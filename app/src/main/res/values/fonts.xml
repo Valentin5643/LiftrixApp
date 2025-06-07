@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Font families for the app -->
+    <string name="font_family_primary">sans-serif</string>
+    <string name="font_family_secondary">sans-serif-medium</string>
+    <string name="font_family_monospace">monospace</string>
+    
+    <!-- Custom font declarations -->
+    <array name="font_family_poppins">
+        <item>@font/poppins_bold</item>
+    </array>
+    <array name="font_family_inter">
+        <item>@font/inter_regular</item>
+        <item>@font/inter_medium</item>
+    </array>
+    <array name="font_family_roboto_mono">
+        <item>@font/roboto_mono_light</item>
+    </array>
+</resources> 

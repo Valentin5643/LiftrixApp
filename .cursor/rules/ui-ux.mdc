@@ -1,0 +1,116 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+**Visual Design**
+- Establish clear visual hierarchy using Material 3 elevation and typography scale
+- Use brand-aligned color palette (primary/secondary/tertiary) with dynamic theming
+- Ensure text contrast meets WCAG 2.1 AA standards
+- Maintain consistent component styling across all screens
+
+**Interaction Design**
+- Implement intuitive navigation patterns (bottom bars, navigation rails)
+- Use standard Material Design components
+- Position primary CTAs within thumb reach zone
+- Apply purposeful animations (limited to 300ms duration)
+- Design for adaptive layouts (phones, tablets, foldables)
+
+**Accessibility (Android Focused)**
+- Add content descriptions for all visual elements
+- Support TalkBack navigation and Switch Access
+- Ensure minimum 44dp touch targets
+- Provide text scaling up to 200% without breakage
+- Implement high contrast mode support
+
+**Performance Optimization**
+- Optimize Compose recomposition with stable classes
+- Implement lazy loading for lists/pagers
+- Compress assets with WebP/AVIF formats
+- Monitor performance via Android Vitals:
+  - Frozen frames (<1.6%)
+  - Slow rendering (<50ms/frame)
+  - App startup time (<2s cold start)
+
+**User Feedback**
+- Show snackbars/toasts for action confirmation
+- Use shimmer placeholders during loading
+- Provide localized error messages with recovery actions
+- Track user flows with Firebase Analytics
+
+**Information Architecture**
+- Organize features with bottom navigation (max 5 items)
+- Implement predictable back navigation
+- Use persistent search bars where appropriate
+- Group related settings with preference categories
+
+**Mobile-Specific Patterns**
+- Design for one-handed thumb use
+- Implement edge-to-edge displays with system bar insets
+- Handle software keyboard interactions
+- Support gesture navigation (back swipe, quick settings)
+- Adapt to dark/light theme and battery saver mode
+
+**Consistency**
+- Create Compose-based design system components
+- Maintain consistent terminology across app
+- Standardize spacing (4dp grid system)
+- Use unified iconography style
+
+**Testing & Iteration**
+- Conduct usability tests with Maze/UserTesting
+- A/B test critical flows with Firebase Remote Config
+- Analyze heatmaps via Smartlook
+- Gather feedback through Play Store reviews
+- Iterate based on crash analytics (Crashlytics)
+
+**Layout Principles**
+- Use ConstraintLayout for complex adaptive UIs
+- Implement responsive breakpoints:
+  - Compact (0-599dp)
+  - Medium (600-904dp)
+  - Expanded (905+dp)
+- Prioritize vertical scrolling layouts
+- Apply window size classes for foldables
+
+**Typography**
+- Use scalable sp units for fonts
+- Adjust line height based on font size
+- Implement dynamic type with line clamping
+- Use letter spacing -0.01 to 0.15 for readability
+
+**Touch Targets**
+- Minimum 48x48dp interactive elements
+- 8dp spacing between touch targets
+- Visual feedback for all touch states (pressed/focused)
+
+**Performance**
+- Optimize image loading with Coil/Glide
+- Use baseline profiles for startup optimization
+- Limit overdraw to <2.5x
+- Reduce APK size via R8 optimization
+
+**Content Prioritization**
+- Prioritize above-the-fold content
+- Use progressive disclosure (expandable cards)
+- Implement bottom sheets for secondary actions
+- Collapse app bars on scroll
+
+**Navigation**
+- Use Navigation Component with deep linking
+- Implement predictive back gestures
+- Provide consistent up/back navigation
+- Use modal bottom sheets for contextual actions
+
+**Forms**
+- Use Material TextFields with clear validation
+- Implement appropriate input types (numberDecimal, textPassword)
+- Show inline error messages
+- Provide auto-complete suggestions
+
+**Testing**
+- Use Espresso for UI tests
+- Test on Firebase Test Lab device matrix
+- Verify accessibility with Accessibility Scanner
+
+- Conduct perceptual contrast testing

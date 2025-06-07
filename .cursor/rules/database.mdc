@@ -1,0 +1,93 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+You are an expert in Firebase/Firestore development for Kotlin mobile apps using Jetpack Compose, Clean Architecture, and MVI.
+
+Firebase Architecture
+- Follow Clean Architecture with MVI pattern: Compose UI → ViewModel → UseCases → Repository → Firebase SDK.
+- Separate logic per Firebase service using dedicated repository interfaces and implementations.
+- Structure Firestore with collections: `users`, `workouts`, `prs`, `friendships`. Use subcollections for nested user data.
+- Use descriptive document IDs (e.g., `user-{uid}`, `workout-{date}`) and plural collection names (e.g., `workouts`).
+- Enable and test Firestore offline persistence.
+- Always mirror Firestore updates in Room (offline-first). Use WorkManager for background sync.
+
+Authentication
+- Use Firebase Authentication for:
+  - Email/password sign-in
+  - Google Sign-In
+  - Anonymous sign-in for guest/trial access
+- Leverage Firebase custom claims for feature gating (e.g., premium tier).
+- Centralize all auth logic in `AuthRepository`. No direct Firebase calls in ViewModels or UI.
+
+Firestore Usage
+- Always access Firestore through a repository, injected via Hilt.
+- Use Kotlin `Flow` and coroutines for all Firestore reads and writes.
+- Handle Firestore errors centrally. Surface user-friendly messages through ViewModel states.
+- Use transactions for multi-document consistency.
+- Batch writes when logging multiple workout sets or syncing offline data.
+- Use pagination and cursors for history views.
+- Implement Firestore indexes for query performance.
+
+Cloud Functions
+- Trigger serverless logic on Firestore document writes (e.g., AI summaries, friend invites).
+- Communicate with Firebase Functions via callable endpoints or Firestore writes.
+- Centralize all callable function calls in a `CloudFunctionService`.
+
+Cloud Storage
+- Use Firebase Storage for uploading:
+  - Profile pictures
+  - QR code images
+  - Workout data exports
+- Handle file upload/download via a centralized `StorageRepository`.
+- Always include progress feedback and retry logic in UI.
+
+Crashlytics & Analytics
+- Integrate Crashlytics for real-time error tracking.
+- Use `log()` and `setCustomKey()` to annotate user actions (e.g., workout flow).
+- Track feature events with Firebase Analytics:
+  - `pr_achieved`
+  - `spotter_added`
+  - `ai_summary_viewed`
+- Wrap Analytics logging in a reusable `AnalyticsService`.
+
+Cloud Messaging
+- Use FCM for:
+  - PR/streak notifications
+  - Workout invites
+- Route notifications via Cloud Functions, not from client directly.
+- Handle notification tap actions with Compose Navigation deep links.
+
+Security & Rules
+- Use Firestore Security Rules to:
+  - Allow access only to authenticated users
+  - Enforce user-level document ownership
+  - Restrict `premium-only` collections by custom claims
+- Enforce upload path restrictions in Firebase Storage Rules
+- Use Firebase Emulator Suite to test all security rules
+
+Testing & CI
+- Use fake repositories for ViewModel testing.
+- Write unit tests for Cloud Functions logic.
+- Use Firebase Emulator Suite for local Firestore/Storage/Auth testing.
+- Create CI pipeline to:
+  - Run emulator tests
+  - Deploy functions and rules
+  - Lint and verify coverage
+
+General Kotlin Guidelines
+- Follow idiomatic Kotlin and Jetpack Compose patterns.
+- Use `sealed class` for UI state modeling.
+- Always collect `Flow` with lifecycle-safe methods (e.g., `collectAsState()`).
+- Apply dependency injection through Hilt.
+- Handle background sync with WorkManager + Coroutine workers.
+- Use Firebase BoM for consistent SDK versions.
+
+Performance and Optimization
+- Use Firestore bundles for caching reads.
+- Prefer local Room access for UI responsiveness.
+- Use Cloud Functions for heavy or AI-powered logic.
+- Monitor and optimize Firestore quota usage.
+
+Follow official Firebase, Kotlin, and Jetpack Compose documentation and best practices for implementation details.
