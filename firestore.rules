@@ -1,0 +1,332 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions for common checks
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserId() {
+      return request.auth.uid;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && getUserId() == userId;
+    }
+    
+    function isPremiumUser() {
+      return isAuthenticated() && 
+             request.auth.token.premium == true;
+    }
+    
+    function isValidEmail() {
+      return isAuthenticated() && 
+        (request.auth.token.firebase.sign_in_provider == 'anonymous' || 
+         request.auth.token.email_verified == true);
+    }
+    
+    function isNewDocument() {
+      return resource == null;
+    }
+    
+    function isDocumentOwner() {
+      return isAuthenticated() && 
+             resource.data.userId == getUserId();
+    }
+    
+    function isRequestDataOwner() {
+      return isAuthenticated() && 
+             request.resource.data.userId == getUserId();
+    }
+    
+    // Global deny rule - require authentication for all documents
+    match /{document=**} {
+      allow read, write: if false;
+    }
+    
+        // Users collection - personal profile management
+    match /users/{userId} {
+      // Users can read and write their own profile
+      allow read, write: if isOwner(userId);
+      
+      // Allow creation of own profile during signup
+      allow create: if isOwner(userId) && isValidEmail() &&
+                   validateUserProfile(request.resource.data);
+    }
+
+    // User profiles collection - onboarding and personalization data
+    match /user_profiles/{userId} {
+      // Users can read and write their own profile
+      allow read, write: if isOwner(userId) && 
+                        validateUserProfileData(request.resource.data);
+      
+      // Allow creation of own profile during onboarding
+      allow create: if isOwner(userId) && 
+                   validateUserProfileData(request.resource.data);
+      
+      // Update own profile data
+      allow update: if isOwner(userId) && 
+                   validateUserProfileData(request.resource.data);
+      
+      // Delete own profile
+      allow delete: if isOwner(userId);
+    }
+
+    // Workouts collection - personal workout data
+    match /workouts/{workoutId} {
+      // Read own workouts
+      allow read: if isDocumentOwner();
+      
+      // Create new workout (must include userId)
+      allow create: if isRequestDataOwner() && 
+                   validateWorkoutData(request.resource.data);
+      
+      // Update own workout
+      allow update: if isDocumentOwner() && 
+                   isRequestDataOwner() &&
+                   validateWorkoutData(request.resource.data);
+      
+      // Delete own workout
+      allow delete: if isDocumentOwner();
+    }
+    
+    // Personal Records (PRs) collection - achievement tracking
+    match /prs/{prId} {
+      // Read own PRs
+      allow read: if isDocumentOwner();
+      
+      // Create new PR (must include userId)
+      allow create: if isRequestDataOwner() && 
+                   validatePRData(request.resource.data);
+      
+      // Update own PR
+      allow update: if isDocumentOwner() && 
+                   isRequestDataOwner() &&
+                   validatePRData(request.resource.data);
+      
+      // Delete own PR
+      allow delete: if isDocumentOwner();
+    }
+    
+    // Friendships collection - social features
+    match /friendships/{friendshipId} {
+      // Read friendships where user is either sender or receiver
+      allow read: if isAuthenticated() && 
+                 (resource.data.senderId == getUserId() || 
+                  resource.data.receiverId == getUserId());
+      
+      // Create friendship requests (must be the sender)
+      allow create: if isAuthenticated() && 
+                   request.resource.data.senderId == getUserId() &&
+                   validateFriendshipData(request.resource.data);
+      
+      // Update friendship status (must be the receiver to accept/decline)
+      allow update: if isAuthenticated() && 
+                   resource.data.receiverId == getUserId() &&
+                   validateFriendshipUpdate(resource.data, request.resource.data);
+      
+      // Delete friendship (either party can delete)
+      allow delete: if isAuthenticated() && 
+                   (resource.data.senderId == getUserId() || 
+                    resource.data.receiverId == getUserId());
+    }
+    
+    // Premium features collection - subscription-based content
+    match /premium_workouts/{workoutId} {
+      // Premium users can read premium workout templates
+      allow read: if isPremiumUser();
+      
+      // Only admins can create/update premium content (via Cloud Functions)
+      allow write: if false;
+    }
+    
+    match /premium_exercises/{exerciseId} {
+      // Premium users can read premium exercises
+      allow read: if isPremiumUser();
+      
+      // Only admins can create/update premium content (via Cloud Functions)
+      allow write: if false;
+    }
+    
+    // AI summaries - premium feature for workout analysis
+    match /ai_summaries/{summaryId} {
+      // Read own AI summaries (premium feature)
+      allow read: if isPremiumUser() && isDocumentOwner();
+      
+      // Create AI summary request (premium feature)
+      allow create: if isPremiumUser() && 
+                   isRequestDataOwner() &&
+                   validateAISummaryData(request.resource.data);
+      
+      // AI summaries are created/updated by Cloud Functions
+      allow update, delete: if false;
+    }
+    
+    // Exercise templates - community and personal templates
+    match /exercise_templates/{templateId} {
+      // Everyone can read public templates
+      allow read: if isAuthenticated() && 
+                 (resource.data.isPublic == true || isDocumentOwner());
+      
+      // Create personal templates
+      allow create: if isRequestDataOwner() && 
+                   validateExerciseTemplateData(request.resource.data);
+      
+      // Update own templates
+      allow update: if isDocumentOwner() && 
+                   isRequestDataOwner() &&
+                   validateExerciseTemplateData(request.resource.data);
+      
+      // Delete own templates
+      allow delete: if isDocumentOwner();
+    }
+    
+    // Workout templates - personal and premium templates
+    match /workout_templates/{templateId} {
+      // Read public templates and own templates
+      allow read: if isAuthenticated() && 
+                 (resource.data.isPublic == true || 
+                  isDocumentOwner() ||
+                  (resource.data.isPremium == true && isPremiumUser()));
+      
+      // Create personal templates
+      allow create: if isRequestDataOwner() && 
+                   validateWorkoutTemplateData(request.resource.data);
+      
+      // Update own templates
+      allow update: if isDocumentOwner() && 
+                   isRequestDataOwner() &&
+                   validateWorkoutTemplateData(request.resource.data);
+      
+      // Delete own templates
+      allow delete: if isDocumentOwner();
+    }
+    
+    // User settings - personal preferences
+    match /user_settings/{userId} {
+      // Users can read and write their own settings
+      allow read, write: if isOwner(userId) &&
+                        validateUserSettingsData(request.resource.data);
+    }
+    
+    // Debug collection (development only - remove in production)
+    match /debug/{document} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // Validation functions
+    function validateUserProfile(data) {
+      return data.keys().hasAll(['uid', 'email', 'created_at']) &&
+             data.uid is string &&
+             data.email is string &&
+             data.created_at is timestamp &&
+             data.uid == getUserId();
+    }
+    
+    function validateWorkoutData(data) {
+      return data.keys().hasAll(['userId', 'name', 'date', 'status', 'created_at']) &&
+             data.userId is string &&
+             data.name is string &&
+             data.date is string &&
+             data.status is string &&
+             data.created_at is timestamp &&
+             data.exercises is list &&
+             data.exercises.size() <= 50 && // Max exercises per workout
+             data.name.size() <= 100; // Max workout name length
+    }
+    
+    function validatePRData(data) {
+      return data.keys().hasAll(['userId', 'exerciseName', 'weight', 'reps', 'date', 'created_at']) &&
+             data.userId is string &&
+             data.exerciseName is string &&
+             data.weight is number &&
+             data.reps is number &&
+             data.date is string &&
+             data.created_at is timestamp &&
+             data.weight >= 0 && data.weight <= 1000 && // Reasonable weight limits (kg)
+             data.reps >= 1 && data.reps <= 1000; // Reasonable rep limits
+    }
+    
+    function validateFriendshipData(data) {
+      return data.keys().hasAll(['senderId', 'receiverId', 'status', 'created_at']) &&
+             data.senderId is string &&
+             data.receiverId is string &&
+             data.status == 'pending' &&
+             data.created_at is timestamp &&
+             data.senderId != data.receiverId; // Can't friend yourself
+    }
+    
+    function validateFriendshipUpdate(oldData, newData) {
+      return oldData.senderId == newData.senderId &&
+             oldData.receiverId == newData.receiverId &&
+             oldData.created_at == newData.created_at &&
+             newData.status in ['accepted', 'declined', 'blocked'] &&
+             newData.updated_at is timestamp;
+    }
+    
+    function validateAISummaryData(data) {
+      return data.keys().hasAll(['userId', 'workoutId', 'requestedAt']) &&
+             data.userId is string &&
+             data.workoutId is string &&
+             data.requestedAt is timestamp;
+    }
+    
+    function validateExerciseTemplateData(data) {
+      return data.keys().hasAll(['userId', 'name', 'category', 'isPublic', 'created_at']) &&
+             data.userId is string &&
+             data.name is string &&
+             data.category is string &&
+             data.isPublic is bool &&
+             data.created_at is timestamp &&
+             data.name.size() <= 100; // Max exercise name length
+    }
+    
+    function validateWorkoutTemplateData(data) {
+      return data.keys().hasAll(['userId', 'name', 'isPublic', 'created_at']) &&
+             data.userId is string &&
+             data.name is string &&
+             data.isPublic is bool &&
+             data.created_at is timestamp &&
+             data.exercises is list &&
+             data.exercises.size() <= 20 && // Max exercises per template
+             data.name.size() <= 100; // Max template name length
+    }
+    
+    function validateUserSettingsData(data) {
+      return data.keys().hasAll(['userId', 'updated_at']) &&
+             data.userId is string &&
+             data.updated_at is timestamp;
+    }
+    
+    function validateUserProfileData(data) {
+      return data.keys().hasAll(['userId', 'updatedAt', 'profileVersion']) &&
+             data.userId is string &&
+             data.updatedAt is timestamp &&
+             data.profileVersion is number &&
+             data.userId == getUserId() &&
+             // Age validation if present (13-100 years)
+             (!(data.keys().hasAny(['age'])) || 
+              (data.age is number && data.age >= 13 && data.age <= 100)) &&
+             // Weight validation if present (positive value)
+             (!(data.keys().hasAny(['weight'])) || 
+              (data.weight is map && data.weight.value is number && data.weight.value >= 0 && data.weight.value <= 1000)) &&
+             // Equipment validation if present (must be list)
+             (!(data.keys().hasAny(['availableEquipment'])) || 
+              (data.availableEquipment is list && data.availableEquipment.size() <= 20)) &&
+             // Other equipment validation if present (string length limit)
+             (!(data.keys().hasAny(['otherEquipment'])) || 
+              (data.otherEquipment is string && data.otherEquipment.size() <= 200)) &&
+             // Fitness goals validation if present (must be list)
+             (!(data.keys().hasAny(['fitnessGoals'])) || 
+              (data.fitnessGoals is list && data.fitnessGoals.size() <= 10)) &&
+             // Goals priority validation if present (must be map)
+             (!(data.keys().hasAny(['goalsPriority'])) || 
+              (data.goalsPriority is map && data.goalsPriority.size() <= 10)) &&
+             // Completed timestamp validation if present
+             (!(data.keys().hasAny(['completedAt'])) || 
+              data.completedAt is timestamp);
+    }
+  }
+}

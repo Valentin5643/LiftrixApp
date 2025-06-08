@@ -1,30 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme for dark mode -->
-    <style name="Theme.AIGymApp" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.Liftrix" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="colorPrimary">@color/indigo_secondary</item>
-        <item name="colorSecondary">@color/teal_primary</item>
-        <item name="colorTertiary">@color/coral_accent</item>
+        <item name="colorPrimaryDark">@color/primary_variant</item>
+        <item name="colorAccent">@color/coral_accent</item>
         <item name="android:colorBackground">@color/dark_charcoal</item>
-        <item name="colorSurface">@color/dark_charcoal</item>
-        <!-- Typography -->
-        <item name="textAppearanceHeadlineLarge" tools:targetApi="31">
-            <style>
-                <item name="fontFamily">@font/poppins_bold</item>
-            </style>
-        </item>
-        <item name="textAppearanceBodyLarge">
-            <style>
-                <item name="fontFamily">@font/inter_medium</item>
-            </style>
-        </item>
-        <item name="textAppearanceLabelMedium">
-            <style>
-                <item name="fontFamily">@font/roboto_mono_light</item>
-            </style>
-        </item>
-        <!-- Shape -->
-        <item name="shapeCornerSmall">4dp</item>
-        <item name="shapeCornerMedium">8dp</item>
+        <item name="android:textColorPrimary">@color/white</item>
+        <item name="android:textColorSecondary">@color/white</item>
     </style>
 </resources> 

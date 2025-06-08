@@ -1,31 +1,94 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
+    <!-- Legacy Android colors for compatibility -->
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     
-    <!-- App specific colors -->
-    <color name="primary">#FF6200EE</color>
-    <color name="primary_variant">#FF3700B3</color>
-    <color name="secondary">#FF03DAC5</color>
-    <color name="secondary_variant">#FF018786</color>
-    <color name="surface">#FFFFFFFF</color>
-    <color name="background">#FFFFFFFF</color>
-    <color name="error">#FFB00020</color>
-    <color name="on_primary">#FFFFFFFF</color>
-    <color name="on_secondary">#FF000000</color>
-    <color name="on_surface">#FF000000</color>
-    <color name="on_background">#FF000000</color>
-    <color name="on_error">#FFFFFFFF</color>
-    <color name="teal_primary">#FF20C9B7</color>
-    <color name="indigo_secondary">#FF2A3B7D</color>
-    <color name="coral_accent">#FFFF6B6B</color>
-    <color name="light_gray">#FFF8F9FA</color>
-    <color name="dark_charcoal">#FF2C3E50</color>
-    <color name="teal_coral_gradient_start">#FF20C9B7</color>
-    <color name="teal_coral_gradient_end">#FFFF6B6B</color>
+    <!-- Liftrix Brand Colors -->
+    <color name="liftrix_primary">#FF20C9B7</color>
+    <color name="liftrix_secondary">#FF2A3B7D</color>
+    <color name="liftrix_accent">#FFFF6B6B</color>
+    <color name="liftrix_error">#FFFF4444</color>
+    
+    <!-- Light Theme Colors -->
+    <color name="liftrix_background_light">#FFF8F9FA</color>
+    <color name="liftrix_surface_light">#FFFFFFFF</color>
+    <color name="liftrix_on_primary">#FFFFFFFF</color>
+    <color name="liftrix_on_secondary">#FFFFFFFF</color>
+    <color name="liftrix_on_accent">#FFFFFFFF</color>
+    <color name="liftrix_on_error">#FFFFFFFF</color>
+    <color name="liftrix_on_background">#FF1C1B1F</color>
+    <color name="liftrix_on_surface">#FF1C1B1F</color>
+    
+    <!-- Dark Theme Colors -->
+    <color name="liftrix_background_dark">#FF121212</color>
+    <color name="liftrix_surface_dark">#FF1E1E1E</color>
+    <color name="liftrix_on_background_dark">#FFE6E1E5</color>
+    <color name="liftrix_on_surface_dark">#FFE6E1E5</color>
+    
+    <!-- Material 3 Container Colors (Light) -->
+    <color name="liftrix_primary_container">#FFB2F2EA</color>
+    <color name="liftrix_on_primary_container">#FF003A35</color>
+    <color name="liftrix_secondary_container">#FFDDE1FF</color>
+    <color name="liftrix_on_secondary_container">#FF0F1B37</color>
+    <color name="liftrix_tertiary_container">#FFFFADD8</color>
+    <color name="liftrix_on_tertiary_container">#FF410006</color>
+    <color name="liftrix_error_container">#FFFFADD6</color>
+    <color name="liftrix_on_error_container">#FF410002</color>
+    
+    <!-- Material 3 Container Colors (Dark) -->
+    <color name="liftrix_primary_container_dark">#FF005047</color>
+    <color name="liftrix_on_primary_container_dark">#FFB2F2EA</color>
+    <color name="liftrix_secondary_container_dark">#FF1E2A4E</color>
+    <color name="liftrix_on_secondary_container_dark">#FFDDE1FF</color>
+    <color name="liftrix_tertiary_container_dark">#FF5F0008</color>
+    <color name="liftrix_on_tertiary_container_dark">#FFFFADD8</color>
+    <color name="liftrix_error_container_dark">#FF93000A</color>
+    <color name="liftrix_on_error_container_dark">#FFFFADD6</color>
+    
+    <!-- Outline Colors -->
+    <color name="liftrix_outline">#FF79747E</color>
+    <color name="liftrix_outline_dark">#FF938F99</color>
+    <color name="liftrix_outline_variant">#FFCAC4CF</color>
+    <color name="liftrix_outline_variant_dark">#FF49454E</color>
+    
+    <!-- Surface Variants -->
+    <color name="liftrix_surface_variant">#FFE7E0EC</color>
+    <color name="liftrix_on_surface_variant">#FF49454E</color>
+    <color name="liftrix_surface_variant_dark">#FF49454E</color>
+    <color name="liftrix_on_surface_variant_dark">#FFCAC4CF</color>
+    
+    <!-- Inverse Colors -->
+    <color name="liftrix_inverse_surface">#FF313033</color>
+    <color name="liftrix_inverse_on_surface">#FFF4EFF4</color>
+    <color name="liftrix_inverse_primary">#FFB2F2EA</color>
+    <color name="liftrix_inverse_surface_dark">#FFE6E1E5</color>
+    <color name="liftrix_inverse_on_surface_dark">#FF313033</color>
+    <color name="liftrix_inverse_primary_dark">#FF005047</color>
+    
+    <!-- Gradient Colors for XML usage -->
+    <color name="liftrix_teal_coral_start">#FF20C9B7</color>
+    <color name="liftrix_teal_coral_end">#FFFF6B6B</color>
+    <color name="liftrix_indigo_teal_start">#FF2A3B7D</color>
+    <color name="liftrix_indigo_teal_end">#FF20C9B7</color>
+    
+    <!-- Legacy aliases for backward compatibility -->
+    <color name="primary">@color/liftrix_primary</color>
+    <color name="secondary">@color/liftrix_secondary</color>
+    <color name="accent">@color/liftrix_accent</color>
+    <color name="error">@color/liftrix_error</color>
+    <color name="background">@color/liftrix_background_light</color>
+    <color name="surface">@color/liftrix_surface_light</color>
+    <color name="on_primary">@color/liftrix_on_primary</color>
+    <color name="on_secondary">@color/liftrix_on_secondary</color>
+    <color name="on_surface">@color/liftrix_on_surface</color>
+    <color name="on_background">@color/liftrix_on_background</color>
+    <color name="on_error">@color/liftrix_on_error</color>
+    
+    <!-- Missing theme color aliases -->
+    <color name="teal_primary">@color/liftrix_primary</color>
+    <color name="primary_variant">@color/liftrix_primary_container_dark</color>
+    <color name="coral_accent">@color/liftrix_accent</color>
+    <color name="indigo_secondary">@color/liftrix_secondary</color>
+    <color name="dark_charcoal">@color/liftrix_background_dark</color>
 </resources>

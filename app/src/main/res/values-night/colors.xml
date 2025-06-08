@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Liftrix Dark Theme Colors -->
+    
+    <!-- Primary Brand Colors (same in dark mode) -->
+    <color name="liftrix_primary">#FF20C9B7</color>
+    <color name="liftrix_secondary">#FF2A3B7D</color>
+    <color name="liftrix_accent">#FFFF6B6B</color>
+    <color name="liftrix_error">#FFFF4444</color>
+    
+    <!-- Dark Theme Specific Colors -->
+    <color name="liftrix_background_light">@color/liftrix_background_dark</color>
+    <color name="liftrix_surface_light">@color/liftrix_surface_dark</color>
+    <color name="liftrix_on_background">@color/liftrix_on_background_dark</color>
+    <color name="liftrix_on_surface">@color/liftrix_on_surface_dark</color>
+    
+    <!-- Material 3 Container Colors (Dark Mode) -->
+    <color name="liftrix_primary_container">@color/liftrix_primary_container_dark</color>
+    <color name="liftrix_on_primary_container">@color/liftrix_on_primary_container_dark</color>
+    <color name="liftrix_secondary_container">@color/liftrix_secondary_container_dark</color>
+    <color name="liftrix_on_secondary_container">@color/liftrix_on_secondary_container_dark</color>
+    <color name="liftrix_tertiary_container">@color/liftrix_tertiary_container_dark</color>
+    <color name="liftrix_on_tertiary_container">@color/liftrix_on_tertiary_container_dark</color>
+    <color name="liftrix_error_container">@color/liftrix_error_container_dark</color>
+    <color name="liftrix_on_error_container">@color/liftrix_on_error_container_dark</color>
+    
+    <!-- Outline Colors (Dark Mode) -->
+    <color name="liftrix_outline">@color/liftrix_outline_dark</color>
+    <color name="liftrix_outline_variant">@color/liftrix_outline_variant_dark</color>
+    
+    <!-- Surface Variants (Dark Mode) -->
+    <color name="liftrix_surface_variant">@color/liftrix_surface_variant_dark</color>
+    <color name="liftrix_on_surface_variant">@color/liftrix_on_surface_variant_dark</color>
+    
+    <!-- Inverse Colors (Dark Mode) -->
+    <color name="liftrix_inverse_surface">@color/liftrix_inverse_surface_dark</color>
+    <color name="liftrix_inverse_on_surface">@color/liftrix_inverse_on_surface_dark</color>
+    <color name="liftrix_inverse_primary">@color/liftrix_inverse_primary_dark</color>
+    
+    <!-- Legacy aliases for dark mode -->
+    <color name="background">@color/liftrix_background_dark</color>
+    <color name="surface">@color/liftrix_surface_dark</color>
+    <color name="on_background">@color/liftrix_on_background_dark</color>
+    <color name="on_surface">@color/liftrix_on_surface_dark</color>
+</resources> 

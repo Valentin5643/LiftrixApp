@@ -1,16 +1,31 @@
 package com.example.liftrix
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+
+import com.example.liftrix.ui.MainViewModel
+import com.example.liftrix.ui.auth.AuthActivity
 import com.example.liftrix.ui.theme.LiftrixTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -24,29 +39,71 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    val navController = rememberNavController()
-                    NavHost(navController, startDestination = "home") {
-                        composable("home") { HomeScreen() }
-                        composable("workout") { WorkoutScreen() }
-                        composable("progress") { ProgressScreen() }
-                    }
+                    MainContent(
+                        onNavigateToAuth = {
+                            navigateToAuthActivity()
+                        }
+                    )
                 }
             }
+        }
+    }
+    
+    private fun navigateToAuthActivity() {
+        val intent = Intent(this, AuthActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        startActivity(intent)
+        finish()
+    }
+}
+@Composable
+fun MainContent(
+    onNavigateToAuth: () -> Unit,
+    viewModel: MainViewModel = hiltViewModel()
+) {
+    val authState by viewModel.authState.collectAsState()
+    
+    when (val currentState = authState) {
+        is MainViewModel.AuthenticationState.Loading -> {
+            LoadingScreen()
+        }
+        is MainViewModel.AuthenticationState.Unauthenticated -> {
+            LaunchedEffect(Unit) {
+                onNavigateToAuth()
+            }
+        }
+        is MainViewModel.AuthenticationState.Authenticated -> {
+            AuthenticatedContent(user = currentState.user)
         }
     }
 }
 
 @Composable
-fun HomeScreen() {
-    // Placeholder UI with visual hierarchy
+fun LoadingScreen() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            CircularProgressIndicator(
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Loading...",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
 }
 
 @Composable
-fun WorkoutScreen() {
-    // Placeholder for workout logging
+fun AuthenticatedContent(user: com.example.liftrix.domain.model.User) {
+    // Direct routing to WorkoutScreen as requested
+    com.example.liftrix.ui.workout.WorkoutScreen(user = user)
 }
 
-@Composable
-fun ProgressScreen() {
-    // Placeholder for progress tracking
-}

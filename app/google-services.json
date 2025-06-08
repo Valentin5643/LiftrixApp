@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "734273269747",
+    "project_id": "liftrix-390cf",
+    "storage_bucket": "liftrix-390cf.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:734273269747:android:39d5352dabb68d74202c86",
+        "android_client_info": {
+          "package_name": "com.example.liftrix"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDIZeItBskzkEeiXYbzR87oyztYatwqt48"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

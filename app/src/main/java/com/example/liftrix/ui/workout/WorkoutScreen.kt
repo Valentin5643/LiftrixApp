@@ -1,0 +1,752 @@
+package com.example.liftrix.ui.workout
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.liftrix.domain.model.User
+import com.example.liftrix.domain.model.Workout
+import com.example.liftrix.domain.model.WorkoutStatus
+import com.example.liftrix.domain.model.WorkoutTemplate
+import com.example.liftrix.sync.SyncStatus
+import com.example.liftrix.ui.components.QuickWorkoutFab
+import com.example.liftrix.ui.workout.daily.QuickWorkoutSelectionDialog
+import com.example.liftrix.ui.workout.daily.QuickWorkoutScreen
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+
+// Navigation state for managing screen transitions
+private sealed class WorkoutScreenState {
+    object WorkoutList : WorkoutScreenState()
+    data class QuickWorkout(val templateId: String?) : WorkoutScreenState()
+    object TemplateCreation : WorkoutScreenState()
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun WorkoutScreen(
+    user: User,
+    modifier: Modifier = Modifier,
+    viewModel: WorkoutViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val currentUser by viewModel.currentUser.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    var showQuickWorkoutDialog by remember { mutableStateOf(false) }
+    var screenState by remember { mutableStateOf<WorkoutScreenState>(WorkoutScreenState.WorkoutList) }
+
+    // Show error messages
+    LaunchedEffect(uiState.errorMessage) {
+        uiState.errorMessage?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearError()
+        }
+    }
+
+    when (screenState) {
+        is WorkoutScreenState.WorkoutList -> {
+            WorkoutListScreen(
+                uiState = uiState,
+                user = user,
+                snackbarHostState = snackbarHostState,
+                showQuickWorkoutDialog = showQuickWorkoutDialog,
+                onShowQuickWorkoutDialog = { showQuickWorkoutDialog = it },
+                onNavigateToQuickWorkout = { templateId ->
+                    screenState = WorkoutScreenState.QuickWorkout(templateId)
+                },
+                onNavigateToTemplateCreation = {
+                    screenState = WorkoutScreenState.TemplateCreation
+                },
+                onWorkoutAction = { workout, action ->
+                    when (action) {
+                        WorkoutAction.Start -> {
+                            // TODO: Start workout
+                        }
+                        WorkoutAction.Resume -> {
+                            // TODO: Resume workout
+                        }
+                        WorkoutAction.Complete -> {
+                            // TODO: Complete workout
+                        }
+                        WorkoutAction.Cancel -> {
+                            // TODO: Cancel workout
+                        }
+                    }
+                },
+                onSyncNow = { viewModel.syncNow() },
+                onClearError = { viewModel.clearError() },
+                modifier = modifier
+            )
+        }
+        is WorkoutScreenState.QuickWorkout -> {
+            val quickWorkoutState = screenState as WorkoutScreenState.QuickWorkout
+            QuickWorkoutScreen(
+                templateId = quickWorkoutState.templateId,
+                onNavigateBack = { 
+                    screenState = WorkoutScreenState.WorkoutList 
+                },
+                modifier = modifier
+            )
+        }
+        is WorkoutScreenState.TemplateCreation -> {
+            // TODO: Implement WorkoutTemplateCreationScreen
+            // For now, show placeholder
+            TemplateCreationPlaceholder(
+                onNavigateBack = {
+                    screenState = WorkoutScreenState.WorkoutList
+                }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WorkoutListScreen(
+    uiState: WorkoutUiState,
+    user: User,
+    snackbarHostState: SnackbarHostState,
+    showQuickWorkoutDialog: Boolean,
+    onShowQuickWorkoutDialog: (Boolean) -> Unit,
+    onNavigateToQuickWorkout: (String?) -> Unit,
+    onNavigateToTemplateCreation: () -> Unit,
+    onWorkoutAction: (Workout, WorkoutAction) -> Unit,
+    onSyncNow: () -> Unit,
+    onClearError: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Workouts",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                actions = {
+                    // Sync status indicator
+                    when (uiState.syncStatus) {
+                        is SyncStatus.Syncing -> {
+                            CircularProgressIndicator(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .semantics { contentDescription = "Syncing workouts" },
+                                strokeWidth = 2.dp
+                            )
+                        }
+                        is SyncStatus.Error -> {
+                            IconButton(
+                                onClick = onSyncNow,
+                                modifier = Modifier.semantics { 
+                                    contentDescription = "Retry sync" 
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Retry sync",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                        else -> {
+                            if (uiState.unsyncedCount > 0) {
+                                IconButton(
+                                    onClick = onSyncNow,
+                                    modifier = Modifier.semantics { 
+                                        contentDescription = "Sync ${uiState.unsyncedCount} unsynced workouts" 
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = "Sync workouts",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
+        },
+        floatingActionButton = {
+            QuickWorkoutFab(
+                onQuickWorkoutClick = { 
+                    onShowQuickWorkoutDialog(true)
+                }
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { paddingValues ->
+        WorkoutContent(
+            uiState = uiState,
+            user = user,
+            onWorkoutAction = onWorkoutAction,
+            onNavigateToTemplateCreation = onNavigateToTemplateCreation,
+            modifier = Modifier.padding(paddingValues)
+        )
+    }
+    
+    // Quick Workout Selection Dialog
+    QuickWorkoutSelectionDialog(
+        isVisible = showQuickWorkoutDialog,
+        templates = emptyList(), // TODO: Load templates from repository
+        onTemplateSelected = { template ->
+            onNavigateToQuickWorkout(template?.id?.value)
+            onShowQuickWorkoutDialog(false)
+        },
+        onDismiss = { 
+            onShowQuickWorkoutDialog(false)
+        }
+    )
+}
+
+@Composable
+private fun WorkoutContent(
+    uiState: WorkoutUiState,
+    user: User,
+    onWorkoutAction: (Workout, WorkoutAction) -> Unit,
+    onNavigateToTemplateCreation: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    when {
+        uiState.isLoading -> {
+            LoadingContent(modifier = modifier)
+        }
+        uiState.workouts.isEmpty() -> {
+            EmptyWorkoutsContent(
+                user = user,
+                onNavigateToTemplateCreation = onNavigateToTemplateCreation,
+                modifier = modifier
+            )
+        }
+        else -> {
+            WorkoutList(
+                workouts = uiState.workouts,
+                syncStatus = uiState.syncStatus,
+                onWorkoutAction = onWorkoutAction,
+                modifier = modifier
+            )
+        }
+    }
+}
+
+@Composable
+private fun LoadingContent(
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.semantics { 
+                    contentDescription = "Loading workouts" 
+                }
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Loading workouts...",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmptyWorkoutsContent(
+    user: User,
+    onNavigateToTemplateCreation: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Text(
+                text = "Welcome, ${user.displayName ?: "Athlete"}!",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Ready to start your fitness journey?",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "Create Your First Workout Template",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Design a reusable workout template that you can use again and again. Perfect for planned routines.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Button(
+                        onClick = onNavigateToTemplateCreation,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics { 
+                                contentDescription = "Create your first workout template" 
+                            }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Assignment,
+                            contentDescription = null
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Create Workout Template")
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "Want to jump right in?",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Use the Quick Workout button below to start an ad-hoc workout session right now.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Tap the floating + button",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TemplateCreationPlaceholder(
+    onNavigateBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Create Workout Template",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                navigationIcon = {
+                    IconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.semantics { 
+                            contentDescription = "Navigate back" 
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
+        }
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Build,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Template Creation Coming Soon",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "This feature will allow you to create reusable workout templates for your training routines.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    text = "For now, use the Quick Workout feature to start logging your workouts immediately!",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkoutList(
+    workouts: List<Workout>,
+    syncStatus: SyncStatus,
+    onWorkoutAction: (Workout, WorkoutAction) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxSize()) {
+        // Sync status bar
+        if (syncStatus is SyncStatus.Syncing) {
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { contentDescription = "Syncing workouts in progress" }
+            )
+        }
+        
+        LazyColumn(
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(
+                items = workouts,
+                key = { it.id.value }
+            ) { workout ->
+                WorkoutCard(
+                    workout = workout,
+                    onAction = { action -> onWorkoutAction(workout, action) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkoutCard(
+    workout: Workout,
+    onAction: (WorkoutAction) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics { 
+                contentDescription = "Workout: ${workout.name}, ${workout.status.name}" 
+            },
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = workout.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = workout.date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                WorkoutStatusChip(status = workout.status)
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Stats
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                WorkoutStat(
+                    label = "Exercises",
+                    value = workout.exercises.size.toString()
+                )
+                WorkoutStat(
+                    label = "Sets",
+                    value = "${workout.getCompletedSets()}/${workout.getTotalSets()}"
+                )
+                WorkoutStat(
+                    label = "Volume",
+                    value = "${String.format("%.1f", workout.calculateTotalVolume().kilograms)} kg"
+                )
+            }
+            
+            // Progress bar
+            if (workout.status == WorkoutStatus.IN_PROGRESS || workout.status == WorkoutStatus.PAUSED) {
+                Spacer(modifier = Modifier.height(12.dp))
+                val progress = (workout.getCompletionPercentage() / 100f).toFloat()
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { 
+                            contentDescription = "Workout progress: ${String.format("%.1f", workout.getCompletionPercentage())}%" 
+                        }
+                )
+                Text(
+                    text = "${String.format("%.1f", workout.getCompletionPercentage())}% Complete",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+            
+            // Action buttons
+            if (workout.status != WorkoutStatus.COMPLETED && workout.status != WorkoutStatus.CANCELLED) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    when (workout.status) {
+                        WorkoutStatus.PLANNED -> {
+                            OutlinedButton(
+                                onClick = { onAction(WorkoutAction.Start) },
+                                modifier = Modifier.semantics { 
+                                    contentDescription = "Start workout" 
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Start")
+                            }
+                        }
+                        WorkoutStatus.IN_PROGRESS -> {
+                            OutlinedButton(
+                                onClick = { onAction(WorkoutAction.Complete) },
+                                modifier = Modifier.semantics { 
+                                    contentDescription = "Complete workout" 
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Stop,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Complete")
+                            }
+                        }
+                        WorkoutStatus.PAUSED -> {
+                            OutlinedButton(
+                                onClick = { onAction(WorkoutAction.Resume) },
+                                modifier = Modifier.semantics { 
+                                    contentDescription = "Resume workout" 
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Resume")
+                            }
+                        }
+                        else -> { /* No actions for completed/cancelled */ }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkoutStatusChip(
+    status: WorkoutStatus,
+    modifier: Modifier = Modifier
+) {
+    val (backgroundColor, contentColor) = when (status) {
+        WorkoutStatus.PLANNED -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
+        WorkoutStatus.IN_PROGRESS -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+        WorkoutStatus.PAUSED -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+        WorkoutStatus.COMPLETED -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
+        WorkoutStatus.CANCELLED -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+    }
+    
+    Card(
+        modifier = modifier.semantics { 
+            contentDescription = "Status: ${status.name}" 
+        },
+        colors = CardDefaults.cardColors(
+            containerColor = backgroundColor,
+            contentColor = contentColor
+        )
+    ) {
+        Text(
+            text = status.name.replace("_", " "),
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        )
+    }
+}
+
+@Composable
+private fun WorkoutStat(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier.semantics { 
+            contentDescription = "$label: $value" 
+        }
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+enum class WorkoutAction {
+    Start,
+    Resume,
+    Complete,
+    Cancel
+} 

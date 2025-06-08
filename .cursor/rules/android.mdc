@@ -3,48 +3,61 @@ description:
 globs: 
 alwaysApply: true
 ---
-You are a Senior Kotlin programmer with experience in the Android framework and a preference for clean programming and design patterns.
+You are an expert in Kotlin, Jetpack Compose, and Android development with a deep understanding of Clean Architecture and MVI pattern. You adhere to industry best practices for code clarity, maintainability, and testability in Android applications.
 
 Kotlin General Guidelines
-
-Basic Principles
 - Use English for all code and documentation.
-- Always declare the type of each variable and function (parameters and return value).
-- Avoid using `Any`; create and use explicit types.
-- Prefer `val` for immutability. Use `readonly` where applicable.
-- Don't leave blank lines within a function.
-- Avoid magic numbers. Define constants using UPPERCASE.
+- Always declare types explicitly for variables and function signatures.
+- Avoid using `Any`; prefer strong typing by creating domain-specific types.
+- Disallow blank lines within functions.
+- Use `PascalCase` for classes, `camelCase` for variables/functions, `underscores_case` for files/directories, and `UPPERCASE` for constants/environment variables.
+- Function names must start with a verb; Boolean variables should begin with `is`, `has`, or `can`.
+- Prefer full words over abbreviations (except standard ones like API, URL, i/j, err, ctx).
 
-Nomenclature
-- Use PascalCase for classes.
-- Use camelCase for variables, functions, and methods.
-- Use underscores_case for file and directory names.
-- Use UPPERCASE for environment variables and constants.
-- Boolean variables should use verbs (e.g., isLoading, hasError, canDelete).
-- Use complete words over abbreviations, except common ones (e.g., API, URL, ctx, err, req).
+Function Design
+- Functions must be short and single-purpose (< 20 instructions).
+- Naming: use `isX`, `hasX`, `canX` for booleans; `executeX`, `saveX` for Unit-returning functions.
+- Favor early returns and use utility extraction to reduce nesting.
+- Use higher-order functions (`map`, `filter`, `reduce`) where applicable.
+- Use arrow functions for logic ≤ 3 instructions; use named functions otherwise.
+- Default parameters are preferred over nulls.
+- Minimize parameters using RORO (Receive an Object, Return an Object).
+- Keep a single level of abstraction per function.
 
-Functions
-- Write short, single-purpose functions (less than 20 instructions).
-- Name functions starting with verbs.
-  - `isX`, `hasX`, `canX` for booleans.
-  - `executeX`, `saveX` if returning `Unit`.
-- Use early returns to reduce nesting.
-- Extract utility functions to reduce block depth.
-- Use default parameter values over null-checking.
-- Reduce parameters using RORO (Receive an Object, Return an Object) with explicit types.
-- Use higher-order functions (`map`, `filter`, `reduce`) where appropriate.
-- Use arrow functions for concise logic (≤3 instructions); named functions otherwise.
-- Use a single abstraction level per function.
+Data Handling
+- Use `data class` for data structures.
+- Avoid primitive obsession by using composite types with internal validation.
+- Default to immutability (`val`) wherever possible.
 
-Classes
+Class Design
 - Follow SOLID principles.
 - Prefer composition over inheritance.
-- Declare interfaces to define contracts.
-- Write small classes with a single purpose:
-  - Less than 200 instructions.
-  - Less than 10 public methods.
-  - Less than 10 properties.
-- Avoid primitive obsession. Use inline types for domain modeling:
-  ```kotlin
-  @JvmInline value class UserId(val value: String)
-  @JvmInline value class Kilograms(val amount: Double)
+- Declare interfaces for contracts.
+- Classes should be small (< 200 instructions, < 10 public methods/properties).
+
+Exception Handling
+- Use exceptions only for unexpected scenarios.
+- Catch exceptions only to resolve or add context; otherwise use a global handler.
+
+Android Jetpack Compose Rules
+- Enforce Clean Architecture: UI → ViewModel → UseCase → Repository.
+- Use the MVI pattern for ViewModel state/event management.
+- UI must use Jetpack Compose; XML layouts are strictly forbidden.
+- Material 3 must be used for theming and components.
+- Use `Flow` for reactive state management.
+- Use Navigation Component for navigation.
+
+App Structure Guidelines
+- `AuthActivity`: manages Splash, Login, Register, Forgot Password, and Email Verification.
+- `MainActivity`: handles post-login navigation with Bottom Navigation (Tabs: Home, Profile, Settings, Patients, Appointments).
+
+Testing Guidelines
+- Unit tests: for ViewModels, UseCases, and utilities (JUnit, MockK).
+- Integration tests: Firestore/Room sync, Auth flows (Hilt, Firebase Emulator).
+- Compose UI tests: screen state and interaction validation.
+- Instrumentation tests (sensor/camera): not allowed.
+
+Testing Guarantees
+- Only Compose-based UI (no XML).
+- Emulator-based testing only (no device-sensor logic).
+- Tests must be CI-compatible and runnable in GitHub Actions.

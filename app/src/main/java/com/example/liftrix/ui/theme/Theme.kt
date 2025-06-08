@@ -11,33 +11,71 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+private val LightColorScheme = lightColorScheme(
+    primary = LiftrixColors.Primary,
+    onPrimary = LiftrixColors.OnPrimary,
+    primaryContainer = LiftrixColors.PrimaryContainer,
+    onPrimaryContainer = LiftrixColors.OnPrimaryContainer,
+    secondary = LiftrixColors.Secondary,
+    onSecondary = LiftrixColors.OnSecondary,
+    secondaryContainer = LiftrixColors.SecondaryContainer,
+    onSecondaryContainer = LiftrixColors.OnSecondaryContainer,
+    tertiary = LiftrixColors.Accent,
+    onTertiary = LiftrixColors.OnAccent,
+    tertiaryContainer = LiftrixColors.TertiaryContainer,
+    onTertiaryContainer = LiftrixColors.OnTertiaryContainer,
+    error = LiftrixColors.Error,
+    onError = LiftrixColors.OnError,
+    errorContainer = LiftrixColors.ErrorContainer,
+    onErrorContainer = LiftrixColors.OnErrorContainer,
+    background = LiftrixColors.BackgroundLight,
+    onBackground = LiftrixColors.OnBackground,
+    surface = LiftrixColors.SurfaceLight,
+    onSurface = LiftrixColors.OnSurface,
+    surfaceVariant = LiftrixColors.SurfaceVariant,
+    onSurfaceVariant = LiftrixColors.OnSurfaceVariant,
+    outline = LiftrixColors.Outline,
+    outlineVariant = LiftrixColors.OutlineVariant,
+    inverseSurface = LiftrixColors.InverseSurface,
+    inverseOnSurface = LiftrixColors.InverseOnSurface,
+    inversePrimary = LiftrixColors.InversePrimary,
 )
 
-private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+private val DarkColorScheme = darkColorScheme(
+    primary = LiftrixColors.Primary,
+    onPrimary = LiftrixColors.OnPrimary,
+    primaryContainer = LiftrixColors.PrimaryContainerDark,
+    onPrimaryContainer = LiftrixColors.OnPrimaryContainerDark,
+    secondary = LiftrixColors.Secondary,
+    onSecondary = LiftrixColors.OnSecondary,
+    secondaryContainer = LiftrixColors.SecondaryContainerDark,
+    onSecondaryContainer = LiftrixColors.OnSecondaryContainerDark,
+    tertiary = LiftrixColors.Accent,
+    onTertiary = LiftrixColors.OnAccent,
+    tertiaryContainer = LiftrixColors.TertiaryContainerDark,
+    onTertiaryContainer = LiftrixColors.OnTertiaryContainerDark,
+    error = LiftrixColors.Error,
+    onError = LiftrixColors.OnError,
+    errorContainer = LiftrixColors.ErrorContainerDark,
+    onErrorContainer = LiftrixColors.OnErrorContainerDark,
+    background = LiftrixColors.BackgroundDark,
+    onBackground = LiftrixColors.OnBackgroundDark,
+    surface = LiftrixColors.SurfaceDark,
+    onSurface = LiftrixColors.OnSurfaceDark,
+    surfaceVariant = LiftrixColors.SurfaceVariantDark,
+    onSurfaceVariant = LiftrixColors.OnSurfaceVariantDark,
+    outline = LiftrixColors.OutlineDark,
+    outlineVariant = LiftrixColors.OutlineVariantDark,
+    inverseSurface = LiftrixColors.InverseSurfaceDark,
+    inverseOnSurface = LiftrixColors.InverseOnSurfaceDark,
+    inversePrimary = LiftrixColors.InversePrimaryDark,
 )
 
 @Composable
 fun LiftrixTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false, // Disabled by default to use Liftrix brand colors
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
