@@ -37,25 +37,25 @@ interface WorkoutDao {
     suspend fun insertWorkout(workout: WorkoutEntity): Long
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertWorkouts(workouts: List<WorkoutEntity>)
+    suspend fun insertWorkouts(workouts: List<WorkoutEntity>): List<Long>
     
     @Update
-    suspend fun updateWorkout(workout: WorkoutEntity)
+    suspend fun updateWorkout(workout: WorkoutEntity): Int
     
     @Query("UPDATE workouts SET is_synced = :isSynced, sync_version = :version WHERE id = :id AND user_id = :userId")
-    suspend fun updateSyncStatusForUser(id: String, userId: String, isSynced: Boolean, version: Long = System.currentTimeMillis())
+    suspend fun updateSyncStatusForUser(id: String, userId: String, isSynced: Boolean, version: Long): Int
     
     @Query("UPDATE workouts SET is_synced = 1, sync_version = :version WHERE id IN (:ids) AND user_id = :userId")
-    suspend fun markWorkoutsAsSyncedForUser(ids: List<String>, userId: String, version: Long = System.currentTimeMillis())
+    suspend fun markWorkoutsAsSyncedForUser(ids: List<String>, userId: String, version: Long): Int
     
     @Delete
-    suspend fun deleteWorkout(workout: WorkoutEntity)
+    suspend fun deleteWorkout(workout: WorkoutEntity): Int
     
     @Query("DELETE FROM workouts WHERE id = :id AND user_id = :userId")
-    suspend fun deleteWorkoutByIdForUser(id: String, userId: String)
+    suspend fun deleteWorkoutByIdForUser(id: String, userId: String): Int
     
     @Query("DELETE FROM workouts WHERE user_id = :userId")
-    suspend fun deleteAllWorkoutsForUser(userId: String)
+    suspend fun deleteAllWorkoutsForUser(userId: String): Int
     
     // Legacy methods without user filtering - deprecated for migration
     @Deprecated("Use user-scoped methods instead")
@@ -80,17 +80,17 @@ interface WorkoutDao {
     
     @Deprecated("Use user-scoped methods instead")
     @Query("UPDATE workouts SET is_synced = 1, sync_version = :version WHERE id IN (:ids)")
-    suspend fun markWorkoutsAsSynced(ids: List<String>, version: Long = System.currentTimeMillis())
+    suspend fun markWorkoutsAsSynced(ids: List<String>, version: Long): Int
     
     @Deprecated("Use user-scoped methods instead")
     @Query("DELETE FROM workouts WHERE id = :id")
-    suspend fun deleteWorkoutById(id: String)
+    suspend fun deleteWorkoutById(id: String): Int
     
     @Deprecated("Use user-scoped methods instead")
     @Query("DELETE FROM workouts")
-    suspend fun deleteAllWorkouts()
+    suspend fun deleteAllWorkouts(): Int
     
     @Deprecated("Use user-scoped updateSyncStatusForUser instead")
     @Query("UPDATE workouts SET is_synced = :isSynced, sync_version = :version WHERE id = :id")
-    suspend fun updateSyncStatus(id: String, isSynced: Boolean, version: Long = System.currentTimeMillis())
+    suspend fun updateSyncStatus(id: String, isSynced: Boolean, version: Long): Int
 } 

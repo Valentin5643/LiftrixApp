@@ -15,10 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assignment
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
@@ -27,7 +24,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -37,7 +33,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -49,7 +44,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -59,11 +53,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutStatus
-import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.sync.SyncStatus
 import com.example.liftrix.ui.components.QuickWorkoutFab
-import com.example.liftrix.ui.workout.daily.QuickWorkoutSelectionDialog
 import com.example.liftrix.ui.workout.daily.QuickWorkoutScreen
+import com.example.liftrix.ui.workout.daily.QuickWorkoutSelectionDialog
+import com.example.liftrix.ui.workout.creation.UnifiedWorkoutCreationScreen
+
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
@@ -71,7 +66,7 @@ import java.time.format.FormatStyle
 private sealed class WorkoutScreenState {
     object WorkoutList : WorkoutScreenState()
     data class QuickWorkout(val templateId: String?) : WorkoutScreenState()
-    object TemplateCreation : WorkoutScreenState()
+    object WorkoutCreation : WorkoutScreenState()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -106,8 +101,8 @@ fun WorkoutScreen(
                 onNavigateToQuickWorkout = { templateId ->
                     screenState = WorkoutScreenState.QuickWorkout(templateId)
                 },
-                onNavigateToTemplateCreation = {
-                    screenState = WorkoutScreenState.TemplateCreation
+                onNavigateToWorkoutCreation = {
+                    screenState = WorkoutScreenState.WorkoutCreation
                 },
                 onWorkoutAction = { workout, action ->
                     when (action) {
@@ -140,13 +135,16 @@ fun WorkoutScreen(
                 modifier = modifier
             )
         }
-        is WorkoutScreenState.TemplateCreation -> {
-            // TODO: Implement WorkoutTemplateCreationScreen
-            // For now, show placeholder
-            TemplateCreationPlaceholder(
-                onNavigateBack = {
+        is WorkoutScreenState.WorkoutCreation -> {
+                            UnifiedWorkoutCreationScreen(
+                onNavigateBack = { 
+                    screenState = WorkoutScreenState.WorkoutList 
+                },
+                onWorkoutCreated = { workoutId ->
+                    // Navigate back to workout list after successful creation
                     screenState = WorkoutScreenState.WorkoutList
-                }
+                },
+                modifier = modifier
             )
         }
     }
@@ -161,7 +159,7 @@ private fun WorkoutListScreen(
     showQuickWorkoutDialog: Boolean,
     onShowQuickWorkoutDialog: (Boolean) -> Unit,
     onNavigateToQuickWorkout: (String?) -> Unit,
-    onNavigateToTemplateCreation: () -> Unit,
+    onNavigateToWorkoutCreation: () -> Unit,
     onWorkoutAction: (Workout, WorkoutAction) -> Unit,
     onSyncNow: () -> Unit,
     onClearError: () -> Unit,
@@ -240,7 +238,7 @@ private fun WorkoutListScreen(
             uiState = uiState,
             user = user,
             onWorkoutAction = onWorkoutAction,
-            onNavigateToTemplateCreation = onNavigateToTemplateCreation,
+            onNavigateToWorkoutCreation = onNavigateToWorkoutCreation,
             modifier = Modifier.padding(paddingValues)
         )
     }
@@ -250,7 +248,11 @@ private fun WorkoutListScreen(
         isVisible = showQuickWorkoutDialog,
         templates = emptyList(), // TODO: Load templates from repository
         onTemplateSelected = { template ->
-            onNavigateToQuickWorkout(template?.id?.value)
+            onNavigateToQuickWorkout(template.id.value)
+            onShowQuickWorkoutDialog(false)
+        },
+        onCreateFromScratch = {
+            onNavigateToWorkoutCreation()
             onShowQuickWorkoutDialog(false)
         },
         onDismiss = { 
@@ -264,7 +266,7 @@ private fun WorkoutContent(
     uiState: WorkoutUiState,
     user: User,
     onWorkoutAction: (Workout, WorkoutAction) -> Unit,
-    onNavigateToTemplateCreation: () -> Unit,
+    onNavigateToWorkoutCreation: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     when {
@@ -274,7 +276,7 @@ private fun WorkoutContent(
         uiState.workouts.isEmpty() -> {
             EmptyWorkoutsContent(
                 user = user,
-                onNavigateToTemplateCreation = onNavigateToTemplateCreation,
+                onNavigateToWorkoutCreation = onNavigateToWorkoutCreation,
                 modifier = modifier
             )
         }
@@ -318,7 +320,7 @@ private fun LoadingContent(
 @Composable
 private fun EmptyWorkoutsContent(
     user: User,
-    onNavigateToTemplateCreation: () -> Unit,
+    onNavigateToWorkoutCreation: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -354,12 +356,12 @@ private fun EmptyWorkoutsContent(
                     modifier = Modifier.padding(16.dp)
                 ) {
                     Text(
-                        text = "Create Your First Workout Template",
+                        text = "Create Your First Workout",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = "Design a reusable workout template that you can use again and again. Perfect for planned routines.",
+                        text = "Start your fitness journey by creating a simple workout with exercises, sets, and reps.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp)
@@ -368,11 +370,11 @@ private fun EmptyWorkoutsContent(
                     Spacer(modifier = Modifier.height(16.dp))
                     
                     Button(
-                        onClick = onNavigateToTemplateCreation,
+                        onClick = onNavigateToWorkoutCreation,
                         modifier = Modifier
                             .fillMaxWidth()
                             .semantics { 
-                                contentDescription = "Create your first workout template" 
+                                contentDescription = "Create your first workout" 
                             }
                     ) {
                         Icon(
@@ -380,7 +382,7 @@ private fun EmptyWorkoutsContent(
                             contentDescription = null
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Create Workout Template")
+                        Text("Create Your First Workout")
                     }
                 }
             }
@@ -432,85 +434,6 @@ private fun EmptyWorkoutsContent(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun TemplateCreationPlaceholder(
-    onNavigateBack: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Create Workout Template",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(
-                        onClick = onNavigateBack,
-                        modifier = Modifier.semantics { 
-                            contentDescription = "Navigate back" 
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
-        }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(32.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Build,
-                    contentDescription = null,
-                    modifier = Modifier.size(64.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Template Creation Coming Soon",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
-                Text(
-                    text = "This feature will allow you to create reusable workout templates for your training routines.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-                Text(
-                    text = "For now, use the Quick Workout feature to start logging your workouts immediately!",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun WorkoutList(

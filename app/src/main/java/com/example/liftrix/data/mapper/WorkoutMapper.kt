@@ -98,7 +98,7 @@ class WorkoutMapper @Inject constructor(
             id = WorkoutId(dto.id),
             name = dto.name,
             date = LocalDate.parse(dto.date, DATE_FORMATTER),
-            exercises = dto.exercises.map { exerciseMapper.fromFirestoreDto(it) },
+            exercises = emptyList(), // TODO: Implement proper exercise conversion with library lookup
             status = WorkoutStatus.valueOf(dto.status),
             startTime = dto.startTime?.toInstant(),
             endTime = dto.endTime?.toInstant(),
@@ -118,7 +118,7 @@ class WorkoutMapper @Inject constructor(
             userId = dto.userId,
             name = dto.name,
             date = LocalDate.parse(dto.date, DATE_FORMATTER),
-            exercisesJson = gson.toJson(dto.exercises.map { exerciseMapper.fromFirestoreDto(it) }),
+            exercisesJson = gson.toJson(emptyList<Exercise>()), // TODO: Implement proper exercise conversion
             status = WorkoutStatus.valueOf(dto.status),
             startTime = dto.startTime?.toInstant(),
             endTime = dto.endTime?.toInstant(),

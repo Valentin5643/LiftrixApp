@@ -227,7 +227,10 @@ class AuthRepositoryImpl @Inject constructor(
         try {
             firestore.collection("users")
                 .document(uid)
-                .update("last_sign_in_at", com.google.firebase.Timestamp.now())
+                .set(
+                    mapOf("last_sign_in_at" to com.google.firebase.Timestamp.now()),
+                    com.google.firebase.firestore.SetOptions.merge()
+                )
                 .await()
         } catch (exception: Exception) {
             Timber.e(exception, "Failed to update last sign in time")

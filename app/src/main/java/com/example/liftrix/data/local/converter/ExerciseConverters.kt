@@ -46,15 +46,4 @@ class ExerciseConverters {
         return categoryNames.map { ExerciseCategory.valueOf(it) }
     }
     
-    @TypeConverter
-    fun fromStringList(strings: List<String>?): String? {
-        return if (strings == null) null else gson.toJson(strings)
-    }
-    
-    @TypeConverter
-    fun toStringList(stringsJson: String?): List<String>? {
-        if (stringsJson == null) return null
-        val type = object : TypeToken<List<String>>() {}.type
-        return gson.fromJson(stringsJson, type)
-    }
 } 

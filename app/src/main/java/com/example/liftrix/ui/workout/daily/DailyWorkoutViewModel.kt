@@ -6,9 +6,17 @@ import com.example.liftrix.domain.model.DailyWorkout
 import com.example.liftrix.domain.model.Exercise
 import com.example.liftrix.domain.model.ExerciseId
 import com.example.liftrix.domain.model.ExerciseSet
+import com.example.liftrix.domain.model.ExerciseSetId
 import com.example.liftrix.domain.model.Reps
 import com.example.liftrix.domain.model.Weight
+import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.model.WorkoutTemplate
+import com.example.liftrix.domain.model.ExerciseLibrary
+import com.example.liftrix.domain.model.ExerciseLibraryId
+import com.example.liftrix.domain.model.ExerciseDifficulty
+import com.example.liftrix.domain.model.ExerciseType
+import com.example.liftrix.domain.model.Equipment
+import com.example.liftrix.domain.model.RestTimer
 import com.example.liftrix.domain.usecase.exercise.SearchableExercise
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,13 +50,13 @@ data class DailyWorkoutUiState(
  */
 sealed class DailyWorkoutEvent {
     data class StartFromTemplate(val templateId: String) : DailyWorkoutEvent()
-    object StartFromScratch : DailyWorkoutEvent()
+    data object StartFromScratch : DailyWorkoutEvent()
     data class AddExercise(val searchableExercise: SearchableExercise) : DailyWorkoutEvent()
     data class UpdateExerciseSet(
         val exerciseId: ExerciseId, 
         val setIndex: Int, 
         val weight: Weight, 
-        val reps: Reps
+        val reps: Reps?
     ) : DailyWorkoutEvent()
     data class CompleteSet(val exerciseId: ExerciseId, val setIndex: Int) : DailyWorkoutEvent()
     data class AddSetToExercise(val exerciseId: ExerciseId) : DailyWorkoutEvent()
@@ -61,7 +69,7 @@ sealed class DailyWorkoutEvent {
     object HideConvertToTemplateDialog : DailyWorkoutEvent()
     object ShowExerciseSelection : DailyWorkoutEvent()
     object HideExerciseSelection : DailyWorkoutEvent()
-    object ClearError : DailyWorkoutEvent()
+    data object ClearError : DailyWorkoutEvent()
 }
 
 /**
@@ -196,7 +204,7 @@ class DailyWorkoutViewModel @Inject constructor(
                 )
             }
             
-            Timber.d("Added exercise: ${exercise.name}")
+            Timber.d("Added exercise: ${exercise.libraryExercise.name}")
         } catch (e: Exception) {
             Timber.e(e, "Failed to add exercise")
             _uiState.update { 
@@ -208,7 +216,7 @@ class DailyWorkoutViewModel @Inject constructor(
     /**
      * Update a specific set in an exercise
      */
-    private fun updateExerciseSet(exerciseId: ExerciseId, setIndex: Int, weight: Weight, reps: Reps) {
+    private fun updateExerciseSet(exerciseId: ExerciseId, setIndex: Int, weight: Weight, reps: Reps?) {
         val currentWorkout = _uiState.value.currentWorkout ?: return
         
         try {
@@ -219,7 +227,7 @@ class DailyWorkoutViewModel @Inject constructor(
             
             _uiState.update { it.copy(currentWorkout = updatedWorkout) }
             
-            Timber.d("Updated set $setIndex for exercise ${exercise.name}: ${weight.kilograms}kg x ${reps.count}")
+            Timber.d("Updated set $setIndex for exercise ${exercise.libraryExercise.name}: ${weight.kilograms}kg x ${reps?.count}")
         } catch (e: Exception) {
             Timber.e(e, "Failed to update exercise set")
             _uiState.update { 
@@ -242,7 +250,7 @@ class DailyWorkoutViewModel @Inject constructor(
             
             _uiState.update { it.copy(currentWorkout = updatedWorkout) }
             
-            Timber.d("Completed set $setIndex for exercise ${exercise.name}")
+            Timber.d("Completed set $setIndex for exercise ${exercise.libraryExercise.name}")
         } catch (e: Exception) {
             Timber.e(e, "Failed to complete set")
             _uiState.update { 
@@ -268,7 +276,7 @@ class DailyWorkoutViewModel @Inject constructor(
             
             _uiState.update { it.copy(currentWorkout = updatedWorkout) }
             
-            Timber.d("Added new set to exercise ${exercise.name}")
+            Timber.d("Added new set to exercise ${exercise.libraryExercise.name}")
         } catch (e: Exception) {
             Timber.e(e, "Failed to add set")
             _uiState.update { 
@@ -412,22 +420,37 @@ class DailyWorkoutViewModel @Inject constructor(
     private fun createExerciseFromSearchable(searchableExercise: SearchableExercise): Exercise {
         val now = Instant.now()
         val initialSet = ExerciseSet(
+            id = ExerciseSetId.generate(),
             setNumber = 1,
             weight = Weight.fromKilograms(20.0), // Default starting weight
-            reps = Reps.of(10), // Default starting reps
-            isCompleted = false
+            reps = Reps.of(10) // Default starting reps
         )
         
         return Exercise(
             id = ExerciseId.generate(),
-            name = searchableExercise.name,
-            category = when (searchableExercise) {
-                is SearchableExercise.LibraryExercise -> searchableExercise.exercise.primaryMuscleGroup
-                is SearchableExercise.CustomExercise -> searchableExercise.exercise.primaryMuscle
+            libraryExercise = when (searchableExercise) {
+                is SearchableExercise.LibraryExercise -> searchableExercise.exercise
+                is SearchableExercise.CustomExercise -> {
+                    // Create a basic ExerciseLibrary from CustomExercise
+                    ExerciseLibrary(
+                        id = ExerciseLibraryId.generate().value,
+                        name = searchableExercise.exercise.name,
+                        primaryMuscleGroup = searchableExercise.exercise.primaryMuscle,
+                        equipment = searchableExercise.exercise.equipment,
+                        secondaryMuscleGroups = emptyList(),
+                        movementPattern = "Unknown",
+                        difficultyLevel = 1,
+                        instructions = null,
+                        isCompound = false,
+                        searchableTerms = listOf(searchableExercise.exercise.name.lowercase())
+                    )
+                }
             },
+            workoutId = WorkoutId.generate(),
+            orderIndex = 0,
             sets = listOf(initialSet),
-            createdAt = now,
-            updatedAt = now
+            notes = null,
+            createdAt = now
         )
     }
 
@@ -440,27 +463,51 @@ class DailyWorkoutViewModel @Inject constructor(
             listOf(
                 Exercise(
                     id = ExerciseId.generate(),
-                    name = "Bench Press",
-                    category = com.example.liftrix.domain.model.ExerciseCategory.CHEST,
-                    sets = listOf(
-                        ExerciseSet(1, Weight.fromKilograms(60.0), Reps.of(10)),
-                        ExerciseSet(2, Weight.fromKilograms(65.0), Reps.of(8)),
-                        ExerciseSet(3, Weight.fromKilograms(70.0), Reps.of(6))
+                    workoutId = WorkoutId.generate(),
+                    libraryExercise = ExerciseLibrary(
+                        id = ExerciseLibraryId.generate().value,
+                        name = "Bench Press",
+                        primaryMuscleGroup = com.example.liftrix.domain.model.ExerciseCategory.CHEST,
+                        equipment = Equipment.BARBELL,
+                        secondaryMuscleGroups = listOf(com.example.liftrix.domain.model.ExerciseCategory.TRICEPS),
+                        movementPattern = "Horizontal Push",
+                        difficultyLevel = 3,
+                        instructions = "Lie on bench, lower bar to chest, press up",
+                        isCompound = true,
+                        searchableTerms = listOf("bench", "press", "chest")
                     ),
-                    createdAt = now,
-                    updatedAt = now
+                    orderIndex = 0,
+                    sets = listOf(
+                        ExerciseSet(id = ExerciseSetId.generate(), setNumber = 1, weight = Weight.fromKilograms(60.0), reps = Reps.of(10)),
+                        ExerciseSet(id = ExerciseSetId.generate(), setNumber = 2, weight = Weight.fromKilograms(65.0), reps = Reps.of(8)),
+                        ExerciseSet(id = ExerciseSetId.generate(), setNumber = 3, weight = Weight.fromKilograms(70.0), reps = Reps.of(6))
+                    ),
+                    notes = null,
+                    createdAt = now
                 ),
                 Exercise(
                     id = ExerciseId.generate(),
-                    name = "Squat",
-                    category = com.example.liftrix.domain.model.ExerciseCategory.LEGS,
-                    sets = listOf(
-                        ExerciseSet(1, Weight.fromKilograms(80.0), Reps.of(12)),
-                        ExerciseSet(2, Weight.fromKilograms(85.0), Reps.of(10)),
-                        ExerciseSet(3, Weight.fromKilograms(90.0), Reps.of(8))
+                    workoutId = WorkoutId.generate(),
+                    libraryExercise = ExerciseLibrary(
+                        id = ExerciseLibraryId.generate().value,
+                        name = "Squat",
+                        primaryMuscleGroup = com.example.liftrix.domain.model.ExerciseCategory.LEGS,
+                        equipment = Equipment.BARBELL,
+                        secondaryMuscleGroups = listOf(com.example.liftrix.domain.model.ExerciseCategory.GLUTES),
+                        movementPattern = "Knee Dominant",
+                        difficultyLevel = 3,
+                        instructions = "Stand with feet shoulder-width, lower until thighs parallel, drive through heels",
+                        isCompound = true,
+                        searchableTerms = listOf("squat", "legs", "glutes")
                     ),
-                    createdAt = now,
-                    updatedAt = now
+                    orderIndex = 1,
+                    sets = listOf(
+                        ExerciseSet(id = ExerciseSetId.generate(), setNumber = 1, weight = Weight.fromKilograms(80.0), reps = Reps.of(12)),
+                        ExerciseSet(id = ExerciseSetId.generate(), setNumber = 2, weight = Weight.fromKilograms(85.0), reps = Reps.of(10)),
+                        ExerciseSet(id = ExerciseSetId.generate(), setNumber = 3, weight = Weight.fromKilograms(90.0), reps = Reps.of(8))
+                    ),
+                    notes = null,
+                    createdAt = now
                 )
             )
         } else {

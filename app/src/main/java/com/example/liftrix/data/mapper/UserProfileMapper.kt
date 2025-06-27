@@ -12,6 +12,7 @@ import com.google.gson.reflect.TypeToken
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneOffset
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,30 +26,55 @@ class UserProfileMapper @Inject constructor(
             userId = entity.userId,
             age = entity.age,
             weight = entity.weightKg?.let { Weight.fromKilograms(it) },
-            availableEquipment = entity.availableEquipmentJson?.toEquipmentList() ?: emptyList(),
-            otherEquipment = entity.otherEquipment,
-            fitnessGoals = entity.fitnessGoalsJson?.toFitnessGoalList() ?: emptyList(),
-            goalsPriority = entity.goalsPriorityJson?.toGoalsPriorityMap(),
+            availableEquipment = entity.availableEquipment?.toEquipmentList() ?: emptyList(),
+            otherEquipment = null, // Note: otherEquipment not stored separately in new entity structure
+            fitnessGoals = entity.goals?.toFitnessGoalList() ?: emptyList(),
+            goalsPriority = null, // Note: goalsPriority not stored in new entity structure
             completedAt = entity.completedAt,
             updatedAt = entity.updatedAt,
-            profileVersion = entity.profileVersion
+            profileVersion = entity.syncVersion // Using syncVersion as profileVersion
         )
     }
 
     fun toEntity(profile: UserProfile, isSynced: Boolean = false): UserProfileEntity {
         return UserProfileEntity(
+            id = UUID.randomUUID().toString(), // Generate unique ID for entity
             userId = profile.userId,
+            displayName = "User", // Default display name, can be updated later
             age = profile.age,
             weightKg = profile.weight?.kilograms,
-            availableEquipmentJson = profile.availableEquipment.toJson(),
-            otherEquipment = profile.otherEquipment,
-            fitnessGoalsJson = profile.fitnessGoals.toJson(),
-            goalsPriorityJson = profile.goalsPriority?.toJson(),
+            heightCm = null, // Height not in domain model, set to null
+            fitnessLevel = determineFitnessLevel(profile.fitnessGoals),
+            goals = profile.fitnessGoals.toJson(),
+            availableEquipment = profile.availableEquipment.toJson(),
+            workoutFrequency = null, // Not in domain model, set to null
+            preferredWorkoutDuration = null, // Not in domain model, set to null
             completedAt = profile.completedAt,
+            createdAt = LocalDateTime.now(), // Set current time for new entities
             updatedAt = profile.updatedAt,
-            profileVersion = profile.profileVersion,
             isSynced = isSynced,
-            syncVersion = System.currentTimeMillis()
+            syncVersion = profile.profileVersion
+        )
+    }
+
+    fun toEntityWithId(profile: UserProfile, entityId: String, isSynced: Boolean = false): UserProfileEntity {
+        return UserProfileEntity(
+            id = entityId,
+            userId = profile.userId,
+            displayName = "User", // Default display name
+            age = profile.age,
+            weightKg = profile.weight?.kilograms,
+            heightCm = null,
+            fitnessLevel = determineFitnessLevel(profile.fitnessGoals),
+            goals = profile.fitnessGoals.toJson(),
+            availableEquipment = profile.availableEquipment.toJson(),
+            workoutFrequency = null,
+            preferredWorkoutDuration = null,
+            completedAt = profile.completedAt,
+            createdAt = LocalDateTime.now(),
+            updatedAt = profile.updatedAt,
+            isSynced = isSynced,
+            syncVersion = profile.profileVersion
         )
     }
 
@@ -90,8 +116,21 @@ class UserProfileMapper @Inject constructor(
     fun updateEntitySyncStatus(entity: UserProfileEntity, isSynced: Boolean): UserProfileEntity {
         return entity.copy(
             isSynced = isSynced,
-            syncVersion = System.currentTimeMillis()
+            syncVersion = System.currentTimeMillis(),
+            updatedAt = LocalDateTime.now()
         )
+    }
+
+    private fun determineFitnessLevel(goals: List<FitnessGoal>): String? {
+        // Simple heuristic to determine fitness level based on goals
+        return when {
+            goals.contains(FitnessGoal.BUILD_MUSCLE) -> "intermediate"
+            goals.contains(FitnessGoal.LOSE_WEIGHT) -> "beginner"
+            goals.contains(FitnessGoal.INCREASE_STRENGTH) -> "intermediate"
+            goals.contains(FitnessGoal.IMPROVE_ENDURANCE) -> "intermediate"
+            goals.contains(FitnessGoal.SPORT_SPECIFIC) -> "advanced"
+            else -> "beginner"
+        }
     }
 
     private fun <T> T.toJson(): String? {
@@ -99,18 +138,30 @@ class UserProfileMapper @Inject constructor(
     }
 
     private fun String.toEquipmentList(): List<Equipment> {
-        val type = object : TypeToken<List<Equipment>>() {}.type
-        return gson.fromJson(this, type)
+        return try {
+            val type = object : TypeToken<List<Equipment>>() {}.type
+            gson.fromJson(this, type) ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
     }
 
     private fun String.toFitnessGoalList(): List<FitnessGoal> {
-        val type = object : TypeToken<List<FitnessGoal>>() {}.type
-        return gson.fromJson(this, type)
+        return try {
+            val type = object : TypeToken<List<FitnessGoal>>() {}.type
+            gson.fromJson(this, type) ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
     }
 
     private fun String.toGoalsPriorityMap(): Map<FitnessGoal, Int> {
-        val type = object : TypeToken<Map<FitnessGoal, Int>>() {}.type
-        return gson.fromJson(this, type)
+        return try {
+            val type = object : TypeToken<Map<FitnessGoal, Int>>() {}.type
+            gson.fromJson(this, type) ?: emptyMap()
+        } catch (e: Exception) {
+            emptyMap()
+        }
     }
 
     private fun String.toEquipment(): Equipment? {

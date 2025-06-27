@@ -77,7 +77,7 @@ data class Workout(
      */
     fun calculateTotalVolume(): Weight {
         return exercises
-            .map { it.calculateTotalVolume() }
+            .mapNotNull { it.getTotalVolume() }
             .fold(Weight.ZERO) { acc, volume -> acc + volume }
     }
     
@@ -118,7 +118,7 @@ data class Workout(
     /**
      * Gets all unique exercise categories in this workout
      */
-    fun getExerciseCategories(): Set<ExerciseCategory> = exercises.map { it.category }.toSet()
+    fun getExerciseCategories(): Set<ExerciseCategory> = exercises.map { it.libraryExercise.primaryMuscleGroup }.toSet()
     
     /**
      * Starts the workout by setting start time and status
@@ -186,7 +186,7 @@ data class Workout(
         require(exerciseIndex != -1) { "Exercise with ID $exerciseId not found" }
         
         val updatedExercises = exercises.toMutableList()
-        updatedExercises[exerciseIndex] = updatedExercise.copy(updatedAt = Instant.now())
+        updatedExercises[exerciseIndex] = updatedExercise
         
         return copy(
             exercises = updatedExercises,

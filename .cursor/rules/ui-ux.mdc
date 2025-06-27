@@ -1,7 +1,7 @@
 ---
-description: 
+description: when making changes to the ui or the ux
 globs: 
-alwaysApply: true
+alwaysApply: false
 ---
 **Visual Design**
 - Establish clear visual hierarchy using Material 3 elevation and typography scale

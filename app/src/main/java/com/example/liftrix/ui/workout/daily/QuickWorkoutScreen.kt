@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -79,7 +80,7 @@ fun QuickWorkoutScreen(
                         }
                     ) {
                         Icon(
-                            imageVector = Icons.Default.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back"
                         )
                     }
@@ -491,12 +492,12 @@ private fun ExerciseCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = exercise.name,
+                        text = exercise.libraryExercise.name,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = exercise.category.displayName,
+                        text = exercise.libraryExercise.primaryMuscleGroup.displayName,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -539,15 +540,15 @@ private fun ExerciseCard(
             exercise.sets.forEachIndexed { index, set ->
                 SetInputRow(
                     setNumber = set.setNumber,
-                    reps = set.reps,
-                    weight = set.weight,
-                    restTimeSeconds = set.restTimeSeconds,
+                    reps = set.reps ?: Reps.ZERO,
+                    weight = set.weight ?: Weight.ZERO,
+                    restTimeSeconds = null, // Rest time handled by RestTimer in Exercise
                     rpe = null, // RPE not implemented in ExerciseSet model yet
                     onRepsChanged = { reps ->
-                        onUpdateSet(exercise.id, index, set.weight, reps)
+                        onUpdateSet(exercise.id, index, set.weight ?: Weight.ZERO, reps)
                     },
                     onWeightChanged = { weight ->
-                        onUpdateSet(exercise.id, index, weight, set.reps)
+                        onUpdateSet(exercise.id, index, weight, set.reps ?: Reps.ZERO)
                     },
                     onRestTimeChanged = { /* TODO: Implement rest time updates */ },
                     onRpeChanged = { /* TODO: Implement RPE updates */ },

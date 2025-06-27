@@ -1,7 +1,7 @@
 ---
-description: 
+description: when making changes to database
 globs: 
-alwaysApply: true
+alwaysApply: false
 ---
 You are an expert in Firebase/Firestore development for Kotlin mobile apps using Jetpack Compose, Clean Architecture, and MVI.
 

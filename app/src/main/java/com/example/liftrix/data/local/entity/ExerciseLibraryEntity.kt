@@ -15,10 +15,10 @@ import com.example.liftrix.domain.model.ExerciseCategory
 @Entity(
     tableName = "exercise_library",
     indices = [
-        Index(value = ["name"]),
-        Index(value = ["primary_muscle_group"]),
-        Index(value = ["equipment"]),
-        Index(value = ["movement_pattern"])
+        Index(value = ["name"], name = "index_exercise_library_name"),
+        Index(value = ["primary_muscle_group"], name = "index_exercise_library_primary_muscle_group"),
+        Index(value = ["equipment"], name = "index_exercise_library_equipment"),
+        Index(value = ["movement_pattern"], name = "index_exercise_library_movement_pattern")
     ]
 )
 @TypeConverters(ExerciseConverters::class)

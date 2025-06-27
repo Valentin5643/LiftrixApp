@@ -1,29 +1,30 @@
 package com.example.liftrix.domain.model
 
+import java.time.Duration
 import java.time.Instant
 
 /**
- * Domain model representing an exercise within a workout
+ * Domain model representing an exercise within a workout with flexible metric support
  */
 data class Exercise(
     val id: ExerciseId,
-    val name: String,
-    val category: ExerciseCategory,
-    val sets: List<ExerciseSet>,
-    val notes: String? = null,
+    val workoutId: WorkoutId,
+    val libraryExercise: ExerciseLibrary,
+    val orderIndex: Int,
     val targetSets: Int? = null,
-    val targetReps: Reps? = null,
+    val targetReps: Int? = null,
     val targetWeight: Weight? = null,
-    val createdAt: Instant,
-    val updatedAt: Instant
+    val targetTime: Duration? = null,
+    val targetDistance: Distance? = null,
+    val sets: List<ExerciseSet> = emptyList(),
+    val notes: String? = null,
+    val createdAt: Instant
 ) {
     init {
-        require(name.isNotBlank()) { "Exercise name cannot be blank" }
-        require(name.length <= MAX_NAME_LENGTH) { 
-            "Exercise name cannot exceed $MAX_NAME_LENGTH characters: ${name.length}" 
-        }
-        require(sets.isNotEmpty()) { "Exercise must have at least one set" }
-        require(sets.size <= MAX_SETS) { "Exercise cannot have more than $MAX_SETS sets: ${sets.size}" }
+        require(orderIndex >= 0) { "Order index must be non-negative: $orderIndex" }
+        require(targetSets == null || targetSets > 0) { "Target sets must be positive: $targetSets" }
+        require(targetReps == null || targetReps > 0) { "Target reps must be positive: $targetReps" }
+        require(sets.size <= MAX_SETS) { "Maximum $MAX_SETS sets per exercise: ${sets.size}" }
         
         notes?.let { note ->
             require(note.length <= MAX_NOTES_LENGTH) { 
@@ -31,31 +32,106 @@ data class Exercise(
             }
         }
         
-        targetSets?.let { target ->
-            require(target > 0) { "Target sets must be positive: $target" }
-            require(target <= MAX_SETS) { "Target sets cannot exceed $MAX_SETS: $target" }
-        }
-        
-        // Validate set numbers are sequential
-        val setNumbers = sets.map { it.setNumber }.sorted()
-        require(setNumbers == (1..sets.size).toList()) { 
-            "Set numbers must be sequential starting from 1: $setNumbers" 
+        // Validate set numbers are sequential if sets exist
+        if (sets.isNotEmpty()) {
+            val setNumbers = sets.map { it.setNumber }.sorted()
+            require(setNumbers == (1..sets.size).toList()) { 
+                "Set numbers must be sequential starting from 1: $setNumbers" 
+            }
         }
     }
     
     companion object {
-        const val MAX_NAME_LENGTH: Int = 100
         const val MAX_NOTES_LENGTH: Int = 1000
         const val MAX_SETS: Int = 50
     }
     
     /**
-     * Calculates total volume for all completed sets
+     * Exercise type based on library exercise metadata
      */
-    fun calculateTotalVolume(): Weight {
+    val exerciseType: ExerciseType = ExerciseType.fromLibraryExercise(libraryExercise)
+    
+    /**
+     * Exercise capabilities based on type
+     */
+    val capabilities: ExerciseCapabilities = ExerciseCapabilities.fromExerciseType(exerciseType)
+    
+    /**
+     * Exercise type detection based on equipment and movement patterns
+     */
+    val isWeightBased: Boolean = capabilities.supportsWeight()
+    val isTimeBased: Boolean = capabilities.supportsTime()
+    val isDistanceBased: Boolean = capabilities.supportsDistance()
+    
+    /**
+     * Adds a new set to the exercise with validation
+     */
+    fun addSet(set: ExerciseSet): Exercise {
+        validateSetCompatibility(set)
+        val newSetNumber = sets.size + 1
+        val newSet = set.copy(setNumber = newSetNumber)
+        return copy(sets = sets + newSet)
+    }
+    
+    /**
+     * Adds a new set with weight and reps (convenience method)
+     */
+    fun addSet(weight: Weight?, reps: Reps?): Exercise {
+        val newSet = ExerciseSet(
+            id = ExerciseSetId.generate(),
+            setNumber = sets.size + 1,
+            reps = reps,
+            weight = weight
+        )
+        return addSet(newSet)
+    }
+    
+    /**
+     * Removes a set by set ID
+     */
+    fun removeSet(setId: ExerciseSetId): Exercise {
+        val updatedSets = sets.filter { it.id != setId }
+            .mapIndexed { index, set -> set.copy(setNumber = index + 1) }
+        return copy(sets = updatedSets)
+    }
+    
+    /**
+     * Updates a set by set number (1-indexed)
+     */
+    fun updateSet(setNumber: Int, updatedSet: ExerciseSet): Exercise {
+        require(setNumber > 0) { "Set number must be positive: $setNumber" }
+        require(setNumber <= sets.size) { "Set number $setNumber exceeds available sets: ${sets.size}" }
+        
+        val updatedSets = sets.mapIndexed { index, set ->
+            if (set.setNumber == setNumber) updatedSet.copy(setNumber = setNumber) else set
+        }
+        return copy(sets = updatedSets)
+    }
+    
+    /**
+     * Validates set compatibility with exercise type
+     */
+    fun validateSetCompatibility(set: ExerciseSet) {
+        if (!isWeightBased && set.weight != null) {
+            throw IllegalArgumentException("Weight not supported for ${libraryExercise.name}")
+        }
+        if (!isTimeBased && set.time != null) {
+            throw IllegalArgumentException("Time not supported for ${libraryExercise.name}")
+        }
+        if (!isDistanceBased && set.distance != null) {
+            throw IllegalArgumentException("Distance not supported for ${libraryExercise.name}")
+        }
+    }
+    
+    /**
+     * Calculates total volume for weight-based exercises
+     */
+    fun getTotalVolume(): Weight? {
+        if (!isWeightBased) return null
+        
         return sets
             .filter { it.isCompleted }
-            .map { it.calculateVolume() }
+            .mapNotNull { it.getVolume() }
             .fold(Weight.ZERO) { acc, volume -> acc + volume }
     }
     
@@ -65,94 +141,40 @@ data class Exercise(
     fun getCompletedSetsCount(): Int = sets.count { it.isCompleted }
     
     /**
-     * Gets the total number of reps completed
-     */
-    fun getTotalRepsCompleted(): Reps {
-        return sets
-            .filter { it.isCompleted }
-            .map { it.reps }
-            .fold(Reps.ZERO) { acc, reps -> acc + reps }
-    }
-    
-    /**
      * Checks if the exercise is completed (all sets are completed)
      */
     fun isCompleted(): Boolean = sets.isNotEmpty() && sets.all { it.isCompleted }
     
     /**
-     * Gets the maximum weight used in any completed set
+     * Gets the total reps completed across all completed sets
      */
-    fun getMaxWeight(): Weight? {
+    fun getTotalRepsCompleted(): Reps {
         return sets
             .filter { it.isCompleted }
-            .maxByOrNull { it.weight.kilograms }
-            ?.weight
+            .map { it.reps ?: Reps.ZERO }
+            .fold(Reps.ZERO) { acc, reps -> acc + reps }
     }
     
     /**
-     * Adds a new set to the exercise
+     * Gets the maximum weight used across all sets
      */
-    fun addSet(weight: Weight, reps: Reps): Exercise {
-        val newSetNumber = sets.size + 1
-        val newSet = ExerciseSet(
-            setNumber = newSetNumber,
-            weight = weight,
-            reps = reps
-        )
-        return copy(
-            sets = sets + newSet,
-            updatedAt = Instant.now()
-        )
+    fun getMaxWeight(): Weight? {
+        if (!isWeightBased) return null
+        
+        return sets
+            .mapNotNull { it.weight }
+            .maxByOrNull { it.kilograms }
     }
     
     /**
-     * Updates a specific set
+     * Creates a template version of this exercise (without performance data)
      */
-    fun updateSet(setNumber: Int, updatedSet: ExerciseSet): Exercise {
-        require(setNumber in 1..sets.size) { "Invalid set number: $setNumber" }
-        
-        val updatedSets = sets.map { set ->
-            if (set.setNumber == setNumber) updatedSet.copy(setNumber = setNumber)
-            else set
-        }
-        
-        return copy(
-            sets = updatedSets,
-            updatedAt = Instant.now()
-        )
-    }
-    
-    /**
-     * Removes the last set from the exercise
-     */
-    fun removeLastSet(): Exercise {
-        require(sets.size > 1) { "Cannot remove the last remaining set" }
-        
-        return copy(
-            sets = sets.dropLast(1),
-            updatedAt = Instant.now()
-        )
-    }
-    
-    /**
-     * Creates a template version of this exercise with all sets reset
-     */
-    fun toTemplate(): Exercise {
-        val templateSets = sets.map { set ->
-            set.copy(
-                isCompleted = false,
-                completedAt = null,
-                restTimeSeconds = null
-            )
-        }
-        
-        return copy(
-            id = ExerciseId.generate(),
-            sets = templateSets,
-            createdAt = Instant.now(),
-            updatedAt = Instant.now()
-        )
-    }
+    fun toTemplate(): Exercise = copy(
+        id = ExerciseId.generate(),
+        sets = emptyList(),
+        notes = null,
+        createdAt = Instant.now()
+    )
 }
 
 /**
@@ -163,9 +185,12 @@ enum class ExerciseCategory(val displayName: String) {
     BACK("Back"),
     SHOULDERS("Shoulders"),
     ARMS("Arms"),
+    TRICEPS("Triceps"),
+    BICEPS("Biceps"),
     LEGS("Legs"),
+    GLUTES("Glutes"),
     CORE("Core"),
     CARDIO("Cardio"),
     FULL_BODY("Full Body"),
     OTHER("Other")
-} 
+}

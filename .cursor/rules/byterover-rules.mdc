@@ -1,6 +1,7 @@
 ---
-description: ByteRover MCP Custom Instructions
-alwaysApply: true
+description: 
+globs: 
+alwaysApply: false
 ---
 
 # important 

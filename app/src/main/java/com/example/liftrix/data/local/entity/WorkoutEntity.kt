@@ -53,9 +53,9 @@ data class WorkoutEntity(
     @ColumnInfo(name = "updated_at")
     val updatedAt: Instant,
     
-    @ColumnInfo(name = "is_synced")
+    @ColumnInfo(name = "is_synced", defaultValue = "0")
     val isSynced: Boolean = false,
     
-    @ColumnInfo(name = "sync_version")
+    @ColumnInfo(name = "sync_version", defaultValue = "0")
     val syncVersion: Long = 0L
 ) 

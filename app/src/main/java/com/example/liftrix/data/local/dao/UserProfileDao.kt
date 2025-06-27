@@ -34,28 +34,28 @@ interface UserProfileDao {
     suspend fun insertProfile(profile: UserProfileEntity): Long
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertProfiles(profiles: List<UserProfileEntity>)
+    suspend fun insertProfiles(profiles: List<UserProfileEntity>): List<Long>
     
     @Update
-    suspend fun updateProfile(profile: UserProfileEntity)
+    suspend fun updateProfile(profile: UserProfileEntity): Int
     
     @Query("UPDATE user_profiles SET is_synced = :isSynced, sync_version = :version WHERE user_id = :userId")
-    suspend fun updateSyncStatus(userId: String, isSynced: Boolean, version: Long = System.currentTimeMillis())
+    suspend fun updateSyncStatus(userId: String, isSynced: Boolean, version: Long): Int
     
     @Query("UPDATE user_profiles SET is_synced = 1, sync_version = :version WHERE user_id IN (:userIds)")
-    suspend fun markProfilesAsSynced(userIds: List<String>, version: Long = System.currentTimeMillis())
+    suspend fun markProfilesAsSynced(userIds: List<String>, version: Long): Int
     
     @Query("UPDATE user_profiles SET completed_at = :completedAt WHERE user_id = :userId")
-    suspend fun markProfileAsCompleted(userId: String, completedAt: String?)
+    suspend fun markProfileAsCompleted(userId: String, completedAt: String?): Int
     
     @Delete
-    suspend fun deleteProfile(profile: UserProfileEntity)
+    suspend fun deleteProfile(profile: UserProfileEntity): Int
     
     @Query("DELETE FROM user_profiles WHERE user_id = :userId")
-    suspend fun deleteProfileForUser(userId: String)
+    suspend fun deleteProfileForUser(userId: String): Int
     
     @Query("DELETE FROM user_profiles")
-    suspend fun deleteAllProfiles()
+    suspend fun deleteAllProfiles(): Int
     
     @Query("SELECT EXISTS(SELECT 1 FROM user_profiles WHERE user_id = :userId)")
     suspend fun hasProfile(userId: String): Boolean

@@ -25,6 +25,15 @@ data class ExerciseSetDto(
     @PropertyName("notes")
     val notes: String? = null,
     
+    @PropertyName("time_seconds")
+    val timeSeconds: Int? = null,
+    
+    @PropertyName("distance_meters") 
+    val distanceMeters: Float? = null,
+    
+    @PropertyName("rpe")
+    val rpe: Int? = null,
+    
     @PropertyName("completed_at")
     val completedAt: Timestamp? = null
 ) {
@@ -35,6 +44,9 @@ data class ExerciseSetDto(
         reps = 0,
         isCompleted = false,
         restTimeSeconds = null,
+        timeSeconds = null,
+        distanceMeters = null,
+        rpe = null,
         notes = null,
         completedAt = null
     )

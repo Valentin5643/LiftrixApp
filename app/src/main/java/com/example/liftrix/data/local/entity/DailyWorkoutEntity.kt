@@ -27,11 +27,11 @@ import java.time.LocalDate
         )
     ],
     indices = [
-        Index(value = ["user_id"]),
-        Index(value = ["date", "user_id"]),
-        Index(value = ["template_id"]),
-        Index(value = ["status"]),
-        Index(value = ["created_at"])
+        Index(value = ["user_id"], name = "index_daily_workouts_user_id"),
+        Index(value = ["date", "user_id"], name = "index_daily_workouts_date_user_id"),
+        Index(value = ["template_id"], name = "index_daily_workouts_template_id"),
+        Index(value = ["status"], name = "index_daily_workouts_status"),
+        Index(value = ["created_at"], name = "index_daily_workouts_created_at")
     ]
 )
 @TypeConverters(DateTimeConverters::class, WorkoutConverters::class)
@@ -88,9 +88,9 @@ data class DailyWorkoutEntity(
     @ColumnInfo(name = "updated_at")
     val updatedAt: Instant,
     
-    @ColumnInfo(name = "is_synced")
+    @ColumnInfo(name = "is_synced", defaultValue = "0")
     val isSynced: Boolean = false,
     
-    @ColumnInfo(name = "sync_version")
+    @ColumnInfo(name = "sync_version", defaultValue = "1")
     val syncVersion: Int = 1
 ) 

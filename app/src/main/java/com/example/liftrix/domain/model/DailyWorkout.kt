@@ -88,7 +88,7 @@ data class DailyWorkout(
          */
         fun fromTemplate(template: WorkoutTemplate): DailyWorkout {
             val now = Instant.now()
-            val exercises = template.exercises.map { it.toExercise() }
+            val exercises = template.exercises.map { it.toExercise(WorkoutId.generate()) }
             
             return DailyWorkout(
                 id = DailyWorkoutId.generate(),
@@ -168,9 +168,11 @@ data class DailyWorkout(
             Duration.between(start, now).toMinutes().toInt()
         }
         
-        val calculatedVolume = exercises.sumOf { it.calculateTotalVolume().kilograms }
+        val calculatedVolume = exercises.sumOf { it.getTotalVolume()?.kilograms ?: 0.0 }
         val calculatedSets = exercises.sumOf { it.sets.size }
-        val calculatedReps = exercises.sumOf { it.getTotalRepsCompleted().count }
+        val calculatedReps = exercises.sumOf { exercise -> 
+            exercise.sets.filter { it.isCompleted }.sumOf { set -> set.reps?.count ?: 0 }
+        }
         
         return copy(
             status = WorkoutStatus.COMPLETED,
@@ -240,7 +242,7 @@ data class DailyWorkout(
         require(exerciseIndex != -1) { "Exercise with ID $exerciseId not found" }
         
         val updatedExercises = exercises.toMutableList()
-        updatedExercises[exerciseIndex] = updatedExercise.copy(updatedAt = Instant.now())
+        updatedExercises[exerciseIndex] = updatedExercise
         
         return copy(
             exercises = updatedExercises,
@@ -346,7 +348,7 @@ data class DailyWorkout(
     /**
      * Gets all unique exercise categories in this workout
      */
-    fun getExerciseCategories(): Set<ExerciseCategory> = exercises.map { it.category }.toSet()
+    fun getExerciseCategories(): Set<ExerciseCategory> = exercises.map { it.libraryExercise.primaryMuscleGroup }.toSet()
     
     /**
      * Converts this daily workout to a template
@@ -357,7 +359,7 @@ data class DailyWorkout(
                 exercise = exercise,
                 orderIndex = index,
                 targetSets = exercise.targetSets,
-                targetReps = exercise.targetReps,
+                targetReps = exercise.targetReps as Reps?,
                 targetWeight = exercise.targetWeight,
                 notes = exercise.notes
             )

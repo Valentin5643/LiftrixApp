@@ -1,0 +1,427 @@
+{
+  "metadata": {
+    "prd_file": "docs/SPEC-20250625-simple-workout-creation.md",
+    "created_date": "2025-01-27T10:50:00Z",
+    "description": "Remaining tasks for Simple Workout Creation feature - Integration and Testing layers",
+    "total_tasks": 8,
+    "estimated_hours": 15,
+    "confidence_level": "95%+",
+    "completed_layers": ["Database (DB-001 to DB-003)", "Backend Services (BE-001 to BE-004)", "Frontend Components (FE-001 to FE-005)"],
+    "remaining_layers": ["Integration (INT-001 to INT-002)", "Testing (TEST-001 to TEST-002)"]
+  },
+  "tasks": [
+    {
+      "id": "INT-001",
+      "title": "Extend WorkoutSyncWorker for Simple Workouts",
+      "description": "Modify the existing WorkoutSyncWorker to handle syncing SimpleWorkout entities to Firestore alongside existing workout sync functionality",
+      "category": "integration",
+      "status": "todo",
+      "priority": "high",
+      "estimated_hours": 2,
+      "dependencies": ["BE-002", "BE-004"],
+      "files_affected": {
+        "modify": [
+          "app/src/main/java/com/example/liftrix/sync/WorkoutSyncWorker.kt - Add simple workout sync logic",
+          "app/src/main/java/com/example/liftrix/di/RepositoryModule.kt - Inject SimpleWorkoutRepository into sync worker"
+        ],
+        "read": [
+          "app/src/main/java/com/example/liftrix/data/repository/SimpleWorkoutRepositoryImpl.kt",
+          "app/src/main/java/com/example/liftrix/data/mapper/SimpleWorkoutMapper.kt"
+        ]
+      },
+      "implementation_details": {
+        "approach": "Extend existing sync worker to handle both regular workouts and simple workouts in a single sync operation",
+        "functions_to_implement": [
+          "WorkoutSyncWorker.syncSimpleWorkouts(userId: String): List<String>",
+          "WorkoutSyncWorker.syncAllWorkoutTypes(): Pair<Int, String?>"
+        ],
+        "tests_to_write": [
+          "app/src/androidTest/java/com/example/liftrix/sync/WorkoutSyncWorkerTest.kt"
+        ],
+        "libraries_needed": ["No new libraries required"],
+        "integration_points": ["Firestore collection: simple_workouts", "SimpleWorkoutRepository", "SimpleWorkoutMapper"]
+      },
+      "acceptance_criteria": [
+        "Simple workouts are uploaded to 'simple_workouts' Firestore collection",
+        "Sync worker handles both regular and simple workouts in single execution",
+        "Local simple workouts marked as synced after successful upload",
+        "Error handling preserves existing sync behavior for regular workouts",
+        "Sync metrics include count of both workout types"
+      ],
+      "validation_steps": [
+        "Create simple workout locally and trigger sync",
+        "Verify workout appears in Firestore simple_workouts collection",
+        "Verify local entity marked as synced",
+        "Test error scenarios (network failure, auth failure)",
+        "Verify existing workout sync functionality unchanged"
+      ],
+      "potential_risks": ["Firestore collection naming conflicts", "Performance impact of syncing two workout types"],
+      "example_code": [
+        "// Add to WorkoutSyncWorker doWork() method\nval unsyncedSimpleWorkouts = simpleWorkoutRepository.getUnsyncedWorkouts()\nfor (simpleWorkout in unsyncedSimpleWorkouts) {\n  val dto = simpleWorkoutMapper.toFirestoreDto(simpleWorkout)\n  firestore.collection(\"simple_workouts\").document(simpleWorkout.id.value).set(dto).await()\n  simpleWorkoutRepository.markAsSynced(simpleWorkout.id)\n}"
+      ]
+    },
+    {
+      "id": "INT-002A",
+      "title": "Create Simple Workout Analytics Events",
+      "description": "Extend AnalyticsService and LogWorkoutEventUseCase to track simple workout creation and completion events with specific metrics",
+      "category": "integration",
+      "status": "todo",
+      "priority": "medium",
+      "estimated_hours": 1.5,
+      "dependencies": ["BE-003"],
+      "files_affected": {
+        "modify": [
+          "app/src/main/java/com/example/liftrix/domain/service/AnalyticsService.kt - Add simple workout event methods",
+          "app/src/main/java/com/example/liftrix/data/service/AnalyticsServiceImpl.kt - Implement simple workout tracking",
+          "app/src/main/java/com/example/liftrix/domain/usecase/analytics/LogWorkoutEventUseCase.kt - Add simple workout methods"
+        ],
+        "read": [
+          "app/src/main/java/com/example/liftrix/domain/model/SimpleWorkout.kt"
+        ]
+      },
+      "implementation_details": {
+        "approach": "Add parallel analytics methods for simple workouts with relevant metrics (exercise count, total sets, creation time)",
+        "functions_to_implement": [
+          "AnalyticsService.logSimpleWorkoutCreated(userId: String, workoutId: String, exerciseCount: Int, totalSets: Int)",
+          "LogWorkoutEventUseCase.logSimpleWorkoutCreated(workout: SimpleWorkout)",
+          "AnalyticsService.logSimpleWorkoutStarted(userId: String, workoutId: String, templateUsed: Boolean)"
+        ],
+        "tests_to_write": [
+          "app/src/test/java/com/example/liftrix/domain/usecase/analytics/LogWorkoutEventUseCaseTest.kt"
+        ],
+        "libraries_needed": ["No new libraries required"],
+        "integration_points": ["Firebase Analytics", "CreateSimpleWorkoutUseCase"]
+      },
+      "acceptance_criteria": [
+        "Simple workout creation events tracked with exercise count and total sets",
+        "Events include user ID, workout ID, and creation timestamp",
+        "Analytics distinguish between simple workouts and regular workouts",
+        "Events properly categorized for reporting and analysis",
+        "Error handling prevents analytics failures from affecting workout creation"
+      ],
+      "validation_steps": [
+        "Create simple workout and verify analytics event fired",
+        "Check Firebase Analytics dashboard for simple workout events",
+        "Verify event parameters include correct metrics",
+        "Test error scenarios don't break workout creation flow"
+      ],
+      "potential_risks": ["Analytics API changes", "Event naming conflicts with existing events"],
+      "example_code": [
+        "// In AnalyticsServiceImpl\nsuspend fun logSimpleWorkoutCreated(userId: String, workoutId: String, exerciseCount: Int, totalSets: Int): Result<Unit> {\n  val params = bundleOf(\n    \"user_id\" to userId,\n    \"workout_id\" to workoutId,\n    \"exercise_count\" to exerciseCount,\n    \"total_sets\" to totalSets,\n    \"workout_type\" to \"simple\"\n  )\n  return firebaseAnalytics.logEvent(\"simple_workout_created\", params)\n}"
+      ]
+    },
+    {
+      "id": "INT-002B",
+      "title": "Integrate Analytics into Simple Workout Creation Flow",
+      "description": "Connect the analytics logging to the actual simple workout creation use case to automatically track events when workouts are created",
+      "category": "integration",
+      "status": "todo",
+      "priority": "medium",
+      "estimated_hours": 0.5,
+      "dependencies": ["INT-002A", "BE-003"],
+      "files_affected": {
+        "modify": [
+          "app/src/main/java/com/example/liftrix/domain/usecase/CreateSimpleWorkoutUseCase.kt - Add analytics logging call"
+        ],
+        "read": [
+          "app/src/main/java/com/example/liftrix/domain/usecase/analytics/LogWorkoutEventUseCase.kt"
+        ]
+      },
+      "implementation_details": {
+        "approach": "Add analytics call to CreateSimpleWorkoutUseCase after successful workout creation, with proper error handling",
+        "functions_to_implement": [
+          "CreateSimpleWorkoutUseCase.logCreationEvent(workout: SimpleWorkout)"
+        ],
+        "tests_to_write": [
+          "Extend existing CreateSimpleWorkoutUseCaseTest to verify analytics integration"
+        ],
+        "libraries_needed": ["No new libraries required"],
+        "integration_points": ["LogWorkoutEventUseCase", "CreateSimpleWorkoutUseCase success flow"]
+      },
+      "acceptance_criteria": [
+        "Analytics event automatically fired on successful simple workout creation",
+        "Analytics failures don't prevent workout creation success",
+        "Event includes all relevant workout metrics",
+        "Integration properly tested with mock analytics service"
+      ],
+      "validation_steps": [
+        "Create simple workout and verify analytics event fired",
+        "Test analytics failure scenario doesn't break workout creation",
+        "Verify correct metrics passed to analytics service"
+      ],
+      "potential_risks": ["Analytics dependency affecting core functionality"],
+      "example_code": [
+        "// In CreateSimpleWorkoutUseCase after successful creation\nsimpleWorkoutRepository.createWorkout(workout)\n  .onSuccess { createdWorkout ->\n    // Analytics logging should not fail workout creation\n    try {\n      logWorkoutEventUseCase.logSimpleWorkoutCreated(createdWorkout)\n    } catch (e: Exception) {\n      Timber.w(e, \"Analytics logging failed for workout: ${createdWorkout.id}\")\n    }\n  }"
+      ]
+    },
+    {
+      "id": "TEST-001A",
+      "title": "Unit Tests for Simple Workout Domain Models",
+      "description": "Comprehensive unit tests for SimpleWorkout and SimpleExercise domain models covering validation rules, business logic, and edge cases",
+      "category": "testing",
+      "status": "todo",
+      "priority": "medium",
+      "estimated_hours": 2,
+      "dependencies": ["BE-001"],
+      "files_affected": {
+        "create": [
+          "app/src/test/java/com/example/liftrix/domain/model/SimpleWorkoutTest.kt",
+          "app/src/test/java/com/example/liftrix/domain/model/SimpleExerciseTest.kt",
+          "app/src/test/java/com/example/liftrix/domain/model/SimpleWorkoutIdTest.kt",
+          "app/src/test/java/com/example/liftrix/domain/model/SimpleExerciseIdTest.kt"
+        ],
+        "read": [
+          "app/src/test/java/com/example/liftrix/domain/model/WorkoutTest.kt - Pattern reference"
+        ]
+      },
+      "implementation_details": {
+        "approach": "Test-driven approach covering all validation rules, boundary conditions, and business methods using JUnit5 and AssertJ",
+        "functions_to_implement": [
+          "SimpleWorkoutTest.should_create_valid_workout_with_required_fields()",
+          "SimpleWorkoutTest.should_fail_validation_with_invalid_name_length()",
+          "SimpleExerciseTest.should_validate_reps_within_bounds()",
+          "SimpleExerciseTest.should_validate_rpe_range()"
+        ],
+        "tests_to_write": [
+          "Validation scenarios for all fields",
+          "Boundary value testing (1, 999 reps, etc.)",
+          "Business logic methods (total sets calculation)",
+          "Value object equality and hash code"
+        ],
+        "libraries_needed": ["JUnit5", "AssertJ", "Kotest (if preferred)"],
+        "integration_points": ["Domain model validation", "Value object behavior"]
+      },
+      "acceptance_criteria": [
+        "90%+ code coverage for domain models",
+        "All validation rules tested with valid and invalid inputs",
+        "Boundary conditions tested (min/max values)",
+        "Business methods tested with various scenarios",
+        "Value object behavior (equals, hashCode, toString) verified"
+      ],
+      "validation_steps": [
+        "Run tests and verify all pass",
+        "Check code coverage reports meet 90% threshold",
+        "Verify all validation error messages are tested",
+        "Ensure edge cases are covered"
+      ],
+      "potential_risks": ["Test data setup complexity", "Validation rule changes"],
+      "example_code": [
+        "@Test\nfun `should reject workout with name too short`() {\n  assertThatThrownBy {\n    SimpleWorkout(\n      id = SimpleWorkoutId.generate(),\n      userId = \"user123\",\n      name = \"AB\", // Too short\n      description = null,\n      exercises = emptyList(),\n      createdAt = Instant.now(),\n      updatedAt = Instant.now()\n    )\n  }.isInstanceOf(IllegalArgumentException::class.java)\n   .hasMessageContaining(\"Name must be 3-100 characters\")\n}"
+      ]
+    },
+    {
+      "id": "TEST-001B",
+      "title": "Unit Tests for Simple Workout Use Cases",
+      "description": "Unit tests for CreateSimpleWorkoutUseCase covering success scenarios, validation failures, and error handling with proper mocking",
+      "category": "testing",
+      "status": "todo",
+      "priority": "medium",
+      "estimated_hours": 2,
+      "dependencies": ["BE-003", "TEST-001A"],
+      "files_affected": {
+        "create": [
+          "app/src/test/java/com/example/liftrix/domain/usecase/CreateSimpleWorkoutUseCaseTest.kt"
+        ],
+        "read": [
+          "app/src/test/java/com/example/liftrix/domain/usecase/auth/SignInWithEmailUseCaseTest.kt - Pattern reference"
+        ]
+      },
+      "implementation_details": {
+        "approach": "MockK-based testing with comprehensive scenario coverage following existing use case test patterns",
+        "functions_to_implement": [
+          "CreateSimpleWorkoutUseCaseTest.should_create_workout_with_valid_input()",
+          "CreateSimpleWorkoutUseCaseTest.should_fail_when_user_not_authenticated()",
+          "CreateSimpleWorkoutUseCaseTest.should_handle_repository_failure_gracefully()",
+          "CreateSimpleWorkoutUseCaseTest.should_validate_exercise_input_constraints()"
+        ],
+        "tests_to_write": [
+          "Happy path scenarios with various exercise counts",
+          "Authentication failure scenarios",
+          "Repository failure scenarios",
+          "Input validation scenarios",
+          "Analytics integration scenarios"
+        ],
+        "libraries_needed": ["MockK", "JUnit5", "Kotlinx Coroutines Test"],
+        "integration_points": ["SimpleWorkoutRepository", "AuthRepository", "AnalyticsService"]
+      },
+      "acceptance_criteria": [
+        "All use case execution paths tested",
+        "Repository and auth service properly mocked",
+        "Error scenarios return appropriate Result.failure",
+        "Success scenarios return valid SimpleWorkout",
+        "Analytics integration tested with mock service"
+      ],
+      "validation_steps": [
+        "All tests pass consistently",
+        "Mock interactions verified correctly",
+        "Error handling paths covered",
+        "Analytics integration properly tested"
+      ],
+      "potential_risks": ["Mock setup complexity", "Coroutine testing challenges"],
+      "example_code": [
+        "@Test\nfun `should create workout with valid input`() = runTest {\n  // Arrange\n  every { authRepository.getCurrentUserId() } returns \"user123\"\n  coEvery { simpleWorkoutRepository.createWorkout(any()) } returns Result.success(mockWorkout)\n  coEvery { analyticsService.logWorkoutCreated(any()) } returns Result.success(Unit)\n  \n  // Act\n  val result = useCase(\"Test Workout\", \"Description\", validExercises)\n  \n  // Assert\n  assertThat(result.isSuccess).isTrue()\n  coVerify { simpleWorkoutRepository.createWorkout(any()) }\n}"
+      ]
+    },
+    {
+      "id": "TEST-001C",
+      "title": "Unit Tests for Simple Workout Repository",
+      "description": "Unit tests for SimpleWorkoutRepositoryImpl covering database operations, mapping, and error scenarios with in-memory database",
+      "category": "testing",
+      "status": "todo",
+      "priority": "medium",
+      "estimated_hours": 2,
+      "dependencies": ["BE-002", "BE-004"],
+      "files_affected": {
+        "create": [
+          "app/src/test/java/com/example/liftrix/data/repository/SimpleWorkoutRepositoryImplTest.kt"
+        ],
+        "read": [
+          "app/src/test/java/com/example/liftrix/data/repository/CustomExerciseRepositoryImplTest.kt - Pattern reference"
+        ]
+      },
+      "implementation_details": {
+        "approach": "Room in-memory database testing with real DAO operations and mapper integration",
+        "functions_to_implement": [
+          "SimpleWorkoutRepositoryImplTest.should_create_and_retrieve_workout()",
+          "SimpleWorkoutRepositoryImplTest.should_get_user_workouts_only()",
+          "SimpleWorkoutRepositoryImplTest.should_handle_database_constraints()",
+          "SimpleWorkoutRepositoryImplTest.should_map_entities_correctly()"
+        ],
+        "tests_to_write": [
+          "CRUD operations with real database",
+          "User-scoped data access",
+          "Database constraint violations",
+          "Entity-domain mapping accuracy",
+          "Sync status management"
+        ],
+        "libraries_needed": ["Room Testing", "JUnit5", "Kotlinx Coroutines Test"],
+        "integration_points": ["SimpleWorkoutDao", "SimpleExerciseDao", "SimpleWorkoutMapper"]
+      },
+      "acceptance_criteria": [
+        "All repository methods tested with real database operations",
+        "User data isolation verified",
+        "Database constraints properly tested",
+        "Mapping between entities and domain models verified",
+        "Error scenarios handled appropriately"
+      ],
+      "validation_steps": [
+        "All database operations work correctly",
+        "User isolation maintained",
+        "Constraint violations handled properly",
+        "Mapping accuracy verified"
+      ],
+      "potential_risks": ["Database setup complexity", "Test data management"],
+      "example_code": [
+        "@Test\nfun `should create and retrieve workout`() = runTest {\n  // Arrange\n  val workout = createTestSimpleWorkout()\n  \n  // Act\n  val createResult = repository.createWorkout(workout)\n  val retrieveResult = repository.getWorkoutById(workout.id.value)\n  \n  // Assert\n  assertThat(createResult.isSuccess).isTrue()\n  assertThat(retrieveResult.getOrNull()).isEqualTo(workout)\n}"
+      ]
+    },
+    {
+      "id": "TEST-002A",
+      "title": "UI Tests for Simple Workout Creation Flow",
+      "description": "End-to-end Compose UI tests for the complete simple workout creation flow from WorkoutScreen to results screen",
+      "category": "testing",
+      "status": "todo",
+      "priority": "high",
+      "estimated_hours": 3,
+      "dependencies": ["FE-001", "FE-002", "FE-003", "FE-004", "FE-005"],
+      "files_affected": {
+        "create": [
+          "app/src/androidTest/java/com/example/liftrix/ui/workout/simple/SimpleWorkoutCreationFlowTest.kt",
+          "app/src/androidTest/java/com/example/liftrix/ui/workout/simple/SimpleWorkoutResultsScreenTest.kt"
+        ],
+        "read": [
+          "app/src/androidTest/java/com/example/liftrix/ui/auth/AuthScreenTest.kt - Pattern reference"
+        ]
+      },
+      "implementation_details": {
+        "approach": "Hilt-based UI testing with ComposeTestRule for complete user journey simulation",
+        "functions_to_implement": [
+          "SimpleWorkoutCreationFlowTest.should_complete_workout_creation_end_to_end()",
+          "SimpleWorkoutCreationFlowTest.should_validate_form_inputs_correctly()",
+          "SimpleWorkoutCreationFlowTest.should_handle_navigation_properly()",
+          "SimpleWorkoutResultsScreenTest.should_display_workout_details()"
+        ],
+        "tests_to_write": [
+          "Complete creation flow from button tap to results screen",
+          "Form validation and error display",
+          "Navigation between steps",
+          "Results screen display and interactions",
+          "Back navigation scenarios"
+        ],
+        "libraries_needed": ["Compose Testing", "Hilt Testing", "Espresso"],
+        "integration_points": ["WorkoutScreen navigation", "SimpleWorkoutCreationScreen", "SimpleWorkoutResultsScreen"]
+      },
+      "acceptance_criteria": [
+        "Complete user journey tested from start to finish",
+        "All form validation scenarios covered",
+        "Navigation flows work correctly",
+        "Results screen displays accurate data",
+        "Error handling properly tested"
+      ],
+      "validation_steps": [
+        "End-to-end flow completes successfully",
+        "Form validation works as expected",
+        "Navigation state preserved correctly",
+        "Results screen shows created workout"
+      ],
+      "potential_risks": ["Compose testing complexity", "Test data setup", "Navigation state management"],
+      "example_code": [
+        "@Test\nfun should_complete_workout_creation_end_to_end() {\n  composeTestRule.setContent {\n    LiftrixTheme {\n      WorkoutScreen(user = testUser)\n    }\n  }\n  \n  // Tap create workout button\n  composeTestRule.onNodeWithText(\"Create Your First Workout\").performClick()\n  \n  // Fill workout details\n  composeTestRule.onNodeWithText(\"Workout Name\").performTextInput(\"Test Workout\")\n  composeTestRule.onNodeWithText(\"Next\").performClick()\n  \n  // Add exercise\n  composeTestRule.onNodeWithText(\"Add Exercise\").performClick()\n  composeTestRule.onNodeWithText(\"Exercise Name\").performTextInput(\"Push-ups\")\n  \n  // Complete creation\n  composeTestRule.onNodeWithText(\"Save Workout\").performClick()\n  \n  // Verify results screen\n  composeTestRule.onNodeWithText(\"Workout Created Successfully!\").assertIsDisplayed()\n}"
+      ]
+    },
+    {
+      "id": "TEST-002B",
+      "title": "Accessibility and Performance Tests",
+      "description": "Accessibility compliance tests and performance validation for the simple workout creation flow",
+      "category": "testing",
+      "status": "todo",
+      "priority": "medium",
+      "estimated_hours": 2,
+      "dependencies": ["TEST-002A"],
+      "files_affected": {
+        "create": [
+          "app/src/androidTest/java/com/example/liftrix/ui/workout/simple/SimpleWorkoutAccessibilityTest.kt",
+          "app/src/androidTest/java/com/example/liftrix/ui/workout/simple/SimpleWorkoutPerformanceTest.kt"
+        ],
+        "read": [
+          "app/src/androidTest/java/com/example/liftrix/ui/onboarding/AccessibilityTest.kt - Pattern reference"
+        ]
+      },
+      "implementation_details": {
+        "approach": "Accessibility scanner integration and performance benchmarking using Android testing frameworks",
+        "functions_to_implement": [
+          "SimpleWorkoutAccessibilityTest.should_meet_accessibility_requirements()",
+          "SimpleWorkoutAccessibilityTest.should_support_screen_reader_navigation()",
+          "SimpleWorkoutPerformanceTest.should_meet_form_submission_timing()",
+          "SimpleWorkoutPerformanceTest.should_meet_navigation_timing()"
+        ],
+        "tests_to_write": [
+          "Accessibility scanner compliance",
+          "Screen reader navigation flow",
+          "Keyboard navigation support",
+          "Form submission performance (<500ms)",
+          "Screen transition performance (<200ms)"
+        ],
+        "libraries_needed": ["Accessibility Testing Framework", "Android Benchmark"],
+        "integration_points": ["Compose accessibility semantics", "Navigation performance", "Form validation timing"]
+      },
+      "acceptance_criteria": [
+        "All screens pass accessibility scanner checks",
+        "Screen reader navigation works correctly",
+        "Keyboard navigation fully supported",
+        "Form submission completes within 500ms",
+        "Screen transitions complete within 200ms"
+      ],
+      "validation_steps": [
+        "Accessibility scanner reports no violations",
+        "Screen reader testing completed successfully",
+        "Performance benchmarks meet requirements",
+        "Keyboard navigation tested on all screens"
+      ],
+      "potential_risks": ["Performance variability on different devices", "Accessibility framework limitations"],
+      "example_code": [
+        "@Test\nfun should_meet_accessibility_requirements() {\n  composeTestRule.setContent {\n    SimpleWorkoutCreationScreen(\n      onNavigateBack = {},\n      onWorkoutCreated = {}\n    )\n  }\n  \n  composeTestRule.onRoot().performAccessibilityCheck()\n  \n  // Verify screen reader descriptions\n  composeTestRule.onNodeWithContentDescription(\"Workout name input\").assertExists()\n  composeTestRule.onNodeWithContentDescription(\"Save workout\").assertExists()\n}"
+      ]
+    }
+  ]
+}

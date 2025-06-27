@@ -23,6 +23,11 @@ value class Weight(val kilograms: Double) {
     
     fun toPounds(): Double = kilograms / 0.453592
     
+    /**
+     * Formats weight with appropriate precision
+     */
+    fun format(): String = "%.1f kg".format(kilograms)
+    
     operator fun plus(other: Weight): Weight = Weight(kilograms + other.kilograms)
     operator fun minus(other: Weight): Weight = Weight(kilograms - other.kilograms)
     operator fun times(multiplier: Double): Weight = Weight(kilograms * multiplier)

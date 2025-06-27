@@ -81,4 +81,31 @@ data class ExerciseLibrary(
         
         return 0.0
     }
+    
+    /**
+     * Converts ExerciseLibrary to Exercise with default empty sets and current timestamps
+     */
+    fun toExercise(workoutId: WorkoutId, orderIndex: Int): Exercise {
+        return Exercise(
+            id = ExerciseId.generate(),
+            workoutId = workoutId,
+            libraryExercise = this,
+            orderIndex = orderIndex,
+            targetSets = null,
+            targetReps = null,
+            targetWeight = null,
+            targetTime = null,
+            targetDistance = null,
+            sets = listOf(
+                ExerciseSet(
+                    id = ExerciseSetId.generate(),
+                    setNumber = 1,
+                    reps = Reps.ZERO,
+                    weight = Weight.ZERO
+                )
+            ),
+            notes = null,
+            createdAt = java.time.Instant.now()
+        )
+    }
 } 

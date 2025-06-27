@@ -90,8 +90,12 @@ class WorkoutSyncWorker @AssistedInject constructor(
                 }
             }
 
+
+            val totalSynced = syncedWorkoutIds.size
+            val totalUnsyncedAttempted = unsyncedWorkouts.size
+
             return when {
-                syncedWorkoutIds.isNotEmpty() && !hasError -> {
+                totalSynced > 0 && !hasError -> {
                     // All workouts synced successfully
                     Result.success(
                         Data.Builder()
@@ -99,9 +103,10 @@ class WorkoutSyncWorker @AssistedInject constructor(
                             .build()
                     )
                 }
-                syncedWorkoutIds.isNotEmpty() && hasError -> {
+                totalSynced > 0 && hasError -> {
                     // Some workouts synced, some failed - partial success
-                    Timber.w("Partial sync completed. Synced: ${syncedWorkoutIds.size}, Failed: ${unsyncedWorkouts.size - syncedWorkoutIds.size}")
+                    val failedCount = totalUnsyncedAttempted - totalSynced
+                    Timber.w("Partial sync completed. Synced: $totalSynced, Failed: $failedCount")
                     Result.success(
                         Data.Builder()
                             .putInt(KEY_SYNC_COUNT, syncedWorkoutIds.size)

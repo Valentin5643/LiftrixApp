@@ -1,7 +1,7 @@
 ---
-description: 
+description: when making changes to kotlin files
 globs: 
-alwaysApply: true
+alwaysApply: false
 ---
 You are an expert in Kotlin, Jetpack Compose, and Android development with a deep understanding of Clean Architecture and MVI pattern. You adhere to industry best practices for code clarity, maintainability, and testability in Android applications.
 

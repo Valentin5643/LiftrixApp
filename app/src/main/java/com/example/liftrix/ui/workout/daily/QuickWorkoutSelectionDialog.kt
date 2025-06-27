@@ -22,9 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -41,7 +39,8 @@ import com.example.liftrix.domain.model.WorkoutTemplate
  * 
  * @param isVisible Whether the dialog is currently visible
  * @param templates List of available workout templates
- * @param onTemplateSelected Callback when a template is selected (null for "Create from Scratch")
+ * @param onTemplateSelected Callback when a template is selected for quick workout
+ * @param onCreateFromScratch Callback when "Create from Scratch" is selected (routes to unified creation)
  * @param onDismiss Callback when dialog is dismissed
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,7 +48,8 @@ import com.example.liftrix.domain.model.WorkoutTemplate
 fun QuickWorkoutSelectionDialog(
     isVisible: Boolean,
     templates: List<WorkoutTemplate>,
-    onTemplateSelected: (WorkoutTemplate?) -> Unit,
+    onTemplateSelected: (WorkoutTemplate) -> Unit,
+    onCreateFromScratch: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -68,6 +68,7 @@ fun QuickWorkoutSelectionDialog(
             QuickWorkoutSelectionContent(
                 templates = templates,
                 onTemplateSelected = onTemplateSelected,
+                onCreateFromScratch = onCreateFromScratch,
                 onDismiss = onDismiss,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
@@ -78,7 +79,8 @@ fun QuickWorkoutSelectionDialog(
 @Composable
 private fun QuickWorkoutSelectionContent(
     templates: List<WorkoutTemplate>,
-    onTemplateSelected: (WorkoutTemplate?) -> Unit,
+    onTemplateSelected: (WorkoutTemplate) -> Unit,
+    onCreateFromScratch: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -116,7 +118,7 @@ private fun QuickWorkoutSelectionContent(
         // Create from Scratch option
         CreateFromScratchCard(
             onClick = { 
-                onTemplateSelected(null)
+                onCreateFromScratch()
                 onDismiss()
             }
         )

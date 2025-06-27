@@ -21,6 +21,8 @@ class AnalyticsServiceImpl @Inject constructor(
         // Custom event names
         private const val EVENT_WORKOUT_STARTED = "workout_started"
         private const val EVENT_WORKOUT_COMPLETED = "workout_completed"
+        private const val EVENT_WORKOUT_CREATED = "workout_created"
+        private const val EVENT_EXERCISE_SELECTED = "exercise_selected"
         private const val EVENT_PR_ACHIEVED = "pr_achieved"
         private const val EVENT_AI_SUMMARY_VIEWED = "ai_summary_viewed"
         private const val EVENT_SPOTTER_ADDED = "spotter_added"
@@ -35,12 +37,15 @@ class AnalyticsServiceImpl @Inject constructor(
         private const val PARAM_DURATION_MINUTES = "duration_minutes"
         private const val PARAM_TOTAL_VOLUME_KG = "total_volume_kg"
         private const val PARAM_EXERCISE_NAME = "exercise_name"
+        private const val PARAM_EXERCISE_ID = "exercise_id"
+        private const val PARAM_SELECTION_METHOD = "selection_method"
         private const val PARAM_RECORD_TYPE = "record_type"
         private const val PARAM_NEW_VALUE = "new_value"
         private const val PARAM_PREVIOUS_VALUE = "previous_value"
         private const val PARAM_SUMMARY_TYPE = "summary_type"
         private const val PARAM_SPOTTER_USER_ID = "spotter_user_id"
         private const val PARAM_CONNECTION_TYPE = "connection_type"
+        private const val PARAM_WORKOUT_TYPE = "workout_type"
         
         // User property names
         private const val USER_PROP_SUBSCRIPTION_TIER = "subscription_tier"
@@ -129,6 +134,52 @@ class AnalyticsServiceImpl @Inject constructor(
             Result.success(Unit)
         } catch (exception: Exception) {
             Timber.e(exception, "Failed to log workout completion: $workoutId")
+            Result.failure(exception)
+        }
+    }
+
+    override suspend fun logWorkoutCreationEvent(
+        userId: String,
+        workoutId: String,
+        workoutName: String,
+        workoutType: String,
+        exerciseCount: Int
+    ): Result<Unit> {
+        return try {
+            firebaseAnalytics.logEvent(EVENT_WORKOUT_CREATED) {
+                param(FirebaseAnalytics.Param.ITEM_ID, workoutId)
+                param(FirebaseAnalytics.Param.ITEM_NAME, workoutName)
+                param(FirebaseAnalytics.Param.CONTENT_TYPE, "workout")
+                param(PARAM_WORKOUT_TYPE, workoutType)
+                param(PARAM_EXERCISE_COUNT, exerciseCount.toLong())
+            }
+            
+            Timber.d("Workout creation logged: $workoutId ($workoutType) with $exerciseCount exercises")
+            Result.success(Unit)
+        } catch (exception: Exception) {
+            Timber.e(exception, "Failed to log workout creation: $workoutId")
+            Result.failure(exception)
+        }
+    }
+
+    override suspend fun logExerciseSelectionEvent(
+        userId: String,
+        exerciseId: String,
+        exerciseName: String,
+        selectionMethod: String
+    ): Result<Unit> {
+        return try {
+            firebaseAnalytics.logEvent(EVENT_EXERCISE_SELECTED) {
+                param(PARAM_EXERCISE_ID, exerciseId)
+                param(PARAM_EXERCISE_NAME, exerciseName)
+                param(PARAM_SELECTION_METHOD, selectionMethod)
+                param(FirebaseAnalytics.Param.CONTENT_TYPE, "exercise_selection")
+            }
+            
+            Timber.d("Exercise selection logged: $exerciseName via $selectionMethod")
+            Result.success(Unit)
+        } catch (exception: Exception) {
+            Timber.e(exception, "Failed to log exercise selection: $exerciseName")
             Result.failure(exception)
         }
     }

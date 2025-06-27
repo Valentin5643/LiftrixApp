@@ -7,10 +7,10 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverters
 import com.example.liftrix.data.local.converter.DateTimeConverters
-import java.time.Instant
 
 /**
  * Room entity representing an exercise set in local database
+ * Supports flexible metrics (weight, time, distance, RPE) for enhanced set tracking
  */
 @Entity(
     tableName = "exercise_sets",
@@ -23,38 +23,41 @@ import java.time.Instant
         )
     ],
     indices = [
-        Index(value = ["exercise_id"]),
-        Index(value = ["set_number"]),
-        Index(value = ["is_completed"])
+        Index(value = ["exercise_id"], name = "index_exercise_sets_exercise_id"),
+        Index(value = ["set_number"], name = "index_exercise_sets_set_number"),
+        Index(value = ["completed_at"], name = "index_exercise_sets_completed_at")
     ]
 )
 @TypeConverters(DateTimeConverters::class)
 data class ExerciseSetEntity(
-    @PrimaryKey
+    @PrimaryKey(autoGenerate = true)
     @ColumnInfo(name = "id")
-    val id: String,
+    val id: Long = 0,
     
     @ColumnInfo(name = "exercise_id")
-    val exerciseId: String,
+    val exerciseId: Long,
     
     @ColumnInfo(name = "set_number")
     val setNumber: Int,
     
-    @ColumnInfo(name = "weight_kg")
-    val weightKg: Double,
-    
     @ColumnInfo(name = "reps")
-    val reps: Int,
+    val reps: Int? = null,
     
-    @ColumnInfo(name = "is_completed")
-    val isCompleted: Boolean = false,
+    @ColumnInfo(name = "weight_kg")
+    val weightKg: Float? = null,
     
-    @ColumnInfo(name = "rest_time_seconds")
-    val restTimeSeconds: Int?,
+    @ColumnInfo(name = "time_seconds")
+    val timeSeconds: Int? = null,
+    
+    @ColumnInfo(name = "distance_meters")
+    val distanceMeters: Float? = null,
+    
+    @ColumnInfo(name = "rpe")
+    val rpe: Int? = null,
     
     @ColumnInfo(name = "notes")
-    val notes: String?,
+    val notes: String? = null,
     
     @ColumnInfo(name = "completed_at")
-    val completedAt: Instant?
+    val completedAt: Long? = null
 ) 

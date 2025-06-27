@@ -23,7 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-
 import com.example.liftrix.ui.MainViewModel
 import com.example.liftrix.ui.auth.AuthActivity
 import com.example.liftrix.ui.theme.LiftrixTheme
@@ -103,7 +102,10 @@ fun LoadingScreen() {
 
 @Composable
 fun AuthenticatedContent(user: com.example.liftrix.domain.model.User) {
-    // Direct routing to WorkoutScreen as requested
-    com.example.liftrix.ui.workout.WorkoutScreen(user = user)
+    // Single entry point navigation through WorkoutNavigation
+    com.example.liftrix.ui.navigation.WorkoutNavigation(
+        onNavigateBack = { /* Handle back navigation */ },
+        onWorkoutComplete = { /* Handle workout completion */ }
+    )
 }
 

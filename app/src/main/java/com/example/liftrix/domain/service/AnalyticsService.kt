@@ -35,6 +35,27 @@ interface AnalyticsService {
     ): Result<Unit>
     
     /**
+     * Logs unified workout creation event
+     */
+    suspend fun logWorkoutCreationEvent(
+        userId: String,
+        workoutId: String,
+        workoutName: String,
+        workoutType: String,
+        exerciseCount: Int
+    ): Result<Unit>
+    
+    /**
+     * Logs exercise selection event with selection method
+     */
+    suspend fun logExerciseSelectionEvent(
+        userId: String,
+        exerciseId: String,
+        exerciseName: String,
+        selectionMethod: String
+    ): Result<Unit>
+    
+    /**
      * Logs personal record achievement
      */
     suspend fun logPersonalRecord(

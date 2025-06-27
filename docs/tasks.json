@@ -1,802 +1,780 @@
 {
   "metadata": {
-    "prd_file": "docs/prd.md",
-    "created_date": "2024-12-19T10:30:00Z",
-    "description": "Task breakdown for implementing workout creation flow with custom exercises, intelligent search, template management, and daily workouts to achieve 70% new user engagement and <10 minute first workout completion",
-    "total_tasks": 22,
-    "estimated_hours": 125,
-    "confidence_level": "95%+"
+    "prd_file": "docs/SPEC-20250626-workout-ui-consolidation.md",
+    "created_date": "2025-01-27T15:45:00Z",
+    "description": "Task breakdown for consolidating multiple workout creation UIs into single optimized flow with compact set input and exercise library integration",
+    "total_tasks": 15,
+    "estimated_hours": 43,
+    "confidence_level": "95%"
   },
   "tasks": [
     {
-      "id": "DB-001",
-      "title": "Create CustomExercise database entity and DAO",
-      "description": "Implement Room entity for user-created custom exercises with full CRUD operations and user-scoped data isolation",
-      "category": "database",
+      "id": "UI-001",
+      "title": "Create unified WorkoutCreationScreen component",
+      "description": "Implement single comprehensive workout creation screen that consolidates functionality from SimpleWorkout, RedesignedWorkout, and CustomExercise creation flows",
+      "category": "frontend",
+      "status": "done",
+      "priority": "high",
+      "estimated_hours": 8,
+      "dependencies": [],
+      "files_affected": {
+        "create": [
+          "app/src/main/java/com/example/liftrix/ui/workout/creation/UnifiedWorkoutCreationScreen.kt"
+        ],
+        "modify": [],
+        "read": [
+          "app/src/main/java/com/example/liftrix/ui/workout/creation/WorkoutCreationScreen.kt",
+          "app/src/main/java/com/example/liftrix/ui/workout/creation/RedesignedWorkoutCreationScreen.kt",
+          "app/src/main/java/com/example/liftrix/ui/workout/simple/"
+        ]
+      },
+      "implementation_details": {
+        "approach": "Single Activity with Jetpack Compose using LazyColumn layout for optimal performance",
+        "functions_to_implement": [
+          "@Composable UnifiedWorkoutCreationScreen(state: WorkoutCreationUiState, onEvent: (WorkoutCreationEvent) -> Unit)",
+          "WorkoutHeaderSection(workout: WorkoutDraft, onEvent: (WorkoutCreationEvent) -> Unit)",
+          "AddExerciseButton(onClick: () -> Unit)"
+        ],
+        "tests_to_write": [
+          "app/src/androidTest/java/com/example/liftrix/ui/workout/creation/UnifiedWorkoutCreationScreenTest.kt"
+        ],
+        "libraries_needed": [],
+        "integration_points": ["Jetpack Compose Navigation", "Material 3 components", "Unified ViewModel"]
+      },
+      "acceptance_criteria": [
+        "Single screen handles all workout creation scenarios",
+        "WorkoutHeaderSection for workout metadata input",
+        "Exercise list displays using ExerciseCard components",
+        "Add Exercise button opens ExerciseSelector modal",
+        "Proper loading states and error handling"
+      ],
+      "validation_steps": [
+        "UI tests for all user interactions",
+        "Navigation flow testing",
+        "State management validation"
+      ],
+      "potential_risks": [
+        "Complex state management with multiple exercise types",
+        "Performance with large workout lists"
+      ],
+      "example_code": [
+        "@Composable fun UnifiedWorkoutCreationScreen() { LazyColumn(modifier = modifier) { item { WorkoutHeaderSection() } items(exercises) { ExerciseCard() } item { AddExerciseButton() } } }"
+      ]
+    },
+    {
+      "id": "UI-002",
+      "title": "Implement compact ExerciseCard component",
+      "description": "Create expandable exercise card component with <80dp collapsed height, exercise thumbnail, clickable name, and inline set management",
+      "category": "frontend",
+      "status": "done",
+      "priority": "high",
+      "estimated_hours": 6,
+      "dependencies": [],
+      "files_affected": {
+        "create": [
+          "app/src/main/java/com/example/liftrix/ui/workout/creation/components/CompactExerciseCard.kt",
+          "app/src/main/java/com/example/liftrix/ui/workout/creation/components/ExerciseHeader.kt"
+        ],
+        "modify": [],
+        "read": [
+          "app/src/main/java/com/example/liftrix/domain/model/Exercise.kt",
+          "app/src/main/java/com/example/liftrix/ui/theme/Theme.kt"
+        ]
+      },
+      "implementation_details": {
+        "approach": "Material 3 Card with AnimatedVisibility for expandable content and optimal touch targets",
+        "functions_to_implement": [
+          "@Composable ExerciseCard(exercise: SelectedExercise, isExpanded: Boolean, onEvent: (WorkoutCreationEvent) -> Unit)",
+          "@Composable ExerciseHeader(exercise: SelectedExercise, isExpanded: Boolean, onToggleExpand: () -> Unit, onNameClick: () -> Unit)",
+          "SetManagementSection(sets: List<ExerciseSet>, exerciseType: ExerciseType, onEvent: (WorkoutCreationEvent) -> Unit)"
+        ],
+        "tests_to_write": [
+          "app/src/androidTest/java/com/example/liftrix/ui/workout/creation/components/CompactExerciseCardTest.kt"
+        ],
+        "libraries_needed": [],
+        "integration_points": ["AnimatedVisibility", "Material 3 Card", "Exercise domain models"]
+      },
+      "acceptance_criteria": [
+        "Card height <80dp when collapsed",
+        "Exercise thumbnail 40x40dp with placeholder support",
+        "Exercise name clickable with touch feedback",
+        "Expand/collapse animation smooth",
+        "Touch targets minimum 44x44dp"
+      ],
+      "validation_steps": [
+        "UI tests for expand/collapse functionality",
+        "Touch target accessibility testing",
+        "Layout measurement validation"
+      ],
+      "potential_risks": [
+        "Animation performance with many cards",
+        "Layout complexity with conditional content"
+      ],
+      "example_code": [
+        "Card(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) { Column { ExerciseHeader() AnimatedVisibility(visible = isExpanded) { SetManagementSection() } } }"
+      ]
+    },
+    {
+      "id": "UI-003",
+      "title": "Build SetInputRow with conditional weight fields",
+      "description": "Create inline set input component with conditional weight field display based on exercise type and 48dp row height",
+      "category": "frontend",
       "status": "done",
       "priority": "high",
       "estimated_hours": 4,
       "dependencies": [],
       "files_affected": {
         "create": [
-          "app/src/main/java/com/example/liftrix/data/local/entity/CustomExerciseEntity.kt",
-          "app/src/main/java/com/example/liftrix/data/local/dao/CustomExerciseDao.kt"
+          "app/src/main/java/com/example/liftrix/ui/workout/creation/components/SetInputRow.kt",
+          "app/src/main/java/com/example/liftrix/ui/workout/creation/components/SetInputField.kt"
         ],
-        "modify": [
-          "app/src/main/java/com/example/liftrix/data/local/LiftrixDatabase.kt - Add CustomExercise entities and DAOs"
-        ],
+        "modify": [],
         "read": [
-          "app/src/main/java/com/example/liftrix/data/local/entity/ExerciseEntity.kt"
+          "app/src/main/java/com/example/liftrix/domain/model/ExerciseSet.kt",
+          "app/src/main/java/com/example/liftrix/domain/model/ExerciseType.kt"
         ]
       },
       "implementation_details": {
-        "approach": "Extend existing entity patterns with user-scoped custom exercise storage",
+        "approach": "Row layout with weight-based sizing and conditional field visibility based on ExerciseType.supportsWeight",
         "functions_to_implement": [
-          "CustomExerciseDao.insertCustomExercise(CustomExerciseEntity): Long",
-          "CustomExerciseDao.getAllCustomExercisesForUser(userId: String): Flow<List<CustomExerciseEntity>>",
-          "CustomExerciseDao.deleteCustomExercise(customExerciseId: String): Int",
-          "CustomExerciseDao.updateCustomExercise(CustomExerciseEntity): Int"
+          "@Composable SetInputRow(set: ExerciseSet, exerciseType: ExerciseType, onSetUpdated: (ExerciseSet) -> Unit, onDeleteSet: () -> Unit)",
+          "@Composable SetInputField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier)",
+          "validateSetInput(set: ExerciseSet): Boolean"
         ],
         "tests_to_write": [
-          "app/src/test/java/com/example/liftrix/data/local/dao/CustomExerciseDaoTest.kt"
-        ],
-        "libraries_needed": ["Room@2.6.0"],
-        "integration_points": ["User authentication context for data isolation"]
-      },
-      "acceptance_criteria": [
-        "CustomExercise entity supports name, muscle groups, equipment, difficulty",
-        "All operations scoped to authenticated user ID",
-        "Name uniqueness enforced per user with max 100 characters",
-        "DAO methods return Flow for reactive updates"
-      ],
-      "validation_steps": [
-        "Unit tests pass for all DAO operations",
-        "Database migration executes without errors",
-        "User data isolation verified in tests"
-      ],
-      "potential_risks": ["Database migration complexity", "User scope validation"],
-      "example_code": [
-        "@Entity(tableName = \"custom_exercises\") data class CustomExerciseEntity(@PrimaryKey val id: String, @ColumnInfo(name = \"user_id\") val userId: String, val name: String, val primaryMuscleGroup: String, val equipment: String, val secondaryMuscles: List<String>?, val difficulty: Int?, val notes: String?, val createdAt: Instant, val updatedAt: Instant)"
-      ]
-    },
-    {
-      "id": "DB-002", 
-      "title": "Create WorkoutTemplate entity distinct from daily workouts",
-      "description": "Implement separate entities for reusable workout templates vs daily workout instances to support template reuse patterns",
-      "category": "database",
-      "status": "done",
-      "priority": "high", 
-      "estimated_hours": 3,
-      "dependencies": ["DB-001"],
-      "files_affected": {
-        "create": [
-          "app/src/main/java/com/example/liftrix/data/local/entity/WorkoutTemplateEntity.kt",
-          "app/src/main/java/com/example/liftrix/data/local/entity/DailyWorkoutEntity.kt",
-          "app/src/main/java/com/example/liftrix/data/local/dao/WorkoutTemplateDao.kt",
-          "app/src/main/java/com/example/liftrix/data/local/dao/DailyWorkoutDao.kt"
-        ],
-        "modify": [
-          "app/src/main/java/com/example/liftrix/data/local/LiftrixDatabase.kt - Add template entities"
-        ],
-        "read": [
-          "app/src/main/java/com/example/liftrix/data/local/entity/WorkoutEntity.kt"
-        ]
-      },
-      "implementation_details": {
-        "approach": "Create separate template and daily workout storage with foreign key relationships",
-        "functions_to_implement": [
-          "WorkoutTemplateDao.insertTemplate(WorkoutTemplateEntity): Long",
-          "WorkoutTemplateDao.getAllTemplatesForUser(userId: String): Flow<List<WorkoutTemplateEntity>>",
-          "DailyWorkoutDao.insertDailyWorkout(DailyWorkoutEntity): Long",
-          "DailyWorkoutDao.convertToTemplate(workoutId: String, templateName: String): Long"
-        ],
-        "tests_to_write": [
-          "app/src/test/java/com/example/liftrix/data/local/dao/WorkoutTemplateDaoTest.kt"
-        ],
-        "libraries_needed": ["Room@2.6.0"],
-        "integration_points": ["Custom exercise relationships", "User authentication"]
-      },
-      "acceptance_criteria": [
-        "Templates preserve exercise order and target sets/reps/weight",
-        "Template names unique per user with 100 character limit", 
-        "Daily workouts reference templates but store actual performance data",
-        "Support template editing without affecting historical workouts"
-      ],
-      "validation_steps": [
-        "Template CRUD operations work correctly",
-        "Template-to-daily-workout conversion functions properly",
-        "Data integrity maintained across template modifications"
-      ],
-      "potential_risks": ["Template versioning complexity", "Data relationship management"],
-      "example_code": [
-        "@Entity(tableName = \"workout_templates\") data class WorkoutTemplateEntity(@PrimaryKey val id: String, val userId: String, val name: String, val exercises: List<String>, val createdAt: Instant, val updatedAt: Instant)"
-      ]
-    },
-    {
-      "id": "DB-003",
-      "title": "Create exercise library seed data with 50+ exercises",
-      "description": "Populate database with comprehensive exercise library covering all major muscle groups with equipment categorization",
-      "category": "database",
-      "status": "done", 
-      "priority": "high",
-      "estimated_hours": 5,
-      "dependencies": ["DB-001", "DB-002"],
-      "files_affected": {
-        "create": [
-          "app/src/main/java/com/example/liftrix/data/local/seed/ExerciseLibrarySeedData.kt",
-          "app/src/main/assets/exercise_library.json"
-        ],
-        "modify": [
-          "app/src/main/java/com/example/liftrix/data/local/LiftrixDatabase.kt - Add seed data population"
-        ],
-        "read": [
-          "app/src/main/java/com/example/liftrix/domain/model/Equipment.kt"
-        ]
-      },
-      "implementation_details": {
-        "approach": "Create JSON seed data with 50+ exercises across all muscle groups and equipment types",
-        "functions_to_implement": [
-          "ExerciseLibrarySeedData.populateExerciseLibrary(database: LiftrixDatabase)",
-          "ExerciseLibrarySeedData.getChestExercises(): List<ExerciseLibraryEntity>",
-          "ExerciseLibrarySeedData.getVariationsByMovement(movement: String): List<ExerciseLibraryEntity>"
-        ],
-        "tests_to_write": [
-          "app/src/test/java/com/example/liftrix/data/local/seed/ExerciseLibrarySeedDataTest.kt"
-        ],
-        "libraries_needed": ["Gson for JSON parsing"],
-        "integration_points": ["Equipment enum integration", "Exercise categorization"]
-      },
-      "acceptance_criteria": [
-        "50+ exercises covering Chest, Back, Shoulders, Arms, Legs, Core, Cardio",
-        "Multiple equipment variations for common movements (e.g., lateral raises with bands, dumbbells)",
-        "Proper muscle group and equipment categorization",
-        "Exercise names support fuzzy search patterns"
-      ],
-      "validation_steps": [
-        "All muscle groups have adequate exercise coverage",
-        "Exercise variations properly grouped by movement pattern",
-        "Seed data loads successfully on app initialization"
-      ],
-      "potential_risks": ["Exercise data accuracy", "Equipment mapping consistency"],
-      "example_code": [
-        "val exercises = listOf(ExerciseLibraryEntity(\"chest-bench-press-barbell\", \"Bench Press\", \"Chest\", \"BARBELL\", listOf(\"Chest\", \"Shoulders\", \"Triceps\")), ExerciseLibraryEntity(\"chest-bench-press-dumbbell\", \"Dumbbell Bench Press\", \"Chest\", \"DUMBBELLS\", listOf(\"Chest\", \"Shoulders\", \"Triceps\")))"
-      ]
-    },
-    {
-      "id": "BE-001",
-      "title": "Create CustomExercise domain model",
-      "description": "Implement domain model for user-created exercises with validation and business rules",
-      "category": "backend",
-      "status": "done",
-      "priority": "high",
-      "estimated_hours": 3,
-      "dependencies": ["DB-001"],
-      "files_affected": {
-        "create": [
-          "app/src/main/java/com/example/liftrix/domain/model/CustomExercise.kt",
-          "app/src/main/java/com/example/liftrix/domain/model/CustomExerciseId.kt"
-        ],
-        "read": [
-          "app/src/main/java/com/example/liftrix/domain/model/Exercise.kt",
-          "app/src/main/java/com/example/liftrix/domain/model/ExerciseCategory.kt"
-        ]
-      },
-      "implementation_details": {
-        "approach": "Create immutable domain model with validation and business rules",
-        "functions_to_implement": [
-          "CustomExercise.create(name: String, primaryMuscle: ExerciseCategory, equipment: Equipment): CustomExercise",
-          "CustomExercise.updateName(newName: String): CustomExercise",
-          "CustomExercise.addSecondaryMuscle(muscle: ExerciseCategory): CustomExercise"
-        ],
-        "tests_to_write": [
-          "app/src/test/java/com/example/liftrix/domain/model/CustomExerciseTest.kt"
+          "app/src/androidTest/java/com/example/liftrix/ui/workout/creation/components/SetInputRowTest.kt"
         ],
         "libraries_needed": [],
-        "integration_points": ["Exercise categories", "Equipment types"]
+        "integration_points": ["Material 3 TextField", "ExerciseType system", "Weight domain model"]
       },
       "acceptance_criteria": [
-        "Name validation (1-100 characters, non-blank)",
-        "Primary muscle group required from predefined categories",
-        "Equipment selection from existing Equipment enum",
-        "Optional secondary muscles, difficulty (1-10), notes (max 500 chars)"
+        "Row height exactly 48dp for consistent touch targets",
+        "Weight field only visible for exercises supporting weight",
+        "Reps input always visible",
+        "RPE input with 60dp fixed width",
+        "Delete button with proper accessibility"
       ],
       "validation_steps": [
-        "Validation rules enforced in model constructor",
-        "Business rules tested with edge cases",
-        "Model immutability verified"
+        "UI tests for conditional field display",
+        "Input validation testing",
+        "Touch target accessibility verification"
       ],
-      "potential_risks": ["Validation complexity", "Business rule enforcement"],
+      "potential_risks": [
+        "Input validation complexity",
+        "Layout shifting with conditional fields"
+      ],
       "example_code": [
-        "data class CustomExercise(val id: CustomExerciseId, val userId: String, val name: String, val primaryMuscle: ExerciseCategory, val equipment: Equipment, val secondaryMuscles: Set<ExerciseCategory> = emptySet(), val difficulty: Int? = null, val notes: String? = null, val createdAt: Instant, val updatedAt: Instant) { init { require(name.isNotBlank() && name.length <= 100) } }"
+        "Row(modifier = modifier.fillMaxWidth().height(48.dp)) { Text(setNumber) SetInputField(reps) if (exerciseType.supportsWeight) SetInputField(weight) SetInputField(rpe) IconButton(Delete) }"
       ]
     },
     {
-      "id": "BE-002",
-      "title": "Create WorkoutTemplate domain model",
-      "description": "Implement domain model for reusable workout templates with exercise ordering and targeting",
-      "category": "backend", 
-      "status": "done",
-      "priority": "high",
-      "estimated_hours": 3,
-      "dependencies": ["BE-001", "DB-002"],
-      "files_affected": {
-        "create": [
-          "app/src/main/java/com/example/liftrix/domain/model/WorkoutTemplate.kt",
-          "app/src/main/java/com/example/liftrix/domain/model/DailyWorkout.kt"
-        ],
-        "read": [
-          "app/src/main/java/com/example/liftrix/domain/model/Workout.kt"
-        ]
-      },
-      "implementation_details": {
-        "approach": "Extend existing workout patterns for template/instance distinction",
-        "functions_to_implement": [
-          "WorkoutTemplate.addExercise(exercise: Exercise): WorkoutTemplate",
-          "WorkoutTemplate.reorderExercises(newOrder: List<ExerciseId>): WorkoutTemplate",
-          "WorkoutTemplate.createDailyWorkout(): DailyWorkout"
-        ],
-        "tests_to_write": [
-          "app/src/test/java/com/example/liftrix/domain/model/WorkoutTemplateTest.kt"
-        ],
-        "libraries_needed": [],
-        "integration_points": ["Exercise models", "User context"]
-      },
-      "acceptance_criteria": [
-        "Template names unique per user (max 100 characters)",
-        "Exercise order preservation with reordering support",
-        "Template-to-daily-workout conversion with data population",
-        "Template editing without affecting historical workouts"
-      ],
-      "validation_steps": [
-        "Template validation rules enforced",
-        "Exercise ordering maintained correctly",
-        "Template immutability with proper update methods"
-      ],
-      "potential_risks": ["Template versioning", "Exercise relationship management"],
-      "example_code": [
-        "data class WorkoutTemplate(val id: WorkoutTemplateId, val userId: String, val name: String, val exercises: List<TemplateExercise>, val createdAt: Instant, val updatedAt: Instant) { fun createDailyWorkout(): DailyWorkout = DailyWorkout.fromTemplate(this) }"
-      ]
-    },
-    {
-      "id": "BE-003", 
-      "title": "Implement CreateCustomExerciseUseCase",
-      "description": "Create use case for custom exercise creation with validation and user-scoped storage",
-      "category": "backend",
-      "status": "done",
-      "priority": "medium",
-      "estimated_hours": 3,
-      "dependencies": ["BE-001"],
-      "files_affected": {
-        "create": [
-          "app/src/main/java/com/example/liftrix/domain/usecase/exercise/CreateCustomExerciseUseCase.kt"
-        ],
-        "read": [
-          "app/src/main/java/com/example/liftrix/domain/repository/CustomExerciseRepository.kt"
-        ]
-      },
-      "implementation_details": {
-        "approach": "Implement use case with input validation and repository interaction",
-        "functions_to_implement": [
-          "CreateCustomExerciseUseCase.invoke(input: CreateCustomExerciseInput): Result<CustomExercise>",
-          "CreateCustomExerciseUseCase.validateInput(input: CreateCustomExerciseInput): ValidationResult"
-        ],
-        "tests_to_write": [
-          "app/src/test/java/com/example/liftrix/domain/usecase/exercise/CreateCustomExerciseUseCaseTest.kt"
-        ],
-        "libraries_needed": [],
-        "integration_points": ["CustomExerciseRepository", "User authentication"]
-      },
-      "acceptance_criteria": [
-        "Name uniqueness validation per user",
-        "Input sanitization and validation",
-        "Proper error handling with user-friendly messages",
-        "User-scoped exercise creation"
-      ],
-      "validation_steps": [
-        "Use case validation logic tested",
-        "Repository integration verified",
-        "Error scenarios handled correctly"
-      ],
-      "potential_risks": ["Validation complexity", "User scope enforcement"],
-      "example_code": [
-        "class CreateCustomExerciseUseCase @Inject constructor(private val repository: CustomExerciseRepository, private val authRepository: AuthRepository) { suspend operator fun invoke(input: CreateCustomExerciseInput): Result<CustomExercise> { val userId = authRepository.getCurrentUserId() ?: return Result.failure(AuthenticationException()) return repository.createCustomExercise(userId, input) } }"
-      ]
-    },
-    {
-      "id": "BE-004",
-      "title": "Implement SearchExercisesUseCase with variations",
-      "description": "Create intelligent search that shows exercise variations based on equipment and movement patterns",
-      "category": "backend",
-      "status": "done", 
-      "priority": "high",
-      "estimated_hours": 5,
-      "dependencies": ["BE-001", "DB-003"],
-      "files_affected": {
-        "create": [
-          "app/src/main/java/com/example/liftrix/domain/usecase/exercise/SearchExercisesUseCase.kt",
-          "app/src/main/java/com/example/liftrix/domain/usecase/exercise/GetExerciseVariationsUseCase.kt"
-        ],
-        "read": [
-          "app/src/main/java/com/example/liftrix/domain/repository/ExerciseLibraryRepository.kt"
-        ]
-      },
-      "implementation_details": {
-        "approach": "Implement fuzzy search with movement pattern matching and equipment filtering",
-        "functions_to_implement": [
-          "SearchExercisesUseCase.search(query: String, equipment: Set<Equipment>): Flow<List<Exercise>>",
-          "SearchExercisesUseCase.getVariations(baseMovement: String): List<Exercise>",
-          "SearchExercisesUseCase.fuzzyMatch(query: String, exerciseName: String): Double"
-        ],
-        "tests_to_write": [
-          "app/src/test/java/com/example/liftrix/domain/usecase/exercise/SearchExercisesUseCaseTest.kt"
-        ],
-        "libraries_needed": ["Apache Commons Text for fuzzy matching"],
-        "integration_points": ["Exercise library", "Custom exercises", "Equipment filtering"]
-      },
-      "acceptance_criteria": [
-        "Search 'lateral raises' returns band and dumbbell variations",
-        "Fuzzy matching handles typos and partial matches",
-        "Results filtered by user's available equipment",
-        "Custom exercises included in search results",
-        "Response time <200ms for typical queries"
-      ],
-      "validation_steps": [
-        "Search accuracy tested with various queries",
-        "Performance benchmarks met",
-        "Equipment filtering works correctly"
-      ],
-      "potential_risks": ["Search performance", "Relevance scoring accuracy"],
-      "example_code": [
-        "class SearchExercisesUseCase @Inject constructor(private val exerciseRepository: ExerciseLibraryRepository, private val customExerciseRepository: CustomExerciseRepository) { suspend fun search(query: String, userEquipment: Set<Equipment>): Flow<List<Exercise>> = combine(exerciseRepository.searchExercises(query), customExerciseRepository.searchCustomExercises(query)) { library, custom -> (library + custom).filter { exercise -> userEquipment.contains(exercise.equipment) }.sortedBy { fuzzyDistance(query, it.name) } } }"
-      ]
-    },
-    {
-      "id": "API-001",
-      "title": "Implement CustomExerciseRepositoryImpl",
-      "description": "Create repository implementation with Room local storage and Firestore cloud sync for custom exercises",
-      "category": "backend",
-      "status": "done",
-      "priority": "medium", 
-      "estimated_hours": 4,
-      "dependencies": ["BE-001", "DB-001"],
-      "files_affected": {
-        "create": [
-          "app/src/main/java/com/example/liftrix/data/repository/CustomExerciseRepositoryImpl.kt",
-          "app/src/main/java/com/example/liftrix/data/mapper/CustomExerciseMapper.kt"
-        ],
-        "modify": [
-          "app/src/main/java/com/example/liftrix/di/RepositoryModule.kt - Add repository binding"
-        ],
-        "read": [
-          "app/src/main/java/com/example/liftrix/domain/repository/CustomExerciseRepository.kt"
-        ]
-      },
-      "implementation_details": {
-        "approach": "Local-first repository with background Firestore sync using existing patterns",
-        "functions_to_implement": [
-          "CustomExerciseRepositoryImpl.createCustomExercise(userId: String, input: CreateCustomExerciseInput): Result<CustomExercise>",
-          "CustomExerciseRepositoryImpl.getAllCustomExercises(userId: String): Flow<List<CustomExercise>>",
-          "CustomExerciseRepositoryImpl.syncWithFirestore(userId: String): Result<Unit>"
-        ],
-        "tests_to_write": [
-          "app/src/test/java/com/example/liftrix/data/repository/CustomExerciseRepositoryImplTest.kt"
-        ],
-        "libraries_needed": ["Hilt for DI"],
-        "integration_points": ["Room database", "Firestore", "User authentication"]
-      },
-      "acceptance_criteria": [
-        "Local-first data access with offline support",
-        "Background sync to Firestore for user-scoped data",
-        "Conflict resolution for simultaneous edits",
-        "Proper error handling and retry logic"
-      ],
-      "validation_steps": [
-        "Repository operations work offline and online",
-        "Firestore sync maintains data consistency",
-        "User data isolation verified"
-      ],
-      "potential_risks": ["Sync conflict resolution", "Network error handling"],
-      "example_code": [
-        "@Singleton class CustomExerciseRepositoryImpl @Inject constructor(private val dao: CustomExerciseDao, private val firestore: FirebaseFirestore, private val mapper: CustomExerciseMapper) : CustomExerciseRepository { override suspend fun createCustomExercise(userId: String, input: CreateCustomExerciseInput): Result<CustomExercise> = try { val entity = mapper.toEntity(input, userId); dao.insert(entity); syncToFirestore(entity); Result.success(mapper.toDomain(entity)) } catch (e: Exception) { Result.failure(e) } }"
-      ]
-    },
-    {
-      "id": "FE-001",
-      "title": "Create CustomExerciseCreationScreen",
-      "description": "Build Compose screen for custom exercise creation with form validation and user feedback",
+      "id": "UI-004",
+      "title": "Create unified WorkoutCreationViewModel with MVI pattern",
+      "description": "Implement comprehensive ViewModel replacing multiple existing ViewModels with unified state management and event handling",
       "category": "frontend",
       "status": "done",
-      "priority": "medium",
+      "priority": "high",
       "estimated_hours": 6,
-      "dependencies": ["BE-003", "API-001"],
+      "dependencies": [],
       "files_affected": {
         "create": [
-          "app/src/main/java/com/example/liftrix/ui/workout/creation/CustomExerciseCreationScreen.kt",
-          "app/src/main/java/com/example/liftrix/ui/workout/creation/CustomExerciseCreationViewModel.kt",
-          "app/src/main/java/com/example/liftrix/ui/workout/components/CustomExerciseForm.kt"
+          "app/src/main/java/com/example/liftrix/ui/workout/creation/UnifiedWorkoutCreationViewModel.kt",
+          "app/src/main/java/com/example/liftrix/ui/workout/creation/model/WorkoutCreationUiState.kt",
+          "app/src/main/java/com/example/liftrix/ui/workout/creation/model/WorkoutCreationEvent.kt"
         ],
+        "modify": [],
         "read": [
-          "app/src/main/java/com/example/liftrix/ui/components/WorkoutLoggingComponents.kt"
+          "app/src/main/java/com/example/liftrix/ui/workout/creation/WorkoutCreationViewModel.kt",
+          "app/src/main/java/com/example/liftrix/ui/workout/creation/RedesignedWorkoutCreationViewModel.kt",
+          "app/src/main/java/com/example/liftrix/ui/workout/simple/"
         ]
       },
       "implementation_details": {
-        "approach": "Material 3 Compose screen with MVI pattern and form validation",
+        "approach": "MVI pattern with StateFlow and sealed class events, consolidating best practices from existing ViewModels",
         "functions_to_implement": [
-          "CustomExerciseCreationScreen(onNavigateBack: () -> Unit, onExerciseCreated: (CustomExercise) -> Unit)",
-          "CustomExerciseCreationViewModel.createExercise(input: CreateCustomExerciseInput)",
-          "CustomExerciseForm.validateForm(): ValidationResult"
+          "UnifiedWorkoutCreationViewModel: ViewModel()",
+          "data class WorkoutCreationUiState(workout: WorkoutDraft, exercises: List<SelectedExercise>, expandedExerciseId: ExerciseId?)",
+          "sealed class WorkoutCreationEvent with workout, exercise, and set management events",
+          "private fun handleEvent(event: WorkoutCreationEvent)"
         ],
         "tests_to_write": [
-          "app/src/androidTest/java/com/example/liftrix/ui/workout/creation/CustomExerciseCreationScreenTest.kt"
+          "app/src/test/java/com/example/liftrix/ui/workout/creation/UnifiedWorkoutCreationViewModelTest.kt"
         ],
-        "libraries_needed": ["Compose UI", "Hilt ViewModel"],
-        "integration_points": ["Navigation", "Form validation", "Custom exercise use cases"]
+        "libraries_needed": [],
+        "integration_points": ["CreateWorkoutWithExercisesUseCase", "ExerciseLibraryService", "WeightMemoryService"]
       },
       "acceptance_criteria": [
-        "Form with required fields: name, primary muscle, equipment",
-        "Optional fields: secondary muscles, difficulty, notes",
-        "Real-time validation with inline error messages",
-        "Loading states during exercise creation",
-        "Success feedback and navigation after creation"
+        "Single ViewModel handles all workout creation scenarios",
+        "Proper state management with canSave validation",
+        "Exercise expansion state management",
+        "ExerciseSelector modal state handling",
+        "Error handling and loading states"
       ],
       "validation_steps": [
-        "Form validation works correctly",
-        "UI states handled properly (loading, error, success)",
-        "Accessibility requirements met"
+        "Unit tests for all event handling",
+        "State transition testing",
+        "Integration tests with use cases"
       ],
-      "potential_risks": ["Form complexity", "State management"],
+      "potential_risks": [
+        "Complex state management with multiple exercise states",
+        "Memory usage with large workouts"
+      ],
       "example_code": [
-        "@Composable fun CustomExerciseCreationScreen(viewModel: CustomExerciseCreationViewModel = hiltViewModel(), onNavigateBack: () -> Unit) { val uiState by viewModel.uiState.collectAsStateWithLifecycle(); Column { TopAppBar(title = { Text(\"Create Exercise\") }, navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.Default.ArrowBack, \"Back\") } }); CustomExerciseForm(state = uiState, onNameChanged = viewModel::updateName, onSubmit = viewModel::createExercise) } }"
+        "data class WorkoutCreationUiState(val workout: WorkoutDraft = WorkoutDraft.empty(), val exercises: List<SelectedExercise> = emptyList(), val expandedExerciseId: ExerciseId? = null, val canSave: Boolean = false)"
       ]
     },
     {
-      "id": "FE-002", 
-      "title": "Enhance ExerciseSelectionScreen with variations",
-      "description": "Update exercise selection to show equipment variations and integrate custom exercise creation",
+      "id": "UI-005",
+      "title": "Implement ExerciseHeader with clickable name functionality",
+      "description": "Create compact exercise header component with thumbnail, clickable exercise name, and expand toggle button",
       "category": "frontend",
       "status": "done",
-      "priority": "high",
-      "estimated_hours": 5,
-      "dependencies": ["BE-004", "FE-001"],
+      "priority": "medium",
+      "estimated_hours": 2,
+      "dependencies": ["UI-002"],
       "files_affected": {
         "create": [
-          "app/src/main/java/com/example/liftrix/ui/workout/components/ExerciseVariationList.kt",
-          "app/src/main/java/com/example/liftrix/ui/workout/components/ExerciseSearchWithVariations.kt"
+          "app/src/main/java/com/example/liftrix/ui/workout/creation/components/ExerciseHeader.kt"
         ],
-        "modify": [
-          "app/src/main/java/com/example/liftrix/ui/workout/creation/ExerciseSelectionScreen.kt - Add variations display and custom exercise option"
-        ],
+        "modify": [],
         "read": [
-          "app/src/main/java/com/example/liftrix/ui/components/SearchableExerciseSelector.kt"
+          "app/src/main/java/com/example/liftrix/domain/model/ExerciseLibrary.kt"
         ]
       },
       "implementation_details": {
-        "approach": "Enhance existing exercise selection with variation grouping and custom exercise integration",
+        "approach": "Row layout with exercise thumbnail, clickable text, and expand toggle with proper touch feedback",
         "functions_to_implement": [
-          "ExerciseVariationList(variations: List<Exercise>, onExerciseSelected: (Exercise) -> Unit)",
-          "ExerciseSearchWithVariations(searchResults: List<ExerciseGroup>, onVariationSelected: (Exercise) -> Unit)",
-          "ExerciseSelectionViewModel.searchWithVariations(query: String): Flow<List<ExerciseGroup>>"
+          "@Composable ExerciseHeader(exercise: SelectedExercise, isExpanded: Boolean, onToggleExpand: () -> Unit, onNameClick: () -> Unit)",
+          "ExerciseThumbnail(exercise: ExerciseLibrary, size: Dp = 40.dp)",
+          "ClickableExerciseName(name: String, onClick: () -> Unit)"
         ],
         "tests_to_write": [
-          "app/src/androidTest/java/com/example/liftrix/ui/workout/creation/ExerciseSelectionScreenTest.kt"
+          "app/src/androidTest/java/com/example/liftrix/ui/workout/creation/components/ExerciseHeaderTest.kt"
         ],
-        "libraries_needed": ["Compose UI", "StateFlow"],
-        "integration_points": ["Search use case", "Custom exercise creation", "Equipment filtering"]
+        "libraries_needed": [],
+        "integration_points": ["Material 3 clickable", "ExerciseLibrary domain model"]
       },
       "acceptance_criteria": [
-        "Search results grouped by movement pattern with equipment variations",
-        "Custom exercises displayed alongside library exercises",
-        "Add Custom Exercise button prominently placed",
-        "Visual indicators for custom vs library exercises",
-        "Maintains <200ms search response time"
+        "Exercise thumbnail 40x40dp with placeholder support",
+        "Exercise name properly clickable with ripple effect",
+        "Expand toggle button clearly indicates state",
+        "Header layout responsive and accessible",
+        "Touch targets meet 44x44dp minimum"
       ],
       "validation_steps": [
-        "Search variations display correctly",
-        "Custom exercise integration works seamlessly",
-        "Performance requirements met"
+        "UI tests for click interactions",
+        "Accessibility testing for clickable elements",
+        "Visual testing for layout consistency"
       ],
-      "potential_risks": ["Search result complexity", "UI performance with large datasets"],
+      "potential_risks": [
+        "Touch target conflicts between name and toggle",
+        "Accessibility issues with multiple clickable elements"
+      ],
       "example_code": [
-        "@Composable fun ExerciseVariationList(exerciseGroup: ExerciseGroup, onExerciseSelected: (Exercise) -> Unit) { Card { Column { Text(exerciseGroup.movementPattern, style = MaterialTheme.typography.titleMedium); LazyRow { items(exerciseGroup.variations) { exercise -> ExerciseVariationCard(exercise = exercise, onClick = { onExerciseSelected(exercise) }) } } } } }"
+        "Row(verticalAlignment = Alignment.CenterVertically) { ExerciseThumbnail() Text(exercise.name, modifier = Modifier.clickable { onNameClick() }.weight(1f)) IconButton(onClick = onToggleExpand) { Icon(if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore) } }"
       ]
     },
     {
-      "id": "FE-003",
-      "title": "Add QuickWorkoutFab component",
-      "description": "Implement floating action button for quick daily workout creation with template selection",
-      "category": "frontend",
+      "id": "NAV-001",
+      "title": "Update navigation graph for single entry point",
+      "description": "Consolidate multiple workout creation navigation routes into single destination and update navigation graph",
+      "category": "integration",
       "status": "done",
       "priority": "high",
-      "estimated_hours": 4,
-      "dependencies": ["BE-002"],
+      "estimated_hours": 2,
+      "dependencies": ["UI-001"],
       "files_affected": {
-        "create": [
-          "app/src/main/java/com/example/liftrix/ui/components/QuickWorkoutFab.kt",
-          "app/src/main/java/com/example/liftrix/ui/workout/daily/QuickWorkoutSelectionDialog.kt"
-        ],
+        "create": [],
         "modify": [
-          "app/src/main/java/com/example/liftrix/ui/MainActivity.kt - Add FAB to main screen"
+          "app/src/main/java/com/example/liftrix/navigation/WorkoutNavigation.kt",
+          "app/src/main/java/com/example/liftrix/navigation/NavGraph.kt"
         ],
         "read": [
           "app/src/main/java/com/example/liftrix/ui/workout/WorkoutScreen.kt"
         ]
       },
       "implementation_details": {
-        "approach": "Material 3 FAB with modal bottom sheet for template selection",
+        "approach": "Replace multiple navigation destinations with single WorkoutCreation route using Navigation Compose",
         "functions_to_implement": [
-          "QuickWorkoutFab(onQuickWorkoutClick: () -> Unit, modifier: Modifier = Modifier)",
-          "QuickWorkoutSelectionDialog(templates: List<WorkoutTemplate>, onTemplateSelected: (WorkoutTemplate?) -> Unit)",
-          "QuickWorkoutSelectionViewModel.getAvailableTemplates(): Flow<List<WorkoutTemplate>>"
+          "updateWorkoutNavigation() - replace multiple routes with single destination",
+          "sealed class WorkoutDestination.WorkoutCreation - single destination class",
+          "composable(WorkoutDestination.WorkoutCreation.route) - single navigation composable"
         ],
         "tests_to_write": [
-          "app/src/androidTest/java/com/example/liftrix/ui/components/QuickWorkoutFabTest.kt"
+          "app/src/androidTest/java/com/example/liftrix/navigation/WorkoutNavigationTest.kt"
         ],
-        "libraries_needed": ["Compose Material 3"],
-        "integration_points": ["Navigation", "Template repository", "Daily workout creation"]
+        "libraries_needed": [],
+        "integration_points": ["Navigation Compose", "WorkoutScreen entry points"]
       },
       "acceptance_criteria": [
-        "FAB visible on main screens with proper Material 3 styling",
-        "Modal shows template options plus 'Create from Scratch'",
-        "Quick access to start workout without template creation",
-        "Proper navigation to workout execution screen"
+        "Single WorkoutCreation destination replaces multiple routes",
+        "All workout creation entry points route to unified screen",
+        "Navigation back stack properly maintained",
+        "Deep linking compatibility preserved",
+        "No broken navigation references"
       ],
       "validation_steps": [
-        "FAB placement and visibility correct",
-        "Template selection works properly",
-        "Navigation flows function correctly"
+        "Navigation flow testing from all entry points",
+        "Back navigation testing",
+        "Deep link validation"
       ],
-      "potential_risks": ["Navigation complexity", "Template loading performance"],
+      "potential_risks": [
+        "Breaking existing navigation flows",
+        "Deep link compatibility issues"
+      ],
       "example_code": [
-        "@Composable fun QuickWorkoutFab(onClick: () -> Unit, modifier: Modifier = Modifier) { FloatingActionButton(onClick = onClick, modifier = modifier, containerColor = MaterialTheme.colorScheme.primary) { Icon(Icons.Default.Add, contentDescription = \"Quick Workout\") } }"
+        "sealed class WorkoutDestination { object WorkoutList : WorkoutDestination() object WorkoutCreation : WorkoutDestination() data class WorkoutDetails(val workoutId: WorkoutId) : WorkoutDestination() }"
       ]
     },
     {
-      "id": "FE-004",
-      "title": "Implement workout template vs daily workout UI distinction",
-      "description": "Create clear visual and navigation differences between template creation and daily workout execution",
-      "category": "frontend", 
+      "id": "NAV-002",
+      "title": "Update workout creation entry point routing",
+      "description": "Route all workout creation buttons and entry points to unified screen across the application",
+      "category": "integration",
       "status": "done",
-      "priority": "medium",
-      "estimated_hours": 4,
-      "dependencies": ["FE-003", "BE-002"],
+      "priority": "high",
+      "estimated_hours": 2,
+      "dependencies": ["NAV-001"],
       "files_affected": {
-        "create": [
-          "app/src/main/java/com/example/liftrix/ui/workout/daily/QuickWorkoutScreen.kt",
-          "app/src/main/java/com/example/liftrix/ui/workout/daily/DailyWorkoutViewModel.kt"
-        ],
+        "create": [],
         "modify": [
-          "app/src/main/java/com/example/liftrix/ui/workout/creation/WorkoutCreationScreen.kt - Add template creation distinction",
-          "app/src/main/java/com/example/liftrix/ui/navigation/WorkoutNavigation.kt - Add daily workout routes"
+          "app/src/main/java/com/example/liftrix/ui/workout/WorkoutScreen.kt",
+          "app/src/main/java/com/example/liftrix/ui/workout/daily/DailyWorkoutScreen.kt",
+          "app/src/main/java/com/example/liftrix/ui/home/HomeScreen.kt"
         ],
-        "read": [
-          "app/src/main/java/com/example/liftrix/ui/workout/WorkoutScreen.kt"
-        ]
+        "read": []
       },
       "implementation_details": {
-        "approach": "Separate UI flows with distinct visual indicators and navigation paths",
+        "approach": "Update all workout creation button onClick handlers to navigate to single unified destination",
         "functions_to_implement": [
-          "QuickWorkoutScreen(templateId: String?, onWorkoutComplete: () -> Unit)",
-          "DailyWorkoutViewModel.startFromTemplate(templateId: String)",
-          "DailyWorkoutViewModel.convertToTemplate(workoutId: String, templateName: String)"
+          "updateCreateWorkoutButton() - route to unified screen",
+          "updateQuickWorkoutCreation() - route to unified screen",
+          "updateTemplateWorkoutCreation() - route to unified screen"
         ],
         "tests_to_write": [
-          "app/src/androidTest/java/com/example/liftrix/ui/workout/daily/QuickWorkoutScreenTest.kt"
+          "app/src/androidTest/java/com/example/liftrix/ui/workout/WorkoutScreenNavigationTest.kt"
         ],
-        "libraries_needed": ["Navigation Compose"],
-        "integration_points": ["Template repository", "Daily workout creation", "Navigation"]
+        "libraries_needed": [],
+        "integration_points": ["NavController", "workout creation entry points"]
       },
       "acceptance_criteria": [
-        "Clear visual distinction between template and daily workout screens",
-        "Template creation shows 'Save as Template' messaging",
-        "Daily workout shows 'Start Workout' with immediate execution",
-        "Option to convert completed daily workout to template",
-        "Breadcrumb or title clearly indicates current mode"
+        "All 'Create Workout' buttons navigate to unified screen",
+        "Quick workout creation routes correctly",
+        "Template-based creation uses unified flow",
+        "Navigation arguments properly passed",
+        "No duplicate or broken navigation calls"
       ],
       "validation_steps": [
-        "UI distinctions are clear and intuitive",
-        "Navigation flows work correctly",
-        "Template conversion feature functions properly"
+        "Test all entry point navigation",
+        "Verify navigation arguments",
+        "End-to-end flow testing"
       ],
-      "potential_risks": ["User confusion between modes", "Navigation complexity"],
+      "potential_risks": [
+        "Missing entry point updates",
+        "Navigation argument compatibility"
+      ],
       "example_code": [
-        "@Composable fun QuickWorkoutScreen(templateId: String?, viewModel: DailyWorkoutViewModel = hiltViewModel()) { val uiState by viewModel.uiState.collectAsStateWithLifecycle(); Column { TopAppBar(title = { Text(\"Today's Workout\") }); if (templateId != null) { Text(\"Starting from template\", style = MaterialTheme.typography.bodyMedium) }; WorkoutExecutionInterface(uiState = uiState, onSetCompleted = viewModel::completeSet) } }"
+        "Button(onClick = { navController.navigate(WorkoutDestination.WorkoutCreation.route) }) { Text('Create Workout') }"
       ]
     },
     {
-      "id": "INT-001",
-      "title": "Integrate custom exercise creation end-to-end",
-      "description": "Connect custom exercise creation from UI through to database storage with proper error handling",
+      "id": "NAV-003",
+      "title": "Remove obsolete navigation destinations",
+      "description": "Clean removal of SimpleWorkout and RedesignedWorkout navigation routes from navigation configuration",
       "category": "integration",
       "status": "done",
       "priority": "medium",
-      "estimated_hours": 3,
-      "dependencies": ["FE-001", "API-001"],
+      "estimated_hours": 1,
+      "dependencies": ["NAV-002"],
       "files_affected": {
+        "create": [],
         "modify": [
-          "app/src/main/java/com/example/liftrix/ui/navigation/WorkoutNavigation.kt - Add custom exercise creation routes",
-          "app/src/main/java/com/example/liftrix/di/RepositoryModule.kt - Ensure all dependencies wired",
-          "app/src/main/java/com/example/liftrix/ui/workout/creation/ExerciseSelectionScreen.kt - Add navigation to custom exercise creation"
+          "app/src/main/java/com/example/liftrix/navigation/WorkoutNavigation.kt",
+          "app/src/main/java/com/example/liftrix/navigation/NavGraph.kt"
         ],
-        "read": [
-          "app/src/main/java/com/example/liftrix/ui/workout/creation/CustomExerciseCreationScreen.kt"
-        ]
+        "read": []
       },
       "implementation_details": {
-        "approach": "End-to-end integration testing and navigation wiring",
+        "approach": "Remove navigation composables and route definitions for obsolete workout creation screens",
         "functions_to_implement": [
-          "WorkoutNavigation.navigateToCustomExerciseCreation()",
-          "ExerciseSelectionViewModel.onCustomExerciseCreated(customExercise: CustomExercise)",
-          "CustomExerciseCreationViewModel.handleCreationSuccess()"
+          "removeSimpleWorkoutRoutes()",
+          "removeRedesignedWorkoutRoutes()",
+          "cleanupNavigationDestinations()"
         ],
         "tests_to_write": [
-          "app/src/androidTest/java/com/example/liftrix/integration/CustomExerciseCreationIntegrationTest.kt"
+          "app/src/androidTest/java/com/example/liftrix/navigation/NavigationCleanupTest.kt"
         ],
-        "libraries_needed": ["Navigation Compose"],
-        "integration_points": ["Navigation", "ViewModel communication", "Repository layer"]
+        "libraries_needed": [],
+        "integration_points": ["Navigation Compose", "Route definitions"]
       },
       "acceptance_criteria": [
-        "Custom exercise creation accessible from exercise selection",
-        "Created exercises immediately available in search results",
-        "Proper error handling with user feedback",
-        "Navigation flows work seamlessly"
+        "SimpleWorkout navigation routes completely removed",
+        "RedesignedWorkout navigation routes completely removed",
+        "Navigation graph compiles without errors",
+        "No unused navigation imports",
+        "Build system updated appropriately"
       ],
       "validation_steps": [
-        "End-to-end flow tested with real data",
-        "Error scenarios handled gracefully",
-        "Performance meets requirements"
+        "Full project compilation",
+        "Navigation graph validation",
+        "Search for remaining route references"
       ],
-      "potential_risks": ["Navigation state management", "Data refresh timing"],
+      "potential_risks": [
+        "Missing route reference cleanup",
+        "Build errors from unused imports"
+      ],
       "example_code": [
-        "// In ExerciseSelectionScreen LaunchedEffect(viewModel.customExerciseCreated) { customExercise -> if (customExercise != null) { viewModel.refreshExerciseList(); viewModel.clearCustomExerciseCreated() } }"
+        "// Remove: composable(SimpleWorkoutDestination.route) { SimpleWorkoutScreen() } // Remove: composable(RedesignedWorkoutDestination.route) { RedesignedWorkoutScreen() }"
       ]
     },
     {
-      "id": "INT-002",
-      "title": "Connect intelligent search to UI",
-      "description": "Integrate search with variations functionality with exercise selection UI for seamless user experience",
+      "id": "CLEAN-001",
+      "title": "Remove SimpleWorkout UI components and files",
+      "description": "Complete removal of /ui/workout/simple/ directory containing 15+ SimpleWorkout UI files and components",
       "category": "integration",
       "status": "done",
-      "priority": "high", 
-      "estimated_hours": 3,
-      "dependencies": ["FE-002", "BE-004"],
+      "priority": "medium",
+      "estimated_hours": 2,
+      "dependencies": ["NAV-003"],
       "files_affected": {
-        "modify": [
-          "app/src/main/java/com/example/liftrix/ui/workout/creation/ExerciseSelectionViewModel.kt - Integrate search with variations",
-          "app/src/main/java/com/example/liftrix/ui/workout/creation/ExerciseSelectionScreen.kt - Update search UI"
-        ],
+        "create": [],
+        "modify": [],
         "read": [
-          "app/src/main/java/com/example/liftrix/domain/usecase/exercise/SearchExercisesUseCase.kt"
+          "app/src/main/java/com/example/liftrix/ui/workout/simple/"
         ]
       },
       "implementation_details": {
-        "approach": "Real-time search integration with debouncing and performance optimization",
-        "functions_to_implement": [
-          "ExerciseSelectionViewModel.searchExercises(query: String, debounceMs: Long = 300)",
-          "ExerciseSelectionViewModel.groupExercisesByMovement(exercises: List<Exercise>): List<ExerciseGroup>",
-          "ExerciseSelectionViewModel.filterByEquipment(exercises: List<Exercise>): List<Exercise>"
-        ],
-        "tests_to_write": [
-          "app/src/test/java/com/example/liftrix/ui/workout/creation/ExerciseSelectionViewModelTest.kt"
-        ],
-        "libraries_needed": ["Coroutines", "Flow"],
-        "integration_points": ["Search use case", "Equipment filtering", "UI performance"]
+        "approach": "Systematic file removal with reference checking to avoid compilation errors",
+        "functions_to_implement": [],
+        "tests_to_write": [],
+        "libraries_needed": [],
+        "integration_points": ["Build system", "Import statements", "DI modules"]
       },
       "acceptance_criteria": [
-        "Search results update in real-time with <200ms response",
-        "Exercise variations grouped and displayed correctly",
-        "Equipment filtering works seamlessly",
-        "No search performance degradation with large datasets"
+        "Complete /ui/workout/simple/ directory removed",
+        "All SimpleWorkout UI files deleted",
+        "No compilation errors after removal",
+        "No unused imports remaining",
+        "Build system properly updated"
       ],
       "validation_steps": [
-        "Search performance benchmarks met",
-        "Variation grouping works correctly",
-        "UI responsiveness maintained"
+        "Full project compilation test",
+        "Search for remaining SimpleWorkout references",
+        "Import statement cleanup verification"
       ],
-      "potential_risks": ["Search performance", "UI complexity with variations"],
+      "potential_risks": [
+        "Missing file reference cleanup",
+        "Compilation errors from missed dependencies"
+      ],
+      "example_code": []
+    },
+    {
+      "id": "CLEAN-002",
+      "title": "Remove RedesignedWorkout UI components",
+      "description": "Remove RedesignedWorkoutCreationScreen.kt and RedesignedWorkoutCreationViewModel.kt while preserving useful patterns",
+      "category": "integration",
+      "status": "done",
+      "priority": "medium",
+      "estimated_hours": 2,
+      "dependencies": ["UI-004"],
+      "files_affected": {
+        "create": [],
+        "modify": [],
+        "read": [
+          "app/src/main/java/com/example/liftrix/ui/workout/creation/RedesignedWorkoutCreationScreen.kt",
+          "app/src/main/java/com/example/liftrix/ui/workout/creation/RedesignedWorkoutCreationViewModel.kt"
+        ]
+      },
+      "implementation_details": {
+        "approach": "Careful removal after ensuring useful patterns are preserved in unified components",
+        "functions_to_implement": [],
+        "tests_to_write": [],
+        "libraries_needed": [],
+        "integration_points": ["DI modules", "Navigation references"]
+      },
+      "acceptance_criteria": [
+        "RedesignedWorkoutCreationScreen.kt removed",
+        "RedesignedWorkoutCreationViewModel.kt removed",
+        "Useful patterns preserved in unified implementation",
+        "No compilation errors",
+        "DI module references cleaned up"
+      ],
+      "validation_steps": [
+        "Verify useful patterns preserved",
+        "Full compilation test",
+        "DI module validation"
+      ],
+      "potential_risks": [
+        "Loss of useful implementation patterns",
+        "DI module reference cleanup"
+      ],
+      "example_code": []
+    },
+    {
+      "id": "CLEAN-003",
+      "title": "Update dependency injection modules", 
+      "description": "Remove obsolete ViewModel bindings and add unified ViewModel to DI configuration",
+      "category": "integration",
+      "status": "done",
+      "priority": "medium",
+      "estimated_hours": 1,
+      "dependencies": ["CLEAN-002"],
+      "files_affected": {
+        "create": [],
+        "modify": [
+          "app/src/main/java/com/example/liftrix/di/ViewModelModule.kt",
+          "app/src/main/java/com/example/liftrix/di/UseCaseModule.kt"
+        ],
+        "read": []
+      },
+      "implementation_details": {
+        "approach": "Update Hilt DI modules to provide unified ViewModel and remove obsolete bindings",
+        "functions_to_implement": [
+          "@Binds abstract fun bindUnifiedWorkoutCreationViewModel(impl: UnifiedWorkoutCreationViewModel): ViewModel",
+          "removeObsoleteViewModelBindings()"
+        ],
+        "tests_to_write": [
+          "app/src/test/java/com/example/liftrix/di/ViewModelModuleTest.kt"
+        ],
+        "libraries_needed": [],
+        "integration_points": ["Hilt DI", "ViewModel factories"]
+      },
+      "acceptance_criteria": [
+        "UnifiedWorkoutCreationViewModel properly provided",
+        "Obsolete ViewModel bindings removed",
+        "DI graph compiles without errors",
+        "No circular dependencies",
+        "Proper scope annotations"
+      ],
+      "validation_steps": [
+        "DI graph compilation test",
+        "ViewModel injection testing",
+        "Scope validation"
+      ],
+      "potential_risks": [
+        "DI configuration errors",
+        "ViewModel injection failures"
+      ],
       "example_code": [
-        "class ExerciseSelectionViewModel @Inject constructor(private val searchUseCase: SearchExercisesUseCase) { private val searchQuery = MutableStateFlow(\"\"); val searchResults = searchQuery.debounce(300).flatMapLatest { query -> if (query.isBlank()) flowOf(emptyList()) else searchUseCase.search(query, userEquipment) }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList()) }"
+        "@Binds @IntoMap @ViewModelKey(UnifiedWorkoutCreationViewModel::class) abstract fun bindUnifiedWorkoutCreationViewModel(viewModel: UnifiedWorkoutCreationViewModel): ViewModel"
       ]
     },
     {
       "id": "TEST-001",
-      "title": "Write unit tests for custom exercise use cases",
-      "description": "Comprehensive unit testing for custom exercise creation, validation, and search functionality", 
+      "title": "UI component tests for unified screen",
+      "description": "Comprehensive UI testing for unified workout creation screen covering exercise selection, set input, and workout saving",
       "category": "testing",
-      "status": "todo",
-      "priority": "medium",
+      "status": "done",
+      "priority": "high",
       "estimated_hours": 4,
-      "dependencies": ["BE-003", "BE-004"],
+      "dependencies": ["UI-001", "UI-002", "UI-003"],
       "files_affected": {
         "create": [
-          "app/src/test/java/com/example/liftrix/domain/usecase/exercise/CreateCustomExerciseUseCaseTest.kt",
-          "app/src/test/java/com/example/liftrix/domain/usecase/exercise/SearchExercisesUseCaseTest.kt",
-          "app/src/test/java/com/example/liftrix/domain/model/CustomExerciseTest.kt"
+          "app/src/androidTest/java/com/example/liftrix/ui/workout/creation/UnifiedWorkoutCreationScreenTest.kt"
         ],
-        "read": [
-          "app/src/test/java/com/example/liftrix/domain/usecase/auth/SignInWithEmailUseCaseTest.kt"
-        ]
+        "modify": [],
+        "read": []
       },
       "implementation_details": {
-        "approach": "MockK-based unit tests following existing test patterns with comprehensive coverage",
+        "approach": "Compose UI testing with Hilt test integration covering all functional requirements",
         "functions_to_implement": [
-          "CreateCustomExerciseUseCaseTest.should_create_exercise_with_valid_input()",
-          "CreateCustomExerciseUseCaseTest.should_fail_validation_with_invalid_name()", 
-          "SearchExercisesUseCaseTest.should_return_variations_for_movement_pattern()"
+          "test_single_entry_point() - FR-001 validation",
+          "test_compact_exercise_layout() - FR-002 validation",
+          "test_inline_set_input() - FR-003 validation",
+          "test_exercise_name_clickable() - FR-004 validation",
+          "test_weight_field_conditional() - FR-005 validation"
         ],
         "tests_to_write": [
-          "Custom exercise validation scenarios",
-          "Search functionality with various inputs",
-          "Error handling and edge cases"
+          "Single entry point navigation test",
+          "Compact exercise display test",
+          "Inline set management test",
+          "Exercise name click test",
+          "Conditional weight field test"
         ],
-        "libraries_needed": ["JUnit5", "MockK", "Coroutines Test"],
-        "integration_points": ["Use case testing patterns", "Repository mocking"]
+        "libraries_needed": ["Compose Test", "Hilt Test"],
+        "integration_points": ["UI components", "ViewModel", "Navigation"]
       },
       "acceptance_criteria": [
-        "90%+ code coverage for use cases",
-        "All validation scenarios tested",
-        "Search performance and accuracy validated",
-        "Error handling paths covered"
+        "All functional requirements tested",
+        "Exercise selection flow validated",
+        "Set input and validation working",
+        "Workout saving functionality tested",
+        "Error scenarios properly handled"
       ],
       "validation_steps": [
-        "All tests pass consistently",
-        "Coverage metrics meet requirements",
-        "Edge cases properly handled"
+        "Run complete UI test suite",
+        "Manual testing verification",
+        "Performance validation"
       ],
-      "potential_risks": ["Test complexity", "Mock setup overhead"],
+      "potential_risks": [
+        "Test environment setup complexity",
+        "UI test flakiness with animations"
+      ],
       "example_code": [
-        "@ExtendWith(MockKExtension::class) class CreateCustomExerciseUseCaseTest { @MockK private lateinit var repository: CustomExerciseRepository; @MockK private lateinit var authRepository: AuthRepository; @Test fun `should create exercise with valid input`() = runTest { every { authRepository.getCurrentUserId() } returns \"user123\"; coEvery { repository.createCustomExercise(any(), any()) } returns Result.success(mockCustomExercise); val result = useCase(validInput); assertThat(result.isSuccess).isTrue() } }"
+        "@Test fun test_single_entry_point() { composeTestRule.setContent { UnifiedWorkoutCreationScreen() } composeTestRule.onNodeWithText('Create Workout').assertExists() }"
       ]
     },
     {
       "id": "TEST-002",
-      "title": "Write UI tests for exercise selection and creation",
-      "description": "Compose UI tests for exercise selection screen, custom exercise creation, and workout building flows",
+      "title": "ViewModel unit tests for unified state management",
+      "description": "Comprehensive unit testing of UnifiedWorkoutCreationViewModel covering state management, event handling, and business logic",
       "category": "testing",
-      "status": "todo",
-      "priority": "medium",
-      "estimated_hours": 5,
-      "dependencies": ["FE-001", "FE-002"],
+      "status": "done",
+      "priority": "high",
+      "estimated_hours": 3,
+      "dependencies": ["UI-004"],
       "files_affected": {
         "create": [
-          "app/src/androidTest/java/com/example/liftrix/ui/workout/creation/ExerciseSelectionScreenTest.kt",
-          "app/src/androidTest/java/com/example/liftrix/ui/workout/creation/CustomExerciseCreationScreenTest.kt",
-          "app/src/androidTest/java/com/example/liftrix/ui/workout/WorkoutCreationFlowTest.kt"
+          "app/src/test/java/com/example/liftrix/ui/workout/creation/UnifiedWorkoutCreationViewModelTest.kt"
         ],
-        "read": [
-          "app/src/androidTest/java/com/example/liftrix/ui/auth/AuthScreenTest.kt"
-        ]
+        "modify": [],
+        "read": []
       },
       "implementation_details": {
-        "approach": "Compose testing with Hilt test modules and realistic user interaction scenarios",
+        "approach": "MockK-based unit testing with coroutines test support for comprehensive ViewModel testing",
         "functions_to_implement": [
-          "ExerciseSelectionScreenTest.should_display_search_results_with_variations()",
-          "CustomExerciseCreationScreenTest.should_validate_form_inputs()",
-          "WorkoutCreationFlowTest.should_complete_end_to_end_workout_creation()"
+          "test_exerciseSelection_updatesState()",
+          "test_setManagement_validatesInput()",
+          "test_workoutSaving_handlesSuccess()",
+          "test_errorHandling_displaysUserFeedback()",
+          "test_expandedExerciseState_managedCorrectly()"
         ],
         "tests_to_write": [
-          "Exercise search and selection interactions",
-          "Custom exercise form validation",
-          "Complete workout creation flows"
+          "Exercise selection state management",
+          "Set input validation and updates",
+          "Workout saving with success/error scenarios",
+          "Exercise expansion state handling",
+          "Modal state management"
         ],
-        "libraries_needed": ["Compose Test", "Hilt Test", "Espresso"],
-        "integration_points": ["Test database", "Mock repositories", "Navigation testing"]
+        "libraries_needed": ["MockK", "Coroutines Test", "Turbine"],
+        "integration_points": ["Use cases", "Services", "State management"]
       },
       "acceptance_criteria": [
-        "Critical user paths tested end-to-end",
-        "Form validation UI behavior verified",
-        "Search and selection interactions work correctly",
-        "Accessibility features tested"
+        "All ViewModel methods tested",
+        "State transitions validated",
+        "Error handling scenarios covered",
+        "Event handling properly tested",
+        "Integration with use cases verified"
       ],
       "validation_steps": [
-        "UI tests pass on different device configurations",
-        "Accessibility tests verify proper behavior",
-        "Performance requirements met in test environment"
+        "Run unit test suite",
+        "Code coverage analysis",
+        "State transition validation"
       ],
-      "potential_risks": ["Test stability", "Device configuration variations"],
+      "potential_risks": [
+        "Complex state management testing",
+        "Mock setup complexity"
+      ],
       "example_code": [
-        "@HiltAndroidTest class ExerciseSelectionScreenTest { @get:Rule val hiltRule = HiltAndroidRule(this); @get:Rule val composeTestRule = createAndroidComposeRule<MainActivity>(); @Test fun should_display_search_results() { composeTestRule.setContent { ExerciseSelectionScreen(onExerciseSelected = {}) }; composeTestRule.onNodeWithText(\"Search exercises\").performTextInput(\"lateral raises\"); composeTestRule.onNodeWithText(\"Dumbbell Lateral Raises\").assertIsDisplayed() } }"
+        "@Test fun test_exerciseSelection_updatesState() = runTest { viewModel.handleEvent(SelectExercise(exercise)) verify { viewModel.uiState.value.exercises.contains(exercise) } }"
+      ]
+    },
+    {
+      "id": "TEST-003",
+      "title": "Navigation integration tests",
+      "description": "End-to-end testing of navigation flow verifying single entry point navigation and proper screen transitions",
+      "category": "testing",
+      "status": "done",
+      "priority": "medium",
+      "estimated_hours": 2,
+      "dependencies": ["NAV-002"],
+      "files_affected": {
+        "create": [
+          "app/src/androidTest/java/com/example/liftrix/navigation/WorkoutNavigationIntegrationTest.kt"
+        ],
+        "modify": [],
+        "read": []
+      },
+      "implementation_details": {
+        "approach": "Navigation testing with Compose Test and NavController testing utilities",
+        "functions_to_implement": [
+          "test_workoutCreationNavigation_fromAllEntryPoints()",
+          "test_backNavigation_maintainsState()",
+          "test_deepLinking_worksCorrectly()",
+          "test_navigationArguments_passedCorrectly()"
+        ],
+        "tests_to_write": [
+          "Navigation from all entry points",
+          "Back navigation stack validation",
+          "Deep linking compatibility",
+          "Navigation argument passing"
+        ],
+        "libraries_needed": ["Navigation Testing", "Compose Test"],
+        "integration_points": ["NavController", "Navigation Compose", "Deep linking"]
+      },
+      "acceptance_criteria": [
+        "Single entry point navigation verified",
+        "All workout creation buttons route correctly",
+        "Back navigation maintains proper stack",
+        "Deep linking compatibility preserved",
+        "Navigation arguments handled correctly"
+      ],
+      "validation_steps": [
+        "Run navigation test suite",
+        "Manual navigation flow testing",
+        "Deep link testing"
+      ],
+      "potential_risks": [
+        "Navigation test environment complexity",
+        "Deep link compatibility issues"
+      ],
+      "example_code": [
+        "@Test fun test_workoutCreationNavigation_fromAllEntryPoints() { composeTestRule.onNodeWithText('Create Workout').performClick() navController.assertCurrentRouteName(WorkoutDestination.WorkoutCreation.route) }"
+      ]
+    },
+    {
+      "id": "PERF-001",
+      "title": "Performance validation and optimization",
+      "description": "Validate screen load time <300ms, set input response <100ms, and optimize component performance for success metrics",
+      "category": "testing",
+      "status": "done",
+      "priority": "medium",
+      "estimated_hours": 3,
+      "dependencies": ["TEST-001"],
+      "completion_timestamp": "2025-01-27T20:30:00Z",
+      "files_affected": {
+        "create": [
+          "app/src/androidTest/java/com/example/liftrix/ui/workout/creation/WorkoutCreationPerformanceTest.kt"
+        ],
+        "modify": [],
+        "read": []
+      },
+      "implementation_details": {
+        "approach": "Performance testing with timing assertions and memory profiling for key user interactions",
+        "functions_to_implement": [
+          "test_screenLoadTime_under300ms()",
+          "test_setInputResponse_under100ms()",
+          "test_exerciseCardExpansion_performsWell()",
+          "test_memoryUsage_withinLimits()"
+        ],
+        "tests_to_write": [
+          "Screen load performance testing",
+          "Set input response time validation",
+          "Exercise card animation performance",
+          "Memory usage profiling"
+        ],
+        "libraries_needed": ["Performance testing utilities", "Memory profiling"],
+        "integration_points": ["UI components", "Animation system"]
+      },
+      "acceptance_criteria": [
+        "Screen load time consistently <300ms",
+        "Set input response consistently <100ms",
+        "Exercise card animations smooth (60fps)",
+        "Memory usage within acceptable limits",
+        "No performance regressions"
+      ],
+      "validation_steps": [
+        "Run performance test suite",
+        "Memory profiling analysis",
+        "Frame rate monitoring"
+      ],
+      "potential_risks": [
+        "Performance bottlenecks with large workouts",
+        "Memory leaks in components"
+      ],
+      "example_code": [
+        "@Test fun test_screenLoadTime_under300ms() { val startTime = System.currentTimeMillis() composeTestRule.setContent { UnifiedWorkoutCreationScreen() } val loadTime = System.currentTimeMillis() - startTime assertThat(loadTime).isLessThan(300) }"
       ]
     }
   ]
 }
- 

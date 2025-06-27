@@ -76,7 +76,8 @@ class ProfileSyncWorker @AssistedInject constructor(
                     // Mark as synced in local database
                     userProfileDao.updateSyncStatus(
                         userId = profileEntity.userId,
-                        isSynced = true
+                        isSynced = true,
+                        version = System.currentTimeMillis()
                     )
                     
                     syncedProfileIds.add(profileEntity.userId)

@@ -2,6 +2,7 @@ package com.example.liftrix.domain.usecase.analytics
 
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutStatus
+
 import com.example.liftrix.domain.service.AnalyticsService
 import java.time.Duration
 import javax.inject.Inject
@@ -70,5 +71,46 @@ class LogWorkoutEventUseCase @Inject constructor(
             WorkoutStatus.COMPLETED -> logWorkoutComplete(workout)
             else -> Result.success(Unit) // No specific event for other status changes
         }
+    }
+    
+    /**
+     * Logs unified workout creation event
+     */
+    suspend fun logWorkoutCreationEvent(
+        workout: Workout,
+        workoutType: String = "unified"
+    ): Result<Unit> {
+        if (workout.userId.isBlank()) {
+            return Result.failure(IllegalArgumentException("Workout must have a valid user ID"))
+        }
+        
+        return analyticsService.logWorkoutCreationEvent(
+            userId = workout.userId,
+            workoutId = workout.id.value,
+            workoutName = workout.name,
+            workoutType = workoutType,
+            exerciseCount = workout.exercises.size
+        )
+    }
+    
+    /**
+     * Logs exercise selection event with method tracking
+     */
+    suspend fun logExerciseSelectionEvent(
+        userId: String,
+        exerciseId: String,
+        exerciseName: String,
+        selectionMethod: String
+    ): Result<Unit> {
+        if (userId.isBlank()) {
+            return Result.failure(IllegalArgumentException("User ID must not be blank"))
+        }
+        
+        return analyticsService.logExerciseSelectionEvent(
+            userId = userId,
+            exerciseId = exerciseId,
+            exerciseName = exerciseName,
+            selectionMethod = selectionMethod
+        )
     }
 } 

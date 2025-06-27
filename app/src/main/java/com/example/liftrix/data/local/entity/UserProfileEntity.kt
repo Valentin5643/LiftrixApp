@@ -10,13 +10,20 @@ import java.time.LocalDateTime
 
 /**
  * Room entity representing a user's fitness profile in the local database.
+ * Schema matches Migration_9_to_10 user_profiles table creation with completion tracking.
  */
 @Entity(tableName = "user_profiles")
 @TypeConverters(DateTimeConverters::class, UserProfileConverters::class)
 data class UserProfileEntity(
     @PrimaryKey
+    @ColumnInfo(name = "id")
+    val id: String,
+
     @ColumnInfo(name = "user_id")
     val userId: String,
+
+    @ColumnInfo(name = "display_name")
+    val displayName: String,
 
     @ColumnInfo(name = "age")
     val age: Int?,
@@ -24,30 +31,36 @@ data class UserProfileEntity(
     @ColumnInfo(name = "weight_kg")
     val weightKg: Double?,
 
-    @ColumnInfo(name = "available_equipment_json")
-    val availableEquipmentJson: String?,
+    @ColumnInfo(name = "height_cm")
+    val heightCm: Double?,
 
-    @ColumnInfo(name = "other_equipment")
-    val otherEquipment: String?,
+    @ColumnInfo(name = "fitness_level")
+    val fitnessLevel: String?,
 
-    @ColumnInfo(name = "fitness_goals_json")
-    val fitnessGoalsJson: String?,
+    @ColumnInfo(name = "goals")
+    val goals: String?,
 
-    @ColumnInfo(name = "goals_priority_json")
-    val goalsPriorityJson: String?,
+    @ColumnInfo(name = "available_equipment")
+    val availableEquipment: String?,
+
+    @ColumnInfo(name = "workout_frequency")
+    val workoutFrequency: Int?,
+
+    @ColumnInfo(name = "preferred_workout_duration")
+    val preferredWorkoutDuration: Int?,
 
     @ColumnInfo(name = "completed_at")
     val completedAt: LocalDateTime?,
 
+    @ColumnInfo(name = "created_at")
+    val createdAt: LocalDateTime,
+
     @ColumnInfo(name = "updated_at")
     val updatedAt: LocalDateTime,
 
-    @ColumnInfo(name = "profile_version")
-    val profileVersion: Long,
-
-    @ColumnInfo(name = "is_synced")
+    @ColumnInfo(name = "is_synced", defaultValue = "0")
     val isSynced: Boolean = false,
 
-    @ColumnInfo(name = "sync_version")
-    val syncVersion: Long = 0L
+    @ColumnInfo(name = "sync_version", defaultValue = "1")
+    val syncVersion: Long = 1L
 ) 

@@ -16,6 +16,27 @@ interface ExerciseLibraryRepository {
     fun searchExercises(query: String): Flow<List<ExerciseLibrary>>
     
     /**
+     * Advanced search exercises with optional equipment and muscle group filtering
+     * @param query Search query string
+     * @param equipment Set of equipment types to filter by (null for no filter)
+     * @param muscleGroups Set of muscle groups to filter by (null for no filter)
+     * @return Flow of filtered and sorted exercises
+     */
+    suspend fun searchExercises(
+        query: String,
+        equipment: Set<Equipment>? = null,
+        muscleGroups: Set<ExerciseCategory>? = null
+    ): Result<List<ExerciseLibrary>>
+    
+    /**
+     * Get recent exercises used by a specific user
+     * @param userId The user ID to get recent exercises for
+     * @param limit Maximum number of exercises to return
+     * @return Result containing list of recent exercises
+     */
+    suspend fun getRecentExercises(userId: String, limit: Int = 10): Result<List<ExerciseLibrary>>
+    
+    /**
      * Get all exercises from the library
      */
     fun getAllExercises(): Flow<List<ExerciseLibrary>>

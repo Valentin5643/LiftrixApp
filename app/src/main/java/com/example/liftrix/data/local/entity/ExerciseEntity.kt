@@ -7,12 +7,11 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverters
 import com.example.liftrix.data.local.converter.DateTimeConverters
-import com.example.liftrix.data.local.converter.ExerciseConverters
-import com.example.liftrix.domain.model.ExerciseCategory
 import java.time.Instant
 
 /**
  * Room entity representing an exercise in local database
+ * Supports flexible metrics (weight, time, distance) for enhanced exercise tracking
  */
 @Entity(
     tableName = "exercises",
@@ -25,47 +24,53 @@ import java.time.Instant
         )
     ],
     indices = [
-        Index(value = ["workout_id"]),
-        Index(value = ["name"]),
-        Index(value = ["category"])
+        Index(value = ["workout_id"], name = "index_exercises_workout_id"),
+        Index(value = ["exercise_library_id"], name = "index_exercises_exercise_library_id"),
+        Index(value = ["order_index"], name = "index_exercises_order_index")
     ]
 )
-@TypeConverters(DateTimeConverters::class, ExerciseConverters::class)
+@TypeConverters(DateTimeConverters::class)
 data class ExerciseEntity(
-    @PrimaryKey
+    @PrimaryKey(autoGenerate = true)
     @ColumnInfo(name = "id")
-    val id: String,
+    val id: Long = 0,
     
     @ColumnInfo(name = "workout_id")
     val workoutId: String,
     
-    @ColumnInfo(name = "name")
-    val name: String,
-    
-    @ColumnInfo(name = "category")
-    val category: ExerciseCategory,
-    
-    @ColumnInfo(name = "sets_json")
-    val setsJson: String, // JSON serialized list of sets
-    
-    @ColumnInfo(name = "notes")
-    val notes: String?,
-    
-    @ColumnInfo(name = "target_sets")
-    val targetSets: Int?,
-    
-    @ColumnInfo(name = "target_reps")
-    val targetReps: Int?,
-    
-    @ColumnInfo(name = "target_weight_kg")
-    val targetWeightKg: Double?,
-    
-    @ColumnInfo(name = "created_at")
-    val createdAt: Instant,
-    
-    @ColumnInfo(name = "updated_at")
-    val updatedAt: Instant,
+    @ColumnInfo(name = "exercise_library_id")
+    val exerciseLibraryId: String,
     
     @ColumnInfo(name = "order_index")
-    val orderIndex: Int = 0
+    val orderIndex: Int,
+    
+    @ColumnInfo(name = "target_sets")
+    val targetSets: Int? = null,
+    
+    @ColumnInfo(name = "target_reps")
+    val targetReps: Int? = null,
+    
+    @ColumnInfo(name = "target_weight_kg")
+    val targetWeightKg: Float? = null,
+    
+    @ColumnInfo(name = "target_time_seconds")
+    val targetTimeSeconds: Int? = null,
+    
+    @ColumnInfo(name = "target_distance_meters")
+    val targetDistanceMeters: Float? = null,
+    
+    @ColumnInfo(name = "notes")
+    val notes: String? = null,
+    
+    @ColumnInfo(name = "last_used_weight_kg")
+    val lastUsedWeightKg: Float? = null,
+    
+    @ColumnInfo(name = "weight_memory_updated_at")
+    val weightMemoryUpdatedAt: Long? = null,
+    
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long,
+    
+    @ColumnInfo(name = "updated_at")
+    val updatedAt: Long
 ) 

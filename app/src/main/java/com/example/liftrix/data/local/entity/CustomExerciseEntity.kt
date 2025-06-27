@@ -17,10 +17,10 @@ import java.time.Instant
 @Entity(
     tableName = "custom_exercises",
     indices = [
-        Index(value = ["user_id"]),
-        Index(value = ["name", "user_id"], unique = true),
-        Index(value = ["primary_muscle_group"]),
-        Index(value = ["equipment"])
+        Index(value = ["user_id"], name = "index_custom_exercises_user_id"),
+        Index(value = ["name", "user_id"], unique = true, name = "index_custom_exercises_name_user_id"),
+        Index(value = ["primary_muscle_group"], name = "index_custom_exercises_primary_muscle_group"),
+        Index(value = ["equipment"], name = "index_custom_exercises_equipment")
     ]
 )
 @TypeConverters(DateTimeConverters::class, ExerciseConverters::class)
@@ -56,9 +56,9 @@ data class CustomExerciseEntity(
     @ColumnInfo(name = "updated_at")
     val updatedAt: Instant,
     
-    @ColumnInfo(name = "is_synced")
+    @ColumnInfo(name = "is_synced", defaultValue = "0")
     val isSynced: Boolean = false,
     
-    @ColumnInfo(name = "sync_version")
+    @ColumnInfo(name = "sync_version", defaultValue = "1")
     val syncVersion: Int = 1
 ) 

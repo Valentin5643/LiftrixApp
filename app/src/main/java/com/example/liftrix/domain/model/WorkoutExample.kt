@@ -16,75 +16,99 @@ object WorkoutExample {
         
         // Create exercise sets with validation
         val benchPressSet1 = ExerciseSet(
+            id = ExerciseSetId.generate(),
             setNumber = 1,
             weight = Weight.fromKilograms(80.0),
             reps = Reps.of(10),
-            isCompleted = true,
-            restTimeSeconds = 120,
             completedAt = now
         )
         
         val benchPressSet2 = ExerciseSet(
+            id = ExerciseSetId.generate(),
             setNumber = 2,
             weight = Weight.fromKilograms(85.0),
             reps = Reps.of(8),
-            isCompleted = true,
-            restTimeSeconds = 120,
             completedAt = now.plusSeconds(180)
         )
         
         val benchPressSet3 = ExerciseSet(
+            id = ExerciseSetId.generate(),
             setNumber = 3,
             weight = Weight.fromKilograms(90.0),
-            reps = Reps.of(6),
-            isCompleted = false
+            reps = Reps.of(6)
+        )
+        
+        // Create bench press library exercise
+        val benchPressLibrary = ExerciseLibrary(
+            id = "bench-press",
+            name = "Bench Press",
+            primaryMuscleGroup = ExerciseCategory.CHEST,
+            equipment = Equipment.BARBELL,
+            secondaryMuscleGroups = listOf(ExerciseCategory.TRICEPS, ExerciseCategory.SHOULDERS),
+            movementPattern = "Push",
+            difficultyLevel = 5,
+            instructions = "Lie on bench, grip bar shoulder-width apart, lower to chest, press up",
+            isCompound = true,
+            searchableTerms = listOf("bench", "press", "chest")
         )
         
         // Create bench press exercise
         val benchPress = Exercise(
             id = ExerciseId.generate(),
-            name = "Bench Press",
-            category = ExerciseCategory.CHEST,
+            workoutId = WorkoutId.generate(),
+            libraryExercise = benchPressLibrary,
+            orderIndex = 0,
+            targetSets = 3,
+            targetReps = 8,
+            targetWeight = Weight.fromKilograms(85.0),
             sets = listOf(benchPressSet1, benchPressSet2, benchPressSet3),
             notes = "Focus on controlled movement",
-            targetSets = 3,
-            targetReps = Reps.of(8),
-            targetWeight = Weight.fromKilograms(85.0),
-            createdAt = now,
-            updatedAt = now
+            createdAt = now
         )
         
         // Create squat sets
         val squatSet1 = ExerciseSet(
+            id = ExerciseSetId.generate(),
             setNumber = 1,
             weight = Weight.fromKilograms(100.0),
             reps = Reps.of(12),
-            isCompleted = true,
-            restTimeSeconds = 180,
             completedAt = now.plusSeconds(300)
         )
         
         val squatSet2 = ExerciseSet(
+            id = ExerciseSetId.generate(),
             setNumber = 2,
             weight = Weight.fromKilograms(110.0),
             reps = Reps.of(10),
-            isCompleted = true,
-            restTimeSeconds = 180,
             completedAt = now.plusSeconds(600)
+        )
+        
+        // Create squat library exercise  
+        val squatLibrary = ExerciseLibrary(
+            id = "back-squat",
+            name = "Back Squat",
+            primaryMuscleGroup = ExerciseCategory.LEGS,
+            equipment = Equipment.BARBELL,
+            secondaryMuscleGroups = listOf(ExerciseCategory.CORE),
+            movementPattern = "Squat",
+            difficultyLevel = 6,
+            instructions = "Bar on upper back, feet shoulder-width apart, squat down and up",
+            isCompound = true,
+            searchableTerms = listOf("squat", "back", "legs")
         )
         
         // Create squat exercise
         val squat = Exercise(
             id = ExerciseId.generate(),
-            name = "Back Squat",
-            category = ExerciseCategory.LEGS,
+            workoutId = WorkoutId.generate(),
+            libraryExercise = squatLibrary,
+            orderIndex = 1,
+            targetSets = 3,
+            targetReps = 10,
+            targetWeight = Weight.fromKilograms(105.0),
             sets = listOf(squatSet1, squatSet2),
             notes = "Keep chest up, knees tracking over toes",
-            targetSets = 3,
-            targetReps = Reps.of(10),
-            targetWeight = Weight.fromKilograms(105.0),
-            createdAt = now,
-            updatedAt = now
+            createdAt = now
         )
         
         // Create workout
@@ -125,28 +149,28 @@ object WorkoutExample {
         
         println("\n=== Exercise Details ===")
         workout.exercises.forEach { exercise ->
-            println("\n${exercise.name} (${exercise.category.displayName}):")
+            println("\n${exercise.libraryExercise.name} (${exercise.libraryExercise.primaryMuscleGroup.displayName}):")
             println("  Sets completed: ${exercise.getCompletedSetsCount()}/${exercise.sets.size}")
-            println("  Total volume: ${String.format("%.1f", exercise.calculateTotalVolume().kilograms)} kg")
+            println("  Total volume: ${String.format("%.1f", exercise.getTotalVolume()?.kilograms ?: 0.0)} kg")
             println("  Max weight: ${exercise.getMaxWeight()?.kilograms ?: "N/A"} kg")
             println("  Total reps: ${exercise.getTotalRepsCompleted().count}")
             println("  Completed: ${if (exercise.isCompleted()) "Yes" else "No"}")
             
             exercise.sets.forEach { set ->
                 val status = if (set.isCompleted) "✓" else "○"
-                println("    Set ${set.setNumber}: $status ${set.weight.kilograms}kg × ${set.reps.count}")
+                println("    Set ${set.setNumber}: $status ${set.weight?.kilograms ?: 0.0}kg × ${set.reps?.count ?: 0}")
             }
         }
         
         println("\n=== Workout Operations ===")
         
         // Add a new set to bench press
-        val benchPress = workout.exercises.first { it.name == "Bench Press" }
+        val benchPress = workout.exercises.first { it.libraryExercise.name == "Bench Press" }
         val updatedBenchPress = benchPress.addSet(
             Weight.fromKilograms(75.0),
             Reps.of(12)
         )
-        println("Added new set to bench press: ${updatedBenchPress.sets.last().weight.kilograms}kg × ${updatedBenchPress.sets.last().reps.count}")
+        println("Added new set to bench press: ${updatedBenchPress.sets.last().weight?.kilograms ?: 0.0}kg × ${updatedBenchPress.sets.last().reps?.count ?: 0}")
         
         // Complete the workout
         val completedWorkout = workout.complete()
@@ -175,23 +199,21 @@ object WorkoutExample {
         }
         
         try {
-            // This will throw an exception - blank exercise name
-            Exercise(
-                id = ExerciseId.generate(),
+            // This will throw an exception - blank exercise library name
+            ExerciseLibrary(
+                id = "",
                 name = "",
-                category = ExerciseCategory.CHEST,
-                sets = listOf(
-                    ExerciseSet(
-                        setNumber = 1,
-                        weight = Weight.fromKilograms(50.0),
-                        reps = Reps.of(10)
-                    )
-                ),
-                createdAt = Instant.now(),
-                updatedAt = Instant.now()
+                primaryMuscleGroup = ExerciseCategory.CHEST,
+                equipment = Equipment.BARBELL,
+                secondaryMuscleGroups = emptyList(),
+                movementPattern = "Push",
+                difficultyLevel = 5,
+                instructions = null,
+                isCompound = false,
+                searchableTerms = emptyList()
             )
         } catch (e: IllegalArgumentException) {
-            println("✓ Caught blank exercise name validation: ${e.message}")
+            println("✓ Caught blank exercise library validation: ${e.message}")
         }
         
         println("All validations working correctly!")

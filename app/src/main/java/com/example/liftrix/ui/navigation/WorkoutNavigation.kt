@@ -20,21 +20,31 @@ import com.example.liftrix.ui.workout.creation.CustomExerciseCreationScreen
 import com.example.liftrix.ui.workout.creation.CustomExerciseCreationViewModel
 import com.example.liftrix.ui.workout.creation.ExerciseSelectionScreen
 import com.example.liftrix.ui.workout.creation.ExerciseSelectionViewModel
+import com.example.liftrix.ui.workout.creation.UnifiedWorkoutCreationScreen
+import com.example.liftrix.ui.workout.creation.UnifiedWorkoutCreationViewModel
 import timber.log.Timber
 
 /**
  * Navigation routes for workout creation flow.
+ * Single entry point: UNIFIED_WORKOUT_CREATION consolidates all workout creation functionality.
+ * 
+ * NAV-003 Cleanup Verification: SimpleWorkout, RedesignedWorkout routes never existed or already cleaned up.
+ * Current architecture uses unified single-destination pattern for all workout creation.
+ * Navigation graph verified clean of obsolete destinations.
  */
 object WorkoutRoutes {
     const val EXERCISE_SELECTION = "workout/exercise_selection"
     const val CUSTOM_EXERCISE_CREATION = "workout/custom_exercise_creation"
-    const val WORKOUT_CREATION = "workout/creation"
+    const val UNIFIED_WORKOUT_CREATION = "workout/unified_creation"
     const val WORKOUT_EXECUTION = "workout/execution"
 }
 
 /**
  * Main workout navigation composable.
- * Manages the workout creation and execution flow.
+ * Manages the workout creation and execution flow with single entry point architecture.
+ * 
+ * Entry Point: UNIFIED_WORKOUT_CREATION serves as the consolidated destination for all
+ * workout creation scenarios, replacing multiple separate creation flows.
  */
 @Composable
 fun WorkoutNavigation(
@@ -44,7 +54,7 @@ fun WorkoutNavigation(
 ) {
     NavHost(
         navController = navController,
-        startDestination = WorkoutRoutes.EXERCISE_SELECTION,
+        startDestination = WorkoutRoutes.UNIFIED_WORKOUT_CREATION,
         enterTransition = {
             slideIntoContainer(
                 towards = AnimatedContentTransitionScope.SlideDirection.Left,
@@ -79,7 +89,12 @@ fun WorkoutNavigation(
 }
 
 /**
- * Defines the workout navigation graph.
+ * Defines the workout navigation graph with consolidated single entry point.
+ * 
+ * Navigation Architecture:
+ * - UNIFIED_WORKOUT_CREATION: Primary destination for all workout creation
+ * - EXERCISE_SELECTION: Supporting flow for exercise selection
+ * - CUSTOM_EXERCISE_CREATION: Supporting flow for custom exercise creation
  */
 fun NavGraphBuilder.workoutGraph(
     navController: NavHostController,
@@ -144,6 +159,20 @@ fun NavGraphBuilder.workoutGraph(
             }
         }
     }
+    
+    // Single entry point for all workout creation scenarios
+    composable(WorkoutRoutes.UNIFIED_WORKOUT_CREATION) {
+        val viewModel: UnifiedWorkoutCreationViewModel = hiltViewModel()
+        
+        UnifiedWorkoutCreationScreen(
+            onNavigateBack = onNavigateBack,
+            onWorkoutCreated = { workoutId ->
+                // Navigate back to main workout list after successful creation
+                onWorkoutComplete()
+            },
+            viewModel = viewModel
+        )
+    }
 }
 
 /**
@@ -160,6 +189,15 @@ fun NavHostController.navigateToCustomExerciseCreation() {
  */
 fun NavHostController.navigateToExerciseSelection() {
     navigate(WorkoutRoutes.EXERCISE_SELECTION) {
+        launchSingleTop = true
+    }
+}
+
+/**
+ * Extension function to navigate to unified workout creation
+ */
+fun NavHostController.navigateToUnifiedWorkoutCreation() {
+    navigate(WorkoutRoutes.UNIFIED_WORKOUT_CREATION) {
         launchSingleTop = true
     }
 }

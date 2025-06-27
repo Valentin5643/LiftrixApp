@@ -269,7 +269,7 @@ class WorkoutRepositoryImpl @Inject constructor(
 
     override suspend fun markWorkoutsAsSyncedForUser(workoutIds: List<String>, userId: String): Result<Unit> {
         return try {
-            workoutDao.markWorkoutsAsSyncedForUser(workoutIds, userId)
+            workoutDao.markWorkoutsAsSyncedForUser(workoutIds, userId, System.currentTimeMillis())
             Timber.d("Marked ${workoutIds.size} workouts as synced for user: $userId")
             Result.success(Unit)
         } catch (e: Exception) {
@@ -373,7 +373,7 @@ class WorkoutRepositoryImpl @Inject constructor(
     internal suspend fun handleSyncResult(workoutIds: List<String>, userId: String, success: Boolean) {
         try {
             if (success) {
-                workoutDao.markWorkoutsAsSyncedForUser(workoutIds, userId)
+                workoutDao.markWorkoutsAsSyncedForUser(workoutIds, userId, System.currentTimeMillis())
                 Timber.d("Marked ${workoutIds.size} workouts as synced for user: $userId")
             } else {
                 Timber.w("Sync failed for ${workoutIds.size} workouts for user: $userId")

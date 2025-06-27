@@ -20,6 +20,68 @@ object Versions {
 }
 
 object Dependencies {
+    const val compileSdk = 34
+    const val minSdk = 21
+    const val targetSdk = 34
+    const val versionCode = 1
+    const val versionName = "1.0"
+
+    const val androidGradlePlugin = "8.1.4"
+    const val kotlin = "1.8.20"
+    const val ksp = "1.8.20-1.0.11"
+
+    object AndroidX {
+        const val coreKtx = "1.10.1"
+        const val lifecycleRuntimeKtx = "2.6.1"
+        const val lifecycleViewmodelCompose = "2.6.1"
+        const val activityCompose = "1.7.2"
+        const val compose = "2023.05.01"
+        const val navigation = "2.6.0"
+        const val room = "2.5.0"
+        const val work = "2.8.1"
+        const val constraintlayout = "1.0.1"
+        const val hilt = "2.47"
+        const val hiltNavigation = "1.0.0"
+        const val datastore = "1.0.0"
+        const val junit = "1.1.5"
+        const val espresso = "3.5.1"
+    }
+
+    object Google {
+        const val material = "1.9.0"
+        const val accompanist = "0.30.1"
+        const val firebase = "32.2.2"
+        const val playServicesAuth = "20.6.0"
+        const val playServicesLocation = "21.0.1"
+        const val mlkitBarcode = "17.2.0"
+        const val zxing = "3.5.1"
+        const val gson = "2.10.1"
+    }
+
+    object Testing {
+        const val junit = "4.13.2"
+        const val mockk = "1.13.5"
+        const val coroutines = "1.7.1"
+        const val turbine = "1.0.0"
+        const val robolectric = "4.10.3"
+    }
+
+    object Timber {
+        const val timber = "5.0.1"
+    }
+
+    // Lint Rules for Room Entity Validation
+    object LintRules {
+        const val customLint = "1.0.0"
+        
+        // Custom lint rules to prevent Room schema issues
+        val roomLintRules = listOf(
+            "no-undefined-defaults",    // Prevent defaultValue = "undefined"
+            "room-entity-validation",   // Ensure proper Room annotations
+            "nullable-vs-defaults"      // Check nullable fields vs default values
+        )
+    }
+
     // Core Android
     const val coreKtx = "androidx.core:core-ktx:1.12.0"
     const val appCompat = "androidx.appcompat:appcompat:1.6.1"
@@ -37,7 +99,6 @@ object Dependencies {
     
     // Lifecycle
     const val lifecycleViewmodel = "androidx.lifecycle:lifecycle-viewmodel-ktx:${Versions.lifecycle}"
-    const val lifecycleViewmodelCompose = "androidx.lifecycle:lifecycle-viewmodel-compose:${Versions.lifecycle}"
     const val lifecycleRuntime = "androidx.lifecycle:lifecycle-runtime-ktx:${Versions.lifecycle}"
     const val lifecycleRuntimeCompose = "androidx.lifecycle:lifecycle-runtime-compose:${Versions.lifecycle}"
     
@@ -78,15 +139,11 @@ object Dependencies {
     const val workManagerHilt = "androidx.hilt:hilt-work:1.1.0"
     
     // Testing
-    const val junit = "junit:junit:${Versions.junit}"
     const val junitExt = "androidx.test.ext:junit:1.1.5"
-    const val espresso = "androidx.test.espresso:espresso-core:3.5.1"
     const val composeUiTest = "androidx.compose.ui:ui-test-junit4"
     const val composeUiTestManifest = "androidx.compose.ui:ui-test-manifest"
-    const val mockk = "io.mockk:mockk:${Versions.mockk}"
     const val mockkAndroid = "io.mockk:mockk-android:${Versions.mockk}"
     const val truth = "com.google.truth:truth:${Versions.truth}"
-    const val turbine = "app.cash.turbine:turbine:${Versions.turbine}"
     const val coroutinesTest = "org.jetbrains.kotlinx:kotlinx-coroutines-test:${Versions.coroutines}"
     const val roomTesting = "androidx.room:room-testing:${Versions.room}"
     const val workTesting = "androidx.work:work-testing:${Versions.work}"
@@ -106,7 +163,6 @@ object Plugins {
 }
 
 object Libs {
-    const val androidGradlePlugin = "com.android.tools.build:gradle:8.1.0"
     const val hiltGradlePlugin = "com.google.dagger:hilt-android-gradle-plugin:${Versions.hilt}"
     
     object Compose {

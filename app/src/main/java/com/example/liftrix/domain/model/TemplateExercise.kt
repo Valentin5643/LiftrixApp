@@ -69,11 +69,11 @@ data class TemplateExercise(
         ): TemplateExercise {
             return TemplateExercise(
                 exerciseId = exercise.id,
-                name = exercise.name,
-                primaryMuscle = exercise.category,
+                name = exercise.libraryExercise.name,
+                primaryMuscle = exercise.libraryExercise.primaryMuscleGroup,
                 equipment = Equipment.BODYWEIGHT_ONLY, // Default, should be determined from exercise
                 targetSets = targetSets ?: exercise.targetSets,
-                targetReps = targetReps ?: exercise.targetReps,
+                targetReps = targetReps ?: exercise.targetReps?.let { Reps(it) },
                 targetWeight = targetWeight ?: exercise.targetWeight,
                 restTimeSeconds = restTimeSeconds,
                 notes = notes ?: exercise.notes,
@@ -176,25 +176,36 @@ data class TemplateExercise(
     /**
      * Converts this template exercise to an actual exercise for a workout
      */
-    fun toExercise(): Exercise {
+    fun toExercise(workoutId: WorkoutId): Exercise {
         val initialSet = ExerciseSet(
+            id = ExerciseSetId.generate(),
             setNumber = 1,
             weight = targetWeight ?: Weight.ZERO,
-            reps = targetReps ?: Reps.ZERO,
-            isCompleted = false
+            reps = targetReps ?: Reps.ZERO
         )
         
         return Exercise(
             id = exerciseId,
-            name = name,
-            category = primaryMuscle,
+            workoutId = workoutId,
+            libraryExercise = ExerciseLibrary(
+                id = exerciseId.value,
+                name = name,
+                primaryMuscleGroup = primaryMuscle,
+                equipment = equipment,
+                secondaryMuscleGroups = emptyList(),
+                movementPattern = "Unknown",
+                difficultyLevel = 1,
+                instructions = "",
+                isCompound = false,
+                searchableTerms = listOf(name.lowercase())
+            ),
+            orderIndex = orderIndex,
+            targetSets = targetSets,
+            targetReps = targetReps?.count,
+            targetWeight = targetWeight,
             sets = listOf(initialSet),
             notes = notes,
-            targetSets = targetSets,
-            targetReps = targetReps,
-            targetWeight = targetWeight,
-            createdAt = java.time.Instant.now(),
-            updatedAt = java.time.Instant.now()
+            createdAt = java.time.Instant.now()
         )
     }
     
