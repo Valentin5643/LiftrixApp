@@ -366,10 +366,19 @@ class UnifiedWorkoutCreationViewModel @Inject constructor(
                     }
                 )
             } catch (e: Exception) {
-                Timber.e(e, "Unexpected error creating workout")
+                Timber.e(e, "Unexpected error creating workout. Error type: ${e::class.simpleName}, Message: ${e.message}")
+                val errorMessage = when {
+                    e.message?.contains("exercise_usage_history") == true -> 
+                        "Error saving workout progress data. Your workout was created but progress tracking may be affected."
+                    e.message?.contains("FOREIGN KEY constraint") == true -> 
+                        "Database error: Invalid exercise or user data. Please try again."
+                    e.message?.contains("NOT NULL constraint") == true -> 
+                        "Database error: Missing required data. Please check all fields are filled."
+                    else -> "An unexpected error occurred. Please try again. (${e::class.simpleName})"
+                }
                 _state.value = _state.value.copy(
                     isSaving = false,
-                    errorMessage = "An unexpected error occurred. Please try again."
+                    errorMessage = errorMessage
                 )
             }
         }

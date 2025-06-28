@@ -17,6 +17,9 @@ interface ExerciseDao {
     suspend fun getExercisesByWorkout(workoutId: Long): List<ExerciseEntity>
     
     @Query("SELECT * FROM exercises WHERE workout_id = :workoutId ORDER BY order_index ASC")
+    suspend fun getExercisesByWorkoutId(workoutId: String): List<ExerciseEntity>
+    
+    @Query("SELECT * FROM exercises WHERE workout_id = :workoutId ORDER BY order_index ASC")
     fun getExercisesByWorkoutFlow(workoutId: Long): Flow<List<ExerciseEntity>>
     
     @Query("SELECT * FROM exercises WHERE id = :exerciseId")
@@ -76,4 +79,14 @@ interface ExerciseDao {
         ORDER BY e.created_at DESC
     """)
     suspend fun getRecentlyUsedExerciseIds(userId: String): List<String>
+    
+    @Query("""
+        SELECT e.* FROM exercises e 
+        JOIN workouts w ON e.workout_id = w.id 
+        WHERE w.user_id = :userId 
+        AND e.exercise_library_id = :exerciseLibraryId 
+        AND w.date BETWEEN :startDate AND :endDate
+        ORDER BY e.created_at DESC
+    """)
+    suspend fun getExerciseHistoryInDateRange(userId: String, exerciseLibraryId: String, startDate: String, endDate: String): List<ExerciseEntity>
 }

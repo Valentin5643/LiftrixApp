@@ -17,7 +17,7 @@ import java.time.LocalDateTime
             onDelete = ForeignKey.CASCADE
         ),
         ForeignKey(
-            entity = ExerciseEntity::class,
+            entity = ExerciseLibraryEntity::class,
             parentColumns = ["id"],
             childColumns = ["exercise_id"],
             onDelete = ForeignKey.CASCADE
@@ -32,7 +32,7 @@ import java.time.LocalDateTime
 )
 data class ExerciseUsageHistoryEntity(
     @PrimaryKey(autoGenerate = true)
-    val id: Long = 0,
+    val id: Int = 0,
     
     @ColumnInfo(name = "user_id")
     val userId: String,

@@ -114,9 +114,13 @@ class WorkoutRepositoryImpl @Inject constructor(
             // Validate workout has userId
             require(workout.userId.isNotBlank()) { "Workout must have a valid user ID" }
             
+            Timber.v("💾 Starting workout save operation (should be silent)")
+            
             // Save to local database first (offline-first approach)
             val entity = workoutMapper.toEntity(workout, isSynced = false)
             workoutDao.insertWorkout(entity)
+            
+            Timber.v("✅ Workout DAO operation completed silently")
             
             // Queue sync in background for this user
             queueSyncForUser(workout.userId)

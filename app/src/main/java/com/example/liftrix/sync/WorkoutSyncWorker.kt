@@ -17,12 +17,12 @@ import timber.log.Timber
 @HiltWorker
 class WorkoutSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
-    @Assisted workerParams: WorkerParameters,
+    @Assisted params: WorkerParameters,
     private val workoutDao: WorkoutDao,
     private val workoutMapper: WorkoutMapper,
     private val firestore: FirebaseFirestore,
     private val auth: FirebaseAuth
-) : CoroutineWorker(context, workerParams) {
+) : CoroutineWorker(context, params) {
 
     companion object {
         const val WORK_NAME = "workout_sync_work"

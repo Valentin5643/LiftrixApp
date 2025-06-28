@@ -60,11 +60,12 @@ class WeightMemoryServiceImpl @Inject constructor(
                     workoutId = workoutId
                 )
                 
+                Timber.d("Attempting to insert usage history: userId=$userId, exerciseId=$exerciseId, weight=$weight, reps=$reps, sets=$sets")
                 val insertedId = exerciseUsageHistoryDao.insertUsage(usageHistory)
-                Timber.d("Updated exercise weight for user $userId, exercise $exerciseId: $weight (ID: $insertedId)")
+                Timber.d("Successfully updated exercise weight for user $userId, exercise $exerciseId: $weight (ID: $insertedId)")
                 Result.success(Unit)
             } catch (e: Exception) {
-                Timber.e(e, "Error updating exercise weight for user $userId, exercise $exerciseId")
+                Timber.e(e, "Error updating exercise weight for user $userId, exercise $exerciseId. Error type: ${e::class.simpleName}, Message: ${e.message}")
                 Result.failure(e)
             }
         }

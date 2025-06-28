@@ -8,6 +8,7 @@ import com.example.liftrix.domain.model.ExerciseCategory
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.reflect.TypeToken
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -35,7 +36,7 @@ private data class ExerciseJsonData(
  */
 @Singleton
 class ExerciseLibrarySeedData @Inject constructor(
-    private val context: Context,
+    @ApplicationContext private val context: Context,
     private val gson: Gson
 ) {
     

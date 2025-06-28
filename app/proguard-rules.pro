@@ -23,4 +23,10 @@
 # ProGuard rules for Liftrix
 -keep class com.example.liftrix.** { *; }
 -dontwarn com.example.liftrix.**
+
+# Vico chart library
+-keep class com.patrykandpatrick.vico.** { *; }
+-dontwarn com.patrykandpatrick.vico.**
+-keepclassmembers class com.patrykandpatrick.vico.** { *; }
+
 # Add additional rules as needed for libraries

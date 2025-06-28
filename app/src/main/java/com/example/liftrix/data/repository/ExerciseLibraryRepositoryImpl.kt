@@ -1,7 +1,10 @@
 package com.example.liftrix.data.repository
 
+import com.example.liftrix.data.fallback.ExercisePlaceholderService
+import com.example.liftrix.data.local.LiftrixDatabase
 import com.example.liftrix.data.local.dao.ExerciseLibraryDao
 import com.example.liftrix.data.local.dao.ExerciseUsageHistoryDao
+import com.example.liftrix.data.local.seed.ExerciseLibrarySeedData
 import com.example.liftrix.data.mapper.ExerciseLibraryMapper
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.ExerciseCategory
@@ -9,7 +12,10 @@ import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.repository.ExerciseLibraryRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,9 +24,12 @@ import javax.inject.Singleton
  */
 @Singleton
 class ExerciseLibraryRepositoryImpl @Inject constructor(
+    private val database: LiftrixDatabase,
     private val dao: ExerciseLibraryDao,
     private val usageHistoryDao: ExerciseUsageHistoryDao,
-    private val mapper: ExerciseLibraryMapper
+    private val mapper: ExerciseLibraryMapper,
+    private val exerciseLibrarySeedData: ExerciseLibrarySeedData,
+    private val placeholderService: ExercisePlaceholderService
 ) : ExerciseLibraryRepository {
     
     override fun searchExercises(query: String): Flow<List<ExerciseLibrary>> {
@@ -94,8 +103,36 @@ class ExerciseLibraryRepositoryImpl @Inject constructor(
     }
     
     override fun getAllExercises(): Flow<List<ExerciseLibrary>> {
-        return dao.getAllExercises()
-            .map { entities -> mapper.toDomainList(entities) }
+        return flow {
+            try {
+                // First, try to get exercises from database
+                val dbExercises = dao.getAllExercises().first()
+                
+                if (dbExercises.isEmpty()) {
+                    Timber.d("Database empty, showing placeholder exercises and triggering population")
+                    
+                    // Emit placeholder exercises immediately for better UX
+                    val placeholderExercises = placeholderService.getPlaceholderExercises()
+                    emit(placeholderExercises)
+                    
+                    // Trigger database population in background
+                    exerciseLibrarySeedData.populateExerciseLibraryIfNeeded(database)
+                    
+                    // Emit updated exercises from database
+                    val updatedExercises = dao.getAllExercises().first()
+                    if (updatedExercises.isNotEmpty()) {
+                        emit(mapper.toDomainList(updatedExercises))
+                    }
+                } else {
+                    // Database has exercises, use them
+                    emit(mapper.toDomainList(dbExercises))
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Error loading exercises, falling back to placeholders")
+                // Fallback to placeholder exercises if database fails
+                emit(placeholderService.getPlaceholderExercises())
+            }
+        }
     }
     
     override fun getExercisesByMuscleGroup(muscleGroup: ExerciseCategory): Flow<List<ExerciseLibrary>> {

@@ -33,6 +33,12 @@ interface WorkoutDao {
     @Query("SELECT * FROM workouts WHERE template_id = :templateId AND user_id = :userId ORDER BY created_at DESC")
     fun getWorkoutsFromTemplateForUser(templateId: String, userId: String): Flow<List<WorkoutEntity>>
     
+    @Query("SELECT * FROM workouts WHERE user_id = :userId AND date BETWEEN :startDate AND :endDate ORDER BY date ASC")
+    suspend fun getWorkoutsInDateRangeForUser(userId: String, startDate: String, endDate: String): List<WorkoutEntity>
+    
+    @Query("SELECT w.* FROM workouts w JOIN exercises e ON w.id = e.workout_id WHERE e.id = :exerciseId")
+    suspend fun getWorkoutByExerciseId(exerciseId: Long): WorkoutEntity?
+    
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWorkout(workout: WorkoutEntity): Long
     

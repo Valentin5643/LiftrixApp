@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.ui.MainViewModel
 import com.example.liftrix.ui.auth.AuthActivity
+import com.example.liftrix.ui.navigation.MainNavigationContainer
 import com.example.liftrix.ui.theme.LiftrixTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -73,7 +74,10 @@ fun MainContent(
             }
         }
         is MainViewModel.AuthenticationState.Authenticated -> {
-            AuthenticatedContent(user = currentState.user)
+            AuthenticatedContent(
+                user = currentState.user,
+                onNavigateToAuth = onNavigateToAuth
+            )
         }
     }
 }
@@ -101,11 +105,14 @@ fun LoadingScreen() {
 }
 
 @Composable
-fun AuthenticatedContent(user: com.example.liftrix.domain.model.User) {
-    // Single entry point navigation through WorkoutNavigation
-    com.example.liftrix.ui.navigation.WorkoutNavigation(
-        onNavigateBack = { /* Handle back navigation */ },
-        onWorkoutComplete = { /* Handle workout completion */ }
+fun AuthenticatedContent(
+    user: com.example.liftrix.domain.model.User,
+    onNavigateToAuth: () -> Unit
+) {
+    // Main navigation with tab-based navigation system
+    MainNavigationContainer(
+        user = user,
+        onNavigateToAuth = onNavigateToAuth
     )
 }
 

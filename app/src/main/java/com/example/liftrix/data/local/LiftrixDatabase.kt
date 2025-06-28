@@ -37,6 +37,8 @@ import com.example.liftrix.data.local.migration.MIGRATION_10_11
 import com.example.liftrix.data.local.migration.MIGRATION_11_12
 import com.example.liftrix.data.local.migration.MIGRATION_12_13
 import com.example.liftrix.data.local.migration.MIGRATION_13_14
+import com.example.liftrix.data.local.migration.MIGRATION_14_15
+import com.example.liftrix.data.local.migration.MIGRATION_15_16
 
 @Database(
     entities = [
@@ -51,7 +53,7 @@ import com.example.liftrix.data.local.migration.MIGRATION_13_14
         ExerciseWeightMemoryEntity::class,
         ExerciseUsageHistoryEntity::class,
     ],
-    version = 14,
+    version = 16,
     exportSchema = true
 )
 @TypeConverters(

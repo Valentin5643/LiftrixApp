@@ -47,4 +47,10 @@ object NetworkModule {
             .setDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ")
             .create()
     }
+
+    @Provides
+    @Singleton
+    fun provideContext(@ApplicationContext context: Context): Context {
+        return context
+    }
 } 

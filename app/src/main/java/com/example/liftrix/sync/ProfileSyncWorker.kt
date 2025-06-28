@@ -17,12 +17,12 @@ import timber.log.Timber
 @HiltWorker
 class ProfileSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
-    @Assisted workerParams: WorkerParameters,
+    @Assisted params: WorkerParameters,
     private val userProfileDao: UserProfileDao,
     private val userProfileMapper: UserProfileMapper,
     private val firestore: FirebaseFirestore,
     private val auth: FirebaseAuth
-) : CoroutineWorker(context, workerParams) {
+) : CoroutineWorker(context, params) {
 
     companion object {
         const val WORK_NAME = "profile_sync_work"

@@ -2,11 +2,11 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.google.gms.google.services)
     alias(libs.plugins.google.firebase.crashlytics)
     alias(libs.plugins.google.firebase.firebase.perf)
     alias(libs.plugins.ksp)
-    alias(libs.plugins.kapt)
     alias(libs.plugins.hilt.android)
 }
 
@@ -18,13 +18,13 @@ kotlin {
 
 android {
     namespace = "com.example.liftrix"
-    compileSdk = 34
+    compileSdk = 35
     buildToolsVersion = "34.0.0"
 
     defaultConfig {
         applicationId = "com.example.liftrix"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
@@ -65,14 +65,8 @@ android {
     }
 }
 
-kapt {
-    correctErrorTypes = true
-    useBuildCache = true
-    arguments {
-        arg("dagger.fastInit", "enabled")
-        // Room schema export configuration
-        arg("room.schemaLocation", "$projectDir/schemas")
-    }
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
@@ -90,6 +84,10 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material3.window.size.util)
     implementation("androidx.compose.material:material-icons-extended")
+    
+    // Chart library
+    implementation("com.patrykandpatrick.vico:compose-m3:2.1.3")
+    
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.auth)
     implementation(libs.androidx.credentials)
@@ -106,21 +104,23 @@ dependencies {
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     implementation(libs.firebase.storage)
-    // Temporarily using KAPT instead of KSP due to Unit signature issues
-    kapt(libs.room.compiler)
-    // ksp(libs.room.compiler)
+    // Switch to KSP for better compatibility with SDK 35
+    ksp(libs.room.compiler)
+    // kapt(libs.room.compiler)
     
     // Navigation
     implementation(libs.navigation.compose)
     
     // JSON serialization
     implementation(libs.gson)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.datetime)
     
     // Dependency Injection
     implementation(libs.hilt.android)
     implementation(libs.hilt.work)
     implementation(libs.hilt.navigation.compose)
-    kapt(libs.hilt.compiler)
+    ksp(libs.hilt.compiler)
     
     // WorkManager
     implementation(libs.work.runtime.ktx)
@@ -130,13 +130,15 @@ dependencies {
     
     // Missing dependencies for KSP and ASM instrumentation
     implementation("androidx.window:window:1.4.0")
+    implementation("androidx.window:window-core:1.4.0")
     implementation("com.google.guava:guava:32.1.3-android")
-    implementation("androidx.compose.animation:animation:1.5.4")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("androidx.compose.animation:animation:1.7.6")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.8.1")
     
     testImplementation(libs.junit)
     testImplementation("io.mockk:mockk:1.13.8")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
     testImplementation("androidx.arch.core:core-testing:2.2.0")
     testImplementation("app.cash.turbine:turbine:1.0.0")
     
@@ -152,7 +154,7 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test:rules:1.6.1")
     androidTestImplementation("com.google.dagger:hilt-android-testing:2.52")
-    kaptAndroidTest("com.google.dagger:hilt-android-compiler:2.52")
+    kspAndroidTest("com.google.dagger:hilt-android-compiler:2.52")
     
     // Room testing dependencies for MigrationTestHelper
     androidTestImplementation(libs.room.testing)
