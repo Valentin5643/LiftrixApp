@@ -1,5 +1,10 @@
 package com.example.liftrix.data.repository
 
+import com.example.liftrix.data.extensions.getWorkoutsInDateRangeWithMetrics
+import com.example.liftrix.data.extensions.toDurationDataPoints
+import com.example.liftrix.data.extensions.toFrequencyDataPoints
+import com.example.liftrix.data.extensions.toVolumeDataPoints
+import com.example.liftrix.data.extensions.calculateProgressSummary
 import com.example.liftrix.data.local.dao.ExerciseDao
 import com.example.liftrix.data.local.dao.ExerciseSetDao
 import com.example.liftrix.data.local.dao.WorkoutDao
@@ -11,12 +16,14 @@ import com.example.liftrix.domain.repository.VolumeDataPoint
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.toJavaLocalDate
 import timber.log.Timber
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.abs
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.todayIn
+import kotlinx.datetime.toJavaLocalDate
+import java.time.format.DateTimeFormatter
 
 @Singleton
 class ProgressStatsRepositoryImpl @Inject constructor(
@@ -36,41 +43,11 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         endDate: LocalDate
     ): Flow<List<VolumeDataPoint>> = flow {
         try {
-            val startDateString = startDate.toJavaLocalDate().format(DATE_FORMATTER)
-            val endDateString = endDate.toJavaLocalDate().format(DATE_FORMATTER)
+            val dailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(
+                userId, startDate, endDate, exerciseDao, exerciseSetDao
+            )
             
-            // Get all workouts in date range for user
-            val workouts = workoutDao.getWorkoutsInDateRangeForUser(userId, startDateString, endDateString)
-            
-            // Group by date and calculate volume
-            val volumeData = workouts.groupBy { it.date }
-                .map { (date, dailyWorkouts) ->
-                    var totalVolume = 0f
-                    var exerciseCount = 0
-                    
-                    dailyWorkouts.forEach { workout ->
-                        // Get exercises for this workout
-                        val exercises = exerciseDao.getExercisesByWorkoutId(workout.id)
-                        exerciseCount += exercises.size
-                        
-                        // Calculate volume for each exercise
-                        exercises.forEach { exercise ->
-                            val sets = exerciseSetDao.getSetsByExercise(exercise.id)
-                            sets.forEach { set ->
-                                if (set.weightKg != null && set.reps != null) {
-                                    totalVolume += set.weightKg * set.reps
-                                }
-                            }
-                        }
-                    }
-                    
-                    VolumeDataPoint(
-                        date = kotlinx.datetime.LocalDate.parse(date.format(DATE_FORMATTER)),
-                        totalVolume = totalVolume,
-                        exerciseCount = exerciseCount
-                    )
-                }
-                .sortedBy { it.date }
+            val volumeData = dailyMetrics.toVolumeDataPoints()
             
             emit(volumeData)
             
@@ -86,31 +63,11 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         endDate: LocalDate
     ): Flow<List<DurationDataPoint>> = flow {
         try {
-            val startDateString = startDate.toJavaLocalDate().format(DATE_FORMATTER)
-            val endDateString = endDate.toJavaLocalDate().format(DATE_FORMATTER)
+            val dailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(
+                userId, startDate, endDate, exerciseDao, exerciseSetDao
+            )
             
-            // Get all workouts in date range for user
-            val workouts = workoutDao.getWorkoutsInDateRangeForUser(userId, startDateString, endDateString)
-            
-            // Group by date and calculate duration
-            val durationData = workouts.groupBy { it.date }
-                .map { (date, dailyWorkouts) ->
-                    val totalDuration = dailyWorkouts.sumOf { workout ->
-                        if (workout.startTime != null && workout.endTime != null) {
-                            val durationMs = workout.endTime.toEpochMilli() - workout.startTime.toEpochMilli()
-                            (durationMs / MILLISECONDS_PER_MINUTE).toInt()
-                        } else {
-                            0
-                        }
-                    }
-                    
-                    DurationDataPoint(
-                        date = kotlinx.datetime.LocalDate.parse(date.format(DATE_FORMATTER)),
-                        durationMinutes = totalDuration,
-                        workoutCount = dailyWorkouts.size
-                    )
-                }
-                .sortedBy { it.date }
+            val durationData = dailyMetrics.toDurationDataPoints()
             
             emit(durationData)
             
@@ -126,29 +83,11 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         endDate: LocalDate
     ): Flow<List<FrequencyDataPoint>> = flow {
         try {
-            val startDateString = startDate.toJavaLocalDate().format(DATE_FORMATTER)
-            val endDateString = endDate.toJavaLocalDate().format(DATE_FORMATTER)
+            val dailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(
+                userId, startDate, endDate, exerciseDao, exerciseSetDao
+            )
             
-            // Get all workouts in date range for user
-            val workouts = workoutDao.getWorkoutsInDateRangeForUser(userId, startDateString, endDateString)
-            
-            // Group by date and calculate frequency with intensity
-            val workoutsByDate = workouts.groupBy { it.date }
-            val maxWorkoutsPerDay = workoutsByDate.values.maxOfOrNull { it.size } ?: 1
-            
-            val frequencyData = workoutsByDate.map { (date, dailyWorkouts) ->
-                val intensity = if (maxWorkoutsPerDay > 0) {
-                    dailyWorkouts.size.toFloat() / maxWorkoutsPerDay.toFloat()
-                } else {
-                    0f
-                }
-                
-                FrequencyDataPoint(
-                    date = kotlinx.datetime.LocalDate.parse(date.format(DATE_FORMATTER)),
-                    workoutCount = dailyWorkouts.size,
-                    intensity = intensity.coerceIn(0f, 1f)
-                )
-            }.sortedBy { it.date }
+            val frequencyData = dailyMetrics.toFrequencyDataPoints()
             
             emit(frequencyData)
             
@@ -164,67 +103,25 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         endDate: LocalDate
     ): Flow<ProgressSummary> = flow {
         try {
-            val startDateString = startDate.toJavaLocalDate().format(DATE_FORMATTER)
-            val endDateString = endDate.toJavaLocalDate().format(DATE_FORMATTER)
-            
-            // Get all workouts in date range for user
-            val workouts = workoutDao.getWorkoutsInDateRangeForUser(userId, startDateString, endDateString)
-            
-            // Calculate total volume
-            var totalVolume = 0f
-            workouts.forEach { workout ->
-                val exercises = exerciseDao.getExercisesByWorkoutId(workout.id)
-                exercises.forEach { exercise ->
-                    val sets = exerciseSetDao.getSetsByExercise(exercise.id)
-                    sets.forEach { set ->
-                        if (set.weightKg != null && set.reps != null) {
-                            totalVolume += set.weightKg * set.reps
-                        }
-                    }
-                }
-            }
-            
-            // Calculate average duration
-            val completedWorkouts = workouts.filter { it.startTime != null && it.endTime != null }
-            val averageDuration = if (completedWorkouts.isNotEmpty()) {
-                completedWorkouts.map { workout ->
-                    val durationMs = workout.endTime!!.toEpochMilli() - workout.startTime!!.toEpochMilli()
-                    (durationMs / MILLISECONDS_PER_MINUTE).toInt()
-                }.average().toInt()
-            } else {
-                0
-            }
-            
-            // Calculate total active time
-            val totalActiveTime = completedWorkouts.sumOf { workout ->
-                val durationMs = workout.endTime!!.toEpochMilli() - workout.startTime!!.toEpochMilli()
-                (durationMs / MILLISECONDS_PER_MINUTE).toInt()
-            }
-            
-            // Calculate streaks
-            val workoutDates = workouts.map { it.date }.distinct().sorted()
-            val (currentStreak, longestStreak) = calculateStreaks(workoutDates)
-            
-            // Calculate average workouts per week
-            val daysBetween = abs(endDate.toEpochDays() - startDate.toEpochDays())
-            val weeks = if (daysBetween > 0) daysBetween / 7.0 else 1.0
-            val averageWorkoutsPerWeek = if (weeks > 0) workouts.size.toFloat() / weeks.toFloat() else 0f
-            
-            val summary = ProgressSummary(
-                totalWorkouts = workouts.size,
-                totalVolume = totalVolume,
-                averageDuration = averageDuration,
-                currentStreak = currentStreak,
-                longestStreak = longestStreak,
-                averageWorkoutsPerWeek = averageWorkoutsPerWeek,
-                totalActiveTime = totalActiveTime
+            val dailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(
+                userId, startDate, endDate, exerciseDao, exerciseSetDao
             )
+            
+            val summary = dailyMetrics.calculateProgressSummary(startDate, endDate)
             
             emit(summary)
             
         } catch (e: Exception) {
             Timber.e(e, "Failed to get progress summary for user: $userId")
-            emit(ProgressSummary(0, 0f, 0, 0, 0, 0f, 0))
+            emit(ProgressSummary(
+                totalWorkouts = 0,
+                totalVolume = 0f,
+                averageDuration = 0,
+                currentStreak = 0,
+                longestStreak = 0,
+                averageWorkoutsPerWeek = 0f,
+                totalActiveTime = 0
+            ))
         }
     }
 
@@ -305,7 +202,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         val lastWorkoutDate = sortedDates.lastOrNull()
         if (lastWorkoutDate != null) {
             val daysSinceLastWorkout = java.time.temporal.ChronoUnit.DAYS.between(lastWorkoutDate, today)
-            if (daysSinceLastWorkout <= 1) {
+            if (daysSinceLastWorkout <= 1L) {
                 // Find consecutive days leading up to today
                 var streak = 1
                 for (i in sortedDates.size - 2 downTo 0) {
@@ -322,4 +219,5 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         
         return Pair(currentStreak, longestStreak)
     }
+
 }

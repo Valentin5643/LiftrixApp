@@ -25,44 +25,43 @@ class WorkoutMapper @Inject constructor(
     /**
      * Convert Room entity to domain model
      */
-    fun toDomain(entity: WorkoutEntity): Workout {
+    fun toDomain(entity: WorkoutEntity): Workout = entity.run {
         val exercisesType = object : TypeToken<List<Exercise>>() {}.type
-        val exercises: List<Exercise> = gson.fromJson(entity.exercisesJson, exercisesType)
-            ?: emptyList()
+        val exercises: List<Exercise> = gson.fromJson(exercisesJson, exercisesType) ?: emptyList()
 
-        return Workout(
-            userId = entity.userId,
-            id = WorkoutId(entity.id),
-            name = entity.name,
-            date = entity.date,
+        Workout(
+            userId = userId,
+            id = WorkoutId(id),
+            name = name,
+            date = date,
             exercises = exercises,
-            status = entity.status,
-            startTime = entity.startTime,
-            endTime = entity.endTime,
-            notes = entity.notes,
-            templateId = entity.templateId?.let { WorkoutId(it) },
-            createdAt = entity.createdAt,
-            updatedAt = entity.updatedAt
+            status = status,
+            startTime = startTime,
+            endTime = endTime,
+            notes = notes,
+            templateId = templateId?.let(::WorkoutId),
+            createdAt = createdAt,
+            updatedAt = updatedAt
         )
     }
 
     /**
      * Convert domain model to Room entity
      */
-    fun toEntity(workout: Workout, isSynced: Boolean = false): WorkoutEntity {
-        return WorkoutEntity(
-            id = workout.id.value,
-            userId = workout.userId,
-            name = workout.name,
-            date = workout.date,
-            exercisesJson = gson.toJson(workout.exercises),
-            status = workout.status,
-            startTime = workout.startTime,
-            endTime = workout.endTime,
-            notes = workout.notes,
-            templateId = workout.templateId?.value,
-            createdAt = workout.createdAt,
-            updatedAt = workout.updatedAt,
+    fun toEntity(workout: Workout, isSynced: Boolean = false): WorkoutEntity = workout.run {
+        WorkoutEntity(
+            id = id.value,
+            userId = userId,
+            name = name,
+            date = date,
+            exercisesJson = gson.toJson(exercises),
+            status = status,
+            startTime = startTime,
+            endTime = endTime,
+            notes = notes,
+            templateId = templateId?.value,
+            createdAt = createdAt,
+            updatedAt = updatedAt,
             isSynced = isSynced,
             syncVersion = System.currentTimeMillis()
         )
@@ -71,19 +70,19 @@ class WorkoutMapper @Inject constructor(
     /**
      * Convert domain model to Firestore DTO
      */
-    fun toFirestoreDto(workout: Workout, userId: String): WorkoutDto {
-        return WorkoutDto(
-            id = workout.id.value,
-            name = workout.name,
-            date = workout.date.format(DATE_FORMATTER),
-            exercises = workout.exercises.map { exerciseMapper.toFirestoreDto(it) },
-            status = workout.status.name,
-            startTime = workout.startTime?.let { Timestamp(it.epochSecond, it.nano) },
-            endTime = workout.endTime?.let { Timestamp(it.epochSecond, it.nano) },
-            notes = workout.notes,
-            templateId = workout.templateId?.value,
-            createdAt = Timestamp(workout.createdAt.epochSecond, workout.createdAt.nano),
-            updatedAt = Timestamp(workout.updatedAt.epochSecond, workout.updatedAt.nano),
+    fun toFirestoreDto(workout: Workout, userId: String): WorkoutDto = workout.run {
+        WorkoutDto(
+            id = id.value,
+            name = name,
+            date = date.format(DATE_FORMATTER),
+            exercises = exercises.map(exerciseMapper::toFirestoreDto),
+            status = status.name,
+            startTime = startTime?.let { Timestamp(it.epochSecond, it.nano) },
+            endTime = endTime?.let { Timestamp(it.epochSecond, it.nano) },
+            notes = notes,
+            templateId = templateId?.value,
+            createdAt = Timestamp(createdAt.epochSecond, createdAt.nano),
+            updatedAt = Timestamp(updatedAt.epochSecond, updatedAt.nano),
             userId = userId,
             version = System.currentTimeMillis()
         )
@@ -92,20 +91,20 @@ class WorkoutMapper @Inject constructor(
     /**
      * Convert Firestore DTO to domain model
      */
-    fun fromFirestoreDto(dto: WorkoutDto): Workout {
-        return Workout(
-            userId = dto.userId,
-            id = WorkoutId(dto.id),
-            name = dto.name,
-            date = LocalDate.parse(dto.date, DATE_FORMATTER),
+    fun fromFirestoreDto(dto: WorkoutDto): Workout = dto.run {
+        Workout(
+            userId = userId,
+            id = WorkoutId(id),
+            name = name,
+            date = LocalDate.parse(date, DATE_FORMATTER),
             exercises = emptyList(), // TODO: Implement proper exercise conversion with library lookup
-            status = WorkoutStatus.valueOf(dto.status),
-            startTime = dto.startTime?.toInstant(),
-            endTime = dto.endTime?.toInstant(),
-            notes = dto.notes,
-            templateId = dto.templateId?.let { WorkoutId(it) },
-            createdAt = dto.createdAt.toInstant(),
-            updatedAt = dto.updatedAt?.toInstant() ?: dto.createdAt.toInstant()
+            status = WorkoutStatus.valueOf(status),
+            startTime = startTime?.toInstant(),
+            endTime = endTime?.toInstant(),
+            notes = notes,
+            templateId = templateId?.let(::WorkoutId),
+            createdAt = createdAt.toInstant(),
+            updatedAt = updatedAt?.toInstant() ?: createdAt.toInstant()
         )
     }
 

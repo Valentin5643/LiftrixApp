@@ -85,8 +85,10 @@ dependencies {
     implementation(libs.androidx.material3.window.size.util)
     implementation("androidx.compose.material:material-icons-extended")
     
-    // Chart library
-    implementation("com.patrykandpatrick.vico:compose-m3:2.1.3")
+    // Chart library - Add explicit core dependency for axis functions
+    implementation(libs.vico.compose)
+    implementation(libs.vico.compose.m3)
+    implementation(libs.vico.core)
     
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.auth)

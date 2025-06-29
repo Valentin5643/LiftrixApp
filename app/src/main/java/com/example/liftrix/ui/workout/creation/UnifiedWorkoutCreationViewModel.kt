@@ -10,6 +10,7 @@ import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.ExerciseLibraryRepository
 import com.example.liftrix.domain.usecase.CreateWorkoutWithExercisesUseCase
 import com.example.liftrix.domain.usecase.exercise.SearchExercisesUseCase
+import com.example.liftrix.ui.common.updateState
 import com.example.liftrix.ui.workout.creation.model.SelectedExercise
 import com.example.liftrix.ui.workout.creation.model.SetInput
 import com.example.liftrix.ui.workout.creation.model.WorkoutCreationEvent
@@ -79,17 +80,21 @@ class UnifiedWorkoutCreationViewModel @Inject constructor(
         exerciseLibraryRepository.getAllExercises()
             .catch { error ->
                 Timber.e(error, "Failed to load exercise library")
-                _state.value = _state.value.copy(
-                    isLoading = false,
-                    errorMessage = "Failed to load exercises. Please try again."
-                )
+                _state.updateState { 
+                    copy(
+                        isLoading = false,
+                        errorMessage = "Failed to load exercises. Please try again."
+                    )
+                }
             }
             .onEach { exercises ->
-                _state.value = _state.value.copy(
-                    availableExercises = exercises,
-                    filteredExercises = exercises,
-                    isLoading = false
-                )
+                _state.updateState { 
+                    copy(
+                        availableExercises = exercises,
+                        filteredExercises = exercises,
+                        isLoading = false
+                    )
+                }
             }
             .launchIn(viewModelScope)
     }

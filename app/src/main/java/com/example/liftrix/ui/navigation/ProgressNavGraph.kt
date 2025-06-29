@@ -37,8 +37,8 @@ fun NavGraphBuilder.progressGraph(
         route = MainNavigationItem.PROGRESS.route
     ) {
         composable(ProgressRoutes.PROGRESS_DASHBOARD) {
-            // Placeholder for ProgressDashboardScreen - will be implemented in PROGRESS-005
-            com.example.liftrix.ui.progress.ProgressScreen()
+            // ProgressDashboardScreen implemented in PROGRESS-005
+            com.example.liftrix.ui.progress.ProgressDashboardScreen()
         }
         
         composable(ProgressRoutes.WORKOUT_ANALYTICS) {

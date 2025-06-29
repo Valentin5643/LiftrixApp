@@ -43,59 +43,51 @@ class WorkoutRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getWorkoutByIdForUser(id: WorkoutId, userId: String): Workout? {
-        return try {
-            workoutDao.getWorkoutByIdForUser(id.value, userId)?.let { entity ->
-                workoutMapper.toDomain(entity)
-            }
-        } catch (e: Exception) {
+        return runCatching {
+            workoutDao.getWorkoutByIdForUser(id.value, userId)?.let(workoutMapper::toDomain)
+        }.onFailure { e ->
             Timber.e(e, "Failed to get workout by ID for user: ${id.value}, user: $userId")
-            null
-        }
+        }.getOrNull()
     }
 
     override suspend fun getWorkoutById(id: WorkoutId): Workout? {
-        return try {
-            workoutDao.getWorkoutById(id.value)?.let { entity ->
-                workoutMapper.toDomain(entity)
-            }
-        } catch (e: Exception) {
+        return runCatching {
+            workoutDao.getWorkoutById(id.value)?.let(workoutMapper::toDomain)
+        }.onFailure { e ->
             Timber.e(e, "Failed to get workout by ID: ${id.value}")
-            null
-        }
+        }.getOrNull()
     }
 
     override fun getWorkoutsByDateForUser(date: LocalDate, userId: String): Flow<List<Workout>> {
-        val dateString = date.format(DATE_FORMATTER)
-        return workoutDao.getWorkoutsByDateForUser(dateString, userId).map { entities ->
-            entities.map { workoutMapper.toDomain(it) }
+        return date.format(DATE_FORMATTER).let { dateString ->
+            workoutDao.getWorkoutsByDateForUser(dateString, userId).map { entities ->
+                entities.map(workoutMapper::toDomain)
+            }
         }
     }
 
     override fun getWorkoutsByDate(date: LocalDate): Flow<List<Workout>> {
-        val dateString = date.format(DATE_FORMATTER)
-        return workoutDao.getWorkoutsByDate(dateString).map { entities ->
-            entities.map { workoutMapper.toDomain(it) }
+        return date.format(DATE_FORMATTER).let { dateString ->
+            workoutDao.getWorkoutsByDate(dateString).map { entities ->
+                entities.map(workoutMapper::toDomain)
+            }
         }
     }
 
     override suspend fun getActiveWorkoutForUser(userId: String): Workout? {
-        return try {
-            workoutDao.getActiveWorkoutForUser(userId)?.let { entity ->
-                workoutMapper.toDomain(entity)
-            }
-        } catch (e: Exception) {
+        return runCatching {
+            workoutDao.getActiveWorkoutForUser(userId)?.let(workoutMapper::toDomain)
+        }.onFailure { e ->
             Timber.e(e, "Failed to get active workout for user: $userId")
-            null
-        }
+        }.getOrNull()
     }
 
     override suspend fun getUnsyncedCountForUser(userId: String): Int {
-        return try {
+        return runCatching {
             workoutDao.getUnsyncedCountForUser(userId)
-        } catch (e: Exception) {
+        }.onFailure { e ->
             Timber.e(e, "Failed to get unsynced count for user: $userId")
-            0
-        }
+        }.getOrDefault(0)
     }
 
     override suspend fun getUnsyncedWorkoutsForUser(userId: String): List<Workout> {

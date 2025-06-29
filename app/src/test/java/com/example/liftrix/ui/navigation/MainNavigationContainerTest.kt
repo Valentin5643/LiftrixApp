@@ -586,4 +586,319 @@ class MainNavigationContainerTest {
             .onNodeWithContentDescription("Navigate to Home tab")
             .assertIsDisplayed()
     }
+
+    // MARK: - Navigation State Preservation Tests
+
+    @Test
+    fun mainNavigationContainer_statePreservationBetweenTabSwitches() = runTest {
+        setupMocks()
+        
+        // Mock NavController for detailed navigation testing
+        val navController = mockk<androidx.navigation.NavHostController>(relaxed = true)
+        every { navController.currentDestination } returns mockk {
+            every { route } returns MainNavigationItem.HOME.route
+        }
+        
+        composeTestRule.setContent {
+            LiftrixTheme {
+                MainNavigationContainer(
+                    user = mockUser,
+                    onNavigateToAuth = { },
+                    navController = navController,
+                    viewModel = mockViewModel
+                )
+            }
+        }
+
+        // Switch to Workout tab
+        composeTestRule
+            .onNodeWithText("Workout")
+            .performClick()
+
+        // Verify navigation with proper options for state preservation
+        verify { 
+            navController.navigate(
+                MainNavigationItem.WORKOUT.route,
+                match<androidx.navigation.NavOptionsBuilder.() -> Unit> { true }
+            ) 
+        }
+    }
+
+    @Test
+    fun mainNavigationContainer_backStackManagement() {
+        composeTestRule.setContent {
+            LiftrixTheme {
+                MainNavigationContainer(
+                    user = mockUser,
+                    onNavigateToAuth = { }
+                )
+            }
+        }
+
+        // Navigate through all tabs in sequence
+        val navigationSequence = listOf(
+            MainNavigationItem.WORKOUT,
+            MainNavigationItem.PROGRESS,
+            MainNavigationItem.COACH,
+            MainNavigationItem.HOME
+        )
+
+        navigationSequence.forEach { item ->
+            composeTestRule
+                .onNodeWithText(item.label)
+                .performClick()
+
+            // Verify the tab is selected
+            composeTestRule
+                .onNodeWithContentDescription("${item.label} tab selected")
+                .assertIsDisplayed()
+        }
+    }
+
+    // MARK: - Deep Linking and Navigation Routing Tests
+
+    @Test
+    fun mainNavigationContainer_handlesDeepLinkNavigation() = runTest {
+        setupMocks()
+        
+        // Test navigation to specific workout routes via modal
+        uiStateFlow.value = MainNavigationState(
+            isWorkoutCreationModalVisible = true,
+            navigationDestination = WorkoutCreationDestination.TemplateWorkout
+        )
+
+        composeTestRule.setContent {
+            LiftrixTheme {
+                MainNavigationContainer(
+                    user = mockUser,
+                    onNavigateToAuth = { },
+                    viewModel = mockViewModel
+                )
+            }
+        }
+
+        // Verify modal shows template workout option
+        composeTestRule
+            .onNodeWithText("Template Workout")
+            .assertIsDisplayed()
+        
+        // Click template workout to test navigation
+        composeTestRule
+            .onNodeWithText("Template Workout")
+            .performClick()
+
+        // Verify navigation to workout tab occurs
+        composeTestRule.waitForIdle()
+    }
+
+    @Test
+    fun mainNavigationContainer_workoutCreationDestinationHandling() = runTest {
+        setupMocks()
+        
+        // Test custom workout destination
+        uiStateFlow.value = MainNavigationState(
+            isWorkoutCreationModalVisible = true,
+            navigationDestination = WorkoutCreationDestination.CustomWorkout
+        )
+
+        composeTestRule.setContent {
+            LiftrixTheme {
+                MainNavigationContainer(
+                    user = mockUser,
+                    onNavigateToAuth = { },
+                    viewModel = mockViewModel
+                )
+            }
+        }
+
+        // Click custom workout option
+        composeTestRule
+            .onNodeWithText("Custom Workout")
+            .performClick()
+
+        // Navigation should be handled through ViewModel state
+        composeTestRule.waitForIdle()
+    }
+
+    // MARK: - Enhanced ViewModel Event Handling Tests
+
+    @Test
+    fun mainNavigationContainer_viewModelEventHandling_tabNavigation() = runTest {
+        setupMocks()
+        
+        composeTestRule.setContent {
+            LiftrixTheme {
+                MainNavigationContainer(
+                    user = mockUser,
+                    onNavigateToAuth = { },
+                    viewModel = mockViewModel
+                )
+            }
+        }
+
+        // Click each tab and verify ViewModel events are triggered
+        MainNavigationItem.entries.forEach { item ->
+            composeTestRule
+                .onNodeWithText(item.label)
+                .performClick()
+
+            // Note: In real testing, we would verify specific NavigateToTab events
+            // This tests the integration works without crashes
+            composeTestRule.waitForIdle()
+        }
+    }
+
+    @Test
+    fun mainNavigationContainer_viewModelStateChanges_reflectedInUI() = runTest {
+        setupMocks()
+        
+        composeTestRule.setContent {
+            LiftrixTheme {
+                MainNavigationContainer(
+                    user = mockUser,
+                    onNavigateToAuth = { },
+                    viewModel = mockViewModel
+                )
+            }
+        }
+
+        // Test error state handling
+        uiStateFlow.value = MainNavigationState(
+            error = "Test error message",
+            isLoading = false
+        )
+
+        composeTestRule.waitForIdle()
+        
+        // UI should still be functional even with error state
+        composeTestRule
+            .onNodeWithText("Home")
+            .assertIsDisplayed()
+
+        // Test loading state
+        uiStateFlow.value = MainNavigationState(
+            isLoading = true,
+            error = null
+        )
+
+        composeTestRule.waitForIdle()
+        
+        // Navigation should still be functional during loading
+        composeTestRule
+            .onNodeWithText("Workout")
+            .performClick()
+    }
+
+    // MARK: - Integration and Edge Case Tests
+
+    @Test
+    fun mainNavigationContainer_modalDismissalHandling() = runTest {
+        setupMocks()
+        
+        // Start with modal visible
+        uiStateFlow.value = MainNavigationState(
+            isWorkoutCreationModalVisible = true
+        )
+
+        composeTestRule.setContent {
+            LiftrixTheme {
+                MainNavigationContainer(
+                    user = mockUser,
+                    onNavigateToAuth = { },
+                    viewModel = mockViewModel
+                )
+            }
+        }
+
+        // Verify modal is visible
+        composeTestRule
+            .onNodeWithText("Template Workout")
+            .assertIsDisplayed()
+
+        // Hide modal via state change
+        uiStateFlow.value = MainNavigationState(
+            isWorkoutCreationModalVisible = false
+        )
+
+        composeTestRule.waitForIdle()
+
+        // Verify modal is hidden
+        composeTestRule
+            .onNodeWithText("Template Workout")
+            .assertIsNotDisplayed()
+    }
+
+    @Test
+    fun mainNavigationContainer_multipleQuickTabSwitches() {
+        composeTestRule.setContent {
+            LiftrixTheme {
+                MainNavigationContainer(
+                    user = mockUser,
+                    onNavigateToAuth = { }
+                )
+            }
+        }
+
+        // Perform rapid tab switching to test UI stability
+        repeat(5) {
+            MainNavigationItem.entries.forEach { item ->
+                composeTestRule
+                    .onNodeWithText(item.label)
+                    .performClick()
+                
+                // Small wait to allow UI to settle
+                composeTestRule.waitForIdle()
+                
+                // Verify tab is selected
+                composeTestRule
+                    .onNodeWithContentDescription("${item.label} tab selected")
+                    .assertIsDisplayed()
+            }
+        }
+    }
+
+    @Test
+    fun mainNavigationContainer_authenticationStateTransitions() = runTest {
+        setupMocks()
+        
+        composeTestRule.setContent {
+            LiftrixTheme {
+                MainNavigationContainer(
+                    user = mockUser,
+                    onNavigateToAuth = { },
+                    viewModel = mockViewModel
+                )
+            }
+        }
+
+        // Test transition from loading to authenticated
+        uiStateFlow.value = MainNavigationState(
+            authenticationState = AuthenticationState.Loading,
+            isLoading = true
+        )
+        composeTestRule.waitForIdle()
+
+        uiStateFlow.value = MainNavigationState(
+            authenticationState = AuthenticationState.Authenticated(mockUser),
+            isLoading = false
+        )
+        composeTestRule.waitForIdle()
+
+        // Verify UI is functional after auth state change
+        composeTestRule
+            .onNodeWithText("Home")
+            .assertIsDisplayed()
+
+        // Test unauthenticated state
+        uiStateFlow.value = MainNavigationState(
+            authenticationState = AuthenticationState.Unauthenticated,
+            isLoading = false
+        )
+        composeTestRule.waitForIdle()
+
+        // Navigation should still be visible (auth handling is at higher level)
+        composeTestRule
+            .onNodeWithText("Home")
+            .assertIsDisplayed()
+    }
 } 

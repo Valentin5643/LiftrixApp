@@ -15,34 +15,31 @@ import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
-object AnalyticsModule {
-
-    @Provides
-    @Singleton
-    fun provideFirebaseAnalytics(): FirebaseAnalytics {
-        return Firebase.analytics.apply {
-            // Enable analytics collection
-            setAnalyticsCollectionEnabled(true)
-        }
-    }
-
-    @Provides
-    @Singleton
-    fun provideFirebaseCrashlytics(): FirebaseCrashlytics {
-        return FirebaseCrashlytics.getInstance().apply {
-            // Enable crashlytics collection
-            setCrashlyticsCollectionEnabled(true)
-        }
-    }
-}
-
-@Module
-@InstallIn(SingletonComponent::class)
-abstract class AnalyticsBindingModule {
+abstract class AnalyticsModule {
 
     @Binds
     @Singleton
     abstract fun bindAnalyticsService(
         analyticsServiceImpl: AnalyticsServiceImpl
     ): AnalyticsService
+
+    companion object {
+        @Provides
+        @Singleton
+        fun provideFirebaseAnalytics(): FirebaseAnalytics {
+            return Firebase.analytics.apply {
+                // Enable analytics collection
+                setAnalyticsCollectionEnabled(true)
+            }
+        }
+
+        @Provides
+        @Singleton
+        fun provideFirebaseCrashlytics(): FirebaseCrashlytics {
+            return FirebaseCrashlytics.getInstance().apply {
+                // Enable crashlytics collection
+                setCrashlyticsCollectionEnabled(true)
+            }
+        }
+    }
 } 

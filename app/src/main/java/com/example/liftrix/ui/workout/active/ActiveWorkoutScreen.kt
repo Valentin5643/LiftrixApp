@@ -49,6 +49,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.liftrix.service.TimerServiceManager
 import com.example.liftrix.service.WorkoutTimerService
+import com.example.liftrix.ui.common.*
 import com.example.liftrix.ui.theme.LiftrixTheme
 
 /**

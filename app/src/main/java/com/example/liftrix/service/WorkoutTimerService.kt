@@ -332,12 +332,14 @@ class WorkoutTimerService : Service() {
         }
     }
 
-    private fun createNotification() = with(NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)) {
-        val mainIntent = Intent(this@WorkoutTimerService, MainActivity::class.java)
-        val mainPendingIntent = PendingIntent.getActivity(
-            this@WorkoutTimerService, 0, mainIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+    private fun createNotification() = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID).apply {
+        val mainPendingIntent = Intent(this@WorkoutTimerService, MainActivity::class.java)
+            .let { intent ->
+                PendingIntent.getActivity(
+                    this@WorkoutTimerService, 0, intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            }
 
         setContentTitle(getNotificationTitle())
         setContentText(getNotificationText())
@@ -348,37 +350,30 @@ class WorkoutTimerService : Service() {
         priority = NotificationCompat.PRIORITY_LOW
 
         // Add action buttons based on current state
-        val currentTimerState = _serviceState.value.timerState
-        when (currentTimerState) {
-            is TimerState.SessionRunning, is TimerState.RestActive -> {
-                addAction(
-                    R.drawable.ic_launcher_foreground, "Pause",
-                    createActionPendingIntent(ACTION_PAUSE)
-                )
+        _serviceState.value.timerState.let { currentTimerState ->
+            getNotificationActions(currentTimerState).forEach { (iconRes, text, action) ->
+                addAction(iconRes, text, createActionPendingIntent(action))
             }
-            is TimerState.SessionPaused, is TimerState.RestPaused -> {
-                addAction(
-                    R.drawable.ic_launcher_foreground, "Resume",
-                    createActionPendingIntent(ACTION_RESUME)
-                )
-            }
+        }
+    }.build()
+
+    private fun getNotificationActions(timerState: TimerState): List<NotificationAction> = buildList {
+        when (timerState) {
+            is TimerState.SessionRunning, is TimerState.RestActive -> 
+                add(NotificationAction(R.drawable.ic_launcher_foreground, "Pause", ACTION_PAUSE))
+            is TimerState.SessionPaused, is TimerState.RestPaused -> 
+                add(NotificationAction(R.drawable.ic_launcher_foreground, "Resume", ACTION_RESUME))
             else -> Unit
         }
 
-        if (currentTimerState is TimerState.RestActive || currentTimerState is TimerState.RestPaused) {
-            addAction(
-                R.drawable.ic_launcher_foreground, "Skip Rest",
-                createActionPendingIntent(ACTION_SKIP_REST)
-            )
+        if (timerState is TimerState.RestActive || timerState is TimerState.RestPaused) {
+            add(NotificationAction(R.drawable.ic_launcher_foreground, "Skip Rest", ACTION_SKIP_REST))
         }
 
-        addAction(
-            R.drawable.ic_launcher_foreground, "Stop",
-            createActionPendingIntent(ACTION_STOP)
-        )
-
-        build()
+        add(NotificationAction(R.drawable.ic_launcher_foreground, "Stop", ACTION_STOP))
     }
+
+    private data class NotificationAction(val iconRes: Int, val text: String, val action: String)
 
     private fun createActionPendingIntent(action: String): PendingIntent {
         val intent = Intent(this, WorkoutTimerService::class.java).apply {
@@ -390,18 +385,22 @@ class WorkoutTimerService : Service() {
         )
     }
 
-    private fun getNotificationTitle(): String = when (_serviceState.value.timerState) {
-        is TimerState.Stopped -> "Workout Timer"
-        is TimerState.SessionRunning, is TimerState.SessionPaused -> "Workout Session"
-        is TimerState.RestActive, is TimerState.RestPaused -> "Rest Timer"
+    private fun getNotificationTitle(): String = _serviceState.value.timerState.let { state ->
+        when (state) {
+            is TimerState.Stopped -> "Workout Timer"
+            is TimerState.SessionRunning, is TimerState.SessionPaused -> "Workout Session"
+            is TimerState.RestActive, is TimerState.RestPaused -> "Rest Timer"
+        }
     }
 
-    private fun getNotificationText(): String = when (val state = _serviceState.value.timerState) {
-        is TimerState.Stopped -> "Timer stopped"
-        is TimerState.SessionRunning -> formatTime(state.elapsedSeconds)
-        is TimerState.SessionPaused -> "Paused at ${formatTime(state.pausedAtSeconds)}"
-        is TimerState.RestActive -> "Rest: ${formatTime(state.remainingSeconds.toLong())}"
-        is TimerState.RestPaused -> "Rest paused: ${formatTime(state.remainingSeconds.toLong())}"
+    private fun getNotificationText(): String = _serviceState.value.timerState.let { state ->
+        when (state) {
+            is TimerState.Stopped -> "Timer stopped"
+            is TimerState.SessionRunning -> formatTime(state.elapsedSeconds)
+            is TimerState.SessionPaused -> "Paused at ${formatTime(state.pausedAtSeconds)}"
+            is TimerState.RestActive -> "Rest: ${formatTime(state.remainingSeconds.toLong())}"
+            is TimerState.RestPaused -> "Rest paused: ${formatTime(state.remainingSeconds.toLong())}"
+        }
     }
 
     private fun updateNotification() {

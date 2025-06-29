@@ -10,6 +10,7 @@ import com.example.liftrix.domain.usecase.auth.SignInWithEmailUseCase
 import com.example.liftrix.domain.usecase.auth.SignInWithGoogleUseCase
 import com.example.liftrix.domain.usecase.auth.SignOutUseCase
 import com.example.liftrix.domain.usecase.auth.SignUpWithEmailUseCase
+import com.example.liftrix.domain.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,11 +26,53 @@ class AuthViewModel @Inject constructor(
     private val signInWithGoogleUseCase: SignInWithGoogleUseCase,
     private val signInAnonymouslyUseCase: SignInAnonymouslyUseCase,
     private val signOutUseCase: SignOutUseCase,
-    private val forgotPasswordUseCase: ForgotPasswordUseCase
+    private val forgotPasswordUseCase: ForgotPasswordUseCase,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Initial)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
+
+    init {
+        observeAuthState()
+    }
+
+    private fun observeAuthState() {
+        viewModelScope.launch {
+            authRepository.currentUser.collect { user ->
+                // Only update if we're not in a loading state from an active operation
+                if (_authState.value !is AuthState.Loading) {
+                    _authState.value = if (user != null) {
+                        AuthState.Authenticated(user)
+                    } else {
+                        AuthState.Unauthenticated
+                    }
+                    Timber.d("Auth state updated: ${if (user != null) "Authenticated (${user.uid})" else "Unauthenticated"}")
+                }
+            }
+        }
+    }
+
+    fun checkInitialAuthState() {
+        viewModelScope.launch {
+            _authState.value = AuthState.Loading
+            try {
+                // Check if user is already authenticated via Firebase Auth persistence
+                val currentUser = authRepository.getCurrentUser()
+                if (currentUser != null) {
+                    _authState.value = AuthState.Authenticated(currentUser)
+                    Timber.d("User already authenticated: ${currentUser.uid}")
+                } else {
+                    _authState.value = AuthState.Unauthenticated
+                    Timber.d("No authenticated user found")
+                }
+            } catch (exception: Exception) {
+                val errorMessage = getErrorMessage(exception)
+                _authState.value = AuthState.Error(errorMessage, exception)
+                Timber.e(exception, "Failed to check initial auth state")
+            }
+        }
+    }
 
     fun handleEvent(event: AuthEvent) {
         when (event) {
@@ -156,8 +199,13 @@ class AuthViewModel @Inject constructor(
 
     private fun clearError() {
         when (val currentState = _authState.value) {
-            is AuthState.Error -> _authState.value = AuthState.Unauthenticated
-            else -> { /* No action needed */ }
+            is AuthState.Error -> {
+                _authState.value = AuthState.Initial
+                Timber.d("Error cleared, returning to initial state")
+            }
+            else -> { 
+                Timber.d("ClearError called but current state is not Error: $currentState")
+            }
         }
     }
 
