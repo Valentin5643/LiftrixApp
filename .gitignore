@@ -13,3 +13,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+/.claude
+/.cursor
+/.vscode
+/user-stories
+/docs
+/scripts
