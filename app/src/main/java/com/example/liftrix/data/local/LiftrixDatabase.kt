@@ -17,6 +17,8 @@ import com.example.liftrix.data.local.dao.ExerciseDao
 import com.example.liftrix.data.local.dao.ExerciseSetDao
 import com.example.liftrix.data.local.dao.ExerciseWeightMemoryDao
 import com.example.liftrix.data.local.dao.ExerciseUsageHistoryDao
+import com.example.liftrix.data.local.dao.FriendDao
+import com.example.liftrix.data.local.dao.PrivacySettingsDao
 
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.data.local.entity.WorkoutEntity
@@ -28,6 +30,8 @@ import com.example.liftrix.data.local.entity.ExerciseEntity
 import com.example.liftrix.data.local.entity.ExerciseSetEntity
 import com.example.liftrix.data.local.entity.ExerciseWeightMemoryEntity
 import com.example.liftrix.data.local.entity.ExerciseUsageHistoryEntity
+import com.example.liftrix.data.local.entity.FriendEntity
+import com.example.liftrix.data.local.entity.PrivacySettingsEntity
 
 import com.example.liftrix.data.local.migration.MIGRATION_6_7
 import com.example.liftrix.data.local.migration.MIGRATION_7_8
@@ -39,6 +43,9 @@ import com.example.liftrix.data.local.migration.MIGRATION_12_13
 import com.example.liftrix.data.local.migration.MIGRATION_13_14
 import com.example.liftrix.data.local.migration.MIGRATION_14_15
 import com.example.liftrix.data.local.migration.MIGRATION_15_16
+import com.example.liftrix.data.local.migration.MIGRATION_16_17
+import com.example.liftrix.data.local.migration.MIGRATION_17_18
+import com.example.liftrix.data.local.migration.MIGRATION_18_19
 
 @Database(
     entities = [
@@ -52,8 +59,10 @@ import com.example.liftrix.data.local.migration.MIGRATION_15_16
         ExerciseSetEntity::class,
         ExerciseWeightMemoryEntity::class,
         ExerciseUsageHistoryEntity::class,
+        FriendEntity::class,
+        PrivacySettingsEntity::class,
     ],
-    version = 16,
+    version = 19,
     exportSchema = true
 )
 @TypeConverters(
@@ -74,4 +83,6 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun exerciseSetDao(): ExerciseSetDao
     abstract fun exerciseWeightMemoryDao(): ExerciseWeightMemoryDao
     abstract fun exerciseUsageHistoryDao(): ExerciseUsageHistoryDao
+    abstract fun friendDao(): FriendDao
+    abstract fun privacySettingsDao(): PrivacySettingsDao
 } 

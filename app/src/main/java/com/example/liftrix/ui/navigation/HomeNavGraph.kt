@@ -1,19 +1,12 @@
 package com.example.liftrix.ui.navigation
 
 import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
+import androidx.navigation.navDeepLink
 import androidx.navigation.navigation
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
+import com.example.liftrix.ui.home.HomeScreen
+import com.example.liftrix.ui.social.FriendsScreen
 
 /**
  * Navigation graph for the Home tab.
@@ -31,16 +24,39 @@ import androidx.compose.ui.unit.dp
  */
 fun NavGraphBuilder.homeGraph(
     onNavigateToAuth: () -> Unit,
-    onNavigateToWorkout: () -> Unit = {}
+    onNavigateToWorkout: () -> Unit = {},
+    navController: NavHostController
 ) {
     navigation(
         startDestination = HomeRoutes.HOME_MAIN,
         route = MainNavigationItem.HOME.route
     ) {
         composable(HomeRoutes.HOME_MAIN) {
-            // Placeholder for HomeScreen - will be implemented in HOME-001
-            HomeScreenPlaceholder(
-                onNavigateToWorkout = onNavigateToWorkout
+            HomeScreen(
+                onNavigateToWorkout = { workoutId ->
+                    // Navigate to workout details - this will be handled by the workout navigation
+                    // For now, we'll navigate to the workout tab
+                    onNavigateToWorkout()
+                },
+                onNavigateToFriends = {
+                    navController.navigate(HomeRoutes.FRIENDS)
+                }
+            )
+        }
+        
+        // Friends screen with deep link support for friend requests
+        composable(
+            route = HomeRoutes.FRIENDS,
+            deepLinks = listOf(
+                navDeepLink { 
+                    uriPattern = "liftrix://friends/{requestId?}"
+                }
+            )
+        ) {
+            FriendsScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
             )
         }
         
@@ -57,38 +73,9 @@ fun NavGraphBuilder.homeGraph(
  */
 object HomeRoutes {
     const val HOME_MAIN = "home/main"
+    const val FRIENDS = "home/friends"
     const val WORKOUT_DETAIL = "home/workout_detail/{workoutId}"
     const val RECENT_WORKOUTS = "home/recent_workouts"
 }
 
-/**
- * Temporary placeholder for the HomeScreen.
- * This will be replaced by the actual HomeScreen implementation in task HOME-001.
- */
-@Composable
-private fun HomeScreenPlaceholder(
-    onNavigateToWorkout: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text(
-                text = "Home",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Text(
-                text = "Recent workouts and dashboard coming soon",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-} 
+ 

@@ -1,7 +1,9 @@
 package com.example.liftrix.data.repository
 
+import com.example.liftrix.domain.model.FeedWorkout
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutId
+import com.example.liftrix.domain.model.WorkoutStats
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
 
@@ -35,6 +37,16 @@ interface WorkoutRepository {
     suspend fun syncNowForUser(userId: String): Result<Unit>
     
     suspend fun markWorkoutsAsSyncedForUser(workoutIds: List<String>, userId: String): Result<Unit>
+    
+    // Home screen methods
+    fun getRecentWorkouts(userId: String, limit: Int = 7): Flow<List<Workout>>
+    
+    fun getWorkoutStats(userId: String): Flow<WorkoutStats>
+    
+    // Feed methods for social workout timeline
+    fun getFeedWorkouts(userId: String, limit: Int, offset: Int): Flow<List<FeedWorkout>>
+    
+    suspend fun hasMoreFeedWorkouts(userId: String, offset: Int): Boolean
     
     // Legacy methods (deprecated - for migration only)
     @Deprecated("Use user-scoped methods instead", ReplaceWith("getAllWorkoutsForUser(userId)"))

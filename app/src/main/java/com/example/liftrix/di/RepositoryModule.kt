@@ -5,6 +5,7 @@ import com.example.liftrix.data.repository.CustomExerciseRepositoryImpl
 import com.example.liftrix.data.repository.ExerciseLibraryRepositoryImpl
 import com.example.liftrix.data.repository.ProfileRepositoryImpl
 import com.example.liftrix.data.repository.ProgressStatsRepositoryImpl
+import com.example.liftrix.data.repository.SocialRepositoryImpl
 import com.example.liftrix.data.repository.WorkoutRepository
 import com.example.liftrix.data.repository.WorkoutRepositoryImpl
 import com.example.liftrix.data.repository.WorkoutTemplateRepositoryImpl
@@ -14,6 +15,7 @@ import com.example.liftrix.domain.repository.CustomExerciseRepository
 import com.example.liftrix.domain.repository.ExerciseLibraryRepository
 import com.example.liftrix.domain.repository.ProfileRepository
 import com.example.liftrix.domain.repository.ProgressStatsRepository
+import com.example.liftrix.domain.repository.SocialRepository
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
 import com.example.liftrix.domain.repository.ExerciseRepository
 import dagger.Binds
@@ -73,5 +75,11 @@ abstract class RepositoryModule {
     abstract fun bindWorkoutTemplateRepository(
         workoutTemplateRepositoryImpl: WorkoutTemplateRepositoryImpl
     ): WorkoutTemplateRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindSocialRepository(
+        socialRepositoryImpl: SocialRepositoryImpl
+    ): SocialRepository
 
 } 

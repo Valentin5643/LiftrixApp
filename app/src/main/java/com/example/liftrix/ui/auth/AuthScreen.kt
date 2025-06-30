@@ -56,6 +56,8 @@ import com.example.liftrix.ui.auth.components.SignUpForm
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
+import timber.log.Timber
+import com.example.liftrix.R
 @Composable
 fun AuthScreen(
     onAuthSuccess: () -> Unit,
@@ -210,17 +212,22 @@ fun AuthScreen(
                     ElevatedButton(
                         onClick = {
                             viewModel.handleEvent(AuthEvent.GoogleSignIn)
-                            val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                                .requestIdToken("734273269747-ojaksa5nhir6re5sqskn7qlbflec2f94.apps.googleusercontent.com")
-                                .requestEmail()
-                                .requestProfile()
-                                .build()
-                            val googleSignInClient = GoogleSignIn.getClient(context, gso)
-                            
-                            // Sign out any existing account first to force account picker
-                            googleSignInClient.signOut().addOnCompleteListener {
-                                val signInIntent = googleSignInClient.signInIntent
-                                googleSignInLauncher.launch(signInIntent)
+                            try {
+                                val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                                    .requestIdToken(context.getString(R.string.default_web_client_id))
+                                    .requestEmail()
+                                    .requestProfile()
+                                    .build()
+                                val googleSignInClient = GoogleSignIn.getClient(context, gso)
+                                
+                                // Sign out any existing account first to force account picker
+                                googleSignInClient.signOut().addOnCompleteListener {
+                                    val signInIntent = googleSignInClient.signInIntent
+                                    googleSignInLauncher.launch(signInIntent)
+                                }
+                            } catch (e: Exception) {
+                                Timber.e(e, "Failed to configure Google Sign-In")
+                                viewModel.handleGoogleSignInResult(null)
                             }
                         },
                         enabled = authState !is AuthState.Loading,

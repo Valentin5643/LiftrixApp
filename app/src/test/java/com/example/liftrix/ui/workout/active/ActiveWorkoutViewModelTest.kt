@@ -9,6 +9,7 @@ import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutExercise
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.repository.AuthRepository
+import com.example.liftrix.service.FirebasePresenceService
 import com.example.liftrix.service.TimerServiceManager
 import com.example.liftrix.service.WorkoutTimerService
 import io.mockk.coEvery
@@ -40,6 +41,7 @@ class ActiveWorkoutViewModelTest {
     private lateinit var timerServiceManager: TimerServiceManager
     private lateinit var workoutRepository: WorkoutRepository
     private lateinit var authRepository: AuthRepository
+    private lateinit var presenceService: FirebasePresenceService
     private lateinit var viewModel: ActiveWorkoutViewModel
     
     private val testDispatcher = StandardTestDispatcher()
@@ -60,6 +62,7 @@ class ActiveWorkoutViewModelTest {
         timerServiceManager = mockk(relaxed = true)
         workoutRepository = mockk(relaxed = true)
         authRepository = mockk(relaxed = true)
+        presenceService = mockk(relaxed = true)
         
         // Setup default mock behavior
         every { timerServiceManager.connectionState } returns flowOf(TimerServiceManager.ConnectionState.Connected)
@@ -67,11 +70,13 @@ class ActiveWorkoutViewModelTest {
         every { authRepository.currentUser } returns flowOf(testUser)
         coEvery { timerServiceManager.bindService() } returns Result.success(Unit)
         coEvery { workoutRepository.getActiveWorkoutForUser(testUser.id) } returns null
+        coEvery { presenceService.updateWorkoutStatus(any()) } returns Result.success(Unit)
         
         viewModel = ActiveWorkoutViewModel(
             timerServiceManager = timerServiceManager,
             workoutRepository = workoutRepository,
-            authRepository = authRepository
+            authRepository = authRepository,
+            presenceService = presenceService
         )
     }
 
@@ -119,7 +124,7 @@ class ActiveWorkoutViewModelTest {
             TimerServiceManager.ConnectionState.Connected
         )
         
-        val newViewModel = ActiveWorkoutViewModel(timerServiceManager, workoutRepository, authRepository)
+        val newViewModel = ActiveWorkoutViewModel(timerServiceManager, workoutRepository, authRepository, presenceService)
         
         newViewModel.uiState.test {
             skipItems(1) // skip initial state
@@ -138,7 +143,7 @@ class ActiveWorkoutViewModelTest {
         
         every { timerServiceManager.timerState } returns flowOf(sessionState)
         
-        val newViewModel = ActiveWorkoutViewModel(timerServiceManager, workoutRepository, authRepository)
+        val newViewModel = ActiveWorkoutViewModel(timerServiceManager, workoutRepository, authRepository, presenceService)
         
         newViewModel.uiState.test {
             skipItems(1) // skip initial state
@@ -428,7 +433,7 @@ class ActiveWorkoutViewModelTest {
         
         every { timerServiceManager.timerState } returns flowOf(sessionState)
         
-        val newViewModel = ActiveWorkoutViewModel(timerServiceManager, workoutRepository, authRepository)
+        val newViewModel = ActiveWorkoutViewModel(timerServiceManager, workoutRepository, authRepository, presenceService)
         
         newViewModel.uiState.test {
             skipItems(1) // skip initial state
@@ -448,7 +453,7 @@ class ActiveWorkoutViewModelTest {
         
         every { timerServiceManager.timerState } returns flowOf(restState)
         
-        val newViewModel = ActiveWorkoutViewModel(timerServiceManager, workoutRepository, authRepository)
+        val newViewModel = ActiveWorkoutViewModel(timerServiceManager, workoutRepository, authRepository, presenceService)
         
         newViewModel.uiState.test {
             skipItems(1) // skip initial state
@@ -467,7 +472,7 @@ class ActiveWorkoutViewModelTest {
     fun `authentication error is handled properly`() = runTest {
         every { authRepository.currentUser } returns flowOf(null)
         
-        val newViewModel = ActiveWorkoutViewModel(timerServiceManager, workoutRepository, authRepository)
+        val newViewModel = ActiveWorkoutViewModel(timerServiceManager, workoutRepository, authRepository, presenceService)
         
         newViewModel.uiState.test {
             skipItems(1) // skip initial state
@@ -483,12 +488,104 @@ class ActiveWorkoutViewModelTest {
             TimerServiceManager.ConnectionState.Error(connectionError)
         )
         
-        val newViewModel = ActiveWorkoutViewModel(timerServiceManager, workoutRepository, authRepository)
+        val newViewModel = ActiveWorkoutViewModel(timerServiceManager, workoutRepository, authRepository, presenceService)
         
         newViewModel.uiState.test {
             skipItems(1) // skip initial state
             val state = awaitItem()
             assertEquals("Connection failed", state.connectionError)
         }
+    }
+
+    @Test
+    fun `startSession updates presence status to WORKING_OUT`() = runTest {
+        coEvery { timerServiceManager.startSession() } returns Result.success(Unit)
+        coEvery { presenceService.updateWorkoutStatus(any()) } returns Result.success(Unit)
+        
+        viewModel.onEvent(ActiveWorkoutEvent.StartSession)
+        advanceUntilIdle()
+        
+        // Verify presence service was called with workout ID
+        coVerify { presenceService.updateWorkoutStatus(any()) }
+    }
+
+    @Test
+    fun `startSession handles presence service error gracefully`() = runTest {
+        coEvery { timerServiceManager.startSession() } returns Result.success(Unit)
+        coEvery { presenceService.updateWorkoutStatus(any()) } returns Result.failure(RuntimeException("Presence error"))
+        
+        viewModel.onEvent(ActiveWorkoutEvent.StartSession)
+        advanceUntilIdle()
+        
+        // Workout should still be created despite presence error
+        viewModel.uiState.test {
+            val state = awaitItem()
+            assertNotNull(state.currentWorkout)
+            assertTrue(state.hasActiveWorkout)
+        }
+    }
+
+    @Test
+    fun `stopSession clears presence status`() = runTest {
+        // Setup active workout first
+        coEvery { timerServiceManager.startSession() } returns Result.success(Unit)
+        coEvery { timerServiceManager.stopTimer() } returns Result.success(Unit)
+        coEvery { workoutRepository.saveWorkout(any()) } returns Result.success(Unit)
+        
+        viewModel.onEvent(ActiveWorkoutEvent.StartSession)
+        advanceUntilIdle()
+        
+        viewModel.onEvent(ActiveWorkoutEvent.StopSession)
+        advanceUntilIdle()
+        
+        // Verify presence service was called with null to clear status
+        coVerify { presenceService.updateWorkoutStatus(null) }
+    }
+
+    @Test
+    fun `pauseSession updates presence to ONLINE`() = runTest {
+        coEvery { timerServiceManager.pauseTimer() } returns Result.success(Unit)
+        
+        viewModel.onEvent(ActiveWorkoutEvent.PauseSession)
+        advanceUntilIdle()
+        
+        coVerify { presenceService.updateWorkoutStatus(null) }
+    }
+
+    @Test
+    fun `resumeSession updates presence back to WORKING_OUT`() = runTest {
+        // Setup active workout first
+        coEvery { timerServiceManager.startSession() } returns Result.success(Unit)
+        coEvery { timerServiceManager.resumeTimer() } returns Result.success(Unit)
+        
+        viewModel.onEvent(ActiveWorkoutEvent.StartSession)
+        advanceUntilIdle()
+        
+        viewModel.onEvent(ActiveWorkoutEvent.ResumeSession)
+        advanceUntilIdle()
+        
+        // Should be called twice - once for start, once for resume
+        coVerify(exactly = 2) { presenceService.updateWorkoutStatus(any()) }
+    }
+
+    @Test
+    fun `presence service errors do not block workout functionality`() = runTest {
+        coEvery { timerServiceManager.startSession() } returns Result.success(Unit)
+        coEvery { timerServiceManager.stopTimer() } returns Result.success(Unit)
+        coEvery { workoutRepository.saveWorkout(any()) } returns Result.success(Unit)
+        coEvery { presenceService.updateWorkoutStatus(any()) } returns Result.failure(RuntimeException("Network error"))
+        
+        // Start workout
+        viewModel.onEvent(ActiveWorkoutEvent.StartSession)
+        advanceUntilIdle()
+        
+        // Stop workout
+        viewModel.onEvent(ActiveWorkoutEvent.StopSession)
+        advanceUntilIdle()
+        
+        // Verify workout functionality still works
+        coVerify { timerServiceManager.startSession() }
+        coVerify { timerServiceManager.stopTimer() }
+        coVerify { workoutRepository.saveWorkout(any()) }
     }
 }

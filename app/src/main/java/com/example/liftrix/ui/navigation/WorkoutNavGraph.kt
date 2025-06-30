@@ -47,8 +47,11 @@ fun NavGraphBuilder.workoutGraph(
         composable(WorkoutTabRoutes.TEMPLATE_MANAGEMENT) {
             WorkoutTemplateSelectionScreen(
                 onTemplateSelected = { templateId ->
-                    // TODO: Navigate to workout creation with selected template
-                    // This will be handled by the workout creation system
+                    // Navigate back to main workout screen and trigger template creation
+                    navController.popBackStack()
+                    // Note: Template creation will be handled by the WorkoutScreen's internal navigation
+                    // This is a simplified approach - in production you might want to pass the templateId
+                    // through navigation arguments or shared state
                 },
                 onNavigateBack = {
                     navController.popBackStack()

@@ -90,6 +90,9 @@ dependencies {
     implementation(libs.vico.compose.m3)
     implementation(libs.vico.core)
     
+    // Pull-to-refresh for Material 3
+    implementation("eu.bambooapps:compose-material3-pullrefresh:1.1.1")
+    
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.auth)
     implementation(libs.androidx.credentials)

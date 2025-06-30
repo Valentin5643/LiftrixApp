@@ -27,6 +27,12 @@ import com.example.liftrix.domain.model.User
 import com.example.liftrix.ui.components.WorkoutCreationFab
 import com.example.liftrix.ui.components.WorkoutCreationModal
 
+// Navigation graph imports
+import com.example.liftrix.ui.navigation.homeGraph
+import com.example.liftrix.ui.navigation.workoutGraph
+import com.example.liftrix.ui.navigation.progressGraph
+import com.example.liftrix.ui.navigation.coachGraph
+
 /**
  * Main navigation container that provides the primary navigation structure for the app.
  * 
@@ -137,7 +143,8 @@ fun MainNavigationContainer(
                     onNavigateToAuth = onNavigateToAuth,
                     onNavigateToWorkout = {
                         navController.navigate(MainNavigationItem.WORKOUT.route)
-                    }
+                    },
+                    navController = navController
                 )
 
                 // Workout tab navigation graph

@@ -388,33 +388,47 @@ private fun TemplateCard(
                 }
             }
             
-            // Difficulty indicator
-            template.difficultyLevel?.let { difficulty ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = "Difficulty: ",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    
-                    repeat(5) { index ->
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(RoundedCornerShape(50))
-                                .background(
-                                    if (index < difficulty) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                                    }
-                                )
+            // Difficulty indicator and Start button
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                template.difficultyLevel?.let { difficulty ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Difficulty: ",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        
+                        repeat(5) { index ->
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(
+                                        if (index < difficulty) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                                        }
+                                    )
+                            )
+                        }
                     }
-                }
+                } ?: Spacer(modifier = Modifier.weight(1f))
+                
+                // Visual start indicator
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = "Start workout",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
             }
         }
     }

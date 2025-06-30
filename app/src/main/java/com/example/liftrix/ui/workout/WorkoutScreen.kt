@@ -54,10 +54,8 @@ import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutStatus
 import com.example.liftrix.sync.SyncStatus
-import com.example.liftrix.ui.components.QuickWorkoutFab
-import com.example.liftrix.ui.workout.daily.QuickWorkoutScreen
-import com.example.liftrix.ui.workout.daily.QuickWorkoutSelectionDialog
 import com.example.liftrix.ui.workout.creation.UnifiedWorkoutCreationScreen
+import com.example.liftrix.ui.workout.templates.WorkoutTemplateSelectionScreen
 
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -65,8 +63,8 @@ import java.time.format.FormatStyle
 // Navigation state for managing screen transitions
 private sealed class WorkoutScreenState {
     object WorkoutList : WorkoutScreenState()
-    data class QuickWorkout(val templateId: String?) : WorkoutScreenState()
     object WorkoutCreation : WorkoutScreenState()
+    data class TemplateSelection(val onTemplateSelected: (String) -> Unit) : WorkoutScreenState()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -76,11 +74,10 @@ fun WorkoutScreen(
     modifier: Modifier = Modifier,
     viewModel: WorkoutViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val currentUser by viewModel.currentUser.collectAsState()
-    val snackbarHostState = remember { SnackbarHostState() }
-    var showQuickWorkoutDialog by remember { mutableStateOf(false) }
-    var screenState by remember { mutableStateOf<WorkoutScreenState>(WorkoutScreenState.WorkoutList) }
+    val uiState: WorkoutUiState by viewModel.uiState.collectAsState()
+    val currentUser: User? by viewModel.currentUser.collectAsState()
+    val snackbarHostState: SnackbarHostState = remember { SnackbarHostState() }
+    var screenState: WorkoutScreenState by remember { mutableStateOf(WorkoutScreenState.WorkoutList) }
 
     // Show error messages
     LaunchedEffect(uiState.errorMessage) {
@@ -96,27 +93,22 @@ fun WorkoutScreen(
                 uiState = uiState,
                 user = user,
                 snackbarHostState = snackbarHostState,
-                showQuickWorkoutDialog = showQuickWorkoutDialog,
-                onShowQuickWorkoutDialog = { showQuickWorkoutDialog = it },
-                onNavigateToQuickWorkout = { templateId ->
-                    screenState = WorkoutScreenState.QuickWorkout(templateId)
-                },
                 onNavigateToWorkoutCreation = {
                     screenState = WorkoutScreenState.WorkoutCreation
                 },
-                onWorkoutAction = { workout, action ->
+                onWorkoutAction = { workout: Workout, action: WorkoutAction ->
                     when (action) {
                         WorkoutAction.Start -> {
-                            // TODO: Start workout
+                            viewModel.startWorkout(workout)
                         }
                         WorkoutAction.Resume -> {
-                            // TODO: Resume workout
+                            viewModel.startWorkout(workout)
                         }
                         WorkoutAction.Complete -> {
-                            // TODO: Complete workout
+                            viewModel.completeWorkout(workout)
                         }
                         WorkoutAction.Cancel -> {
-                            // TODO: Cancel workout
+                            // TODO: Implement cancelWorkout in ViewModel
                         }
                     }
                 },
@@ -125,26 +117,28 @@ fun WorkoutScreen(
                 modifier = modifier
             )
         }
-        is WorkoutScreenState.QuickWorkout -> {
-            val quickWorkoutState = screenState as WorkoutScreenState.QuickWorkout
-            QuickWorkoutScreen(
-                templateId = quickWorkoutState.templateId,
-                onNavigateBack = { 
-                    screenState = WorkoutScreenState.WorkoutList 
-                },
-                modifier = modifier
-            )
-        }
         is WorkoutScreenState.WorkoutCreation -> {
-                            UnifiedWorkoutCreationScreen(
+            UnifiedWorkoutCreationScreen(
                 onNavigateBack = { 
                     screenState = WorkoutScreenState.WorkoutList 
                 },
-                onWorkoutCreated = { workoutId ->
+                onWorkoutCreated = { workoutId: String ->
                     // Navigate back to workout list after successful creation
                     screenState = WorkoutScreenState.WorkoutList
                 },
                 modifier = modifier
+            )
+        }
+        is WorkoutScreenState.TemplateSelection -> {
+            val templateSelectionState = screenState as WorkoutScreenState.TemplateSelection
+            WorkoutTemplateSelectionScreen(
+                onTemplateSelected = { templateId ->
+                    templateSelectionState.onTemplateSelected(templateId.value)
+                    screenState = WorkoutScreenState.WorkoutCreation
+                },
+                onNavigateBack = {
+                    screenState = WorkoutScreenState.WorkoutList
+                }
             )
         }
     }
@@ -156,9 +150,6 @@ private fun WorkoutListScreen(
     uiState: WorkoutUiState,
     user: User,
     snackbarHostState: SnackbarHostState,
-    showQuickWorkoutDialog: Boolean,
-    onShowQuickWorkoutDialog: (Boolean) -> Unit,
-    onNavigateToQuickWorkout: (String?) -> Unit,
     onNavigateToWorkoutCreation: () -> Unit,
     onWorkoutAction: (Workout, WorkoutAction) -> Unit,
     onSyncNow: () -> Unit,
@@ -225,13 +216,6 @@ private fun WorkoutListScreen(
                 )
             )
         },
-        floatingActionButton = {
-            QuickWorkoutFab(
-                onQuickWorkoutClick = { 
-                    onShowQuickWorkoutDialog(true)
-                }
-            )
-        },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         WorkoutContent(
@@ -242,23 +226,6 @@ private fun WorkoutListScreen(
             modifier = Modifier.padding(paddingValues)
         )
     }
-    
-    // Quick Workout Selection Dialog
-    QuickWorkoutSelectionDialog(
-        isVisible = showQuickWorkoutDialog,
-        templates = emptyList(), // TODO: Load templates from repository
-        onTemplateSelected = { template ->
-            onNavigateToQuickWorkout(template.id.value)
-            onShowQuickWorkoutDialog(false)
-        },
-        onCreateFromScratch = {
-            onNavigateToWorkoutCreation()
-            onShowQuickWorkoutDialog(false)
-        },
-        onDismiss = { 
-            onShowQuickWorkoutDialog(false)
-        }
-    )
 }
 
 @Composable
@@ -399,12 +366,12 @@ private fun EmptyWorkoutsContent(
                     modifier = Modifier.padding(16.dp)
                 ) {
                     Text(
-                        text = "Want to jump right in?",
+                        text = "Quick Start Options",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = "Use the Quick Workout button below to start an ad-hoc workout session right now.",
+                        text = "Use the floating + button to access workout creation options including templates and custom workouts.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp)
@@ -422,7 +389,7 @@ private fun EmptyWorkoutsContent(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Tap the floating + button",
+                            text = "Tap the floating + button for options",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.primary

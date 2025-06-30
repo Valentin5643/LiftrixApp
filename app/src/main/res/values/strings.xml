@@ -18,4 +18,7 @@
     <string name="placeholder_loading">Loading...</string>
     <string name="placeholder_empty">No data available</string>
     <string name="placeholder_error">Something went wrong</string>
+    
+    <!-- Firebase configuration -->
+    <string name="default_web_client_id">734273269747-ojaksa5nhir6re5sqskn7qlbflec2f94.apps.googleusercontent.com</string>
 </resources>

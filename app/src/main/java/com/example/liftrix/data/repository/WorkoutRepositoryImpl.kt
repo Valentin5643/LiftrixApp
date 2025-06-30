@@ -7,14 +7,25 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.mapper.WorkoutMapper
+import com.example.liftrix.domain.model.FeedWorkout
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutId
+import com.example.liftrix.domain.model.WorkoutStats
+import com.example.liftrix.domain.model.WorkoutStatus
+import com.example.liftrix.domain.repository.AuthRepository
+import com.example.liftrix.domain.repository.SocialRepository
 import com.example.liftrix.sync.WorkoutSyncWorker
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.tasks.await
 import timber.log.Timber
+import java.time.Duration
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,11 +33,15 @@ import javax.inject.Singleton
 class WorkoutRepositoryImpl @Inject constructor(
     private val workoutDao: WorkoutDao,
     private val workoutMapper: WorkoutMapper,
-    private val workManager: WorkManager
+    private val workManager: WorkManager,
+    private val socialRepository: SocialRepository,
+    private val authRepository: AuthRepository,
+    private val firestore: FirebaseFirestore
 ) : WorkoutRepository {
 
     companion object {
         private val DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE
+        private const val MAX_FEED_WORKOUTS = 40
     }
 
     // User-scoped methods implementation
@@ -113,6 +128,11 @@ class WorkoutRepositoryImpl @Inject constructor(
             workoutDao.insertWorkout(entity)
             
             Timber.v("✅ Workout DAO operation completed silently")
+            
+            // Sync completed workouts to Firebase for real-time feed
+            if (workout.status == WorkoutStatus.COMPLETED) {
+                syncWorkoutToFirebase(workout)
+            }
             
             // Queue sync in background for this user
             queueSyncForUser(workout.userId)
@@ -274,6 +294,19 @@ class WorkoutRepositoryImpl @Inject constructor(
         }
     }
 
+    // Home screen methods implementation
+    override fun getRecentWorkouts(userId: String, limit: Int): Flow<List<Workout>> {
+        return workoutDao.getRecentCompletedWorkouts(userId, limit).map { entities ->
+            entities.map { workoutMapper.toDomain(it) }
+        }
+    }
+
+    override fun getWorkoutStats(userId: String): Flow<WorkoutStats> {
+        return getAllWorkoutsForUser(userId).map { workouts ->
+            calculateWorkoutStats(workouts)
+        }
+    }
+
     override suspend fun queueSync(): Result<Unit> {
         return try {
             val unsyncedCount = workoutDao.getUnsyncedCount()
@@ -363,6 +396,168 @@ class WorkoutRepositoryImpl @Inject constructor(
         }
     }
 
+    // Feed methods implementation
+    override fun getFeedWorkouts(userId: String, limit: Int, offset: Int): Flow<List<FeedWorkout>> {
+        return kotlinx.coroutines.flow.flow {
+            try {
+                Timber.v("Loading feed workouts for user: $userId, limit: $limit, offset: $offset")
+                
+                // Get accepted friend IDs using the new DAO method
+                val friendIds = workoutDao.getAcceptedFriendIds(userId)
+                Timber.v("Found ${friendIds.size} accepted friends for user: $userId")
+                
+                // Get combined workout feed from DAO
+                workoutDao.getFeedWorkouts(userId, friendIds, limit, offset).collect { workoutEntities ->
+                    val feedWorkouts = workoutEntities.map { entity ->
+                        try {
+                            val workout = workoutMapper.toDomain(entity)
+                            val isPersonal = entity.userId == userId
+                            
+                            if (isPersonal) {
+                                FeedWorkout.forPersonalWorkout(workout)
+                            } else {
+                                // Get user information for friend's workout
+                                val user = socialRepository.getUserById(entity.userId)
+                                if (user != null) {
+                                    FeedWorkout.forFriendWorkout(workout, user)
+                                } else {
+                                    Timber.w("User info not found for friend workout: ${entity.userId}")
+                                    null
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Timber.e(e, "Failed to map workout entity to feed workout: ${entity.id}")
+                            null
+                        }
+                    }.filterNotNull()
+                    
+                    Timber.d("Loaded ${feedWorkouts.size} feed workouts for user: $userId")
+                    emit(feedWorkouts)
+                }
+                
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to load feed workouts for user: $userId")
+                emit(emptyList<FeedWorkout>())
+            }
+        }
+    }
+    
+    override suspend fun hasMoreFeedWorkouts(userId: String, offset: Int): Boolean {
+        return try {
+            // Check if we've reached the maximum feed limit
+            if (offset >= MAX_FEED_WORKOUTS) {
+                Timber.v("Feed limit reached for user: $userId at offset: $offset")
+                return false
+            }
+            
+            // Get accepted friend IDs
+            val friendIds = workoutDao.getAcceptedFriendIds(userId)
+            
+            // Get total count of available feed workouts
+            val totalCount = workoutDao.getFeedWorkoutCount(userId, friendIds)
+            val hasMore = offset < totalCount && offset < MAX_FEED_WORKOUTS
+            
+            Timber.v("Feed pagination check for user: $userId - offset: $offset, total: $totalCount, hasMore: $hasMore")
+            hasMore
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to check feed pagination for user: $userId")
+            false
+        }
+    }
+
+    /**
+     * Calculate workout statistics from a list of workouts
+     */
+    private fun calculateWorkoutStats(workouts: List<Workout>): WorkoutStats {
+        if (workouts.isEmpty()) {
+            return WorkoutStats.EMPTY
+        }
+        
+        val completedWorkouts = workouts.filter { it.status == WorkoutStatus.COMPLETED }
+        
+        if (completedWorkouts.isEmpty()) {
+            return WorkoutStats.EMPTY
+        }
+        
+        val totalWorkouts = completedWorkouts.size
+        val currentStreak = calculateCurrentStreak(completedWorkouts)
+        val weeklyVolume = calculateWeeklyVolume(completedWorkouts)
+        val averageWorkoutDuration = calculateAverageDuration(completedWorkouts)
+        
+        return WorkoutStats(
+            totalWorkouts = totalWorkouts,
+            currentStreak = currentStreak,
+            weeklyVolume = weeklyVolume,
+            averageWorkoutDuration = averageWorkoutDuration
+        )
+    }
+    
+    /**
+     * Calculate current workout streak (consecutive days with workouts)
+     */
+    private fun calculateCurrentStreak(workouts: List<Workout>): Int {
+        if (workouts.isEmpty()) return 0
+        
+        val workoutsByDate = workouts
+            .sortedByDescending { it.date }
+            .groupBy { it.date }
+            .keys
+            .toList()
+        
+        var streak = 0
+        var currentDate = LocalDate.now()
+        
+        for (workoutDate in workoutsByDate) {
+            val daysDifference = ChronoUnit.DAYS.between(workoutDate, currentDate)
+            
+            when {
+                daysDifference == 0L || daysDifference == 1L -> {
+                    streak++
+                    currentDate = workoutDate
+                }
+                else -> break
+            }
+        }
+        
+        return streak
+    }
+    
+    /**
+     * Calculate weekly volume (total workout time for current week)
+     */
+    private fun calculateWeeklyVolume(workouts: List<Workout>): Duration {
+        val startOfWeek = LocalDate.now().minusDays(LocalDate.now().dayOfWeek.value.toLong() - 1)
+        val endOfWeek = startOfWeek.plusDays(6)
+        
+        return workouts
+            .filter { it.date in startOfWeek..endOfWeek }
+            .mapNotNull { workout ->
+                if (workout.startTime != null && workout.endTime != null) {
+                    Duration.between(workout.startTime, workout.endTime)
+                } else null
+            }
+            .fold(Duration.ZERO) { acc, duration -> acc.plus(duration) }
+    }
+    
+    /**
+     * Calculate average workout duration across all completed workouts
+     */
+    private fun calculateAverageDuration(workouts: List<Workout>): Duration {
+        val durationsWithTimes = workouts.mapNotNull { workout ->
+            if (workout.startTime != null && workout.endTime != null) {
+                Duration.between(workout.startTime, workout.endTime)
+            } else null
+        }
+        
+        return if (durationsWithTimes.isNotEmpty()) {
+            val totalDuration = durationsWithTimes.fold(Duration.ZERO) { acc, duration -> acc.plus(duration) }
+            totalDuration.dividedBy(durationsWithTimes.size.toLong())
+        } else {
+            Duration.ZERO
+        }
+    }
+
     /**
      * Internal method to handle sync retries and failures
      */
@@ -379,4 +574,97 @@ class WorkoutRepositoryImpl @Inject constructor(
             Timber.e(e, "Failed to handle sync result for user: $userId")
         }
     }
+
+    /**
+     * Sync personal workout to Firebase for real-time feed sharing
+     */
+    private suspend fun syncWorkoutToFirebase(workout: Workout) {
+        try {
+            if (workout.status != WorkoutStatus.COMPLETED) {
+                Timber.v("Skipping Firebase sync for non-completed workout: ${workout.id.value}")
+                return
+            }
+
+            val workoutData = mapOf(
+                "id" to workout.id.value,
+                "userId" to workout.userId,
+                "name" to workout.name,
+                "date" to workout.date.toString(),
+                "status" to workout.status.name,
+                "completedAt" to workout.endTime?.let { com.google.firebase.Timestamp.now() },
+                "exerciseCount" to workout.exercises.size,
+                "duration" to if (workout.startTime != null && workout.endTime != null) {
+                    java.time.Duration.between(workout.startTime, workout.endTime).toMinutes()
+                } else null,
+                "createdAt" to com.google.firebase.Timestamp.now(),
+                "updatedAt" to com.google.firebase.Timestamp.now()
+            )
+
+            firestore.collection("workouts")
+                .document(workout.id.value)
+                .set(workoutData)
+                .await()
+
+            Timber.d("Workout synced to Firebase for feed sharing: ${workout.id.value}")
+
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to sync workout to Firebase: ${workout.id.value}")
+            // Don't fail the local operation - offline-first approach
+        }
+    }
+
+    /**
+     * Setup real-time listener for workout feed updates
+     * Integrates with SocialRepository's real-time feed listener
+     */
+    fun setupRealtimeFeedListener(): kotlinx.coroutines.flow.Flow<Unit> {
+        return kotlinx.coroutines.flow.callbackFlow {
+            var listener: com.google.firebase.firestore.ListenerRegistration? = null
+
+            try {
+                val currentUserId = authRepository.getCurrentUserId()
+                if (currentUserId == null) {
+                    Timber.w("Cannot setup workout feed listener: user not authenticated")
+                    trySend(Unit)
+                    close()
+                    return@callbackFlow
+                }
+
+                Timber.d("Setting up real-time workout feed listener for user: $currentUserId")
+
+                // Listen to current user's own workouts for real-time updates
+                listener = firestore.collection("workouts")
+                    .whereEqualTo("userId", currentUserId)
+                    .whereNotEqualTo("completedAt", null)
+                    .orderBy("completedAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                    .limit(20)
+                    .addSnapshotListener { snapshot, error ->
+                        if (error != null) {
+                            Timber.e(error, "Error in workout feed listener")
+                            return@addSnapshotListener
+                        }
+
+                        snapshot?.let { querySnapshot ->
+                            val workoutCount = querySnapshot.documents.size
+                            Timber.d("Real-time workout feed update: $workoutCount personal workouts")
+
+                            // Notify that personal workout data has been updated
+                            trySend(Unit)
+                        }
+                    }
+
+                Timber.d("Real-time workout feed listener established")
+                trySend(Unit)
+
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to setup real-time workout feed listener")
+                close(e)
+            }
+
+            awaitClose {
+                listener?.remove()
+                Timber.d("Real-time workout feed listener removed")
+            }
+        }
+    } 
 } 

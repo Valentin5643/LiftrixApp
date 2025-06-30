@@ -85,6 +85,52 @@ interface AnalyticsService {
     ): Result<Unit>
     
     /**
+     * Logs friend request sent event
+     */
+    suspend fun logFriendRequestSent(
+        userId: String,
+        targetUserId: String
+    ): Result<Unit>
+    
+    /**
+     * Logs friend request response event (accept/decline)
+     */
+    suspend fun logFriendRequestResponse(
+        userId: String,
+        targetUserId: String,
+        accepted: Boolean
+    ): Result<Unit>
+    
+    /**
+     * Logs workout sharing event
+     */
+    suspend fun logWorkoutShared(
+        userId: String,
+        workoutId: String,
+        workoutName: String,
+        shareMethod: String
+    ): Result<Unit>
+    
+    /**
+     * Logs social workout viewed event
+     */
+    suspend fun logSocialWorkoutViewed(
+        userId: String,
+        workoutId: String,
+        friendUserId: String,
+        workoutName: String
+    ): Result<Unit>
+    
+    /**
+     * Logs social feed interaction events
+     */
+    suspend fun logSocialFeedEvent(
+        userId: String,
+        eventType: String,
+        additionalData: Map<String, Any> = emptyMap()
+    ): Result<Unit>
+    
+    /**
      * Logs general analytics event with parameters
      */
     suspend fun logEvent(
@@ -104,6 +150,24 @@ interface AnalyticsService {
      * Sets custom key for crash reporting
      */
     suspend fun setCustomKey(key: String, value: String): Result<Unit>
+    
+    /**
+     * Tracks feed load time for performance monitoring
+     */
+    suspend fun trackFeedLoadTime(duration: Long): Result<Unit>
+    
+    /**
+     * Tracks user discovery engagement actions
+     */
+    suspend fun trackUserDiscoveryEngagement(
+        action: String,
+        additionalData: Map<String, Any> = emptyMap()
+    ): Result<Unit>
+    
+    /**
+     * Tracks feed scroll depth for engagement analysis
+     */
+    suspend fun trackFeedScrollDepth(itemCount: Int): Result<Unit>
     
     /**
      * Clears user properties (on logout)

@@ -4,128 +4,227 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.liftrix.domain.model.Workout
-import com.example.liftrix.domain.model.WorkoutId
-import com.example.liftrix.domain.model.WorkoutStatus
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.liftrix.domain.model.*
+import com.example.liftrix.ui.home.components.*
+import com.example.liftrix.ui.common.FeedItemShimmer
 import com.example.liftrix.ui.theme.LiftrixTheme
-import java.time.Duration
-import java.time.Instant
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
+import eu.bambooapps.material3.pullrefresh.PullRefreshIndicator
+import eu.bambooapps.material3.pullrefresh.pullRefresh
+import eu.bambooapps.material3.pullrefresh.rememberPullRefreshState
 
 /**
- * Home screen composable displaying recent workouts with empty state handling
+ * Main home screen displaying streamlined social fitness feed.
+ * 
+ * Features:
+ * - Discovery carousel for user recommendations with follow functionality
+ * - Chronological workout feed with personal and friends' workouts
+ * - Pull-to-refresh functionality for data updates
+ * - Loading, error, and empty state handling
+ * - Enhanced HomeViewModel integration with MVI pattern
+ * - Analytics tracking for user interactions
+ * 
+ * @param onNavigateToWorkout Callback to navigate to workout details screen
+ * @param onNavigateToFriends Callback to navigate to friends screen
+ * @param modifier Modifier for styling the screen
+ * @param viewModel HomeViewModel for state management (injectable for testing)
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    workouts: List<Workout>,
-    isLoading: Boolean,
-    isRefreshing: Boolean,
-    onRefresh: () -> Unit,
-    onWorkoutClick: (WorkoutId) -> Unit,
-    modifier: Modifier = Modifier
+    onNavigateToWorkout: (String) -> Unit,
+    onNavigateToFriends: () -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: HomeViewModel = hiltViewModel()
 ) {
-    Box(modifier = modifier.fillMaxSize()) {
+    val uiState by viewModel.uiState.collectAsState()
+    
+    val pullRefreshState = rememberPullRefreshState(
+        refreshing = uiState.isRefreshing,
+        onRefresh = { viewModel.onEvent(HomeEvent.RefreshData) }
+    )
+    
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .pullRefresh(pullRefreshState)
+    ) {
         when {
-            isLoading && workouts.isEmpty() -> {
-                LoadingState(
+            uiState.shouldShowError -> {
+                ErrorState(
+                    errorMessage = uiState.errorMessage ?: "Something went wrong",
+                    onRetry = { viewModel.onEvent(HomeEvent.RefreshData) },
+                    onDismiss = { viewModel.onEvent(HomeEvent.ErrorDismissed) },
                     modifier = Modifier.fillMaxSize()
                 )
             }
-            workouts.isEmpty() -> {
+            
+            uiState.shouldShowEmptyState -> {
                 EmptyState(
                     modifier = Modifier.fillMaxSize()
                 )
             }
+            
             else -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    item {
-                        WelcomeHeader(
-                            isRefreshing = isRefreshing,
-                            onRefresh = onRefresh
-                        )
-                    }
-                    
-                    items(
-                        items = workouts,
-                        key = { it.id.value }
-                    ) { workout ->
-                        WorkoutCard(
-                            workout = workout,
-                            onClick = { onWorkoutClick(workout.id) }
-                        )
-                    }
-                }
+                // Use single LazyColumn to avoid nested scrolling
+                FlattenedHomeContent(
+                    workoutFeedState = uiState.workoutFeedState,
+                    recommendationsState = uiState.recommendationsState,
+                    showEndOfFeedMessage = uiState.showEndOfFeedMessage,
+                    onNavigateToWorkout = onNavigateToWorkout,
+                    onNavigateToFriends = onNavigateToFriends,
+                    onEvent = viewModel::onEvent,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
         }
+        
+        PullRefreshIndicator(
+            refreshing = uiState.isRefreshing,
+            state = pullRefreshState,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
     }
 }
 
 /**
- * Welcome header section with refresh functionality
+ * Flattened content using single LazyColumn to avoid nested scrolling constraints
  */
 @Composable
-private fun WelcomeHeader(
-    isRefreshing: Boolean,
-    onRefresh: () -> Unit
+private fun FlattenedHomeContent(
+    workoutFeedState: FeedState,
+    recommendationsState: RecommendationsState,
+    showEndOfFeedMessage: Boolean,
+    onNavigateToWorkout: (String) -> Unit,
+    onNavigateToFriends: () -> Unit,
+    onEvent: (HomeEvent) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .semantics {
+                contentDescription = "Home screen with user discovery and social workout feed"
+            },
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding = PaddingValues(vertical = 16.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = "Welcome back!",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold
-                )
-                
-                Text(
-                    text = "Here are your recent workouts",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        // Header Section
+        item {
+            HomeHeader(
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+        }
+        
+        // Discovery Section Header
+        item {
+            SectionHeader(
+                title = "Discover People",
+                onViewAllClick = onNavigateToFriends,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+        }
+        
+        // Discovery Carousel Section (Non-scrolling horizontal list)
+        item {
+            DiscoveryCarouselSection(
+                recommendationsState = recommendationsState,
+                onLoadMore = { onEvent(HomeEvent.LoadMoreRecommendations) },
+                onFollowUser = { userId -> onEvent(HomeEvent.FollowUser(userId)) },
+                onViewAllFriends = onNavigateToFriends,
+                onErrorDismissed = { onEvent(HomeEvent.RecommendationsErrorDismissed) }
+            )
+        }
+        
+        // Workout Feed Header
+        item {
+            SectionHeader(
+                title = "Recent Activity",
+                onViewAllClick = null,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp)
+            )
+        }
+        
+        // Workout Feed Items (Individual items instead of nested LazyColumn)
+        when (workoutFeedState) {
+            is FeedState.Loading -> {
+                items(5) {
+                    FeedItemShimmer(
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
             }
             
-            if (isRefreshing) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            } else {
-                IconButton(onClick = onRefresh) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Refresh workouts",
-                        tint = MaterialTheme.colorScheme.primary
+            is FeedState.Success -> {
+                if (workoutFeedState.hasData) {
+                    items(
+                        items = workoutFeedState.workouts,
+                        key = { feedWorkout -> feedWorkout.workout.id.value }
+                    ) { feedWorkout ->
+                        WorkoutFeedItem(
+                            feedWorkout = feedWorkout,
+                            onClick = {
+                                onEvent(HomeEvent.FeedWorkoutOpened(feedWorkout))
+                                onNavigateToWorkout(feedWorkout.workout.id.value)
+                            },
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                    
+                    // Loading more items
+                    if (workoutFeedState.isLoadingMore) {
+                        items(3) {
+                            FeedItemShimmer(
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                        }
+                    }
+                    
+                    // End of feed message
+                    if (showEndOfFeedMessage) {
+                        item {
+                            FeedEndMessage(
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                        }
+                    }
+                    
+                    // Load more trigger (invisible item for pagination)
+                    if (workoutFeedState.hasMore && !workoutFeedState.isLoadingMore) {
+                        item {
+                            LaunchedEffect(Unit) {
+                                onEvent(HomeEvent.LoadMoreWorkouts)
+                            }
+                        }
+                    }
+                } else {
+                    item {
+                        EmptyWorkoutFeedState(
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                }
+            }
+            
+            is FeedState.Error -> {
+                item {
+                    WorkoutFeedErrorState(
+                        message = workoutFeedState.message,
+                        onRetry = { onEvent(HomeEvent.LoadMoreWorkouts) },
+                        onDismiss = { onEvent(HomeEvent.FeedErrorDismissed) },
+                        modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 }
             }
@@ -134,19 +233,177 @@ private fun WelcomeHeader(
 }
 
 /**
- * Workout card displaying workout information
+ * Discovery carousel section without nested scrolling
  */
 @Composable
-private fun WorkoutCard(
-    workout: Workout,
-    onClick: () -> Unit,
+private fun DiscoveryCarouselSection(
+    recommendationsState: RecommendationsState,
+    onLoadMore: () -> Unit,
+    onFollowUser: (String) -> Unit,
+    onViewAllFriends: () -> Unit,
+    onErrorDismissed: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    when (recommendationsState) {
+        is RecommendationsState.Loading -> {
+            DiscoveryCarousel(
+                recommendedUsers = emptyList(),
+                isLoading = true,
+                hasMore = false,
+                onLoadMore = onLoadMore,
+                onFollowUser = onFollowUser,
+                modifier = modifier
+            )
+        }
+        
+        is RecommendationsState.Success -> {
+            if (recommendationsState.hasData) {
+                DiscoveryCarousel(
+                    recommendedUsers = recommendationsState.users,
+                    isLoading = recommendationsState.isLoadingMore,
+                    hasMore = recommendationsState.hasMore,
+                    onLoadMore = onLoadMore,
+                    onFollowUser = onFollowUser,
+                    modifier = modifier
+                )
+            } else {
+                EmptyDiscoveryState(
+                    onViewAllFriends = onViewAllFriends,
+                    modifier = modifier.padding(horizontal = 16.dp)
+                )
+            }
+        }
+        
+        is RecommendationsState.Error -> {
+            DiscoveryErrorState(
+                message = recommendationsState.message,
+                onRetry = onLoadMore,
+                onDismiss = onErrorDismissed,
+                modifier = modifier.padding(horizontal = 16.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Enhanced home screen header with social focus
+ */
+@Composable
+private fun HomeHeader(
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = "Welcome back!",
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Bold
+        )
+        
+        Text(
+            text = "Discover new fitness friends and stay motivated",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
+ * Reusable section header component
+ */
+@Composable
+private fun SectionHeader(
+    title: String,
+    onViewAllClick: (() -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Bold
+        )
+        
+        onViewAllClick?.let { onClick ->
+            TextButton(
+                onClick = onClick,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = "View All",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Empty state for discovery section when no recommendations are available
+ */
+@Composable
+private fun EmptyDiscoveryState(
+    onViewAllFriends: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
-        onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "No new people to discover right now",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            
+            Text(
+                text = "Check back later or explore your existing connections",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            
+            TextButton(onClick = onViewAllFriends) {
+                Text("View Friends")
+            }
+        }
+    }
+}
+
+/**
+ * Error state for discovery section
+ */
+@Composable
+private fun DiscoveryErrorState(
+    message: String,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -154,306 +411,247 @@ private fun WorkoutCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Header with name and date
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = workout.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    
-                    Text(
-                        text = workout.date.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Default.Error,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer
+                )
                 
-                WorkoutStatusChip(status = workout.status)
+                Text(
+                    text = "Unable to load recommendations",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
             }
             
-            // Workout stats
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                WorkoutStat(
-                    icon = Icons.Default.FitnessCenter,
-                    value = "${workout.exercises.size}",
-                    label = "Exercises",
-                    modifier = Modifier.weight(1f)
-                )
-                
-                WorkoutStat(
-                    icon = Icons.Default.TrendingUp,
-                    value = "${workout.getTotalSets()}",
-                    label = "Sets",
-                    modifier = Modifier.weight(1f)
-                )
-                
-                workout.getDuration()?.let { duration ->
-                    WorkoutStat(
-                        icon = Icons.Default.Schedule,
-                        value = formatDuration(duration),
-                        label = "Duration",
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                textAlign = TextAlign.Center
+            )
             
-            // Progress bar for completion
-            if (workout.status == WorkoutStatus.IN_PROGRESS || workout.status == WorkoutStatus.COMPLETED) {
-                val progress = (workout.getCompletionPercentage() / 100.0).toFloat()
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TextButton(onClick = onRetry) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Retry")
+                }
+                
+                TextButton(onClick = onDismiss) {
+                    Text("Dismiss")
+                }
             }
         }
     }
 }
 
 /**
- * Workout status chip
+ * Empty state for workout feed
  */
 @Composable
-private fun WorkoutStatusChip(
-    status: WorkoutStatus,
+private fun EmptyWorkoutFeedState(
     modifier: Modifier = Modifier
 ) {
-    val (backgroundColor, textColor) = when (status) {
-        WorkoutStatus.COMPLETED -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
-        WorkoutStatus.IN_PROGRESS -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
-        WorkoutStatus.PAUSED -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
-        WorkoutStatus.PLANNED -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
-        WorkoutStatus.CANCELLED -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
-    }
-    
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.small,
-        color = backgroundColor
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Text(
-            text = status.displayName,
-            style = MaterialTheme.typography.labelSmall,
-            color = textColor,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            fontWeight = FontWeight.Medium
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "No workout activity yet",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            
+            Text(
+                text = "Start working out or follow friends to see activity here",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
 /**
- * Individual workout statistic
+ * Error state for workout feed
  */
 @Composable
-private fun WorkoutStat(
-    icon: ImageVector,
-    value: String,
-    label: String,
+private fun WorkoutFeedErrorState(
+    message: String,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(16.dp)
-        )
-        
-        Text(
-            text = value,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.SemiBold
-        )
-        
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Unable to load workout feed",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                textAlign = TextAlign.Center
+            )
+            
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                textAlign = TextAlign.Center
+            )
+            
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TextButton(onClick = onRetry) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Retry")
+                }
+                
+                TextButton(onClick = onDismiss) {
+                    Text("Dismiss")
+                }
+            }
+        }
     }
 }
 
 /**
- * Empty state when no workouts are available
- */
-@Composable
-private fun EmptyState(
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            imageVector = Icons.Default.FitnessCenter,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.outline
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(
-            text = "No workouts yet",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Medium
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Text(
-            text = "Start your fitness journey by creating your first workout",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-/**
- * Loading state with shimmer placeholder
+ * Loading state component for initial load
  */
 @Composable
 private fun LoadingState(
     modifier: Modifier = Modifier
 ) {
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            CircularProgressIndicator()
+            Text(
+                text = "Loading your social feed...",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/**
+ * Error state component for global errors
+ */
+@Composable
+private fun ErrorState(
+    errorMessage: String,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Column(
-        modifier = modifier,
+        modifier = modifier
+            .fillMaxSize()
+            .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(48.dp),
-            color = MaterialTheme.colorScheme.primary
+        Icon(
+            imageVector = Icons.Default.Error,
+            contentDescription = null,
+            modifier = Modifier.size(64.dp),
+            tint = MaterialTheme.colorScheme.error
         )
         
         Spacer(modifier = Modifier.height(16.dp))
         
         Text(
-            text = "Loading workouts...",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            text = "Something went wrong",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.error,
+            textAlign = TextAlign.Center
         )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Text(
+            text = errorMessage,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(onClick = onDismiss) {
+                Text("Dismiss")
+            }
+            
+            Button(onClick = onRetry) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Try Again")
+            }
+        }
     }
 }
 
-/**
- * Formats duration to human-readable string
- */
-private fun formatDuration(duration: Duration): String {
-    val hours = duration.toHours()
-    val minutes = duration.toMinutesPart()
-    
-    return when {
-        hours > 0 -> "${hours}h ${minutes}m"
-        minutes > 0 -> "${minutes}m"
-        else -> "< 1m"
-    }
-}
-
-// Preview composables
 @Preview(showBackground = true)
 @Composable
 private fun HomeScreenPreview() {
     LiftrixTheme {
         HomeScreen(
-            workouts = listOf(
-                createSampleWorkout("Push Day", WorkoutStatus.COMPLETED),
-                createSampleWorkout("Pull Day", WorkoutStatus.IN_PROGRESS),
-                createSampleWorkout("Leg Day", WorkoutStatus.PLANNED)
-            ),
-            isLoading = false,
-            isRefreshing = false,
-            onRefresh = {},
-            onWorkoutClick = {}
+            onNavigateToWorkout = {},
+            onNavigateToFriends = {}
         )
     }
 }
-
-@Preview(showBackground = true)
-@Composable
-private fun HomeScreenEmptyPreview() {
-    LiftrixTheme {
-        HomeScreen(
-            workouts = emptyList(),
-            isLoading = false,
-            isRefreshing = false,
-            onRefresh = {},
-            onWorkoutClick = {}
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun HomeScreenLoadingPreview() {
-    LiftrixTheme {
-        HomeScreen(
-            workouts = emptyList(),
-            isLoading = true,
-            isRefreshing = false,
-            onRefresh = {},
-            onWorkoutClick = {}
-        )
-    }
-}
-
-@Preview(showBackground = true, name = "Dark Theme")
-@Composable
-private fun HomeScreenDarkPreview() {
-    LiftrixTheme(darkTheme = true) {
-        HomeScreen(
-            workouts = listOf(
-                createSampleWorkout("Push Day", WorkoutStatus.COMPLETED),
-                createSampleWorkout("Pull Day", WorkoutStatus.IN_PROGRESS)
-            ),
-            isLoading = false,
-            isRefreshing = false,
-            onRefresh = {},
-            onWorkoutClick = {}
-        )
-    }
-}
-
-// Helper function for preview data
-private fun createSampleWorkout(name: String, status: WorkoutStatus): Workout {
-    val now = Instant.now()
-    return Workout(
-        userId = "sample-user",
-        id = WorkoutId.generate(),
-        name = name,
-        date = LocalDate.now(),
-        exercises = emptyList(),
-        status = status,
-        startTime = now.minusSeconds(3600),
-        endTime = if (status == WorkoutStatus.COMPLETED) now else null,
-        notes = null,
-        templateId = null,
-        createdAt = now.minusSeconds(7200),
-        updatedAt = now
-    )
-} 

@@ -12,6 +12,7 @@ import com.example.liftrix.domain.model.WorkoutExercise
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.model.WorkoutStatus
 import com.example.liftrix.domain.repository.AuthRepository
+import com.example.liftrix.service.FirebasePresenceService
 import com.example.liftrix.service.TimerServiceManager
 import com.example.liftrix.service.WorkoutTimerService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -35,7 +36,8 @@ import javax.inject.Inject
 class ActiveWorkoutViewModel @Inject constructor(
     private val timerServiceManager: TimerServiceManager,
     private val workoutRepository: WorkoutRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val presenceService: FirebasePresenceService
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ActiveWorkoutState())
@@ -167,6 +169,15 @@ class ActiveWorkoutViewModel @Inject constructor(
                 if (_uiState.value.currentWorkout == null) {
                     createNewWorkout()
                 }
+                
+                // Update presence status to WORKING_OUT
+                _uiState.value.currentWorkout?.let { workout ->
+                    val presenceResult = presenceService.updateWorkoutStatus(workout.id.value)
+                    if (presenceResult.isFailure) {
+                        Timber.w(presenceResult.exceptionOrNull(), "Failed to update presence status - continuing workout")
+                        // Don't block workout functionality if presence update fails
+                    }
+                }
             }
         }
     }
@@ -181,6 +192,12 @@ class ActiveWorkoutViewModel @Inject constructor(
                 updateState { 
                     copy(error = "Failed to pause session: ${result.exceptionOrNull()?.message}")
                 }
+            } else {
+                // Update presence to ONLINE when paused (user not actively working out)
+                val presenceResult = presenceService.updateWorkoutStatus(null)
+                if (presenceResult.isFailure) {
+                    Timber.w(presenceResult.exceptionOrNull(), "Failed to update presence on pause - continuing")
+                }
             }
         }
     }
@@ -194,6 +211,14 @@ class ActiveWorkoutViewModel @Inject constructor(
             if (result.isFailure) {
                 updateState { 
                     copy(error = "Failed to resume session: ${result.exceptionOrNull()?.message}")
+                }
+            } else {
+                // Update presence back to WORKING_OUT when resumed
+                _uiState.value.currentWorkout?.let { workout ->
+                    val presenceResult = presenceService.updateWorkoutStatus(workout.id.value)
+                    if (presenceResult.isFailure) {
+                        Timber.w(presenceResult.exceptionOrNull(), "Failed to update presence on resume - continuing")
+                    }
                 }
             }
         }
@@ -210,6 +235,13 @@ class ActiveWorkoutViewModel @Inject constructor(
                     copy(error = "Failed to stop session: ${result.exceptionOrNull()?.message}")
                 }
             } else {
+                // Clear presence status to ONLINE
+                val presenceResult = presenceService.updateWorkoutStatus(null)
+                if (presenceResult.isFailure) {
+                    Timber.w(presenceResult.exceptionOrNull(), "Failed to clear presence status - continuing workout stop")
+                    // Don't block workout functionality if presence update fails
+                }
+                
                 // Auto-save workout before stopping
                 saveCurrentWorkout()
             }

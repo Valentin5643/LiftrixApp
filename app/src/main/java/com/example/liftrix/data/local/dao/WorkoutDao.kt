@@ -15,6 +15,9 @@ interface WorkoutDao {
     @Query("SELECT * FROM workouts WHERE user_id = :userId ORDER BY date DESC, created_at DESC")
     fun getAllWorkoutsForUser(userId: String): Flow<List<WorkoutEntity>>
     
+    @Query("SELECT * FROM workouts WHERE user_id = :userId AND status = 'COMPLETED' ORDER BY date DESC, created_at DESC LIMIT :limit")
+    fun getRecentCompletedWorkouts(userId: String, limit: Int): Flow<List<WorkoutEntity>>
+    
     @Query("SELECT * FROM workouts WHERE id = :id AND user_id = :userId")
     suspend fun getWorkoutByIdForUser(id: String, userId: String): WorkoutEntity?
     
@@ -99,4 +102,110 @@ interface WorkoutDao {
     @Deprecated("Use user-scoped updateSyncStatusForUser instead")
     @Query("UPDATE workouts SET is_synced = :isSynced, sync_version = :version WHERE id = :id")
     suspend fun updateSyncStatus(id: String, isSynced: Boolean, version: Long): Int
+    
+    // Feed-specific queries for social workout timeline
+    
+    /**
+     * Gets combined feed of personal and friends' completed workouts in chronological order
+     * 
+     * @param currentUserId The current user's ID
+     * @param friendIds List of friend user IDs to include in the feed
+     * @param limit Maximum number of workouts to return
+     * @param offset Number of workouts to skip for pagination
+     * @return Flow of workout entities ordered by completion time (newest first)
+     */
+    @Query("""
+        SELECT w.* FROM workouts w 
+        WHERE (w.user_id = :currentUserId OR w.user_id IN (:friendIds))
+        AND w.status = 'COMPLETED' 
+        AND w.end_time IS NOT NULL
+        ORDER BY w.end_time DESC 
+        LIMIT :limit OFFSET :offset
+    """)
+    fun getFeedWorkouts(
+        currentUserId: String,
+        friendIds: List<String>,
+        limit: Int,
+        offset: Int
+    ): Flow<List<WorkoutEntity>>
+    
+    /**
+     * Gets personal completed workouts only for the current user
+     * 
+     * @param userId The user's ID
+     * @param limit Maximum number of workouts to return
+     * @param offset Number of workouts to skip for pagination
+     * @return Flow of personal workout entities ordered by completion time (newest first)
+     */
+    @Query("""
+        SELECT * FROM workouts 
+        WHERE user_id = :userId 
+        AND status = 'COMPLETED' 
+        AND end_time IS NOT NULL
+        ORDER BY end_time DESC 
+        LIMIT :limit OFFSET :offset
+    """)
+    fun getPersonalCompletedWorkouts(
+        userId: String,
+        limit: Int,
+        offset: Int
+    ): Flow<List<WorkoutEntity>>
+    
+    /**
+     * Gets friends' completed workouts only
+     * 
+     * @param friendIds List of friend user IDs
+     * @param limit Maximum number of workouts to return
+     * @param offset Number of workouts to skip for pagination
+     * @return Flow of friends' workout entities ordered by completion time (newest first)
+     */
+    @Query("""
+        SELECT * FROM workouts 
+        WHERE user_id IN (:friendIds)
+        AND status = 'COMPLETED' 
+        AND end_time IS NOT NULL
+        ORDER BY end_time DESC 
+        LIMIT :limit OFFSET :offset
+    """)
+    fun getFriendsCompletedWorkouts(
+        friendIds: List<String>,
+        limit: Int,
+        offset: Int
+    ): Flow<List<WorkoutEntity>>
+    
+    /**
+     * Gets accepted friend user IDs for a given user
+     * Used to retrieve friend IDs for feed queries
+     * 
+     * @param userId The user's ID
+     * @return List of friend user IDs with ACCEPTED status
+     */
+    @Query("""
+        SELECT f.friend_user_id FROM friends f 
+        WHERE f.user_id = :userId 
+        AND f.status = 'ACCEPTED'
+        UNION
+        SELECT f.user_id FROM friends f 
+        WHERE f.friend_user_id = :userId 
+        AND f.status = 'ACCEPTED'
+    """)
+    suspend fun getAcceptedFriendIds(userId: String): List<String>
+    
+    /**
+     * Counts total available feed workouts for pagination logic
+     * 
+     * @param currentUserId The current user's ID
+     * @param friendIds List of friend user IDs to include in the feed
+     * @return Total count of completed workouts in the feed
+     */
+    @Query("""
+        SELECT COUNT(*) FROM workouts w 
+        WHERE (w.user_id = :currentUserId OR w.user_id IN (:friendIds))
+        AND w.status = 'COMPLETED' 
+        AND w.end_time IS NOT NULL
+    """)
+    suspend fun getFeedWorkoutCount(
+        currentUserId: String,
+        friendIds: List<String>
+    ): Int
 } 

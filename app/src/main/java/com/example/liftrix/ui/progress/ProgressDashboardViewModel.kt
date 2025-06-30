@@ -390,7 +390,7 @@ data class ProgressDashboardUiState(
 enum class TimePeriod(val displayName: String, val days: Int) {
     WEEK("Week", 7),
     MONTH("Month", 30),
-    QUARTER("3 Months", 90),
+    QUARTER("Quarter", 90),
     YEAR("Year", 365)
 }
 

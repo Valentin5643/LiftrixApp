@@ -1,0 +1,57 @@
+{
+  "id": "ai-coach-chat",
+  "started": "2025-06-29T15:56:00Z",
+  "lastUpdated": "2025-06-29T16:45:00Z",
+  "status": "complete",
+  "phase": "complete",
+  "targetAudience": "Liftrix users seeking intelligent workout guidance",
+  "competitors": ["FitnessAI", "Freeletics Coach+", "Dr. Muscle", "Planfit"],
+  "existingFeatures": [
+    "Coach screen placeholder",
+    "Firebase AI dependency (unused)",
+    "Progress insights (rule-based)",
+    "Social features",
+    "Analytics infrastructure"
+  ],
+  "gaps": [
+    "No AI/ML integration",
+    "No chat/messaging features", 
+    "No intelligent recommendations",
+    "No plateau detection",
+    "No injury-aware coaching"
+  ],
+  "progress": {
+    "discovery": { "answered": 5, "total": 5 },
+    "currentDirection": 1
+  },
+  "painPointsDiscovered": [
+    "Users want plateau detection with diagnostic questioning",
+    "Need for multiple AI personalities (science vs bro)",
+    "Injury integration is critical for safety",
+    "Tiered pricing model creates upgrade motivation",
+    "Conversational AI that understands workout context"
+  ],
+  "chosenDirection": 1,
+  "directionName": "Tiered AI Assistant → Dr. Lift Coach Pipeline",
+  "keyRequirements": {
+    "plateauDetection": "3+ week stagnation triggers automatic analysis",
+    "aiPersonalities": "Dr. Lift (Jeff Nippard/Jeremy Ethier style), Coach Rico (future)",
+    "injuryIntegration": "Must complete onboarding before AI access",
+    "tieringStrategy": "Free: premade questions + limited chats, Premium: unlimited Dr. Lift",
+    "formLimitations": "Minimal form guidance due to visual constraints"
+  },
+  "technicalFoundation": {
+    "existingAssets": [
+      "Coach screen infrastructure",
+      "Firebase AI dependencies ready",
+      "Workout analytics data",
+      "User profile system"
+    ],
+    "integrationPoints": [
+      "Replace Coach screen placeholder",
+      "Enhance analytics for plateau detection", 
+      "Integrate injury data from onboarding",
+      "Add premium upgrade flow"
+    ]
+  }
+}

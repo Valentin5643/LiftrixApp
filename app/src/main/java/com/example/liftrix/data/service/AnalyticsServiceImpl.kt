@@ -27,6 +27,18 @@ class AnalyticsServiceImpl @Inject constructor(
         private const val EVENT_AI_SUMMARY_VIEWED = "ai_summary_viewed"
         private const val EVENT_SPOTTER_ADDED = "spotter_added"
         
+        // Social event names
+        private const val EVENT_FRIEND_REQUEST_SENT = "friend_request_sent"
+        private const val EVENT_FRIEND_REQUEST_RESPONSE = "friend_request_response"
+        private const val EVENT_WORKOUT_SHARED = "workout_shared"
+        private const val EVENT_SOCIAL_WORKOUT_VIEWED = "social_workout_viewed"
+        private const val EVENT_SOCIAL_FEED_INTERACTION = "social_feed_interaction"
+        
+        // Performance monitoring event names
+        private const val EVENT_FEED_LOAD_PERFORMANCE = "feed_load_performance"
+        private const val EVENT_USER_DISCOVERY_ENGAGEMENT = "user_discovery_engagement"
+        private const val EVENT_FEED_SCROLL_DEPTH = "feed_scroll_depth"
+        
         // Parameter names
         private const val PARAM_WORKOUT_ID = "workout_id"
         private const val PARAM_WORKOUT_NAME = "workout_name"
@@ -46,6 +58,19 @@ class AnalyticsServiceImpl @Inject constructor(
         private const val PARAM_SPOTTER_USER_ID = "spotter_user_id"
         private const val PARAM_CONNECTION_TYPE = "connection_type"
         private const val PARAM_WORKOUT_TYPE = "workout_type"
+        
+        // Performance monitoring parameter names
+        private const val PARAM_LOAD_TIME_MS = "load_time_ms"
+        private const val PARAM_SCREEN = "screen"
+        private const val PARAM_ACTION = "action"
+        private const val PARAM_ITEM_COUNT = "item_count"
+        
+        // Social parameter names
+        private const val PARAM_TARGET_USER_ID = "target_user_id"
+        private const val PARAM_FRIEND_USER_ID = "friend_user_id"
+        private const val PARAM_ACCEPTED = "accepted"
+        private const val PARAM_SHARE_METHOD = "share_method"
+        private const val PARAM_EVENT_TYPE = "event_type"
         
         // User property names
         private const val USER_PROP_SUBSCRIPTION_TIER = "subscription_tier"
@@ -302,6 +327,193 @@ class AnalyticsServiceImpl @Inject constructor(
             Result.success(Unit)
         } catch (exception: Exception) {
             Timber.e(exception, "Failed to set custom key: $key")
+            Result.failure(exception)
+        }
+    }
+
+    override suspend fun logFriendRequestSent(
+        userId: String,
+        targetUserId: String
+    ): Result<Unit> {
+        return try {
+            firebaseAnalytics.logEvent(EVENT_FRIEND_REQUEST_SENT) {
+                param(PARAM_TARGET_USER_ID, targetUserId)
+                param(FirebaseAnalytics.Param.CONTENT_TYPE, "social_interaction")
+            }
+            
+            Timber.d("Friend request sent logged: $userId -> $targetUserId")
+            Result.success(Unit)
+        } catch (exception: Exception) {
+            Timber.e(exception, "Failed to log friend request sent")
+            Result.failure(exception)
+        }
+    }
+
+    override suspend fun logFriendRequestResponse(
+        userId: String,
+        targetUserId: String,
+        accepted: Boolean
+    ): Result<Unit> {
+        return try {
+            firebaseAnalytics.logEvent(EVENT_FRIEND_REQUEST_RESPONSE) {
+                param(PARAM_TARGET_USER_ID, targetUserId)
+                param(PARAM_ACCEPTED, accepted.toString())
+                param(FirebaseAnalytics.Param.CONTENT_TYPE, "social_interaction")
+            }
+            
+            val action = if (accepted) "accepted" else "declined"
+            Timber.d("Friend request $action logged: $userId -> $targetUserId")
+            Result.success(Unit)
+        } catch (exception: Exception) {
+            Timber.e(exception, "Failed to log friend request response")
+            Result.failure(exception)
+        }
+    }
+
+    override suspend fun logWorkoutShared(
+        userId: String,
+        workoutId: String,
+        workoutName: String,
+        shareMethod: String
+    ): Result<Unit> {
+        return try {
+            firebaseAnalytics.logEvent(EVENT_WORKOUT_SHARED) {
+                param(FirebaseAnalytics.Param.ITEM_ID, workoutId)
+                param(FirebaseAnalytics.Param.ITEM_NAME, workoutName)
+                param(PARAM_SHARE_METHOD, shareMethod)
+                param(FirebaseAnalytics.Param.CONTENT_TYPE, "workout_sharing")
+            }
+            
+            Timber.d("Workout shared logged: $workoutId via $shareMethod")
+            Result.success(Unit)
+        } catch (exception: Exception) {
+            Timber.e(exception, "Failed to log workout sharing")
+            Result.failure(exception)
+        }
+    }
+
+    override suspend fun logSocialWorkoutViewed(
+        userId: String,
+        workoutId: String,
+        friendUserId: String,
+        workoutName: String
+    ): Result<Unit> {
+        return try {
+            firebaseAnalytics.logEvent(EVENT_SOCIAL_WORKOUT_VIEWED) {
+                param(FirebaseAnalytics.Param.ITEM_ID, workoutId)
+                param(FirebaseAnalytics.Param.ITEM_NAME, workoutName)
+                param(PARAM_FRIEND_USER_ID, friendUserId)
+                param(FirebaseAnalytics.Param.CONTENT_TYPE, "social_content")
+            }
+            
+            Timber.d("Social workout viewed logged: $workoutId from friend $friendUserId")
+            Result.success(Unit)
+        } catch (exception: Exception) {
+            Timber.e(exception, "Failed to log social workout viewed")
+            Result.failure(exception)
+        }
+    }
+
+    override suspend fun logSocialFeedEvent(
+        userId: String,
+        eventType: String,
+        additionalData: Map<String, Any>
+    ): Result<Unit> {
+        return try {
+            firebaseAnalytics.logEvent(EVENT_SOCIAL_FEED_INTERACTION) {
+                param(PARAM_EVENT_TYPE, eventType)
+                param(FirebaseAnalytics.Param.CONTENT_TYPE, "social_feed")
+                
+                // Add additional parameters
+                additionalData.forEach { (key, value) ->
+                    when (value) {
+                        is String -> param(key, value)
+                        is Long -> param(key, value)
+                        is Double -> param(key, value)
+                        is Boolean -> param(key, value.toString())
+                        is Int -> param(key, value.toLong())
+                        is Float -> param(key, value.toDouble())
+                        else -> param(key, value.toString())
+                    }
+                }
+            }
+            
+            Timber.d("Social feed event logged: $eventType with ${additionalData.size} parameters")
+            Result.success(Unit)
+        } catch (exception: Exception) {
+            Timber.e(exception, "Failed to log social feed event: $eventType")
+            Result.failure(exception)
+        }
+    }
+
+    override suspend fun trackFeedLoadTime(duration: Long): Result<Unit> {
+        return try {
+            firebaseAnalytics.logEvent(EVENT_FEED_LOAD_PERFORMANCE) {
+                param(PARAM_LOAD_TIME_MS, duration)
+                param(PARAM_SCREEN, "home_feed")
+                param(FirebaseAnalytics.Param.CONTENT_TYPE, "performance_monitoring")
+            }
+            
+            // Log performance alert if load time exceeds threshold
+            if (duration > 2000) {
+                firebaseAnalytics.logEvent("performance_issue") {
+                    param("issue_type", "feed_load_slow")
+                    param(PARAM_LOAD_TIME_MS, duration)
+                    param("threshold_ms", 2000L)
+                }
+            }
+            
+            Timber.d("Feed load time tracked: ${duration}ms")
+            Result.success(Unit)
+        } catch (exception: Exception) {
+            Timber.e(exception, "Failed to track feed load time")
+            Result.failure(exception)
+        }
+    }
+
+    override suspend fun trackUserDiscoveryEngagement(
+        action: String,
+        additionalData: Map<String, Any>
+    ): Result<Unit> {
+        return try {
+            firebaseAnalytics.logEvent(EVENT_USER_DISCOVERY_ENGAGEMENT) {
+                param(PARAM_ACTION, action)
+                param(FirebaseAnalytics.Param.CONTENT_TYPE, "user_engagement")
+                
+                // Add additional parameters
+                additionalData.forEach { (key, value) ->
+                    when (value) {
+                        is String -> param(key, value)
+                        is Long -> param(key, value)
+                        is Double -> param(key, value)
+                        is Boolean -> param(key, value.toString())
+                        is Int -> param(key, value.toLong())
+                        is Float -> param(key, value.toDouble())
+                        else -> param(key, value.toString())
+                    }
+                }
+            }
+            
+            Timber.d("User discovery engagement tracked: $action with ${additionalData.size} parameters")
+            Result.success(Unit)
+        } catch (exception: Exception) {
+            Timber.e(exception, "Failed to track user discovery engagement: $action")
+            Result.failure(exception)
+        }
+    }
+
+    override suspend fun trackFeedScrollDepth(itemCount: Int): Result<Unit> {
+        return try {
+            firebaseAnalytics.logEvent(EVENT_FEED_SCROLL_DEPTH) {
+                param(PARAM_ITEM_COUNT, itemCount.toLong())
+                param(PARAM_SCREEN, "home_feed")
+                param(FirebaseAnalytics.Param.CONTENT_TYPE, "engagement_tracking")
+            }
+            
+            Timber.d("Feed scroll depth tracked: $itemCount items")
+            Result.success(Unit)
+        } catch (exception: Exception) {
+            Timber.e(exception, "Failed to track feed scroll depth")
             Result.failure(exception)
         }
     }
