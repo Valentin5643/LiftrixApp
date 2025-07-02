@@ -33,22 +33,7 @@ import com.example.liftrix.data.local.entity.FriendEntity
 import com.example.liftrix.data.local.entity.PrivacySettingsEntity
 import com.example.liftrix.data.local.entity.ActiveWorkoutSessionEntity
 
-import com.example.liftrix.data.local.migration.MIGRATION_6_7
-import com.example.liftrix.data.local.migration.MIGRATION_7_8
-import com.example.liftrix.data.local.migration.MIGRATION_8_9
-import com.example.liftrix.data.local.migration.MIGRATION_9_10
-import com.example.liftrix.data.local.migration.MIGRATION_10_11
-import com.example.liftrix.data.local.migration.MIGRATION_11_12
-import com.example.liftrix.data.local.migration.MIGRATION_12_13
-import com.example.liftrix.data.local.migration.MIGRATION_13_14
-import com.example.liftrix.data.local.migration.MIGRATION_14_15
-import com.example.liftrix.data.local.migration.MIGRATION_15_16
-import com.example.liftrix.data.local.migration.MIGRATION_16_17
-import com.example.liftrix.data.local.migration.MIGRATION_17_18
-import com.example.liftrix.data.local.migration.MIGRATION_18_19
-import com.example.liftrix.data.local.migration.MIGRATION_19_20
-import com.example.liftrix.data.local.migration.MIGRATION_20_21
-import com.example.liftrix.data.local.migration.MIGRATION_21_22
+
 
 @Database(
     entities = [

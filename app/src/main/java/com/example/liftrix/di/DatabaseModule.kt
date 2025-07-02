@@ -19,23 +19,7 @@ import com.example.liftrix.data.local.dao.FriendDao
 import com.example.liftrix.data.local.dao.PrivacySettingsDao
 import com.example.liftrix.data.local.seed.ExerciseLibrarySeedData
 
-import com.example.liftrix.data.local.migration.MIGRATION_6_7
-import com.example.liftrix.data.local.migration.MIGRATION_7_8
-import com.example.liftrix.data.local.migration.MIGRATION_8_9
-import com.example.liftrix.data.local.migration.MIGRATION_9_10
-import com.example.liftrix.data.local.migration.MIGRATION_10_11
-import com.example.liftrix.data.local.migration.MIGRATION_11_12
-import com.example.liftrix.data.local.migration.MIGRATION_12_13
-import com.example.liftrix.data.local.migration.MIGRATION_13_14
-import com.example.liftrix.data.local.migration.MIGRATION_14_15
-import com.example.liftrix.data.local.migration.MIGRATION_15_16
-import com.example.liftrix.data.local.migration.MIGRATION_16_17
-import com.example.liftrix.data.local.migration.MIGRATION_17_18
-import com.example.liftrix.data.local.migration.MIGRATION_18_19
-import com.example.liftrix.data.local.migration.MIGRATION_19_20
-import com.example.liftrix.data.local.migration.MIGRATION_20_21
-import com.example.liftrix.data.local.migration.MIGRATION_21_22
-import com.example.liftrix.data.local.MigrationValidator
+
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -63,8 +47,7 @@ object DatabaseModule {
         val availableMigrations = listOf(
             6 to 7, 7 to 8, 8 to 9, 9 to 10, 10 to 11, 11 to 12, 12 to 13, 13 to 14, 14 to 15, 15 to 16, 16 to 17, 17 to 18, 18 to 19, 19 to 20, 20 to 21, 21 to 22
         )
-        MigrationValidator.validateMigrationChain(22, availableMigrations)
-        
+
         lateinit var database: LiftrixDatabase
         
         database = Room.databaseBuilder(
@@ -72,24 +55,6 @@ object DatabaseModule {
             LiftrixDatabase::class.java,
             "liftrix_database"
         )
-            .addMigrations(
-                MIGRATION_6_7, 
-                MIGRATION_7_8, 
-                MIGRATION_8_9,
-                MIGRATION_9_10,
-                MIGRATION_10_11,
-                MIGRATION_11_12,
-                MIGRATION_12_13,
-                MIGRATION_13_14,
-                MIGRATION_14_15,
-                MIGRATION_15_16,
-                MIGRATION_16_17,
-                MIGRATION_17_18,
-                MIGRATION_18_19,
-                MIGRATION_19_20,
-                MIGRATION_20_21,
-                MIGRATION_21_22
-            )
             .setTransactionExecutor(Dispatchers.IO.asExecutor())
             .setQueryExecutor(Dispatchers.IO.asExecutor())
             .addCallback(object : RoomDatabase.Callback() {
