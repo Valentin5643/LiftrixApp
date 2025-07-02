@@ -11,7 +11,6 @@ import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.local.dao.CustomExerciseDao
 import com.example.liftrix.data.local.dao.WorkoutTemplateDao
-import com.example.liftrix.data.local.dao.DailyWorkoutDao
 import com.example.liftrix.data.local.dao.ExerciseLibraryDao
 import com.example.liftrix.data.local.dao.ExerciseDao
 import com.example.liftrix.data.local.dao.ExerciseSetDao
@@ -19,12 +18,12 @@ import com.example.liftrix.data.local.dao.ExerciseWeightMemoryDao
 import com.example.liftrix.data.local.dao.ExerciseUsageHistoryDao
 import com.example.liftrix.data.local.dao.FriendDao
 import com.example.liftrix.data.local.dao.PrivacySettingsDao
+import com.example.liftrix.data.local.dao.ActiveWorkoutSessionDao
 
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.data.local.entity.WorkoutEntity
 import com.example.liftrix.data.local.entity.CustomExerciseEntity
 import com.example.liftrix.data.local.entity.WorkoutTemplateEntity
-import com.example.liftrix.data.local.entity.DailyWorkoutEntity
 import com.example.liftrix.data.local.entity.ExerciseLibraryEntity
 import com.example.liftrix.data.local.entity.ExerciseEntity
 import com.example.liftrix.data.local.entity.ExerciseSetEntity
@@ -32,6 +31,7 @@ import com.example.liftrix.data.local.entity.ExerciseWeightMemoryEntity
 import com.example.liftrix.data.local.entity.ExerciseUsageHistoryEntity
 import com.example.liftrix.data.local.entity.FriendEntity
 import com.example.liftrix.data.local.entity.PrivacySettingsEntity
+import com.example.liftrix.data.local.entity.ActiveWorkoutSessionEntity
 
 import com.example.liftrix.data.local.migration.MIGRATION_6_7
 import com.example.liftrix.data.local.migration.MIGRATION_7_8
@@ -46,6 +46,9 @@ import com.example.liftrix.data.local.migration.MIGRATION_15_16
 import com.example.liftrix.data.local.migration.MIGRATION_16_17
 import com.example.liftrix.data.local.migration.MIGRATION_17_18
 import com.example.liftrix.data.local.migration.MIGRATION_18_19
+import com.example.liftrix.data.local.migration.MIGRATION_19_20
+import com.example.liftrix.data.local.migration.MIGRATION_20_21
+import com.example.liftrix.data.local.migration.MIGRATION_21_22
 
 @Database(
     entities = [
@@ -53,7 +56,6 @@ import com.example.liftrix.data.local.migration.MIGRATION_18_19
         UserProfileEntity::class,
         CustomExerciseEntity::class,
         WorkoutTemplateEntity::class,
-        DailyWorkoutEntity::class,
         ExerciseLibraryEntity::class,
         ExerciseEntity::class,
         ExerciseSetEntity::class,
@@ -61,8 +63,9 @@ import com.example.liftrix.data.local.migration.MIGRATION_18_19
         ExerciseUsageHistoryEntity::class,
         FriendEntity::class,
         PrivacySettingsEntity::class,
+        ActiveWorkoutSessionEntity::class,
     ],
-    version = 19,
+    version = 22,
     exportSchema = true
 )
 @TypeConverters(
@@ -77,7 +80,6 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun userProfileDao(): UserProfileDao
     abstract fun customExerciseDao(): CustomExerciseDao
     abstract fun workoutTemplateDao(): WorkoutTemplateDao
-    abstract fun dailyWorkoutDao(): DailyWorkoutDao
     abstract fun exerciseLibraryDao(): ExerciseLibraryDao
     abstract fun exerciseDao(): ExerciseDao
     abstract fun exerciseSetDao(): ExerciseSetDao
@@ -85,4 +87,5 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun exerciseUsageHistoryDao(): ExerciseUsageHistoryDao
     abstract fun friendDao(): FriendDao
     abstract fun privacySettingsDao(): PrivacySettingsDao
+    abstract fun activeWorkoutSessionDao(): ActiveWorkoutSessionDao
 } 

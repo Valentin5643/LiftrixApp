@@ -3,10 +3,17 @@ package com.example.liftrix.ui.workout.active
 import app.cash.turbine.test
 import com.example.liftrix.data.repository.WorkoutRepository
 import com.example.liftrix.domain.model.ExerciseSet
+import com.example.liftrix.domain.model.ExerciseSetId
+import com.example.liftrix.domain.model.Reps
+import com.example.liftrix.domain.model.Weight
 import com.example.liftrix.domain.model.RestTimer
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.Workout
-import com.example.liftrix.domain.model.WorkoutExercise
+import com.example.liftrix.domain.model.Exercise
+import com.example.liftrix.domain.model.ExerciseCategory
+import com.example.liftrix.domain.model.ExerciseId
+import com.example.liftrix.domain.model.ExerciseLibrary
+import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.service.FirebasePresenceService
@@ -248,7 +255,7 @@ class ActiveWorkoutViewModelTest {
         viewModel.onEvent(ActiveWorkoutEvent.StartSession)
         advanceUntilIdle()
         
-        val exercise = WorkoutExercise.createEmpty()
+        val exercise = createTestExercise()
         viewModel.onEvent(ActiveWorkoutEvent.AddExercise(exercise))
         
         viewModel.uiState.test {
@@ -264,7 +271,7 @@ class ActiveWorkoutViewModelTest {
         viewModel.onEvent(ActiveWorkoutEvent.StartSession)
         advanceUntilIdle()
         
-        val exercise = WorkoutExercise.createEmpty()
+        val exercise = createTestExercise()
         viewModel.onEvent(ActiveWorkoutEvent.AddExercise(exercise))
         viewModel.onEvent(ActiveWorkoutEvent.RemoveExercise(0))
         
@@ -281,7 +288,7 @@ class ActiveWorkoutViewModelTest {
         viewModel.onEvent(ActiveWorkoutEvent.StartSession)
         advanceUntilIdle()
         
-        val exercise = WorkoutExercise.createEmpty()
+        val exercise = createTestExercise()
         viewModel.onEvent(ActiveWorkoutEvent.AddExercise(exercise))
         viewModel.onEvent(ActiveWorkoutEvent.AddSet(0))
         
@@ -299,11 +306,16 @@ class ActiveWorkoutViewModelTest {
         viewModel.onEvent(ActiveWorkoutEvent.StartSession)
         advanceUntilIdle()
         
-        val exercise = WorkoutExercise.createEmpty()
+        val exercise = createTestExercise()
         viewModel.onEvent(ActiveWorkoutEvent.AddExercise(exercise))
         viewModel.onEvent(ActiveWorkoutEvent.AddSet(0))
         
-        val updatedSet = ExerciseSet.createEmpty()
+        val updatedSet = ExerciseSet(
+            id = ExerciseSetId.generate(),
+            setNumber = 1,
+            reps = Reps.of(10),
+            weight = Weight.fromKilograms(50.0)
+        )
         viewModel.onEvent(ActiveWorkoutEvent.UpdateSet(0, 0, updatedSet))
         
         viewModel.uiState.test {
@@ -320,7 +332,7 @@ class ActiveWorkoutViewModelTest {
         viewModel.onEvent(ActiveWorkoutEvent.StartSession)
         advanceUntilIdle()
         
-        val exercise = WorkoutExercise.createEmpty()
+        val exercise = createTestExercise()
         viewModel.onEvent(ActiveWorkoutEvent.AddExercise(exercise))
         viewModel.onEvent(ActiveWorkoutEvent.AddSet(0))
         viewModel.onEvent(ActiveWorkoutEvent.RemoveSet(0, 0))
@@ -587,5 +599,38 @@ class ActiveWorkoutViewModelTest {
         coVerify { timerServiceManager.startSession() }
         coVerify { timerServiceManager.stopTimer() }
         coVerify { workoutRepository.saveWorkout(any()) }
+    }
+
+    /**
+     * Helper function to create a test Exercise object
+     */
+    private fun createTestExercise(): Exercise {
+        val libraryExercise = ExerciseLibrary(
+            id = "test-exercise",
+            name = "Test Exercise",
+            primaryMuscleGroup = ExerciseCategory.CHEST,
+            equipment = Equipment.BODYWEIGHT_ONLY,
+            secondaryMuscleGroups = emptyList(),
+            movementPattern = "Test Movement",
+            difficultyLevel = 3,
+            instructions = "Test instructions",
+            isCompound = false,
+            searchableTerms = listOf("test")
+        )
+        
+        return Exercise(
+            id = ExerciseId.generate(),
+            workoutId = WorkoutId.generate(),
+            libraryExercise = libraryExercise,
+            orderIndex = 0,
+            targetSets = null,
+            targetReps = null,
+            targetWeight = null,
+            targetTime = null,
+            targetDistance = null,
+            sets = emptyList(),
+            notes = null,
+            createdAt = java.time.Instant.now()
+        )
     }
 }

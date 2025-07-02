@@ -7,16 +7,22 @@ import android.util.Log
 /**
  * Migration from version 18 to 19
  * 
- * FOREIGN KEY CONSTRAINT REMOVAL: Fixes schema mismatch
+ * MAJOR CHANGES:
+ * 1. Creates new active_workout_sessions table with full schema (21 fields)
+ * 2. FOREIGN KEY CONSTRAINT REMOVAL: Fixes schema mismatch for friends and privacy tables
  * 
  * Room doesn't expect FOREIGN KEY constraints in the schema definition.
- * This migration removes them to match Room's expected schema exactly.
+ * This migration adds the missing active_workout_sessions table and removes 
+ * foreign key constraints to match Room's expected schema exactly.
  */
 val MIGRATION_18_19 = object : Migration(18, 19) {
     override fun migrate(database: SupportSQLiteDatabase) {
-        Log.d("Migration_18_19", "Starting FOREIGN KEY constraint removal")
+        Log.d("Migration_18_19", "Starting migration 18→19: Creating active_workout_sessions table and fixing schema")
         
         try {
+            // Create the new active_workout_sessions table
+            createActiveWorkoutSessionsTable(database)
+            
             // Fix friends table - remove FOREIGN KEY constraint
             fixFriendsTable(database)
             
@@ -28,6 +34,45 @@ val MIGRATION_18_19 = object : Migration(18, 19) {
             Log.e("Migration_18_19", "Migration failed: ${e.message}", e)
             throw e
         }
+    }
+    
+    private fun createActiveWorkoutSessionsTable(database: SupportSQLiteDatabase) {
+        Log.d("Migration_18_19", "Creating active_workout_sessions table")
+        
+        // Create active_workout_sessions table with full schema
+        database.execSQL("""
+            CREATE TABLE active_workout_sessions (
+                id TEXT NOT NULL PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                template_id TEXT,
+                exercises_json TEXT NOT NULL,
+                current_exercise_index INTEGER NOT NULL DEFAULT 0,
+                session_state TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                paused_at TEXT,
+                resumed_at TEXT,
+                total_paused_duration INTEGER NOT NULL DEFAULT 0,
+                notes TEXT,
+                last_modified TEXT NOT NULL,
+                rest_timer_start_time TEXT,
+                rest_timer_duration_seconds INTEGER,
+                rest_timer_paused_at TEXT,
+                auto_save_enabled INTEGER NOT NULL DEFAULT 1,
+                last_auto_save TEXT,
+                recovery_data_json TEXT,
+                is_synced INTEGER NOT NULL DEFAULT 0,
+                sync_version INTEGER NOT NULL DEFAULT 1
+            )
+        """.trimIndent())
+        
+        // Create indexes for active_workout_sessions table
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_active_sessions_user_id ON active_workout_sessions(user_id)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_active_sessions_started_at ON active_workout_sessions(started_at)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_active_sessions_template_id ON active_workout_sessions(template_id)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_active_sessions_state ON active_workout_sessions(session_state)")
+        
+        Log.d("Migration_18_19", "active_workout_sessions table created successfully")
     }
     
     private fun fixFriendsTable(database: SupportSQLiteDatabase) {

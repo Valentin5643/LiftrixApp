@@ -177,7 +177,6 @@ class Migration7To8Test {
         val userProfileDao = db.userProfileDao()
         val customExerciseDao = db.customExerciseDao()
         val workoutTemplateDao = db.workoutTemplateDao()
-        val dailyWorkoutDao = db.dailyWorkoutDao()
 
         // Basic smoke test - these should not throw exceptions
         assert(workoutDao != null)

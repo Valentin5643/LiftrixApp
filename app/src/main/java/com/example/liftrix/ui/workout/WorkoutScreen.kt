@@ -54,7 +54,6 @@ import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutStatus
 import com.example.liftrix.sync.SyncStatus
-import com.example.liftrix.ui.workout.creation.UnifiedWorkoutCreationScreen
 import com.example.liftrix.ui.workout.templates.WorkoutTemplateSelectionScreen
 
 import java.time.format.DateTimeFormatter
@@ -67,11 +66,29 @@ private sealed class WorkoutScreenState {
     data class TemplateSelection(val onTemplateSelected: (String) -> Unit) : WorkoutScreenState()
 }
 
+/**
+ * Legacy workout screen - DEPRECATED
+ * 
+ * This screen has been replaced by the modern WorkoutTemplatesDashboard + ActiveWorkoutScreen flow.
+ * It's kept for backward compatibility but should not be used in new navigation.
+ * 
+ * Use WorkoutTemplatesDashboard instead for the modern template-focused UI with:
+ * - Persistent timer integration
+ * - Modern session tracking with ActiveWorkoutScreen
+ * - Template management and quick workout creation
+ * 
+ * @deprecated Use WorkoutTemplatesDashboard and WorkoutFlow navigation instead
+ */
+@Deprecated(
+    message = "Use WorkoutTemplatesDashboard and WorkoutFlow navigation instead",
+    replaceWith = ReplaceWith("WorkoutTemplatesDashboard")
+)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkoutScreen(
     user: User,
     modifier: Modifier = Modifier,
+    onNavigateToCustomWorkout: () -> Unit = {},
     viewModel: WorkoutViewModel = hiltViewModel()
 ) {
     val uiState: WorkoutUiState by viewModel.uiState.collectAsState()
@@ -94,7 +111,8 @@ fun WorkoutScreen(
                 user = user,
                 snackbarHostState = snackbarHostState,
                 onNavigateToWorkoutCreation = {
-                    screenState = WorkoutScreenState.WorkoutCreation
+                    // Use modern WorkoutFlow navigation instead of legacy creation screen
+                    onNavigateToCustomWorkout()
                 },
                 onWorkoutAction = { workout: Workout, action: WorkoutAction ->
                     when (action) {
@@ -118,16 +136,9 @@ fun WorkoutScreen(
             )
         }
         is WorkoutScreenState.WorkoutCreation -> {
-            UnifiedWorkoutCreationScreen(
-                onNavigateBack = { 
-                    screenState = WorkoutScreenState.WorkoutList 
-                },
-                onWorkoutCreated = { workoutId: String ->
-                    // Navigate back to workout list after successful creation
-                    screenState = WorkoutScreenState.WorkoutList
-                },
-                modifier = modifier
-            )
+            // This state is deprecated - navigation now goes directly to modern WorkoutFlow
+            // Fallback to WorkoutList if this state is somehow reached
+            screenState = WorkoutScreenState.WorkoutList
         }
         is WorkoutScreenState.TemplateSelection -> {
             val templateSelectionState = screenState as WorkoutScreenState.TemplateSelection

@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.liftrix.data.local.LiftrixDatabase
+import com.example.liftrix.data.local.dao.ActiveWorkoutSessionDao
 import com.example.liftrix.data.local.dao.CustomExerciseDao
 import com.example.liftrix.data.local.dao.ExerciseLibraryDao
 import com.example.liftrix.data.local.dao.UserProfileDao
@@ -13,7 +14,6 @@ import com.example.liftrix.data.local.dao.ExerciseDao
 import com.example.liftrix.data.local.dao.ExerciseSetDao
 import com.example.liftrix.data.local.dao.ExerciseWeightMemoryDao
 import com.example.liftrix.data.local.dao.ExerciseUsageHistoryDao
-import com.example.liftrix.data.local.dao.DailyWorkoutDao
 import com.example.liftrix.data.local.dao.WorkoutTemplateDao
 import com.example.liftrix.data.local.dao.FriendDao
 import com.example.liftrix.data.local.dao.PrivacySettingsDao
@@ -32,6 +32,9 @@ import com.example.liftrix.data.local.migration.MIGRATION_15_16
 import com.example.liftrix.data.local.migration.MIGRATION_16_17
 import com.example.liftrix.data.local.migration.MIGRATION_17_18
 import com.example.liftrix.data.local.migration.MIGRATION_18_19
+import com.example.liftrix.data.local.migration.MIGRATION_19_20
+import com.example.liftrix.data.local.migration.MIGRATION_20_21
+import com.example.liftrix.data.local.migration.MIGRATION_21_22
 import com.example.liftrix.data.local.MigrationValidator
 import dagger.Module
 import dagger.Provides
@@ -58,14 +61,14 @@ object DatabaseModule {
     ): LiftrixDatabase {
         // Validate migration chain at build time
         val availableMigrations = listOf(
-            6 to 7, 7 to 8, 8 to 9, 9 to 10, 10 to 11, 11 to 12, 12 to 13, 13 to 14, 14 to 15, 15 to 16, 16 to 17, 17 to 18, 18 to 19
+            6 to 7, 7 to 8, 8 to 9, 9 to 10, 10 to 11, 11 to 12, 12 to 13, 13 to 14, 14 to 15, 15 to 16, 16 to 17, 17 to 18, 18 to 19, 19 to 20, 20 to 21, 21 to 22
         )
-        MigrationValidator.validateMigrationChain(19, availableMigrations)
+        MigrationValidator.validateMigrationChain(22, availableMigrations)
         
         lateinit var database: LiftrixDatabase
         
         database = Room.databaseBuilder(
-            context,
+            context.applicationContext,
             LiftrixDatabase::class.java,
             "liftrix_database"
         )
@@ -82,14 +85,17 @@ object DatabaseModule {
                 MIGRATION_15_16,
                 MIGRATION_16_17,
                 MIGRATION_17_18,
-                MIGRATION_18_19
+                MIGRATION_18_19,
+                MIGRATION_19_20,
+                MIGRATION_20_21,
+                MIGRATION_21_22
             )
             .setTransactionExecutor(Dispatchers.IO.asExecutor())
             .setQueryExecutor(Dispatchers.IO.asExecutor())
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onCreate(db: SupportSQLiteDatabase) {
                     super.onCreate(db)
-                    Timber.i("🏗️ Database created from scratch at version 19")
+                    Timber.i("🏗️ Database created from scratch at version 22")
                 }
                 
                 override fun onOpen(db: SupportSQLiteDatabase) {
@@ -97,7 +103,8 @@ object DatabaseModule {
                     Timber.d("📖 Database connection opened (routine operation)")
                 }
             })
-            // Add fallback strategy for migration issues
+            // Temporary fallback for development - enables database recreation on schema mismatch
+            // TODO: Remove this for production builds and ensure proper migration testing
             .fallbackToDestructiveMigration()
             .fallbackToDestructiveMigrationOnDowngrade(true)
             .build()
@@ -117,7 +124,7 @@ object DatabaseModule {
                 val tableExists = cursor.moveToFirst()
                 cursor.close()
                 
-                if (version == 19 && tableExists) {
+                if (version == 22 && tableExists) {
                     Timber.i("✅ Database ready - all migrations complete, exercise_usage_history confirmed")
                 } else {
                     Timber.w("⚠️ Database initialization issue - version: $version, table exists: $tableExists")
@@ -169,10 +176,6 @@ object DatabaseModule {
         return database.exerciseWeightMemoryDao()
     }
 
-    @Provides
-    fun provideDailyWorkoutDao(database: LiftrixDatabase): DailyWorkoutDao {
-        return database.dailyWorkoutDao()
-    }
 
     @Provides
     fun provideWorkoutTemplateDao(database: LiftrixDatabase): WorkoutTemplateDao {
@@ -192,6 +195,11 @@ object DatabaseModule {
     @Provides
     fun providePrivacySettingsDao(database: LiftrixDatabase): PrivacySettingsDao {
         return database.privacySettingsDao()
+    }
+
+    @Provides
+    fun provideActiveWorkoutSessionDao(database: LiftrixDatabase): ActiveWorkoutSessionDao {
+        return database.activeWorkoutSessionDao()
     }
 
 } 

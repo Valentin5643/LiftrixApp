@@ -69,4 +69,4 @@ fun ExerciseSearchField(
                 contentDescription = "Exercise search field"
             }
     )
-} 
+}

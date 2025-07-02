@@ -71,7 +71,7 @@ data class TemplateExercise(
                 exerciseId = exercise.id,
                 name = exercise.libraryExercise.name,
                 primaryMuscle = exercise.libraryExercise.primaryMuscleGroup,
-                equipment = Equipment.BODYWEIGHT_ONLY, // Default, should be determined from exercise
+                equipment = exercise.libraryExercise.equipment,
                 targetSets = targetSets ?: exercise.targetSets,
                 targetReps = targetReps ?: exercise.targetReps?.let { Reps(it) },
                 targetWeight = targetWeight ?: exercise.targetWeight,

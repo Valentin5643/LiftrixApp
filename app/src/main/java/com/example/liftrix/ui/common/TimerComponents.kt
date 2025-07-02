@@ -130,7 +130,7 @@ fun TimerDisplay(
     modifier: Modifier = Modifier
 ) {
     Text(
-        text = formatTime(elapsedTime),
+        text = formatDurationTime(elapsedTime),
         style = MaterialTheme.typography.headlineMedium,
         fontWeight = FontWeight.Bold,
         modifier = modifier
@@ -152,7 +152,7 @@ fun RestTimerDisplay(
             style = MaterialTheme.typography.titleSmall
         )
         Text(
-            text = formatTime(timeRemaining),
+            text = formatDurationTime(timeRemaining),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
@@ -179,7 +179,7 @@ fun SessionControlButton(
     }
 }
 
-fun formatTime(timeInSeconds: Long): String {
+fun formatDurationTime(timeInSeconds: Long): String {
     val hours = timeInSeconds / 3600
     val minutes = (timeInSeconds % 3600) / 60
     val seconds = timeInSeconds % 60

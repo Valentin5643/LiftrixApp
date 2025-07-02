@@ -47,14 +47,33 @@ class ExerciseLibrarySeedData @Inject constructor(
         withContext(Dispatchers.IO) {
             try {
                 val exerciseCount = database.exerciseLibraryDao().getExerciseCount()
+                Timber.d("ExerciseLibrarySeedData: Current exercise count: $exerciseCount")
+                
                 if (exerciseCount == 0) {
                     Timber.d("Exercise library empty, populating with seed data")
                     populateExerciseLibrary(database)
+                    
+                    // Verify population succeeded
+                    val newCount = database.exerciseLibraryDao().getExerciseCount()
+                    Timber.d("ExerciseLibrarySeedData: After population, exercise count: $newCount")
+                    
+                    if (newCount == 0) {
+                        Timber.e("ExerciseLibrarySeedData: Population failed - no exercises were inserted")
+                    } else {
+                        Timber.i("ExerciseLibrarySeedData: Successfully populated $newCount exercises")
+                    }
                 } else {
                     Timber.d("Exercise library already populated with $exerciseCount exercises")
                 }
             } catch (e: Exception) {
-                Timber.e(e, "Error checking exercise library count")
+                Timber.e(e, "Error checking exercise library count or populating")
+                // Try to populate anyway if count check failed
+                try {
+                    Timber.d("ExerciseLibrarySeedData: Attempting population after count check failure")
+                    populateExerciseLibrary(database)
+                } catch (populateException: Exception) {
+                    Timber.e(populateException, "ExerciseLibrarySeedData: Population also failed")
+                }
             }
         }
     }
@@ -65,11 +84,23 @@ class ExerciseLibrarySeedData @Inject constructor(
     suspend fun populateExerciseLibrary(database: LiftrixDatabase) {
         withContext(Dispatchers.IO) {
             try {
+                Timber.d("ExerciseLibrarySeedData: Starting to load exercises from JSON")
                 val exercises = loadExercisesFromJson()
-                val entities = exercises.map { convertToEntity(it) }
+                Timber.d("ExerciseLibrarySeedData: Loaded ${exercises.size} exercises from JSON")
                 
-                database.exerciseLibraryDao().insertExercises(entities)
-                Timber.d("Successfully populated exercise library with ${entities.size} exercises")
+                val entities = exercises.map { convertToEntity(it) }
+                Timber.d("ExerciseLibrarySeedData: Converted to ${entities.size} entities")
+                
+                val insertResults = database.exerciseLibraryDao().insertExercises(entities)
+                Timber.d("ExerciseLibrarySeedData: Insert results: ${insertResults.size} IDs returned")
+                
+                // Verify actual insertion
+                val finalCount = database.exerciseLibraryDao().getExerciseCount()
+                Timber.i("ExerciseLibrarySeedData: Final database count after insertion: $finalCount")
+                
+                if (finalCount != entities.size) {
+                    Timber.w("ExerciseLibrarySeedData: Mismatch - tried to insert ${entities.size}, but database has $finalCount")
+                }
                 
             } catch (e: Exception) {
                 Timber.e(e, "Error populating exercise library")

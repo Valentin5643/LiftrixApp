@@ -59,7 +59,7 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
         
         val tables = listOf(
             "workouts", "simple_workouts", "simple_exercises", "exercises", 
-            "exercise_sets", "exercise_weight_memory", "daily_workouts", 
+            "exercise_sets", "exercise_weight_memory", 
             "workout_templates", "custom_exercises", "user_profiles", 
             "exercise_library"
         )
@@ -97,11 +97,6 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
             "DROP INDEX IF EXISTS index_exercise_sets_exercise_id",
             "DROP INDEX IF EXISTS index_exercise_sets_set_number",
             "DROP INDEX IF EXISTS index_exercise_sets_completed_at",
-            "DROP INDEX IF EXISTS index_daily_workouts_user_id",
-            "DROP INDEX IF EXISTS index_daily_workouts_date_user_id",
-            "DROP INDEX IF EXISTS index_daily_workouts_template_id",
-            "DROP INDEX IF EXISTS index_daily_workouts_status",
-            "DROP INDEX IF EXISTS index_daily_workouts_created_at",
             "DROP INDEX IF EXISTS index_workout_templates_user_id",
             "DROP INDEX IF EXISTS index_workout_templates_name_user_id",
             "DROP INDEX IF EXISTS index_workout_templates_created_at",
@@ -122,7 +117,7 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
         // Drop all tables
         val tables = listOf(
             "workouts", "simple_workouts", "simple_exercises", "exercises",
-            "exercise_sets", "exercise_weight_memory", "daily_workouts",
+            "exercise_sets", "exercise_weight_memory",
             "workout_templates", "custom_exercises", "user_profiles",
             "exercise_library"
         )
@@ -239,31 +234,6 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
             )
         """)
         
-        // Create daily_workouts table - matching DailyWorkoutEntity
-        database.execSQL("""
-            CREATE TABLE daily_workouts (
-                id TEXT PRIMARY KEY NOT NULL,
-                user_id TEXT NOT NULL,
-                name TEXT NOT NULL,
-                date TEXT NOT NULL,
-                template_id TEXT,
-                exercises_json TEXT NOT NULL,
-                status TEXT NOT NULL,
-                start_time TEXT,
-                end_time TEXT,
-                duration_minutes INTEGER,
-                total_volume_kg REAL,
-                total_sets INTEGER,
-                total_reps INTEGER,
-                notes TEXT,
-                rating INTEGER,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                is_synced INTEGER NOT NULL DEFAULT 0,
-                sync_version INTEGER NOT NULL DEFAULT 1,
-                FOREIGN KEY(template_id) REFERENCES workout_templates(id) ON DELETE SET NULL
-            )
-        """)
         
         // Create workout_templates table
         database.execSQL("""
@@ -355,7 +325,6 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
         restoreExercisesData(database)
         restoreExerciseSetsData(database)
         restoreExerciseWeightMemoryData(database)
-        restoreDailyWorkoutsData(database)
         restoreWorkoutTemplatesData(database)
         restoreCustomExercisesData(database)
         restoreUserProfilesData(database)
@@ -545,51 +514,6 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
         }
     }
 
-    private fun restoreDailyWorkoutsData(database: SupportSQLiteDatabase) {
-        if (!tableExists(database, "daily_workouts_backup")) return
-        
-        try {
-            database.execSQL("""
-                INSERT INTO daily_workouts (
-                    id, user_id, name, date, template_id, exercises_json, status,
-                    start_time, end_time, duration_minutes, total_volume_kg, total_sets, 
-                    total_reps, notes, rating, created_at, updated_at, is_synced, sync_version
-                )
-                SELECT 
-                    id,
-                    COALESCE(user_id, 'unknown') as user_id,
-                    COALESCE(name, 'Daily Workout') as name,
-                    COALESCE(date, date('now')) as date,
-                    template_id,
-                    COALESCE(exercises_json, '[]') as exercises_json,
-                    COALESCE(status, 'PLANNED') as status,
-                    start_time,
-                    end_time,
-                    duration_minutes,
-                    total_volume_kg,
-                    total_sets,
-                    total_reps,
-                    notes,
-                    rating,
-                    CASE 
-                        WHEN typeof(created_at) = 'integer' THEN datetime(created_at/1000, 'unixepoch')
-                        WHEN typeof(created_at) = 'text' THEN created_at
-                        ELSE datetime('now')
-                    END as created_at,
-                    CASE 
-                        WHEN typeof(updated_at) = 'integer' THEN datetime(updated_at/1000, 'unixepoch')
-                        WHEN typeof(updated_at) = 'text' THEN updated_at
-                        ELSE datetime('now')
-                    END as updated_at,
-                    COALESCE(is_synced, 0) as is_synced,
-                    COALESCE(sync_version, 1) as sync_version
-                FROM daily_workouts_backup
-            """)
-            Log.d("Migration_9_10", "Daily workouts data restored successfully")
-        } catch (e: Exception) {
-            Log.w("Migration_9_10", "Failed to restore daily workouts data: ${e.message}")
-        }
-    }
 
     private fun restoreWorkoutTemplatesData(database: SupportSQLiteDatabase) {
         if (!tableExists(database, "workout_templates_backup")) return

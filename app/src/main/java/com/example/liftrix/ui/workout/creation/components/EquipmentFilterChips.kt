@@ -1,10 +1,14 @@
 package com.example.liftrix.ui.workout.creation.components
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
@@ -121,6 +125,100 @@ fun MuscleGroupFilterChips(
     }
 }
 
+/**
+ * Unified horizontal scrollable filter chips for both equipment and muscle groups
+ * Provides a compact single-row layout to maximize exercise list visibility
+ */
+@Composable
+fun UnifiedFilterChips(
+    selectedEquipment: Set<Equipment>,
+    onEquipmentSelectionChange: (Set<Equipment>) -> Unit,
+    selectedMuscleGroups: Set<com.example.liftrix.domain.model.ExerciseCategory>,
+    onMuscleGroupSelectionChange: (Set<com.example.liftrix.domain.model.ExerciseCategory>) -> Unit,
+    modifier: Modifier = Modifier,
+    availableEquipment: List<Equipment> = Equipment.entries,
+    availableMuscleGroups: List<com.example.liftrix.domain.model.ExerciseCategory> = com.example.liftrix.domain.model.ExerciseCategory.entries
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Equipment chips with primary color scheme
+        availableEquipment.forEach { equipment ->
+            val isSelected = selectedEquipment.contains(equipment)
+            
+            FilterChip(
+                onClick = {
+                    val newSelection = if (isSelected) {
+                        selectedEquipment - equipment
+                    } else {
+                        selectedEquipment + equipment
+                    }
+                    onEquipmentSelectionChange(newSelection)
+                },
+                label = {
+                    Text(
+                        text = equipment.displayName,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                },
+                selected = isSelected,
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ),
+                modifier = Modifier
+                    .heightIn(min = 32.dp)
+                    .semantics {
+                        contentDescription = if (isSelected) {
+                            "Remove ${equipment.displayName} equipment filter"
+                        } else {
+                            "Add ${equipment.displayName} equipment filter"
+                        }
+                    }
+            )
+        }
+        
+        // Muscle group chips with secondary color scheme for visual distinction
+        availableMuscleGroups.forEach { muscleGroup ->
+            val isSelected = selectedMuscleGroups.contains(muscleGroup)
+            
+            FilterChip(
+                onClick = {
+                    val newSelection = if (isSelected) {
+                        selectedMuscleGroups - muscleGroup
+                    } else {
+                        selectedMuscleGroups + muscleGroup
+                    }
+                    onMuscleGroupSelectionChange(newSelection)
+                },
+                label = {
+                    Text(
+                        text = muscleGroup.displayName,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                },
+                selected = isSelected,
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
+                ),
+                modifier = Modifier
+                    .heightIn(min = 32.dp)
+                    .semantics {
+                        contentDescription = if (isSelected) {
+                            "Remove ${muscleGroup.displayName} muscle group filter"
+                        } else {
+                            "Add ${muscleGroup.displayName} muscle group filter"
+                        }
+                    }
+            )
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 private fun EquipmentFilterChipsPreview() {
@@ -146,4 +244,21 @@ private fun MuscleGroupFilterChipsPreview() {
             modifier = Modifier.padding(16.dp)
         )
     }
-} 
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun UnifiedFilterChipsPreview() {
+    LiftrixTheme {
+        UnifiedFilterChips(
+            selectedEquipment = setOf(Equipment.DUMBBELLS, Equipment.BARBELL),
+            onEquipmentSelectionChange = {},
+            selectedMuscleGroups = setOf(
+                com.example.liftrix.domain.model.ExerciseCategory.CHEST,
+                com.example.liftrix.domain.model.ExerciseCategory.SHOULDERS
+            ),
+            onMuscleGroupSelectionChange = {},
+            modifier = Modifier.padding(16.dp)
+        )
+    }
+}

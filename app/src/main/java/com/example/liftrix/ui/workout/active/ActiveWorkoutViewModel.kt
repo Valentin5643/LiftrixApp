@@ -3,6 +3,8 @@ package com.example.liftrix.ui.workout.active
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.data.repository.WorkoutRepository
+import com.example.liftrix.domain.model.Exercise
+import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.model.ExerciseSet
 import com.example.liftrix.domain.model.ExerciseSetId
 import com.example.liftrix.domain.model.Reps
@@ -15,6 +17,10 @@ import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.service.FirebasePresenceService
 import com.example.liftrix.service.TimerServiceManager
 import com.example.liftrix.service.WorkoutTimerService
+import com.example.liftrix.domain.usecase.template.CreateTemplateFromSessionUseCase
+import com.example.liftrix.domain.usecase.exercise.SearchExercisesUseCase
+import com.example.liftrix.domain.usecase.exercise.SearchableExercise
+import com.example.liftrix.domain.model.Equipment
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,7 +43,9 @@ class ActiveWorkoutViewModel @Inject constructor(
     private val timerServiceManager: TimerServiceManager,
     private val workoutRepository: WorkoutRepository,
     private val authRepository: AuthRepository,
-    private val presenceService: FirebasePresenceService
+    private val presenceService: FirebasePresenceService,
+    private val createTemplateFromSessionUseCase: CreateTemplateFromSessionUseCase,
+    private val searchExercisesUseCase: SearchExercisesUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ActiveWorkoutState())
@@ -47,6 +55,23 @@ class ActiveWorkoutViewModel @Inject constructor(
         bindTimerService()
         observeTimerState()
         loadActiveWorkout()
+        loadAvailableExercises()
+    }
+    
+    /**
+     * Loads available exercises for selection
+     */
+    private fun loadAvailableExercises() {
+        viewModelScope.launch {
+            try {
+                searchExercisesUseCase.search("", Equipment.values().toSet())
+                    .collect { exercises ->
+                        updateState { copy(availableExercises = exercises) }
+                    }
+            } catch (error: Exception) {
+                Timber.e(error, "Error loading available exercises")
+            }
+        }
     }
 
     /**
@@ -58,17 +83,222 @@ class ActiveWorkoutViewModel @Inject constructor(
             is ActiveWorkoutEvent.PauseSession -> pauseWorkoutSession()
             is ActiveWorkoutEvent.ResumeSession -> resumeWorkoutSession()
             is ActiveWorkoutEvent.StopSession -> stopWorkoutSession()
+            is ActiveWorkoutEvent.StartSessionFromTemplate -> startSessionFromTemplateInternal(event.templateId)
+            is ActiveWorkoutEvent.StartBlankSession -> startBlankSessionInternal()
+            is ActiveWorkoutEvent.ResumeExistingSession -> resumeExistingSessionInternal(event.sessionId)
             is ActiveWorkoutEvent.StartRest -> startRestTimer(event.restTimer)
             is ActiveWorkoutEvent.SkipRest -> skipRestTimer()
             is ActiveWorkoutEvent.AddExercise -> addExercise(event.exercise)
+            is ActiveWorkoutEvent.AddExerciseFromSelector -> addExerciseFromSelector(event.searchableExercise)
+            is ActiveWorkoutEvent.OnExerciseSearchQueryChanged -> onExerciseSearchQueryChanged(event.query)
+            is ActiveWorkoutEvent.OnExerciseSelected -> onExerciseSelected(event.exercise)
+            is ActiveWorkoutEvent.OnExerciseSelectorExpandedChanged -> onExerciseSelectorExpandedChanged(event.expanded)
             is ActiveWorkoutEvent.RemoveExercise -> removeExercise(event.exerciseIndex)
             is ActiveWorkoutEvent.AddSet -> addSetToExercise(event.exerciseIndex)
             is ActiveWorkoutEvent.UpdateSet -> updateExerciseSet(event.exerciseIndex, event.setIndex, event.set)
             is ActiveWorkoutEvent.RemoveSet -> removeSetFromExercise(event.exerciseIndex, event.setIndex)
             is ActiveWorkoutEvent.SaveWorkout -> saveCurrentWorkout()
+            is ActiveWorkoutEvent.SaveAsTemplate -> saveCurrentWorkoutAsTemplate(event.templateName, event.templateDescription)
             is ActiveWorkoutEvent.LoadWorkout -> loadWorkout(event.workoutId)
+            is ActiveWorkoutEvent.ShowExitConfirmation -> showExitConfirmationInternal()
+            is ActiveWorkoutEvent.HideExitConfirmation -> hideExitConfirmationInternal()
             is ActiveWorkoutEvent.ClearError -> clearError()
             is ActiveWorkoutEvent.DismissMessage -> dismissMessage()
+        }
+    }
+
+    // Convenience methods for WorkoutFlow compatibility
+    fun startSessionFromTemplate(templateId: String) {
+        onEvent(ActiveWorkoutEvent.StartSessionFromTemplate(templateId))
+    }
+
+    fun startBlankSession() {
+        onEvent(ActiveWorkoutEvent.StartBlankSession)
+    }
+
+    fun resumeSession(sessionId: String) {
+        onEvent(ActiveWorkoutEvent.ResumeExistingSession(sessionId))
+    }
+
+    fun hasUnsavedChanges(): Boolean {
+        return _uiState.value.hasUnsavedChanges
+    }
+
+    fun showExitConfirmation() {
+        onEvent(ActiveWorkoutEvent.ShowExitConfirmation)
+    }
+    
+    /**
+     * Adds an exercise from the exercise library to the current session
+     */
+    fun addExerciseToSession(exerciseLibrary: ExerciseLibrary) {
+        val exercise = convertExerciseLibraryToExercise(exerciseLibrary)
+        addExercise(exercise)
+    }
+    
+    /**
+     * Adds an exercise by ID (supports both library and custom exercises)
+     */
+    fun addExerciseById(exerciseId: String, isCustomExercise: Boolean) {
+        viewModelScope.launch {
+            try {
+                val searchableExercises = searchExercisesUseCase.search("", Equipment.values().toSet()).first()
+                val searchableExercise = searchableExercises.find { searchable ->
+                    when (searchable) {
+                        is SearchableExercise.LibraryExercise -> !isCustomExercise && searchable.exercise.id == exerciseId
+                        is SearchableExercise.CustomExercise -> isCustomExercise && searchable.exercise.id.value == exerciseId
+                    }
+                }
+                
+                searchableExercise?.let { exercise ->
+                    addExerciseFromSelector(exercise)
+                }
+            } catch (e: Exception) {
+                updateState { copy(error = "Failed to add exercise: ${e.message}") }
+            }
+        }
+    }
+
+    val sessionId: String?
+        get() = _uiState.value.sessionId
+
+    /**
+     * Starts a session from a workout template
+     */
+    private fun startSessionFromTemplateInternal(templateId: String) {
+        viewModelScope.launch {
+            try {
+                updateState { copy(isLoading = true) }
+                
+                // TODO: Load template and create workout from it
+                // For now, create a basic workout with the template ID as reference
+                val sessionId = "session_${System.currentTimeMillis()}"
+                createNewWorkoutFromTemplate(templateId, sessionId)
+                
+                // Start the timer session
+                startWorkoutSession()
+                
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to start session from template: $templateId")
+                updateState { 
+                    copy(
+                        isLoading = false,
+                        error = "Failed to start session from template: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Starts a blank workout session
+     */
+    private fun startBlankSessionInternal() {
+        viewModelScope.launch {
+            try {
+                val sessionId = "session_${System.currentTimeMillis()}"
+                updateState { copy(sessionId = sessionId) }
+                
+                // Create new blank workout
+                createNewWorkout()
+                
+                // Start the timer session
+                startWorkoutSession()
+                
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to start blank session")
+                updateState { 
+                    copy(error = "Failed to start blank session: ${e.message}")
+                }
+            }
+        }
+    }
+
+    /**
+     * Resumes an existing workout session
+     */
+    private fun resumeExistingSessionInternal(sessionId: String) {
+        viewModelScope.launch {
+            try {
+                updateState { copy(isLoading = true, sessionId = sessionId) }
+                
+                // TODO: Load existing session data
+                // For now, just set the session ID and load active workout
+                loadActiveWorkout()
+                
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to resume session: $sessionId")
+                updateState { 
+                    copy(
+                        isLoading = false,
+                        error = "Failed to resume session: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Shows exit confirmation dialog
+     */
+    private fun showExitConfirmationInternal() {
+        updateState { copy(showExitConfirmation = true) }
+    }
+
+    /**
+     * Hides exit confirmation dialog
+     */
+    private fun hideExitConfirmationInternal() {
+        updateState { copy(showExitConfirmation = false) }
+    }
+
+    /**
+     * Creates a new workout from a template
+     */
+    private suspend fun createNewWorkoutFromTemplate(templateId: String, sessionId: String) {
+        try {
+            val user = authRepository.currentUser.first()
+            if (user == null) {
+                updateState { 
+                    copy(
+                        isLoading = false,
+                        error = "User not authenticated"
+                    )
+                }
+                return
+            }
+            
+            val now = java.time.Instant.now()
+            val newWorkout = Workout(
+                userId = user.uid,
+                id = WorkoutId.generate(),
+                name = "Workout from Template",
+                date = java.time.LocalDate.now(),
+                exercises = emptyList(), // TODO: Load exercises from template
+                status = WorkoutStatus.IN_PROGRESS,
+                startTime = now,
+                endTime = null,
+                createdAt = now,
+                updatedAt = now
+            )
+            
+            updateState { 
+                copy(
+                    isLoading = false,
+                    currentWorkout = newWorkout,
+                    hasActiveWorkout = true,
+                    hasUnsavedChanges = true,
+                    sessionId = sessionId
+                )
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to create workout from template: $templateId")
+            updateState { 
+                copy(
+                    isLoading = false,
+                    error = "Failed to create workout from template: ${e.message}"
+                )
+            }
         }
     }
 
@@ -279,12 +509,168 @@ class ActiveWorkoutViewModel @Inject constructor(
     /**
      * Adds an exercise to the current workout
      */
-    private fun addExercise(exercise: WorkoutExercise) {
-        // TODO: Convert WorkoutExercise to Exercise - this is a type mismatch that needs proper conversion
-        // For now, just mark as having unsaved changes
+    private fun addExercise(exercise: Exercise) {
         updateState {
-            copy(hasUnsavedChanges = true)
+            val currentWorkout = this.currentWorkout ?: return@updateState this
+            
+            // Set the order index and workout ID for the new exercise
+            val exerciseWithCorrectIds = exercise.copy(
+                workoutId = currentWorkout.id,
+                orderIndex = currentWorkout.exercises.size
+            )
+            val updatedExercises = currentWorkout.exercises + exerciseWithCorrectIds
+            
+            copy(
+                currentWorkout = currentWorkout.copy(exercises = updatedExercises),
+                hasUnsavedChanges = true
+            )
         }
+    }
+    
+    /**
+     * Adds an exercise from the search selector to the workout
+     */
+    private fun addExerciseFromSelector(searchableExercise: SearchableExercise) {
+        val exercise = convertSearchableExerciseToExercise(searchableExercise)
+        addExercise(exercise)
+        
+        // Clear selection after adding
+        updateState {
+            copy(
+                selectedExercise = null,
+                exerciseSearchQuery = "",
+                isExerciseSelectorExpanded = false
+            )
+        }
+    }
+    
+    /**
+     * Converts ExerciseLibrary to Exercise domain model
+     */
+    private fun convertExerciseLibraryToExercise(exerciseLibrary: ExerciseLibrary): Exercise {
+        val currentWorkout = _uiState.value.currentWorkout
+        val workoutId = currentWorkout?.id ?: WorkoutId.generate()
+        
+        return Exercise(
+            id = com.example.liftrix.domain.model.ExerciseId.generate(),
+            workoutId = workoutId,
+            libraryExercise = exerciseLibrary,
+            orderIndex = currentWorkout?.exercises?.size ?: 0,
+            targetSets = null,
+            targetReps = null,
+            targetWeight = null,
+            targetTime = null,
+            targetDistance = null,
+            sets = createInitialSets(),
+            notes = null,
+            createdAt = java.time.Instant.now()
+        )
+    }
+    
+    /**
+     * Creates initial sets for a new exercise (3 sets with default values)
+     */
+    private fun createInitialSets(): List<ExerciseSet> {
+        return (1..3).map { setNumber ->
+            ExerciseSet(
+                id = ExerciseSetId.generate(),
+                setNumber = setNumber,
+                reps = null,
+                weight = null,
+                distance = null,
+                completedAt = null,
+                notes = null
+            )
+        }
+    }
+    
+    /**
+     * Converts SearchableExercise to Exercise domain model
+     */
+    private fun convertSearchableExerciseToExercise(searchableExercise: SearchableExercise): Exercise {
+        val currentWorkout = _uiState.value.currentWorkout
+        val workoutId = currentWorkout?.id ?: WorkoutId.generate()
+        
+        return when (searchableExercise) {
+            is SearchableExercise.LibraryExercise -> {
+                val libraryExercise = searchableExercise.exercise
+                Exercise(
+                    id = com.example.liftrix.domain.model.ExerciseId.generate(),
+                    workoutId = workoutId,
+                    libraryExercise = libraryExercise,
+                    orderIndex = currentWorkout?.exercises?.size ?: 0,
+                    targetSets = null,
+                    targetReps = null,
+                    targetWeight = null,
+                    targetTime = null,
+                    targetDistance = null,
+                    sets = createInitialSets(),
+                    notes = null,
+                    createdAt = java.time.Instant.now()
+                )
+            }
+            is SearchableExercise.CustomExercise -> {
+                val customExercise = searchableExercise.exercise
+                Exercise(
+                    id = com.example.liftrix.domain.model.ExerciseId.generate(),
+                    workoutId = workoutId,
+                    libraryExercise = com.example.liftrix.domain.model.ExerciseLibrary(
+                        id = customExercise.id.value,
+                        name = customExercise.name,
+                        primaryMuscleGroup = customExercise.primaryMuscle,
+                        equipment = customExercise.equipment,
+                        secondaryMuscleGroups = emptyList(),
+                        movementPattern = "Custom Exercise",
+                        difficultyLevel = 3,
+                        instructions = customExercise.notes ?: "Custom exercise added by user",
+                        isCompound = false,
+                        searchableTerms = listOf(customExercise.name.lowercase())
+                    ),
+                    orderIndex = currentWorkout?.exercises?.size ?: 0,
+                    targetSets = null,
+                    targetReps = null,
+                    targetWeight = null,
+                    targetTime = null,
+                    targetDistance = null,
+                    sets = createInitialSets(),
+                    notes = customExercise.notes,
+                    createdAt = java.time.Instant.now()
+                )
+            }
+        }
+    }
+    
+    /**
+     * Updates exercise search query
+     */
+    private fun onExerciseSearchQueryChanged(query: String) {
+        updateState { copy(exerciseSearchQuery = query) }
+        
+        // Perform search
+        viewModelScope.launch {
+            try {
+                searchExercisesUseCase.search(query, Equipment.values().toSet())
+                    .collect { exercises ->
+                        updateState { copy(availableExercises = exercises) }
+                    }
+            } catch (error: Exception) {
+                Timber.e(error, "Error searching exercises")
+            }
+        }
+    }
+    
+    /**
+     * Updates selected exercise
+     */
+    private fun onExerciseSelected(exercise: SearchableExercise?) {
+        updateState { copy(selectedExercise = exercise) }
+    }
+    
+    /**
+     * Updates exercise selector expanded state
+     */
+    private fun onExerciseSelectorExpandedChanged(expanded: Boolean) {
+        updateState { copy(isExerciseSelectorExpanded = expanded) }
     }
 
     /**
@@ -390,7 +776,7 @@ class ActiveWorkoutViewModel @Inject constructor(
     /**
      * Creates a new empty workout for the current session
      */
-    private suspend fun createNewWorkout() {
+    private suspend fun createNewWorkout(sessionId: String? = null) {
         try {
             val user = authRepository.currentUser.first() ?: return
             
@@ -412,7 +798,8 @@ class ActiveWorkoutViewModel @Inject constructor(
                 copy(
                     currentWorkout = newWorkout,
                     hasActiveWorkout = true,
-                    hasUnsavedChanges = true
+                    hasUnsavedChanges = true,
+                    sessionId = sessionId ?: "session_${System.currentTimeMillis()}"
                 )
             }
         } catch (e: Exception) {
@@ -454,6 +841,50 @@ class ActiveWorkoutViewModel @Inject constructor(
                     copy(
                         isSaving = false,
                         error = "Failed to save workout: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Saves the current session as a workout template
+     */
+    private fun saveCurrentWorkoutAsTemplate(templateName: String, templateDescription: String?) {
+        viewModelScope.launch {
+            try {
+                val session = _uiState.value.currentSession ?: return@launch
+                
+                updateState { copy(isSaving = true) }
+                
+                val result = createTemplateFromSessionUseCase(session, templateName, templateDescription)
+                if (result.isSuccess) {
+                    // Also save the workout to history
+                    _uiState.value.currentWorkout?.let { workout ->
+                        workoutRepository.saveWorkout(workout)
+                    }
+                    
+                    updateState { 
+                        copy(
+                            isSaving = false,
+                            hasUnsavedChanges = false,
+                            successMessage = "Template '$templateName' created successfully"
+                        )
+                    }
+                } else {
+                    updateState { 
+                        copy(
+                            isSaving = false,
+                            error = "Failed to create template: ${result.exceptionOrNull()?.message}"
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to save workout as template")
+                updateState { 
+                    copy(
+                        isSaving = false,
+                        error = "Failed to create template: ${e.message}"
                     )
                 }
             }
@@ -575,12 +1006,20 @@ data class ActiveWorkoutState(
     val hasActiveWorkout: Boolean = false,
     val hasUnsavedChanges: Boolean = false,
     val currentWorkout: Workout? = null,
+    val currentSession: com.example.liftrix.domain.model.ActiveWorkoutSession? = null,
+    val sessionId: String? = null,
+    val showExitConfirmation: Boolean = false,
     val timerState: WorkoutTimerService.TimerServiceState = WorkoutTimerService.TimerServiceState(),
     val formattedSessionTime: String = "00:00",
     val formattedRestTime: String = "",
     val error: String? = null,
     val connectionError: String? = null,
-    val successMessage: String? = null
+    val successMessage: String? = null,
+    // Exercise search functionality
+    val availableExercises: List<SearchableExercise> = emptyList(),
+    val exerciseSearchQuery: String = "",
+    val selectedExercise: SearchableExercise? = null,
+    val isExerciseSelectorExpanded: Boolean = false
 )
 
 /**
@@ -591,15 +1030,25 @@ sealed class ActiveWorkoutEvent {
     data object PauseSession : ActiveWorkoutEvent()
     data object ResumeSession : ActiveWorkoutEvent()
     data object StopSession : ActiveWorkoutEvent()
+    data class StartSessionFromTemplate(val templateId: String) : ActiveWorkoutEvent()
+    data object StartBlankSession : ActiveWorkoutEvent()
+    data class ResumeExistingSession(val sessionId: String) : ActiveWorkoutEvent()
     data class StartRest(val restTimer: RestTimer) : ActiveWorkoutEvent()
     data object SkipRest : ActiveWorkoutEvent()
-    data class AddExercise(val exercise: WorkoutExercise) : ActiveWorkoutEvent()
+    data class AddExercise(val exercise: Exercise) : ActiveWorkoutEvent()
+    data class AddExerciseFromSelector(val searchableExercise: SearchableExercise) : ActiveWorkoutEvent()
+    data class OnExerciseSearchQueryChanged(val query: String) : ActiveWorkoutEvent()
+    data class OnExerciseSelected(val exercise: SearchableExercise?) : ActiveWorkoutEvent()
+    data class OnExerciseSelectorExpandedChanged(val expanded: Boolean) : ActiveWorkoutEvent()
     data class RemoveExercise(val exerciseIndex: Int) : ActiveWorkoutEvent()
     data class AddSet(val exerciseIndex: Int) : ActiveWorkoutEvent()
     data class UpdateSet(val exerciseIndex: Int, val setIndex: Int, val set: ExerciseSet) : ActiveWorkoutEvent()
     data class RemoveSet(val exerciseIndex: Int, val setIndex: Int) : ActiveWorkoutEvent()
     data object SaveWorkout : ActiveWorkoutEvent()
+    data class SaveAsTemplate(val templateName: String, val templateDescription: String?) : ActiveWorkoutEvent()
     data class LoadWorkout(val workoutId: WorkoutId) : ActiveWorkoutEvent()
+    data object ShowExitConfirmation : ActiveWorkoutEvent()
+    data object HideExitConfirmation : ActiveWorkoutEvent()
     data object ClearError : ActiveWorkoutEvent()
     data object DismissMessage : ActiveWorkoutEvent()
 }

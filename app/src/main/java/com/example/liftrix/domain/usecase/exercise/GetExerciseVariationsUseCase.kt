@@ -25,7 +25,7 @@ class GetExerciseVariationsUseCase @Inject constructor(
      */
     suspend fun getVariations(
         exerciseId: String,
-        userEquipment: Set<Equipment> = Equipment.values().toSet()
+        userEquipment: Set<Equipment> = Equipment.entries.toSet()
     ): Flow<ExerciseGroup> {
         val userId = authRepository.getCurrentUserId()
         
@@ -95,7 +95,7 @@ class GetExerciseVariationsUseCase @Inject constructor(
      */
     suspend fun getVariationsByMovement(
         movementPattern: String,
-        userEquipment: Set<Equipment> = Equipment.values().toSet()
+        userEquipment: Set<Equipment> = Equipment.entries.toSet()
     ): Flow<ExerciseGroup> {
         val userId = authRepository.getCurrentUserId()
         
@@ -141,7 +141,7 @@ class GetExerciseVariationsUseCase @Inject constructor(
     suspend fun getVariationsByDifficulty(
         movementPattern: String,
         maxDifficulty: Int,
-        userEquipment: Set<Equipment> = Equipment.values().toSet()
+        userEquipment: Set<Equipment> = Equipment.entries.toSet()
     ): Flow<ExerciseGroup> {
         val userId = authRepository.getCurrentUserId()
         

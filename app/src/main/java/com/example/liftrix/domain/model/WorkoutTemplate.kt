@@ -274,10 +274,10 @@ data class WorkoutTemplate(
     }
     
     /**
-     * Creates a daily workout from this template
+     * Creates an active workout session from this template
      */
-    fun createDailyWorkout(): DailyWorkout {
-        return DailyWorkout.fromTemplate(this)
+    fun createActiveSession(userId: String, customName: String? = null): ActiveWorkoutSession {
+        return ActiveWorkoutSession.fromTemplate(userId, this, customName)
     }
     
     /**

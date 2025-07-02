@@ -424,9 +424,9 @@ class RecommendationCacheIntegrationTest {
         assertTrue(cacheValidBefore)
         assertEquals(2, retrievedRecommendations?.size)
         assertEquals("recommended-user-1", retrievedRecommendations?.first()?.userId)
-        assertEquals("Recommended User 1", retrievedRecommendations?.first()?.displayName)
+        assertEquals("Recommended User 1", retrievedRecommendations?.first()?.username)
         assertEquals("recommended-user-2", retrievedRecommendations?.get(1)?.userId)
-        assertEquals("Recommended User 2", retrievedRecommendations?.get(1)?.displayName)
+        assertEquals("Recommended User 2", retrievedRecommendations?.get(1)?.username)
         assertFalse(cacheValidAfter)
         
         // Verify cache operations

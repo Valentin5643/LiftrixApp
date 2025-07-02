@@ -1,4 +1,8 @@
 {
+  "env": {
+    "BASH_DEFAULT_TIMEOUT_MS": "900000",
+    "BASH_MAX_TIMEOUT_MS": "900000"
+  },
   "permissions": {
     "allow": [
       "Bash(grep:*)",
@@ -18,10 +22,31 @@
       "Bash(sudo ln:*)",
       "Bash(ln:*)",
       "Bash(cp:*)",
-      "Bash(timeout 180 ./gradlew compileDebugKotlin)",
+      "Bash(./gradlew :app:compileDebugKotlin)",
       "Bash(timeout:*)",
       "Bash(rm:*)",
-      "Bash(kotlinc:*)"
+      "Bash(kotlinc:*)",
+      "Bash(chmod:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs",
+      "Bash(jq:*)",
+      "Bash(sed:*)",
+      "Bash(mkdir:*)",
+      "Bash(git checkout:*)",
+      "Bash(../gradlew compileDebugKotlin:*)",
+      "Bash(echo \"BUILD_RESULT: $?\")",
+      "WebFetch(domain:github.com)",
+      "Bash(killall:*)",
+      "Bash(true)",
+      "Bash(kill:*)",
+      "WebFetch(domain:www.patrykandpatrick.com)",
+      "Bash(gradle clean:*)",
+      "WebFetch(domain:patrykandpatrick.com)",
+      "Bash(cat:*)",
+      "Bash(pkill:*)",
+      "mcp__ref__ref_search_documentation",
+      "WebFetch(domain:www.uinarrative.com)",
+      "WebFetch(domain:stormotion.io)"
     ]
   },
   "enableAllProjectMcpServers": true,

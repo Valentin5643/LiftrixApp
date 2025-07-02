@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
+import timber.log.Timber
 
 /**
  * Data class representing a group of exercise variations
@@ -74,7 +75,7 @@ class SearchExercisesUseCase @Inject constructor(
      */
     suspend fun search(
         query: String,
-        userEquipment: Set<Equipment> = Equipment.values().toSet()
+        userEquipment: Set<Equipment> = emptySet()
     ): Flow<List<SearchableExercise>> {
         val userId = authRepository.getCurrentUserId()
         
@@ -83,27 +84,38 @@ class SearchExercisesUseCase @Inject constructor(
                 exerciseLibraryRepository.searchExercises(query),
                 customExerciseRepository.searchCustomExercises(userId, query)
             ) { libraryExercises, customExercises ->
+                Timber.d("SearchExercisesUseCase: Raw library exercises count: ${libraryExercises.size}")
+                Timber.d("SearchExercisesUseCase: Query: '$query', userEquipment: $userEquipment")
+                
                 val libraryResults = libraryExercises
-                    .filter { userEquipment.contains(it.equipment) }
+                    .filter { userEquipment.isEmpty() || userEquipment.contains(it.equipment) }
                     .map { SearchableExercise.LibraryExercise(it) }
                 
                 val customResults = customExercises
-                    .filter { userEquipment.contains(it.equipment) }
+                    .filter { userEquipment.isEmpty() || userEquipment.contains(it.equipment) }
                     .map { SearchableExercise.CustomExercise(it) }
                 
-                (libraryResults + customResults)
+                val finalResults = (libraryResults + customResults)
                     .filter { it.calculateMatchScore(query) > 0.0 || query.isBlank() }
                     .sortedWith(compareByDescending<SearchableExercise> { it.calculateMatchScore(query) }
                         .thenBy { it.name })
+                
+                Timber.d("SearchExercisesUseCase: Final results count: ${finalResults.size}")
+                finalResults
             }
         } else {
             exerciseLibraryRepository.searchExercises(query).map { libraryExercises ->
-                libraryExercises
-                    .filter { userEquipment.contains(it.equipment) }
+                Timber.d("SearchExercisesUseCase: No user - Raw library exercises count: ${libraryExercises.size}")
+                
+                val finalResults = libraryExercises
+                    .filter { userEquipment.isEmpty() || userEquipment.contains(it.equipment) }
                     .map { SearchableExercise.LibraryExercise(it) }
                     .filter { it.calculateMatchScore(query) > 0.0 || query.isBlank() }
                     .sortedWith(compareByDescending<SearchableExercise> { it.calculateMatchScore(query) }
                         .thenBy { it.name })
+                
+                Timber.d("SearchExercisesUseCase: No user - Final results count: ${finalResults.size}")
+                finalResults
             }
         }
     }
@@ -111,7 +123,7 @@ class SearchExercisesUseCase @Inject constructor(
     /**
      * Get exercise variations grouped by movement pattern
      */
-    suspend fun getVariations(baseMovement: String, userEquipment: Set<Equipment> = Equipment.values().toSet()): Flow<List<ExerciseGroup>> {
+    suspend fun getVariations(baseMovement: String, userEquipment: Set<Equipment> = Equipment.entries.toSet()): Flow<List<ExerciseGroup>> {
         val userId = authRepository.getCurrentUserId()
         
         return if (userId != null) {
@@ -154,7 +166,7 @@ class SearchExercisesUseCase @Inject constructor(
      */
     suspend fun searchWithVariations(
         query: String,
-        userEquipment: Set<Equipment> = Equipment.values().toSet()
+        userEquipment: Set<Equipment> = emptySet()
     ): Flow<List<ExerciseGroup>> {
         val userId = authRepository.getCurrentUserId()
         
@@ -163,8 +175,8 @@ class SearchExercisesUseCase @Inject constructor(
                 exerciseLibraryRepository.searchExercises(query),
                 customExerciseRepository.searchCustomExercises(userId, query)
             ) { libraryExercises, customExercises ->
-                val filteredLibrary = libraryExercises.filter { userEquipment.contains(it.equipment) }
-                val filteredCustom = customExercises.filter { userEquipment.contains(it.equipment) }
+                val filteredLibrary = libraryExercises.filter { userEquipment.isEmpty() || userEquipment.contains(it.equipment) }
+                val filteredCustom = customExercises.filter { userEquipment.isEmpty() || userEquipment.contains(it.equipment) }
                 
                 val groupedByMovement = filteredLibrary.groupBy { it.movementPattern }
                 
@@ -185,7 +197,7 @@ class SearchExercisesUseCase @Inject constructor(
             }
         } else {
             exerciseLibraryRepository.searchExercises(query).map { libraryExercises ->
-                val filteredLibrary = libraryExercises.filter { userEquipment.contains(it.equipment) }
+                val filteredLibrary = libraryExercises.filter { userEquipment.isEmpty() || userEquipment.contains(it.equipment) }
                 val groupedByMovement = filteredLibrary.groupBy { it.movementPattern }
                 
                 groupedByMovement.map { (movementPattern, exercises) ->

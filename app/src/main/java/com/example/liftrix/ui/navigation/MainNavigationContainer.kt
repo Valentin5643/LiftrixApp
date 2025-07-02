@@ -32,6 +32,7 @@ import com.example.liftrix.ui.navigation.homeGraph
 import com.example.liftrix.ui.navigation.workoutGraph
 import com.example.liftrix.ui.navigation.progressGraph
 import com.example.liftrix.ui.navigation.coachGraph
+import com.example.liftrix.ui.navigation.WorkoutDestinations
 
 /**
  * Main navigation container that provides the primary navigation structure for the app.
@@ -151,7 +152,11 @@ fun MainNavigationContainer(
                 workoutGraph(
                     user = user,
                     onNavigateToAuth = onNavigateToAuth,
-                    navController = navController
+                    navController = navController,
+                    onNavigateToExerciseLibrary = {
+                        // TODO: Navigate to exercise library when implemented
+                        // For now, placeholder to satisfy the interface
+                    }
                 )
 
                 // Progress tab navigation graph
@@ -182,9 +187,11 @@ fun MainNavigationContainer(
                     restoreState = true
                 }
                 // Navigate to template selection screen within workout tab
-                if (navController.currentDestination?.route != WorkoutTabRoutes.TEMPLATE_MANAGEMENT) {
-                    navController.navigate(WorkoutTabRoutes.TEMPLATE_MANAGEMENT)
+                if (navController.currentDestination?.route != WorkoutDestinations.TEMPLATES_DASHBOARD) {
+                    navController.navigate(WorkoutDestinations.TEMPLATES_DASHBOARD)
                 }
+                // Hide the modal
+                viewModel.onEvent(MainNavigationEvent.HideWorkoutCreationModal)
             },
             onCustomWorkout = {
                 // Navigate to workout tab and trigger custom workout creation
@@ -195,8 +202,10 @@ fun MainNavigationContainer(
                     launchSingleTop = true
                     restoreState = true
                 }
-                // TODO: Add navigation to custom workout creation
-                // This will be handled by the WorkoutScreen's internal navigation
+                // Navigate directly to blank workout session using modern WorkoutFlow
+                navController.navigate("blank_workout_session")
+                // Hide the modal
+                viewModel.onEvent(MainNavigationEvent.HideWorkoutCreationModal)
             }
         )
     }

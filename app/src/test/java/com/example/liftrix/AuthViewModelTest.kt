@@ -2,12 +2,16 @@ package com.example.liftrix
 
 import com.example.liftrix.domain.model.AuthEvent
 import com.example.liftrix.domain.model.AuthState
+import com.example.liftrix.domain.model.SubscriptionStatus
+import com.example.liftrix.domain.model.SubscriptionTier
 import com.example.liftrix.domain.model.User
+import com.example.liftrix.domain.usecase.auth.ForgotPasswordUseCase
 import com.example.liftrix.domain.usecase.auth.SignInAnonymouslyUseCase
 import com.example.liftrix.domain.usecase.auth.SignInWithEmailUseCase
 import com.example.liftrix.domain.usecase.auth.SignInWithGoogleUseCase
 import com.example.liftrix.domain.usecase.auth.SignOutUseCase
 import com.example.liftrix.domain.usecase.auth.SignUpWithEmailUseCase
+import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.ui.auth.AuthViewModel
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -31,6 +35,8 @@ class AuthViewModelTest {
     private lateinit var signInWithGoogleUseCase: SignInWithGoogleUseCase
     private lateinit var signInAnonymouslyUseCase: SignInAnonymouslyUseCase
     private lateinit var signOutUseCase: SignOutUseCase
+    private lateinit var forgotPasswordUseCase: ForgotPasswordUseCase
+    private lateinit var authRepository: AuthRepository
     private lateinit var authViewModel: AuthViewModel
 
     private val testDispatcher = StandardTestDispatcher()
@@ -44,13 +50,17 @@ class AuthViewModelTest {
         signInWithGoogleUseCase = mockk()
         signInAnonymouslyUseCase = mockk()
         signOutUseCase = mockk()
+        forgotPasswordUseCase = mockk()
+        authRepository = mockk()
         
         authViewModel = AuthViewModel(
             signInWithEmailUseCase = signInWithEmailUseCase,
             signUpWithEmailUseCase = signUpWithEmailUseCase,
             signInWithGoogleUseCase = signInWithGoogleUseCase,
             signInAnonymouslyUseCase = signInAnonymouslyUseCase,
-            signOutUseCase = signOutUseCase
+            signOutUseCase = signOutUseCase,
+            forgotPasswordUseCase = forgotPasswordUseCase,
+            authRepository = authRepository
         )
     }
 
@@ -70,8 +80,15 @@ class AuthViewModelTest {
             displayName = "Test User",
             photoUrl = null,
             isAnonymous = false,
+            subscriptionTier = SubscriptionTier.FREE,
+            subscriptionStatus = SubscriptionStatus.ACTIVE,
+            subscriptionExpiresAt = null,
+            premiumFeaturesEnabled = false,
+            onboardingCompleted = true,
+            profileVersion = 1L,
             createdAt = LocalDateTime.now(),
-            lastSignInAt = LocalDateTime.now()
+            lastSignInAt = LocalDateTime.now(),
+            updatedAt = LocalDateTime.now()
         )
         
         coEvery { signInWithEmailUseCase(email, password) } returns Result.success(mockUser)
@@ -114,8 +131,15 @@ class AuthViewModelTest {
             displayName = null,
             photoUrl = null,
             isAnonymous = true,
+            subscriptionTier = SubscriptionTier.FREE,
+            subscriptionStatus = SubscriptionStatus.ACTIVE,
+            subscriptionExpiresAt = null,
+            premiumFeaturesEnabled = false,
+            onboardingCompleted = false,
+            profileVersion = 1L,
             createdAt = LocalDateTime.now(),
-            lastSignInAt = LocalDateTime.now()
+            lastSignInAt = LocalDateTime.now(),
+            updatedAt = LocalDateTime.now()
         )
         
         coEvery { signInAnonymouslyUseCase() } returns Result.success(mockUser)

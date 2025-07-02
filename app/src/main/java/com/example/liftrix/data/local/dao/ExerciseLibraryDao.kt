@@ -33,10 +33,7 @@ interface ExerciseLibraryDao {
     @Query("""
         SELECT * FROM exercise_library 
         WHERE name LIKE '%' || :query || '%' 
-        OR EXISTS (
-            SELECT 1 FROM json_each(searchable_terms) 
-            WHERE json_each.value LIKE '%' || :query || '%'
-        )
+        OR searchable_terms LIKE '%' || :query || '%'
         ORDER BY 
             CASE WHEN name LIKE :query || '%' THEN 1 ELSE 2 END,
             name ASC
@@ -99,8 +96,7 @@ interface ExerciseLibraryDao {
     @Query("""
         SELECT * FROM exercise_library 
         WHERE (primary_muscle_group = :muscleGroup OR 
-               EXISTS (SELECT 1 FROM json_each(secondary_muscle_groups) 
-                      WHERE json_each.value = :muscleGroup))
+               secondary_muscle_groups LIKE '%' || :muscleGroup || '%')
         AND is_compound = 1
         ORDER BY difficulty_level ASC
     """)

@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * Room migration from version 5 to 6.
  * Adds simple workout and exercise tables for the new simplified workout creation flow.
  */
-val MIGRATION_5_6 = object : Migration(5, 6) {
+/*val MIGRATION_5_6 = object : Migration(5, 6) {
     override fun migrate(database: SupportSQLiteDatabase) {
         // Create simple_workouts table
         database.execSQL(
@@ -65,3 +65,4 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
         )
     }
 }
+ */

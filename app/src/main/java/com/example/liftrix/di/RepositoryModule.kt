@@ -1,5 +1,6 @@
 package com.example.liftrix.di
 
+import com.example.liftrix.data.repository.ActiveWorkoutSessionRepositoryImpl
 import com.example.liftrix.data.repository.AuthRepositoryImpl
 import com.example.liftrix.data.repository.CustomExerciseRepositoryImpl
 import com.example.liftrix.data.repository.ExerciseLibraryRepositoryImpl
@@ -10,6 +11,7 @@ import com.example.liftrix.data.repository.WorkoutRepository
 import com.example.liftrix.data.repository.WorkoutRepositoryImpl
 import com.example.liftrix.data.repository.WorkoutTemplateRepositoryImpl
 import com.example.liftrix.data.repository.ExerciseRepositoryImpl
+import com.example.liftrix.domain.repository.ActiveWorkoutSessionRepository
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.CustomExerciseRepository
 import com.example.liftrix.domain.repository.ExerciseLibraryRepository
@@ -81,5 +83,11 @@ abstract class RepositoryModule {
     abstract fun bindSocialRepository(
         socialRepositoryImpl: SocialRepositoryImpl
     ): SocialRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindActiveWorkoutSessionRepository(
+        activeWorkoutSessionRepositoryImpl: ActiveWorkoutSessionRepositoryImpl
+    ): ActiveWorkoutSessionRepository
 
 } 

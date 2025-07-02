@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 19,
-    "identityHash": "e86eebda402857e99a401bcf26eb454f",
+    "identityHash": "921a6f6dbdf9fbee72284fec739dd315",
     "entities": [
       {
         "tableName": "workouts",
@@ -1267,11 +1267,183 @@
             "user_id"
           ]
         }
+      },
+      {
+        "tableName": "active_workout_sessions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `name` TEXT NOT NULL, `template_id` TEXT, `exercises_json` TEXT NOT NULL, `current_exercise_index` INTEGER NOT NULL DEFAULT 0, `session_state` TEXT NOT NULL, `started_at` TEXT NOT NULL, `paused_at` TEXT, `resumed_at` TEXT, `total_paused_duration` INTEGER NOT NULL DEFAULT 0, `notes` TEXT, `last_modified` TEXT NOT NULL, `rest_timer_start_time` TEXT, `rest_timer_duration_seconds` INTEGER, `rest_timer_paused_at` TEXT, `auto_save_enabled` INTEGER NOT NULL DEFAULT 1, `last_auto_save` TEXT, `recovery_data_json` TEXT, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "user_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "templateId",
+            "columnName": "template_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "exercisesJson",
+            "columnName": "exercises_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currentExerciseIndex",
+            "columnName": "current_exercise_index",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "sessionState",
+            "columnName": "session_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAt",
+            "columnName": "started_at",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pausedAt",
+            "columnName": "paused_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "resumedAt",
+            "columnName": "resumed_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "totalPausedDuration",
+            "columnName": "total_paused_duration",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "restTimerStartTime",
+            "columnName": "rest_timer_start_time",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "restTimerDurationSeconds",
+            "columnName": "rest_timer_duration_seconds",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "restTimerPausedAt",
+            "columnName": "rest_timer_paused_at",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "autoSaveEnabled",
+            "columnName": "auto_save_enabled",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          },
+          {
+            "fieldPath": "lastAutoSave",
+            "columnName": "last_auto_save",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "recoveryDataJson",
+            "columnName": "recovery_data_json",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isSynced",
+            "columnName": "is_synced",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "syncVersion",
+            "columnName": "sync_version",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_active_sessions_user_id",
+            "unique": false,
+            "columnNames": [
+              "user_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_active_sessions_user_id` ON `${TABLE_NAME}` (`user_id`)"
+          },
+          {
+            "name": "index_active_sessions_started_at",
+            "unique": false,
+            "columnNames": [
+              "started_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_active_sessions_started_at` ON `${TABLE_NAME}` (`started_at`)"
+          },
+          {
+            "name": "index_active_sessions_template_id",
+            "unique": false,
+            "columnNames": [
+              "template_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_active_sessions_template_id` ON `${TABLE_NAME}` (`template_id`)"
+          },
+          {
+            "name": "index_active_sessions_state",
+            "unique": false,
+            "columnNames": [
+              "session_state"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_active_sessions_state` ON `${TABLE_NAME}` (`session_state`)"
+          }
+        ]
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'e86eebda402857e99a401bcf26eb454f')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '921a6f6dbdf9fbee72284fec739dd315')"
     ]
   }
 }
