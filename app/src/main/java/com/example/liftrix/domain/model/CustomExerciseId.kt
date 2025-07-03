@@ -1,11 +1,13 @@
 package com.example.liftrix.domain.model
 
+import kotlinx.serialization.Serializable
 import java.util.UUID
 
 /**
  * Value class representing a unique identifier for a custom exercise
  */
 @JvmInline
+@Serializable
 value class CustomExerciseId(val value: String) {
     
     companion object {

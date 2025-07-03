@@ -18,6 +18,7 @@ import com.example.liftrix.data.local.dao.WorkoutTemplateDao
 import com.example.liftrix.data.local.dao.FriendDao
 import com.example.liftrix.data.local.dao.PrivacySettingsDao
 import com.example.liftrix.data.local.seed.ExerciseLibrarySeedData
+import com.example.liftrix.data.local.migration.MIGRATION_22_23
 
 
 import dagger.Module
@@ -45,12 +46,10 @@ object DatabaseModule {
     ): LiftrixDatabase {
         // Validate migration chain at build time
         val availableMigrations = listOf(
-            6 to 7, 7 to 8, 8 to 9, 9 to 10, 10 to 11, 11 to 12, 12 to 13, 13 to 14, 14 to 15, 15 to 16, 16 to 17, 17 to 18, 18 to 19, 19 to 20, 20 to 21, 21 to 22
+            6 to 7, 7 to 8, 8 to 9, 9 to 10, 10 to 11, 11 to 12, 12 to 13, 13 to 14, 14 to 15, 15 to 16, 16 to 17, 17 to 18, 18 to 19, 19 to 20, 20 to 21, 21 to 22, 22 to 23
         )
 
-        lateinit var database: LiftrixDatabase
-        
-        database = Room.databaseBuilder(
+        val database = Room.databaseBuilder(
             context.applicationContext,
             LiftrixDatabase::class.java,
             "liftrix_database"
@@ -60,7 +59,7 @@ object DatabaseModule {
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onCreate(db: SupportSQLiteDatabase) {
                     super.onCreate(db)
-                    Timber.i("🏗️ Database created from scratch at version 22")
+                    Timber.i("🏗️ Database created from scratch at version 23")
                 }
                 
                 override fun onOpen(db: SupportSQLiteDatabase) {
@@ -68,6 +67,8 @@ object DatabaseModule {
                     Timber.d("📖 Database connection opened (routine operation)")
                 }
             })
+            // Register the missing migration from version 22 to 23
+            //.addMigration(MIGRATION_22_23)
             // Temporary fallback for development - enables database recreation on schema mismatch
             // TODO: Remove this for production builds and ensure proper migration testing
             .fallbackToDestructiveMigration()
@@ -89,7 +90,7 @@ object DatabaseModule {
                 val tableExists = cursor.moveToFirst()
                 cursor.close()
                 
-                if (version == 22 && tableExists) {
+                if (version == 23 && tableExists) {
                     Timber.i("✅ Database ready - all migrations complete, exercise_usage_history confirmed")
                 } else {
                     Timber.w("⚠️ Database initialization issue - version: $version, table exists: $tableExists")
@@ -167,4 +168,4 @@ object DatabaseModule {
         return database.activeWorkoutSessionDao()
     }
 
-} 
+}

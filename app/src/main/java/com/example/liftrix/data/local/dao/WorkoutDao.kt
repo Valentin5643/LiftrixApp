@@ -208,4 +208,33 @@ interface WorkoutDao {
         currentUserId: String,
         friendIds: List<String>
     ): Int
+    
+    /**
+     * Gets paginated workout history for a user ordered by date (newest first)
+     * 
+     * @param userId The user's ID
+     * @param limit Maximum number of workouts to return
+     * @param offset Number of workouts to skip for pagination
+     * @return Flow of workout entities ordered by date (newest first)
+     */
+    @Query("""
+        SELECT * FROM workouts 
+        WHERE user_id = :userId 
+        ORDER BY date DESC, created_at DESC 
+        LIMIT :limit OFFSET :offset
+    """)
+    fun getWorkoutHistoryPaginated(
+        userId: String,
+        limit: Int,
+        offset: Int
+    ): Flow<List<WorkoutEntity>>
+    
+    /**
+     * Counts total workouts for a user for pagination logic
+     * 
+     * @param userId The user's ID
+     * @return Total count of workouts for the user
+     */
+    @Query("SELECT COUNT(*) FROM workouts WHERE user_id = :userId")
+    suspend fun getWorkoutCountForUser(userId: String): Int
 } 

@@ -46,6 +46,7 @@ import eu.bambooapps.material3.pullrefresh.rememberPullRefreshState
 fun HomeScreen(
     onNavigateToWorkout: (String) -> Unit,
     onNavigateToFriends: () -> Unit,
+    onNavigateToMyWorkouts: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = hiltViewModel()
 ) {

@@ -2,10 +2,13 @@
 
 package com.example.liftrix.domain.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * Value class representing repetitions with validation
  */
 @JvmInline
+@Serializable
 value class Reps(val count: Int) {
     init {
         require(count >= 0) { "Reps cannot be negative: $count" }

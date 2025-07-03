@@ -12,14 +12,20 @@ import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.model.WorkoutStats
 import com.example.liftrix.domain.model.WorkoutStatus
+import com.example.liftrix.domain.model.WorkoutSummary
+import com.example.liftrix.domain.model.toSummary
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SocialRepository
+import com.example.liftrix.domain.service.NetworkConnectivityMonitor
 import com.example.liftrix.sync.WorkoutSyncWorker
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import java.time.Duration
@@ -36,12 +42,25 @@ class WorkoutRepositoryImpl @Inject constructor(
     private val workManager: WorkManager,
     private val socialRepository: SocialRepository,
     private val authRepository: AuthRepository,
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val networkConnectivityMonitor: NetworkConnectivityMonitor
 ) : WorkoutRepository {
 
     companion object {
         private val DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE
         private const val MAX_FEED_WORKOUTS = 40
+    }
+
+    // Network connectivity and offline support
+    override val isOffline: StateFlow<Boolean> = networkConnectivityMonitor.isConnected.map { !it }
+        .stateIn(
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()),
+            started = kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000),
+            initialValue = !networkConnectivityMonitor.isCurrentlyConnected()
+        )
+
+    override fun isCurrentlyOffline(): Boolean {
+        return !networkConnectivityMonitor.isCurrentlyConnected()
     }
 
     // User-scoped methods implementation
@@ -291,6 +310,30 @@ class WorkoutRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Failed to mark workouts as synced for user: $userId")
             Result.failure(e)
+        }
+    }
+
+    // Pagination methods implementation
+    override fun getUserWorkoutHistory(userId: String, limit: Int, offset: Int): Flow<List<WorkoutSummary>> {
+        return try {
+            workoutDao.getWorkoutHistoryPaginated(userId, limit, offset).map { entities ->
+                entities.map { entity ->
+                    val workout = workoutMapper.toDomain(entity)
+                    workout.toSummary()
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get workout history for user: $userId, limit: $limit, offset: $offset")
+            kotlinx.coroutines.flow.flowOf(emptyList())
+        }
+    }
+
+    override suspend fun getWorkoutHistoryCount(userId: String): Int {
+        return try {
+            workoutDao.getWorkoutCountForUser(userId)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get workout history count for user: $userId")
+            0
         }
     }
 

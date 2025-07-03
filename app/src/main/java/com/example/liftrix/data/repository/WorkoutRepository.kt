@@ -4,7 +4,9 @@ import com.example.liftrix.domain.model.FeedWorkout
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.model.WorkoutStats
+import com.example.liftrix.domain.model.WorkoutSummary
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import java.time.LocalDate
 
 interface WorkoutRepository {
@@ -47,6 +49,20 @@ interface WorkoutRepository {
     fun getFeedWorkouts(userId: String, limit: Int, offset: Int): Flow<List<FeedWorkout>>
     
     suspend fun hasMoreFeedWorkouts(userId: String, offset: Int): Boolean
+    
+    // Workout history pagination methods for My Workouts feature
+    fun getUserWorkoutHistory(
+        userId: String,
+        limit: Int = 20,
+        offset: Int = 0
+    ): Flow<List<WorkoutSummary>>
+    
+    suspend fun getWorkoutHistoryCount(userId: String): Int
+    
+    // Network connectivity and offline support
+    val isOffline: StateFlow<Boolean>
+    
+    fun isCurrentlyOffline(): Boolean
     
     // Legacy methods (deprecated - for migration only)
     @Deprecated("Use user-scoped methods instead", ReplaceWith("getAllWorkoutsForUser(userId)"))

@@ -1,5 +1,6 @@
 package com.example.liftrix.domain.model
 
+import kotlinx.serialization.Serializable
 import java.time.Duration
 import java.time.Instant
 
@@ -180,6 +181,7 @@ data class Exercise(
 /**
  * Enum representing different exercise categories
  */
+@Serializable
 enum class ExerciseCategory(val displayName: String) {
     CHEST("Chest"),
     BACK("Back"),

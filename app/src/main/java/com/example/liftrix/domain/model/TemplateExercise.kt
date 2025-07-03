@@ -1,9 +1,12 @@
 package com.example.liftrix.domain.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * Domain model representing an exercise within a workout template
  * Contains target values and ordering information for template exercises
  */
+@Serializable
 data class TemplateExercise(
     val exerciseId: ExerciseId,
     val name: String,

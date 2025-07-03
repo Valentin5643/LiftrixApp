@@ -2,10 +2,13 @@
 
 package com.example.liftrix.domain.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * Value class representing weight in kilograms with validation
  */
 @JvmInline
+@Serializable
 value class Weight(val kilograms: Double) {
     init {
         require(kilograms >= 0.0) { "Weight cannot be negative: $kilograms" }

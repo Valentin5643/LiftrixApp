@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.liftrix.data.repository.WorkoutRepository
 import com.example.liftrix.domain.model.Exercise
 import com.example.liftrix.domain.model.ExerciseLibrary
+import com.example.liftrix.domain.model.TemplateExercise
 import com.example.liftrix.domain.model.ExerciseSet
 import com.example.liftrix.domain.model.ExerciseSetId
 import com.example.liftrix.domain.model.Reps
@@ -13,7 +14,16 @@ import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutExercise
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.model.WorkoutStatus
+import com.example.liftrix.domain.model.WorkoutTemplateId
+import com.example.liftrix.domain.model.ActiveWorkoutSession
+import com.example.liftrix.domain.model.SessionExercise
+import com.example.liftrix.domain.model.WorkoutSessionId
+import com.example.liftrix.domain.model.Weight
+import com.example.liftrix.domain.model.Distance
+import com.example.liftrix.domain.model.RPE
 import com.example.liftrix.domain.repository.AuthRepository
+import com.example.liftrix.domain.repository.ActiveWorkoutSessionRepository
+import com.example.liftrix.domain.repository.WorkoutTemplateRepository
 import com.example.liftrix.service.FirebasePresenceService
 import com.example.liftrix.service.TimerServiceManager
 import com.example.liftrix.service.WorkoutTimerService
@@ -42,10 +52,12 @@ import javax.inject.Inject
 class ActiveWorkoutViewModel @Inject constructor(
     private val timerServiceManager: TimerServiceManager,
     private val workoutRepository: WorkoutRepository,
+    private val activeWorkoutSessionRepository: ActiveWorkoutSessionRepository,
     private val authRepository: AuthRepository,
     private val presenceService: FirebasePresenceService,
     private val createTemplateFromSessionUseCase: CreateTemplateFromSessionUseCase,
-    private val searchExercisesUseCase: SearchExercisesUseCase
+    private val searchExercisesUseCase: SearchExercisesUseCase,
+    private val templateRepository: WorkoutTemplateRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ActiveWorkoutState())
@@ -170,13 +182,11 @@ class ActiveWorkoutViewModel @Inject constructor(
             try {
                 updateState { copy(isLoading = true) }
                 
-                // TODO: Load template and create workout from it
-                // For now, create a basic workout with the template ID as reference
                 val sessionId = "session_${System.currentTimeMillis()}"
                 createNewWorkoutFromTemplate(templateId, sessionId)
                 
-                // Start the timer session
-                startWorkoutSession()
+                // Don't start the timer session automatically for template workouts
+                // The simple timer will start when the screen loads
                 
             } catch (e: Exception) {
                 Timber.e(e, "Failed to start session from template: $templateId")
@@ -196,11 +206,55 @@ class ActiveWorkoutViewModel @Inject constructor(
     private fun startBlankSessionInternal() {
         viewModelScope.launch {
             try {
-                val sessionId = "session_${System.currentTimeMillis()}"
-                updateState { copy(sessionId = sessionId) }
+                val user = authRepository.currentUser.first()
+                if (user == null) {
+                    updateState { 
+                        copy(error = "User not authenticated")
+                    }
+                    return@launch
+                }
                 
-                // Create new blank workout
-                createNewWorkout()
+                // Create blank active workout session
+                val newSession = ActiveWorkoutSession.createBlank(
+                    userId = user.uid,
+                    name = "Active Workout"
+                )
+                
+                // Create and save the session using the repository
+                val createResult = activeWorkoutSessionRepository.createSession(newSession)
+                if (createResult.isFailure) {
+                    updateState { 
+                        copy(error = "Failed to create session: ${createResult.exceptionOrNull()?.message}")
+                    }
+                    return@launch
+                }
+                
+                val createdSession = createResult.getOrNull()!!
+                
+                // Also create a workout representation for UI compatibility (legacy support)
+                val now = java.time.Instant.now()
+                val newWorkout = Workout(
+                    userId = user.uid,
+                    id = WorkoutId.generate(),
+                    name = "Active Workout",
+                    date = java.time.LocalDate.now(),
+                    exercises = emptyList(),
+                    status = WorkoutStatus.IN_PROGRESS,
+                    startTime = now,
+                    endTime = null,
+                    createdAt = now,
+                    updatedAt = now
+                )
+                
+                updateState { 
+                    copy(
+                        currentSession = createdSession,
+                        currentWorkout = newWorkout,
+                        hasActiveWorkout = true,
+                        hasUnsavedChanges = true,
+                        sessionId = createdSession.id.value
+                    )
+                }
                 
                 // Start the timer session
                 startWorkoutSession()
@@ -222,9 +276,51 @@ class ActiveWorkoutViewModel @Inject constructor(
             try {
                 updateState { copy(isLoading = true, sessionId = sessionId) }
                 
-                // TODO: Load existing session data
-                // For now, just set the session ID and load active workout
-                loadActiveWorkout()
+                // Load the existing session by ID
+                val sessionResult = activeWorkoutSessionRepository.getSessionById(
+                    WorkoutSessionId(sessionId)
+                )
+                
+                if (sessionResult.isFailure) {
+                    updateState { 
+                        copy(
+                            isLoading = false,
+                            error = "Failed to load session: ${sessionResult.exceptionOrNull()?.message}"
+                        )
+                    }
+                    return@launch
+                }
+                
+                val session = sessionResult.getOrNull()
+                if (session == null) {
+                    updateState { 
+                        copy(
+                            isLoading = false,
+                            error = "Session not found: $sessionId"
+                        )
+                    }
+                    return@launch
+                }
+                
+                // Convert session to workout representation for UI compatibility
+                val workoutFromSession = session.toCompletedWorkout().copy(
+                    status = WorkoutStatus.IN_PROGRESS,
+                    endTime = null
+                )
+                
+                updateState { 
+                    copy(
+                        isLoading = false,
+                        currentSession = session,
+                        currentWorkout = workoutFromSession,
+                        hasActiveWorkout = true,
+                        hasUnsavedChanges = true,
+                        sessionId = session.id.value,
+                        isWorkoutFromTemplate = session.templateId != null
+                    )
+                }
+                
+                Timber.i("Successfully resumed session: $sessionId with ${session.exercises.size} exercises")
                 
             } catch (e: Exception) {
                 Timber.e(e, "Failed to resume session: $sessionId")
@@ -268,13 +364,54 @@ class ActiveWorkoutViewModel @Inject constructor(
                 return
             }
             
+            // Load the actual template
+            val template = templateRepository.getTemplateById(WorkoutTemplateId(templateId), user.uid)
+            if (template == null) {
+                updateState { 
+                    copy(
+                        isLoading = false,
+                        error = "Template not found"
+                    )
+                }
+                return
+            }
+            
+            // Create active workout session from template
+            val newSession = ActiveWorkoutSession.fromTemplate(
+                userId = user.uid,
+                template = template,
+                customName = null // Will use template name with timestamp
+            )
+            
+            // Create and save the session using the repository
+            val createResult = activeWorkoutSessionRepository.createSession(newSession)
+            if (createResult.isFailure) {
+                updateState { 
+                    copy(
+                        isLoading = false,
+                        error = "Failed to create session: ${createResult.exceptionOrNull()?.message}"
+                    )
+                }
+                return
+            }
+            
+            val createdSession = createResult.getOrNull()!!
+            
+            // Also create a workout representation for UI compatibility (legacy support)
             val now = java.time.Instant.now()
+            val workoutId = WorkoutId.generate()
+            
+            // Convert template exercises to workout exercises for UI display
+            val workoutExercises = template.exercises.mapIndexed { index, templateExercise ->
+                templateExercise.toExercise(workoutId).copy(orderIndex = index)
+            }
+            
             val newWorkout = Workout(
                 userId = user.uid,
-                id = WorkoutId.generate(),
-                name = "Workout from Template",
+                id = workoutId,
+                name = template.name,
                 date = java.time.LocalDate.now(),
-                exercises = emptyList(), // TODO: Load exercises from template
+                exercises = workoutExercises,
                 status = WorkoutStatus.IN_PROGRESS,
                 startTime = now,
                 endTime = null,
@@ -285,12 +422,18 @@ class ActiveWorkoutViewModel @Inject constructor(
             updateState { 
                 copy(
                     isLoading = false,
+                    currentSession = createdSession,
                     currentWorkout = newWorkout,
                     hasActiveWorkout = true,
                     hasUnsavedChanges = true,
-                    sessionId = sessionId
+                    sessionId = createdSession.id.value,
+                    isWorkoutFromTemplate = true
                 )
             }
+            
+            Timber.i("🔍 DEBUG: Template workout session created with ${createdSession.exercises.size} exercises. Session ID: ${createdSession.id.value}. Checking for pending exercises...")
+            // Process any exercises that were added while template was loading
+            processPendingExercises()
         } catch (e: Exception) {
             Timber.e(e, "Failed to create workout from template: $templateId")
             updateState { 
@@ -301,6 +444,7 @@ class ActiveWorkoutViewModel @Inject constructor(
             }
         }
     }
+
 
     /**
      * Binds to the timer service for reactive state updates
@@ -364,12 +508,40 @@ class ActiveWorkoutViewModel @Inject constructor(
                     return@launch
                 }
 
+                // Check for active session first
+                val activeSessionResult = activeWorkoutSessionRepository.getCurrentSessionForUser(user.uid)
+                
+                if (activeSessionResult.isSuccess) {
+                    val activeSession = activeSessionResult.getOrNull()
+                    if (activeSession != null) {
+                        // Convert session to workout for UI compatibility
+                        val workoutFromSession = activeSession.toCompletedWorkout().copy(
+                            status = WorkoutStatus.IN_PROGRESS,
+                            endTime = null
+                        )
+                        
+                        updateState {
+                            copy(
+                                isLoading = false,
+                                currentSession = activeSession,
+                                currentWorkout = workoutFromSession,
+                                hasActiveWorkout = true,
+                                sessionId = activeSession.id.value,
+                                isWorkoutFromTemplate = activeSession.templateId != null
+                            )
+                        }
+                        return@launch
+                    }
+                }
+                
+                // Fall back to loading active workout if no session found
                 val activeWorkout = workoutRepository.getActiveWorkoutForUser(user.uid)
                 updateState {
                     copy(
                         isLoading = false,
                         currentWorkout = activeWorkout,
-                        hasActiveWorkout = activeWorkout != null
+                        hasActiveWorkout = activeWorkout != null,
+                        currentSession = null
                     )
                 }
             } catch (e: Exception) {
@@ -510,18 +682,60 @@ class ActiveWorkoutViewModel @Inject constructor(
      * Adds an exercise to the current workout
      */
     private fun addExercise(exercise: Exercise) {
+        Timber.d("🔍 DEBUG: addExercise called for '${exercise.libraryExercise.name}'")
+        updateState {
+            val currentWorkout = this.currentWorkout
+            
+            if (currentWorkout == null) {
+                Timber.w("🔍 DEBUG: currentWorkout is null, queueing exercise '${exercise.libraryExercise.name}' in pendingExercises. Current pending count: ${pendingExercises.size}")
+                // Queue the exercise to be added when workout is loaded
+                copy(pendingExercises = pendingExercises + exercise)
+            } else {
+                Timber.i("🔍 DEBUG: Adding exercise '${exercise.libraryExercise.name}' to workout '${currentWorkout.name}'. Current exercise count: ${currentWorkout.exercises.size}")
+                // Set the order index and workout ID for the new exercise
+                val exerciseWithCorrectIds = exercise.copy(
+                    workoutId = currentWorkout.id,
+                    orderIndex = currentWorkout.exercises.size
+                )
+                val updatedExercises = currentWorkout.exercises + exerciseWithCorrectIds
+                
+                copy(
+                    currentWorkout = currentWorkout.copy(exercises = updatedExercises),
+                    hasUnsavedChanges = true
+                )
+            }
+        }
+    }
+    
+    /**
+     * Processes any pending exercises that were queued while workout was loading
+     */
+    private fun processPendingExercises() {
+        Timber.d("🔍 DEBUG: processPendingExercises called")
         updateState {
             val currentWorkout = this.currentWorkout ?: return@updateState this
+            val pendingExercises = this.pendingExercises
             
-            // Set the order index and workout ID for the new exercise
-            val exerciseWithCorrectIds = exercise.copy(
-                workoutId = currentWorkout.id,
-                orderIndex = currentWorkout.exercises.size
-            )
-            val updatedExercises = currentWorkout.exercises + exerciseWithCorrectIds
+            if (pendingExercises.isEmpty()) {
+                Timber.d("🔍 DEBUG: No pending exercises to process")
+                return@updateState this
+            }
+            
+            Timber.i("🔍 DEBUG: Processing ${pendingExercises.size} pending exercises for workout '${currentWorkout.name}'")
+            // Add all pending exercises to the workout
+            val exercisesWithCorrectIds = pendingExercises.mapIndexed { index, exercise ->
+                exercise.copy(
+                    workoutId = currentWorkout.id,
+                    orderIndex = currentWorkout.exercises.size + index
+                )
+            }
+            
+            val updatedExercises = currentWorkout.exercises + exercisesWithCorrectIds
+            Timber.i("🔍 DEBUG: Successfully processed pending exercises. New exercise count: ${updatedExercises.size}")
             
             copy(
                 currentWorkout = currentWorkout.copy(exercises = updatedExercises),
+                pendingExercises = emptyList(),
                 hasUnsavedChanges = true
             )
         }
@@ -814,25 +1028,81 @@ class ActiveWorkoutViewModel @Inject constructor(
     private fun saveCurrentWorkout() {
         viewModelScope.launch {
             try {
-                val workout = _uiState.value.currentWorkout ?: return@launch
+                val currentSession = _uiState.value.currentSession
+                val currentWorkout = _uiState.value.currentWorkout
+                
+                if (currentSession == null && currentWorkout == null) {
+                    updateState { copy(error = "No workout to save") }
+                    return@launch
+                }
                 
                 updateState { copy(isSaving = true) }
                 
-                val result = workoutRepository.saveWorkout(workout)
-                if (result.isSuccess) {
-                    updateState { 
-                        copy(
-                            isSaving = false,
-                            hasUnsavedChanges = false,
-                            successMessage = "Workout saved successfully"
-                        )
+                // Use proper session completion flow if we have an active session
+                if (currentSession != null) {
+                    Timber.d("Completing workout session: ${currentSession.id}")
+                    val result = activeWorkoutSessionRepository.completeSession(currentSession.id)
+                    
+                    if (result.isSuccess) {
+                        val completedWorkout = result.getOrNull()
+                        updateState { 
+                            copy(
+                                isSaving = false,
+                                hasUnsavedChanges = false,
+                                currentWorkout = completedWorkout,
+                                currentSession = null, // Clear session after completion
+                                successMessage = "Workout saved successfully"
+                            )
+                        }
+                        Timber.i("Workout session completed successfully: ${currentSession.id}")
+                    } else {
+                        val error = result.exceptionOrNull()?.message ?: "Unknown error"
+                        updateState { 
+                            copy(
+                                isSaving = false,
+                                error = "Failed to complete workout session: $error"
+                            )
+                        }
+                        Timber.e("Failed to complete workout session: ${currentSession.id}, error: $error")
                     }
                 } else {
-                    updateState { 
-                        copy(
-                            isSaving = false,
-                            error = "Failed to save workout: ${result.exceptionOrNull()?.message}"
-                        )
+                    // Fallback to direct workout save for legacy workouts without sessions
+                    val workout = currentWorkout!!
+                    
+                    // For template workouts, allow saving even without exercises
+                    val isTemplateWorkout = _uiState.value.isWorkoutFromTemplate
+                    if (workout.exercises.isEmpty() && !isTemplateWorkout) {
+                        updateState { copy(error = "Cannot save workout without exercises", isSaving = false) }
+                        return@launch
+                    }
+                    
+                    // Update workout status and end time
+                    val completedWorkout = workout.copy(
+                        status = WorkoutStatus.COMPLETED,
+                        endTime = java.time.Instant.now(),
+                        updatedAt = java.time.Instant.now()
+                    )
+                    
+                    val result = workoutRepository.saveWorkout(completedWorkout)
+                    if (result.isSuccess) {
+                        updateState { 
+                            copy(
+                                isSaving = false,
+                                hasUnsavedChanges = false,
+                                currentWorkout = completedWorkout,
+                                successMessage = "Workout saved successfully"
+                            )
+                        }
+                        Timber.i("Workout saved successfully (legacy mode): ${completedWorkout.id}")
+                    } else {
+                        val error = result.exceptionOrNull()?.message ?: "Unknown error"
+                        updateState { 
+                            copy(
+                                isSaving = false,
+                                error = "Failed to save workout: $error"
+                            )
+                        }
+                        Timber.e("Failed to save workout: ${completedWorkout.id}, error: $error")
                     }
                 }
             } catch (e: Exception) {
@@ -1019,7 +1289,11 @@ data class ActiveWorkoutState(
     val availableExercises: List<SearchableExercise> = emptyList(),
     val exerciseSearchQuery: String = "",
     val selectedExercise: SearchableExercise? = null,
-    val isExerciseSelectorExpanded: Boolean = false
+    val isExerciseSelectorExpanded: Boolean = false,
+    // Pending exercises to add when workout is loaded
+    val pendingExercises: List<Exercise> = emptyList(),
+    // Track if this workout was created from a template
+    val isWorkoutFromTemplate: Boolean = false
 )
 
 /**

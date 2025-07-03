@@ -49,7 +49,10 @@ object TestDataFactory {
     // TODO: Update squatExercise to match current Exercise domain model
     
     // Workout test data
-    // TODO: Update to match current Workout domain model with proper exercises
+    val sampleWorkout = WorkoutExample.createSampleWorkout().copy(
+        userId = "test-user-id",
+        name = "Upper Body Workout"
+    )
     
     // TODO: Update completedWorkout to match current Workout domain model
     

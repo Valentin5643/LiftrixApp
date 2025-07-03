@@ -1,9 +1,12 @@
 package com.example.liftrix.domain.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * Enum representing the types of fitness equipment available to a user.
  * Each enum constant has a user-friendly display name.
  */
+@Serializable
 enum class Equipment(val displayName: String) {
     DUMBBELLS("Dumbbells"),
     BARBELL("Barbell"),

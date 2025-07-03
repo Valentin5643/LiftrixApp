@@ -332,7 +332,7 @@ private fun TemplateExercisesCard(
 }
 
 /**
- * Individual exercise item in the template with inline parameter editing
+ * Individual exercise item in the template with actual set input rows
  */
 @Composable
 private fun ExerciseListItem(
@@ -341,9 +341,22 @@ private fun ExerciseListItem(
     onUpdate: (TemplateExercise) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var sets by remember { mutableStateOf(exercise.targetSets?.toString() ?: "1") }
-    var reps by remember { mutableStateOf(exercise.targetReps?.count?.toString() ?: "") }
-    var weight by remember { mutableStateOf(exercise.targetWeight?.kilograms?.toString() ?: "") }
+    // Track individual sets instead of just a target number
+    var setInputs by remember { 
+        mutableStateOf(
+            if (exercise.targetSets != null && exercise.targetSets!! > 0) {
+                List(exercise.targetSets!!) { index ->
+                    SetInput(
+                        setNumber = index + 1,
+                        weight = exercise.targetWeight?.kilograms?.toString() ?: "",
+                        reps = exercise.targetReps?.count?.toString() ?: ""
+                    )
+                }
+            } else {
+                listOf(SetInput(setNumber = 1, weight = "", reps = ""))
+            }
+        )
+    }
     
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -380,80 +393,155 @@ private fun ExerciseListItem(
                 }
             }
             
-            // Inline editable sets
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "1",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.width(24.dp)
-                )
-                
-                OutlinedTextField(
-                    value = weight,
-                    onValueChange = { newValue ->
-                        if ((newValue.isEmpty() || newValue.toDoubleOrNull() != null) && newValue.length <= 6) {
-                            weight = newValue
-                            updateExercise(exercise, sets, reps, weight, onUpdate)
+            // Display all set input rows
+            setInputs.forEachIndexed { index, setInput ->
+                TemplateSetInputRow(
+                    setInput = setInput,
+                    onUpdateSet = { updatedSet ->
+                        setInputs = setInputs.toMutableList().apply {
+                            set(index, updatedSet)
                         }
+                        updateExerciseFromSets(exercise, setInputs, onUpdate)
                     },
-                    label = { Text("Weight") },
-                    placeholder = { Text("50") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true,
-                    modifier = Modifier.weight(1f)
-                )
-                
-                OutlinedTextField(
-                    value = reps,
-                    onValueChange = { newValue ->
-                        if (newValue.all { it.isDigit() } && newValue.length <= 3) {
-                            reps = newValue
-                            updateExercise(exercise, sets, reps, weight, onUpdate)
+                    onRemoveSet = if (setInputs.size > 1) {
+                        {
+                            setInputs = setInputs.toMutableList().apply {
+                                removeAt(index)
+                                // Renumber remaining sets
+                                forEachIndexed { i, set -> set(i, this[i].copy(setNumber = i + 1)) }
+                            }
+                            updateExerciseFromSets(exercise, setInputs, onUpdate)
                         }
-                    },
-                    label = { Text("Reps") },
-                    placeholder = { Text("12") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.weight(1f)
+                    } else null
                 )
                 
-                IconButton(
-                    onClick = { 
-                        // Add set functionality would need to be implemented in ViewModel
-                        // For now, just increment the sets value
-                        val currentSets = sets.toIntOrNull() ?: 1
-                        sets = (currentSets + 1).toString()
-                        updateExercise(exercise, sets, reps, weight, onUpdate)
-                    },
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Add set",
-                        modifier = Modifier.size(18.dp)
-                    )
+                if (index < setInputs.size - 1) {
+                    Spacer(modifier = Modifier.height(4.dp))
                 }
             }
             
-            // Display target sets summary
-            if (sets.toIntOrNull() != null && sets.toInt() > 1) {
-                Text(
-                    text = "Target: $sets sets",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Add set button
+            OutlinedButton(
+                onClick = { 
+                    setInputs = setInputs + SetInput(
+                        setNumber = setInputs.size + 1,
+                        weight = setInputs.lastOrNull()?.weight ?: "",
+                        reps = setInputs.lastOrNull()?.reps ?: ""
+                    )
+                    updateExerciseFromSets(exercise, setInputs, onUpdate)
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
                 )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Add Set")
             }
         }
     }
 }
 
 /**
- * Helper function to update exercise with new parameters
+ * Data class to track individual set inputs
+ */
+private data class SetInput(
+    val setNumber: Int,
+    val weight: String,
+    val reps: String
+)
+
+/**
+ * Individual set input row for template exercises
+ */
+@Composable
+private fun TemplateSetInputRow(
+    setInput: SetInput,
+    onUpdateSet: (SetInput) -> Unit,
+    onRemoveSet: (() -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "${setInput.setNumber}",
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.width(24.dp)
+        )
+        
+        OutlinedTextField(
+            value = setInput.weight,
+            onValueChange = { newValue ->
+                if ((newValue.isEmpty() || newValue.toDoubleOrNull() != null) && newValue.length <= 6) {
+                    onUpdateSet(setInput.copy(weight = newValue))
+                }
+            },
+            label = { Text("Weight") },
+            placeholder = { Text("50") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            singleLine = true,
+            modifier = Modifier.weight(1f)
+        )
+        
+        OutlinedTextField(
+            value = setInput.reps,
+            onValueChange = { newValue ->
+                if (newValue.all { it.isDigit() } && newValue.length <= 3) {
+                    onUpdateSet(setInput.copy(reps = newValue))
+                }
+            },
+            label = { Text("Reps") },
+            placeholder = { Text("12") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            singleLine = true,
+            modifier = Modifier.weight(1f)
+        )
+        
+        if (onRemoveSet != null) {
+            IconButton(
+                onClick = onRemoveSet,
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Remove set",
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        } else {
+            // Placeholder to maintain alignment when there's only one set
+            Spacer(modifier = Modifier.size(40.dp))
+        }
+    }
+}
+
+/**
+ * Helper function to update exercise from set inputs
+ */
+private fun updateExerciseFromSets(
+    exercise: TemplateExercise,
+    setInputs: List<SetInput>,
+    onUpdate: (TemplateExercise) -> Unit
+) {
+    // Use the first set's values as the target values for the template
+    val firstSet = setInputs.firstOrNull()
+    val updatedExercise = exercise.copy(
+        targetSets = setInputs.size,
+        targetReps = firstSet?.reps?.toIntOrNull()?.let { com.example.liftrix.domain.model.Reps(it) },
+        targetWeight = firstSet?.weight?.toDoubleOrNull()?.let { com.example.liftrix.domain.model.Weight.fromKilograms(it) }
+    )
+    onUpdate(updatedExercise)
+}
+
+/**
+ * Helper function to update exercise with new parameters (legacy)
  */
 private fun updateExercise(
     exercise: TemplateExercise,

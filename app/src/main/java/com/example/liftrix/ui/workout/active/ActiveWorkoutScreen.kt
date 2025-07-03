@@ -46,6 +46,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.DisposableEffect
+import java.time.LocalDateTime
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -96,7 +98,8 @@ fun ActiveWorkoutScreen(
     onAddExercise: () -> Unit = {},
     navController: NavHostController,
     modifier: Modifier = Modifier,
-    workoutViewModel: ActiveWorkoutViewModel = hiltViewModel()
+    workoutViewModel: ActiveWorkoutViewModel = hiltViewModel(),
+    isFromTemplate: Boolean = false
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val workoutState by workoutViewModel.uiState.collectAsStateWithLifecycle()
@@ -105,6 +108,31 @@ fun ActiveWorkoutScreen(
     var isTimerExpanded by remember { mutableStateOf(false) }
     
     var showSaveWorkoutDialog by remember { mutableStateOf(false) }
+    
+    // Simple timer state for template workouts
+    var startTime by remember { mutableStateOf<LocalDateTime?>(null) }
+    var elapsedTime by remember { mutableStateOf("00:00") }
+    
+    // Start simple timer when screen loads for template workouts
+    LaunchedEffect(isFromTemplate) {
+        if (isFromTemplate && startTime == null) {
+            startTime = LocalDateTime.now()
+        }
+    }
+    
+    // Update elapsed time for template workouts
+    LaunchedEffect(startTime, isFromTemplate) {
+        if (isFromTemplate && startTime != null) {
+            while (true) {
+                val now = LocalDateTime.now()
+                val elapsed = java.time.Duration.between(startTime, now)
+                val minutes = elapsed.toMinutes()
+                val seconds = elapsed.minusMinutes(minutes).seconds
+                elapsedTime = String.format("%02d:%02d", minutes, seconds)
+                kotlinx.coroutines.delay(1000)
+            }
+        }
+    }
 
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -135,12 +163,32 @@ fun ActiveWorkoutScreen(
                     }
                 },
                 actions = {
-                    // Save workout button (with options)
-                    if (workoutState.currentWorkout != null && workoutState.currentWorkout!!.exercises.isNotEmpty()) {
+                    // Simple timer for template workouts
+                    if (isFromTemplate) {
+                        Text(
+                            text = elapsedTime,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                    }
+                    
+                    // Save workout button - always visible for template workouts or when exercises exist
+                    if (isFromTemplate || (workoutState.currentWorkout != null && workoutState.currentWorkout!!.exercises.isNotEmpty())) {
                         IconButton(
-                            onClick = { showSaveWorkoutDialog = true },
+                            onClick = { 
+                                if (isFromTemplate) {
+                                    // Template workouts complete immediately without dialog
+                                    workoutViewModel.onEvent(ActiveWorkoutEvent.SaveWorkout)
+                                    onNavigateBack()
+                                } else {
+                                    // Blank sessions show save dialog
+                                    showSaveWorkoutDialog = true
+                                }
+                            },
                             modifier = Modifier.semantics {
-                                contentDescription = "Save workout with options"
+                                contentDescription = if (isFromTemplate) "Complete workout" else "Complete and save workout"
                             }
                         ) {
                             Icon(
@@ -170,36 +218,38 @@ fun ActiveWorkoutScreen(
                 Spacer(modifier = Modifier.height(8.dp))
             }
             
-            // Session Controls Section
-            item {
-                SessionControlsCard(
-                    timerState = workoutState.timerState,
-                    connectionState = when {
-                        workoutState.connectionError != null -> 
-                            TimerServiceManager.ConnectionState.Error(Exception(workoutState.connectionError))
-                        workoutState.isTimerServiceConnected -> 
-                            TimerServiceManager.ConnectionState.Connected
-                        else -> TimerServiceManager.ConnectionState.Disconnected
-                    },
-                    onStartSession = { workoutViewModel.onEvent(ActiveWorkoutEvent.StartSession) },
-                    onPauseTimer = { workoutViewModel.onEvent(ActiveWorkoutEvent.PauseSession) },
-                    onResumeTimer = { workoutViewModel.onEvent(ActiveWorkoutEvent.ResumeSession) },
-                    onStopTimer = { workoutViewModel.onEvent(ActiveWorkoutEvent.StopSession) }
-                )
+            // Session Controls Section (only for non-template workouts)
+            if (!isFromTemplate) {
+                item {
+                    SessionControlsCard(
+                        timerState = workoutState.timerState,
+                        connectionState = when {
+                            workoutState.connectionError != null -> 
+                                TimerServiceManager.ConnectionState.Error(Exception(workoutState.connectionError))
+                            workoutState.isTimerServiceConnected -> 
+                                TimerServiceManager.ConnectionState.Connected
+                            else -> TimerServiceManager.ConnectionState.Disconnected
+                        },
+                        onStartSession = { workoutViewModel.onEvent(ActiveWorkoutEvent.StartSession) },
+                        onPauseTimer = { workoutViewModel.onEvent(ActiveWorkoutEvent.PauseSession) },
+                        onResumeTimer = { workoutViewModel.onEvent(ActiveWorkoutEvent.ResumeSession) },
+                        onStopTimer = { workoutViewModel.onEvent(ActiveWorkoutEvent.StopSession) }
+                    )
+                }
             }
             
             // Exercise Selection Section
             item {
-                ExerciseSelectionCard(
-                    onNavigateToExerciseSelection = onAddExercise
+                WorkoutExerciseSelectionCard(
+                    onNavigateToExerciseSelection = onAddExercise,
+                    isFromTemplate = isFromTemplate
                 )
             }
             
             // Exercises Section
             item {
-                ExercisesCard(
+                WorkoutExercisesCard(
                     workout = workoutState.currentWorkout,
-                    onAddExercise = { /* No longer needed - using selector above */ },
                     onRemoveExercise = { exerciseIndex ->
                         workoutViewModel.onEvent(ActiveWorkoutEvent.RemoveExercise(exerciseIndex))
                     },
@@ -211,16 +261,23 @@ fun ActiveWorkoutScreen(
                     },
                     onRemoveSet = { exerciseIndex, setIndex ->
                         workoutViewModel.onEvent(ActiveWorkoutEvent.RemoveSet(exerciseIndex, setIndex))
-                    }
+                    },
+                    isFromTemplate = isFromTemplate,
+                    workoutState = workoutState // DEBUG: Pass state for visual indicators
                 )
             }
             
             // Workout Summary Section
-            if (workoutState.currentWorkout != null) {
+            if (workoutState.currentWorkout != null && workoutState.currentWorkout!!.exercises.isNotEmpty()) {
                 item {
                     WorkoutSummaryCard(
                         workout = workoutState.currentWorkout!!,
-                        onCompleteWorkout = { showSaveWorkoutDialog = true }
+                        onCompleteWorkout = { 
+                            // This button only appears for blank sessions (non-template workouts)
+                            // Show save dialog to let user choose how to save their workout
+                            showSaveWorkoutDialog = true 
+                        },
+                        isFromTemplate = isFromTemplate
                     )
                 }
             }
@@ -258,30 +315,33 @@ fun ActiveWorkoutScreen(
         onDismiss = { showSaveWorkoutDialog = false }
     )
     
-    // Minimized Timer Component (persistent at bottom)
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.BottomCenter
-    ) {
-        MinimizedTimerComponent(
-            timerState = workoutState.timerState,
-            connectionState = when {
-                workoutState.connectionError != null -> 
-                    TimerServiceManager.ConnectionState.Error(Exception(workoutState.connectionError))
-                workoutState.isTimerServiceConnected -> 
-                    TimerServiceManager.ConnectionState.Connected
-                else -> TimerServiceManager.ConnectionState.Disconnected
-            },
-            isVisible = workoutState.currentSession != null,
-            isExpanded = isTimerExpanded,
-            onToggleExpanded = { isTimerExpanded = !isTimerExpanded },
-            onNavigateToWorkout = { /* Already on workout screen */ },
-            onPause = { workoutViewModel.onEvent(ActiveWorkoutEvent.PauseSession) },
-            onResume = { workoutViewModel.onEvent(ActiveWorkoutEvent.ResumeSession) },
-            onStop = { workoutViewModel.onEvent(ActiveWorkoutEvent.StopSession) }
-        )
+    // Minimized Timer Component (persistent at bottom) - only for non-template workouts
+    if (!isFromTemplate) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            MinimizedTimerComponent(
+                timerState = workoutState.timerState,
+                connectionState = when {
+                    workoutState.connectionError != null -> 
+                        TimerServiceManager.ConnectionState.Error(Exception(workoutState.connectionError))
+                    workoutState.isTimerServiceConnected -> 
+                        TimerServiceManager.ConnectionState.Connected
+                    else -> TimerServiceManager.ConnectionState.Disconnected
+                },
+                isVisible = workoutState.currentSession != null,
+                isExpanded = isTimerExpanded,
+                onToggleExpanded = { isTimerExpanded = !isTimerExpanded },
+                onNavigateToWorkout = { /* Already on workout screen */ },
+                onPause = { workoutViewModel.onEvent(ActiveWorkoutEvent.PauseSession) },
+                onResume = { workoutViewModel.onEvent(ActiveWorkoutEvent.ResumeSession) },
+                onStop = { workoutViewModel.onEvent(ActiveWorkoutEvent.StopSession) }
+            )
+        }
     }
 }
+
 
 /**
  * Card component displaying the session timer and rest timer when active
@@ -562,21 +622,25 @@ private fun SessionControlsCard(
 }
 
 /**
- * Enhanced exercises card with full exercise and set management
+ * Enhanced exercises card with full exercise and set management (no duplicate Add Exercise button)
  */
 @Composable
-private fun ExercisesCard(
+private fun WorkoutExercisesCard(
     workout: com.example.liftrix.domain.model.Workout?,
-    onAddExercise: () -> Unit,
     onRemoveExercise: (Int) -> Unit,
     onAddSet: (Int) -> Unit,
     onUpdateSet: (Int, Int, ExerciseSet) -> Unit,
     onRemoveSet: (Int, Int) -> Unit,
+    isFromTemplate: Boolean = false,
+    workoutState: ActiveWorkoutState? = null, // DEBUG: Add state for visual indicators
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isFromTemplate) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
+        )
     ) {
         Column(
             modifier = Modifier
@@ -589,36 +653,109 @@ private fun ExercisesCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Exercises",
+                    text = if (isFromTemplate) "Workout Exercises (${workout?.exercises?.size ?: 0})" else "Exercises",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.SemiBold
                 )
                 
-                OutlinedButton(
-                    onClick = onAddExercise,
-                    modifier = Modifier.semantics {
-                        contentDescription = "Add exercise to workout"
+                // DEBUG: Visual indicators for debugging
+                workoutState?.let { state ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Show loading state
+                        if (state.isLoading) {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
+                                modifier = Modifier.padding(2.dp)
+                            ) {
+                                Text(
+                                    text = "LOADING",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        
+                        // Show pending exercises count
+                        if (state.pendingExercises.isNotEmpty()) {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiary),
+                                modifier = Modifier.padding(2.dp)
+                            ) {
+                                Text(
+                                    text = "PENDING: ${state.pendingExercises.size}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onTertiary,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        
+                        // Show template flag
+                        if (state.isWorkoutFromTemplate) {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary),
+                                modifier = Modifier.padding(2.dp)
+                            ) {
+                                Text(
+                                    text = "TEMPLATE",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSecondary,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
                     }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Add Exercise")
                 }
             }
             
             Spacer(modifier = Modifier.height(16.dp))
             
+            // DEBUG: Show pending exercises details
+            workoutState?.let { state ->
+                if (state.pendingExercises.isNotEmpty()) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "🔍 DEBUG: Pending Exercises (waiting for workout to load)",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                            state.pendingExercises.forEachIndexed { index, exercise ->
+                                Text(
+                                    text = "${index + 1}. ${exercise.libraryExercise.name}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.padding(start = 8.dp, top = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+            }
+            
             if (workout?.exercises?.isEmpty() != false) {
                 Text(
-                    text = "No exercises added yet. Tap 'Add Exercise' to get started!",
+                    text = if (isFromTemplate) 
+                        "No exercises added yet. Use the exercise selector above to add exercises to your workout."
+                    else 
+                        "No exercises added yet. Tap 'Select Exercise' to get started!",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp)
                 )
             } else {
                 workout.exercises.forEachIndexed { exerciseIndex, exercise ->
@@ -628,7 +765,8 @@ private fun ExercisesCard(
                         onRemoveExercise = onRemoveExercise,
                         onAddSet = onAddSet,
                         onUpdateSet = onUpdateSet,
-                        onRemoveSet = onRemoveSet
+                        onRemoveSet = onRemoveSet,
+                        isFromTemplate = isFromTemplate
                     )
                     
                     if (exerciseIndex < workout.exercises.size - 1) {
@@ -651,13 +789,14 @@ private fun ExerciseItem(
     onAddSet: (Int) -> Unit,
     onUpdateSet: (Int, Int, ExerciseSet) -> Unit,
     onRemoveSet: (Int, Int) -> Unit,
+    isFromTemplate: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = if (isFromTemplate) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
         Column(
@@ -829,13 +968,14 @@ private fun SetItem(
 private fun WorkoutSummaryCard(
     workout: com.example.liftrix.domain.model.Workout,
     onCompleteWorkout: () -> Unit,
+    isFromTemplate: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer
+            containerColor = if (isFromTemplate) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.secondaryContainer
         )
     ) {
         Column(
@@ -846,7 +986,7 @@ private fun WorkoutSummaryCard(
             Text(
                 text = "Workout Summary",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(bottom = 12.dp)
             )
             
@@ -868,23 +1008,32 @@ private fun WorkoutSummaryCard(
                 )
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            FilledTonalButton(
-                onClick = onCompleteWorkout,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .semantics {
-                        contentDescription = "Complete and save workout"
-                    }
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Done,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Complete Workout")
+            // Only show completion button for non-template workouts
+            if (!isFromTemplate) {
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                FilledTonalButton(
+                    onClick = {
+                        // Validate workout has exercises before completion
+                        if (workout.exercises.isNotEmpty()) {
+                            onCompleteWorkout()
+                        }
+                    },
+                    enabled = workout.exercises.isNotEmpty(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics {
+                            contentDescription = "Complete and save workout"
+                        }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Done,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Complete Workout")
+                }
             }
         }
     }
@@ -979,16 +1128,20 @@ private fun ActiveWorkoutScreenPreview() {
 }
 
 /**
- * Card for exercise selection using navigation to ExerciseSelectionScreen
+ * Card for exercise selection using navigation to ExerciseSelectionScreen (template-aligned)
  */
 @Composable
-private fun ExerciseSelectionCard(
+private fun WorkoutExerciseSelectionCard(
     onNavigateToExerciseSelection: () -> Unit,
+    isFromTemplate: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -997,19 +1150,27 @@ private fun ExerciseSelectionCard(
             Text(
                 text = "Add Exercise",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.SemiBold
             )
             
-            Button(
+            if (isFromTemplate) {
+                Text(
+                    text = "Browse exercises by category, equipment, or search to find the perfect exercises for your workout.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            
+            FilledTonalButton(
                 onClick = onNavigateToExerciseSelection,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = "Add Exercise"
+                    contentDescription = null
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Select Exercise")
+                Text(if (isFromTemplate) "Browse Exercises" else "Select Exercise")
             }
         }
     }

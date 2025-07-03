@@ -50,7 +50,7 @@ import com.example.liftrix.data.local.entity.ActiveWorkoutSessionEntity
         PrivacySettingsEntity::class,
         ActiveWorkoutSessionEntity::class,
     ],
-    version = 22,
+    version = 23,
     exportSchema = true
 )
 @TypeConverters(

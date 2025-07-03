@@ -140,7 +140,8 @@ fun NavGraphBuilder.workoutGraph(
                         )
                     }
                 },
-                navController = navController
+                navController = navController,
+                isFromTemplate = templateId != null
             )
         }
         
@@ -190,7 +191,8 @@ fun NavGraphBuilder.workoutGraph(
                         )
                     }
                 },
-                navController = navController
+                navController = navController,
+                isFromTemplate = false
             )
         }
         
@@ -246,7 +248,8 @@ fun NavGraphBuilder.workoutGraph(
                         WorkoutDestinations.createAddExerciseRoute(sessionId)
                     )
                 },
-                navController = navController
+                navController = navController,
+                isFromTemplate = false
             )
         }
         

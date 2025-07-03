@@ -7,6 +7,7 @@ import androidx.navigation.navDeepLink
 import androidx.navigation.navigation
 import com.example.liftrix.ui.home.HomeScreen
 import com.example.liftrix.ui.social.FriendsScreen
+import com.example.liftrix.ui.workout.history.MyWorkoutsScreen
 
 /**
  * Navigation graph for the Home tab.
@@ -40,6 +41,9 @@ fun NavGraphBuilder.homeGraph(
                 },
                 onNavigateToFriends = {
                     navController.navigate(HomeRoutes.FRIENDS)
+                },
+                onNavigateToMyWorkouts = {
+                    navController.navigate(HomeRoutes.MY_WORKOUTS)
                 }
             )
         }
@@ -54,6 +58,15 @@ fun NavGraphBuilder.homeGraph(
             )
         ) {
             FriendsScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        // My Workouts screen for workout history
+        composable(HomeRoutes.MY_WORKOUTS) {
+            MyWorkoutsScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }
@@ -76,6 +89,7 @@ object HomeRoutes {
     const val FRIENDS = "home/friends"
     const val WORKOUT_DETAIL = "home/workout_detail/{workoutId}"
     const val RECENT_WORKOUTS = "home/recent_workouts"
+    const val MY_WORKOUTS = "home/my_workouts"
 }
 
  
