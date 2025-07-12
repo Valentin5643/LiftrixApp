@@ -41,8 +41,8 @@ class WorkoutTemplateRepositoryImpl @Inject constructor(
         }
     }
 
-    override fun getTemplatesByTag(userId: String, tag: String): Flow<List<WorkoutTemplate>> {
-        return workoutTemplateDao.getTemplatesByTag(userId, tag).map { entities ->
+    override fun getTemplatesByFolder(userId: String, folderId: String): Flow<List<WorkoutTemplate>> {
+        return workoutTemplateDao.getTemplatesByFolder(userId, folderId).map { entities ->
             workoutTemplateMapper.toDomainList(entities)
         }
     }
@@ -80,7 +80,7 @@ class WorkoutTemplateRepositoryImpl @Inject constructor(
                 Timber.d("Created template: ${template.name} for user ${template.userId}")
                 Result.success(template)
             } else {
-                Result.failure(RuntimeException("Failed to insert template"))
+                Result.failure(RuntimeException("Failed to insert template into database"))
             }
         } catch (e: Exception) {
             Timber.e(e, "Failed to create template: ${template.name}")

@@ -1,8 +1,12 @@
 package com.example.liftrix.domain.model
 
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
+
 /**
  * Domain model representing an exercise from the exercise library
  */
+@Parcelize
 data class ExerciseLibrary(
     val id: String,
     val name: String,
@@ -14,7 +18,7 @@ data class ExerciseLibrary(
     val instructions: String?,
     val isCompound: Boolean,
     val searchableTerms: List<String>
-) {
+) : Parcelable {
     init {
         require(id.isNotBlank()) { "Exercise ID cannot be blank" }
         require(name.isNotBlank()) { "Exercise name cannot be blank" }

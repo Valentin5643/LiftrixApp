@@ -42,11 +42,7 @@ data class Workout(
             require(endTime.isAfter(startTime)) { 
                 "End time must be after start time: start=$startTime, end=$endTime" 
             }
-            
-            val duration = Duration.between(startTime, endTime)
-            require(duration.toHours() <= MAX_WORKOUT_HOURS) { 
-                "Workout duration cannot exceed $MAX_WORKOUT_HOURS hours: ${duration.toHours()}" 
-            }
+            // Note: Duration validation removed to allow long workouts (some users forget to end them)
         }
         
         // Validate exercise IDs are unique
@@ -60,7 +56,7 @@ data class Workout(
         const val MAX_NAME_LENGTH: Int = 100
         const val MAX_NOTES_LENGTH: Int = 2000
         const val MAX_EXERCISES: Int = 20
-        const val MAX_WORKOUT_HOURS: Long = 8
+        // Note: MAX_WORKOUT_HOURS removed - no duration limit enforced
     }
     
     /**

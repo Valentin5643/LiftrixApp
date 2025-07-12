@@ -180,12 +180,15 @@ data class TemplateExercise(
      * Converts this template exercise to an actual exercise for a workout
      */
     fun toExercise(workoutId: WorkoutId): Exercise {
-        val initialSet = ExerciseSet(
-            id = ExerciseSetId.generate(),
-            setNumber = 1,
-            weight = targetWeight ?: Weight.ZERO,
-            reps = targetReps ?: Reps.ZERO
-        )
+        // Create appropriate number of sets based on targetSets property
+        val initialSets = (1..(targetSets ?: 1)).map { setNumber ->
+            ExerciseSet(
+                id = ExerciseSetId.generate(),
+                setNumber = setNumber,
+                weight = targetWeight ?: Weight.ZERO,
+                reps = targetReps ?: Reps.ZERO
+            )
+        }
         
         return Exercise(
             id = exerciseId,
@@ -195,21 +198,128 @@ data class TemplateExercise(
                 name = name,
                 primaryMuscleGroup = primaryMuscle,
                 equipment = equipment,
-                secondaryMuscleGroups = emptyList(),
-                movementPattern = "Unknown",
-                difficultyLevel = 1,
-                instructions = "",
-                isCompound = false,
-                searchableTerms = listOf(name.lowercase())
+                secondaryMuscleGroups = inferSecondaryMuscleGroups(name, primaryMuscle),
+                movementPattern = inferMovementPattern(name, equipment),
+                difficultyLevel = inferDifficultyLevel(name, equipment),
+                instructions = notes ?: inferInstructions(name, equipment),
+                isCompound = inferIsCompound(name, primaryMuscle),
+                searchableTerms = listOf(name.lowercase()) + inferSearchTerms(name)
             ),
             orderIndex = orderIndex,
             targetSets = targetSets,
             targetReps = targetReps?.count,
             targetWeight = targetWeight,
-            sets = listOf(initialSet),
+            sets = initialSets,
             notes = notes,
             createdAt = java.time.Instant.now()
         )
+    }
+    
+    /**
+     * Infers secondary muscle groups based on exercise name and primary muscle
+     */
+    private fun inferSecondaryMuscleGroups(exerciseName: String, primary: ExerciseCategory): List<ExerciseCategory> {
+        val name = exerciseName.lowercase()
+        return when {
+            name.contains("bench") && primary == ExerciseCategory.CHEST -> listOf(ExerciseCategory.SHOULDERS, ExerciseCategory.TRICEPS)
+            name.contains("squat") && primary == ExerciseCategory.LEGS -> listOf(ExerciseCategory.GLUTES, ExerciseCategory.CORE)
+            name.contains("deadlift") && primary == ExerciseCategory.BACK -> listOf(ExerciseCategory.LEGS, ExerciseCategory.GLUTES)
+            name.contains("pull") && primary == ExerciseCategory.BACK -> listOf(ExerciseCategory.BICEPS)
+            name.contains("press") && primary == ExerciseCategory.SHOULDERS -> listOf(ExerciseCategory.TRICEPS)
+            name.contains("row") && primary == ExerciseCategory.BACK -> listOf(ExerciseCategory.BICEPS)
+            else -> emptyList()
+        }
+    }
+    
+    /**
+     * Infers movement pattern based on exercise name and equipment
+     */
+    private fun inferMovementPattern(exerciseName: String, equipment: Equipment): String {
+        val name = exerciseName.lowercase()
+        return when {
+            name.contains("squat") -> "Squat"
+            name.contains("deadlift") -> "Hinge"
+            name.contains("bench") || name.contains("press") -> "Push"
+            name.contains("pull") || name.contains("row") -> "Pull"
+            name.contains("curl") -> "Isolation"
+            name.contains("lunge") -> "Lunge"
+            name.contains("plank") || name.contains("hold") -> "Hold"
+            name.contains("run") || name.contains("walk") -> "Cardio"
+            equipment == Equipment.TREADMILL || equipment == Equipment.EXERCISE_BIKE -> "Cardio"
+            else -> "Compound"
+        }
+    }
+    
+    /**
+     * Infers difficulty level based on exercise complexity
+     */
+    private fun inferDifficultyLevel(exerciseName: String, equipment: Equipment): Int {
+        val name = exerciseName.lowercase()
+        return when {
+            name.contains("deadlift") || name.contains("snatch") || name.contains("clean") -> 5
+            name.contains("squat") || name.contains("bench") -> 4
+            name.contains("press") || name.contains("row") -> 3
+            name.contains("curl") || name.contains("extension") -> 2
+            equipment == Equipment.BODYWEIGHT_ONLY -> 2
+            else -> 3
+        }
+    }
+    
+    /**
+     * Infers basic instructions based on exercise type
+     */
+    private fun inferInstructions(exerciseName: String, equipment: Equipment): String {
+        val name = exerciseName.lowercase()
+        return when {
+            name.contains("squat") -> "Stand with feet shoulder-width apart, lower your body as if sitting back into a chair, then return to standing."
+            name.contains("bench") -> "Lie on bench, grip bar slightly wider than shoulders, lower to chest, then press up."
+            name.contains("deadlift") -> "Stand with feet hip-width apart, bend at hips and knees to grip bar, stand up by driving through heels."
+            name.contains("curl") -> "Hold weight with arms extended, curl by flexing biceps, then lower with control."
+            name.contains("press") -> "Press weight overhead in a controlled motion, then lower with control."
+            name.contains("row") -> "Pull weight towards body by squeezing shoulder blades together, then lower with control."
+            else -> "Exercise from workout template. Follow proper form and breathing technique."
+        }
+    }
+    
+    /**
+     * Infers if exercise is compound based on name and primary muscle
+     */
+    private fun inferIsCompound(exerciseName: String, primary: ExerciseCategory): Boolean {
+        val name = exerciseName.lowercase()
+        return when {
+            name.contains("squat") || name.contains("deadlift") || name.contains("bench") -> true
+            name.contains("press") && !name.contains("leg press") -> true
+            name.contains("row") && !name.contains("cable") -> true
+            name.contains("pull-up") || name.contains("pullup") -> true
+            name.contains("curl") || name.contains("extension") || name.contains("fly") -> false
+            name.contains("isolation") -> false
+            else -> true // Default to compound for template exercises
+        }
+    }
+    
+    /**
+     * Infers additional search terms based on exercise name
+     */
+    private fun inferSearchTerms(exerciseName: String): List<String> {
+        val name = exerciseName.lowercase()
+        val terms = mutableListOf<String>()
+        
+        // Add muscle group terms
+        when {
+            name.contains("bench") || name.contains("chest") -> terms.addAll(listOf("chest", "pecs"))
+            name.contains("squat") || name.contains("leg") -> terms.addAll(listOf("legs", "quads", "glutes"))
+            name.contains("back") || name.contains("row") -> terms.addAll(listOf("back", "lats"))
+            name.contains("shoulder") || name.contains("press") -> terms.addAll(listOf("shoulders", "delts"))
+        }
+        
+        // Add movement terms
+        when {
+            name.contains("press") -> terms.add("pressing")
+            name.contains("pull") -> terms.add("pulling")
+            name.contains("curl") -> terms.add("curling")
+        }
+        
+        return terms.distinct()
     }
     
     /**

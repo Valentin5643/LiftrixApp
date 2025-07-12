@@ -7,7 +7,6 @@ import androidx.navigation.navDeepLink
 import androidx.navigation.navigation
 import com.example.liftrix.ui.home.HomeScreen
 import com.example.liftrix.ui.social.FriendsScreen
-import com.example.liftrix.ui.workout.history.MyWorkoutsScreen
 
 /**
  * Navigation graph for the Home tab.
@@ -18,7 +17,7 @@ import com.example.liftrix.ui.workout.history.MyWorkoutsScreen
  * Features:
  * - Independent navigation stack for home functionality
  * - Deep linking support for home-related routes
- * - Placeholder implementation ready for HomeScreen integration
+ * - Settings screen integration with proper navigation callbacks
  * 
  * @param onNavigateToAuth Callback to navigate to authentication flow
  * @param onNavigateToWorkout Callback to navigate to workout creation
@@ -64,13 +63,12 @@ fun NavGraphBuilder.homeGraph(
             )
         }
         
-        // My Workouts screen for workout history
+        
+        // My Workouts screen for workout history - placeholder
         composable(HomeRoutes.MY_WORKOUTS) {
-            MyWorkoutsScreen(
-                onNavigateBack = {
-                    navController.popBackStack()
-                }
-            )
+            // TODO: Implement MyWorkoutsScreen or redirect to workout history
+            // For now, navigate back
+            navController.popBackStack()
         }
         
         // Future home-related destinations can be added here
@@ -87,6 +85,7 @@ fun NavGraphBuilder.homeGraph(
 object HomeRoutes {
     const val HOME_MAIN = "home/main"
     const val FRIENDS = "home/friends"
+    const val SETTINGS = "home/settings"
     const val WORKOUT_DETAIL = "home/workout_detail/{workoutId}"
     const val RECENT_WORKOUTS = "home/recent_workouts"
     const val MY_WORKOUTS = "home/my_workouts"

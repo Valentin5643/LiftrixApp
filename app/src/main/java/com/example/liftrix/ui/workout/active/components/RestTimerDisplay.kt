@@ -35,7 +35,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,6 +53,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.model.RestTimer
 import com.example.liftrix.service.WorkoutTimerService
+import com.example.liftrix.ui.components.animations.CompletionCheckmark
+import com.example.liftrix.ui.components.animations.CompletionFeedback
+import com.example.liftrix.ui.components.animations.CompletionFeedbackType
 import com.example.liftrix.ui.theme.LiftrixTheme
 
 /**
@@ -130,6 +137,18 @@ private fun RestTimerCard(
         label = "rest_progress"
     )
     
+    // Track completion state for animations
+    var previousRemainingSeconds by remember { mutableStateOf(remainingSeconds) }
+    val isRestCompleted = remainingSeconds == 0 && restTimer.durationSeconds > 0
+    
+    // Trigger completion animations when timer finishes
+    LaunchedEffect(remainingSeconds) {
+        if (previousRemainingSeconds > 0 && remainingSeconds == 0) {
+            // Rest timer completed
+        }
+        previousRemainingSeconds = remainingSeconds
+    }
+    
     val containerColor = if (isPaused) {
         MaterialTheme.colorScheme.secondaryContainer
     } else {
@@ -142,111 +161,129 @@ private fun RestTimerCard(
         MaterialTheme.colorScheme.onTertiaryContainer
     }
 
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
+    CompletionFeedback(
+        completed = isRestCompleted,
+        feedbackType = CompletionFeedbackType.SET_COMPLETE,
+        modifier = modifier
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+            colors = CardDefaults.cardColors(containerColor = containerColor)
         ) {
-            // Rest timer header
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(
-                    imageVector = if (isPaused) Icons.Filled.Pause else Icons.Filled.Timer,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = contentColor.copy(alpha = 0.8f)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = if (isPaused) "Rest Paused" else "Rest Timer",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = contentColor.copy(alpha = 0.8f),
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Circular progress with countdown
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.size(120.dp)
-            ) {
-                // Background circle
-                CircularProgressIndicator(
-                    progress = { 1f },
-                    modifier = Modifier.size(120.dp),
-                    color = contentColor.copy(alpha = 0.2f),
-                    strokeWidth = 8.dp,
-                    strokeCap = StrokeCap.Round
-                )
-                
-                // Progress indicator
-                CircularProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.size(120.dp),
-                    color = contentColor,
-                    strokeWidth = 8.dp,
-                    strokeCap = StrokeCap.Round
-                )
-                
-                // Countdown time
-                AnimatedContent(
-                    targetState = formattedTime,
-                    transitionSpec = {
-                        (scaleIn() + fadeIn()) togetherWith (scaleOut() + fadeOut())
-                    },
-                    label = "rest_timer_animation",
-                    modifier = Modifier.semantics {
-                        contentDescription = "Rest time remaining: $formattedTime"
+                // Rest timer header with completion checkmark
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    if (isRestCompleted) {
+                        CompletionCheckmark(
+                            completed = true,
+                            size = 20.dp,
+                            color = contentColor
+                        )
+                    } else {
+                        Icon(
+                            imageVector = if (isPaused) Icons.Filled.Pause else Icons.Filled.Timer,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = contentColor.copy(alpha = 0.8f)
+                        )
                     }
-                ) { timeText ->
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = timeText,
-                        style = MaterialTheme.typography.headlineMedium.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold
-                        ),
-                        textAlign = TextAlign.Center,
-                        color = contentColor
+                        text = when {
+                            isRestCompleted -> "Rest Complete!"
+                            isPaused -> "Rest Paused"
+                            else -> "Rest Timer"
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = contentColor.copy(alpha = 0.8f),
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
-            }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // Rest type indicator
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(contentColor.copy(alpha = 0.15f))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.RestaurantMenu,
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp),
-                    tint = contentColor.copy(alpha = 0.7f)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = when {
-                        restTimer.isStrengthTimer() -> "Strength Rest"
-                        restTimer.isCardioTimer() -> "Cardio Rest"
-                        else -> "Rest Break"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = contentColor.copy(alpha = 0.7f)
-                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Circular progress with countdown
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.size(120.dp)
+                ) {
+                    // Background circle
+                    CircularProgressIndicator(
+                        progress = { 1f },
+                        modifier = Modifier.size(120.dp),
+                        color = contentColor.copy(alpha = 0.2f),
+                        strokeWidth = 8.dp,
+                        strokeCap = StrokeCap.Round
+                    )
+                    
+                    // Progress indicator
+                    CircularProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.size(120.dp),
+                        color = contentColor,
+                        strokeWidth = 8.dp,
+                        strokeCap = StrokeCap.Round
+                    )
+                    
+                    // Countdown time with completion checkmark overlay
+                    AnimatedContent(
+                        targetState = if (isRestCompleted) "✓" else formattedTime,
+                        transitionSpec = {
+                            (scaleIn() + fadeIn()) togetherWith (scaleOut() + fadeOut())
+                        },
+                        label = "rest_timer_animation",
+                        modifier = Modifier.semantics {
+                            contentDescription = if (isRestCompleted) "Rest completed" else "Rest time remaining: $formattedTime"
+                        }
+                    ) { displayText ->
+                        Text(
+                            text = displayText,
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontFamily = if (isRestCompleted) FontFamily.Default else FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            textAlign = TextAlign.Center,
+                            color = contentColor
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Rest type indicator
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(contentColor.copy(alpha = 0.15f))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.RestaurantMenu,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = contentColor.copy(alpha = 0.7f)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = when {
+                            restTimer.isStrengthTimer() -> "Strength Rest"
+                            restTimer.isCardioTimer() -> "Cardio Rest"
+                            else -> "Rest Break"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = contentColor.copy(alpha = 0.7f)
+                    )
+                }
             }
         }
     }

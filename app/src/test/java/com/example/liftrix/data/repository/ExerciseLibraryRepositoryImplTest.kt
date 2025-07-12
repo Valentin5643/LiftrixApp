@@ -105,7 +105,14 @@ class ExerciseLibraryRepositoryImplTest {
 
     @Before
     fun setup() {
-        repository = ExerciseLibraryRepositoryImpl(dao, usageHistoryDao, mapper)
+        repository = ExerciseLibraryRepositoryImpl(
+            database = mockk(),
+            dao = dao, 
+            usageHistoryDao = usageHistoryDao, 
+            mapper = mapper,
+            exerciseLibrarySeedData = mockk(),
+            placeholderService = mockk()
+        )
         
         // Setup common mocks
         every { dao.getAllExercises() } returns flowOf(sampleExerciseEntities)

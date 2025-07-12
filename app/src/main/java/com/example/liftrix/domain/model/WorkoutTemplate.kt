@@ -13,7 +13,7 @@ data class WorkoutTemplate(
     val exercises: List<TemplateExercise>,
     val estimatedDurationMinutes: Int? = null,
     val difficultyLevel: Int? = null,
-    val tags: Set<String> = emptySet(),
+    val folderId: String,
     val usageCount: Int = 0,
     val lastUsedAt: Instant? = null,
     val createdAt: Instant,
@@ -47,15 +47,7 @@ data class WorkoutTemplate(
             }
         }
         
-        require(tags.size <= MAX_TAGS) { 
-            "Template cannot have more than $MAX_TAGS tags: ${tags.size}" 
-        }
-        
-        tags.forEach { tag ->
-            require(tag.isNotBlank() && tag.length <= MAX_TAG_LENGTH) { 
-                "Tag must be non-blank and not exceed $MAX_TAG_LENGTH characters: '$tag'" 
-            }
-        }
+        require(folderId.isNotBlank()) { "Folder ID cannot be blank" }
         
         require(usageCount >= 0) { "Usage count cannot be negative: $usageCount" }
         
@@ -76,8 +68,6 @@ data class WorkoutTemplate(
         const val MAX_DURATION_MINUTES: Int = 300 // 5 hours
         const val MIN_DIFFICULTY: Int = 1
         const val MAX_DIFFICULTY: Int = 10
-        const val MAX_TAGS: Int = 10
-        const val MAX_TAG_LENGTH: Int = 30
         
         /**
          * Creates a new WorkoutTemplate with validation
@@ -85,11 +75,11 @@ data class WorkoutTemplate(
         fun create(
             userId: String,
             name: String,
+            folderId: String,
             description: String? = null,
             exercises: List<TemplateExercise> = emptyList(),
             estimatedDurationMinutes: Int? = null,
-            difficultyLevel: Int? = null,
-            tags: Set<String> = emptySet()
+            difficultyLevel: Int? = null
         ): WorkoutTemplate {
             val now = Instant.now()
             return WorkoutTemplate(
@@ -100,7 +90,7 @@ data class WorkoutTemplate(
                 exercises = exercises,
                 estimatedDurationMinutes = estimatedDurationMinutes,
                 difficultyLevel = difficultyLevel,
-                tags = tags.map { it.trim().lowercase() }.toSet(),
+                folderId = folderId,
                 usageCount = 0,
                 lastUsedAt = null,
                 createdAt = now,
@@ -231,37 +221,6 @@ data class WorkoutTemplate(
     }
     
     /**
-     * Adds a tag to the template
-     */
-    fun addTag(tag: String): WorkoutTemplate {
-        val normalizedTag = tag.trim().lowercase()
-        require(normalizedTag.isNotBlank()) { "Tag cannot be blank" }
-        require(normalizedTag.length <= MAX_TAG_LENGTH) { 
-            "Tag cannot exceed $MAX_TAG_LENGTH characters: ${normalizedTag.length}" 
-        }
-        require(!tags.contains(normalizedTag)) { "Tag already exists: $normalizedTag" }
-        require(tags.size < MAX_TAGS) { "Cannot add more than $MAX_TAGS tags" }
-        
-        return copy(
-            tags = tags + normalizedTag,
-            updatedAt = Instant.now()
-        )
-    }
-    
-    /**
-     * Removes a tag from the template
-     */
-    fun removeTag(tag: String): WorkoutTemplate {
-        val normalizedTag = tag.trim().lowercase()
-        require(tags.contains(normalizedTag)) { "Tag does not exist: $normalizedTag" }
-        
-        return copy(
-            tags = tags - normalizedTag,
-            updatedAt = Instant.now()
-        )
-    }
-    
-    /**
      * Records usage of this template
      */
     fun recordUsage(): WorkoutTemplate {
@@ -276,8 +235,8 @@ data class WorkoutTemplate(
     /**
      * Creates an active workout session from this template
      */
-    fun createActiveSession(userId: String, customName: String? = null): ActiveWorkoutSession {
-        return ActiveWorkoutSession.fromTemplate(userId, this, customName)
+    fun createActiveSession(userId: String, customName: String? = null): UnifiedWorkoutSession {
+        return UnifiedWorkoutSession.fromTemplate(userId, this, customName)
     }
     
     /**
@@ -297,8 +256,4 @@ data class WorkoutTemplate(
     fun containsExercise(exerciseId: ExerciseId): Boolean = 
         exercises.any { it.exerciseId == exerciseId }
     
-    /**
-     * Checks if this template has a specific tag
-     */
-    fun hasTag(tag: String): Boolean = tags.contains(tag.trim().lowercase())
 } 

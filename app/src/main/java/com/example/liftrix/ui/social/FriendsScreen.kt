@@ -30,11 +30,12 @@ import com.example.liftrix.ui.theme.LiftrixTheme
 /**
  * Full friends list, search, requests, and privacy settings in dedicated screen
  * Features tabbed interface for friends and requests with comprehensive friend management
+ * Now integrated with global navigation system - no longer needs dedicated TopAppBar
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FriendsScreen(
-    onNavigateBack: () -> Unit,
+    onNavigateBack: () -> Unit, // Kept for backward compatibility, but navigation handled by global TopAppBar
     modifier: Modifier = Modifier,
     viewModel: SocialViewModel = hiltViewModel()
 ) {
@@ -44,34 +45,8 @@ fun FriendsScreen(
     Column(
         modifier = modifier.fillMaxSize()
     ) {
-        // Top App Bar
-        TopAppBar(
-            title = { 
-                Text(
-                    text = "Friends",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold
-                ) 
-            },
-            navigationIcon = {
-                IconButton(onClick = onNavigateBack) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowBack,
-                        contentDescription = "Navigate back"
-                    )
-                }
-            },
-            actions = {
-                IconButton(
-                    onClick = { viewModel.onEvent(SocialEvent.Refresh) }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Sync,
-                        contentDescription = "Refresh friends"
-                    )
-                }
-            }
-        )
+        // TopAppBar removed - now handled by NavigationAwareTopAppBar in MainNavigationContainer
+        // This eliminates the duplicate top bar and saves vertical space
         
         // Tab Row
         TabRow(

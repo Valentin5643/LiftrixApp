@@ -16,6 +16,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import com.example.liftrix.ui.common.AccessibleIcon
+import com.example.liftrix.ui.theme.LiftrixTokens
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -211,11 +213,11 @@ private fun WorkoutStatItem(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
+        AccessibleIcon(
             imageVector = icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(14.dp)
+            iconSize = LiftrixTokens.TouchTarget.IconSmall,
+            tint = MaterialTheme.colorScheme.primary
         )
         
         Text(

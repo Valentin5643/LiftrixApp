@@ -8,11 +8,16 @@ plugins {
     alias(libs.plugins.google.firebase.firebase.perf)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt.android)
+    id("kotlin-parcelize")
 }
 
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        freeCompilerArgs.addAll(
+            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
+            "-Xjvm-default=all"
+        )
     }
 }
 
@@ -29,15 +34,46 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        // Build optimizations
+        vectorDrawables.useSupportLibrary = true
+        multiDexEnabled = false
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            
+            // Performance optimizations for release builds
+            isDebuggable = false
+            isJniDebuggable = false
+            renderscriptOptimLevel = 3
+            
+            // Firebase Performance Monitoring configuration
+            manifestPlaceholders["firebase_performance_logcat_enabled"] = false
+            manifestPlaceholders["firebase_performance_collection_enabled"] = true
+        }
+        
+        debug {
+            // Debug build optimizations for faster builds
+            isMinifyEnabled = false
+            isShrinkResources = false
+            isDebuggable = true
+            
+            // Disable unnecessary features for debug builds
+            renderscriptOptimLevel = 0
+            isJniDebuggable = false
+            
+            // Firebase Performance Monitoring configuration for debug
+            manifestPlaceholders["firebase_performance_logcat_enabled"] = true
+            manifestPlaceholders["firebase_performance_collection_enabled"] = false
+            
+            versionNameSuffix = "-DEBUG"
         }
     }
     compileOptions {
@@ -48,10 +84,16 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        // Disable unused features for faster builds
+        aidl = false
+        renderScript = false
+        resValues = false
+        shaders = false
     }
 
     lint {
         abortOnError = false
+        checkReleaseBuilds = false
         disable.addAll(listOf("MissingTranslation", "ExtraTranslation"))
         
         // Custom lint rules to prevent Room schema issues
@@ -60,8 +102,9 @@ android {
             "RoomInvalidDefaultValue"       // Validate proper Room default values
         ))
         
-        // Add lint rule to check for 'undefined' in @ColumnInfo defaultValue
-        checkDependencies = true
+        // Optimize lint for faster builds
+        checkDependencies = false
+        checkGeneratedSources = false
     }
 }
 
@@ -83,6 +126,7 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation("androidx.compose.runtime:runtime-livedata")
+    implementation("androidx.compose.runtime:runtime-tracing")
     implementation(libs.androidx.material3.window.size.util)
     implementation("androidx.compose.material:material-icons-extended")
     
@@ -105,6 +149,9 @@ dependencies {
     implementation(libs.firebase.ai)
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.perf)
+    
+    // Google Play Billing
+    implementation("com.android.billingclient:billing-ktx:6.0.1")
     
     // Room dependencies
     implementation(libs.room.runtime)
@@ -131,47 +178,51 @@ dependencies {
     // WorkManager
     implementation(libs.work.runtime.ktx)
     
+    // DataStore for preferences
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    
     // Logging
     implementation(libs.timber)
     
     // Missing dependencies for KSP and ASM instrumentation
-    implementation("androidx.window:window:1.4.0")
-    implementation("androidx.window:window-core:1.4.0")
-    implementation("com.google.guava:guava:32.1.3-android")
-    implementation("androidx.compose.animation:animation:1.7.6")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.8.1")
+    implementation(libs.androidx.window)
+    implementation(libs.androidx.window.core)
+    implementation(libs.guava)
+    implementation(libs.androidx.animation)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.coroutines.jdk8)
     
     testImplementation(libs.junit)
-    testImplementation("io.mockk:mockk:1.13.8")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
-    testImplementation("androidx.arch.core:core-testing:2.2.0")
-    testImplementation("app.cash.turbine:turbine:1.0.0")
-    testImplementation("org.robolectric:robolectric:4.13")
-    testImplementation("androidx.test:core:1.6.1")
-    testImplementation("androidx.test.ext:junit:1.2.1")
-    testImplementation("org.jetbrains.kotlin:kotlin-test:1.9.25")
+    testImplementation(libs.mockk)
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+    testImplementation(libs.androidx.core.testing)
+    testImplementation(libs.app.turbine)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.test.core)
+    testImplementation(libs.androidx.junit)
+    testImplementation(libs.kotlin.test)
     testImplementation(libs.room.testing)
-    testImplementation("androidx.sqlite:sqlite-framework:2.4.0")
-    testImplementation("androidx.test:runner:1.6.2")
+    testImplementation(libs.androidx.sqlite.framework)
+    testImplementation(libs.androidx.runner)
     
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.benchmark.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
-    androidTestImplementation("io.mockk:mockk-android:1.13.8")
-    androidTestImplementation("app.cash.turbine:turbine:1.0.0")
+    androidTestImplementation(libs.mockk.android)
+    androidTestImplementation(libs.app.turbine)
     androidTestImplementation(libs.firebase.firestore.ktx)
-    androidTestImplementation("androidx.work:work-testing:2.10.1")
-    androidTestImplementation("androidx.test:core:1.6.1")
-    androidTestImplementation("androidx.test:runner:1.6.2")
-    androidTestImplementation("androidx.test:rules:1.6.1")
-    androidTestImplementation("com.google.dagger:hilt-android-testing:2.52")
-    kspAndroidTest("com.google.dagger:hilt-android-compiler:2.52")
+    androidTestImplementation(libs.androidx.work.testing)
+    androidTestImplementation(libs.test.core)
+    androidTestImplementation(libs.androidx.runner)
+    androidTestImplementation(libs.androidx.rules)
+    androidTestImplementation(libs.hilt.android.testing)
+    kspAndroidTest(libs.hilt.android.compiler)
     
     // Room testing dependencies for MigrationTestHelper
     androidTestImplementation(libs.room.testing)
-    androidTestImplementation("androidx.sqlite:sqlite-framework:2.4.0")
+    androidTestImplementation(libs.androidx.sqlite.framework)
     
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)

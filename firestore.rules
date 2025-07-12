@@ -223,7 +223,24 @@ service cloud.firestore {
       allow delete: if isDocumentOwner();
     }
     
-    // User settings - personal preferences
+    // User settings - personal preferences and subcollections
+    match /users/{userId}/settings/{settingId} {
+      // Users can read and write their own settings
+      allow read, write: if isOwner(userId);
+      
+      // Allow creation of settings documents
+      allow create: if isOwner(userId) && 
+                   validateUserSettingsData(request.resource.data);
+      
+      // Allow updates to settings documents
+      allow update: if isOwner(userId) && 
+                   validateUserSettingsData(request.resource.data);
+      
+      // Allow deletion of settings documents
+      allow delete: if isOwner(userId);
+    }
+    
+    // User settings - personal preferences (legacy support)
     match /user_settings/{userId} {
       // Users can read and write their own settings
       allow read, write: if isOwner(userId) &&
@@ -314,9 +331,19 @@ service cloud.firestore {
     }
     
     function validateUserSettingsData(data) {
-      return data.keys().hasAll(['userId', 'updated_at']) &&
+      return data.keys().hasAll(['userId', 'updatedAt']) &&
              data.userId is string &&
-             data.updated_at is timestamp;
+             data.updatedAt is number &&
+             data.userId == getUserId() &&
+             // Dark mode validation if present
+             (!(data.keys().hasAny(['darkMode'])) || 
+              data.darkMode is bool) &&
+             // Notifications validation if present
+             (!(data.keys().hasAny(['notificationsEnabled'])) || 
+              data.notificationsEnabled is bool) &&
+             // Sync timestamp validation if present
+             (!(data.keys().hasAny(['syncedAt'])) || 
+              data.syncedAt is number);
     }
     
     function validateUserProfileData(data) {

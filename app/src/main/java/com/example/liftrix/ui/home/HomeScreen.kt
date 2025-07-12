@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,24 +21,32 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.domain.model.*
 import com.example.liftrix.ui.home.components.*
 import com.example.liftrix.ui.common.FeedItemShimmer
+import com.example.liftrix.ui.common.ContextualColorOverlay
+import com.example.liftrix.ui.common.ColorContext
+import com.example.liftrix.ui.common.calculateWorkoutIntensity
+import com.example.liftrix.ui.components.cards.LiftrixCard
+import com.example.liftrix.ui.components.cards.ElevatedLiftrixCard
+import com.example.liftrix.ui.components.layouts.GridSystem
 import com.example.liftrix.ui.theme.LiftrixTheme
 import eu.bambooapps.material3.pullrefresh.PullRefreshIndicator
 import eu.bambooapps.material3.pullrefresh.pullRefresh
 import eu.bambooapps.material3.pullrefresh.rememberPullRefreshState
 
 /**
- * Main home screen displaying streamlined social fitness feed.
+ * Enhanced home screen with modern social feed layout and personal stats dashboard.
  * 
  * Features:
- * - Discovery carousel for user recommendations with follow functionality
- * - Chronological workout feed with personal and friends' workouts
- * - Pull-to-refresh functionality for data updates
- * - Loading, error, and empty state handling
+ * - Personal performance stats dashboard with asymmetrical card layout
+ * - Discovery carousel with enhanced user recommendations and smooth animations
+ * - Chronological workout feed with enhanced card design and athletic styling
+ * - Pull-to-refresh functionality with improved user feedback
+ * - Loading, error, and empty state handling with modern design
  * - Enhanced HomeViewModel integration with MVI pattern
- * - Analytics tracking for user interactions
+ * - Analytics tracking for user interactions and performance metrics
  * 
  * @param onNavigateToWorkout Callback to navigate to workout details screen
  * @param onNavigateToFriends Callback to navigate to friends screen
+ * @param onNavigateToMyWorkouts Callback to navigate to personal workouts screen
  * @param modifier Modifier for styling the screen
  * @param viewModel HomeViewModel for state management (injectable for testing)
  */
@@ -79,13 +88,15 @@ fun HomeScreen(
             }
             
             else -> {
-                // Use single LazyColumn to avoid nested scrolling
-                FlattenedHomeContent(
+                // Enhanced home content with modern card-based layout
+                EnhancedHomeContent(
                     workoutFeedState = uiState.workoutFeedState,
                     recommendationsState = uiState.recommendationsState,
+                    workoutStats = uiState.workoutStats,
                     showEndOfFeedMessage = uiState.showEndOfFeedMessage,
                     onNavigateToWorkout = onNavigateToWorkout,
                     onNavigateToFriends = onNavigateToFriends,
+                    onNavigateToMyWorkouts = onNavigateToMyWorkouts,
                     onEvent = viewModel::onEvent,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -101,15 +112,17 @@ fun HomeScreen(
 }
 
 /**
- * Flattened content using single LazyColumn to avoid nested scrolling constraints
+ * Enhanced home content with modern card-based layout and personal stats dashboard
  */
 @Composable
-private fun FlattenedHomeContent(
+private fun EnhancedHomeContent(
     workoutFeedState: FeedState,
     recommendationsState: RecommendationsState,
+    workoutStats: WorkoutStats?,
     showEndOfFeedMessage: Boolean,
     onNavigateToWorkout: (String) -> Unit,
     onNavigateToFriends: () -> Unit,
+    onNavigateToMyWorkouts: () -> Unit,
     onEvent: (HomeEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -117,15 +130,28 @@ private fun FlattenedHomeContent(
         modifier = modifier
             .fillMaxSize()
             .semantics {
-                contentDescription = "Home screen with user discovery and social workout feed"
+                contentDescription = "Enhanced home screen with personal stats dashboard and social workout feed"
             },
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(vertical = 16.dp)
+        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3),
+        contentPadding = PaddingValues(vertical = GridSystem.spacing3)
     ) {
-        // Header Section
+        // Enhanced Header Section
         item {
-            HomeHeader(
-                modifier = Modifier.padding(horizontal = 16.dp)
+            ElevatedLiftrixCard(
+                modifier = Modifier.padding(horizontal = GridSystem.spacing3),
+                contentPadding = PaddingValues(GridSystem.spacing4)
+            ) {
+                EnhancedHomeHeader(
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+        
+        // Personal Stats Dashboard
+        item {
+            PersonalStatsCard(
+                workoutStats = workoutStats,
+                modifier = Modifier.padding(horizontal = GridSystem.spacing3)
             )
         }
         
@@ -134,11 +160,11 @@ private fun FlattenedHomeContent(
             SectionHeader(
                 title = "Discover People",
                 onViewAllClick = onNavigateToFriends,
-                modifier = Modifier.padding(horizontal = 16.dp)
+                modifier = Modifier.padding(horizontal = GridSystem.spacing3)
             )
         }
         
-        // Discovery Carousel Section (Non-scrolling horizontal list)
+        // Enhanced Discovery Carousel Section
         item {
             DiscoveryCarouselSection(
                 recommendationsState = recommendationsState,
@@ -153,17 +179,21 @@ private fun FlattenedHomeContent(
         item {
             SectionHeader(
                 title = "Recent Activity",
-                onViewAllClick = null,
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp)
+                onViewAllClick = onNavigateToMyWorkouts,
+                modifier = Modifier.padding(
+                    start = GridSystem.spacing3,
+                    end = GridSystem.spacing3,
+                    top = GridSystem.spacing2
+                )
             )
         }
         
-        // Workout Feed Items (Individual items instead of nested LazyColumn)
+        // Enhanced Workout Feed Items
         when (workoutFeedState) {
             is FeedState.Loading -> {
                 items(5) {
                     FeedItemShimmer(
-                        modifier = Modifier.padding(horizontal = 16.dp)
+                        modifier = Modifier.padding(horizontal = GridSystem.spacing3)
                     )
                 }
             }
@@ -174,21 +204,30 @@ private fun FlattenedHomeContent(
                         items = workoutFeedState.workouts,
                         key = { feedWorkout -> feedWorkout.workout.id.value }
                     ) { feedWorkout ->
-                        WorkoutFeedItem(
-                            feedWorkout = feedWorkout,
-                            onClick = {
-                                onEvent(HomeEvent.FeedWorkoutOpened(feedWorkout))
-                                onNavigateToWorkout(feedWorkout.workout.id.value)
-                            },
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                        )
+                        val workoutIntensity = calculateWorkoutIntensityFromFeedWorkout(feedWorkout)
+                        ContextualColorOverlay(
+                            context = ColorContext.WorkoutIntensity(
+                                intensity = workoutIntensity,
+                                workoutType = com.example.liftrix.ui.common.WorkoutType.GENERAL
+                            ),
+                            alpha = 0.03f
+                        ) {
+                            WorkoutFeedItem(
+                                feedWorkout = feedWorkout,
+                                onClick = {
+                                    onEvent(HomeEvent.FeedWorkoutOpened(feedWorkout))
+                                    onNavigateToWorkout(feedWorkout.workout.id.value)
+                                },
+                                modifier = Modifier.padding(horizontal = GridSystem.spacing3)
+                            )
+                        }
                     }
                     
                     // Loading more items
                     if (workoutFeedState.isLoadingMore) {
                         items(3) {
                             FeedItemShimmer(
-                                modifier = Modifier.padding(horizontal = 16.dp)
+                                modifier = Modifier.padding(horizontal = GridSystem.spacing3)
                             )
                         }
                     }
@@ -197,7 +236,7 @@ private fun FlattenedHomeContent(
                     if (showEndOfFeedMessage) {
                         item {
                             FeedEndMessage(
-                                modifier = Modifier.padding(horizontal = 16.dp)
+                                modifier = Modifier.padding(horizontal = GridSystem.spacing3)
                             )
                         }
                     }
@@ -213,7 +252,7 @@ private fun FlattenedHomeContent(
                 } else {
                     item {
                         EmptyWorkoutFeedState(
-                            modifier = Modifier.padding(horizontal = 16.dp)
+                            modifier = Modifier.padding(horizontal = GridSystem.spacing3)
                         )
                     }
                 }
@@ -225,7 +264,7 @@ private fun FlattenedHomeContent(
                         message = workoutFeedState.message,
                         onRetry = { onEvent(HomeEvent.LoadMoreWorkouts) },
                         onDismiss = { onEvent(HomeEvent.FeedErrorDismissed) },
-                        modifier = Modifier.padding(horizontal = 16.dp)
+                        modifier = Modifier.padding(horizontal = GridSystem.spacing3)
                     )
                 }
             }
@@ -234,7 +273,73 @@ private fun FlattenedHomeContent(
 }
 
 /**
- * Discovery carousel section without nested scrolling
+ * Enhanced home screen header with modern typography and athletic branding
+ */
+@Composable
+private fun EnhancedHomeHeader(
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing1)
+    ) {
+        Text(
+            text = "Welcome back!",
+            style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        
+        Text(
+            text = "Track your progress and stay motivated with friends",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
+ * Enhanced section header with modern styling and improved accessibility
+ */
+@Composable
+private fun SectionHeader(
+    title: String,
+    onViewAllClick: (() -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Bold
+        )
+        
+        onViewAllClick?.let { onClick ->
+            TextButton(
+                onClick = onClick,
+                contentPadding = PaddingValues(
+                    horizontal = GridSystem.spacing2,
+                    vertical = GridSystem.spacing1
+                )
+            ) {
+                Text(
+                    text = "View All",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Enhanced discovery carousel section with modern error handling
  */
 @Composable
 private fun DiscoveryCarouselSection(
@@ -270,7 +375,7 @@ private fun DiscoveryCarouselSection(
             } else {
                 EmptyDiscoveryState(
                     onViewAllFriends = onViewAllFriends,
-                    modifier = modifier.padding(horizontal = 16.dp)
+                    modifier = modifier.padding(horizontal = GridSystem.spacing3)
                 )
             }
         }
@@ -280,101 +385,40 @@ private fun DiscoveryCarouselSection(
                 message = recommendationsState.message,
                 onRetry = onLoadMore,
                 onDismiss = onErrorDismissed,
-                modifier = modifier.padding(horizontal = 16.dp)
+                modifier = modifier.padding(horizontal = GridSystem.spacing3)
             )
         }
     }
 }
 
 /**
- * Enhanced home screen header with social focus
- */
-@Composable
-private fun HomeHeader(
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Text(
-            text = "Welcome back!",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Bold
-        )
-        
-        Text(
-            text = "Discover new fitness friends and stay motivated",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-/**
- * Reusable section header component
- */
-@Composable
-private fun SectionHeader(
-    title: String,
-    onViewAllClick: (() -> Unit)?,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Bold
-        )
-        
-        onViewAllClick?.let { onClick ->
-            TextButton(
-                onClick = onClick,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    text = "View All",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-    }
-}
-
-/**
- * Empty state for discovery section when no recommendations are available
+ * Enhanced empty state for discovery section with modern card design
  */
 @Composable
 private fun EmptyDiscoveryState(
     onViewAllFriends: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    LiftrixCard(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        contentPadding = PaddingValues(GridSystem.spacing4)
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
         ) {
             Text(
                 text = "No new people to discover right now",
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.Medium
             )
             
             Text(
@@ -384,7 +428,10 @@ private fun EmptyDiscoveryState(
                 textAlign = TextAlign.Center
             )
             
-            TextButton(onClick = onViewAllFriends) {
+            Button(
+                onClick = onViewAllFriends,
+                modifier = Modifier.padding(top = GridSystem.spacing1)
+            ) {
                 Text("View Friends")
             }
         }
@@ -392,7 +439,7 @@ private fun EmptyDiscoveryState(
 }
 
 /**
- * Error state for discovery section
+ * Enhanced error state for discovery section with modern card design
  */
 @Composable
 private fun DiscoveryErrorState(
@@ -401,59 +448,72 @@ private fun DiscoveryErrorState(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    LiftrixCard(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        contentPadding = PaddingValues(GridSystem.spacing3)
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing1)
             ) {
                 Icon(
                     imageVector = Icons.Default.Error,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onErrorContainer
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.size(20.dp)
                 )
                 
                 Text(
                     text = "Unable to load recommendations",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    fontWeight = FontWeight.Medium
                 )
             }
             
             Text(
                 text = message,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onErrorContainer,
                 textAlign = TextAlign.Center
             )
             
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
             ) {
-                TextButton(onClick = onRetry) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                ) {
+                    Text("Dismiss")
+                }
+                
+                Button(
+                    onClick = onRetry,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.onErrorContainer,
+                        contentColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(GridSystem.spacing1))
                     Text("Retry")
-                }
-                
-                TextButton(onClick = onDismiss) {
-                    Text("Dismiss")
                 }
             }
         }
@@ -461,36 +521,44 @@ private fun DiscoveryErrorState(
 }
 
 /**
- * Empty state for workout feed
+ * Enhanced empty state for workout feed with modern card design
  */
 @Composable
 private fun EmptyWorkoutFeedState(
     modifier: Modifier = Modifier
 ) {
-    Card(
+    LiftrixCard(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        contentPadding = PaddingValues(GridSystem.spacing5)
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(32.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
         ) {
+            Icon(
+                imageVector = Icons.Default.FitnessCenter,
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            
             Text(
                 text = "No workout activity yet",
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.Bold
             )
             
             Text(
                 text = "Start working out or follow friends to see activity here",
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
@@ -499,7 +567,7 @@ private fun EmptyWorkoutFeedState(
 }
 
 /**
- * Error state for workout feed
+ * Enhanced error state for workout feed with modern card design
  */
 @Composable
 private fun WorkoutFeedErrorState(
@@ -508,49 +576,72 @@ private fun WorkoutFeedErrorState(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    LiftrixCard(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        contentPadding = PaddingValues(GridSystem.spacing3)
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
         ) {
-            Text(
-                text = "Unable to load workout feed",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onErrorContainer,
-                textAlign = TextAlign.Center
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing1)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Error,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.size(20.dp)
+                )
+                
+                Text(
+                    text = "Unable to load workout feed",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    fontWeight = FontWeight.Medium
+                )
+            }
             
             Text(
                 text = message,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onErrorContainer,
                 textAlign = TextAlign.Center
             )
             
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
             ) {
-                TextButton(onClick = onRetry) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                ) {
+                    Text("Dismiss")
+                }
+                
+                Button(
+                    onClick = onRetry,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.onErrorContainer,
+                        contentColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(GridSystem.spacing1))
                     Text("Retry")
-                }
-                
-                TextButton(onClick = onDismiss) {
-                    Text("Dismiss")
                 }
             }
         }
@@ -558,7 +649,34 @@ private fun WorkoutFeedErrorState(
 }
 
 /**
- * Loading state component for initial load
+ * Enhanced end of feed message with modern card design
+ */
+@Composable
+private fun FeedEndMessage(
+    modifier: Modifier = Modifier
+) {
+    LiftrixCard(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        contentPadding = PaddingValues(GridSystem.spacing3)
+    ) {
+        Text(
+            text = "You're all caught up! 🎉",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+/**
+ * Enhanced loading state component with modern design
  */
 @Composable
 private fun LoadingState(
@@ -568,22 +686,31 @@ private fun LoadingState(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        LiftrixCard(
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+            contentPadding = PaddingValues(GridSystem.spacing5)
         ) {
-            CircularProgressIndicator()
-            Text(
-                text = "Loading your social feed...",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
+            ) {
+                CircularProgressIndicator(
+                    color = MaterialTheme.colorScheme.primary
+                )
+                
+                Text(
+                    text = "Loading your social feed...",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
     }
 }
 
 /**
- * Error state component for global errors
+ * Enhanced error state component for global errors with modern design
  */
 @Composable
 private fun ErrorState(
@@ -595,55 +722,139 @@ private fun ErrorState(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(32.dp),
+            .padding(GridSystem.spacing5),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            imageVector = Icons.Default.Error,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.error
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(
-            text = "Something went wrong",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.error,
-            textAlign = TextAlign.Center
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Text(
-            text = errorMessage,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        LiftrixCard(
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+            contentPadding = PaddingValues(GridSystem.spacing5)
         ) {
-            OutlinedButton(onClick = onDismiss) {
-                Text("Dismiss")
-            }
-            
-            Button(onClick = onRetry) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
+            ) {
                 Icon(
-                    imageVector = Icons.Default.Refresh,
+                    imageVector = Icons.Default.Error,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.onErrorContainer
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Try Again")
+                
+                Text(
+                    text = "Something went wrong",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                Text(
+                    text = errorMessage,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    textAlign = TextAlign.Center
+                )
+                
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    ) {
+                        Text("Dismiss")
+                    }
+                    
+                    Button(
+                        onClick = onRetry,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.onErrorContainer,
+                            contentColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(GridSystem.spacing1))
+                        Text("Try Again")
+                    }
+                }
             }
         }
     }
+}
+
+/**
+ * Enhanced empty state component with modern design and call-to-action
+ */
+@Composable
+private fun EmptyState(
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(GridSystem.spacing5),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        LiftrixCard(
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+            contentPadding = PaddingValues(GridSystem.spacing5)
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.FitnessCenter,
+                    contentDescription = null,
+                    modifier = Modifier.size(80.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                
+                Text(
+                    text = "Welcome to Liftrix!",
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                Text(
+                    text = "Start your fitness journey by creating your first workout or connecting with friends",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Helper function to calculate workout intensity from FeedWorkout data
+ * Used for contextual color overlays
+ */
+private fun calculateWorkoutIntensityFromFeedWorkout(feedWorkout: FeedWorkout): Float {
+    val workout = feedWorkout.workout
+    val completionPercentage = workout.getCompletionPercentage()
+    val duration = workout.getDuration()?.toMinutes()
+    
+    return calculateWorkoutIntensity(
+        completionPercentage = completionPercentage,
+        duration = duration,
+        workoutType = com.example.liftrix.ui.common.WorkoutType.GENERAL
+    )
 }
 
 @Preview(showBackground = true)

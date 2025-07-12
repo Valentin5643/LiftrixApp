@@ -37,17 +37,31 @@ class ExerciseLibraryRepositoryImpl @Inject constructor(
             val exercises = try {
                 // First, check if database is populated
                 val dbExercises = dao.getAllExercises().first()
-                Timber.d("ExerciseLibraryRepo: Database contains ${dbExercises.size} exercises")
+                Timber.d("🔥 REPO-DEBUG: Database contains ${dbExercises.size} exercises")
+                
+                // Additional debug logging
+                if (dbExercises.isEmpty()) {
+                    Timber.w("🔥 REPO-DEBUG: Database is empty - triggering population")
+                } else {
+                    Timber.d("🔥 REPO-DEBUG: Database has exercises - sample: ${dbExercises.take(3).map { it.name }}")
+                }
                 
                 if (dbExercises.isEmpty()) {
                     Timber.d("Database empty during search, triggering population")
                     
                     // CRITICAL FIX: Ensure population completes before proceeding
+                    Timber.d("🔥 REPO-DEBUG: Starting database population...")
                     exerciseLibrarySeedData.populateExerciseLibraryIfNeeded(database)
                     
                     // Get updated exercises from database after population
                     val updatedExercises = dao.getAllExercises().first()
-                    Timber.d("ExerciseLibraryRepo: After population: ${updatedExercises.size} exercises")
+                    Timber.d("🔥 REPO-DEBUG: After population: ${updatedExercises.size} exercises")
+                    
+                    if (updatedExercises.isEmpty()) {
+                        Timber.e("🔥 REPO-DEBUG: Population failed - still no exercises in database!")
+                    } else {
+                        Timber.d("🔥 REPO-DEBUG: Population successful - sample: ${updatedExercises.take(3).map { it.name }}")
+                    }
                     
                     if (updatedExercises.isNotEmpty()) {
                         // Now perform search on populated database

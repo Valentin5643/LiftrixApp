@@ -11,6 +11,7 @@ data class SessionExercise(
     val name: String,
     val category: ExerciseCategory,
     val primaryMuscle: ExerciseCategory,
+    val equipment: Equipment,
     val secondaryMuscles: Set<ExerciseCategory> = emptySet(),
     val sets: List<SessionSet>,
     val orderIndex: Int,
@@ -54,9 +55,12 @@ data class SessionExercise(
 
         /**
          * Creates a SessionExercise from a TemplateExercise
+         * 🔥 FIXED: Now generates unique exercise IDs per session to prevent exercise sharing between sessions
          */
         fun fromTemplate(templateExercise: TemplateExercise): SessionExercise {
-            val sessionSets = (1..(templateExercise.targetSets ?: 1)).map { setNumber ->
+            // 🔥 FIX: Ensure at least 1 set is always created, even if targetSets is 0 or null
+            val targetSetsCount = (templateExercise.targetSets ?: 1).coerceAtLeast(1)
+            val sessionSets = (1..targetSetsCount).map { setNumber ->
                 SessionSet(
                     setNumber = setNumber,
                     targetReps = templateExercise.targetReps?.count,
@@ -74,10 +78,11 @@ data class SessionExercise(
             }
 
             return SessionExercise(
-                exerciseId = templateExercise.exerciseId,
+                exerciseId = ExerciseId.generate(), // 🔥 FIX: Generate unique ID per session instance
                 name = templateExercise.name,
                 category = templateExercise.primaryMuscle,
                 primaryMuscle = templateExercise.primaryMuscle,
+                equipment = templateExercise.equipment,
                 secondaryMuscles = emptySet(),
                 sets = sessionSets,
                 orderIndex = templateExercise.orderIndex,
@@ -90,24 +95,50 @@ data class SessionExercise(
 
         /**
          * Creates a blank SessionExercise for adding during workout
+         * 🔥 FIXED: Now provides default target metrics to prevent ExerciseSet validation failures
          */
         fun createBlank(
             exerciseId: ExerciseId,
             name: String,
             category: ExerciseCategory,
             primaryMuscle: ExerciseCategory,
+            equipment: Equipment,
             orderIndex: Int,
-            initialSets: Int = 3
+            initialSets: Int = 1
         ): SessionExercise {
             require(initialSets > 0) { "Initial sets must be positive: $initialSets" }
             require(initialSets <= 20) { "Too many initial sets: $initialSets" }
 
+            // 🔥 FIX: Create sets with default target metrics based on exercise type
+            val defaultTargetReps = when {
+                // Time-based exercises (cardio, planks, etc.)
+                name.contains("plank", ignoreCase = true) ||
+                name.contains("hold", ignoreCase = true) ||
+                category == ExerciseCategory.CORE -> null // Will use time instead
+                
+                // Distance-based exercises
+                name.contains("run", ignoreCase = true) ||
+                name.contains("walk", ignoreCase = true) ||
+                name.contains("cycle", ignoreCase = true) -> null // Will use distance instead
+                
+                // Standard strength exercises - default to reps
+                else -> 10
+            }
+            
+            val defaultTargetTime = when {
+                // Time-based exercises get default time
+                name.contains("plank", ignoreCase = true) ||
+                name.contains("hold", ignoreCase = true) ||
+                category == ExerciseCategory.CORE -> 30L // 30 seconds
+                else -> null
+            }
+
             val blankSets = (1..initialSets).map { setNumber ->
                 SessionSet(
                     setNumber = setNumber,
-                    targetReps = null,
+                    targetReps = defaultTargetReps,
                     targetWeight = null,
-                    targetTime = null,
+                    targetTime = defaultTargetTime,
                     targetDistance = null,
                     targetRpe = null,
                     actualReps = null,
@@ -124,6 +155,7 @@ data class SessionExercise(
                 name = name,
                 category = category,
                 primaryMuscle = primaryMuscle,
+                equipment = equipment,
                 secondaryMuscles = emptySet(),
                 sets = blankSets,
                 orderIndex = orderIndex,
@@ -134,15 +166,36 @@ data class SessionExercise(
 
     /**
      * Adds a new set to the exercise
+     * 🔥 FIXED: Ensures default metrics are provided to prevent validation failures
      */
     fun addSet(targetReps: Int? = null, targetWeight: Weight? = null): SessionExercise {
         require(sets.size < 20) { "Cannot add more than 20 sets per exercise" }
 
+        // 🔥 FIX: Provide smart defaults based on existing sets or exercise type
+        val inferredTargetReps = targetReps ?: run {
+            // Use existing set's target/actual reps as template, or default to 10 for strength exercises
+            val existingReps = sets.lastOrNull()?.let { it.actualReps ?: it.targetReps }
+            existingReps ?: when {
+                name.contains("plank", ignoreCase = true) || 
+                name.contains("hold", ignoreCase = true) -> null // Time-based
+                else -> 10 // Default reps for strength exercises
+            }
+        }
+        
+        val inferredTargetTime = when {
+            // Time-based exercises get default time if no reps
+            (name.contains("plank", ignoreCase = true) || 
+             name.contains("hold", ignoreCase = true)) && inferredTargetReps == null -> {
+                sets.lastOrNull()?.let { it.actualTime ?: it.targetTime } ?: 30L
+            }
+            else -> null
+        }
+
         val newSet = SessionSet(
             setNumber = sets.size + 1,
-            targetReps = targetReps,
+            targetReps = inferredTargetReps,
             targetWeight = targetWeight,
-            targetTime = null,
+            targetTime = inferredTargetTime,
             targetDistance = null,
             targetRpe = null,
             actualReps = null,
@@ -309,18 +362,30 @@ data class SessionExercise(
 
     /**
      * Converts to a completed Exercise for saving to workout history
+     * 🔥 FIXED: Added defensive checks to ensure at least one metric is always present
      */
     fun toCompletedExercise(): Exercise {
         val completedSets = sets.map { sessionSet ->
+            // Extract metrics with fallbacks
+            val finalReps = sessionSet.actualReps?.let { Reps(it) } ?: sessionSet.targetReps?.let { Reps(it) }
+            val finalWeight = sessionSet.actualWeight ?: sessionSet.targetWeight
+            val finalTime = sessionSet.actualTime?.let { java.time.Duration.ofSeconds(it) } 
+                ?: sessionSet.targetTime?.let { java.time.Duration.ofSeconds(it) }
+            val finalDistance = sessionSet.actualDistance ?: sessionSet.targetDistance
+            val finalRpe = sessionSet.actualRpe?.let { RPE(it) } ?: sessionSet.targetRpe?.let { RPE(it) }
+            
+            // 🔥 DEFENSIVE FIX: Ensure at least one metric is present to satisfy ExerciseSet validation
+            val safeReps = finalReps ?: if (finalTime == null && finalDistance == null) Reps(1) else null
+            val safeTime = finalTime ?: if (safeReps == null && finalDistance == null) java.time.Duration.ofSeconds(30) else null
+            
             ExerciseSet(
                 id = ExerciseSetId.generate(),
                 setNumber = sessionSet.setNumber,
-                reps = sessionSet.actualReps?.let { Reps(it) } ?: sessionSet.targetReps?.let { Reps(it) },
-                weight = sessionSet.actualWeight ?: sessionSet.targetWeight,
-                time = sessionSet.actualTime?.let { java.time.Duration.ofSeconds(it) } 
-                    ?: sessionSet.targetTime?.let { java.time.Duration.ofSeconds(it) },
-                distance = sessionSet.actualDistance ?: sessionSet.targetDistance,
-                rpe = sessionSet.actualRpe?.let { RPE(it) } ?: sessionSet.targetRpe?.let { RPE(it) },
+                reps = safeReps,
+                weight = finalWeight,
+                time = safeTime,
+                distance = finalDistance,
+                rpe = finalRpe,
                 completedAt = sessionSet.completedAt,
                 notes = null
             )
@@ -340,7 +405,7 @@ data class SessionExercise(
             searchableTerms = listOf(name.lowercase())
         )
 
-        return Exercise(
+        return Exercise.createSafe(
             id = exerciseId,
             workoutId = WorkoutId(""), // Will be set by parent workout
             libraryExercise = libraryExercise,

@@ -1,6 +1,5 @@
 package com.example.liftrix.di
 
-import com.example.liftrix.data.repository.ActiveWorkoutSessionRepositoryImpl
 import com.example.liftrix.data.repository.AuthRepositoryImpl
 import com.example.liftrix.data.repository.CustomExerciseRepositoryImpl
 import com.example.liftrix.data.repository.ExerciseLibraryRepositoryImpl
@@ -10,8 +9,8 @@ import com.example.liftrix.data.repository.SocialRepositoryImpl
 import com.example.liftrix.data.repository.WorkoutRepository
 import com.example.liftrix.data.repository.WorkoutRepositoryImpl
 import com.example.liftrix.data.repository.WorkoutTemplateRepositoryImpl
+import com.example.liftrix.data.repository.FolderRepositoryImpl
 import com.example.liftrix.data.repository.ExerciseRepositoryImpl
-import com.example.liftrix.domain.repository.ActiveWorkoutSessionRepository
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.CustomExerciseRepository
 import com.example.liftrix.domain.repository.ExerciseLibraryRepository
@@ -19,9 +18,11 @@ import com.example.liftrix.domain.repository.ProfileRepository
 import com.example.liftrix.domain.repository.ProgressStatsRepository
 import com.example.liftrix.domain.repository.SocialRepository
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.repository.ExerciseRepository
 import dagger.Binds
 import dagger.Module
+import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
@@ -84,10 +85,11 @@ abstract class RepositoryModule {
         socialRepositoryImpl: SocialRepositoryImpl
     ): SocialRepository
 
+
     @Binds
     @Singleton
-    abstract fun bindActiveWorkoutSessionRepository(
-        activeWorkoutSessionRepositoryImpl: ActiveWorkoutSessionRepositoryImpl
-    ): ActiveWorkoutSessionRepository
+    abstract fun bindFolderRepository(
+        folderRepositoryImpl: FolderRepositoryImpl
+    ): FolderRepository
 
 } 

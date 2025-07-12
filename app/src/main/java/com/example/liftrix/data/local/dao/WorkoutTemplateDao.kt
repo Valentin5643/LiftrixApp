@@ -24,8 +24,9 @@ interface WorkoutTemplateDao {
     
     /**
      * Get all workout templates for a specific user
+     * Uses COALESCE to ensure new templates (last_used_at = NULL) appear at top
      */
-    @Query("SELECT * FROM workout_templates WHERE user_id = :userId ORDER BY last_used_at DESC, created_at DESC")
+    @Query("SELECT * FROM workout_templates WHERE user_id = :userId ORDER BY COALESCE(last_used_at, created_at) DESC, created_at DESC")
     fun getAllTemplatesForUser(userId: String): Flow<List<WorkoutTemplateEntity>>
     
     /**
@@ -46,15 +47,15 @@ interface WorkoutTemplateDao {
     fun searchTemplates(userId: String, searchQuery: String): Flow<List<WorkoutTemplateEntity>>
     
     /**
-     * Get templates by tags for a specific user
+     * Get templates by folder for a specific user
      */
     @Query("""
         SELECT * FROM workout_templates 
         WHERE user_id = :userId 
-        AND tags LIKE '%' || :tag || '%'
-        ORDER BY usage_count DESC
+        AND folder_id = :folderId
+        ORDER BY usage_count DESC, last_used_at DESC
     """)
-    fun getTemplatesByTag(userId: String, tag: String): Flow<List<WorkoutTemplateEntity>>
+    fun getTemplatesByFolder(userId: String, folderId: String): Flow<List<WorkoutTemplateEntity>>
     
     /**
      * Get most used templates for a specific user

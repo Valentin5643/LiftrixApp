@@ -60,10 +60,4 @@ enum class SubscriptionTier(val displayName: String) {
     PRO("Pro")
 }
 
-enum class SubscriptionStatus(val displayName: String) {
-    ACTIVE("Active"),
-    CANCELLED("Cancelled"),
-    EXPIRED("Expired"),
-    TRIAL("Trial"),
-    PAUSED("Paused")
-} 
+ 

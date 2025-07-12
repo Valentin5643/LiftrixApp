@@ -5,7 +5,6 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.liftrix.data.local.LiftrixDatabase
-import com.example.liftrix.data.local.dao.ActiveWorkoutSessionDao
 import com.example.liftrix.data.local.dao.CustomExerciseDao
 import com.example.liftrix.data.local.dao.ExerciseLibraryDao
 import com.example.liftrix.data.local.dao.UserProfileDao
@@ -15,10 +14,12 @@ import com.example.liftrix.data.local.dao.ExerciseSetDao
 import com.example.liftrix.data.local.dao.ExerciseWeightMemoryDao
 import com.example.liftrix.data.local.dao.ExerciseUsageHistoryDao
 import com.example.liftrix.data.local.dao.WorkoutTemplateDao
+import com.example.liftrix.data.local.dao.FolderDao
 import com.example.liftrix.data.local.dao.FriendDao
 import com.example.liftrix.data.local.dao.PrivacySettingsDao
+import com.example.liftrix.data.local.dao.SubscriptionDao
+import com.example.liftrix.data.local.dao.SettingsDao
 import com.example.liftrix.data.local.seed.ExerciseLibrarySeedData
-import com.example.liftrix.data.local.migration.MIGRATION_22_23
 
 
 import dagger.Module
@@ -44,22 +45,18 @@ object DatabaseModule {
         @ApplicationContext context: Context,
         exerciseLibrarySeedData: ExerciseLibrarySeedData
     ): LiftrixDatabase {
-        // Validate migration chain at build time
-        val availableMigrations = listOf(
-            6 to 7, 7 to 8, 8 to 9, 9 to 10, 10 to 11, 11 to 12, 12 to 13, 13 to 14, 14 to 15, 15 to 16, 16 to 17, 17 to 18, 18 to 19, 19 to 20, 20 to 21, 21 to 22, 22 to 23
-        )
 
         val database = Room.databaseBuilder(
             context.applicationContext,
             LiftrixDatabase::class.java,
-            "liftrix_database"
+            "liftrix_database" // Standard database name
         )
             .setTransactionExecutor(Dispatchers.IO.asExecutor())
             .setQueryExecutor(Dispatchers.IO.asExecutor())
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onCreate(db: SupportSQLiteDatabase) {
                     super.onCreate(db)
-                    Timber.i("🏗️ Database created from scratch at version 23")
+                    Timber.i("🏗️ Database created from scratch at version 27")
                 }
                 
                 override fun onOpen(db: SupportSQLiteDatabase) {
@@ -67,12 +64,8 @@ object DatabaseModule {
                     Timber.d("📖 Database connection opened (routine operation)")
                 }
             })
-            // Register the missing migration from version 22 to 23
-            //.addMigration(MIGRATION_22_23)
-            // Temporary fallback for development - enables database recreation on schema mismatch
-            // TODO: Remove this for production builds and ensure proper migration testing
+            // Enable fallback to destructive migration for development
             .fallbackToDestructiveMigration()
-            .fallbackToDestructiveMigrationOnDowngrade(true)
             .build()
             
         // Pre-warm the database to establish stable connection and complete any migrations
@@ -90,7 +83,7 @@ object DatabaseModule {
                 val tableExists = cursor.moveToFirst()
                 cursor.close()
                 
-                if (version == 23 && tableExists) {
+                if (version == 27 && tableExists) {
                     Timber.i("✅ Database ready - all migrations complete, exercise_usage_history confirmed")
                 } else {
                     Timber.w("⚠️ Database initialization issue - version: $version, table exists: $tableExists")
@@ -163,9 +156,20 @@ object DatabaseModule {
         return database.privacySettingsDao()
     }
 
+
     @Provides
-    fun provideActiveWorkoutSessionDao(database: LiftrixDatabase): ActiveWorkoutSessionDao {
-        return database.activeWorkoutSessionDao()
+    fun provideFolderDao(database: LiftrixDatabase): FolderDao {
+        return database.folderDao()
+    }
+
+    @Provides
+    fun provideSubscriptionDao(database: LiftrixDatabase): SubscriptionDao {
+        return database.subscriptionDao()
+    }
+
+    @Provides
+    fun provideSettingsDao(database: LiftrixDatabase): SettingsDao {
+        return database.settingsDao()
     }
 
 }

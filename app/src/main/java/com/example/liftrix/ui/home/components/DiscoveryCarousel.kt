@@ -27,6 +27,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,12 +45,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.model.RecommendedUser
 import com.example.liftrix.ui.common.UserCardShimmer
+import com.example.liftrix.ui.components.cards.LiftrixCard
+import com.example.liftrix.ui.components.cards.CompactLiftrixCard
+import com.example.liftrix.ui.components.layouts.GridSystem
 import com.example.liftrix.ui.theme.LiftrixColors
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
- * Discovery carousel component displaying recommended users with lazy loading
- * and 70% scroll prefetch trigger for pagination
+ * Enhanced discovery carousel with smooth animations and modern card design
+ * Displays recommended users with lazy loading and 70% scroll prefetch trigger for pagination
  */
 @Composable
 fun DiscoveryCarousel(
@@ -81,8 +86,8 @@ fun DiscoveryCarousel(
     
     LazyRow(
         state = listState,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing2),
+        contentPadding = PaddingValues(horizontal = GridSystem.spacing3),
         modifier = modifier.testTag("discovery_carousel")
     ) {
         items(
@@ -96,7 +101,7 @@ fun DiscoveryCarousel(
             )
         }
         
-        // Loading placeholders
+        // Loading placeholders with enhanced styling
         if (isLoading) {
             items(3) {
                 UserCardShimmer()
@@ -106,7 +111,7 @@ fun DiscoveryCarousel(
 }
 
 /**
- * Individual user recommendation card with profile image, username, and follow button
+ * Enhanced user recommendation card with modern styling and improved interactions
  */
 @Composable
 private fun RecommendedUserCard(
@@ -114,32 +119,32 @@ private fun RecommendedUserCard(
     onFollowUser: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.width(140.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    LiftrixCard(
+        modifier = modifier.width(160.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        contentDescription = "Recommended user: ${user.username}",
+        contentPadding = PaddingValues(GridSystem.spacing3)
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
         ) {
-            // Profile image
+            // Enhanced profile image
             ProfileImage(
                 imageUrl = user.profileImageUrl,
                 displayName = user.username,
-                size = 48.dp
+                size = 56.dp
             )
             
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            // Username
+            // Username with enhanced typography
             Text(
                 text = user.username,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
@@ -148,20 +153,82 @@ private fun RecommendedUserCard(
                 modifier = Modifier.fillMaxWidth()
             )
             
-            Spacer(modifier = Modifier.height(8.dp))
+            // User stats (if available)
+            Text(
+                text = "Active user",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
             
-            // Follow/Unfollow button
+            // Enhanced follow/unfollow button
             FollowButton(
                 isFollowing = user.isFollowing,
-                onClick = onFollowUser
+                onClick = onFollowUser,
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
 }
 
 /**
- * Profile image component with URL loading capability and initials fallback
- * Based on existing FriendAvatar pattern but enhanced for image loading
+ * Enhanced follow/unfollow button with modern styling
+ */
+@Composable
+private fun FollowButton(
+    isFollowing: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (isFollowing) {
+        OutlinedButton(
+            onClick = onClick,
+            modifier = modifier,
+            contentPadding = PaddingValues(
+                horizontal = GridSystem.spacing2,
+                vertical = GridSystem.spacing1
+            )
+        ) {
+            Icon(
+                imageVector = Icons.Default.PersonRemove,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp)
+            )
+            
+            Spacer(modifier = Modifier.width(GridSystem.spacing1))
+            
+            Text(
+                text = "Following",
+                style = MaterialTheme.typography.labelMedium
+            )
+        }
+    } else {
+        Button(
+            onClick = onClick,
+            modifier = modifier,
+            contentPadding = PaddingValues(
+                horizontal = GridSystem.spacing2,
+                vertical = GridSystem.spacing1
+            )
+        ) {
+            Icon(
+                imageVector = Icons.Default.PersonAdd,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp)
+            )
+            
+            Spacer(modifier = Modifier.width(GridSystem.spacing1))
+            
+            Text(
+                text = "Follow",
+                style = MaterialTheme.typography.labelMedium
+            )
+        }
+    }
+}
+
+/**
+ * Enhanced profile image component with modern styling
  */
 @Composable
 private fun ProfileImage(
@@ -170,8 +237,7 @@ private fun ProfileImage(
     size: Dp,
     modifier: Modifier = Modifier
 ) {
-    // For now, using initials-based approach similar to FriendAvatar
-    // TODO: Add Coil image loading library for actual URL support in future iteration
+    // Enhanced initials-based approach with better styling
     val initials = displayName
         .trim()
         .split(' ')
@@ -184,56 +250,25 @@ private fun ProfileImage(
         modifier = modifier
             .size(size)
             .clip(CircleShape)
-            .background(LiftrixColors.Primary),
+            .background(MaterialTheme.colorScheme.primary),
         contentAlignment = Alignment.Center
     ) {
         if (initials == "?") {
             Icon(
                 imageVector = Icons.Default.Person,
                 contentDescription = "User avatar",
-                tint = LiftrixColors.OnPrimary,
-                modifier = Modifier.size(size * 0.5f)
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(size * 0.6f)
             )
         } else {
             Text(
                 text = initials,
-                style = MaterialTheme.typography.titleMedium,
-                color = LiftrixColors.OnPrimary,
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimary,
                 textAlign = TextAlign.Center
             )
         }
-    }
-}
-
-/**
- * Follow/Unfollow button with appropriate icons and states
- */
-@Composable
-private fun FollowButton(
-    isFollowing: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val (icon, contentDescription) = if (isFollowing) {
-        Icons.Default.PersonRemove to "Unfollow user"
-    } else {
-        Icons.Default.PersonAdd to "Follow user"
-    }
-    
-    IconButton(
-        onClick = onClick,
-        modifier = modifier
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = if (isFollowing) {
-                MaterialTheme.colorScheme.error
-            } else {
-                LiftrixColors.Primary
-            }
-        )
     }
 }
 

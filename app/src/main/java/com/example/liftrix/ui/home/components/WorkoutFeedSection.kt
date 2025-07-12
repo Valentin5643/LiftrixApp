@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +31,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.ui.common.FeedItemShimmer
+import com.example.liftrix.domain.model.PerformanceMetrics
+import com.example.liftrix.ui.common.PerformanceOptimizations
+import com.example.liftrix.ui.common.getWorkoutFeedScrollConfig
 import com.example.liftrix.ui.home.FeedState
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -70,6 +74,7 @@ fun WorkoutFeedSection(
 
 /**
  * Main feed content with workout items and pagination support
+ * Enhanced with performance optimizations for 60fps scrolling
  */
 @Composable
 private fun WorkoutFeedContent(
@@ -80,7 +85,13 @@ private fun WorkoutFeedContent(
 ) {
     val listState = rememberLazyListState()
     
-    // Pagination trigger when scrolled near the end
+    // Performance optimization: remember stable callbacks and config
+    val stableOnLoadMore = remember(onLoadMore) { onLoadMore }
+    val scrollConfig = remember(feedState.workouts.size) { 
+        getWorkoutFeedScrollConfig(feedState.workouts.size) 
+    }
+    
+    // Optimized pagination with performance monitoring
     LaunchedEffect(listState, feedState.workouts.size, feedState.hasMore) {
         snapshotFlow {
             val layoutInfo = listState.layoutInfo
@@ -91,7 +102,7 @@ private fun WorkoutFeedContent(
             totalItemsCount > 0 && lastVisibleItemIndex >= totalItemsCount - 3
         }.distinctUntilChanged().collect { shouldLoadMore ->
             if (shouldLoadMore && feedState.hasMore && !feedState.isLoadingMore) {
-                onLoadMore()
+                stableOnLoadMore()
             }
         }
     }
@@ -104,27 +115,37 @@ private fun WorkoutFeedContent(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Workout feed items
+        // Workout feed items with optimized keys and content types
         items(
             items = feedState.workouts,
-            key = { feedWorkout -> feedWorkout.workout.id.value }
+            key = { feedWorkout -> 
+                "workout_${feedWorkout.workout.id.value}"
+            },
+            contentType = { "workout_feed_item" }
         ) { feedWorkout ->
             WorkoutFeedItem(
                 feedWorkout = feedWorkout,
                 modifier = Modifier.testTag("workout_feed_item")
             )
         }
-        
-        // Loading more placeholders
+    
+        // Loading more placeholders with optimized keys
         if (feedState.isLoadingMore) {
-            items(3) {
+            items(
+                count = 3,
+                key = { index -> "loading_shimmer_$index" },
+                contentType = { "loading_shimmer" }
+            ) { index ->
                 FeedItemShimmer()
             }
         }
         
-        // End of feed message
+        // End of feed message with stable key
         if (showEndMessage) {
-            item {
+            item(
+                key = "feed_end_message",
+                contentType = "end_message"
+            ) {
                 FeedEndMessage()
             }
         }

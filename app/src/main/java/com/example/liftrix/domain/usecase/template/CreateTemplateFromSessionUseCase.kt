@@ -1,6 +1,6 @@
 package com.example.liftrix.domain.usecase.template
 
-import com.example.liftrix.domain.model.ActiveWorkoutSession
+import com.example.liftrix.domain.model.UnifiedWorkoutSession
 import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.model.WorkoutTemplateId
@@ -42,7 +42,7 @@ class CreateTemplateFromSessionUseCase @Inject constructor(
      * @return Result containing the created template or error
      */
     suspend operator fun invoke(
-        session: ActiveWorkoutSession,
+        session: UnifiedWorkoutSession,
         templateName: String,
         templateDescription: String? = null
     ): Result<WorkoutTemplate> {
@@ -65,7 +65,7 @@ class CreateTemplateFromSessionUseCase @Inject constructor(
     /**
      * Validates input parameters
      */
-    private fun validateInput(session: ActiveWorkoutSession, templateName: String) {
+    private fun validateInput(session: UnifiedWorkoutSession, templateName: String) {
         require(templateName.isNotBlank()) { "Template name cannot be blank" }
         require(templateName.length <= WorkoutTemplate.MAX_NAME_LENGTH) { 
             "Template name too long: ${templateName.length} > ${WorkoutTemplate.MAX_NAME_LENGTH}" 
@@ -77,7 +77,7 @@ class CreateTemplateFromSessionUseCase @Inject constructor(
      * Converts an active session to a template, removing session-specific data
      */
     private fun convertSessionToTemplate(
-        session: ActiveWorkoutSession,
+        session: UnifiedWorkoutSession,
         templateName: String,
         templateDescription: String?
     ): WorkoutTemplate {
@@ -111,7 +111,7 @@ class CreateTemplateFromSessionUseCase @Inject constructor(
             // Estimate workout characteristics
             estimatedDurationMinutes = estimateWorkoutDuration(templateExercises),
             difficultyLevel = estimateDifficultyLevel(templateExercises),
-            tags = deriveWorkoutTags(templateExercises).toSet(), // Convert List to Set
+            folderId = "uncategorized_${session.userId}",
             
             // Template metadata
             usageCount = 0,
@@ -214,60 +214,4 @@ class CreateTemplateFromSessionUseCase @Inject constructor(
         }.coerceIn(1, 5)
     }
     
-    /**
-     * Derives workout tags based on exercise characteristics
-     */
-    private fun deriveWorkoutTags(exercises: List<TemplateExercise>): List<String> {
-        val tags = mutableSetOf<String>()
-        
-        // Muscle group tags
-        val muscleGroups = exercises.map { it.primaryMuscle }.distinct()
-        val uniqueGroups = muscleGroups.distinct()
-        
-        when {
-            uniqueGroups.size >= 4 -> tags.add("Full Body")
-            muscleGroups.any { it == ExerciseCategory.CHEST } && 
-            muscleGroups.any { it == ExerciseCategory.SHOULDERS } &&
-            muscleGroups.any { it == ExerciseCategory.ARMS } -> tags.add("Push")
-            muscleGroups.any { it == ExerciseCategory.BACK } && 
-            muscleGroups.any { it == ExerciseCategory.ARMS } -> tags.add("Pull")
-            muscleGroups.any { it == ExerciseCategory.LEGS } -> tags.add("Legs")
-            muscleGroups.any { it == ExerciseCategory.CHEST } -> tags.add("Chest")
-            muscleGroups.any { it == ExerciseCategory.BACK } -> tags.add("Back")
-            muscleGroups.any { it == ExerciseCategory.ARMS } -> tags.add("Arms")
-            muscleGroups.any { it == ExerciseCategory.CORE } -> tags.add("Core")
-            muscleGroups.any { it == ExerciseCategory.CARDIO } -> tags.add("Cardio")
-            else -> tags.add("Custom")
-        }
-        
-        // Equipment tags based on available equipment
-        val equipmentTypes = exercises.map { it.equipment }.distinct()
-        equipmentTypes.forEach { equipment: Equipment ->
-            when (equipment) {
-                Equipment.BARBELL -> tags.add("Barbell")
-                Equipment.DUMBBELLS -> tags.add("Dumbbell")
-                Equipment.BODYWEIGHT_ONLY -> tags.add("Bodyweight")
-                Equipment.CABLE_MACHINE -> tags.add("Cable")
-                else -> {} // No tag for other equipment
-            }
-        }
-        
-        // Duration tags
-        val estimatedDuration = estimateWorkoutDuration(exercises)
-        when {
-            estimatedDuration <= 30 -> tags.add("Quick")
-            estimatedDuration <= 60 -> tags.add("Medium")
-            else -> tags.add("Long")
-        }
-        
-        // Intensity tags
-        val difficultyLevel = estimateDifficultyLevel(exercises)
-        when {
-            difficultyLevel <= 2 -> tags.add("Beginner")
-            difficultyLevel <= 3 -> tags.add("Intermediate")
-            else -> tags.add("Advanced")
-        }
-        
-        return tags.toList().sorted()
-    }
 }

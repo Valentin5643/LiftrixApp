@@ -63,6 +63,14 @@ data class ExerciseCapabilities(
                     supportsDistance = true,
                     requiredFields = emptySet() // At least one metric required
                 )
+
+                ExerciseType.FLEXIBILITY -> TODO()
+                ExerciseType.BALANCE -> TODO()
+                ExerciseType.PLYOMETRIC -> TODO()
+                ExerciseType.OLYMPIC_LIFT -> TODO()
+                ExerciseType.POWERLIFTING -> TODO()
+                ExerciseType.ISOLATION -> TODO()
+                ExerciseType.COMPOUND -> TODO()
             }
         }
         

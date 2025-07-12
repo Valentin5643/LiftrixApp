@@ -13,7 +13,10 @@ import com.example.liftrix.ui.common.updateState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DatePeriod
@@ -335,6 +338,63 @@ class ProgressDashboardViewModel @Inject constructor(
             totalActiveTime = 1876 // 28 workouts * 67 minutes average
         )
     }
+    
+    /**
+     * Enhanced UI animated progress data for new progress components
+     * Transforms progress statistics into animation-friendly format
+     */
+    val animatedProgress: StateFlow<Map<String, Float>> = uiState.map { state ->
+        buildMap {
+            // Volume progress (normalized to 0-1 range)
+            if (state.volumeData.isNotEmpty()) {
+                val maxVolume = state.volumeData.maxOf { it.totalVolume }
+                val currentVolume = state.volumeData.lastOrNull()?.totalVolume ?: 0f
+                put("volume", if (maxVolume > 0) currentVolume / maxVolume else 0f)
+            } else {
+                put("volume", 0f)
+            }
+            
+            // Duration progress (normalized based on target or average)
+            if (state.durationData.isNotEmpty()) {
+                val avgDuration = state.durationData.map { it.durationMinutes }.average().toFloat()
+                val currentDuration = state.durationData.lastOrNull()?.durationMinutes?.toFloat() ?: 0f
+                val targetDuration = 60f // 60 minutes target
+                put("duration", minOf(currentDuration / targetDuration, 1f))
+            } else {
+                put("duration", 0f)
+            }
+            
+            // Frequency progress (workout consistency)
+            if (state.frequencyData.isNotEmpty()) {
+                val avgIntensity = state.frequencyData.map { it.intensity }.average().toFloat()
+                put("frequency", avgIntensity)
+            } else {
+                put("frequency", 0f)
+            }
+            
+            // Overall progress (combination of all metrics)
+            val volumeProgress = get("volume") ?: 0f
+            val durationProgress = get("duration") ?: 0f
+            val frequencyProgress = get("frequency") ?: 0f
+            val overallProgress = (volumeProgress + durationProgress + frequencyProgress) / 3f
+            put("overall", overallProgress)
+            
+            // Streak progress (current streak vs goal)
+            val currentStreak = state.summaryData.currentStreak.toFloat()
+            val streakGoal = 7f // 7 day goal
+            put("streak", minOf(currentStreak / streakGoal, 1f))
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = mapOf(
+            "volume" to 0f,
+            "duration" to 0f, 
+            "frequency" to 0f,
+            "overall" to 0f,
+            "streak" to 0f
+        )
+    )
 }
 
 /**

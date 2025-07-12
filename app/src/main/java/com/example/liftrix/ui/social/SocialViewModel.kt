@@ -217,13 +217,14 @@ class SocialViewModel @Inject constructor(
     }
 
     /**
-     * Searches for users by query string
+     * Searches for users by query string with immediate UI update
      */
     private fun searchFriends(query: String) {
+        // Immediately update search query to prevent text input issues
+        updateState { copy(searchQuery = query) }
+        
         viewModelScope.launch {
             try {
-                updateState { copy(searchQuery = query) }
-                
                 if (query.isBlank()) {
                     updateState { copy(searchResults = emptyList()) }
                     return@launch

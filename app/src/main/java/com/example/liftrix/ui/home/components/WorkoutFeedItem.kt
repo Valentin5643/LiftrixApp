@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -32,6 +34,9 @@ import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.model.FeedWorkout
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.Workout
+import com.example.liftrix.ui.components.cards.LiftrixCard
+import com.example.liftrix.ui.components.cards.CompactLiftrixCard
+import com.example.liftrix.ui.components.layouts.GridSystem
 import com.example.liftrix.ui.theme.LiftrixColors
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -39,8 +44,8 @@ import java.time.format.TextStyle
 import java.util.Locale
 
 /**
- * Individual workout card component for displaying workout details in the social feed
- * Supports both personal workouts and friends' workouts with conditional rendering
+ * Modern workout feed item using LiftrixCard system with athletic styling
+ * Supports both personal workouts and friends' workouts with enhanced visual hierarchy
  */
 @Composable
 fun WorkoutFeedItem(
@@ -48,28 +53,32 @@ fun WorkoutFeedItem(
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Card(
+    LiftrixCard(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
             .testTag("workout_feed_item"),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        contentDescription = "Workout: ${feedWorkout.workout.name}${if (!feedWorkout.isPersonal) " by ${feedWorkout.user?.displayName}" else ""}",
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(GridSystem.spacing3)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
         ) {
             // Friend workout header (only for friends' workouts)
             if (!feedWorkout.isPersonal && feedWorkout.user != null) {
                 FriendWorkoutHeader(
                     user = feedWorkout.user,
-                    modifier = Modifier.padding(bottom = 12.dp)
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
             
-            // Main workout content
+            // Main workout content with enhanced styling
             WorkoutContent(
                 workout = feedWorkout.workout,
                 isPersonal = feedWorkout.isPersonal
@@ -79,7 +88,7 @@ fun WorkoutFeedItem(
 }
 
 /**
- * Header component for friends' workouts showing user profile information
+ * Enhanced header component for friends' workouts with modern styling
  */
 @Composable
 private fun FriendWorkoutHeader(
@@ -87,24 +96,23 @@ private fun FriendWorkoutHeader(
     modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
     ) {
-        // Profile image
+        // Profile image with enhanced styling
         ProfileImage(
             imageUrl = user.photoUrl,
             displayName = user.displayName ?: "Unknown User",
-            size = 32.dp
+            size = 40.dp
         )
         
-        Spacer(modifier = Modifier.width(12.dp))
-        
-        // User name
+        // User name with enhanced typography
         Text(
             text = user.displayName ?: "Unknown User",
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.primary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -112,7 +120,7 @@ private fun FriendWorkoutHeader(
 }
 
 /**
- * Core workout content component displaying workout details
+ * Enhanced workout content with athletic styling and improved visual hierarchy
  */
 @Composable
 private fun WorkoutContent(
@@ -121,124 +129,183 @@ private fun WorkoutContent(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
     ) {
-        // Workout title
+        // Workout title with enhanced typography
         Text(
             text = workout.name,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
         
-        Spacer(modifier = Modifier.height(8.dp))
+        // Workout metadata with enhanced visual design
+        WorkoutMetadata(
+            workout = workout,
+            modifier = Modifier.fillMaxWidth()
+        )
         
-        // Workout metadata (date, duration, exercises)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Date
-            Text(
-                text = formatWorkoutDate(workout.date),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            
-            // Duration (if available)
-            workout.getDuration()?.let { duration ->
-                Text(
-                    text = "•",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                
-                Text(
-                    text = formatDuration(duration),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            
-            // Exercise count
-            Text(
-                text = "•",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            
-            Text(
-                text = "${workout.exercises.size} ${if (workout.exercises.size == 1) "exercise" else "exercises"}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        
-        // Workout notes (if available)
+        // Workout notes with improved styling
         workout.notes?.takeIf { it.isNotBlank() }?.let { notes ->
-            Spacer(modifier = Modifier.height(8.dp))
-            
             Text(
                 text = notes,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = GridSystem.spacing2,
+                        top = GridSystem.spacing1,
+                        end = GridSystem.spacing2,
+                        bottom = GridSystem.spacing1
+                    )
+                    .background(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(GridSystem.spacing2)
+                    )
+                    .padding(GridSystem.spacing2)
             )
         }
         
-        // Workout summary for personal workouts
+        // Enhanced workout summary for personal workouts
         if (isPersonal) {
-            Spacer(modifier = Modifier.height(8.dp))
-            
             PersonalWorkoutSummary(workout = workout)
         }
     }
 }
 
 /**
- * Summary section for personal workouts with additional details
+ * Enhanced workout metadata with modern icon-based design
+ */
+@Composable
+private fun WorkoutMetadata(
+    workout: Workout,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing3),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Date with icon
+        MetadataItem(
+            icon = Icons.Default.Schedule,
+            text = formatWorkoutDate(workout.date),
+            modifier = Modifier.weight(1f, fill = false)
+        )
+        
+        // Duration (if available)
+        workout.getDuration()?.let { duration ->
+            MetadataItem(
+                icon = Icons.Default.Schedule,
+                text = formatDuration(duration),
+                modifier = Modifier.weight(1f, fill = false)
+            )
+        }
+        
+        // Exercise count with icon
+        MetadataItem(
+            icon = Icons.Default.FitnessCenter,
+            text = "${workout.exercises.size} ${if (workout.exercises.size == 1) "exercise" else "exercises"}",
+            modifier = Modifier.weight(1f, fill = false)
+        )
+    }
+}
+
+/**
+ * Individual metadata item with icon and text
+ */
+@Composable
+private fun MetadataItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing1)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+        
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * Enhanced personal workout summary with modern card design
  */
 @Composable
 private fun PersonalWorkoutSummary(
     workout: Workout,
     modifier: Modifier = Modifier
 ) {
-    val completedSets = workout.getCompletedSets()
-    val totalVolume = workout.calculateTotalVolume()
+    val completionPercentage = workout.getCompletionPercentage()
+    val totalSets = workout.exercises.sumOf { it.sets.size }
+    val completedSets = workout.exercises.sumOf { exercise ->
+        exercise.sets.count { it.isCompleted }
+    }
     
-    if (completedSets > 0 || totalVolume.kilograms > 0.0) {
+    CompactLiftrixCard(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+        ),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(GridSystem.spacing2)
+    ) {
         Row(
-            modifier = modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (completedSets > 0) {
+            // Completion status
+            Column {
                 Text(
-                    text = "$completedSets ${if (completedSets == 1) "set" else "sets"}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = LiftrixColors.Primary,
-                    fontWeight = FontWeight.Medium
+                    text = "Progress",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                
+                Text(
+                    text = "${String.format("%.0f", completionPercentage)}% Complete",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
             
-            if (totalVolume.kilograms > 0.0) {
-                if (completedSets > 0) {
-                    Text(
-                        text = "•",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            // Sets completed
+            Column(
+                horizontalAlignment = Alignment.End
+            ) {
+                Text(
+                    text = "Sets",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
                 
                 Text(
-                    text = "${totalVolume.kilograms.toInt()} kg",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = LiftrixColors.Primary,
-                    fontWeight = FontWeight.Medium
+                    text = "$completedSets/$totalSets",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
         }
@@ -246,8 +313,7 @@ private fun PersonalWorkoutSummary(
 }
 
 /**
- * Profile image component with URL loading capability and initials fallback
- * Reused from DiscoveryCarousel pattern
+ * Enhanced profile image component with modern styling
  */
 @Composable
 private fun ProfileImage(
@@ -256,8 +322,7 @@ private fun ProfileImage(
     size: Dp,
     modifier: Modifier = Modifier
 ) {
-    // For now, using initials-based approach similar to FriendAvatar
-    // TODO: Add Coil image loading library for actual URL support in future iteration
+    // Enhanced initials-based approach with better styling
     val initials = displayName
         .trim()
         .split(' ')
@@ -270,22 +335,22 @@ private fun ProfileImage(
         modifier = modifier
             .size(size)
             .clip(CircleShape)
-            .background(LiftrixColors.Primary),
+            .background(MaterialTheme.colorScheme.primary),
         contentAlignment = Alignment.Center
     ) {
         if (initials == "?") {
             Icon(
                 imageVector = Icons.Default.Person,
                 contentDescription = "User avatar",
-                tint = LiftrixColors.OnPrimary,
-                modifier = Modifier.size(size * 0.5f)
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(size * 0.6f)
             )
         } else {
             Text(
                 text = initials,
-                style = MaterialTheme.typography.labelMedium,
-                color = LiftrixColors.OnPrimary,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimary,
                 textAlign = TextAlign.Center
             )
         }

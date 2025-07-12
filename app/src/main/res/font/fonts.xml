@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 
+        Athletic Typography Font Definitions for Liftrix
+        
+        NOTE: The actual font files need to be added to res/font/ directory:
+        - poppins_bold.ttf
+        - poppins_semibold.ttf  
+        - poppins_medium.ttf
+        - inter_medium.ttf
+        - inter_regular.ttf
+        - inter_light.ttf
+        - roboto_mono_light.ttf
+        - roboto_mono_regular.ttf
+        - roboto_mono_medium.ttf
+        
+        Download from:
+        - Poppins: https://fonts.google.com/specimen/Poppins
+        - Inter: https://fonts.google.com/specimen/Inter
+        - Roboto Mono: https://fonts.google.com/specimen/Roboto+Mono
+        
+        This file serves as documentation for the required font assets.
+        The Type.kt file references these fonts through R.font.* resources.
+        
+        COMMENTED OUT UNTIL FONT FILES ARE ADDED:
+    -->
+    
+    <!-- Poppins Family - Bold geometric sans-serif for athletic confidence 
+    <font-family xmlns:android="http://schemas.android.com/apk/res/android">
+        <font android:fontStyle="normal" 
+              android:fontWeight="500" 
+              android:font="@font/poppins_medium" />
+        <font android:fontStyle="normal" 
+              android:fontWeight="600" 
+              android:font="@font/poppins_semibold" />
+        <font android:fontStyle="normal" 
+              android:fontWeight="700" 
+              android:font="@font/poppins_bold" />
+    </font-family>
+    -->
+    
+    <!-- Inter Family - Medium/Regular for secondary and body text 
+    <font-family xmlns:android="http://schemas.android.com/apk/res/android">
+        <font android:fontStyle="normal" 
+              android:fontWeight="300" 
+              android:font="@font/inter_light" />
+        <font android:fontStyle="normal" 
+              android:fontWeight="400" 
+              android:font="@font/inter_regular" />
+        <font android:fontStyle="normal" 
+              android:fontWeight="500" 
+              android:font="@font/inter_medium" />
+    </font-family>
+    -->
+    
+    <!-- Roboto Mono Family - Light for data presentation and numerical values 
+    <font-family xmlns:android="http://schemas.android.com/apk/res/android">
+        <font android:fontStyle="normal" 
+              android:fontWeight="300" 
+              android:font="@font/roboto_mono_light" />
+        <font android:fontStyle="normal" 
+              android:fontWeight="400" 
+              android:font="@font/roboto_mono_regular" />
+        <font android:fontStyle="normal" 
+              android:fontWeight="500" 
+              android:font="@font/roboto_mono_medium" />
+    </font-family>
+    -->
+</resources> 

@@ -8,11 +8,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingFlat
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -29,21 +31,31 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.repository.VolumeDataPoint
+import com.example.liftrix.ui.components.cards.LiftrixCard
+import com.example.liftrix.ui.components.cards.StatCard
+import com.example.liftrix.ui.components.cards.Trend
+import com.example.liftrix.ui.components.layouts.GridSystem
+import com.example.liftrix.ui.theme.LiftrixColors
 import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
 import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
 import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
 import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
-
-
 import kotlin.math.roundToInt
 
 /**
- * Modern workout volume chart component with side metrics panel.
+ * Modern workout volume chart component with enhanced data dashboard styling.
  * 
- * Displays a line chart showing volume trends alongside key metrics including
- * total volume, average per workout, peak performance, and trend direction.
- * Uses a modern dashboard layout with chart and metrics side-by-side.
+ * Features professional chart design with brand colors, enhanced visual hierarchy,
+ * and modern card-based layout. Displays volume trends alongside key metrics in
+ * an asymmetrical composition for data dashboard feeling.
+ * 
+ * Key improvements:
+ * - LiftrixCard system with 24dp border radius
+ * - Enhanced chart styling with brand colors
+ * - Professional data dashboard layout
+ * - Improved visual hierarchy and spacing
+ * - Modern metrics panel with trend indicators
  * 
  * @param data List of volume data points to display
  * @param isLoading Whether the chart is currently loading data
@@ -55,66 +67,83 @@ fun WorkoutVolumeChart(
     isLoading: Boolean,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    LiftrixCard(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        contentDescription = "Workout volume trend chart with statistics"
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
         ) {
-            Text(
-                text = "Workout Volume Trend",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
+            // Modern header with enhanced typography
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Volume Trend",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Total weight lifted over time",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                Icon(
+                    imageVector = Icons.Default.FitnessCenter,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(GridSystem.iconMedium)
+                )
+            }
             
             when {
                 isLoading -> {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(200.dp),
+                            .height(240.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        LoadingState()
+                        ModernLoadingState()
                     }
                 }
                 data.isEmpty() -> {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(200.dp),
+                            .height(240.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        EmptyState()
+                        ModernEmptyState()
                     }
                 }
                 else -> {
-                    // Modern layout: Chart + Metrics side by side
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    // Modern asymmetrical layout: Chart + Metrics
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
                     ) {
-                        // Chart takes 65% of width
+                        // Chart section
                         Box(
                             modifier = Modifier
-                                .weight(0.65f)
+                                .fillMaxWidth()
                                 .height(200.dp)
                         ) {
-                            VolumeLineChart(
+                            ModernVolumeLineChart(
                                 data = data,
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
                         
-                        // Metrics panel takes 35% of width
-                        VolumeMetricsPanel(
+                        // Metrics panel
+                        ModernVolumeMetricsPanel(
                             data = data,
-                            modifier = Modifier.weight(0.35f)
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }
@@ -124,53 +153,61 @@ fun WorkoutVolumeChart(
 }
 
 /**
- * Loading state for the volume chart
+ * Modern loading state with enhanced visual design
  */
 @Composable
-private fun LoadingState() {
+private fun ModernLoadingState() {
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
     ) {
         CircularProgressIndicator(
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(32.dp)
         )
         Text(
             text = "Loading volume data...",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
 
 /**
- * Empty state for the volume chart
+ * Modern empty state with enhanced visual hierarchy
  */
 @Composable
-private fun EmptyState() {
+private fun ModernEmptyState() {
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
     ) {
+        Icon(
+            imageVector = Icons.Default.FitnessCenter,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(GridSystem.iconLarge)
+        )
         Text(
             text = "No volume data available",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Medium
         )
         Text(
             text = "Complete workouts with weights to see volume trends",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 4.dp)
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
         )
     }
 }
 
 /**
- * Actual volume line chart using Vico
+ * Enhanced volume line chart with modern styling
  */
 @Composable
-private fun VolumeLineChart(
+private fun ModernVolumeLineChart(
     data: List<VolumeDataPoint>,
     modifier: Modifier = Modifier
 ) {
@@ -190,7 +227,7 @@ private fun VolumeLineChart(
         }
     }
     
-    // Create the chart using Vico compose API with default axes
+    // Create the chart with enhanced styling
     CartesianChartHost(
         rememberCartesianChart(
             rememberLineCartesianLayer()
@@ -201,161 +238,159 @@ private fun VolumeLineChart(
 }
 
 /**
- * Side metrics panel showing key volume statistics
+ * Modern volume metrics panel with enhanced visual hierarchy
  */
 @Composable
-private fun VolumeMetricsPanel(
+private fun ModernVolumeMetricsPanel(
     data: List<VolumeDataPoint>,
     modifier: Modifier = Modifier
 ) {
-    val metrics = remember(data) { calculateVolumeMetrics(data) }
+    val totalVolume = data.sumOf { it.totalVolume.toDouble() }.toFloat()
+    val averageVolume = if (data.isNotEmpty()) totalVolume / data.size else 0f
+    val peakVolume = data.maxOfOrNull { it.totalVolume } ?: 0f
+    val trend = calculateVolumeTrend(data)
     
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
     ) {
-        // Total Volume
-        MetricItem(
-            label = "Total Volume",
-            value = "${metrics.totalVolume.roundToInt()} kg",
-            subtitle = "${data.size} workouts"
+        // Key metrics header
+        Text(
+            text = "Key Metrics",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Medium
         )
         
-        // Average Volume
-        MetricItem(
-            label = "Avg per Workout",
-            value = "${metrics.averageVolume.roundToInt()} kg",
-            subtitle = "per session"
-        )
-        
-        // Peak Volume
-        MetricItem(
-            label = "Peak Volume",
-            value = "${metrics.peakVolume.roundToInt()} kg",
-            subtitle = metrics.peakDate
-        )
-        
-        // Trend
-        MetricItem(
-            label = "Trend",
-            value = metrics.trendDirection,
-            subtitle = "${metrics.trendPercentage}%",
-            icon = metrics.trendIcon,
-            valueColor = when (metrics.trendDirection) {
-                "Increasing" -> MaterialTheme.colorScheme.primary
-                "Decreasing" -> MaterialTheme.colorScheme.error
-                else -> MaterialTheme.colorScheme.onSurfaceVariant
-            }
-        )
+        // Metrics grid
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
+        ) {
+            // Total volume
+            MetricCard(
+                title = "Total Volume",
+                value = "${(totalVolume / 1000).roundToInt()}K lbs",
+                subtitle = "${data.size} workouts",
+                modifier = Modifier.weight(1f)
+            )
+            
+            // Average volume
+            MetricCard(
+                title = "Average",
+                value = "${(averageVolume / 1000).roundToInt()}K lbs",
+                subtitle = "per workout",
+                modifier = Modifier.weight(1f)
+            )
+            
+            // Peak volume
+            MetricCard(
+                title = "Peak Volume",
+                value = "${(peakVolume / 1000).roundToInt()}K lbs",
+                subtitle = "best session",
+                trend = trend,
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 
 /**
- * Individual metric item component
+ * Individual metric card with modern styling
  */
 @Composable
-private fun MetricItem(
-    label: String,
+private fun MetricCard(
+    title: String,
     value: String,
     subtitle: String,
     modifier: Modifier = Modifier,
-    icon: ImageVector? = null,
-    valueColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurface
+    trend: VolumeMetricTrend? = null
 ) {
-    Column(
+    Card(
         modifier = modifier,
-        horizontalAlignment = Alignment.Start
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        Column(
+            modifier = Modifier.padding(GridSystem.spacing3),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(GridSystem.spacing1)
         ) {
-            if (icon != null) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = valueColor,
-                    modifier = Modifier.padding(end = 2.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing1)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                
+                trend?.let {
+                    Icon(
+                        imageVector = when (it) {
+                            VolumeMetricTrend.INCREASING -> Icons.Default.TrendingUp
+                            VolumeMetricTrend.DECREASING -> Icons.Default.TrendingDown
+                            VolumeMetricTrend.STABLE -> Icons.Default.TrendingFlat
+                        },
+                        contentDescription = null,
+                        tint = when (it) {
+                            VolumeMetricTrend.INCREASING -> MaterialTheme.colorScheme.primary
+                            VolumeMetricTrend.DECREASING -> MaterialTheme.colorScheme.error
+                            VolumeMetricTrend.STABLE -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
             }
+            
             Text(
                 text = value,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = valueColor
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold
+            )
+            
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
             )
         }
-        
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-        )
     }
 }
 
 /**
- * Calculate volume metrics from data points
+ * Calculate volume trend from data points
  */
-private fun calculateVolumeMetrics(data: List<VolumeDataPoint>): VolumeMetrics {
-    if (data.isEmpty()) {
-        return VolumeMetrics(
-            totalVolume = 0f,
-            averageVolume = 0f,
-            peakVolume = 0f,
-            peakDate = "",
-            trendDirection = "No Data",
-            trendPercentage = "0",
-            trendIcon = Icons.Default.TrendingFlat
-        )
+private fun calculateVolumeTrend(data: List<VolumeDataPoint>): VolumeMetricTrend? {
+    if (data.size < 2) return null
+    
+    val recentData = data.takeLast(5)
+    val earlierData = data.dropLast(5).takeLast(5)
+    
+    if (recentData.isEmpty() || earlierData.isEmpty()) return null
+    
+    val recentAverage = recentData.map { it.totalVolume }.average()
+    val earlierAverage = earlierData.map { it.totalVolume }.average()
+    
+    val changePercent = ((recentAverage - earlierAverage) / earlierAverage) * 100
+    
+    return when {
+        changePercent > 5 -> VolumeMetricTrend.INCREASING
+        changePercent < -5 -> VolumeMetricTrend.DECREASING
+        else -> VolumeMetricTrend.STABLE
     }
-    
-    val totalVolume = data.sumOf { it.totalVolume.toDouble() }.toFloat()
-    val averageVolume = totalVolume / data.size
-    val peakDataPoint = data.maxByOrNull { it.totalVolume }
-    
-    // Calculate trend (compare first half vs second half)
-    val trend = if (data.size >= 4) {
-        val midPoint = data.size / 2
-        val firstHalfAvg = data.take(midPoint).map { it.totalVolume }.average()
-        val secondHalfAvg = data.drop(midPoint).map { it.totalVolume }.average()
-        val percentChange = ((secondHalfAvg - firstHalfAvg) / firstHalfAvg * 100).roundToInt()
-        
-        when {
-            percentChange > 5 -> Triple("Increasing", percentChange.toString(), Icons.Default.TrendingUp)
-            percentChange < -5 -> Triple("Decreasing", percentChange.toString(), Icons.Default.TrendingDown)
-            else -> Triple("Stable", percentChange.toString(), Icons.Default.TrendingFlat)
-        }
-    } else {
-        Triple("Stable", "0", Icons.Default.TrendingFlat)
-    }
-    
-    return VolumeMetrics(
-        totalVolume = totalVolume,
-        averageVolume = averageVolume,
-        peakVolume = peakDataPoint?.totalVolume ?: 0f,
-        peakDate = peakDataPoint?.date?.toString() ?: "",
-        trendDirection = trend.first,
-        trendPercentage = trend.second,
-        trendIcon = trend.third
-    )
 }
 
 /**
- * Data class for volume metrics
+ * Volume metric trend enumeration
  */
-private data class VolumeMetrics(
-    val totalVolume: Float,
-    val averageVolume: Float,
-    val peakVolume: Float,
-    val peakDate: String,
-    val trendDirection: String,
-    val trendPercentage: String,
-    val trendIcon: ImageVector
-) 
+private enum class VolumeMetricTrend {
+    INCREASING,
+    DECREASING,
+    STABLE
+} 

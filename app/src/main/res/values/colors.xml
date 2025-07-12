@@ -20,8 +20,8 @@
     <color name="liftrix_on_background">#FF1C1B1F</color>
     <color name="liftrix_on_surface">#FF1C1B1F</color>
     
-    <!-- Dark Theme Colors -->
-    <color name="liftrix_background_dark">#FF121212</color>
+    <!-- Dark Theme Colors - OLED Optimized -->
+    <color name="liftrix_background_dark">#FF0F0F0F</color>
     <color name="liftrix_surface_dark">#FF1E1E1E</color>
     <color name="liftrix_on_background_dark">#FFE6E1E5</color>
     <color name="liftrix_on_surface_dark">#FFE6E1E5</color>

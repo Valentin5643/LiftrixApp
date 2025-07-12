@@ -6,6 +6,7 @@ import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.analytics.ktx.analytics
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.ktx.Firebase
+import com.google.firebase.perf.FirebasePerformance
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -39,6 +40,15 @@ abstract class AnalyticsModule {
             return FirebaseCrashlytics.getInstance().apply {
                 // Enable crashlytics collection
                 setCrashlyticsCollectionEnabled(true)
+            }
+        }
+
+        @Provides
+        @Singleton
+        fun provideFirebasePerformance(): FirebasePerformance {
+            return FirebasePerformance.getInstance().apply {
+                // Enable performance monitoring collection
+                isPerformanceCollectionEnabled = true
             }
         }
     }

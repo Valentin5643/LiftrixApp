@@ -52,6 +52,7 @@ import com.example.liftrix.R
 import com.example.liftrix.domain.model.TemplateExercise
 import com.example.liftrix.ui.common.LiftrixProgressIndicator
 import com.example.liftrix.ui.theme.LiftrixTheme
+import com.example.liftrix.ui.workout.creation.components.DragDropExerciseList
 
 /**
  * Screen for creating a new workout template from scratch.
@@ -67,15 +68,43 @@ import com.example.liftrix.ui.theme.LiftrixTheme
 fun WorkoutTemplateCreationScreen(
     onNavigateBack: () -> Unit,
     onNavigateToExerciseSelection: () -> Unit = {},
-    selectedExerciseId: String? = null,
-    isCustomExercise: Boolean = false,
+    editTemplateId: String? = null,
     modifier: Modifier = Modifier,
-    viewModel: WorkoutTemplateCreationViewModel = hiltViewModel()
+    viewModel: WorkoutTemplateCreationViewModel = hiltViewModel(),
+    savedStateHandle: androidx.lifecycle.SavedStateHandle? = null
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val loadedTemplate by viewModel.loadedTemplate.collectAsStateWithLifecycle()
+    
+    // Debug UI state changes
+    LaunchedEffect(uiState) {
+        timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: UI State changed to: ${uiState::class.simpleName}")
+        when (uiState) {
+            is WorkoutTemplateCreationUiState.Editing -> {
+                timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: Editing state with ${uiState.exercises.size} exercises")
+                timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: Exercise names: ${uiState.exercises.map { it.name }}")
+            }
+            is WorkoutTemplateCreationUiState.Loading -> {
+                timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: Loading state")
+            }
+            else -> {
+                timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: Other state: ${uiState::class.simpleName}")
+            }
+        }
+    }
     
     var templateName by remember { mutableStateOf("") }
     var templateDescription by remember { mutableStateOf("") }
+    
+    val isEditMode = editTemplateId != null
+    
+    // Initialize form fields when template is loaded
+    LaunchedEffect(loadedTemplate) {
+        loadedTemplate?.let { template ->
+            templateName = template.name
+            templateDescription = template.description ?: ""
+        }
+    }
     
     // Handle successful template creation
     LaunchedEffect(uiState) {
@@ -84,10 +113,32 @@ fun WorkoutTemplateCreationScreen(
         }
     }
     
+    // Load template data when in edit mode
+    LaunchedEffect(editTemplateId) {
+        editTemplateId?.let { templateId ->
+            viewModel.loadTemplateForEditing(templateId)
+        }
+    }
+    
     // Handle selected exercise from navigation
-    LaunchedEffect(selectedExerciseId, isCustomExercise) {
-        selectedExerciseId?.let { exerciseId ->
-            viewModel.addExerciseById(exerciseId, isCustomExercise)
+    val selectedExercise = savedStateHandle?.get<com.example.liftrix.domain.model.ExerciseLibrary>("selected_exercise")
+    
+    timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: selectedExercise from savedStateHandle: ${selectedExercise?.name} (ID: ${selectedExercise?.id})")
+    timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: savedStateHandle is null? ${savedStateHandle == null}")
+    
+    LaunchedEffect(selectedExercise) {
+        timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: LaunchedEffect triggered for selectedExercise: ${selectedExercise?.name}")
+        
+        selectedExercise?.let { exercise ->
+            timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: About to call addExerciseFromLibrary for: ${exercise.name} (ID: ${exercise.id})")
+            viewModel.addExerciseFromLibrary(exercise)
+            timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: addExerciseFromLibrary call completed")
+            
+            // Clear the saved state to prevent re-adding the same exercise
+            savedStateHandle?.remove<com.example.liftrix.domain.model.ExerciseLibrary>("selected_exercise")
+            timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: selectedExercise cleared from savedStateHandle")
+        } ?: run {
+            timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: selectedExercise is null, no action taken")
         }
     }
     
@@ -97,7 +148,7 @@ fun WorkoutTemplateCreationScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = stringResource(R.string.create_template_title),
+                        text = if (isEditMode) "Edit Template" else stringResource(R.string.create_template_title),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -113,17 +164,26 @@ fun WorkoutTemplateCreationScreen(
                 actions = {
                     IconButton(
                         onClick = {
-                            viewModel.createTemplate(
-                                name = templateName,
-                                description = templateDescription.takeIf { it.isNotBlank() },
-                                exercises = uiState.exercises
-                            )
+                            if (isEditMode && editTemplateId != null) {
+                                viewModel.updateTemplate(
+                                    templateId = editTemplateId,
+                                    name = templateName,
+                                    description = templateDescription.takeIf { it.isNotBlank() },
+                                    exercises = uiState.exercises
+                                )
+                            } else {
+                                viewModel.createTemplate(
+                                    name = templateName,
+                                    description = templateDescription.takeIf { it.isNotBlank() },
+                                    exercises = uiState.exercises
+                                )
+                            }
                         },
                         enabled = templateName.isNotBlank() && uiState !is WorkoutTemplateCreationUiState.Loading
                     ) {
                         Icon(
                             imageVector = Icons.Default.Check,
-                            contentDescription = "Save template"
+                            contentDescription = if (isEditMode) "Update template" else "Save template"
                         )
                     }
                 },
@@ -138,8 +198,8 @@ fun WorkoutTemplateCreationScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Template Basic Information
@@ -155,9 +215,14 @@ fun WorkoutTemplateCreationScreen(
                 onNavigateToExerciseSelection = onNavigateToExerciseSelection
             )
             
-            // Exercises List Section
-            TemplateExercisesCard(
+            // Exercises List Section with drag-and-drop (dynamic size based on exercises)
+            timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: Rendering DragDropExerciseList with ${uiState.exercises.size} exercises")
+            timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: Current uiState type: ${uiState::class.simpleName}")
+            timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: Exercises: ${uiState.exercises.map { "${it.name} (${it.name})" }}")
+            
+            DragDropExerciseList(
                 exercises = uiState.exercises,
+                onReorder = viewModel::reorderExercises,
                 onRemoveExercise = viewModel::removeExercise,
                 onUpdateExercise = viewModel::updateExercise
             )
@@ -282,54 +347,7 @@ private fun TemplateBasicInfoCard(
 }
 
 
-/**
- * Card for managing exercises in the template
- */
-@Composable
-private fun TemplateExercisesCard(
-    exercises: List<TemplateExercise>,
-    onRemoveExercise: (TemplateExercise) -> Unit,
-    onUpdateExercise: (TemplateExercise) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                text = "Template Exercises (${exercises.size})",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            
-            if (exercises.isEmpty()) {
-                Text(
-                    text = "No exercises added yet. Use the exercise selector above to add exercises to your template.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp)
-                )
-            } else {
-                exercises.forEach { exercise ->
-                    ExerciseListItem(
-                        exercise = exercise,
-                        onRemove = { onRemoveExercise(exercise) },
-                        onUpdate = onUpdateExercise
-                    )
-                }
-            }
-        }
-    }
-}
+// TemplateExercisesCard removed - replaced by DragDropExerciseList
 
 /**
  * Individual exercise item in the template with actual set input rows

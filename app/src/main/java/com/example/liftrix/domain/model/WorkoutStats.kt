@@ -10,7 +10,16 @@ data class WorkoutStats(
     val totalWorkouts: Int,
     val currentStreak: Int,
     val weeklyVolume: Duration,
-    val averageWorkoutDuration: Duration
+    val averageWorkoutDuration: Duration,
+    // Additional properties expected by UI components
+    val workoutsThisWeek: Int = 0,
+    val totalMinutesThisWeek: Int = 0,
+    val daysSinceLastWorkout: Int? = null,
+    val workoutTrend: String = "STABLE",
+    val weeklyWorkouts: Int = 0,
+    val weeklyTrend: String = "STABLE",
+    val averagePerWeek: Double = 0.0,
+    val workoutCount: Int = totalWorkouts
 ) {
     init {
         require(totalWorkouts >= 0) { "Total workouts cannot be negative: $totalWorkouts" }

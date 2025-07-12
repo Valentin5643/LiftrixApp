@@ -2,6 +2,7 @@ package com.example.liftrix.data.local.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverters
@@ -14,10 +15,19 @@ import java.time.Instant
  */
 @Entity(
     tableName = "workout_templates",
+    foreignKeys = [
+        ForeignKey(
+            entity = FolderEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["folder_id"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
     indices = [
         Index(value = ["user_id"], name = "index_workout_templates_user_id"),
         Index(value = ["name", "user_id"], unique = true, name = "index_workout_templates_name_user_id"),
-        Index(value = ["created_at"], name = "index_workout_templates_created_at")
+        Index(value = ["created_at"], name = "index_workout_templates_created_at"),
+        Index(value = ["folder_id"], name = "index_workout_templates_folder_id")
     ]
 )
 @TypeConverters(DateTimeConverters::class, WorkoutConverters::class)
@@ -44,8 +54,8 @@ data class WorkoutTemplateEntity(
     @ColumnInfo(name = "difficulty_level")
     val difficultyLevel: Int?, // 1-10 scale
     
-    @ColumnInfo(name = "tags")
-    val tags: List<String>?, // e.g., ["strength", "upper-body", "beginner"]
+    @ColumnInfo(name = "folder_id")
+    val folderId: String,
     
     @ColumnInfo(name = "usage_count", defaultValue = "0")
     val usageCount: Int = 0,

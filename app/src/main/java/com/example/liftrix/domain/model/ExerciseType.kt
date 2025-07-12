@@ -10,7 +10,14 @@ enum class ExerciseType {
     BODYWEIGHT,      // Bodyweight only exercises (push-ups, pull-ups, etc.)
     CARDIO,          // Cardio exercises (may combine time and distance)
     STRENGTH,        // General strength training exercises
-    HYBRID;          // Exercises that can use multiple metrics
+    HYBRID,          // Exercises that can use multiple metrics
+    FLEXIBILITY,     // Flexibility and stretching exercises
+    BALANCE,         // Balance and stability exercises
+    PLYOMETRIC,      // Explosive power exercises
+    OLYMPIC_LIFT,    // Olympic lifting movements
+    POWERLIFTING,    // Powerlifting movements
+    ISOLATION,       // Isolation exercises targeting specific muscles
+    COMPOUND;        // Compound movements working multiple muscle groups
     
     companion object {
         /**

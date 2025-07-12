@@ -18,12 +18,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,11 +35,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.liftrix.domain.repository.FrequencyDataPoint
+import com.example.liftrix.ui.components.cards.LiftrixCard
+import com.example.liftrix.ui.components.layouts.GridSystem
+import com.example.liftrix.ui.theme.LiftrixColors
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
@@ -48,11 +54,18 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.todayIn
 
 /**
- * Calendar-style workout frequency heatmap component with month navigation.
+ * Modern workout frequency heatmap component with enhanced accessibility.
  * 
- * Displays workout frequency in a calendar format with month headers,
- * day numbers, and workout counts. Features navigation arrows to browse
- * through months, making it compact like modern calendar apps.
+ * Features professional calendar-style layout with brand colors, enhanced visual
+ * hierarchy, and improved accessibility. Displays workout frequency in a modern
+ * heatmap format with month navigation and intensity indicators.
+ * 
+ * Key improvements:
+ * - LiftrixCard system with 24dp border radius
+ * - Enhanced color coding with better accessibility
+ * - Professional calendar layout with modern styling
+ * - Improved visual hierarchy and spacing
+ * - Better accessibility support with proper contrast ratios
  * 
  * @param data List of frequency data points to display
  * @param isLoading Whether the chart is currently loading data
@@ -64,110 +77,139 @@ fun WorkoutFrequencyHeatmap(
     isLoading: Boolean,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    LiftrixCard(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        contentDescription = "Workout frequency calendar heatmap with navigation"
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
         ) {
-            Text(
-                text = "Workout Frequency Calendar",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
+            // Modern header with enhanced typography
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Frequency Calendar",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Daily workout activity patterns",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                Icon(
+                    imageVector = Icons.Default.CalendarMonth,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(GridSystem.iconMedium)
+                )
+            }
             
             when {
                 isLoading -> {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(220.dp),
+                            .height(280.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        LoadingState()
+                        ModernLoadingState()
                     }
                 }
                 data.isEmpty() -> {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(220.dp),
+                            .height(280.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        EmptyState()
+                        ModernEmptyState()
                     }
                 }
                 else -> {
-                    NavigableFrequencyCalendar(
-                        data = data,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
+                    ) {
+                        // Enhanced frequency calendar
+                        ModernNavigableFrequencyCalendar(
+                            data = data,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        
+                        // Modern legend with improved accessibility
+                        ModernHeatmapLegend(
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
-            }
-            
-            // Legend for heatmap intensity
-            if (!isLoading && data.isNotEmpty()) {
-                HeatmapLegend(
-                    modifier = Modifier.padding(top = 12.dp)
-                )
             }
         }
     }
 }
 
 /**
- * Loading state for the frequency heatmap
+ * Modern loading state with enhanced visual design
  */
 @Composable
-private fun LoadingState() {
+private fun ModernLoadingState() {
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
     ) {
         CircularProgressIndicator(
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(32.dp)
         )
         Text(
             text = "Loading frequency data...",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
 
 /**
- * Empty state for the frequency heatmap
+ * Modern empty state with enhanced visual hierarchy
  */
 @Composable
-private fun EmptyState() {
+private fun ModernEmptyState() {
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
     ) {
+        Icon(
+            imageVector = Icons.Default.CalendarMonth,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(GridSystem.iconLarge)
+        )
         Text(
             text = "No frequency data available",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Medium
         )
         Text(
             text = "Complete workouts regularly to see frequency patterns",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 4.dp)
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
         )
     }
 }
 
 /**
- * Navigable calendar with month selection arrows
+ * Enhanced navigable calendar with modern styling and improved accessibility
  */
 @Composable
-private fun NavigableFrequencyCalendar(
+private fun ModernNavigableFrequencyCalendar(
     data: List<FrequencyDataPoint>,
     modifier: Modifier = Modifier
 ) {
@@ -196,304 +238,260 @@ private fun NavigableFrequencyCalendar(
     
     val currentDate = availableMonths[currentMonthIndex]
     
-    // Generate calendar data for current month
-    val currentMonthData = remember(currentDate, dataMap, maxWorkouts) {
-        generateMonthCalendarData(currentDate, dataMap, maxWorkouts)
-    }
-    
-    Column(modifier = modifier) {
-        // Month navigation header
-        MonthNavigationHeader(
-            currentMonth = currentDate.month,
-            canNavigatePrevious = currentMonthIndex > 0,
-            canNavigateNext = currentMonthIndex < availableMonths.size - 1,
-            onPreviousMonth = { 
-                if (currentMonthIndex > 0) {
-                    currentMonthIndex--
-                }
-            },
-            onNextMonth = { 
-                if (currentMonthIndex < availableMonths.size - 1) {
-                    currentMonthIndex++
-                }
-            },
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
+    ) {
+        // Modern month navigation header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = { 
+                    if (currentMonthIndex > 0) currentMonthIndex--
+                },
+                enabled = currentMonthIndex > 0
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ChevronLeft,
+                    contentDescription = "Previous month",
+                    tint = if (currentMonthIndex > 0) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                    }
+                )
+            }
+            
+            Text(
+                text = "${currentDate.month.name.lowercase().replaceFirstChar { it.uppercase() }} ${currentDate.year}",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Medium
+            )
+            
+            IconButton(
+                onClick = { 
+                    if (currentMonthIndex < availableMonths.size - 1) currentMonthIndex++
+                },
+                enabled = currentMonthIndex < availableMonths.size - 1
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = "Next month",
+                    tint = if (currentMonthIndex < availableMonths.size - 1) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                    }
+                )
+            }
+        }
         
-        // Current month calendar
-        MonthCalendarGrid(
-            cells = currentMonthData,
-            currentMonth = currentDate.month,
+        // Enhanced calendar grid
+        ModernCalendarGrid(
+            currentDate = currentDate,
+            dataMap = dataMap,
+            maxWorkouts = maxWorkouts,
             modifier = Modifier.fillMaxWidth()
         )
     }
 }
 
 /**
- * Month navigation header with arrows and month name
+ * Modern calendar grid with enhanced visual design and accessibility
  */
 @Composable
-private fun MonthNavigationHeader(
-    currentMonth: Month,
-    canNavigatePrevious: Boolean,
-    canNavigateNext: Boolean,
-    onPreviousMonth: () -> Unit,
-    onNextMonth: () -> Unit,
+private fun ModernCalendarGrid(
+    currentDate: LocalDate,
+    dataMap: Map<LocalDate, Int>,
+    maxWorkouts: Int,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing1)
     ) {
-        // Previous month button
-        IconButton(
-            onClick = onPreviousMonth,
-            enabled = canNavigatePrevious
-        ) {
-            Icon(
-                imageVector = Icons.Default.ChevronLeft,
-                contentDescription = "Previous month",
-                tint = if (canNavigatePrevious) {
-                    MaterialTheme.colorScheme.onSurface
-                } else {
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                }
-            )
-        }
-        
-        // Current month name
-        Text(
-            text = currentMonth.name.lowercase().replaceFirstChar { it.uppercase() },
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.SemiBold
-        )
-        
-        // Next month button
-        IconButton(
-            onClick = onNextMonth,
-            enabled = canNavigateNext
-        ) {
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = "Next month",
-                tint = if (canNavigateNext) {
-                    MaterialTheme.colorScheme.onSurface
-                } else {
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                }
-            )
-        }
-    }
-}
-
-/**
- * Calendar grid for a single month
- */
-@Composable
-private fun MonthCalendarGrid(
-    cells: List<CalendarCell>,
-    currentMonth: Month,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier = modifier) {
-        // Week day headers
+        // Day headers with enhanced styling
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             listOf("S", "M", "T", "W", "T", "F", "S").forEach { day ->
-                Text(
-                    text = day,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Box(
                     modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center,
-                    fontSize = 10.sp
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = day,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+        
+        // Calendar days grid with improved spacing
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(7),
+            modifier = Modifier.height(160.dp),
+            horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing1),
+            verticalArrangement = Arrangement.spacedBy(GridSystem.spacing1)
+        ) {
+            // Generate calendar days for current month
+            val daysInMonth = generateCalendarDays(currentDate)
+            
+            items(daysInMonth.size) { index ->
+                val dayData = daysInMonth[index]
+                ModernCalendarDay(
+                    dayData = dayData,
+                    workoutCount = dataMap[dayData.date] ?: 0,
+                    maxWorkouts = maxWorkouts,
+                    isCurrentMonth = dayData.isCurrentMonth
                 )
             }
         }
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        // Calendar grid
-        val weeks = cells.chunked(7)
-        weeks.forEach { week ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                week.forEach { cell ->
-                    CalendarCellView(
-                        cell = cell,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                // Fill remaining cells if week is incomplete
-                repeat(7 - week.size) {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-            }
-            Spacer(modifier = Modifier.height(3.dp))
-        }
     }
 }
 
 /**
- * Individual calendar cell with day number and workout count
+ * Individual calendar day with modern styling and accessibility
  */
 @Composable
-private fun CalendarCellView(
-    cell: CalendarCell,
-    modifier: Modifier = Modifier
+private fun ModernCalendarDay(
+    dayData: CalendarDayData,
+    workoutCount: Int,
+    maxWorkouts: Int,
+    isCurrentMonth: Boolean
 ) {
-    val backgroundColor = when {
-        !cell.isCurrentMonth -> MaterialTheme.colorScheme.outline.copy(alpha = 0.05f)
-        cell.workoutCount == 0 -> MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
-        cell.workoutCount == 1 -> MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
-        cell.workoutCount == 2 -> MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-        cell.workoutCount >= 3 -> MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
-        else -> MaterialTheme.colorScheme.primary
-    }
-    
-    val textColor = when {
-        !cell.isCurrentMonth -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-        cell.workoutCount >= 2 -> MaterialTheme.colorScheme.onPrimary
-        else -> MaterialTheme.colorScheme.onSurface
+    val intensity = if (maxWorkouts > 0) workoutCount.toFloat() / maxWorkouts else 0f
+    val backgroundColor = getIntensityColor(intensity, isCurrentMonth)
+    val textColor = if (intensity > 0.5f) {
+        MaterialTheme.colorScheme.onPrimary
+    } else {
+        MaterialTheme.colorScheme.onSurface
     }
     
     Box(
-        modifier = modifier
+        modifier = Modifier
             .aspectRatio(1f)
-            .padding(1.dp)
-            .clip(RoundedCornerShape(4.dp))
+            .clip(RoundedCornerShape(GridSystem.cornerRadiusMedium))
             .background(backgroundColor),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            // Day number
+        if (isCurrentMonth) {
             Text(
-                text = cell.date.dayOfMonth.toString(),
+                text = dayData.date.dayOfMonth.toString(),
                 style = MaterialTheme.typography.bodySmall,
                 color = textColor,
-                fontSize = 8.sp,
-                fontWeight = FontWeight.Medium
+                fontWeight = if (workoutCount > 0) FontWeight.Medium else FontWeight.Normal
             )
-            
-            // Workout count (only show if > 0 and in current month)
-            if (cell.workoutCount > 0 && cell.isCurrentMonth) {
-                Text(
-                    text = cell.workoutCount.toString(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = textColor,
-                    fontSize = 6.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
         }
     }
 }
 
 /**
- * Generate calendar data for a specific month with complete weeks
- */
-private fun generateMonthCalendarData(
-    monthDate: LocalDate,
-    dataMap: Map<LocalDate, Int>,
-    maxWorkouts: Int
-): List<CalendarCell> {
-    val firstDayOfMonth = LocalDate(monthDate.year, monthDate.month, 1)
-    val lastDayOfMonth = LocalDate(monthDate.year, monthDate.month, monthDate.month.length(false))
-    
-    // Get the first day of the week containing the first day of the month
-    val firstDayOfWeek = firstDayOfMonth.dayOfWeek.value % 7 // Sunday = 0, Monday = 1, etc.
-    val calendarStartDate = firstDayOfMonth.minus(DatePeriod(days = firstDayOfWeek))
-    
-    // Calculate total days needed for complete weeks
-    val daysInMonth = lastDayOfMonth.dayOfMonth
-    val totalDaysNeeded = ((daysInMonth + firstDayOfWeek + 6) / 7) * 7 // Round up to complete weeks
-    
-    return (0 until totalDaysNeeded).map { dayOffset ->
-        val date = calendarStartDate.plus(DatePeriod(days = dayOffset))
-        val isCurrentMonth = date.month == monthDate.month
-        val workoutCount = if (isCurrentMonth) {
-            dataMap[date] ?: 0
-        } else {
-            0 // Days outside current month have no workout count
-        }
-        val intensity = if (maxWorkouts > 0 && workoutCount > 0) {
-            workoutCount.toFloat() / maxWorkouts
-        } else {
-            0f
-        }
-        
-        CalendarCell(
-            date = date,
-            workoutCount = workoutCount,
-            intensity = intensity,
-            isCurrentMonth = isCurrentMonth
-        )
-    }
-}
-
-/**
- * Heatmap legend showing intensity levels
+ * Modern heatmap legend with improved accessibility
  */
 @Composable
-private fun HeatmapLegend(
+private fun ModernHeatmapLegend(
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
     ) {
         Text(
-            text = "Less",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 10.sp
+            text = "Activity Level",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Medium
         )
         
-        Spacer(modifier = Modifier.width(4.dp))
-        
-        // Legend squares
         Row(
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            val intensities = listOf(0.1f, 0.3f, 0.5f, 0.7f, 1.0f)
-            intensities.forEach { intensity ->
-                val backgroundColor = MaterialTheme.colorScheme.primary.copy(alpha = intensity)
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .clip(RoundedCornerShape(1.dp))
-                        .background(backgroundColor)
-                )
+            Text(
+                text = "Less",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing1)
+            ) {
+                (0..4).forEach { level ->
+                    val intensity = level / 4f
+                    Box(
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clip(RoundedCornerShape(GridSystem.cornerRadiusSmall))
+                            .background(getIntensityColor(intensity, true))
+                    )
+                }
             }
+            
+            Text(
+                text = "More",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
-        
-        Spacer(modifier = Modifier.width(4.dp))
-        
-        Text(
-            text = "More",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 10.sp
-        )
     }
 }
 
 /**
- * Data class representing a single cell in the calendar
+ * Get intensity color with improved accessibility and brand color integration
  */
-private data class CalendarCell(
+private fun getIntensityColor(intensity: Float, isCurrentMonth: Boolean): Color {
+    return if (!isCurrentMonth) {
+        Color.Transparent
+    } else {
+        when {
+            intensity == 0f -> LiftrixColors.SurfaceLight.copy(alpha = 0.1f)
+            intensity <= 0.25f -> LiftrixColors.Primary.copy(alpha = 0.2f)
+            intensity <= 0.5f -> LiftrixColors.Primary.copy(alpha = 0.4f)
+            intensity <= 0.75f -> LiftrixColors.Primary.copy(alpha = 0.7f)
+            else -> LiftrixColors.Primary
+        }
+    }
+}
+
+/**
+ * Generate calendar days for the given month
+ */
+private fun generateCalendarDays(currentDate: LocalDate): List<CalendarDayData> {
+    val firstDayOfMonth = LocalDate(currentDate.year, currentDate.month, 1)
+    val lastDayOfMonth = LocalDate(currentDate.year, currentDate.month, currentDate.month.length(false))
+    
+    val startOfWeek = firstDayOfMonth.minus(DatePeriod(days = firstDayOfMonth.dayOfWeek.value % 7))
+    val endOfWeek = lastDayOfMonth.plus(DatePeriod(days = 6 - (lastDayOfMonth.dayOfWeek.value % 7)))
+    
+    val days = mutableListOf<CalendarDayData>()
+    var current = startOfWeek
+    
+    while (current <= endOfWeek) {
+        days.add(
+            CalendarDayData(
+                date = current,
+                isCurrentMonth = current.month == currentDate.month
+            )
+        )
+        current = current.plus(DatePeriod(days = 1))
+    }
+    
+    return days
+}
+
+/**
+ * Data class for calendar day information
+ */
+private data class CalendarDayData(
     val date: LocalDate,
-    val workoutCount: Int,
-    val intensity: Float,
-    val isCurrentMonth: Boolean = true
+    val isCurrentMonth: Boolean
 ) 

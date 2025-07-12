@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Liftrix Dark Theme Colors -->
+    <!-- Liftrix Dark Theme Colors - OLED Optimized -->
     
     <!-- Primary Brand Colors (same in dark mode) -->
     <color name="liftrix_primary">#FF20C9B7</color>

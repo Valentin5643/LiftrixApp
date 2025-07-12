@@ -7,6 +7,7 @@ import com.example.liftrix.data.local.converter.DateTimeConverters
 import com.example.liftrix.data.local.converter.UserProfileConverters
 import com.example.liftrix.data.local.converter.WorkoutConverters
 import com.example.liftrix.data.local.converter.ExerciseConverters
+import com.example.liftrix.data.local.converter.SubscriptionConverters
 import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.local.dao.CustomExerciseDao
@@ -18,9 +19,14 @@ import com.example.liftrix.data.local.dao.ExerciseWeightMemoryDao
 import com.example.liftrix.data.local.dao.ExerciseUsageHistoryDao
 import com.example.liftrix.data.local.dao.FriendDao
 import com.example.liftrix.data.local.dao.PrivacySettingsDao
-import com.example.liftrix.data.local.dao.ActiveWorkoutSessionDao
+import com.example.liftrix.data.local.dao.FolderDao
+import com.example.liftrix.data.local.dao.SettingsDao
+import com.example.liftrix.data.local.dao.SubscriptionDao
 
 import com.example.liftrix.data.local.entity.UserProfileEntity
+import com.example.liftrix.data.local.entity.FolderEntity
+import com.example.liftrix.data.local.entity.SettingsEntity
+import com.example.liftrix.data.local.entity.SubscriptionEntity
 import com.example.liftrix.data.local.entity.WorkoutEntity
 import com.example.liftrix.data.local.entity.CustomExerciseEntity
 import com.example.liftrix.data.local.entity.WorkoutTemplateEntity
@@ -31,7 +37,6 @@ import com.example.liftrix.data.local.entity.ExerciseWeightMemoryEntity
 import com.example.liftrix.data.local.entity.ExerciseUsageHistoryEntity
 import com.example.liftrix.data.local.entity.FriendEntity
 import com.example.liftrix.data.local.entity.PrivacySettingsEntity
-import com.example.liftrix.data.local.entity.ActiveWorkoutSessionEntity
 
 
 
@@ -48,16 +53,19 @@ import com.example.liftrix.data.local.entity.ActiveWorkoutSessionEntity
         ExerciseUsageHistoryEntity::class,
         FriendEntity::class,
         PrivacySettingsEntity::class,
-        ActiveWorkoutSessionEntity::class,
+        FolderEntity::class,
+        SettingsEntity::class,
+        SubscriptionEntity::class,
     ],
-    version = 23,
+    version = 27,
     exportSchema = true
 )
 @TypeConverters(
     DateTimeConverters::class,
     WorkoutConverters::class,
     UserProfileConverters::class,
-    ExerciseConverters::class
+    ExerciseConverters::class,
+    SubscriptionConverters::class
 )
 abstract class LiftrixDatabase : RoomDatabase() {
     
@@ -72,5 +80,7 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun exerciseUsageHistoryDao(): ExerciseUsageHistoryDao
     abstract fun friendDao(): FriendDao
     abstract fun privacySettingsDao(): PrivacySettingsDao
-    abstract fun activeWorkoutSessionDao(): ActiveWorkoutSessionDao
+    abstract fun folderDao(): FolderDao
+    abstract fun settingsDao(): SettingsDao
+    abstract fun subscriptionDao(): SubscriptionDao
 } 

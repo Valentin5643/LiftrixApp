@@ -5,7 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.liftrix.data.repository.WorkoutRepository
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.Workout
+import com.example.liftrix.domain.model.WorkoutTemplatePreview
 import com.example.liftrix.domain.repository.AuthRepository
+import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.usecase.SaveWorkoutUseCase
 import com.example.liftrix.domain.usecase.analytics.LogWorkoutEventUseCase
 import com.example.liftrix.domain.service.AnalyticsService
@@ -14,9 +17,12 @@ import com.example.liftrix.sync.SyncStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -24,6 +30,8 @@ import javax.inject.Inject
 @HiltViewModel
 class WorkoutViewModel @Inject constructor(
     private val workoutRepository: WorkoutRepository,
+    private val workoutTemplateRepository: WorkoutTemplateRepository,
+    private val folderRepository: FolderRepository,
     private val authRepository: AuthRepository,
     private val saveWorkoutUseCase: SaveWorkoutUseCase,
     private val syncManager: SyncManager,
@@ -40,6 +48,7 @@ class WorkoutViewModel @Inject constructor(
     init {
         observeAuthState()
         observeWorkouts()
+        observeTemplates()
         observeSyncStatus()
     }
 
@@ -59,6 +68,7 @@ class WorkoutViewModel @Inject constructor(
                     // Clear workout data when user logs out
                     _uiState.value = _uiState.value.copy(
                         workouts = emptyList(),
+                        templates = emptyList(),
                         isLoading = false
                     )
                     // Clear analytics user properties
@@ -87,6 +97,29 @@ class WorkoutViewModel @Inject constructor(
                             isLoading = false
                         )
                     }.collect { /* Updates handled in combine block */ }
+                }
+        }
+    }
+
+    private fun observeTemplates() {
+        viewModelScope.launch {
+            // Only observe templates when user is authenticated
+            authRepository.currentUser
+                .filterNotNull()
+                .collect { user ->
+                    // Ensure default folder exists for the user
+                    folderRepository.getOrCreateDefaultFolder(user.uid)
+                        .onFailure { exception ->
+                            Timber.e(exception, "Failed to create default folder for user ${user.uid}")
+                        }
+                    
+                    workoutTemplateRepository.getAllTemplatesForUser(user.uid)
+                        .collect { templates ->
+                            _uiState.value = _uiState.value.copy(
+                                templates = templates
+                            )
+                            Timber.d("Loaded ${templates.size} templates for user ${user.uid}")
+                        }
                 }
         }
     }
@@ -185,10 +218,38 @@ class WorkoutViewModel @Inject constructor(
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }
+    
+    /**
+     * Enhanced UI template preview for workout creation flow
+     * Transforms workout data into structured preview format
+     */
+    val templatePreview: StateFlow<WorkoutTemplatePreview?> = uiState.map { state ->
+        state.workouts.firstOrNull()?.let { workout ->
+            WorkoutTemplatePreview(
+                name = workout.name,
+                description = workout.notes,
+                exerciseCount = workout.exercises.size,
+                estimatedDuration = workout.getDuration()?.toMinutes()?.toString() + "m" ?: "Unknown",
+                targetMuscleGroups = workout.exercises.map { it.libraryExercise.primaryMuscleGroup.displayName }.distinct(),
+                difficulty = when {
+                    workout.exercises.size <= 3 -> "Beginner"
+                    workout.exercises.size <= 6 -> "Intermediate" 
+                    else -> "Advanced"
+                },
+                lastUsed = null,
+                isPopular = false
+            )
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null
+    )
 }
 
 data class WorkoutUiState(
     val workouts: List<Workout> = emptyList(),
+    val templates: List<com.example.liftrix.domain.model.WorkoutTemplate> = emptyList(),
     val syncStatus: SyncStatus = SyncStatus.Idle,
     val unsyncedCount: Int = 0,
     val isLoading: Boolean = true,

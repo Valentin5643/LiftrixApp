@@ -25,8 +25,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.ui.MainViewModel
 import com.example.liftrix.ui.auth.AuthActivity
-import com.example.liftrix.ui.navigation.MainNavigationContainer
+import com.example.liftrix.ui.navigation.UnifiedMainNavigationContainer
 import com.example.liftrix.ui.theme.LiftrixTheme
+import com.example.liftrix.ui.theme.ThemeManager
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -34,7 +35,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            LiftrixTheme {
+            val themeManager = ThemeManager.getInstance(this)
+            
+            LiftrixTheme(
+                themeManager = themeManager
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -110,9 +115,6 @@ fun AuthenticatedContent(
     onNavigateToAuth: () -> Unit
 ) {
     // Main navigation with tab-based navigation system
-    MainNavigationContainer(
-        user = user,
-        onNavigateToAuth = onNavigateToAuth
-    )
+    UnifiedMainNavigationContainer()
 }
 

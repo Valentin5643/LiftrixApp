@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
@@ -38,11 +39,18 @@ class WorkoutTimerService : Service() {
 
     companion object {
         private const val NOTIFICATION_CHANNEL_ID = "workout_timer_channel"
+        private const val LONG_WORKOUT_CHANNEL_ID = "long_workout_reminder_channel"
         private const val NOTIFICATION_ID = 1001
+        private const val LONG_WORKOUT_NOTIFICATION_ID = 1002
         private const val ACTION_PAUSE = "com.example.liftrix.PAUSE_TIMER"
         private const val ACTION_RESUME = "com.example.liftrix.RESUME_TIMER"
         private const val ACTION_STOP = "com.example.liftrix.STOP_TIMER"
         private const val ACTION_SKIP_REST = "com.example.liftrix.SKIP_REST"
+        private const val ACTION_CONFIRM_ACTIVE = "com.example.liftrix.CONFIRM_ACTIVE"
+        private const val ACTION_END_WORKOUT = "com.example.liftrix.END_WORKOUT"
+        
+        // 2 hours in seconds
+        private const val LONG_WORKOUT_THRESHOLD_SECONDS = 2 * 60 * 60L
     }
 
     sealed class TimerState {
@@ -68,6 +76,7 @@ class WorkoutTimerService : Service() {
     private var sessionStartTime: Instant? = null
     private var pausedAtSeconds: Long = 0
     private var currentRestTimer: RestTimer? = null
+    private var longWorkoutNotificationShown = false
 
     @Inject
     lateinit var notificationManager: NotificationManager
@@ -81,6 +90,7 @@ class WorkoutTimerService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        createLongWorkoutNotificationChannel()
         Timber.d("WorkoutTimerService created")
     }
 
@@ -104,6 +114,8 @@ class WorkoutTimerService : Service() {
             ACTION_RESUME -> resumeTimer()
             ACTION_STOP -> stopService()
             ACTION_SKIP_REST -> skipRest()
+            ACTION_CONFIRM_ACTIVE -> confirmWorkoutActive()
+            ACTION_END_WORKOUT -> endWorkoutFromNotification()
         }
     }
 
@@ -115,9 +127,21 @@ class WorkoutTimerService : Service() {
             if (_serviceState.value.timerState is TimerState.Stopped) {
                 sessionStartTime = Clock.System.now()
                 pausedAtSeconds = 0
+                longWorkoutNotificationShown = false
                 startSessionTimer()
                 updateNotification()
-                startForeground(NOTIFICATION_ID, createNotification())
+                
+                // For Android 14+ (API 34+), specify the service type when starting foreground
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    startForeground(
+                        NOTIFICATION_ID, 
+                        createNotification(), 
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                    )
+                } else {
+                    startForeground(NOTIFICATION_ID, createNotification())
+                }
+                
                 Timber.d("Session timer started")
                 Result.success(Unit)
             } else {
@@ -255,8 +279,11 @@ class WorkoutTimerService : Service() {
             sessionStartTime = null
             pausedAtSeconds = 0
             currentRestTimer = null
+            longWorkoutNotificationShown = false
             _serviceState.value = TimerServiceState()
             stopForeground(STOP_FOREGROUND_REMOVE)
+            // Clear any long workout notifications
+            notificationManager.cancel(LONG_WORKOUT_NOTIFICATION_ID)
             Timber.d("Timer stopped")
             Result.success(Unit)
         } catch (e: Exception) {
@@ -282,6 +309,9 @@ class WorkoutTimerService : Service() {
                         sessionDurationSeconds = elapsed
                     )
                     updateNotification()
+                    
+                    // Check if we should show the long workout notification
+                    checkForLongWorkoutNotification(elapsed)
                 }
                 delay(1000)
             }
@@ -327,6 +357,20 @@ class WorkoutTimerService : Service() {
             ).apply {
                 description = "Persistent notification for workout and rest timers"
                 setShowBadge(false)
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun createLongWorkoutNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                LONG_WORKOUT_CHANNEL_ID,
+                "Long Workout Reminders",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Notifications asking if you're still working out after 2+ hours"
+                setShowBadge(true)
             }
             notificationManager.createNotificationChannel(channel)
         }
@@ -417,5 +461,86 @@ class WorkoutTimerService : Service() {
         } else {
             "%d:%02d".format(minutes, secs)
         }
+    }
+
+    /**
+     * Checks if we should show the long workout notification (after 2 hours)
+     */
+    private fun checkForLongWorkoutNotification(elapsedSeconds: Long) {
+        if (!longWorkoutNotificationShown && elapsedSeconds >= LONG_WORKOUT_THRESHOLD_SECONDS) {
+            showLongWorkoutNotification(elapsedSeconds)
+            longWorkoutNotificationShown = true
+        }
+    }
+
+    /**
+     * Shows a notification asking if the user is still working out
+     */
+    private fun showLongWorkoutNotification(elapsedSeconds: Long) {
+        val mainPendingIntent = Intent(this, MainActivity::class.java)
+            .let { intent ->
+                PendingIntent.getActivity(
+                    this, 0, intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            }
+
+        val confirmActivePendingIntent = Intent(this, WorkoutTimerService::class.java).apply {
+            action = ACTION_CONFIRM_ACTIVE
+        }.let { intent ->
+            PendingIntent.getService(
+                this, ACTION_CONFIRM_ACTIVE.hashCode(), intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
+
+        val endWorkoutPendingIntent = Intent(this, WorkoutTimerService::class.java).apply {
+            action = ACTION_END_WORKOUT
+        }.let { intent ->
+            PendingIntent.getService(
+                this, ACTION_END_WORKOUT.hashCode(), intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
+
+        val notification = NotificationCompat.Builder(this, LONG_WORKOUT_CHANNEL_ID).apply {
+            setContentTitle("Long Workout Detected")
+            setContentText("You've been working out for ${formatTime(elapsedSeconds)}. Are you still active?")
+            setSmallIcon(R.drawable.ic_launcher_foreground)
+            setContentIntent(mainPendingIntent)
+            setAutoCancel(true)
+            priority = NotificationCompat.PRIORITY_DEFAULT
+            
+            addAction(
+                R.drawable.ic_launcher_foreground,
+                "Yes, I'm active",
+                confirmActivePendingIntent
+            )
+            addAction(
+                R.drawable.ic_launcher_foreground,
+                "End workout",
+                endWorkoutPendingIntent
+            )
+        }.build()
+
+        notificationManager.notify(LONG_WORKOUT_NOTIFICATION_ID, notification)
+        Timber.d("Showed long workout notification after ${formatTime(elapsedSeconds)}")
+    }
+
+    /**
+     * User confirmed they're still active - dismiss the notification
+     */
+    private fun confirmWorkoutActive() {
+        notificationManager.cancel(LONG_WORKOUT_NOTIFICATION_ID)
+        Timber.d("User confirmed workout is still active")
+    }
+
+    /**
+     * User wants to end the workout from the notification
+     */
+    private fun endWorkoutFromNotification() {
+        notificationManager.cancel(LONG_WORKOUT_NOTIFICATION_ID)
+        stopTimer()
+        Timber.d("Workout ended from long workout notification")
     }
 }

@@ -3,6 +3,7 @@ package com.example.liftrix.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.data.repository.WorkoutRepository
+import com.example.liftrix.domain.model.CardData
 import com.example.liftrix.domain.model.FeedWorkout
 import com.example.liftrix.domain.model.RecommendedUser
 import com.example.liftrix.domain.model.Workout
@@ -10,11 +11,18 @@ import com.example.liftrix.domain.model.WorkoutStats
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SocialRepository
 import com.example.liftrix.domain.service.AnalyticsService
+import com.example.liftrix.domain.usecase.GetWorkoutHistoryUseCase
+import com.example.liftrix.ui.components.cards.Trend
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.LocalFireDepartment
 
 /**
  * ViewModel for home screen state management and data loading.
@@ -32,7 +40,8 @@ class HomeViewModel @Inject constructor(
     private val workoutRepository: WorkoutRepository,
     private val authRepository: AuthRepository,
     private val analyticsService: AnalyticsService,
-    private val socialRepository: SocialRepository
+    private val socialRepository: SocialRepository,
+    private val getWorkoutHistoryUseCase: GetWorkoutHistoryUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -733,6 +742,96 @@ class HomeViewModel @Inject constructor(
         _uiState.value = _uiState.value.update()
     }
 
+    private val currentUserIdFlow: StateFlow<String> = 
+        authRepository.currentUser
+            .map { it?.uid ?: "" }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.Eagerly,
+                initialValue = ""
+            )
+
+    /**
+     * Enhanced UI card data for new card components integration
+     * Transforms existing workout data into StatCard and ActivityCard format
+     */
+    val cardData: StateFlow<List<CardData>> = combine(
+        currentUserIdFlow,
+        uiState.map { it.recentWorkouts }
+    ) { userId, recentWorkouts ->
+        val stats = if (userId.isNotEmpty()) {
+            try {
+                workoutRepository.getWorkoutStats(userId).first()
+            } catch (e: Exception) {
+                WorkoutStats.EMPTY
+            }
+        } else {
+            WorkoutStats.EMPTY
+        }
+        
+        buildList {
+            // Total workouts card
+            add(
+                CardData.Stats(
+                    title = "Total Workouts",
+                    value = "${stats.totalWorkouts}",
+                    subtitle = "Completed",
+                    trend = if (stats.totalWorkouts > 0) Trend.Positive(5.0f, "progress") else Trend.Neutral("starting"),
+                    icon = Icons.Default.TrendingUp,
+                    contentDescription = "Total completed workouts"
+                )
+            )
+            
+            // Recent workout activity card
+            recentWorkouts.firstOrNull()?.let { recentWorkout ->
+                add(
+                    CardData.Activity(
+                        title = "Recent Workout",
+                        subtitle = recentWorkout.name ?: "Unnamed workout",
+                        icon = Icons.Default.FitnessCenter,
+                        trailing = "Today",
+                        contentDescription = "Most recent workout details"
+                    )
+                )
+            } ?: add(
+                CardData.Activity(
+                    title = "Recent Workout", 
+                    subtitle = "No recent workouts",
+                    icon = Icons.Default.FitnessCenter,
+                    showChevron = false,
+                    contentDescription = "No recent workout data"
+                )
+            )
+            
+            // Current streak card
+            add(
+                CardData.Stats(
+                    title = "Current Streak",
+                    value = "${stats.currentStreak}",
+                    subtitle = stats.getStreakDescription(),
+                    trend = if (stats.hasSignificantStreak()) Trend.Positive(10.0f, "strong") else null,
+                    icon = Icons.Default.LocalFireDepartment,
+                    contentDescription = "Current workout streak"
+                )
+            )
+            
+            // Average duration card
+            add(
+                CardData.Stats(
+                    title = "Avg Duration", 
+                    value = stats.getFormattedAverageDuration(),
+                    subtitle = "Per workout",
+                    icon = Icons.Default.Schedule,
+                    contentDescription = "Average workout duration"
+                )
+            )
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
     companion object {
         private const val RECENT_WORKOUTS_LIMIT = 7
         private const val FEED_LIMIT = 10
@@ -753,6 +852,7 @@ data class HomeUiState(
     val showEndOfFeedMessage: Boolean = false,
     val isRefreshing: Boolean = false,
     val errorMessage: String? = null,
+    val workoutStats: WorkoutStats? = null,
     // Legacy properties for backward compatibility during transition
     val recentWorkouts: List<Workout> = emptyList(),
     val isLoading: Boolean = false

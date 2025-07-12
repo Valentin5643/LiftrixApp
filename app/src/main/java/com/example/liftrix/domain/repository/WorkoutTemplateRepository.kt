@@ -25,9 +25,9 @@ interface WorkoutTemplateRepository {
     fun searchTemplates(userId: String, searchQuery: String): Flow<List<WorkoutTemplate>>
     
     /**
-     * Get templates filtered by tags for a specific user
+     * Get templates filtered by folder for a specific user
      */
-    fun getTemplatesByTag(userId: String, tag: String): Flow<List<WorkoutTemplate>>
+    fun getTemplatesByFolder(userId: String, folderId: String): Flow<List<WorkoutTemplate>>
     
     /**
      * Get templates filtered by difficulty level for a specific user

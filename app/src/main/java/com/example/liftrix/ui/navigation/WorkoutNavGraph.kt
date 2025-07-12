@@ -1,25 +1,30 @@
 package com.example.liftrix.ui.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.composable
-import androidx.navigation.navigation
-import androidx.navigation.navArgument
 import androidx.navigation.NavType
-import androidx.compose.runtime.Composable
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
+import androidx.navigation.navigation
 import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.model.User
-import com.example.liftrix.service.WorkoutSessionPersistenceService
-import com.example.liftrix.ui.workout.WorkoutTemplatesDashboard
-import com.example.liftrix.ui.workout.WorkoutTemplatesDashboardViewModel
-import com.example.liftrix.ui.workout.active.ActiveWorkoutScreen
-import com.example.liftrix.ui.workout.active.ActiveWorkoutViewModel
-import com.example.liftrix.ui.workout.templates.WorkoutTemplateSelectionScreen
-import com.example.liftrix.ui.workout.create.WorkoutTemplateCreationScreen
+import com.example.liftrix.ui.workout.WorkoutScreen
+import com.example.liftrix.ui.workout.WorkoutTemplateScreen
+import com.example.liftrix.ui.workout.active.UnifiedActiveWorkoutScreen
+import com.example.liftrix.ui.workout.active.UnifiedActiveWorkoutViewModel
 import com.example.liftrix.ui.workout.selection.ExerciseSelectionScreen
+import timber.log.Timber
 
 /**
  * Navigation graph for the Workout tab.
@@ -47,33 +52,26 @@ fun NavGraphBuilder.workoutGraph(
     onNavigateToExerciseLibrary: () -> Unit
 ) {
     navigation(
-        startDestination = WorkoutDestinations.TEMPLATES_DASHBOARD,
+        startDestination = WorkoutDestinations.WORKOUT_MAIN,
         route = MainNavigationItem.WORKOUT.route
     ) {
-        // Template Dashboard - Main Workout Tab (Modern UI)
-        composable(WorkoutDestinations.TEMPLATES_DASHBOARD) {
-            val viewModel: WorkoutTemplatesDashboardViewModel = hiltViewModel()
-            
-            WorkoutTemplatesDashboard(
-                onStartWorkout = { template ->
-                    // Record template usage and navigate to session
-                    viewModel.recordTemplateUsage(template)
-                    navController.navigate(
-                        WorkoutDestinations.createActiveSessionRoute(template.id.value)
-                    )
+        // Main Workout Screen - Entry point
+        composable(WorkoutDestinations.WORKOUT_MAIN) {
+            WorkoutScreen(
+                onNavigateToActiveWorkout = { templateId ->
+                    timber.log.Timber.d("🔥 WORKOUT-NAV-DEBUG: onNavigateToActiveWorkout called with templateId: $templateId")
+                    if (templateId != null && templateId.isNotBlank()) {
+                        val route = WorkoutDestinations.createActiveSessionRoute(templateId)
+                        timber.log.Timber.d("🔥 WORKOUT-NAV-DEBUG: Navigating to template route: $route")
+                        navController.navigate(route)
+                    } else {
+                        timber.log.Timber.d("🔥 WORKOUT-NAV-DEBUG: Navigating to blank workout session")
+                        navController.navigate(WorkoutDestinations.BLANK_WORKOUT_SESSION)
+                    }
                 },
-                onCreateTemplate = {
+                onNavigateToTemplateCreation = {
                     navController.navigate(WorkoutDestinations.CREATE_TEMPLATE)
-                },
-                onEditTemplate = { template ->
-                    navController.navigate(
-                        WorkoutDestinations.createEditTemplateRoute(template.id.value)
-                    )
-                },
-                onCreateBlankWorkout = {
-                    navController.navigate(WorkoutDestinations.BLANK_WORKOUT_SESSION)
-                },
-                viewModel = viewModel
+                }
             )
         }
         
@@ -84,273 +82,139 @@ fun NavGraphBuilder.workoutGraph(
                 navArgument("templateId") { 
                     type = NavType.StringType
                     nullable = true
+                    defaultValue = null
                 }
             )
         ) { backStackEntry ->
             val templateId = backStackEntry.arguments?.getString("templateId")
-            val viewModel: ActiveWorkoutViewModel = hiltViewModel()
+            timber.log.Timber.d("🔥 NAV-DEBUG: ACTIVE_SESSION route - templateId: $templateId")
             
-            // Handle selected exercise from navigation result
-            val selectedExerciseId = navController.currentBackStackEntry
-                ?.savedStateHandle
-                ?.getLiveData<String>("selected_exercise_id")
-                ?.observeAsState(initial = null)?.value
-            val isCustomExercise = navController.currentBackStackEntry
-                ?.savedStateHandle
-                ?.getLiveData<Boolean>("is_custom_exercise")
-                ?.observeAsState(initial = false)?.value ?: false
+            // 🔥 FIX: If templateId is empty string, treat as null
+            val actualTemplateId = templateId?.takeIf { it.isNotBlank() }
+            timber.log.Timber.d("🔥 NAV-DEBUG: actualTemplateId after cleanup: $actualTemplateId")
             
-            LaunchedEffect(selectedExerciseId) {
-                selectedExerciseId?.let { exerciseId ->
-                    viewModel.addExerciseById(exerciseId, isCustomExercise)
-                    // Clear the saved state after handling
-                    navController.currentBackStackEntry?.savedStateHandle?.remove<String>("selected_exercise_id")
-                    navController.currentBackStackEntry?.savedStateHandle?.remove<Boolean>("is_custom_exercise")
-                }
-            }
-            
-            // Start session from template
-            LaunchedEffect(templateId) {
-                if (templateId != null) {
-                    viewModel.startSessionFromTemplate(templateId)
-                }
-            }
-            
-            // Start background persistence
-            LaunchedEffect(Unit) {
-                WorkoutSessionPersistenceService.startPersistence(navController.context)
-            }
-            
-            ActiveWorkoutScreen(
+            UnifiedActiveWorkoutScreen(
                 onNavigateBack = {
-                    // Handle back navigation with confirmation if workout in progress
-                    if (viewModel.hasUnsavedChanges()) {
-                        // Show confirmation dialog
-                        viewModel.showExitConfirmation()
-                    } else {
-                        // Stop background persistence and navigate back
-                        WorkoutSessionPersistenceService.stopPersistence(navController.context)
-                        navController.navigateUp()
-                    }
+                    navController.navigateUp()
                 },
                 onAddExercise = {
-                    viewModel.sessionId?.let { sessionId ->
-                        navController.navigate(
-                            WorkoutDestinations.createAddExerciseRoute(sessionId)
-                        )
-                    }
+                    navController.navigate(WorkoutDestinations.ADD_EXERCISE_TO_SESSION)
                 },
-                navController = navController,
-                isFromTemplate = templateId != null
+                onNavigateToExercise = { exerciseId ->
+                    // Navigate to exercise detail if needed
+                },
+                savedStateHandle = backStackEntry.savedStateHandle,
+                isBlankWorkout = actualTemplateId == null, // 🔥 FIX: If no valid templateId, treat as blank workout
+                templateId = actualTemplateId // Pass cleaned templateId
             )
         }
         
         // Blank Workout Session - Start without template
-        composable(WorkoutDestinations.BLANK_WORKOUT_SESSION) {
-            val viewModel: ActiveWorkoutViewModel = hiltViewModel()
-            
-            // Handle selected exercise from navigation result
-            val selectedExerciseId = navController.currentBackStackEntry
-                ?.savedStateHandle
-                ?.getLiveData<String>("selected_exercise_id")
-                ?.observeAsState(initial = null)?.value
-            val isCustomExercise = navController.currentBackStackEntry
-                ?.savedStateHandle
-                ?.getLiveData<Boolean>("is_custom_exercise")
-                ?.observeAsState(initial = false)?.value ?: false
-            
-            LaunchedEffect(selectedExerciseId) {
-                selectedExerciseId?.let { exerciseId ->
-                    viewModel.addExerciseById(exerciseId, isCustomExercise)
-                    // Clear the saved state after handling
-                    navController.currentBackStackEntry?.savedStateHandle?.remove<String>("selected_exercise_id")
-                    navController.currentBackStackEntry?.savedStateHandle?.remove<Boolean>("is_custom_exercise")
-                }
-            }
-            
-            // Start blank session
-            LaunchedEffect(Unit) {
-                viewModel.startBlankSession()
-                WorkoutSessionPersistenceService.startPersistence(navController.context)
-            }
-            
-            ActiveWorkoutScreen(
+        composable(WorkoutDestinations.BLANK_WORKOUT_SESSION) { backStackEntry ->
+            UnifiedActiveWorkoutScreen(
                 onNavigateBack = {
-                    if (viewModel.hasUnsavedChanges()) {
-                        viewModel.showExitConfirmation()
-                    } else {
-                        // Stop background persistence and navigate back
-                        WorkoutSessionPersistenceService.stopPersistence(navController.context)
-                        navController.navigateUp()
-                    }
+                    navController.navigateUp()
                 },
                 onAddExercise = {
-                    viewModel.sessionId?.let { sessionId ->
-                        navController.navigate(
-                            WorkoutDestinations.createAddExerciseRoute(sessionId)
-                        )
-                    }
+                    navController.navigate(WorkoutDestinations.ADD_EXERCISE_TO_SESSION)
                 },
-                navController = navController,
-                isFromTemplate = false
-            )
-        }
-        
-        // Resume Active Session - For recovery scenarios
-        composable(
-            route = WorkoutDestinations.RESUME_SESSION,
-            arguments = listOf(
-                navArgument("sessionId") { type = NavType.StringType }
-            )
-        ) { backStackEntry ->
-            val sessionId = backStackEntry.arguments?.getString("sessionId")
-                ?: throw IllegalArgumentException("Session ID required")
-            
-            val viewModel: ActiveWorkoutViewModel = hiltViewModel()
-            
-            // Handle selected exercise from navigation result
-            val selectedExerciseId = navController.currentBackStackEntry
-                ?.savedStateHandle
-                ?.getLiveData<String>("selected_exercise_id")
-                ?.observeAsState(initial = null)?.value
-            val isCustomExercise = navController.currentBackStackEntry
-                ?.savedStateHandle
-                ?.getLiveData<Boolean>("is_custom_exercise")
-                ?.observeAsState(initial = false)?.value ?: false
-            
-            LaunchedEffect(selectedExerciseId) {
-                selectedExerciseId?.let { exerciseId ->
-                    viewModel.addExerciseById(exerciseId, isCustomExercise)
-                    // Clear the saved state after handling
-                    navController.currentBackStackEntry?.savedStateHandle?.remove<String>("selected_exercise_id")
-                    navController.currentBackStackEntry?.savedStateHandle?.remove<Boolean>("is_custom_exercise")
-                }
-            }
-            
-            // Resume existing session
-            LaunchedEffect(sessionId) {
-                viewModel.resumeSession(sessionId)
-                WorkoutSessionPersistenceService.startPersistence(navController.context)
-            }
-            
-            ActiveWorkoutScreen(
-                onNavigateBack = {
-                    if (viewModel.hasUnsavedChanges()) {
-                        viewModel.showExitConfirmation()
-                    } else {
-                        // Stop background persistence and navigate back
-                        WorkoutSessionPersistenceService.stopPersistence(navController.context)
-                        navController.navigateUp()
-                    }
+                onNavigateToExercise = { exerciseId ->
+                    // Navigate to exercise detail if needed
                 },
-                onAddExercise = {
-                    navController.navigate(
-                        WorkoutDestinations.createAddExerciseRoute(sessionId)
-                    )
-                },
-                navController = navController,
-                isFromTemplate = false
+                savedStateHandle = backStackEntry.savedStateHandle,
+                isBlankWorkout = true
             )
         }
         
         // Add Exercise to Session
-        composable(
-            route = WorkoutDestinations.ADD_EXERCISE_TO_SESSION,
-            arguments = listOf(
-                navArgument("sessionId") { type = NavType.StringType }
-            )
-        ) { backStackEntry ->
-            val sessionId = backStackEntry.arguments?.getString("sessionId")
-                ?: throw IllegalArgumentException("Session ID required")
+        composable(WorkoutDestinations.ADD_EXERCISE_TO_SESSION) {
+            timber.log.Timber.d("🔥 ROUTE-DEBUG: Navigated to ADD_EXERCISE_TO_SESSION route")
             
             ExerciseSelectionScreen(
                 onNavigateBack = {
                     navController.navigateUp()
                 },
                 onExerciseSelected = { exercise ->
-                    // Navigate back with selected exercise ID
-                    // The exercise will be resolved by the calling screen
-                    // Note: This comes from ExerciseSelectionScreen which already converts SearchableExercise to ExerciseLibrary
-                    // Custom exercises are converted to ExerciseLibrary format in the screen
-                    navController.previousBackStackEntry?.savedStateHandle?.set("selected_exercise_id", exercise.id)
-                    navController.previousBackStackEntry?.savedStateHandle?.set("is_custom_exercise", exercise.id.startsWith("custom_") || exercise.movementPattern == "Custom Exercise")
-                    navController.navigateUp()
+                    timber.log.Timber.d("🔥 NAVIGATION-DEBUG: onExerciseSelected callback invoked")
+                    timber.log.Timber.d("🔥 NAVIGATION-DEBUG: Received exercise - ID: ${exercise.id}, name: '${exercise.name}'")
+                    timber.log.Timber.d("🔥 NAVIGATION-DEBUG: Exercise type: ${exercise::class.simpleName}")
+                    
+                    try {
+                        // Navigate back with selected exercise
+                        timber.log.Timber.i("🔥 NAVIGATION-SEND: Sending exercise selection - ID: ${exercise.id}, name: '${exercise.name}'")
+                        
+                        val previousBackStack = navController.previousBackStackEntry
+                        timber.log.Timber.d("🔥 NAVIGATION-DEBUG: Previous back stack entry: ${previousBackStack?.destination?.route}")
+                        
+                        if (previousBackStack != null) {
+                            previousBackStack.savedStateHandle.set("selected_exercise", exercise)
+                            timber.log.Timber.d("🔥 NAVIGATION-DEBUG: Successfully set selected_exercise in savedStateHandle")
+                        } else {
+                            timber.log.Timber.e("🔥 NAVIGATION-DEBUG: Previous back stack entry is null!")
+                        }
+                        
+                        timber.log.Timber.i("🔥 NAVIGATION-COMPLETE: NavigateUp called, returning to ActiveWorkoutScreen")
+                        navController.navigateUp()
+                        
+                    } catch (e: Exception) {
+                        timber.log.Timber.e(e, "🔥 NAVIGATION-DEBUG: Error in navigation callback")
+                    }
                 },
                 onCreateCustomExercise = {
                     // TODO: Navigate to custom exercise creation
-                    // For now, this is a placeholder
                 }
             )
         }
         
         // Create Template
         composable(WorkoutDestinations.CREATE_TEMPLATE) { backStackEntry ->
-            // Handle selected exercise from navigation result
-            val selectedExerciseId = navController.currentBackStackEntry
-                ?.savedStateHandle
-                ?.getLiveData<String>("selected_exercise_id")
-                ?.observeAsState(initial = null)?.value
-            val isCustomExercise = navController.currentBackStackEntry
-                ?.savedStateHandle
-                ?.getLiveData<Boolean>("is_custom_exercise")
-                ?.observeAsState(initial = false)?.value ?: false
-            
-            LaunchedEffect(selectedExerciseId) {
-                selectedExerciseId?.let { exerciseId ->
-                    // TODO: Handle exercise selection for template creation
-                    // Clear the saved state after handling
-                    navController.currentBackStackEntry?.savedStateHandle?.remove<String>("selected_exercise_id")
-                    navController.currentBackStackEntry?.savedStateHandle?.remove<Boolean>("is_custom_exercise")
-                }
-            }
-            
-            WorkoutTemplateCreationScreen(
+            WorkoutTemplateScreen(
                 onNavigateBack = {
                     navController.navigateUp()
                 },
-                onNavigateToExerciseSelection = {
+                onAddExercise = {
                     navController.navigate(WorkoutDestinations.EXERCISE_SELECTION_FOR_TEMPLATE)
                 },
-                selectedExerciseId = selectedExerciseId,
-                isCustomExercise = isCustomExercise
+                savedStateHandle = backStackEntry.savedStateHandle
             )
         }
         
         // Exercise Selection for Template Creation
         composable(WorkoutDestinations.EXERCISE_SELECTION_FOR_TEMPLATE) {
+            timber.log.Timber.d("🔥 ROUTE-DEBUG: Navigated to EXERCISE_SELECTION_FOR_TEMPLATE route")
+            
             ExerciseSelectionScreen(
                 onNavigateBack = {
                     navController.navigateUp()
                 },
                 onExerciseSelected = { exercise ->
-                    // Pass selected exercise ID back to template creation
-                    navController.previousBackStackEntry?.savedStateHandle?.set("selected_exercise_id", exercise.id)
-                    navController.previousBackStackEntry?.savedStateHandle?.set("is_custom_exercise", exercise.id.startsWith("custom_") || exercise.movementPattern == "Custom Exercise")
-                    navController.navigateUp()
+                    timber.log.Timber.d("🔥 TEMPLATE-NAV-DEBUG: Template exercise selection callback invoked")
+                    timber.log.Timber.d("🔥 TEMPLATE-NAV-DEBUG: Received exercise - ID: ${exercise.id}, name: '${exercise.name}'")
+                    
+                    try {
+                        // Pass selected exercise back to template creation
+                        val previousBackStack = navController.previousBackStackEntry
+                        timber.log.Timber.d("🔥 TEMPLATE-NAV-DEBUG: Previous back stack entry: ${previousBackStack?.destination?.route}")
+                        
+                        if (previousBackStack != null) {
+                            previousBackStack.savedStateHandle.set("selected_exercise", exercise)
+                            timber.log.Timber.d("🔥 TEMPLATE-NAV-DEBUG: Successfully set selected_exercise in savedStateHandle")
+                        } else {
+                            timber.log.Timber.e("🔥 TEMPLATE-NAV-DEBUG: Previous back stack entry is null!")
+                        }
+                        
+                        navController.navigateUp()
+                        timber.log.Timber.d("🔥 TEMPLATE-NAV-DEBUG: NavigateUp completed")
+                        
+                    } catch (e: Exception) {
+                        timber.log.Timber.e(e, "🔥 TEMPLATE-NAV-DEBUG: Error in template navigation callback")
+                    }
                 },
                 onCreateCustomExercise = {
                     // TODO: Navigate to custom exercise creation
-                    // For now, this is a placeholder
                 }
             )
         }
-        
-        // Edit Template
-        composable(
-            route = WorkoutDestinations.EDIT_TEMPLATE,
-            arguments = listOf(
-                navArgument("templateId") { type = NavType.StringType }
-            )
-        ) { backStackEntry ->
-            val templateId = backStackEntry.arguments?.getString("templateId")
-                ?: throw IllegalArgumentException("Template ID required")
-            
-            // TODO: Implement template editing screen
-            // For now, navigate back
-            LaunchedEffect(Unit) {
-                navController.navigateUp()
-            }
-                 }
     }
 }
 
@@ -358,30 +222,15 @@ fun NavGraphBuilder.workoutGraph(
  * Destinations for workout flow navigation
  */
 object WorkoutDestinations {
-    const val WORKOUT_FLOW = "workout_flow"
-    const val TEMPLATES_DASHBOARD = "templates_dashboard"
+    const val WORKOUT_MAIN = "workout_main"
     const val ACTIVE_SESSION = "active_session?templateId={templateId}"
     const val BLANK_WORKOUT_SESSION = "blank_workout_session"
-    const val RESUME_SESSION = "resume_session/{sessionId}"
-    const val ADD_EXERCISE_TO_SESSION = "add_exercise/{sessionId}"
+    const val ADD_EXERCISE_TO_SESSION = "add_exercise_to_session"
     const val CREATE_TEMPLATE = "create_template"
     const val EXERCISE_SELECTION_FOR_TEMPLATE = "exercise_selection_for_template"
-    const val EDIT_TEMPLATE = "edit_template/{templateId}"
     
     fun createActiveSessionRoute(templateId: String): String {
         return "active_session?templateId=$templateId"
-    }
-    
-    fun createResumeSessionRoute(sessionId: String): String {
-        return "resume_session/$sessionId"
-    }
-    
-    fun createAddExerciseRoute(sessionId: String): String {
-        return "add_exercise/$sessionId"
-    }
-    
-    fun createEditTemplateRoute(templateId: String): String {
-        return "edit_template/$templateId"
     }
 }
 

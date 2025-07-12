@@ -8,6 +8,8 @@ import com.example.liftrix.domain.repository.CustomExerciseRepository
 import com.example.liftrix.domain.repository.ExerciseLibraryRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -73,19 +75,26 @@ class SearchExercisesUseCase @Inject constructor(
     /**
      * Search exercises with equipment filtering and variation grouping
      */
-    suspend fun search(
+    fun search(
         query: String,
         userEquipment: Set<Equipment> = emptySet()
-    ): Flow<List<SearchableExercise>> {
+    ): Flow<List<SearchableExercise>> = flow {
         val userId = authRepository.getCurrentUserId()
         
-        return if (userId != null) {
+        val sourceFlow = if (userId != null) {
             combine(
                 exerciseLibraryRepository.searchExercises(query),
                 customExerciseRepository.searchCustomExercises(userId, query)
             ) { libraryExercises, customExercises ->
-                Timber.d("SearchExercisesUseCase: Raw library exercises count: ${libraryExercises.size}")
-                Timber.d("SearchExercisesUseCase: Query: '$query', userEquipment: $userEquipment")
+                Timber.d("🔥 USE-CASE-DEBUG: Raw library exercises count: ${libraryExercises.size}")
+                Timber.d("🔥 USE-CASE-DEBUG: Query: '$query', userEquipment: $userEquipment")
+                
+                // Additional debug logging for library exercises
+                if (libraryExercises.isEmpty()) {
+                    Timber.w("🔥 USE-CASE-DEBUG: No library exercises found - this suggests repository issue")
+                } else {
+                    Timber.d("🔥 USE-CASE-DEBUG: Sample library exercises: ${libraryExercises.take(3).map { it.name }}")
+                }
                 
                 val libraryResults = libraryExercises
                     .filter { userEquipment.isEmpty() || userEquipment.contains(it.equipment) }
@@ -118,15 +127,17 @@ class SearchExercisesUseCase @Inject constructor(
                 finalResults
             }
         }
+        
+        emitAll(sourceFlow)
     }
     
     /**
      * Get exercise variations grouped by movement pattern
      */
-    suspend fun getVariations(baseMovement: String, userEquipment: Set<Equipment> = Equipment.entries.toSet()): Flow<List<ExerciseGroup>> {
+    fun getVariations(baseMovement: String, userEquipment: Set<Equipment> = Equipment.entries.toSet()): Flow<List<ExerciseGroup>> = flow {
         val userId = authRepository.getCurrentUserId()
         
-        return if (userId != null) {
+        val sourceFlow = if (userId != null) {
             combine(
                 exerciseLibraryRepository.getVariationsByMovement(baseMovement, userEquipment),
                 customExerciseRepository.getAllCustomExercises(userId)
@@ -159,18 +170,20 @@ class SearchExercisesUseCase @Inject constructor(
                 }
             }
         }
+        
+        emitAll(sourceFlow)
     }
     
     /**
      * Search with grouped variations for specific query
      */
-    suspend fun searchWithVariations(
+    fun searchWithVariations(
         query: String,
         userEquipment: Set<Equipment> = emptySet()
-    ): Flow<List<ExerciseGroup>> {
+    ): Flow<List<ExerciseGroup>> = flow {
         val userId = authRepository.getCurrentUserId()
         
-        return if (userId != null) {
+        val sourceFlow = if (userId != null) {
             combine(
                 exerciseLibraryRepository.searchExercises(query),
                 customExerciseRepository.searchCustomExercises(userId, query)
@@ -212,6 +225,8 @@ class SearchExercisesUseCase @Inject constructor(
                 }
             }
         }
+        
+        emitAll(sourceFlow)
     }
     
     /**

@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.model.Workout
+import com.example.liftrix.domain.model.WorkoutStats
 import com.example.liftrix.domain.model.WorkoutStatus
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -358,15 +359,4 @@ private fun EmptyWorkoutHistoryState(
     }
 }
 
-/**
- * Data class for workout statistics
- */
-data class WorkoutStats(
-    val workoutsThisWeek: Int = 0,
-    val totalMinutesThisWeek: Int = 0,
-    val currentStreak: Int = 0,
-    val daysSinceLastWorkout: Int? = null,
-    val totalWorkouts: Int = 0,
-    val totalVolume: Double = 0.0,
-    val averageWorkoutDuration: Int = 0
-)
+// WorkoutStats is now imported from domain model

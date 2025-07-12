@@ -1,5 +1,7 @@
 package com.example.liftrix.domain.model
 
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.Serializable
 import java.time.Duration
 import java.time.Instant
@@ -36,8 +38,13 @@ data class Exercise(
         // Validate set numbers are sequential if sets exist
         if (sets.isNotEmpty()) {
             val setNumbers = sets.map { it.setNumber }.sorted()
-            require(setNumbers == (1..sets.size).toList()) { 
-                "Set numbers must be sequential starting from 1: $setNumbers" 
+            val expectedNumbers = (1..sets.size).toList()
+            if (setNumbers != expectedNumbers) {
+                // 🔥 SAFETY: Log the validation failure for debugging
+                timber.log.Timber.e("🔥 SET-VALIDATION-ERROR: Exercise '${libraryExercise.name}' has non-sequential set numbers: $setNumbers, expected: $expectedNumbers")
+                require(setNumbers == expectedNumbers) { 
+                    "Set numbers must be sequential starting from 1: $setNumbers (expected: $expectedNumbers)" 
+                }
             }
         }
     }
@@ -45,6 +52,49 @@ data class Exercise(
     companion object {
         const val MAX_NOTES_LENGTH: Int = 1000
         const val MAX_SETS: Int = 50
+        
+        /**
+         * 🔥 SAFETY: Normalizes set numbers to be sequential starting from 1
+         * This prevents crashes when set ordering is broken due to UI manipulation
+         */
+        fun List<ExerciseSet>.normalized(): List<ExerciseSet> = this
+            .sortedBy { it.setNumber }
+            .mapIndexed { index, set -> set.copy(setNumber = index + 1) }
+            
+        /**
+         * 🔥 SAFETY: Creates an Exercise with normalized set numbers to prevent validation crashes
+         * Use this instead of the constructor when set ordering might be broken
+         */
+        fun createSafe(
+            id: ExerciseId,
+            workoutId: WorkoutId,
+            libraryExercise: ExerciseLibrary,
+            orderIndex: Int,
+            targetSets: Int? = null,
+            targetReps: Int? = null,
+            targetWeight: Weight? = null,
+            targetTime: Duration? = null,
+            targetDistance: Distance? = null,
+            sets: List<ExerciseSet> = emptyList(),
+            notes: String? = null,
+            createdAt: Instant
+        ): Exercise {
+            val normalizedSets = sets.normalized()
+            return Exercise(
+                id = id,
+                workoutId = workoutId,
+                libraryExercise = libraryExercise,
+                orderIndex = orderIndex,
+                targetSets = targetSets,
+                targetReps = targetReps,
+                targetWeight = targetWeight,
+                targetTime = targetTime,
+                targetDistance = targetDistance,
+                sets = normalizedSets,
+                notes = notes,
+                createdAt = createdAt
+            )
+        }
     }
     
     /**
@@ -181,8 +231,9 @@ data class Exercise(
 /**
  * Enum representing different exercise categories
  */
+@Parcelize
 @Serializable
-enum class ExerciseCategory(val displayName: String) {
+enum class ExerciseCategory(val displayName: String) : Parcelable {
     CHEST("Chest"),
     BACK("Back"),
     SHOULDERS("Shoulders"),

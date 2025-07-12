@@ -38,6 +38,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.domain.repository.ProgressSummary
+import com.example.liftrix.ui.components.cards.LiftrixCard
+import com.example.liftrix.ui.components.layouts.GridSystem
 import com.example.liftrix.ui.progress.components.ProgressSummaryCards
 import com.example.liftrix.ui.progress.components.TimePeriodSelector
 import com.example.liftrix.ui.progress.components.WorkoutDurationChart
@@ -45,19 +47,18 @@ import com.example.liftrix.ui.progress.components.WorkoutFrequencyHeatmap
 import com.example.liftrix.ui.progress.components.WorkoutVolumeChart
 
 /**
- * Progress dashboard screen with comprehensive analytics and charts.
+ * Modern progress dashboard screen with data dashboard styling.
  * 
- * This screen displays workout progress analytics including volume charts,
- * duration tracking, frequency heatmaps, and summary statistics. It integrates
- * with ProgressDashboardViewModel for state management and data loading.
+ * Features enhanced Material 3 design with LiftrixCard system, 8pt grid spacing,
+ * and professional athletic interface. Displays comprehensive analytics including
+ * volume charts, duration tracking, frequency heatmaps, and summary statistics.
  * 
- * Features:
- * - LazyColumn layout with chart containers
- * - Loading states for all chart types
- * - Error handling with retry functionality
- * - Empty state for users with no workout data
- * - Material3 design with proper accessibility
- * - Foundation for future chart component integration
+ * Key improvements:
+ * - Modern card-based layout with 24dp border radius
+ * - 8pt grid system for consistent spacing
+ * - Enhanced visual hierarchy with brand colors
+ * - Responsive breakpoints for different screen sizes
+ * - Professional data dashboard styling
  * 
  * @param modifier Modifier for styling the screen
  * @param viewModel ViewModel for state management and data loading
@@ -90,7 +91,7 @@ fun ProgressDashboardScreen(
 }
 
 /**
- * Main dashboard content with LazyColumn layout
+ * Main dashboard content with modern card-based layout and 8pt grid spacing
  */
 @Composable
 private fun ProgressDashboardContent(
@@ -100,24 +101,24 @@ private fun ProgressDashboardContent(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = GridSystem.screenPadding),
+        verticalArrangement = Arrangement.spacedBy(GridSystem.gapMedium)
     ) {
         item {
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(GridSystem.spacing2))
         }
 
-        // Screen title
+        // Modern screen header with enhanced typography
         item {
             Text(
                 text = "Progress Dashboard",
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(bottom = 8.dp)
+                modifier = Modifier.padding(bottom = GridSystem.spacing2)
             )
         }
 
-        // Time period selector
+        // Time period selector with modern styling
         item {
             TimePeriodSelector(
                 selectedPeriod = uiState.selectedTimePeriod,
@@ -125,7 +126,7 @@ private fun ProgressDashboardContent(
             )
         }
 
-        // Summary stats
+        // Enhanced summary stats with modern card design
         item {
             uiState.run {
                 ProgressSummaryCards(
@@ -135,7 +136,7 @@ private fun ProgressDashboardContent(
             }
         }
 
-        // Workout volume chart
+        // Modern workout volume chart with enhanced design
         item {
             uiState.run {
                 WorkoutVolumeChart(
@@ -146,7 +147,7 @@ private fun ProgressDashboardContent(
             }
         }
 
-        // Workout duration chart
+        // Enhanced workout duration chart
         item {
             uiState.run {
                 WorkoutDurationChart(
@@ -157,7 +158,7 @@ private fun ProgressDashboardContent(
             }
         }
 
-        // Workout frequency heatmap
+        // Modern workout frequency heatmap with improved accessibility
         item {
             uiState.run {
                 WorkoutFrequencyHeatmap(
@@ -169,7 +170,7 @@ private fun ProgressDashboardContent(
         }
 
         item {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(GridSystem.spacing3))
         }
     }
 }
@@ -390,7 +391,7 @@ private fun FrequencyHeatmapPlaceholder(dataPoints: Int) {
 }
 
 /**
- * Error state content
+ * Modern error state content with enhanced visual design
  */
 @Composable
 private fun ErrorStateContent(
@@ -402,40 +403,44 @@ private fun ErrorStateContent(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        LiftrixCard(
+            modifier = Modifier.padding(GridSystem.screenPadding),
+            contentDescription = "Error loading progress data"
         ) {
-            Icon(
-                imageVector = Icons.Default.Error,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(48.dp)
-            )
-            Text(
-                text = "Error Loading Progress",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Text(
-                text = error,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 32.dp)
-            )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
             ) {
-                Button(
-                    onClick = onRetry
+                Icon(
+                    imageVector = Icons.Default.Error,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(GridSystem.iconXLarge)
+                )
+                Text(
+                    text = "Error Loading Progress",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
                 ) {
-                    Text("Retry")
-                }
-                OutlinedButton(
-                    onClick = onDismiss
-                ) {
-                    Text("Dismiss")
+                    Button(
+                        onClick = onRetry
+                    ) {
+                        Text("Retry")
+                    }
+                    OutlinedButton(
+                        onClick = onDismiss
+                    ) {
+                        Text("Dismiss")
+                    }
                 }
             }
         }
@@ -443,7 +448,7 @@ private fun ErrorStateContent(
 }
 
 /**
- * Empty state content for users with no workout data
+ * Modern empty state content with enhanced visual hierarchy
  */
 @Composable
 private fun EmptyStateContent(
@@ -453,32 +458,36 @@ private fun EmptyStateContent(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        LiftrixCard(
+            modifier = Modifier.padding(GridSystem.screenPadding),
+            contentDescription = "No progress data available"
         ) {
-            Icon(
-                imageVector = Icons.Default.BarChart,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(64.dp)
-            )
-            Text(
-                text = "No Progress Data Yet",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Text(
-                text = "Start working out to see your progress analytics and charts here",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 32.dp)
-            )
-            Button(
-                onClick = onRefresh
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
             ) {
-                Text("Check for Data")
+                Icon(
+                    imageVector = Icons.Default.BarChart,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(GridSystem.iconXLarge)
+                )
+                Text(
+                    text = "No Progress Data Yet",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Start working out to see your progress analytics and charts here",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+                Button(
+                    onClick = onRefresh
+                ) {
+                    Text("Check for Data")
+                }
             }
         }
     }

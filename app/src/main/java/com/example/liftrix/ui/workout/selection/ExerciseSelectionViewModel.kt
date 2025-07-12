@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.ExerciseLibrary
+import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.ExerciseLibraryRepository
 import com.example.liftrix.domain.usecase.exercise.SearchExercisesUseCase
 import com.example.liftrix.domain.usecase.exercise.SearchableExercise
@@ -49,25 +50,40 @@ data class ExerciseSelectionUiState(
 @HiltViewModel
 class ExerciseSelectionViewModel @Inject constructor(
     private val exerciseLibraryRepository: ExerciseLibraryRepository,
-    private val searchExercisesUseCase: SearchExercisesUseCase
+    private val searchExercisesUseCase: SearchExercisesUseCase,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(ExerciseSelectionUiState())
     val uiState: StateFlow<ExerciseSelectionUiState> = _uiState.asStateFlow()
+    
     
     private val _searchQuery = MutableStateFlow("")
     private val _selectedEquipment = MutableStateFlow<Set<Equipment>>(emptySet())
     private val _selectedMuscleGroups = MutableStateFlow<Set<ExerciseCategory>>(emptySet())
     
     init {
+        Timber.d("🔥 INIT-DEBUG: Initializing ExerciseSelectionViewModel")
+        
         // CRITICAL FIX: Ensure database is populated immediately
         viewModelScope.launch {
             try {
                 // Trigger database population proactively
-                exerciseLibraryRepository.getAllExercises().first()
-                Timber.d("ExerciseSelectionViewModel: Database population check completed")
+                val allExercises = exerciseLibraryRepository.getAllExercises().first()
+                Timber.d("🔥 EXERCISE-DEBUG: Database population check completed - found ${allExercises.size} exercises")
+                
+                // Additional debugging: Log first few exercises
+                if (allExercises.isNotEmpty()) {
+                    allExercises.take(3).forEach { exercise ->
+                        Timber.d("🔥 EXERCISE-DEBUG: Found exercise: ${exercise.name} (${exercise.id})")
+                    }
+                    
+                    Timber.d("🔥 INIT-DEBUG: Found exercises in database - will be loaded by search flow")
+                } else {
+                    Timber.w("🔥 EXERCISE-DEBUG: Database appears to be empty - search flow will handle population")
+                }
             } catch (e: Exception) {
-                Timber.e(e, "ExerciseSelectionViewModel: Error during database check")
+                Timber.e(e, "🔥 EXERCISE-DEBUG: Error during database check - search flow will handle fallback")
             }
         }
         
@@ -76,7 +92,7 @@ class ExerciseSelectionViewModel @Inject constructor(
         
         // Set up filtered exercise flow with debounced search using SearchExercisesUseCase
         combine(
-            _searchQuery.debounce(300).distinctUntilChanged(),
+            _searchQuery.debounce(200).distinctUntilChanged(),
             _selectedEquipment,
             _selectedMuscleGroups
         ) { searchQuery, equipment, muscleGroups ->
@@ -87,6 +103,7 @@ class ExerciseSelectionViewModel @Inject constructor(
             searchExercisesUseCase.search(params.searchQuery, params.selectedEquipment)
         }
         .onEach { searchResults ->
+            
             val filteredByMuscleGroup = if (_selectedMuscleGroups.value.isNotEmpty()) {
                 searchResults.filter { searchableExercise ->
                     when (searchableExercise) {
@@ -107,16 +124,12 @@ class ExerciseSelectionViewModel @Inject constructor(
                 searchResults
             }
             
-            Timber.d("ExerciseSelectionViewModel: searchResults=${searchResults.size}, filtered=${filteredByMuscleGroup.size}")
-            Timber.d("ExerciseSelectionViewModel: query='${_searchQuery.value}', equipment=${_selectedEquipment.value.size}, muscleGroups=${_selectedMuscleGroups.value.size}")
-            
             _uiState.update { currentState ->
                 currentState.copy(
                     allExercises = searchResults,
                     filteredExercises = filteredByMuscleGroup,
-                    searchQuery = _searchQuery.value,
                     isLoading = false,
-                    error = null // Clear any previous errors
+                    error = null
                 )
             }
         }
@@ -133,10 +146,14 @@ class ExerciseSelectionViewModel @Inject constructor(
     }
     
     /**
-     * Update search query with debouncing
+     * Update search query with immediate UI state update
      */
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query
+        // Immediately update UI state to prevent text input issues
+        _uiState.update { currentState ->
+            currentState.copy(searchQuery = query)
+        }
     }
     
     /**

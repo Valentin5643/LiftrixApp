@@ -49,6 +49,7 @@ abstract class NetworkModule {
         fun provideGson(): Gson {
             return GsonBuilder()
                 .setDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ")
+                .setLenient() // Add lenient parsing for cache recovery and backward compatibility
                 .create()
         }
 

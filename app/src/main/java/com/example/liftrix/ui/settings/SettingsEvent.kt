@@ -1,0 +1,165 @@
+package com.example.liftrix.ui.settings
+
+/**
+ * Sealed class representing all possible events that can occur in the settings screen.
+ * 
+ * This follows the MVI (Model-View-Intent) pattern where each user interaction or system
+ * event is represented as a discrete event object. Events are processed by the ViewModel
+ * to update the UI state reactively.
+ * 
+ * Events are grouped by functionality and include both user-initiated actions and
+ * system-triggered events for comprehensive state management.
+ */
+sealed class SettingsEvent {
+    
+    // Data loading events
+    /**
+     * Triggered when the settings screen is first loaded.
+     * Initiates loading of user settings and subscription status.
+     */
+    object LoadSettings : SettingsEvent()
+    
+    /**
+     * Triggered when user pulls to refresh the settings data.
+     * Reloads all settings data from remote sources.
+     */
+    object RefreshSettings : SettingsEvent()
+    
+    // Settings modification events
+    /**
+     * Triggered when user toggles dark mode setting.
+     * 
+     * @property enabled New dark mode state
+     */
+    data class UpdateDarkMode(val enabled: Boolean) : SettingsEvent()
+    
+    /**
+     * Triggered when user toggles notification setting.
+     * 
+     * @property enabled New notification state
+     */
+    data class UpdateNotifications(val enabled: Boolean) : SettingsEvent()
+    
+    // Navigation events
+    /**
+     * Triggered when user taps on profile editing option.
+     * Should navigate to profile editing screen.
+     */
+    object NavigateToProfile : SettingsEvent()
+    
+    /**
+     * Triggered when user taps on subscription management.
+     * Should navigate to subscription management screen.
+     */
+    object NavigateToSubscription : SettingsEvent()
+    
+    /**
+     * Triggered when user taps on privacy settings.
+     * Should navigate to privacy settings screen.
+     */
+    object NavigateToPrivacy : SettingsEvent()
+    
+    /**
+     * Triggered when user taps on help and support.
+     * Should navigate to help screen or open support.
+     */
+    object NavigateToHelp : SettingsEvent()
+    
+    /**
+     * Triggered when user taps on about/app info.
+     * Should navigate to about screen with app information.
+     */
+    object NavigateToAbout : SettingsEvent()
+    
+    // Authentication events
+    /**
+     * Triggered when user initiates logout process.
+     * Shows logout confirmation dialog.
+     */
+    object SignOutRequested : SettingsEvent()
+    
+    /**
+     * Triggered when user confirms logout in dialog.
+     * Proceeds with actual logout operation.
+     */
+    object SignOutConfirmed : SettingsEvent()
+    
+    /**
+     * Triggered when user cancels logout in dialog.
+     * Dismisses logout confirmation dialog.
+     */
+    object SignOutCancelled : SettingsEvent()
+    
+    // UI interaction events
+    /**
+     * Triggered when user taps on an expandable settings card.
+     * Toggles expansion state of the specified card.
+     * 
+     * @property cardId Unique identifier for the settings card
+     */
+    data class ToggleCardExpansion(val cardId: String) : SettingsEvent()
+    
+    /**
+     * Triggered when user taps on profile avatar.
+     * Should initiate profile image upload process.
+     */
+    object ProfileAvatarTapped : SettingsEvent()
+    
+    // Error handling events
+    /**
+     * Triggered when user dismisses an error message.
+     * Clears the error state and allows retry.
+     */
+    object ErrorDismissed : SettingsEvent()
+    
+    /**
+     * Triggered when user taps retry after an error.
+     * Retries the last failed operation.
+     */
+    object RetryRequested : SettingsEvent()
+    
+    // Subscription events
+    /**
+     * Triggered when user taps on upgrade subscription button.
+     * Should initiate subscription upgrade flow.
+     */
+    object UpgradeSubscription : SettingsEvent()
+    
+    /**
+     * Triggered when user taps on manage subscription button.
+     * Should open subscription management in Google Play.
+     */
+    object ManageSubscription : SettingsEvent()
+    
+    /**
+     * Triggered when subscription purchase is completed.
+     * Updates subscription status and refreshes UI.
+     */
+    object SubscriptionPurchaseCompleted : SettingsEvent()
+    
+    // Data export events
+    /**
+     * Triggered when user requests data export.
+     * Should initiate data export process.
+     */
+    object ExportDataRequested : SettingsEvent()
+    
+    /**
+     * Triggered when user requests account deletion.
+     * Should show account deletion confirmation.
+     */
+    object DeleteAccountRequested : SettingsEvent()
+    
+    // System events
+    /**
+     * Triggered when the app theme changes externally.
+     * Updates UI to reflect system theme changes.
+     */
+    object SystemThemeChanged : SettingsEvent()
+    
+    /**
+     * Triggered when subscription status changes externally.
+     * Refreshes subscription information.
+     */
+    object SubscriptionStatusChanged : SettingsEvent()
+}

@@ -4,6 +4,8 @@ import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.model.WorkoutTemplateId
 import com.example.liftrix.domain.model.TemplateExercise
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.domain.repository.FolderRepository
+import com.example.liftrix.domain.usecase.workout.EstimateWorkoutDurationUseCase
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -23,7 +25,9 @@ import javax.inject.Singleton
  */
 @Singleton
 class CreateWorkoutTemplateUseCase @Inject constructor(
-    private val templateRepository: WorkoutTemplateRepository
+    private val templateRepository: WorkoutTemplateRepository,
+    private val folderRepository: FolderRepository,
+    private val estimateWorkoutDurationUseCase: EstimateWorkoutDurationUseCase
 ) {
     
     /**
@@ -41,14 +45,44 @@ class CreateWorkoutTemplateUseCase @Inject constructor(
     suspend operator fun invoke(
         userId: String,
         name: String,
+        folderId: String = "uncategorized_$userId",
         description: String? = null,
         exercises: List<TemplateExercise> = emptyList(),
         estimatedDurationMinutes: Int? = null,
-        difficultyLevel: Int? = null,
-        tags: Set<String> = emptySet()
+        difficultyLevel: Int? = null
     ): Result<WorkoutTemplate> {
         return try {
             validateInput(userId, name, exercises, difficultyLevel)
+            
+            // Ensure default folder exists before creating template
+            val defaultFolderResult = folderRepository.getOrCreateDefaultFolder(userId)
+            if (defaultFolderResult.isFailure) {
+                return Result.failure(
+                    RuntimeException("Failed to create default folder: ${defaultFolderResult.exceptionOrNull()?.message}")
+                )
+            }
+            
+            // Calculate estimated duration if not provided
+            val finalEstimatedDuration = estimatedDurationMinutes ?: run {
+                val tempTemplate = WorkoutTemplate(
+                    id = WorkoutTemplateId.generate(),
+                    userId = userId,
+                    name = name.trim(),
+                    description = description?.trim()?.takeIf { it.isNotBlank() },
+                    exercises = exercises.mapIndexed { index, exercise ->
+                        exercise.copy(orderIndex = index)
+                    },
+                    estimatedDurationMinutes = null,
+                    difficultyLevel = difficultyLevel,
+                    folderId = folderId,
+                    usageCount = 0,
+                    lastUsedAt = null,
+                    createdAt = Instant.now(),
+                    updatedAt = Instant.now()
+                )
+                
+                estimateWorkoutDurationUseCase.estimateDurationMinutes(tempTemplate)
+            }
             
             val template = WorkoutTemplate(
                 id = WorkoutTemplateId.generate(),
@@ -58,9 +92,9 @@ class CreateWorkoutTemplateUseCase @Inject constructor(
                 exercises = exercises.mapIndexed { index, exercise ->
                     exercise.copy(orderIndex = index)
                 },
-                estimatedDurationMinutes = estimatedDurationMinutes,
+                estimatedDurationMinutes = finalEstimatedDuration,
                 difficultyLevel = difficultyLevel,
-                tags = tags,
+                folderId = folderId,
                 usageCount = 0,
                 lastUsedAt = null,
                 createdAt = Instant.now(),

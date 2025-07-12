@@ -35,7 +35,14 @@ class ExerciseLibraryPerformanceTest {
 
     @Before
     fun setup() {
-        repository = ExerciseLibraryRepositoryImpl(dao, usageHistoryDao, mapper)
+        repository = ExerciseLibraryRepositoryImpl(
+            database = mockk(),
+            dao = dao, 
+            usageHistoryDao = usageHistoryDao, 
+            mapper = mapper,
+            exerciseLibrarySeedData = mockk(),
+            placeholderService = mockk()
+        )
         
         // Setup mocks for large dataset
         every { dao.getAllExercises() } returns flowOf(largeExerciseDataset)

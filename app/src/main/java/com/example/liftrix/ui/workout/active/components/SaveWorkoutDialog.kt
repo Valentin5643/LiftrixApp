@@ -36,7 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.liftrix.domain.model.ActiveWorkoutSession
+import com.example.liftrix.domain.model.UnifiedWorkoutSession
 import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.ui.theme.LiftrixTheme
@@ -62,7 +62,7 @@ import java.time.format.DateTimeFormatter
  */
 @Composable
 fun SaveWorkoutDialog(
-    session: ActiveWorkoutSession?,
+    session: UnifiedWorkoutSession?,
     isVisible: Boolean,
     onSaveAsWorkout: () -> Unit,
     onSaveAsTemplate: (name: String, description: String?) -> Unit,
@@ -199,7 +199,7 @@ fun SaveWorkoutDialog(
  */
 @Composable
 private fun WorkoutSummaryCard(
-    session: ActiveWorkoutSession,
+    session: UnifiedWorkoutSession,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -238,7 +238,7 @@ private fun WorkoutSummaryCard(
                 
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = formatSessionDuration(session.getActiveWorkoutDuration()),
+                        text = formatSessionDuration(session.getTotalDurationSeconds()),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Medium
                     )
@@ -451,7 +451,7 @@ private fun formatSessionDuration(seconds: Long): String {
 private fun SaveWorkoutDialogPreview() {
     LiftrixTheme {
         // Mock session for preview
-        val mockSession = ActiveWorkoutSession.createBlank(
+        val mockSession = UnifiedWorkoutSession.createBlank(
             userId = "user123",
             name = "Push Day Workout"
         ).copy(
