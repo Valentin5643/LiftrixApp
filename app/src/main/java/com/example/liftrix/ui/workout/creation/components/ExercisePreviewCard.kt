@@ -280,7 +280,7 @@ fun ExercisePreviewCard(
                 modifier = modifier
                     .fillMaxWidth()
                     .semantics {
-                        contentDescription = "Exercise: ${exercise.name}, ${exercise.equipment}"
+                        contentDescription = "Exercise: ${exercise.name}, ${exercise.exercise.equipment}"
                     },
                 onClick = if (onClick != null) {
                     {
@@ -326,7 +326,7 @@ fun ExercisePreviewCard(
                             )
                             
                             Text(
-                                text = exercise.equipment.toString(),
+                                text = exercise.exercise.equipment.toString(),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,

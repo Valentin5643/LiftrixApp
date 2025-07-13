@@ -86,7 +86,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
      */
     private fun loadAvailableExercises() {
         viewModelScope.launch {
-            searchExercisesUseCase.search("", Equipment.values().toSet())
+            searchExercisesUseCase.search("", Equipment.entries.toSet())
                 .catch { error ->
                     Timber.e(error, "Error loading available exercises")
                 }
@@ -239,7 +239,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
     fun addExerciseById(exerciseId: String, isCustomExercise: Boolean) {
         viewModelScope.launch {
             try {
-                val exercises = searchExercisesUseCase.search("", Equipment.values().toSet()).first()
+                val exercises = searchExercisesUseCase.search("", Equipment.entries.toSet()).first()
                 val searchableExercise = exercises.find { searchable ->
                     when (searchable) {
                         is SearchableExercise.LibraryExercise -> !isCustomExercise && searchable.exercise.id == exerciseId
@@ -449,7 +449,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
             
             // Perform search
             viewModelScope.launch {
-                searchExercisesUseCase.search(query, Equipment.values().toSet())
+                searchExercisesUseCase.search(query, Equipment.entries.toSet())
                     .catch { error ->
                         Timber.e(error, "Error searching exercises")
                     }
@@ -568,24 +568,34 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val userId = getCurrentUserIdUseCase() ?: return@launch
-                val template = workoutTemplateRepository.getTemplateById(
+                val templateResult = workoutTemplateRepository.getTemplateById(
                     WorkoutTemplateId(templateId), 
                     userId
                 )
                 
-                if (template != null) {
-                    _loadedTemplate.value = template
-                    _uiState.value = WorkoutTemplateCreationUiState.Editing(
-                        exercises = template.exercises,
-                        availableExercises = _uiState.value.availableExercises,
-                        exerciseSearchQuery = "",
-                        selectedExercise = null,
-                        isExerciseSelectorExpanded = false
-                    )
+                if (templateResult.isSuccess) {
+                    val template = templateResult.getOrNull()
+                    if (template != null) {
+                        _loadedTemplate.value = template
+                        _uiState.value = WorkoutTemplateCreationUiState.Editing(
+                            exercises = template.exercises,
+                            availableExercises = _uiState.value.availableExercises,
+                            exerciseSearchQuery = "",
+                            selectedExercise = null,
+                            isExerciseSelectorExpanded = false
+                        )
+                    } else {
+                        _uiState.value = WorkoutTemplateCreationUiState.Error(
+                            error = "Template not found",
+                            exercises = emptyList(),
+                            availableExercises = _uiState.value.availableExercises
+                        )
+                    }
                 } else {
-                    Timber.e("Template not found for ID: $templateId")
                     _uiState.value = WorkoutTemplateCreationUiState.Error(
-                        error = "Template not found"
+                        error = templateResult.exceptionOrNull()?.message ?: "Failed to load template",
+                        exercises = emptyList(),
+                        availableExercises = _uiState.value.availableExercises
                     )
                 }
             } catch (exception: Exception) {

@@ -562,7 +562,7 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                         secondaryMuscles = emptySet(), // Template doesn't store secondary muscles
                         sets = initialSets,
                         orderIndex = index,
-                        restTimeSeconds = templateExercise.restTimeSeconds,
+                        restTimeSeconds = templateExercise.restTimeSeconds ?: 60,
                         notes = templateExercise.notes,
                         isSuperset = false, // Template exercises don't have superset info
                         supersetWith = null,
