@@ -8,6 +8,13 @@ import com.example.liftrix.data.extensions.calculateProgressSummary
 import com.example.liftrix.data.local.dao.ExerciseDao
 import com.example.liftrix.data.local.dao.ExerciseSetDao
 import com.example.liftrix.data.local.dao.WorkoutDao
+import com.example.liftrix.data.mapper.AnalyticsMapper
+import com.example.liftrix.domain.model.analytics.ProgressMetrics
+import com.example.liftrix.domain.model.analytics.TimeRange
+import com.example.liftrix.domain.model.analytics.VolumeCalendarData
+import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.repository.DashboardData
 import com.example.liftrix.domain.repository.DurationDataPoint
 import com.example.liftrix.domain.repository.FrequencyDataPoint
 import com.example.liftrix.domain.repository.ProgressStatsRepository
@@ -29,7 +36,8 @@ import java.time.format.DateTimeFormatter
 class ProgressStatsRepositoryImpl @Inject constructor(
     private val workoutDao: WorkoutDao,
     private val exerciseDao: ExerciseDao,
-    private val exerciseSetDao: ExerciseSetDao
+    private val exerciseSetDao: ExerciseSetDao,
+    private val analyticsMapper: AnalyticsMapper
 ) : ProgressStatsRepository {
 
     companion object {
@@ -218,6 +226,135 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         }
         
         return Pair(currentStreak, longestStreak)
+    }
+
+    // Enhanced analytics methods implementation
+    
+    override suspend fun getVolumeCalendarData(
+        userId: String,
+        year: Int,
+        month: Int
+    ): Flow<LiftrixResult<VolumeCalendarData>> = flow {
+        try {
+            val startDate = LocalDate(year, month, 1)
+            // Calculate last day of month
+            val endDate = when (month) {
+                1, 3, 5, 7, 8, 10, 12 -> LocalDate(year, month, 31)
+                4, 6, 9, 11 -> LocalDate(year, month, 30)
+                2 -> if (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)) 
+                    LocalDate(year, month, 29) else LocalDate(year, month, 28)
+                else -> LocalDate(year, month, 31)
+            }
+            
+            val dailyVolumes = workoutDao.getDailyVolumesByDateRange(userId, startDate.toString(), endDate.toString())
+            val volumeCalendarData = analyticsMapper.mapToVolumeCalendarData(
+                dailyVolumes,
+                year,
+                kotlinx.datetime.Month.values()[month - 1]
+            )
+            
+            emit(LiftrixResult.Success(volumeCalendarData))
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get volume calendar data for user: $userId, month: $month")
+            emit(LiftrixResult.Error(LiftrixError.DatabaseError("Failed to load volume calendar data")))
+        }
+    }
+    
+    override suspend fun getProgressMetrics(
+        userId: String,
+        timeRange: TimeRange
+    ): Flow<LiftrixResult<ProgressMetrics>> = flow {
+        try {
+            val startDateString = timeRange.startDate.toJavaLocalDate().format(DATE_FORMATTER)
+            val endDateString = timeRange.endDate.toJavaLocalDate().format(DATE_FORMATTER)
+            
+            // Get workout statistics for the time range
+            val workoutStats = workoutDao.getWorkoutStats(userId, startDateString)
+            
+            // Get detailed workout entities for analysis
+            val workoutEntities = workoutDao.getWorkoutsInDateRangeForUser(userId, startDateString, endDateString)
+            
+            val progressMetrics = analyticsMapper.mapToProgressMetrics(
+                workoutStats,
+                workoutEntities,
+                timeRange,
+                userId
+            )
+            
+            emit(LiftrixResult.Success(progressMetrics))
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get progress metrics for user: $userId, timeRange: $timeRange")
+            emit(LiftrixResult.Error(LiftrixError.DatabaseError("Failed to load progress metrics")))
+        }
+    }
+    
+    override suspend fun getDashboardData(
+        userId: String,
+        timeRange: TimeRange
+    ): Flow<LiftrixResult<DashboardData>> = flow {
+        try {
+            val today = kotlinx.datetime.Clock.System.todayIn(kotlinx.datetime.TimeZone.currentSystemDefault())
+            
+            // Get volume calendar data for current month
+            val volumeCalendarFlow = getVolumeCalendarData(userId, today.year, today.monthNumber)
+            var volumeCalendarData: VolumeCalendarData? = null
+            
+            volumeCalendarFlow.collect { result ->
+                when (result) {
+                    is LiftrixResult.Success -> volumeCalendarData = result.data
+                    is LiftrixResult.Error -> {
+                        emit(result)
+                        return@collect
+                    }
+                }
+            }
+            
+            // Get progress metrics
+            val progressMetricsFlow = getProgressMetrics(userId, timeRange)
+            var progressMetrics: ProgressMetrics? = null
+            
+            progressMetricsFlow.collect { result ->
+                when (result) {
+                    is LiftrixResult.Success -> progressMetrics = result.data
+                    is LiftrixResult.Error -> {
+                        emit(result)
+                        return@collect
+                    }
+                }
+            }
+            
+            // Create dashboard data
+            val dashboardData = DashboardData(
+                volumeCalendar = volumeCalendarData!!,
+                progressMetrics = progressMetrics!!,
+                keyMetrics = createKeyMetrics(progressMetrics!!),
+                lastUpdated = kotlinx.datetime.Clock.System.now()
+            )
+            
+            emit(LiftrixResult.Success(dashboardData))
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get dashboard data for user: $userId, timeRange: $timeRange")
+            emit(LiftrixResult.Error(LiftrixError.DatabaseError("Failed to load dashboard data")))
+        }
+    }
+    
+    /**
+     * Creates key metrics map from progress metrics
+     */
+    private fun createKeyMetrics(progressMetrics: ProgressMetrics): Map<String, Any> {
+        return mapOf(
+            "totalVolume" to progressMetrics.volumeMetrics.totalVolume.format(),
+            "workoutCount" to progressMetrics.frequencyMetrics.workoutCount,
+            "averageWorkoutsPerWeek" to progressMetrics.frequencyMetrics.averageWorkoutsPerWeek,
+            "currentStreak" to progressMetrics.consistencyMetrics.currentStreak,
+            "overallProgressScore" to progressMetrics.calculateOverallProgressScore(),
+            "primaryTrendDirection" to progressMetrics.getPrimaryTrendDirection().name,
+            "consistencyScore" to progressMetrics.frequencyMetrics.getConsistencyScore(),
+            "recentPRCount" to progressMetrics.strengthMetrics.recentPRCount
+        )
     }
 
 }

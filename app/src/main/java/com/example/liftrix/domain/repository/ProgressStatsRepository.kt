@@ -1,5 +1,9 @@
 package com.example.liftrix.domain.repository
 
+import com.example.liftrix.domain.model.analytics.ProgressMetrics
+import com.example.liftrix.domain.model.analytics.TimeRange
+import com.example.liftrix.domain.model.analytics.VolumeCalendarData
+import com.example.liftrix.domain.model.common.LiftrixResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.LocalDate
 
@@ -75,6 +79,42 @@ interface ProgressStatsRepository {
         startDate: LocalDate,
         endDate: LocalDate
     ): Flow<List<VolumeDataPoint>>
+    
+    // Enhanced analytics methods for advanced dashboard features
+    
+    /**
+     * Get volume calendar data for monthly analytics view
+     * @param userId User identifier
+     * @param month Target month for calendar data
+     * @return Flow of volume calendar data with intensity calculations
+     */
+    suspend fun getVolumeCalendarData(
+        userId: String,
+        year: Int,
+        month: Int
+    ): Flow<LiftrixResult<VolumeCalendarData>>
+    
+    /**
+     * Get comprehensive progress metrics for analytics dashboard
+     * @param userId User identifier
+     * @param timeRange Time range for metrics calculation
+     * @return Flow of progress metrics with trends and analysis
+     */
+    suspend fun getProgressMetrics(
+        userId: String,
+        timeRange: TimeRange
+    ): Flow<LiftrixResult<ProgressMetrics>>
+    
+    /**
+     * Get aggregated dashboard data for widget display
+     * @param userId User identifier
+     * @param timeRange Time range for data aggregation
+     * @return Flow of dashboard data with key metrics
+     */
+    suspend fun getDashboardData(
+        userId: String,
+        timeRange: TimeRange
+    ): Flow<LiftrixResult<DashboardData>>
 }
 
 /**
@@ -115,4 +155,14 @@ data class ProgressSummary(
     val longestStreak: Int,
     val averageWorkoutsPerWeek: Float,
     val totalActiveTime: Int // total workout time in minutes
+)
+
+/**
+ * Data class for aggregated dashboard data
+ */
+data class DashboardData(
+    val volumeCalendar: VolumeCalendarData,
+    val progressMetrics: ProgressMetrics,
+    val keyMetrics: Map<String, Any>,
+    val lastUpdated: kotlinx.datetime.Instant
 )
