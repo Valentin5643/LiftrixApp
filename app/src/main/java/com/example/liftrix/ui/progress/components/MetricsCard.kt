@@ -113,7 +113,7 @@ fun MetricsCard(
                     modifier = Modifier
                         .matchParentSize()
                         .clip(RoundedCornerShape(20.dp))
-                        .background(gradientBrush.copy(alpha = 0.1f))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
                 )
             }
             

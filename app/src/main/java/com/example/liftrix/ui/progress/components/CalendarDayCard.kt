@@ -78,6 +78,7 @@ fun CalendarDayCard(
  * @param isCurrentMonth Whether this date is in the current displayed month
  * @return Color for the calendar day background
  */
+@Composable
 fun getVolumeColor(intensity: Float, isCurrentMonth: Boolean): Color {
     return if (isCurrentMonth) {
         if (intensity > 0.0f) {
@@ -103,6 +104,7 @@ fun getVolumeColor(intensity: Float, isCurrentMonth: Boolean): Color {
  * @param isCurrentMonth Whether this date is in the current displayed month
  * @return Color for the day number text
  */
+@Composable
 private fun getDayTextColor(intensity: Float, isCurrentMonth: Boolean): Color {
     return if (isCurrentMonth) {
         if (intensity > 0.6f) {
