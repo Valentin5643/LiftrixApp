@@ -156,6 +156,9 @@ abstract class BaseViewModel<S : UiState<*>, E : ViewModelEvent>(
                     is LiftrixError.DatabaseError -> handleDatabaseError(error, result)
                     is LiftrixError.BusinessLogicError -> handleBusinessLogicError(error, result)
                     is LiftrixError.UnknownError -> handleUnknownError(error, result)
+                    is LiftrixError.CalculationError -> handleUnknownError(error, result)
+                    is LiftrixError.ExportError -> handleUnknownError(error, result)
+                    is LiftrixError.FileSystemError -> handleUnknownError(error, result)
                 }
             } catch (exception: Exception) {
                 Timber.e(exception, "Failed to handle error properly")

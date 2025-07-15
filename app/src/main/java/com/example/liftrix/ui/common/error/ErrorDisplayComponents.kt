@@ -27,6 +27,9 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Rule
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -493,6 +496,9 @@ private fun getErrorIcon(error: LiftrixError): ImageVector {
         is LiftrixError.DatabaseError -> Icons.Default.Storage
         is LiftrixError.BusinessLogicError -> Icons.Default.Rule
         is LiftrixError.UnknownError -> Icons.Default.HelpOutline
+        is LiftrixError.CalculationError -> Icons.Default.Calculate
+        is LiftrixError.ExportError -> Icons.Default.FileDownload
+        is LiftrixError.FileSystemError -> Icons.Default.FolderOff
     }
 }
 

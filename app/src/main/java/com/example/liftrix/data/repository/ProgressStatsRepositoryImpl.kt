@@ -355,7 +355,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
 
     // Analytics sync methods for AnalyticsSyncWorker
     
-    suspend fun getPendingSyncCalculations(userId: String): List<AnalyticsCalculation> {
+    override suspend fun getPendingSyncCalculations(userId: String): List<AnalyticsCalculation> {
         return try {
             // Get analytics calculations that haven't been synced yet
             // This is a placeholder implementation - in a real system this would query
@@ -367,7 +367,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         }
     }
     
-    suspend fun markCalculationsAsSynced(userId: String, calculationIds: List<String>) {
+    override suspend fun markCalculationsAsSynced(userId: String, calculationIds: List<String>) {
         try {
             // Mark calculations as synced in database
             // This is a placeholder implementation
@@ -377,7 +377,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         }
     }
     
-    suspend fun queueCalculationForSync(calculation: AnalyticsCalculation) {
+    override suspend fun queueCalculationForSync(calculation: AnalyticsCalculation) {
         try {
             // Queue calculation for sync
             // This is a placeholder implementation
@@ -387,7 +387,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         }
     }
     
-    suspend fun getUnsyncedCalculationsCount(userId: String): Int {
+    override suspend fun getUnsyncedCalculationsCount(userId: String): Int {
         return try {
             // Get count of unsynced calculations
             // This is a placeholder implementation

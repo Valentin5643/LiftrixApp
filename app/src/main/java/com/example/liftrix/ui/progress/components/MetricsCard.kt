@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -92,6 +93,7 @@ fun MetricsCard(
                             TrendDirection.UP -> "trending up"
                             TrendDirection.DOWN -> "trending down"
                             TrendDirection.STABLE -> "stable"
+                            TrendDirection.UNKNOWN -> "unknown trend"
                         })
                     }
                 }
@@ -280,6 +282,7 @@ private fun TrendIndicator(
         TrendDirection.UP -> Icons.Default.TrendingUp to LiftrixColors.Primary
         TrendDirection.DOWN -> Icons.Default.TrendingDown to LiftrixColors.Accent
         TrendDirection.STABLE -> Icons.Default.TrendingFlat to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        TrendDirection.UNKNOWN -> Icons.Default.TrendingFlat to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
     }
     
     Box(
@@ -295,6 +298,7 @@ private fun TrendIndicator(
                 TrendDirection.UP -> "Trending up"
                 TrendDirection.DOWN -> "Trending down"
                 TrendDirection.STABLE -> "Stable trend"
+                TrendDirection.UNKNOWN -> "Unknown trend"
             },
             modifier = Modifier.size(if (isCompact) 14.dp else 16.dp),
             tint = color

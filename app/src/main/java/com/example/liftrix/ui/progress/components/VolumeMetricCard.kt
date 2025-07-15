@@ -215,12 +215,14 @@ private fun VolumeChangeIndicator(
         TrendDirection.UP -> "+$changePercent%"
         TrendDirection.DOWN -> "-$changePercent%"
         TrendDirection.STABLE -> "±$changePercent%"
+        TrendDirection.UNKNOWN -> "N/A"
     }
     
     val indicatorColor = when (trend) {
         TrendDirection.UP -> LiftrixColors.Primary
         TrendDirection.DOWN -> LiftrixColors.Accent
         TrendDirection.STABLE -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        TrendDirection.UNKNOWN -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
     }
     
     Row(
@@ -240,6 +242,7 @@ private fun VolumeChangeIndicator(
                     TrendDirection.UP -> Icons.Default.TrendingUp
                     TrendDirection.DOWN -> Icons.Default.TrendingUp // Will be rotated
                     TrendDirection.STABLE -> Icons.Default.TrendingUp
+                    TrendDirection.UNKNOWN -> Icons.Default.TrendingUp
                 },
                 contentDescription = null,
                 modifier = Modifier
