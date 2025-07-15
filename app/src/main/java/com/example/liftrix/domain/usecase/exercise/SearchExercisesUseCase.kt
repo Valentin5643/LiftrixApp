@@ -1,275 +1,304 @@
 package com.example.liftrix.domain.usecase.exercise
 
-import com.example.liftrix.domain.model.CustomExercise
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.ExerciseLibrary
-import com.example.liftrix.domain.repository.AuthRepository
+import com.example.liftrix.domain.model.ExerciseCategory
+import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.model.common.flatMapLiftrix
+import com.example.liftrix.domain.model.common.liftrixFailure
+import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.repository.exercise.ExerciseRepository
 import com.example.liftrix.domain.repository.CustomExerciseRepository
-import com.example.liftrix.domain.repository.ExerciseLibraryRepository
+import com.example.liftrix.domain.repository.AuthRepository
+import com.example.liftrix.domain.usecase.common.ErrorHandler
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
-import javax.inject.Inject
 import timber.log.Timber
+import kotlinx.coroutines.flow.flow
+import javax.inject.Inject
 
 /**
- * Data class representing a group of exercise variations
- */
-data class ExerciseGroup(
-    val movementPattern: String,
-    val libraryVariations: List<ExerciseLibrary>,
-    val customVariations: List<CustomExercise>
-) {
-    val allVariations: List<Any>
-        get() = libraryVariations + customVariations
-    
-    val isEmpty: Boolean
-        get() = libraryVariations.isEmpty() && customVariations.isEmpty()
-}
-
-/**
- * Combined exercise result that can be either library or custom exercise
- */
-sealed class SearchableExercise {
-    abstract val name: String
-    abstract val equipment: Equipment
-    abstract val movementPattern: String
-    abstract fun calculateMatchScore(query: String): Double
-    
-    data class LibraryExercise(val exercise: ExerciseLibrary) : SearchableExercise() {
-        override val name: String get() = exercise.name
-        override val equipment: Equipment get() = exercise.equipment
-        override val movementPattern: String get() = exercise.movementPattern
-        override fun calculateMatchScore(query: String): Double = exercise.calculateMatchScore(query)
-    }
-    
-    data class CustomExercise(val exercise: com.example.liftrix.domain.model.CustomExercise) : SearchableExercise() {
-        override val name: String get() = exercise.name
-        override val equipment: Equipment get() = exercise.equipment
-        override val movementPattern: String get() = "custom"
-        override fun calculateMatchScore(query: String): Double {
-            val normalizedQuery = query.lowercase().trim()
-            val normalizedName = exercise.name.lowercase()
-            
-            if (normalizedName == normalizedQuery) return 1.0
-            if (normalizedName.startsWith(normalizedQuery)) return 0.9
-            if (normalizedName.contains(normalizedQuery)) return 0.7
-            
-            return 0.0
-        }
-    }
-}
-
-/**
- * Use case for intelligent exercise search with variations and equipment filtering
+ * Use case for searching exercises in the library with advanced filtering and validation.
+ * 
+ * Responsibilities:
+ * - Validates search query parameters
+ * - Applies search filters for muscle groups and equipment
+ * - Handles empty results and search optimization
+ * - Provides search suggestions and recommendations
+ * 
+ * Business Rules:
+ * - Search query must be at least 2 characters (or empty for browse mode)
+ * - Maximum search results limited to prevent performance issues
+ * - Search results ordered by relevance and popularity
+ * - Invalid filter combinations return appropriate guidance
+ * - Empty search with filters returns filtered browse results
  */
 class SearchExercisesUseCase @Inject constructor(
-    private val exerciseLibraryRepository: ExerciseLibraryRepository,
+    private val exerciseRepository: ExerciseRepository,
     private val customExerciseRepository: CustomExerciseRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val errorHandler: ErrorHandler
 ) {
     
     /**
-     * Search exercises with equipment filtering and variation grouping
+     * Searches exercises based on the provided search criteria.
+     * 
+     * @param request The search request containing query and filter parameters
+     * @return LiftrixResult containing matching exercises or error information
      */
-    fun search(
-        query: String,
-        userEquipment: Set<Equipment> = emptySet()
-    ): Flow<List<SearchableExercise>> = flow {
+    suspend operator fun invoke(request: SearchExercisesRequest): LiftrixResult<SearchExercisesResult> {
+        return try {
+            val validationResult = validateRequest(request)
+            if (validationResult.isFailure) {
+                return validationResult as LiftrixResult<SearchExercisesResult>
+            }
+            
+            val searchResult = performSearch(request)
+            if (searchResult.isFailure) {
+                return searchResult as LiftrixResult<SearchExercisesResult>
+            }
+            
+            val exercises = searchResult.getOrThrow()
+            LiftrixResult.success(
+                SearchExercisesResult(
+                    exercises = exercises,
+                    totalCount = exercises.size,
+                    hasMore = exercises.size >= request.limit,
+                    searchQuery = request.query,
+                    appliedFilters = createAppliedFilters(request)
+                )
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Unexpected error during exercise search")
+            val error = LiftrixError.UnknownError("Exercise search failed: ${e.message}")
+            errorHandler.handleError(error, mapOf("context" to "SearchExercisesUseCase"))
+            LiftrixResult.failure(error)
+        }
+    }
+    
+    /**
+     * Validates the search request parameters.
+     */
+    private fun validateRequest(request: SearchExercisesRequest): LiftrixResult<SearchExercisesRequest> {
+        val violations = mutableListOf<String>()
+        
+        // Validate query length if provided
+        if (request.query.isNotBlank() && request.query.length < MIN_QUERY_LENGTH) {
+            violations.add("Search query must be at least $MIN_QUERY_LENGTH characters")
+        }
+        
+        // Validate query length maximum
+        if (request.query.length > MAX_QUERY_LENGTH) {
+            violations.add("Search query cannot exceed $MAX_QUERY_LENGTH characters")
+        }
+        
+        // Validate limit
+        if (request.limit <= 0) {
+            violations.add("Search limit must be greater than 0")
+        } else if (request.limit > MAX_SEARCH_LIMIT) {
+            violations.add("Search limit cannot exceed $MAX_SEARCH_LIMIT")
+        }
+        
+        // Validate muscle groups list size
+        if (request.muscleGroups.size > MAX_MUSCLE_GROUP_FILTERS) {
+            violations.add("Cannot filter by more than $MAX_MUSCLE_GROUP_FILTERS muscle groups")
+        }
+        
+        // Validate equipment list size
+        if (request.equipment.size > MAX_EQUIPMENT_FILTERS) {
+            violations.add("Cannot filter by more than $MAX_EQUIPMENT_FILTERS equipment types")
+        }
+        
+        return if (violations.isEmpty()) {
+            LiftrixResult.success(request)
+        } else {
+            liftrixFailure(
+                LiftrixError.ValidationError(
+                    field = "SearchExercisesRequest",
+                    violations = violations
+                )
+            )
+        }
+    }
+    
+    /**
+     * Performs the exercise search based on validated request parameters.
+     */
+    private suspend fun performSearch(request: SearchExercisesRequest): LiftrixResult<List<ExerciseLibrary>> {
+        return when {
+            // Text search with filters
+            request.query.isNotBlank() && (request.muscleGroups.isNotEmpty() || request.equipment.isNotEmpty()) -> {
+                searchWithFilters(request)
+            }
+            // Text search only or any other case
+            else -> {
+                val result = exerciseRepository.searchExercisesAdvanced(
+                    query = request.query,
+                    equipment = request.equipment.toSet(),
+                    muscleGroups = request.muscleGroups.toSet()
+                )
+                result.flatMapLiftrix { exercises ->
+                    LiftrixResult.success(exercises.take(request.limit))
+                }
+            }
+        }
+    }
+    
+    /**
+     * Searches exercises with text query and applies additional filters.
+     */
+    private suspend fun searchWithFilters(request: SearchExercisesRequest): LiftrixResult<List<ExerciseLibrary>> {
+        val result = exerciseRepository.searchExercisesAdvanced(
+            query = request.query,
+            equipment = request.equipment.toSet(),
+            muscleGroups = request.muscleGroups.toSet()
+        )
+        return result.flatMapLiftrix { exercises ->
+            LiftrixResult.success(exercises.take(request.limit))
+        }
+    }
+    
+    /**
+     * Creates a summary of applied filters for the result.
+     */
+    private fun createAppliedFilters(request: SearchExercisesRequest): AppliedFilters {
+        return AppliedFilters(
+            muscleGroups = request.muscleGroups,
+            equipment = request.equipment,
+            hasTextQuery = request.query.isNotBlank()
+        )
+    }
+    
+    /**
+     * Simplified search method that returns a Flow of SearchableExercise objects.
+     * This is a convenience method used by ViewModels for reactive search functionality.
+     * 
+     * @param query Search query string
+     * @param userEquipment Set of equipment available to the user
+     * @return Flow of SearchableExercise objects matching the search criteria
+     */
+    fun search(query: String, userEquipment: Set<Equipment>): Flow<List<SearchableExercise>> = flow {
         val userId = authRepository.getCurrentUserId()
         
-        val sourceFlow = if (userId != null) {
+        if (userId != null) {
+            // Combine library and custom exercise searches
             combine(
-                exerciseLibraryRepository.searchExercises(query),
+                exerciseRepository.searchExercisesFlow(query),
                 customExerciseRepository.searchCustomExercises(userId, query)
             ) { libraryExercises, customExercises ->
-                Timber.d("🔥 USE-CASE-DEBUG: Raw library exercises count: ${libraryExercises.size}")
-                Timber.d("🔥 USE-CASE-DEBUG: Query: '$query', userEquipment: $userEquipment")
-                
-                // Additional debug logging for library exercises
-                if (libraryExercises.isEmpty()) {
-                    Timber.w("🔥 USE-CASE-DEBUG: No library exercises found - this suggests repository issue")
-                } else {
-                    Timber.d("🔥 USE-CASE-DEBUG: Sample library exercises: ${libraryExercises.take(3).map { it.name }}")
-                }
-                
-                val libraryResults = libraryExercises
-                    .filter { userEquipment.isEmpty() || userEquipment.contains(it.equipment) }
+                // Convert to SearchableExercise and filter by equipment
+                val searchableLibraryExercises = libraryExercises
+                    .filter { exercise -> userEquipment.isEmpty() || userEquipment.contains(exercise.equipment) }
                     .map { SearchableExercise.LibraryExercise(it) }
                 
-                val customResults = customExercises
-                    .filter { userEquipment.isEmpty() || userEquipment.contains(it.equipment) }
+                val searchableCustomExercises = customExercises
+                    .filter { exercise -> userEquipment.isEmpty() || userEquipment.contains(exercise.equipment) }
                     .map { SearchableExercise.CustomExercise(it) }
                 
-                val finalResults = (libraryResults + customResults)
-                    .filter { it.calculateMatchScore(query) > 0.0 || query.isBlank() }
-                    .sortedWith(compareByDescending<SearchableExercise> { it.calculateMatchScore(query) }
-                        .thenBy { it.name })
-                
-                Timber.d("SearchExercisesUseCase: Final results count: ${finalResults.size}")
-                finalResults
+                // Combine and sort by match score
+                val allExercises = searchableLibraryExercises + searchableCustomExercises
+                allExercises.sortedWith(compareByDescending<SearchableExercise> { 
+                    it.calculateMatchScore(query) 
+                }.thenBy { it.name })
+            }.collect { exercises ->
+                emit(exercises)
             }
         } else {
-            exerciseLibraryRepository.searchExercises(query).map { libraryExercises ->
-                Timber.d("SearchExercisesUseCase: No user - Raw library exercises count: ${libraryExercises.size}")
-                
-                val finalResults = libraryExercises
-                    .filter { userEquipment.isEmpty() || userEquipment.contains(it.equipment) }
+            // If no user ID, just search library exercises
+            exerciseRepository.searchExercisesFlow(query).collect { libraryExercises ->
+                val searchableExercises = libraryExercises
+                    .filter { exercise -> userEquipment.isEmpty() || userEquipment.contains(exercise.equipment) }
                     .map { SearchableExercise.LibraryExercise(it) }
-                    .filter { it.calculateMatchScore(query) > 0.0 || query.isBlank() }
-                    .sortedWith(compareByDescending<SearchableExercise> { it.calculateMatchScore(query) }
-                        .thenBy { it.name })
+                    .sortedWith(compareByDescending<SearchableExercise> { 
+                        it.calculateMatchScore(query) 
+                    }.thenBy { it.name })
                 
-                Timber.d("SearchExercisesUseCase: No user - Final results count: ${finalResults.size}")
-                finalResults
+                emit(searchableExercises)
             }
         }
-        
-        emitAll(sourceFlow)
     }
     
     /**
-     * Get exercise variations grouped by movement pattern
+     * Searches exercises with variations grouped by movement pattern.
+     * This method groups similar exercises together for better discovery.
+     * 
+     * @param query Search query string
+     * @param userEquipment Set of equipment available to the user
+     * @return Flow of SearchableExercise objects with variations grouped together
      */
-    fun getVariations(baseMovement: String, userEquipment: Set<Equipment> = Equipment.entries.toSet()): Flow<List<ExerciseGroup>> = flow {
-        val userId = authRepository.getCurrentUserId()
-        
-        val sourceFlow = if (userId != null) {
-            combine(
-                exerciseLibraryRepository.getVariationsByMovement(baseMovement, userEquipment),
-                customExerciseRepository.getAllCustomExercises(userId)
-            ) { libraryVariations, customExercises ->
-                val customVariationsForMovement = customExercises.filter { 
-                    it.notes?.contains(baseMovement, ignoreCase = true) == true &&
-                    userEquipment.contains(it.equipment)
-                }
-                
-                if (libraryVariations.isNotEmpty() || customVariationsForMovement.isNotEmpty()) {
-                    listOf(ExerciseGroup(
-                        movementPattern = baseMovement,
-                        libraryVariations = libraryVariations,
-                        customVariations = customVariationsForMovement
-                    ))
-                } else {
-                    emptyList()
+    fun searchWithVariations(query: String, userEquipment: Set<Equipment>): Flow<List<SearchableExercise>> = flow {
+        search(query, userEquipment).collect { exercises ->
+            // Group exercises by movement pattern and present variations together
+            val groupedExercises = exercises.groupBy { exercise ->
+                when (exercise) {
+                    is SearchableExercise.LibraryExercise -> exercise.exercise.movementPattern
+                    is SearchableExercise.CustomExercise -> "custom" // Custom exercises get their own group
                 }
             }
-        } else {
-            exerciseLibraryRepository.getVariationsByMovement(baseMovement, userEquipment).map { variations ->
-                if (variations.isNotEmpty()) {
-                    listOf(ExerciseGroup(
-                        movementPattern = baseMovement,
-                        libraryVariations = variations,
-                        customVariations = emptyList()
-                    ))
-                } else {
-                    emptyList()
-                }
-            }
+            
+            // Flatten groups while maintaining internal sorting by score
+            val sortedWithVariations = groupedExercises.values.flatten()
+                .sortedWith(compareByDescending<SearchableExercise> { 
+                    it.calculateMatchScore(query) 
+                }.thenBy { it.name })
+            
+            emit(sortedWithVariations)
         }
-        
-        emitAll(sourceFlow)
     }
     
-    /**
-     * Search with grouped variations for specific query
-     */
-    fun searchWithVariations(
-        query: String,
-        userEquipment: Set<Equipment> = emptySet()
-    ): Flow<List<ExerciseGroup>> = flow {
-        val userId = authRepository.getCurrentUserId()
-        
-        val sourceFlow = if (userId != null) {
-            combine(
-                exerciseLibraryRepository.searchExercises(query),
-                customExerciseRepository.searchCustomExercises(userId, query)
-            ) { libraryExercises, customExercises ->
-                val filteredLibrary = libraryExercises.filter { userEquipment.isEmpty() || userEquipment.contains(it.equipment) }
-                val filteredCustom = customExercises.filter { userEquipment.isEmpty() || userEquipment.contains(it.equipment) }
-                
-                val groupedByMovement = filteredLibrary.groupBy { it.movementPattern }
-                
-                groupedByMovement.map { (movementPattern, exercises) ->
-                    val customForPattern = filteredCustom.filter { 
-                        it.notes?.contains(movementPattern, ignoreCase = true) == true 
-                    }
-                    
-                    ExerciseGroup(
-                        movementPattern = movementPattern,
-                        libraryVariations = exercises.sortedBy { it.difficultyLevel },
-                        customVariations = customForPattern
-                    )
-                }.filter { !it.isEmpty }
-                 .sortedByDescending { group ->
-                    group.libraryVariations.maxOfOrNull { it.calculateMatchScore(query) } ?: 0.0
-                }
-            }
-        } else {
-            exerciseLibraryRepository.searchExercises(query).map { libraryExercises ->
-                val filteredLibrary = libraryExercises.filter { userEquipment.isEmpty() || userEquipment.contains(it.equipment) }
-                val groupedByMovement = filteredLibrary.groupBy { it.movementPattern }
-                
-                groupedByMovement.map { (movementPattern, exercises) ->
-                    ExerciseGroup(
-                        movementPattern = movementPattern,
-                        libraryVariations = exercises.sortedBy { it.difficultyLevel },
-                        customVariations = emptyList()
-                    )
-                }.filter { !it.isEmpty }
-                 .sortedByDescending { group ->
-                    group.libraryVariations.maxOfOrNull { it.calculateMatchScore(query) } ?: 0.0
-                }
-            }
-        }
-        
-        emitAll(sourceFlow)
+    companion object {
+        private const val MIN_QUERY_LENGTH = 2
+        private const val MAX_QUERY_LENGTH = 100
+        private const val MAX_SEARCH_LIMIT = 100
+        private const val MAX_MUSCLE_GROUP_FILTERS = 5
+        private const val MAX_EQUIPMENT_FILTERS = 5
     }
-    
-    /**
-     * Calculate fuzzy match distance between query and exercise name
-     */
-    private fun fuzzyDistance(query: String, exerciseName: String): Double {
-        val normalizedQuery = query.lowercase().trim()
-        val normalizedName = exerciseName.lowercase()
-        
-        if (normalizedQuery.isEmpty()) return 0.0
-        if (normalizedName.isEmpty()) return 1.0
-        
-        // Simple Levenshtein distance approximation
-        val distance = levenshteinDistance(normalizedQuery, normalizedName)
-        val maxLength = maxOf(normalizedQuery.length, normalizedName.length)
-        
-        return distance.toDouble() / maxLength
-    }
-    
-    /**
-     * Calculate Levenshtein distance between two strings
-     */
-    private fun levenshteinDistance(str1: String, str2: String): Int {
-        val dp = Array(str1.length + 1) { IntArray(str2.length + 1) }
-        
-        for (i in 0..str1.length) {
-            dp[i][0] = i
-        }
-        
-        for (j in 0..str2.length) {
-            dp[0][j] = j
-        }
-        
-        for (i in 1..str1.length) {
-            for (j in 1..str2.length) {
-                if (str1[i - 1] == str2[j - 1]) {
-                    dp[i][j] = dp[i - 1][j - 1]
-                } else {
-                    dp[i][j] = 1 + minOf(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
-                }
-            }
-        }
-        
-        return dp[str1.length][str2.length]
-    }
-} 
+}
+
+/**
+ * Request data class for searching exercises.
+ * 
+ * @property query Text query for exercise search (empty for browse mode)
+ * @property muscleGroups List of muscle groups to filter by
+ * @property equipment List of equipment types to filter by
+ * @property limit Maximum number of results to return (default: 20)
+ */
+data class SearchExercisesRequest(
+    val query: String = "",
+    val muscleGroups: List<ExerciseCategory> = emptyList(),
+    val equipment: List<Equipment> = emptyList(),
+    val limit: Int = 20
+)
+
+/**
+ * Result data class for exercise search operations.
+ * 
+ * @property exercises List of matching exercises
+ * @property totalCount Total number of results found
+ * @property hasMore Whether more results are available
+ * @property searchQuery The original search query
+ * @property appliedFilters Summary of filters applied to the search
+ */
+data class SearchExercisesResult(
+    val exercises: List<ExerciseLibrary>,
+    val totalCount: Int,
+    val hasMore: Boolean,
+    val searchQuery: String,
+    val appliedFilters: AppliedFilters
+)
+
+/**
+ * Summary of filters applied to an exercise search.
+ * 
+ * @property muscleGroups Muscle groups used as filters
+ * @property equipment Equipment types used as filters  
+ * @property hasTextQuery Whether a text query was used
+ */
+data class AppliedFilters(
+    val muscleGroups: List<ExerciseCategory>,
+    val equipment: List<Equipment>,
+    val hasTextQuery: Boolean
+) {
+    val hasFilters: Boolean
+        get() = muscleGroups.isNotEmpty() || equipment.isNotEmpty() || hasTextQuery
+}

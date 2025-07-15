@@ -1,6 +1,6 @@
 package com.example.liftrix.integration
 
-import com.example.liftrix.data.repository.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SocialRepository
 import com.example.liftrix.domain.service.AnalyticsService

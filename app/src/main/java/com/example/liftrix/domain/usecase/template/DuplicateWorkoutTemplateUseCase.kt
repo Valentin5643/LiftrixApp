@@ -30,10 +30,12 @@ class DuplicateWorkoutTemplateUseCase @Inject constructor(
             require(newName.length <= 100) { "Template name too long" }
             
             // Check if name already exists
-            val nameExists = workoutTemplateRepository.doesTemplateNameExist(
+            val nameExistsResult = workoutTemplateRepository.doesTemplateNameExist(
                 originalTemplate.userId, 
                 newName.trim()
             )
+            
+            val nameExists = nameExistsResult.getOrElse { false }
             
             if (nameExists) {
                 return Result.failure(

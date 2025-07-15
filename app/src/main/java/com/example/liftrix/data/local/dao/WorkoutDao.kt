@@ -66,6 +66,9 @@ interface WorkoutDao {
     @Query("DELETE FROM workouts WHERE user_id = :userId")
     suspend fun deleteAllWorkoutsForUser(userId: String): Int
     
+    @Query("SELECT EXISTS(SELECT 1 FROM workouts WHERE id = :workoutId AND user_id = :userId)")
+    suspend fun workoutExistsByIdAndUser(workoutId: String, userId: String): Boolean
+    
     // Legacy methods without user filtering - deprecated for migration
     @Deprecated("Use user-scoped methods instead")
     @Query("SELECT * FROM workouts ORDER BY date DESC, created_at DESC")
@@ -237,4 +240,137 @@ interface WorkoutDao {
      */
     @Query("SELECT COUNT(*) FROM workouts WHERE user_id = :userId")
     suspend fun getWorkoutCountForUser(userId: String): Int
-} 
+    
+    // Analytics-specific queries for performance optimization
+    
+    /**
+     * Gets daily volume aggregation for analytics calendar view
+     * Optimized for monthly calendar widget with volume-based color coding
+     * 
+     * @param userId The user's ID
+     * @param startDate Start date in LocalDate format (inclusive)
+     * @param endDate End date in LocalDate format (inclusive)
+     * @return List of daily volume results ordered by date
+     */
+    @Query("""
+        SELECT date, SUM(
+            CASE 
+                WHEN exercises_json IS NOT NULL AND exercises_json != '' 
+                THEN json_extract(exercises_json, '$.totalVolume') 
+                ELSE 0 
+            END
+        ) as volume 
+        FROM workouts 
+        WHERE user_id = :userId 
+        AND status = 'COMPLETED' 
+        AND date BETWEEN :startDate AND :endDate 
+        GROUP BY date
+        ORDER BY date
+    """)
+    suspend fun getDailyVolumesByDateRange(
+        userId: String,
+        startDate: String,
+        endDate: String
+    ): List<DailyVolumeResult>
+    
+    
+    /**
+     * Gets workout statistics for analytics dashboard
+     * Calculates average duration, volume, and workout count for specified period
+     * 
+     * @param userId The user's ID
+     * @param since Start date for statistics calculation (inclusive)
+     * @return Workout statistics result with averages and counts
+     */
+    @Query("""
+        SELECT 
+            AVG(CASE WHEN end_time IS NOT NULL AND start_time IS NOT NULL 
+                THEN (strftime('%s', end_time) - strftime('%s', start_time)) / 60 
+                ELSE 0 END) as avgDurationMinutes,
+            AVG(CASE 
+                WHEN exercises_json IS NOT NULL AND exercises_json != '' 
+                THEN json_extract(exercises_json, '$.totalVolume') 
+                ELSE 0 
+            END) as avgVolume,
+            COUNT(*) as workoutCount
+        FROM workouts 
+        WHERE user_id = :userId 
+        AND status = 'COMPLETED'
+        AND date >= :since
+    """)
+    suspend fun getWorkoutStats(userId: String, since: String): WorkoutStatsResult
+    
+    /**
+     * Gets workout count by month for frequency analysis
+     * Used for workout frequency patterns and consistency tracking
+     * 
+     * @param userId The user's ID
+     * @param year Year for frequency analysis (e.g., "2025")
+     * @return List of monthly workout counts
+     */
+    @Query("""
+        SELECT 
+            strftime('%Y-%m', date) as month,
+            COUNT(*) as workoutCount
+        FROM workouts 
+        WHERE user_id = :userId 
+        AND status = 'COMPLETED'
+        AND strftime('%Y', date) = :year
+        GROUP BY strftime('%Y-%m', date)
+        ORDER BY month
+    """)
+    suspend fun getMonthlyWorkoutCounts(userId: String, year: String): List<MonthlyWorkoutCount>
+    
+    /**
+     * Gets maximum volume for a user in specified date range
+     * Used for volume calendar intensity calculations
+     * 
+     * @param userId The user's ID
+     * @param startDate Start date (inclusive)
+     * @param endDate End date (inclusive)
+     * @return Maximum volume value or 0 if no workouts
+     */
+    @Query("""
+        SELECT MAX(
+            CASE 
+                WHEN exercises_json IS NOT NULL AND exercises_json != '' 
+                THEN json_extract(exercises_json, '$.totalVolume') 
+                ELSE 0 
+            END
+        ) as maxVolume
+        FROM workouts 
+        WHERE user_id = :userId 
+        AND status = 'COMPLETED'
+        AND date BETWEEN :startDate AND :endDate
+    """)
+    suspend fun getMaxVolumeInDateRange(
+        userId: String,
+        startDate: String,
+        endDate: String
+    ): Double?
+}
+
+/**
+ * Data class for daily volume aggregation results
+ */
+data class DailyVolumeResult(
+    val date: String,
+    val volume: Double
+)
+
+/**
+ * Data class for workout statistics results
+ */
+data class WorkoutStatsResult(
+    val avgDurationMinutes: Double,
+    val avgVolume: Double,
+    val workoutCount: Int
+)
+
+/**
+ * Data class for monthly workout count results
+ */
+data class MonthlyWorkoutCount(
+    val month: String,
+    val workoutCount: Int
+) 

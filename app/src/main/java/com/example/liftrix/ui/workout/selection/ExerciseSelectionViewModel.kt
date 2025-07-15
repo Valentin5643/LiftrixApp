@@ -6,7 +6,7 @@ import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.repository.AuthRepository
-import com.example.liftrix.domain.repository.ExerciseLibraryRepository
+import com.example.liftrix.domain.repository.exercise.ExerciseRepository
 import com.example.liftrix.domain.usecase.exercise.SearchExercisesUseCase
 import com.example.liftrix.domain.usecase.exercise.SearchableExercise
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -49,7 +49,7 @@ data class ExerciseSelectionUiState(
 @OptIn(FlowPreview::class)
 @HiltViewModel
 class ExerciseSelectionViewModel @Inject constructor(
-    private val exerciseLibraryRepository: ExerciseLibraryRepository,
+    private val exerciseRepository: ExerciseRepository,
     private val searchExercisesUseCase: SearchExercisesUseCase,
     private val authRepository: AuthRepository
 ) : ViewModel() {
@@ -69,7 +69,8 @@ class ExerciseSelectionViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 // Trigger database population proactively
-                val allExercises = exerciseLibraryRepository.getAllExercises().first()
+                val allExercisesResult = exerciseRepository.getAllExercises().first()
+                val allExercises = allExercisesResult.getOrElse { emptyList() }
                 Timber.d("🔥 EXERCISE-DEBUG: Database population check completed - found ${allExercises.size} exercises")
                 
                 // Additional debugging: Log first few exercises

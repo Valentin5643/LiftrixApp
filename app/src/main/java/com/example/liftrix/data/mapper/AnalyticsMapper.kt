@@ -21,7 +21,7 @@ import com.example.liftrix.domain.model.analytics.PersonalRecord
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.Month
 import kotlinx.datetime.DayOfWeek
-import kotlinx.datetime.toKotlinLocalDate
+import kotlinx.datetime.toJavaLocalDate
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -221,7 +221,7 @@ class AnalyticsMapper @Inject constructor() {
     ): ConsistencyMetrics {
         val completedWorkouts = workoutEntities.filter { it.status == WorkoutStatus.COMPLETED }
         val workoutDates = completedWorkouts.map { 
-            it.date.toKotlinLocalDate() 
+            java.time.LocalDate.parse(it.date.toString()) 
         }.sorted()
         
         val (currentStreak, longestStreak) = calculateStreaks(workoutDates)
@@ -246,7 +246,7 @@ class AnalyticsMapper @Inject constructor() {
     ): RecoveryMetrics {
         val completedWorkouts = workoutEntities.filter { it.status == WorkoutStatus.COMPLETED }
         val workoutDates = completedWorkouts.map { 
-            it.date.toKotlinLocalDate() 
+            java.time.LocalDate.parse(it.date.toString()) 
         }.sorted()
         
         val averageRestDays = calculateAverageRestDays(workoutDates)
@@ -287,10 +287,10 @@ class AnalyticsMapper @Inject constructor() {
         val cutoffDate = today.minusDays(daysPeriod.toLong())
         
         val recentWorkouts = workouts.filter { 
-            it.date.toKotlinLocalDate() >= cutoffDate 
+            java.time.LocalDate.parse(it.date.toString()) >= cutoffDate 
         }
         val olderWorkouts = workouts.filter { 
-            it.date.toKotlinLocalDate() < cutoffDate 
+            java.time.LocalDate.parse(it.date.toString()) < cutoffDate 
         }
         
         val recentVolume = recentWorkouts.sumOf { extractTotalVolumeFromJson(it.exercisesJson) }
@@ -326,10 +326,10 @@ class AnalyticsMapper @Inject constructor() {
         val cutoffDate = today.minusDays(daysPeriod.toLong())
         
         val recentCount = workouts.count { 
-            it.date.toKotlinLocalDate() >= cutoffDate 
+            java.time.LocalDate.parse(it.date.toString()) >= cutoffDate 
         }
         val olderCount = workouts.count { 
-            it.date.toKotlinLocalDate() < cutoffDate 
+            java.time.LocalDate.parse(it.date.toString()) < cutoffDate 
         }
         
         return if (olderCount > 0) {
@@ -343,7 +343,7 @@ class AnalyticsMapper @Inject constructor() {
     private fun calculateConsistencyScore(workouts: List<WorkoutEntity>, timeRange: TimeRange): Float {
         if (workouts.isEmpty()) return 0.0f
         
-        val workoutDates = workouts.map { it.date.toKotlinLocalDate() }.sorted()
+        val workoutDates = workouts.map { java.time.LocalDate.parse(it.date.toString()) }.sorted()
         val gaps = calculateWorkoutGaps(workouts)
         
         // Consistency is higher when gaps are more uniform
@@ -359,11 +359,11 @@ class AnalyticsMapper @Inject constructor() {
      * Calculates gaps between consecutive workouts
      */
     private fun calculateWorkoutGaps(workouts: List<WorkoutEntity>): List<Int> {
-        val workoutDates = workouts.map { it.date.toKotlinLocalDate() }.sorted()
+        val workoutDates = workouts.map { java.time.LocalDate.parse(it.date.toString()) }.sorted()
         if (workoutDates.size < 2) return emptyList()
         
         return workoutDates.zipWithNext { date1, date2 ->
-            (date2.toEpochDays() - date1.toEpochDays()).toInt()
+            (date2.toEpochDay() - date1.toEpochDay()).toInt()
         }
     }
     

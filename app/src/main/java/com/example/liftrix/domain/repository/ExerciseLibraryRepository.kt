@@ -3,6 +3,7 @@ package com.example.liftrix.domain.repository
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.ExerciseLibrary
+import com.example.liftrix.domain.model.common.LiftrixResult
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -26,7 +27,7 @@ interface ExerciseLibraryRepository {
         query: String,
         equipment: Set<Equipment>? = null,
         muscleGroups: Set<ExerciseCategory>? = null
-    ): Result<List<ExerciseLibrary>>
+    ): LiftrixResult<List<ExerciseLibrary>>
     
     /**
      * Get recent exercises used by a specific user
@@ -34,7 +35,7 @@ interface ExerciseLibraryRepository {
      * @param limit Maximum number of exercises to return
      * @return Result containing list of recent exercises
      */
-    suspend fun getRecentExercises(userId: String, limit: Int = 10): Result<List<ExerciseLibrary>>
+    suspend fun getRecentExercises(userId: String, limit: Int = 10): LiftrixResult<List<ExerciseLibrary>>
     
     /**
      * Get all exercises from the library

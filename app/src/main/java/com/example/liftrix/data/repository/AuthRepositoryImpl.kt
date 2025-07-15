@@ -1,8 +1,12 @@
 package com.example.liftrix.data.repository
 
+import com.example.liftrix.core.error.FirebaseErrorMapper
 import com.example.liftrix.data.mapper.UserMapper
 import com.example.liftrix.data.remote.dto.UserDto
 import com.example.liftrix.domain.model.User
+import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.model.common.liftrixCatching
+import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.AuthRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
@@ -36,29 +40,30 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun signInWithEmail(email: String, password: String): Result<User> {
-        return try {
+    override suspend fun signInWithEmail(email: String, password: String): LiftrixResult<User> {
+        return liftrixCatching(
+            errorMapper = { throwable -> FirebaseErrorMapper.handleFirebaseError(throwable) }
+        ) {
             val authResult = firebaseAuth.signInWithEmailAndPassword(email, password).await()
             val firebaseUser = authResult.user
-                ?: return Result.failure(Exception("Sign in failed: User is null"))
+                ?: throw RuntimeException("Sign in failed: User is null")
             
             val user = UserMapper.fromFirebaseUser(firebaseUser)
             
             // Update last sign in time in Firestore
             updateLastSignInTime(user.uid)
             
-            Result.success(user)
-        } catch (exception: Exception) {
-            Timber.e(exception, "Failed to sign in with email")
-            Result.failure(exception)
+            user
         }
     }
 
-    override suspend fun signUpWithEmail(email: String, password: String, displayName: String): Result<User> {
-        return try {
+    override suspend fun signUpWithEmail(email: String, password: String, displayName: String): LiftrixResult<User> {
+        return liftrixCatching(
+            errorMapper = { throwable -> FirebaseErrorMapper.handleFirebaseError(throwable) }
+        ) {
             val authResult = firebaseAuth.createUserWithEmailAndPassword(email, password).await()
             val firebaseUser = authResult.user
-                ?: return Result.failure(Exception("Sign up failed: User is null"))
+                ?: throw RuntimeException("Sign up failed: User is null")
 
             // Update display name
             val profileUpdates = UserProfileChangeRequest.Builder()
@@ -69,74 +74,65 @@ class AuthRepositoryImpl @Inject constructor(
             val user = UserMapper.fromFirebaseUser(firebaseUser).copy(displayName = displayName)
             
             // Create user profile in Firestore
-            createUserProfile(user)
+            createUserProfile(user).getOrThrow()
             
-            Result.success(user)
-        } catch (exception: Exception) {
-            Timber.e(exception, "Failed to sign up with email")
-            Result.failure(exception)
+            user
         }
     }
 
-    override suspend fun signInWithGoogle(idToken: String): Result<User> {
-        return try {
+    override suspend fun signInWithGoogle(idToken: String): LiftrixResult<User> {
+        return liftrixCatching(
+            errorMapper = { throwable -> FirebaseErrorMapper.handleFirebaseError(throwable) }
+        ) {
             val credential = GoogleAuthProvider.getCredential(idToken, null)
             val authResult = firebaseAuth.signInWithCredential(credential).await()
             val firebaseUser = authResult.user
-                ?: return Result.failure(Exception("Google sign in failed: User is null"))
+                ?: throw RuntimeException("Google sign in failed: User is null")
 
             val user = UserMapper.fromFirebaseUser(firebaseUser)
             
             // Create or update user profile in Firestore
             if (authResult.additionalUserInfo?.isNewUser == true) {
-                createUserProfile(user)
+                createUserProfile(user).getOrThrow()
             } else {
                 updateLastSignInTime(user.uid)
             }
             
-            Result.success(user)
-        } catch (exception: Exception) {
-            Timber.e(exception, "Failed to sign in with Google")
-            Result.failure(exception)
+            user
         }
     }
 
-    override suspend fun signInAnonymously(): Result<User> {
-        return try {
+    override suspend fun signInAnonymously(): LiftrixResult<User> {
+        return liftrixCatching(
+            errorMapper = { throwable -> FirebaseErrorMapper.handleFirebaseError(throwable) }
+        ) {
             val authResult = firebaseAuth.signInAnonymously().await()
             val firebaseUser = authResult.user
-                ?: return Result.failure(Exception("Anonymous sign in failed: User is null"))
+                ?: throw RuntimeException("Anonymous sign in failed: User is null")
 
             val user = UserMapper.fromFirebaseUser(firebaseUser)
             
             // Create anonymous user profile in Firestore
-            createUserProfile(user)
+            createUserProfile(user).getOrThrow()
             
-            Result.success(user)
-        } catch (exception: Exception) {
-            Timber.e(exception, "Failed to sign in anonymously")
-            Result.failure(exception)
+            user
         }
     }
 
-    override suspend fun signOut(): Result<Unit> {
-        return try {
+    override suspend fun signOut(): LiftrixResult<Unit> {
+        return liftrixCatching(
+            errorMapper = { throwable -> FirebaseErrorMapper.handleFirebaseError(throwable) }
+        ) {
             firebaseAuth.signOut()
-            Result.success(Unit)
-        } catch (exception: Exception) {
-            Timber.e(exception, "Failed to sign out")
-            Result.failure(exception)
         }
     }
 
-    override suspend fun sendPasswordResetEmail(email: String): Result<Unit> {
-        return try {
+    override suspend fun sendPasswordResetEmail(email: String): LiftrixResult<Unit> {
+        return liftrixCatching(
+            errorMapper = { throwable -> FirebaseErrorMapper.handleFirebaseError(throwable) }
+        ) {
             firebaseAuth.sendPasswordResetEmail(email).await()
             Timber.d("Password reset email sent to: $email")
-            Result.success(Unit)
-        } catch (exception: Exception) {
-            Timber.e(exception, "Failed to send password reset email")
-            Result.failure(exception)
         }
     }
 
@@ -148,8 +144,10 @@ class AuthRepositoryImpl @Inject constructor(
         return firebaseAuth.currentUser?.uid
     }
 
-    override suspend fun createUserProfile(user: User): Result<Unit> {
-        return try {
+    override suspend fun createUserProfile(user: User): LiftrixResult<Unit> {
+        return liftrixCatching(
+            errorMapper = { throwable -> FirebaseErrorMapper.handleFirebaseError(throwable) }
+        ) {
             val userDto = UserMapper.toUserDto(user)
             
             // Use a batch write to ensure atomicity
@@ -196,15 +194,13 @@ class AuthRepositoryImpl @Inject constructor(
             batch.commit().await()
             
             Timber.d("User profile created successfully for uid: ${user.uid}")
-            Result.success(Unit)
-        } catch (exception: Exception) {
-            Timber.e(exception, "Failed to create user profile for uid: ${user.uid}")
-            Result.failure(exception)
         }
     }
 
-    override suspend fun getUserProfile(uid: String): Result<User?> {
-        return try {
+    override suspend fun getUserProfile(uid: String): LiftrixResult<User?> {
+        return liftrixCatching(
+            errorMapper = { throwable -> FirebaseErrorMapper.handleFirebaseError(throwable) }
+        ) {
             val document = firestore.collection("users")
                 .document(uid)
                 .get()
@@ -212,14 +208,10 @@ class AuthRepositoryImpl @Inject constructor(
             
             if (document.exists()) {
                 val userDto = document.toObject(UserDto::class.java)
-                val user = userDto?.let { UserMapper.fromUserDto(it) }
-                Result.success(user)
+                userDto?.let { UserMapper.fromUserDto(it) }
             } else {
-                Result.success(null)
+                null
             }
-        } catch (exception: Exception) {
-            Timber.e(exception, "Failed to get user profile")
-            Result.failure(exception)
         }
     }
 

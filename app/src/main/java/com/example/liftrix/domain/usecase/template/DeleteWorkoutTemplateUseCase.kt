@@ -29,7 +29,8 @@ class DeleteWorkoutTemplateUseCase @Inject constructor(
                 ?: return Result.failure(IllegalStateException("User not authenticated"))
             
             // Verify template exists and belongs to user
-            val template = workoutTemplateRepository.getTemplateById(templateId, currentUser.uid)
+            val templateResult = workoutTemplateRepository.getTemplateById(templateId, currentUser.uid)
+            val template = templateResult.getOrNull()
                 ?: return Result.failure(IllegalArgumentException("Template not found or access denied"))
             
             // Delete the template

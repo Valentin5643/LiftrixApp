@@ -2,16 +2,22 @@ package com.example.liftrix.ui.workout
 
 import app.cash.turbine.test
 import com.example.liftrix.TestDataFactory
-import com.example.liftrix.data.repository.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.Workout
+import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.usecase.SaveWorkoutUseCase
+import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.sync.SyncManager
 import com.example.liftrix.sync.SyncStatus
+import com.example.liftrix.ui.common.state.UiState
+import com.example.liftrix.ui.common.viewmodel.ViewModelTestUtils
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
+import io.mockk.Runs
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -19,10 +25,12 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.test.advanceUntilIdle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
+import kotlin.test.assertIs
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class WorkoutViewModelTest {

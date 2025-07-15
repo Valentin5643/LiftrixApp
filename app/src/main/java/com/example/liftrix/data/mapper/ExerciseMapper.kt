@@ -4,7 +4,8 @@ import com.example.liftrix.data.local.entity.ExerciseEntity
 import com.example.liftrix.data.local.entity.ExerciseSetEntity
 import com.example.liftrix.data.remote.dto.ExerciseDto
 import com.example.liftrix.domain.model.*
-import com.example.liftrix.domain.repository.ExerciseLibraryRepository
+import com.example.liftrix.domain.repository.exercise.ExerciseRepository
+import com.example.liftrix.domain.model.common.LiftrixResult
 import kotlinx.coroutines.flow.first
 import java.time.Duration
 import java.time.Instant
@@ -17,7 +18,7 @@ import javax.inject.Singleton
 @Singleton
 class ExerciseMapper @Inject constructor(
     private val exerciseSetMapper: ExerciseSetMapper,
-    private val exerciseLibraryRepository: ExerciseLibraryRepository
+    private val exerciseRepository: ExerciseRepository
 ) {
     
     // === Firestore DTO Mapping Methods ===
@@ -112,7 +113,8 @@ class ExerciseMapper @Inject constructor(
      */
     private suspend fun getLibraryExerciseById(id: String): ExerciseLibrary? {
         return try {
-            exerciseLibraryRepository.getAllExercises().first().find { it.id == id }
+            val result = exerciseRepository.getAllExercises().first()
+            result.getOrNull()?.find { it.id == id }
         } catch (e: Exception) {
             null
         }

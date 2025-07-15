@@ -3,8 +3,12 @@ package com.example.liftrix.domain.usecase.template
 import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.model.WorkoutTemplateId
 import com.example.liftrix.domain.model.TemplateExercise
+import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.model.common.liftrixCatching
+import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
 import com.example.liftrix.domain.repository.FolderRepository
+import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.workout.EstimateWorkoutDurationUseCase
 import java.time.Instant
 import javax.inject.Inject
@@ -27,7 +31,8 @@ import javax.inject.Singleton
 class CreateWorkoutTemplateUseCase @Inject constructor(
     private val templateRepository: WorkoutTemplateRepository,
     private val folderRepository: FolderRepository,
-    private val estimateWorkoutDurationUseCase: EstimateWorkoutDurationUseCase
+    private val estimateWorkoutDurationUseCase: EstimateWorkoutDurationUseCase,
+    private val errorHandler: ErrorHandler
 ) {
     
     /**
@@ -40,7 +45,7 @@ class CreateWorkoutTemplateUseCase @Inject constructor(
      * @param estimatedDurationMinutes Optional estimated duration
      * @param difficultyLevel Optional difficulty level (1-5)
      * @param tags Optional set of tags for categorization
-     * @return Result containing the created template or error
+     * @return LiftrixResult containing the created template or error
      */
     suspend operator fun invoke(
         userId: String,
@@ -50,16 +55,45 @@ class CreateWorkoutTemplateUseCase @Inject constructor(
         exercises: List<TemplateExercise> = emptyList(),
         estimatedDurationMinutes: Int? = null,
         difficultyLevel: Int? = null
-    ): Result<WorkoutTemplate> {
-        return try {
+    ): LiftrixResult<WorkoutTemplate> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                when (throwable) {
+                    is IllegalArgumentException -> LiftrixError.ValidationError(
+                        field = when {
+                            throwable.message?.contains("User ID") == true -> "userId"
+                            throwable.message?.contains("Template name") == true -> "name"
+                            throwable.message?.contains("exercises") == true -> "exercises"
+                            throwable.message?.contains("Difficulty level") == true -> "difficultyLevel"
+                            else -> "input"
+                        },
+                        violations = listOf(throwable.message ?: "Invalid input parameters")
+                    )
+                    is RuntimeException -> when {
+                        throwable.message?.contains("Failed to create default folder") == true -> 
+                            LiftrixError.DatabaseError(
+                                errorMessage = "Failed to create default folder",
+                                operation = "getOrCreateDefaultFolder"
+                            )
+                        else -> LiftrixError.BusinessLogicError(
+                            code = "TEMPLATE_CREATION_FAILED",
+                            analyticsContext = mapOf("userId" to userId, "templateName" to name),
+                            errorMessage = throwable.message ?: "Failed to create workout template",
+                        )
+                    }
+                    else -> LiftrixError.DatabaseError(
+                        errorMessage = "Failed to create workout template",
+                        operation = "createTemplate"
+                    )
+                }
+            }
+        ) {
             validateInput(userId, name, exercises, difficultyLevel)
             
             // Ensure default folder exists before creating template
             val defaultFolderResult = folderRepository.getOrCreateDefaultFolder(userId)
             if (defaultFolderResult.isFailure) {
-                return Result.failure(
-                    RuntimeException("Failed to create default folder: ${defaultFolderResult.exceptionOrNull()?.message}")
-                )
+                throw RuntimeException("Failed to create default folder: ${defaultFolderResult.exceptionOrNull()?.message}")
             }
             
             // Calculate estimated duration if not provided
@@ -101,10 +135,7 @@ class CreateWorkoutTemplateUseCase @Inject constructor(
                 updatedAt = Instant.now()
             )
             
-            templateRepository.createTemplate(template)
-            
-        } catch (e: Exception) {
-            Result.failure(e)
+            templateRepository.createTemplate(template).getOrThrow()
         }
     }
     

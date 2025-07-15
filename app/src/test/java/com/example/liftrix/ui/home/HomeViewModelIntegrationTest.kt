@@ -2,7 +2,7 @@ package com.example.liftrix.ui.home
 
 import androidx.arch.core.executor.testing.InstantTaskExecutorRule
 import com.example.liftrix.MainCoroutineRule
-import com.example.liftrix.data.repository.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.model.CardData
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutStats

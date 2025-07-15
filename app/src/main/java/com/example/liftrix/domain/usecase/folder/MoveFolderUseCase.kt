@@ -45,11 +45,12 @@ class MoveFolderUseCase @Inject constructor(
             }
             
             // Verify user owns the template
-            val template = workoutTemplateRepository.getTemplateById(
+            val templateResult = workoutTemplateRepository.getTemplateById(
                 WorkoutTemplateId.fromString(input.templateId), 
                 input.userId
             )
             
+            val template = templateResult.getOrNull()
             if (template == null) {
                 return Result.failure(
                     IllegalArgumentException("Template not found or not owned by user")

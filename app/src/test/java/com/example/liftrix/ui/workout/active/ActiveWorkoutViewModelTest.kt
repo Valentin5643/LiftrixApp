@@ -1,7 +1,7 @@
 package com.example.liftrix.ui.workout.active
 
 import app.cash.turbine.test
-import com.example.liftrix.data.repository.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.model.ExerciseSet
 import com.example.liftrix.domain.model.ExerciseSetId
 import com.example.liftrix.domain.model.Reps

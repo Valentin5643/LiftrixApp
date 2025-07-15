@@ -4,7 +4,8 @@ import com.example.liftrix.domain.model.Exercise
 import com.example.liftrix.domain.model.SessionExercise
 import com.example.liftrix.domain.model.ExerciseId
 import com.example.liftrix.domain.model.Equipment
-import com.example.liftrix.domain.repository.ExerciseLibraryRepository
+import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.repository.exercise.ExerciseRepository
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
 import kotlinx.coroutines.flow.first
 import timber.log.Timber
@@ -26,7 +27,7 @@ import javax.inject.Inject
  */
 class AddExerciseToSessionUseCase @Inject constructor(
     private val sessionManager: UnifiedWorkoutSessionManager,
-    private val exerciseLibraryRepository: ExerciseLibraryRepository
+    private val exerciseRepository: ExerciseRepository
 ) {
     /**
      * Adds an exercise to the current session by exercise ID
@@ -48,7 +49,14 @@ class AddExerciseToSessionUseCase @Inject constructor(
             }
             
             // Get exercise from library
-            val allExercises = exerciseLibraryRepository.getAllExercises().first()
+            val exercisesResult = exerciseRepository.getAllExercises().first()
+            val allExercises = exercisesResult.fold(
+                onSuccess = { it },
+                onFailure = { throwable ->
+                    Timber.e("Failed to get exercises: ${throwable.message}")
+                    return Result.failure(Exception("Failed to load exercises"))
+                }
+            )
             val libraryExercise = allExercises.find { it.id == exerciseId.value }
             
             if (libraryExercise == null) {

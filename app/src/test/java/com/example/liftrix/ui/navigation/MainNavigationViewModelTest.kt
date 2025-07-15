@@ -1,7 +1,7 @@
 package com.example.liftrix.ui.navigation
 
 import app.cash.turbine.test
-import com.example.liftrix.data.repository.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.repository.AuthRepository
 import io.mockk.coEvery

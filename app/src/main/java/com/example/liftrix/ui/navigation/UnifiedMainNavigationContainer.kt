@@ -9,18 +9,28 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -39,29 +49,44 @@ import com.example.liftrix.ui.home.HomeScreen
 import com.example.liftrix.ui.workout.WorkoutScreen
 import com.example.liftrix.ui.progress.ProgressDashboardScreen
 import com.example.liftrix.ui.coach.CoachScreen
+import com.example.liftrix.ui.settings.SettingsScreen
+import com.example.liftrix.ui.social.SocialViewModel
+import com.example.liftrix.ui.social.SocialEvent
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
+import com.example.liftrix.ui.navigation.migration.NavigationMigrationHelper
+import com.example.liftrix.ui.navigation.migration.LegacyNavigationWrapper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.launch
 
 /**
- * 🔥 NEW: Unified main navigation container with persistent live session bar
+ * 🔥 MIGRATION NOTE: Legacy Navigation Container with Migration Support
  * 
- * This container replaces the complex MainNavigationContainer with a simplified
- * version that shows the LiveSessionBar whenever there's an active session.
- * The session bar persists across all screens and provides consistent access
- * to the current workout.
+ * This container demonstrates the transition from string-based navigation to
+ * type-safe LiftrixRoute sealed classes. It includes migration helper integration
+ * to provide backward compatibility during the transition period.
+ * 
+ * MIGRATION STATUS: This file uses legacy string navigation and should be
+ * gradually migrated to use UnifiedNavigationContainer.kt with type-safe routes.
  * 
  * Key features:
  * - Persistent live session bar across all screens
  * - Single source of truth for session state
- * - Clean integration with navigation
- * - Proper session management
+ * - Migration helper integration for backward compatibility
+ * - Deprecation warnings for legacy navigation calls
+ * 
+ * @deprecated Consider migrating to UnifiedNavigationContainer with LiftrixRoute sealed classes
  */
+@Deprecated(
+    message = "Consider migrating to UnifiedNavigationContainer with type-safe LiftrixRoute sealed classes",
+    replaceWith = ReplaceWith("UnifiedNavigationContainer", "com.example.liftrix.ui.navigation.UnifiedNavigationContainer")
+)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UnifiedMainNavigationContainer(
     navController: NavHostController = rememberNavController(),
-    viewModel: UnifiedMainNavigationViewModel = hiltViewModel()
+    viewModel: UnifiedMainNavigationViewModel = hiltViewModel(),
+    migrationHelper: NavigationMigrationHelper = hiltViewModel<UnifiedMainNavigationViewModel>().migrationHelper
 ) {
     val currentSession by viewModel.currentSession.collectAsState()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -69,6 +94,12 @@ fun UnifiedMainNavigationContainer(
     
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        topBar = {
+            NavigationAwareTopAppBar(
+                navController = navController,
+                currentRoute = currentRoute
+            )
+        },
         bottomBar = {
             BottomNavigationBar(
                 navController = navController,
@@ -90,10 +121,12 @@ fun UnifiedMainNavigationContainer(
                 composable("home") {
                     HomeScreen(
                         onNavigateToWorkout = {
-                            navController.navigate("workout")
+                            // 🔄 MIGRATION: Using migration helper for backward compatibility
+                            migrationHelper.navigateViaString(navController, "workout")
                         },
                         onNavigateToFriends = {
-                            navController.navigate("friends")
+                            // 🔄 MIGRATION: Using migration helper for backward compatibility
+                            migrationHelper.navigateViaString(navController, "friends")
                         }
                     )
                 }
@@ -215,6 +248,21 @@ fun UnifiedMainNavigationContainer(
                         }
                     )
                 }
+                
+                // Global settings screen accessible from all tabs
+                composable("settings") {
+                    SettingsScreen(
+                        onNavigateBack = {
+                            navController.navigateUp()
+                        },
+                        onNavigateToProfile = {
+                            // TODO: Navigate to profile editing screen when implemented
+                        },
+                        onNavigateToAuth = {
+                            // TODO: Navigate to auth when implemented
+                        }
+                    )
+                }
             }
             
             // 🔥 KEY FEATURE: Persistent live session bar
@@ -317,7 +365,8 @@ private fun StopWorkoutDialog(
  */
 @HiltViewModel
 class UnifiedMainNavigationViewModel @javax.inject.Inject constructor(
-    private val sessionManager: UnifiedWorkoutSessionManager
+    private val sessionManager: UnifiedWorkoutSessionManager,
+    val migrationHelper: NavigationMigrationHelper
 ) : androidx.lifecycle.ViewModel() {
     
     // Direct access to current session
@@ -422,7 +471,7 @@ class UnifiedMainNavigationViewModel @javax.inject.Inject constructor(
     }
 }
 /**
- * Bottom navigation bar with main app tabs
+ * Bottom navigation bar with main app tabs using type-safe navigation
  */
 @Composable
 private fun BottomNavigationBar(
@@ -430,10 +479,10 @@ private fun BottomNavigationBar(
     currentRoute: String?
 ) {
     val items = listOf(
-        BottomNavItem("home", "Home", Icons.Default.Home),
-        BottomNavItem("workout", "Workout", Icons.Default.FitnessCenter),
-        BottomNavItem("progress", "Progress", Icons.Default.TrendingUp),
-        BottomNavItem("coach", "Coach", Icons.Default.Psychology)
+        LegacyBottomNavItem("home", "Home", Icons.Default.Home),
+        LegacyBottomNavItem("workout", "Workout", Icons.Default.FitnessCenter),
+        LegacyBottomNavItem("progress", "Progress", Icons.Default.TrendingUp),
+        LegacyBottomNavItem("coach", "Coach", Icons.Default.Psychology)
     )
     
     NavigationBar {
@@ -464,10 +513,138 @@ private fun BottomNavigationBar(
 }
 
 /**
- * Data class for bottom navigation items
+ * Data class for bottom navigation items with string-based routes (legacy)
  */
-data class BottomNavItem(
+private data class LegacyBottomNavItem(
     val route: String,
     val label: String,
     val icon: ImageVector
 )
+
+/**
+ * Navigation-aware top app bar that dynamically shows content based on current route.
+ * 
+ * Features:
+ * - Global top bar with settings button for main tabs
+ * - Screen-specific top bars with back navigation for detail screens
+ * - Screen titles for proper navigation hierarchy
+ * - Unified top bar logic to prevent duplication
+ * - Smooth transitions between different top bar configurations
+ * 
+ * @param navController Navigation controller for handling back navigation
+ * @param currentRoute Current navigation route
+ */
+@Composable
+private fun NavigationAwareTopAppBar(
+    navController: NavHostController,
+    currentRoute: String?
+) {
+    // Define screens that should show back navigation with custom titles
+    val screenTitles = mapOf(
+        "settings" to "Settings",
+        "friends" to "Friends",
+        "unified_active_workout" to "Active Workout",
+        "template_creation" to "Create Template",
+        "exercise_selection" to "Add Exercise",
+        "exercise_selection_for_template" to "Add Exercise"
+    )
+    
+    // Check if current route is a main tab (should show global top bar)
+    val isMainTab = currentRoute in listOf(
+        "home",
+        "workout", 
+        "progress",
+        "coach"
+    )
+    
+    // Check if current route should show back navigation
+    val shouldShowBackNavigation = currentRoute in screenTitles.keys || 
+                                  currentRoute?.startsWith("unified_active_workout") == true ||
+                                  currentRoute?.startsWith("template_creation") == true ||
+                                  currentRoute?.startsWith("exercise_selection") == true
+    
+    TopAppBar(
+        title = {
+            val title = when {
+                shouldShowBackNavigation -> {
+                    // For parameterized routes, extract the base route
+                    val baseRoute = currentRoute?.split("?")?.firstOrNull()
+                    screenTitles[baseRoute] ?: screenTitles[currentRoute] ?: "Back"
+                }
+                else -> ""
+            }
+            
+            if (title.isNotEmpty()) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        navigationIcon = {
+            if (shouldShowBackNavigation) {
+                IconButton(
+                    onClick = {
+                        navController.navigateUp()
+                    },
+                    modifier = Modifier.semantics {
+                        contentDescription = "Navigate back"
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        },
+        actions = {
+            // Show refresh button specifically for Friends screen
+            if (currentRoute == "friends") {
+                // Get SocialViewModel instance for refresh functionality  
+                val socialViewModel: SocialViewModel = hiltViewModel()
+                
+                IconButton(
+                    onClick = {
+                        socialViewModel.onEvent(SocialEvent.Refresh)
+                    },
+                    modifier = Modifier.semantics {
+                        contentDescription = "Refresh friends"
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Sync,
+                        contentDescription = "Refresh",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+            
+            // Show settings button on all screens EXCEPT when already in settings
+            if (currentRoute != "settings") {
+                IconButton(
+                    onClick = {
+                        navController.navigate("settings")
+                    },
+                    modifier = Modifier.semantics {
+                        contentDescription = "Open settings"
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Settings",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            actionIconContentColor = MaterialTheme.colorScheme.onSurface
+        )
+    )
+}
+

@@ -27,24 +27,31 @@ import com.example.liftrix.ui.workout.selection.ExerciseSelectionScreen
 import timber.log.Timber
 
 /**
- * Navigation graph for the Workout tab.
+ * DEPRECATED: Legacy Workout Navigation Graph
  * 
- * Defines the navigation structure for the Workout section of the app, including
- * the main workout screen and all workout-related functionality such as workout
- * creation, exercise selection, and workout execution.
+ * This file is maintained for backward compatibility during the migration to
+ * type-safe navigation with LiftrixRoute sealed classes. All navigation is now
+ * handled centrally in UnifiedNavigationContainer.kt.
  * 
- * Features:
- * - Independent navigation stack for workout functionality
- * - Integration with existing WorkoutScreen and workout creation flows
- * - Deep linking support for workout-related routes
- * - Seamless integration with workout templates and custom workouts
- * - Modern ActiveWorkoutScreen for real-time session tracking
+ * @deprecated Use UnifiedNavigationContainer with LiftrixRoute sealed classes instead
  * 
- * @param user The authenticated user
+ * Migration Notes:
+ * - WorkoutRoutes → LiftrixRoute sealed class variants
+ * - String-based navigation replaced with type-safe navigation
+ * - All workout flows now handled in UnifiedNavigationContainer
+ * - Exercise selection, active workout, template creation all moved to unified system
+ * 
+ * This file can be removed once all consumers are migrated to the unified navigation system.
+ * 
+ * @param user The authenticated user (parameter maintained for compatibility)
  * @param onNavigateToAuth Callback to navigate to authentication flow
  * @param navController NavController for nested navigation within workout flow
  * @param onNavigateToExerciseLibrary Callback to navigate to exercise library
  */
+@Deprecated(
+    message = "Use UnifiedNavigationContainer with LiftrixRoute sealed classes instead",
+    replaceWith = ReplaceWith("UnifiedNavigationContainer", "com.example.liftrix.ui.navigation.UnifiedNavigationContainer")
+)
 fun NavGraphBuilder.workoutGraph(
     user: User,
     onNavigateToAuth: () -> Unit,

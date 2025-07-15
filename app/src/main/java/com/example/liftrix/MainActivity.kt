@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.ui.MainViewModel
 import com.example.liftrix.ui.auth.AuthActivity
-import com.example.liftrix.ui.navigation.UnifiedMainNavigationContainer
+import com.example.liftrix.ui.navigation.UnifiedNavigationContainer
 import com.example.liftrix.ui.theme.LiftrixTheme
 import com.example.liftrix.ui.theme.ThemeManager
 import dagger.hilt.android.AndroidEntryPoint
@@ -114,7 +114,7 @@ fun AuthenticatedContent(
     user: com.example.liftrix.domain.model.User,
     onNavigateToAuth: () -> Unit
 ) {
-    // Main navigation with tab-based navigation system
-    UnifiedMainNavigationContainer()
+    // Main navigation with type-safe navigation system
+    UnifiedNavigationContainer()
 }
 

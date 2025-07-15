@@ -249,16 +249,6 @@ data class Workout(
     )
 }
 
-/**
- * Workout status enumeration
- */
-enum class WorkoutStatus(val displayName: String) {
-    PLANNED("Planned"),
-    IN_PROGRESS("In Progress"),
-    PAUSED("Paused"),
-    COMPLETED("Completed"),
-    CANCELLED("Cancelled")
-}
 
 /**
  * Workout metrics data class

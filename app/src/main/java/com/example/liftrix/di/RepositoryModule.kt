@@ -2,24 +2,20 @@ package com.example.liftrix.di
 
 import com.example.liftrix.data.repository.AuthRepositoryImpl
 import com.example.liftrix.data.repository.CustomExerciseRepositoryImpl
-import com.example.liftrix.data.repository.ExerciseLibraryRepositoryImpl
 import com.example.liftrix.data.repository.ProfileRepositoryImpl
 import com.example.liftrix.data.repository.ProgressStatsRepositoryImpl
 import com.example.liftrix.data.repository.SocialRepositoryImpl
-import com.example.liftrix.data.repository.WorkoutRepository
-import com.example.liftrix.data.repository.WorkoutRepositoryImpl
 import com.example.liftrix.data.repository.WorkoutTemplateRepositoryImpl
+import com.example.liftrix.data.repository.ExerciseLibraryRepositoryImpl
 import com.example.liftrix.data.repository.FolderRepositoryImpl
-import com.example.liftrix.data.repository.ExerciseRepositoryImpl
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.CustomExerciseRepository
-import com.example.liftrix.domain.repository.ExerciseLibraryRepository
 import com.example.liftrix.domain.repository.ProfileRepository
 import com.example.liftrix.domain.repository.ProgressStatsRepository
 import com.example.liftrix.domain.repository.SocialRepository
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.domain.repository.ExerciseLibraryRepository
 import com.example.liftrix.domain.repository.FolderRepository
-import com.example.liftrix.domain.repository.ExerciseRepository
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -39,12 +35,6 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindWorkoutRepository(
-        workoutRepositoryImpl: WorkoutRepositoryImpl
-    ): WorkoutRepository
-
-    @Binds
-    @Singleton
     abstract fun bindProfileRepository(
         profileRepositoryImpl: ProfileRepositoryImpl
     ): ProfileRepository
@@ -55,11 +45,6 @@ abstract class RepositoryModule {
         customExerciseRepositoryImpl: CustomExerciseRepositoryImpl
     ): CustomExerciseRepository
 
-    @Binds
-    @Singleton
-    abstract fun bindExerciseLibraryRepository(
-        exerciseLibraryRepositoryImpl: ExerciseLibraryRepositoryImpl
-    ): ExerciseLibraryRepository
 
     @Binds
     @Singleton
@@ -67,17 +52,6 @@ abstract class RepositoryModule {
         progressStatsRepositoryImpl: ProgressStatsRepositoryImpl
     ): ProgressStatsRepository
 
-    @Binds
-    @Singleton
-    abstract fun bindExerciseRepository(
-        exerciseRepositoryImpl: ExerciseRepositoryImpl
-    ): ExerciseRepository
-
-    @Binds
-    @Singleton
-    abstract fun bindWorkoutTemplateRepository(
-        workoutTemplateRepositoryImpl: WorkoutTemplateRepositoryImpl
-    ): WorkoutTemplateRepository
 
     @Binds
     @Singleton
@@ -91,5 +65,20 @@ abstract class RepositoryModule {
     abstract fun bindFolderRepository(
         folderRepositoryImpl: FolderRepositoryImpl
     ): FolderRepository
+
+    // Temporary legacy compatibility bindings
+    // TODO: Remove these once ViewModels are migrated to new repository interfaces
+    
+    @Binds
+    @Singleton
+    abstract fun bindWorkoutTemplateRepository(
+        workoutTemplateRepositoryImpl: WorkoutTemplateRepositoryImpl
+    ): WorkoutTemplateRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindExerciseLibraryRepository(
+        exerciseLibraryRepositoryImpl: ExerciseLibraryRepositoryImpl
+    ): ExerciseLibraryRepository
 
 } 

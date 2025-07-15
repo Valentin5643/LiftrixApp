@@ -1,6 +1,6 @@
 package com.example.liftrix.domain.usecase
 
-import com.example.liftrix.data.repository.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.model.Workout
 import timber.log.Timber
 import javax.inject.Inject

@@ -16,13 +16,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +38,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -42,6 +52,7 @@ import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.components.layouts.GridSystem
 import com.example.liftrix.ui.progress.components.ProgressSummaryCards
 import com.example.liftrix.ui.progress.components.TimePeriodSelector
+import com.example.liftrix.ui.progress.components.VolumeCalendarWidget
 import com.example.liftrix.ui.progress.components.WorkoutDurationChart
 import com.example.liftrix.ui.progress.components.WorkoutFrequencyHeatmap
 import com.example.liftrix.ui.progress.components.WorkoutVolumeChart
@@ -95,7 +106,7 @@ fun ProgressDashboardScreen(
  */
 @Composable
 private fun ProgressDashboardContent(
-    uiState: ProgressDashboardUiState,
+    uiState: ProgressDashboardData,
     onEvent: (ProgressDashboardEvent) -> Unit
 ) {
     LazyColumn(
@@ -108,14 +119,29 @@ private fun ProgressDashboardContent(
             Spacer(modifier = Modifier.height(GridSystem.spacing2))
         }
 
-        // Modern screen header with enhanced typography
+        // Modern screen header with enhanced typography and export functionality
         item {
-            Text(
-                text = "Progress Dashboard",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(bottom = GridSystem.spacing2)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = GridSystem.spacing2),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Progress Dashboard",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                
+                // Feature flag controlled export dropdown
+                if (uiState.exportEnabled) {
+                    ExportDropdown(
+                        onExportPdf = { onEvent(ProgressDashboardEvent.ExportToPdf) },
+                        onExportCsv = { onEvent(ProgressDashboardEvent.ExportToCsv) }
+                    )
+                }
+            }
         }
 
         // Time period selector with modern styling
@@ -126,6 +152,16 @@ private fun ProgressDashboardContent(
             )
         }
 
+        // Analytics onboarding (feature flag controlled)
+        if (uiState.showOnboarding && uiState.analyticsEnabled) {
+            item {
+                AnalyticsOnboardingCard(
+                    onDismiss = { onEvent(ProgressDashboardEvent.DismissOnboarding) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
         // Enhanced summary stats with modern card design
         item {
             uiState.run {
@@ -133,6 +169,23 @@ private fun ProgressDashboardContent(
                     summaryData = summaryData,
                     isLoading = isSummaryLoading
                 )
+            }
+        }
+
+        // Volume calendar widget for monthly analytics (feature flag controlled)
+        if (uiState.analyticsEnabled) {
+            item {
+                uiState.run {
+                    volumeCalendarData?.let { calendarData ->
+                        VolumeCalendarWidget(
+                            calendarData = calendarData,
+                            onDateClick = { date ->
+                                onEvent(ProgressDashboardEvent.DateSelected(date))
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
             }
         }
 
@@ -487,6 +540,118 @@ private fun EmptyStateContent(
                     onClick = onRefresh
                 ) {
                     Text("Check for Data")
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Export dropdown menu for PDF and CSV export options
+ */
+@Composable
+private fun ExportDropdown(
+    onExportPdf: () -> Unit,
+    onExportCsv: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    
+    Box {
+        IconButton(
+            onClick = { expanded = true }
+        ) {
+            Icon(
+                imageVector = Icons.Default.FileDownload,
+                contentDescription = "Export data",
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+        
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DropdownMenuItem(
+                text = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PictureAsPdf,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Export as PDF")
+                    }
+                },
+                onClick = {
+                    expanded = false
+                    onExportPdf()
+                }
+            )
+            
+            DropdownMenuItem(
+                text = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.TableChart,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Export as CSV")
+                    }
+                },
+                onClick = {
+                    expanded = false
+                    onExportCsv()
+                }
+            )
+        }
+    }
+}
+
+/**
+ * Analytics onboarding card component
+ */
+@Composable
+private fun AnalyticsOnboardingCard(
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = "🎉 New Analytics Features!",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Discover detailed insights about your workouts with our new analytics dashboard. Track your progress, volume trends, and consistency patterns.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                OutlinedButton(onClick = onDismiss) {
+                    Text("Got it!")
                 }
             }
         }

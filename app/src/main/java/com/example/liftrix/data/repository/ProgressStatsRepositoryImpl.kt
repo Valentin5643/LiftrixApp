@@ -20,6 +20,7 @@ import com.example.liftrix.domain.repository.FrequencyDataPoint
 import com.example.liftrix.domain.repository.ProgressStatsRepository
 import com.example.liftrix.domain.repository.ProgressSummary
 import com.example.liftrix.domain.repository.VolumeDataPoint
+import com.example.liftrix.sync.AnalyticsCalculation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.datetime.LocalDate
@@ -28,9 +29,6 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.todayIn
-import kotlinx.datetime.toJavaLocalDate
-import java.time.format.DateTimeFormatter
 
 @Singleton
 class ProgressStatsRepositoryImpl @Inject constructor(
@@ -41,7 +39,6 @@ class ProgressStatsRepositoryImpl @Inject constructor(
 ) : ProgressStatsRepository {
 
     companion object {
-        private val DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE
         private const val MILLISECONDS_PER_MINUTE = 60_000L
     }
 
@@ -140,8 +137,8 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         endDate: LocalDate
     ): Flow<List<VolumeDataPoint>> = flow {
         try {
-            val startDateString = startDate.toJavaLocalDate().format(DATE_FORMATTER)
-            val endDateString = endDate.toJavaLocalDate().format(DATE_FORMATTER)
+            val startDateString = startDate.toString()
+            val endDateString = endDate.toString()
             
             // Get exercise history for specific exercise
             val exercises = exerciseDao.getExerciseHistoryInDateRange(userId, exerciseLibraryId, startDateString, endDateString)
@@ -165,7 +162,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
                     }
                     
                     VolumeDataPoint(
-                        date = kotlinx.datetime.LocalDate.parse(date!!.format(DATE_FORMATTER)),
+                        date = kotlinx.datetime.LocalDate.parse(date!!.toString()),
                         totalVolume = totalVolume,
                         exerciseCount = exerciseList.size
                     )
@@ -253,11 +250,11 @@ class ProgressStatsRepositoryImpl @Inject constructor(
                 kotlinx.datetime.Month.values()[month - 1]
             )
             
-            emit(LiftrixResult.Success(volumeCalendarData))
+            emit(Result.success(volumeCalendarData))
             
         } catch (e: Exception) {
             Timber.e(e, "Failed to get volume calendar data for user: $userId, month: $month")
-            emit(LiftrixResult.Error(LiftrixError.DatabaseError("Failed to load volume calendar data")))
+            emit(Result.failure(LiftrixError.DatabaseError("Failed to load volume calendar data")))
         }
     }
     
@@ -266,8 +263,8 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         timeRange: TimeRange
     ): Flow<LiftrixResult<ProgressMetrics>> = flow {
         try {
-            val startDateString = timeRange.startDate.toJavaLocalDate().format(DATE_FORMATTER)
-            val endDateString = timeRange.endDate.toJavaLocalDate().format(DATE_FORMATTER)
+            val startDateString = timeRange.startDate.toString()
+            val endDateString = timeRange.endDate.toString()
             
             // Get workout statistics for the time range
             val workoutStats = workoutDao.getWorkoutStats(userId, startDateString)
@@ -282,11 +279,11 @@ class ProgressStatsRepositoryImpl @Inject constructor(
                 userId
             )
             
-            emit(LiftrixResult.Success(progressMetrics))
+            emit(Result.success(progressMetrics))
             
         } catch (e: Exception) {
             Timber.e(e, "Failed to get progress metrics for user: $userId, timeRange: $timeRange")
-            emit(LiftrixResult.Error(LiftrixError.DatabaseError("Failed to load progress metrics")))
+            emit(Result.failure(LiftrixError.DatabaseError("Failed to load progress metrics")))
         }
     }
     
@@ -295,20 +292,20 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         timeRange: TimeRange
     ): Flow<LiftrixResult<DashboardData>> = flow {
         try {
-            val today = kotlinx.datetime.Clock.System.todayIn(kotlinx.datetime.TimeZone.currentSystemDefault())
+            val today = kotlinx.datetime.LocalDate.fromEpochDays((kotlinx.datetime.Clock.System.now().epochSeconds / 86400).toInt())
             
             // Get volume calendar data for current month
             val volumeCalendarFlow = getVolumeCalendarData(userId, today.year, today.monthNumber)
             var volumeCalendarData: VolumeCalendarData? = null
             
             volumeCalendarFlow.collect { result ->
-                when (result) {
-                    is LiftrixResult.Success -> volumeCalendarData = result.data
-                    is LiftrixResult.Error -> {
-                        emit(result)
+                result.fold(
+                    onSuccess = { volumeCalendarData = it },
+                    onFailure = { 
+                        emit(Result.failure(it))
                         return@collect
                     }
-                }
+                )
             }
             
             // Get progress metrics
@@ -316,13 +313,13 @@ class ProgressStatsRepositoryImpl @Inject constructor(
             var progressMetrics: ProgressMetrics? = null
             
             progressMetricsFlow.collect { result ->
-                when (result) {
-                    is LiftrixResult.Success -> progressMetrics = result.data
-                    is LiftrixResult.Error -> {
-                        emit(result)
+                result.fold(
+                    onSuccess = { progressMetrics = it },
+                    onFailure = { 
+                        emit(Result.failure(it))
                         return@collect
                     }
-                }
+                )
             }
             
             // Create dashboard data
@@ -333,11 +330,11 @@ class ProgressStatsRepositoryImpl @Inject constructor(
                 lastUpdated = kotlinx.datetime.Clock.System.now()
             )
             
-            emit(LiftrixResult.Success(dashboardData))
+            emit(Result.success(dashboardData))
             
         } catch (e: Exception) {
             Timber.e(e, "Failed to get dashboard data for user: $userId, timeRange: $timeRange")
-            emit(LiftrixResult.Error(LiftrixError.DatabaseError("Failed to load dashboard data")))
+            emit(Result.failure(LiftrixError.DatabaseError("Failed to load dashboard data")))
         }
     }
     
@@ -346,15 +343,59 @@ class ProgressStatsRepositoryImpl @Inject constructor(
      */
     private fun createKeyMetrics(progressMetrics: ProgressMetrics): Map<String, Any> {
         return mapOf(
-            "totalVolume" to progressMetrics.volumeMetrics.totalVolume.format(),
+            "totalVolume" to progressMetrics.volumeMetrics.totalVolume.toString(),
             "workoutCount" to progressMetrics.frequencyMetrics.workoutCount,
             "averageWorkoutsPerWeek" to progressMetrics.frequencyMetrics.averageWorkoutsPerWeek,
             "currentStreak" to progressMetrics.consistencyMetrics.currentStreak,
-            "overallProgressScore" to progressMetrics.calculateOverallProgressScore(),
-            "primaryTrendDirection" to progressMetrics.getPrimaryTrendDirection().name,
-            "consistencyScore" to progressMetrics.frequencyMetrics.getConsistencyScore(),
+            "volumeTrend" to progressMetrics.volumeMetrics.volumeTrend.name,
+            "consistencyScore" to progressMetrics.frequencyMetrics.consistencyScore,
             "recentPRCount" to progressMetrics.strengthMetrics.recentPRCount
         )
+    }
+
+    // Analytics sync methods for AnalyticsSyncWorker
+    
+    suspend fun getPendingSyncCalculations(userId: String): List<AnalyticsCalculation> {
+        return try {
+            // Get analytics calculations that haven't been synced yet
+            // This is a placeholder implementation - in a real system this would query
+            // a dedicated analytics calculation table
+            emptyList()
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get pending sync calculations for user: $userId")
+            emptyList()
+        }
+    }
+    
+    suspend fun markCalculationsAsSynced(userId: String, calculationIds: List<String>) {
+        try {
+            // Mark calculations as synced in database
+            // This is a placeholder implementation
+            Timber.d("Marked ${calculationIds.size} calculations as synced for user: $userId")
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to mark calculations as synced for user: $userId")
+        }
+    }
+    
+    suspend fun queueCalculationForSync(calculation: AnalyticsCalculation) {
+        try {
+            // Queue calculation for sync
+            // This is a placeholder implementation
+            Timber.d("Queued calculation for sync: ${calculation.id}")
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to queue calculation for sync: ${calculation.id}")
+        }
+    }
+    
+    suspend fun getUnsyncedCalculationsCount(userId: String): Int {
+        return try {
+            // Get count of unsynced calculations
+            // This is a placeholder implementation
+            0
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get unsynced calculations count for user: $userId")
+            0
+        }
     }
 
 }

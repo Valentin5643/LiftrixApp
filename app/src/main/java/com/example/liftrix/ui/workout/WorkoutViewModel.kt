@@ -1,8 +1,7 @@
 package com.example.liftrix.ui.workout
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.liftrix.data.repository.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutTemplatePreview
@@ -12,6 +11,9 @@ import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.usecase.SaveWorkoutUseCase
 import com.example.liftrix.domain.usecase.analytics.LogWorkoutEventUseCase
 import com.example.liftrix.domain.service.AnalyticsService
+import com.example.liftrix.ui.common.event.ViewModelEvent
+import com.example.liftrix.domain.model.common.LiftrixResult
+import androidx.lifecycle.ViewModel
 import com.example.liftrix.sync.SyncManager
 import com.example.liftrix.sync.SyncStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -50,6 +52,19 @@ class WorkoutViewModel @Inject constructor(
         observeWorkouts()
         observeTemplates()
         observeSyncStatus()
+    }
+
+    /**
+     * Handles events from the UI following MVI pattern
+     */
+    fun onEvent(event: WorkoutEvent) {
+        when (event) {
+            is WorkoutEvent.StartWorkout -> startWorkout(event.workout)
+            is WorkoutEvent.CompleteWorkout -> completeWorkout(event.workout)
+            is WorkoutEvent.SaveWorkout -> saveWorkout(event.workout)
+            is WorkoutEvent.ClearError -> clearError()
+            is WorkoutEvent.RefreshData -> refreshData()
+        }
     }
 
     private fun observeAuthState() {
@@ -114,11 +129,21 @@ class WorkoutViewModel @Inject constructor(
                         }
                     
                     workoutTemplateRepository.getAllTemplatesForUser(user.uid)
-                        .collect { templates ->
-                            _uiState.value = _uiState.value.copy(
-                                templates = templates
+                        .collect { templatesResult ->
+                            templatesResult.fold(
+                                onSuccess = { templates ->
+                                    _uiState.value = _uiState.value.copy(
+                                        templates = templates
+                                    )
+                                    Timber.d("Loaded ${templates.size} templates for user ${user.uid}")
+                                },
+                                onFailure = { exception ->
+                                    Timber.e(exception, "Failed to load templates for user ${user.uid}")
+                                    _uiState.value = _uiState.value.copy(
+                                        templates = emptyList()
+                                    )
+                                }
                             )
-                            Timber.d("Loaded ${templates.size} templates for user ${user.uid}")
                         }
                 }
         }
@@ -195,7 +220,8 @@ class WorkoutViewModel @Inject constructor(
         viewModelScope.launch {
             val user = _currentUser.value
             if (user != null) {
-                val count = workoutRepository.getUnsyncedCountForUser(user.uid)
+                val countResult = workoutRepository.getUnsyncedCountForUser(user.uid)
+                val count = countResult.getOrElse { 0 }
                 _uiState.value = _uiState.value.copy(unsyncedCount = count)
             }
         }
@@ -215,9 +241,17 @@ class WorkoutViewModel @Inject constructor(
         }
     }
     
-    fun clearError() {
+    private fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
     }
+
+    private fun refreshData() {
+        // Refresh all data by re-observing
+        observeWorkouts()
+        observeTemplates()
+        observeSyncStatus()
+    }
+
     
     /**
      * Enhanced UI template preview for workout creation flow
@@ -255,4 +289,17 @@ data class WorkoutUiState(
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
     val errorMessage: String? = null
-) 
+)
+
+/**
+ * Events that can be triggered from the workout screen UI
+ * 
+ * Follows the MVI pattern for reactive state management.
+ */
+sealed class WorkoutEvent : ViewModelEvent {
+    data class StartWorkout(val workout: Workout) : WorkoutEvent()
+    data class CompleteWorkout(val workout: Workout) : WorkoutEvent()
+    data class SaveWorkout(val workout: Workout) : WorkoutEvent()
+    object ClearError : WorkoutEvent()
+    object RefreshData : WorkoutEvent()
+}

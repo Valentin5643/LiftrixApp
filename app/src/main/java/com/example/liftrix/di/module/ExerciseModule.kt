@@ -2,6 +2,8 @@ package com.example.liftrix.di.module
 
 import com.example.liftrix.data.repository.exercise.ExerciseRepositoryImpl
 import com.example.liftrix.domain.repository.exercise.ExerciseRepository
+import com.example.liftrix.domain.repository.CustomExerciseRepository
+import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.exercise.SearchExercisesUseCase
 import dagger.Binds
@@ -14,7 +16,7 @@ import javax.inject.Singleton
 /**
  * Hilt module for exercise feature dependencies.
  * 
- * This module encapsulates all dependency injection requirements for the exercise domain:
+ * This module provides exercise-specific dependency injection requirements:
  * - Repository interface binding
  * - Use case provider functions
  * - Feature-specific scoping
@@ -44,23 +46,24 @@ abstract class ExerciseModule {
     companion object {
         
         /**
-         * Provides SearchExercisesUseCase with proper dependency injection.
+         * Provides SearchExercisesUseCase with all required dependencies.
          * 
-         * This use case handles exercise search with advanced filtering,
-         * validation, and business rule application.
+         * The SearchExercisesUseCase requires multiple repositories and services
+         * that are provided by other modules, so we use a @Provides method
+         * to inject all the dependencies correctly.
          * 
-         * @param exerciseRepository The exercise repository dependency
-         * @param customExerciseRepository The custom exercise repository dependency
-         * @param authRepository The authentication repository dependency
-         * @param errorHandler The centralized error handler dependency
+         * @param exerciseRepository Repository for exercise library operations
+         * @param customExerciseRepository Repository for custom exercise operations
+         * @param authRepository Repository for authentication operations
+         * @param errorHandler Service for centralized error handling
          * @return Configured SearchExercisesUseCase instance
          */
         @Provides
         @Singleton
         fun provideSearchExercisesUseCase(
             exerciseRepository: ExerciseRepository,
-            customExerciseRepository: com.example.liftrix.domain.repository.CustomExerciseRepository,
-            authRepository: com.example.liftrix.domain.repository.AuthRepository,
+            customExerciseRepository: CustomExerciseRepository,
+            authRepository: AuthRepository,
             errorHandler: ErrorHandler
         ): SearchExercisesUseCase {
             return SearchExercisesUseCase(

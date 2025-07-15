@@ -36,11 +36,7 @@ import com.example.liftrix.ui.components.cards.StatCard
 import com.example.liftrix.ui.components.cards.Trend
 import com.example.liftrix.ui.components.layouts.GridSystem
 import com.example.liftrix.ui.theme.LiftrixColors
-import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
-import com.patrykandpatrick.vico.core.cartesian.data.lineSeries
-import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
-import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
-import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
+// Vico imports temporarily removed for simplified placeholder implementation
 import kotlin.math.roundToInt
 
 /**
@@ -211,30 +207,20 @@ private fun ModernVolumeLineChart(
     data: List<VolumeDataPoint>,
     modifier: Modifier = Modifier
 ) {
-    val modelProducer = remember { CartesianChartModelProducer() }
-    
-    // Transform data to chart entries
-    val chartEntries = remember(data) {
-        data.map { it.totalVolume }
-    }
-    
-    // Update chart data using LaunchedEffect for suspend function
-    LaunchedEffect(chartEntries) {
-        modelProducer.runTransaction {
-            lineSeries {
-                series(chartEntries)
-            }
-        }
-    }
-    
-    // Create the chart with enhanced styling
-    CartesianChartHost(
-        rememberCartesianChart(
-            rememberLineCartesianLayer()
-        ),
-        modelProducer,
+    // Simplified placeholder implementation while Vico integration is stabilized
+    Box(
         modifier = modifier
-    )
+            .fillMaxWidth()
+            .height(200.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "Volume Line Chart\n${data.size} data points",
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        )
+    }
 }
 
 /**

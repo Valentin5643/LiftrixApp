@@ -22,6 +22,7 @@ import com.example.liftrix.data.local.dao.PrivacySettingsDao
 import com.example.liftrix.data.local.dao.FolderDao
 import com.example.liftrix.data.local.dao.SettingsDao
 import com.example.liftrix.data.local.dao.SubscriptionDao
+import com.example.liftrix.data.local.dao.MetDataDao
 
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.data.local.entity.FolderEntity
@@ -37,6 +38,8 @@ import com.example.liftrix.data.local.entity.ExerciseWeightMemoryEntity
 import com.example.liftrix.data.local.entity.ExerciseUsageHistoryEntity
 import com.example.liftrix.data.local.entity.FriendEntity
 import com.example.liftrix.data.local.entity.PrivacySettingsEntity
+import com.example.liftrix.data.local.entity.AnalyticsCacheEntity
+import com.example.liftrix.data.local.entity.MetDataEntity
 
 
 
@@ -56,8 +59,10 @@ import com.example.liftrix.data.local.entity.PrivacySettingsEntity
         FolderEntity::class,
         SettingsEntity::class,
         SubscriptionEntity::class,
+        AnalyticsCacheEntity::class,
+        MetDataEntity::class,
     ],
-    version = 27,
+    version = 28,
     exportSchema = true
 )
 @TypeConverters(
@@ -83,4 +88,5 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun folderDao(): FolderDao
     abstract fun settingsDao(): SettingsDao
     abstract fun subscriptionDao(): SubscriptionDao
+    abstract fun metDataDao(): MetDataDao
 } 

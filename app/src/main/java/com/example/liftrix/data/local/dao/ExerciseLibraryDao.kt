@@ -91,6 +91,16 @@ interface ExerciseLibraryDao {
     ): Flow<List<ExerciseLibraryEntity>>
     
     /**
+     * Get exercises by multiple muscle groups
+     */
+    @Query("""
+        SELECT * FROM exercise_library 
+        WHERE primary_muscle_group IN (:muscleGroups)
+        ORDER BY name ASC
+    """)
+    fun getExercisesByMuscleGroups(muscleGroups: List<ExerciseCategory>): Flow<List<ExerciseLibraryEntity>>
+    
+    /**
      * Get compound exercises for a muscle group
      */
     @Query("""
@@ -102,6 +112,62 @@ interface ExerciseLibraryDao {
     """)
     fun getCompoundExercisesForMuscle(muscleGroup: ExerciseCategory): Flow<List<ExerciseLibraryEntity>>
     
+    /**
+     * Get exercises by multiple equipment types
+     */
+    @Query("""
+        SELECT * FROM exercise_library 
+        WHERE equipment IN (:equipmentList)
+        ORDER BY name ASC
+    """)
+    fun getExercisesByEquipmentList(equipmentList: List<Equipment>): Flow<List<ExerciseLibraryEntity>>
+    
+    /**
+     * Get exercise by ID
+     */
+    @Query("SELECT * FROM exercise_library WHERE id = :exerciseId")
+    suspend fun getExerciseById(exerciseId: String): ExerciseLibraryEntity?
+    
+    /**
+     * Get exercises by difficulty level
+     */
+    @Query("SELECT * FROM exercise_library WHERE difficulty_level = :difficultyLevel ORDER BY name ASC")
+    suspend fun getExercisesByDifficulty(difficultyLevel: Int): List<ExerciseLibraryEntity>
+    
+    /**
+     * Get all muscle groups
+     */
+    @Query("SELECT DISTINCT primary_muscle_group FROM exercise_library")
+    suspend fun getAllMuscleGroups(): List<ExerciseCategory>
+    
+    /**
+     * Get all equipment types
+     */
+    @Query("SELECT DISTINCT equipment FROM exercise_library")
+    suspend fun getAllEquipment(): List<Equipment>
+    
+    /**
+     * Get recommended exercises based on muscle groups excluding certain equipment
+     */
+    @Query("""
+        SELECT * FROM exercise_library 
+        WHERE primary_muscle_group IN (:muscleGroups)
+        AND equipment NOT IN (:excludeEquipment)
+        ORDER BY difficulty_level ASC, name ASC
+        LIMIT :limit
+    """)
+    suspend fun getRecommendedExercises(
+        muscleGroups: List<ExerciseCategory>,
+        excludeEquipment: List<Equipment>,
+        limit: Int
+    ): List<ExerciseLibraryEntity>
+    
+    /**
+     * Check if exercise exists
+     */
+    @Query("SELECT EXISTS(SELECT 1 FROM exercise_library WHERE id = :exerciseId)")
+    suspend fun exerciseExists(exerciseId: String): Boolean
+
     /**
      * Check if exercise library is populated
      */

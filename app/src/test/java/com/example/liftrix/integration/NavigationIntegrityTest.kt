@@ -3,7 +3,7 @@ package com.example.liftrix.integration
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.example.liftrix.data.repository.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.model.*
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SocialRepository

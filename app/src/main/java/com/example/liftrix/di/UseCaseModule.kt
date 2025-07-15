@@ -1,14 +1,21 @@
 package com.example.liftrix.di
 
 import androidx.work.WorkManager
+import com.example.liftrix.data.export.AnalyticsExporter
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SettingsRepository
 import com.example.liftrix.domain.repository.SubscriptionRepository
 import com.example.liftrix.domain.service.AnalyticsService
+import com.example.liftrix.domain.usecase.common.ErrorHandler
+import com.example.liftrix.domain.usecase.analytics.CalculateWorkoutMetricsUseCase
+import com.example.liftrix.domain.usecase.analytics.ExportAnalyticsUseCase
+import com.example.liftrix.domain.usecase.analytics.GenerateVolumeCalendarUseCase
+import com.example.liftrix.domain.usecase.analytics.UpdateProgressDashboardUseCase
 import com.example.liftrix.domain.usecase.settings.EnhancedSignOutUseCase
 import com.example.liftrix.domain.usecase.settings.GetSubscriptionStatusUseCase
 import com.example.liftrix.domain.usecase.settings.GetUserSettingsUseCase
 import com.example.liftrix.domain.usecase.settings.UpdateSettingsUseCase
+import com.example.liftrix.service.AnalyticsEngine
 import com.example.liftrix.sync.SyncManager
 import dagger.Module
 import dagger.Provides
@@ -100,4 +107,69 @@ object UseCaseModule {
             workManager = workManager
         )
     }
+
+    /**
+     * Provides CalculateWorkoutMetricsUseCase with proper dependency injection.
+     * 
+     * @param analyticsEngine The analytics engine dependency
+     * @param errorHandler The error handler dependency
+     * @return Configured CalculateWorkoutMetricsUseCase instance
+     */
+    @Provides
+    @Singleton
+    fun provideCalculateWorkoutMetricsUseCase(
+        analyticsEngine: AnalyticsEngine,
+        errorHandler: ErrorHandler
+    ): CalculateWorkoutMetricsUseCase {
+        return CalculateWorkoutMetricsUseCase(analyticsEngine, errorHandler)
+    }
+
+    /**
+     * Provides GenerateVolumeCalendarUseCase with proper dependency injection.
+     * 
+     * @param analyticsEngine The analytics engine dependency
+     * @param errorHandler The error handler dependency
+     * @return Configured GenerateVolumeCalendarUseCase instance
+     */
+    @Provides
+    @Singleton
+    fun provideGenerateVolumeCalendarUseCase(
+        analyticsEngine: AnalyticsEngine,
+        errorHandler: ErrorHandler
+    ): GenerateVolumeCalendarUseCase {
+        return GenerateVolumeCalendarUseCase(analyticsEngine, errorHandler)
+    }
+
+    /**
+     * Provides UpdateProgressDashboardUseCase with proper dependency injection.
+     * 
+     * @param analyticsEngine The analytics engine dependency
+     * @param errorHandler The error handler dependency
+     * @return Configured UpdateProgressDashboardUseCase instance
+     */
+    @Provides
+    @Singleton
+    fun provideUpdateProgressDashboardUseCase(
+        analyticsEngine: AnalyticsEngine,
+        errorHandler: ErrorHandler
+    ): UpdateProgressDashboardUseCase {
+        return UpdateProgressDashboardUseCase(analyticsEngine, errorHandler)
+    }
+
+    /**
+     * Provides ExportAnalyticsUseCase with proper dependency injection.
+     * 
+     * @param analyticsEngine The analytics engine dependency
+     * @param analyticsExporter The analytics exporter dependency
+     * @return Configured ExportAnalyticsUseCase instance
+     */
+    @Provides
+    @Singleton
+    fun provideExportAnalyticsUseCase(
+        analyticsEngine: AnalyticsEngine,
+        analyticsExporter: AnalyticsExporter
+    ): ExportAnalyticsUseCase {
+        return ExportAnalyticsUseCase(analyticsEngine, analyticsExporter)
+    }
+
 }

@@ -2,7 +2,7 @@ package com.example.liftrix.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.liftrix.data.repository.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.model.CardData
 import com.example.liftrix.domain.model.FeedWorkout
 import com.example.liftrix.domain.model.RecommendedUser
@@ -12,6 +12,8 @@ import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SocialRepository
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.domain.usecase.GetWorkoutHistoryUseCase
+import com.example.liftrix.domain.usecase.common.ErrorHandler
+import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.components.cards.Trend
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -41,11 +43,16 @@ class HomeViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val analyticsService: AnalyticsService,
     private val socialRepository: SocialRepository,
-    private val getWorkoutHistoryUseCase: GetWorkoutHistoryUseCase
+    private val getWorkoutHistoryUseCase: GetWorkoutHistoryUseCase,
+    private val errorHandler: ErrorHandler
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+
+    private fun updateState(update: HomeUiState.() -> HomeUiState) {
+        _uiState.value = _uiState.value.update()
+    }
 
     private var currentFeedOffset = 0
     private var currentRecommendationsOffset = 0
@@ -57,7 +64,7 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * Handles UI events from the home screen
+     * Handles UI events from the home screen following MVI pattern
      */
     fun onEvent(event: HomeEvent) {
         when (event) {
@@ -88,7 +95,7 @@ class HomeViewModel @Inject constructor(
             }
             is HomeEvent.FeedErrorDismissed -> {
                 updateState { 
-                    copy(workoutFeedState = when (val current = _uiState.value.workoutFeedState) {
+                    copy(workoutFeedState = when (val current = uiState.value.workoutFeedState) {
                         is FeedState.Error -> FeedState.Loading
                         else -> current
                     })
@@ -97,7 +104,7 @@ class HomeViewModel @Inject constructor(
             }
             is HomeEvent.RecommendationsErrorDismissed -> {
                 updateState { 
-                    copy(recommendationsState = when (val current = _uiState.value.recommendationsState) {
+                    copy(recommendationsState = when (val current = uiState.value.recommendationsState) {
                         is RecommendationsState.Error -> RecommendationsState.Loading
                         else -> current
                     })
@@ -132,14 +139,27 @@ class HomeViewModel @Inject constructor(
                         ) 
                     }
                 }
-                .collect { recentWorkouts ->
-                    updateState {
-                        copy(
-                            isLoading = false,
-                            recentWorkouts = recentWorkouts,
-                            errorMessage = null
-                        )
-                    }
+                .collect { result ->
+                    result.fold(
+                        onSuccess = { recentWorkouts ->
+                            updateState {
+                                copy(
+                                    isLoading = false,
+                                    recentWorkouts = recentWorkouts,
+                                    errorMessage = null
+                                )
+                            }
+                        },
+                        onFailure = { throwable ->
+                            updateState {
+                                copy(
+                                    isLoading = false,
+                                    recentWorkouts = emptyList(),
+                                    errorMessage = throwable.message
+                                )
+                            }
+                        }
+                    )
                 }
             } catch (exception: Exception) {
                 Timber.e(exception, "Error in loadHomeData")
@@ -186,16 +206,9 @@ class HomeViewModel @Inject constructor(
                 updateState { copy(workoutFeedState = FeedState.Loading) }
                 currentFeedOffset = 0
 
-                workoutRepository.getFeedWorkouts(currentUser.uid, FEED_LIMIT, 0)
-                    .catch { exception ->
-                        Timber.e(exception, "Error loading feed workouts")
-                        val loadTime = System.currentTimeMillis() - startTime
-                        analyticsService.trackFeedLoadTime(loadTime)
-                        updateState { 
-                            copy(workoutFeedState = FeedState.Error(exception.message ?: "Failed to load workout feed"))
-                        }
-                    }
-                    .collect { workouts ->
+                val feedResult = workoutRepository.getFeedWorkouts(currentUser.uid, FEED_LIMIT)
+                feedResult.fold(
+                    onSuccess = { workouts ->
                         val loadTime = System.currentTimeMillis() - startTime
                         analyticsService.trackFeedLoadTime(loadTime)
                         
@@ -211,7 +224,16 @@ class HomeViewModel @Inject constructor(
                         }
                         currentFeedOffset = workouts.size
                         trackFeedLoaded(workouts.size)
+                    },
+                    onFailure = { exception ->
+                        Timber.e(exception, "Error loading feed workouts")
+                        val loadTime = System.currentTimeMillis() - startTime
+                        analyticsService.trackFeedLoadTime(loadTime)
+                        updateState { 
+                            copy(workoutFeedState = FeedState.Error(exception.message ?: "Failed to load workout feed"))
+                        }
                     }
+                )
             } catch (exception: Exception) {
                 Timber.e(exception, "Error in loadFeedWorkouts")
                 val loadTime = System.currentTimeMillis() - startTime
@@ -227,7 +249,7 @@ class HomeViewModel @Inject constructor(
      * Loads more workout feed data for pagination
      */
     fun loadMoreWorkouts() {
-        val currentState = _uiState.value.workoutFeedState
+        val currentState = uiState.value.workoutFeedState
         if (currentState !is FeedState.Success || !currentState.hasMore || currentState.isLoadingMore) {
             return
         }
@@ -242,17 +264,9 @@ class HomeViewModel @Inject constructor(
                     copy(workoutFeedState = currentState.copy(isLoadingMore = true))
                 }
 
-                workoutRepository.getFeedWorkouts(currentUser.uid, FEED_LIMIT, currentFeedOffset)
-                    .catch { exception ->
-                        Timber.e(exception, "Error loading more workouts")
-                        val loadTime = System.currentTimeMillis() - startTime
-                        // Track pagination performance with <1s target
-                        analyticsService.trackFeedLoadTime(loadTime)
-                        updateState { 
-                            copy(workoutFeedState = currentState.copy(isLoadingMore = false))
-                        }
-                    }
-                    .collect { newWorkouts ->
+                val moreWorkoutsResult = workoutRepository.getFeedWorkouts(currentUser.uid, FEED_LIMIT)
+                moreWorkoutsResult.fold(
+                    onSuccess = { newWorkouts ->
                         val loadTime = System.currentTimeMillis() - startTime
                         analyticsService.trackFeedLoadTime(loadTime)
                         
@@ -275,7 +289,17 @@ class HomeViewModel @Inject constructor(
                         
                         // Track feed scroll depth for engagement analysis
                         analyticsService.trackFeedScrollDepth(allWorkouts.size)
+                    },
+                    onFailure = { exception ->
+                        Timber.e(exception, "Error loading more workouts")
+                        val loadTime = System.currentTimeMillis() - startTime
+                        // Track pagination performance with <1s target
+                        analyticsService.trackFeedLoadTime(loadTime)
+                        updateState { 
+                            copy(workoutFeedState = currentState.copy(isLoadingMore = false))
+                        }
                     }
+                )
             } catch (exception: Exception) {
                 Timber.e(exception, "Error in loadMoreWorkouts")
                 val loadTime = System.currentTimeMillis() - startTime
@@ -330,7 +354,7 @@ class HomeViewModel @Inject constructor(
      * Loads more user recommendations for pagination
      */
     fun loadMoreRecommendations() {
-        val currentState = _uiState.value.recommendationsState
+        val currentState = uiState.value.recommendationsState
         if (currentState !is RecommendationsState.Success || !currentState.hasMore || currentState.isLoadingMore) {
             return
         }
@@ -423,7 +447,7 @@ class HomeViewModel @Inject constructor(
                 socialRepository.followUser(userId).fold(
                     onSuccess = {
                         // Update recommendations state to reflect follow action
-                        val currentState = _uiState.value.recommendationsState
+                        val currentState = uiState.value.recommendationsState
                         if (currentState is RecommendationsState.Success) {
                             val updatedUsers = currentState.users.map { user ->
                                 if (user.userId == userId) {
@@ -463,7 +487,7 @@ class HomeViewModel @Inject constructor(
                 socialRepository.removeFriend(userId).fold(
                     onSuccess = {
                         // Update recommendations state to reflect unfollow action
-                        val currentState = _uiState.value.recommendationsState
+                        val currentState = uiState.value.recommendationsState
                         if (currentState is RecommendationsState.Success) {
                             val updatedUsers = currentState.users.map { user ->
                                 if (user.userId == userId) {
@@ -736,10 +760,17 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * Updates the UI state safely
+     * Sets the loading state for the home screen
      */
-    private fun updateState(update: HomeUiState.() -> HomeUiState) {
-        _uiState.value = _uiState.value.update()
+    private fun setLoadingState() {
+        updateState { copy(isLoading = true, errorMessage = null) }
+    }
+
+    /**
+     * Updates state to reflect error condition
+     */
+    private fun updateErrorState(error: com.example.liftrix.domain.model.error.LiftrixError) {
+        updateState { copy(isLoading = false, errorMessage = error.message) }
     }
 
     private val currentUserIdFlow: StateFlow<String> = 
@@ -761,7 +792,7 @@ class HomeViewModel @Inject constructor(
     ) { userId, recentWorkouts ->
         val stats = if (userId.isNotEmpty()) {
             try {
-                workoutRepository.getWorkoutStats(userId).first()
+                workoutRepository.getWorkoutStats(userId).getOrElse { WorkoutStats.EMPTY }
             } catch (e: Exception) {
                 WorkoutStats.EMPTY
             }
@@ -993,7 +1024,7 @@ sealed class RecommendationsState {
  * Supports both legacy events and new social feed interactions
  * following the MVI pattern for reactive state management.
  */
-sealed class HomeEvent {
+sealed class HomeEvent : com.example.liftrix.ui.common.event.ViewModelEvent {
     // Data loading events
     object RefreshData : HomeEvent()
     object LoadMoreWorkouts : HomeEvent()

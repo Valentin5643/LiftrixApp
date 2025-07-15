@@ -1,0 +1,433 @@
+{
+  "name": "Reddit Fitness Feature Tracker - Simple",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            "days",
+            1
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "resource": "post",
+        "operation": "getAll",
+        "subreddit": "fitness",
+        "limit": 50
+      },
+      "id": "reddit-fitness",
+      "name": "Get Fitness Posts",
+      "type": "n8n-nodes-base.reddit",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "resource": "post",
+        "operation": "getAll",
+        "subreddit": "bodyweightfitness",
+        "limit": 50
+      },
+      "id": "reddit-bodyweightfitness",
+      "name": "Get Bodyweight Posts",
+      "type": "n8n-nodes-base.reddit",
+      "typeVersion": 1,
+      "position": [460, 480]
+    },
+    {
+      "parameters": {
+        "resource": "post",
+        "operation": "getAll",
+        "subreddit": "weightlifting",
+        "limit": 50
+      },
+      "id": "reddit-weightlifting",
+      "name": "Get Weightlifting Posts",
+      "type": "n8n-nodes-base.reddit",
+      "typeVersion": 1,
+      "position": [460, 660]
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "id": "merge-posts",
+      "name": "Merge All Posts",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [680, 480]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "looseTypeValidation": true
+          },
+          "combinator": "or",
+          "conditions": [
+            {
+              "id": "phrase1",
+              "leftValue": "={{ ($json.title + ' ' + ($json.selftext || '')).toLowerCase() }}",
+              "rightValue": "i wish there was an app that",
+              "operator": {
+                "type": "string",
+                "operation": "contains",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "phrase2",
+              "leftValue": "={{ ($json.title + ' ' + ($json.selftext || '')).toLowerCase() }}",
+              "rightValue": "does anyone know an app that can",
+              "operator": {
+                "type": "string",
+                "operation": "contains",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "phrase3",
+              "leftValue": "={{ ($json.title + ' ' + ($json.selftext || '')).toLowerCase() }}",
+              "rightValue": "feature request",
+              "operator": {
+                "type": "string",
+                "operation": "contains",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "phrase4",
+              "leftValue": "={{ ($json.title + ' ' + ($json.selftext || '')).toLowerCase() }}",
+              "rightValue": "missing feature",
+              "operator": {
+                "type": "string",
+                "operation": "contains",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "phrase5",
+              "leftValue": "={{ ($json.title + ' ' + ($json.selftext || '')).toLowerCase() }}",
+              "rightValue": "i would love if",
+              "operator": {
+                "type": "string",
+                "operation": "contains",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "phrase6",
+              "leftValue": "={{ ($json.title + ' ' + ($json.selftext || '')).toLowerCase() }}",
+              "rightValue": "wish there was",
+              "operator": {
+                "type": "string",
+                "operation": "contains",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "phrase7",
+              "leftValue": "={{ ($json.title + ' ' + ($json.selftext || '')).toLowerCase() }}",
+              "rightValue": "looking for an app",
+              "operator": {
+                "type": "string",
+                "operation": "contains",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "phrase8",
+              "leftValue": "={{ ($json.title + ' ' + ($json.selftext || '')).toLowerCase() }}",
+              "rightValue": "need an app",
+              "operator": {
+                "type": "string",
+                "operation": "contains",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "phrase9",
+              "leftValue": "={{ ($json.title + ' ' + ($json.selftext || '')).toLowerCase() }}",
+              "rightValue": "want an app",
+              "operator": {
+                "type": "string",
+                "operation": "contains",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "phrase10",
+              "leftValue": "={{ ($json.title + ' ' + ($json.selftext || '')).toLowerCase() }}",
+              "rightValue": "app suggestion",
+              "operator": {
+                "type": "string",
+                "operation": "contains",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      },
+      "id": "filter-feature-phrases",
+      "name": "Filter Feature Request Phrases",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [900, 480]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "operation": "complete",
+        "chatModel": "gpt-4o-mini",
+        "prompt": {
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are an expert at analyzing fitness discussions to identify feature requests for workout apps. The posts you receive have already been filtered to contain phrases like 'I wish there was an app that', 'feature request', 'missing feature', etc. Extract the specific suggestions, complaints, or desired features mentioned. Focus on actionable features that could be implemented in a fitness app. Return your response in JSON format with fields: title, feature_request, priority (high/medium/low), category (ui/functionality/social/tracking/other), and original_text."
+            },
+            {
+              "role": "user",
+              "content": "Title: {{ $json.title }}\n\nContent: {{ $json.selftext || 'No content' }}\n\nComments count: {{ $json.num_comments }}\n\nUpvotes: {{ $json.ups }}\n\nURL: {{ $json.url }}"
+            }
+          ]
+        }
+      },
+      "id": "analyze-posts",
+      "name": "Analyze for Features",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1.1,
+      "position": [1120, 480]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.choices && $json.choices[0] && $json.choices[0].message && $json.choices[0].message.content || '' }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "filter-features",
+      "name": "Filter Valid AI Responses",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [1340, 480]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "date",
+              "value": "={{ $now.toISOString().split('T')[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "subreddit",
+              "value": "={{ $node[\"Filter Feature Request Phrases\"].json.subreddit || $json.subreddit }}",
+              "type": "string"
+            },
+            {
+              "id": "3",
+              "name": "post_title",
+              "value": "={{ $node[\"Filter Feature Request Phrases\"].json.title || $json.title }}",
+              "type": "string"
+            },
+            {
+              "id": "4",
+              "name": "post_content",
+              "value": "={{ $node[\"Filter Feature Request Phrases\"].json.selftext || $json.selftext || 'No content' }}",
+              "type": "string"
+            },
+            {
+              "id": "5",
+              "name": "ai_analysis_raw",
+              "value": "={{ $json.choices && $json.choices[0] && $json.choices[0].message && $json.choices[0].message.content || 'No analysis' }}",
+              "type": "string"
+            },
+            {
+              "id": "6",
+              "name": "ai_analysis_clean",
+              "value": "={{ ($json.choices && $json.choices[0] && $json.choices[0].message && $json.choices[0].message.content || '').replace(/\\\\n/g, '\\n').replace(/\\\\t/g, ' ').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "7",
+              "name": "upvotes",
+              "value": "={{ $node[\"Filter Feature Request Phrases\"].json.ups || $json.ups || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "8",
+              "name": "comments",
+              "value": "={{ $node[\"Filter Feature Request Phrases\"].json.num_comments || $json.num_comments || 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "9",
+              "name": "url",
+              "value": "={{ $node[\"Filter Feature Request Phrases\"].json.url || $json.url }}",
+              "type": "string"
+            },
+            {
+              "id": "10",
+              "name": "matched_phrases",
+              "value": "={{ $node[\"Filter Feature Request Phrases\"].json.matched_phrases || 'unknown' }}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "format-csv",
+      "name": "Format for CSV",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1560, 480]
+    },
+    {
+      "parameters": {
+        "operation": "toFile",
+        "fileFormat": "csv",
+        "binaryPropertyName": "data",
+        "options": {
+          "headerRow": true
+        }
+      },
+      "id": "create-csv",
+      "name": "Create CSV File",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [1780, 480]
+    }
+  ],
+  "connections": {
+    "Daily Schedule": {
+      "main": [
+        [
+          {
+            "node": "Get Fitness Posts",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Bodyweight Posts",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Weightlifting Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Fitness Posts": {
+      "main": [
+        [
+          {
+            "node": "Merge All Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Bodyweight Posts": {
+      "main": [
+        [
+          {
+            "node": "Merge All Posts",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get Weightlifting Posts": {
+      "main": [
+        [
+          {
+            "node": "Merge All Posts",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge All Posts": {
+      "main": [
+        [
+          {
+            "node": "Filter Feature Request Phrases",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Feature Request Phrases": {
+      "main": [
+        [
+          {
+            "node": "Analyze for Features",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze for Features": {
+      "main": [
+        [
+          {
+            "node": "Filter Valid AI Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Valid AI Responses": {
+      "main": [
+        [
+          {
+            "node": "Format for CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format for CSV": {
+      "main": [
+        [
+          {
+            "node": "Create CSV File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null
+}

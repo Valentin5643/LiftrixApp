@@ -19,8 +19,9 @@ import com.example.liftrix.data.local.dao.FriendDao
 import com.example.liftrix.data.local.dao.PrivacySettingsDao
 import com.example.liftrix.data.local.dao.SubscriptionDao
 import com.example.liftrix.data.local.dao.SettingsDao
+import com.example.liftrix.data.local.dao.MetDataDao
 import com.example.liftrix.data.local.seed.ExerciseLibrarySeedData
-
+import com.example.liftrix.data.local.migration.MIGRATION_27_28
 
 import dagger.Module
 import dagger.Provides
@@ -56,7 +57,7 @@ object DatabaseModule {
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onCreate(db: SupportSQLiteDatabase) {
                     super.onCreate(db)
-                    Timber.i("🏗️ Database created from scratch at version 27")
+                    Timber.i("🏗️ Database created from scratch at version 28")
                 }
                 
                 override fun onOpen(db: SupportSQLiteDatabase) {
@@ -64,7 +65,8 @@ object DatabaseModule {
                     Timber.d("📖 Database connection opened (routine operation)")
                 }
             })
-            // Enable fallback to destructive migration for development
+            .addMigrations(MIGRATION_27_28)
+            // Keep fallback for development environments
             .fallbackToDestructiveMigration()
             .build()
             
@@ -83,7 +85,7 @@ object DatabaseModule {
                 val tableExists = cursor.moveToFirst()
                 cursor.close()
                 
-                if (version == 27 && tableExists) {
+                if (version == 28 && tableExists) {
                     Timber.i("✅ Database ready - all migrations complete, exercise_usage_history confirmed")
                 } else {
                     Timber.w("⚠️ Database initialization issue - version: $version, table exists: $tableExists")
@@ -170,6 +172,11 @@ object DatabaseModule {
     @Provides
     fun provideSettingsDao(database: LiftrixDatabase): SettingsDao {
         return database.settingsDao()
+    }
+
+    @Provides
+    fun provideMetDataDao(database: LiftrixDatabase): MetDataDao {
+        return database.metDataDao()
     }
 
 }

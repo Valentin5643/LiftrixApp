@@ -12,7 +12,7 @@ import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.Weight
 import com.example.liftrix.domain.model.WorkoutTemplateId
-import com.example.liftrix.data.repository.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

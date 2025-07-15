@@ -1,10 +1,10 @@
 package com.example.liftrix.domain.usecase
 
-import com.example.liftrix.data.repository.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.model.*
 import com.example.liftrix.domain.model.builders.plannedWorkout
 import com.example.liftrix.domain.model.builders.exercise
-import com.example.liftrix.domain.repository.ExerciseLibraryRepository
+import com.example.liftrix.domain.repository.exercise.ExerciseRepository
 import com.example.liftrix.domain.service.WeightMemoryService
 import com.example.liftrix.domain.validation.WorkoutValidation
 import com.example.liftrix.domain.validation.combine
@@ -19,7 +19,7 @@ import javax.inject.Inject
  */
 class CreateWorkoutWithExercisesUseCase @Inject constructor(
     private val workoutRepository: WorkoutRepository,
-    private val exerciseLibraryRepository: ExerciseLibraryRepository,
+    private val exerciseRepository: ExerciseRepository,
     private val weightMemoryService: WeightMemoryService
 ) {
     

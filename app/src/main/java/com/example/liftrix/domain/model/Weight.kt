@@ -31,6 +31,16 @@ value class Weight(val kilograms: Double) {
      */
     fun format(): String = "%.1f kg".format(kilograms)
     
+    /**
+     * Gets the numeric value in kilograms (alias for backward compatibility)
+     */
+    val value: Double get() = kilograms
+    
+    /**
+     * Gets formatted display value (alias for backward compatibility)
+     */
+    val displayValue: String get() = format()
+    
     operator fun plus(other: Weight): Weight = Weight(kilograms + other.kilograms)
     operator fun minus(other: Weight): Weight = Weight(kilograms - other.kilograms)
     operator fun times(multiplier: Double): Weight = Weight(kilograms * multiplier)

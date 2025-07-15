@@ -2,7 +2,7 @@ package com.example.liftrix.ui.navigation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.liftrix.data.repository.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel

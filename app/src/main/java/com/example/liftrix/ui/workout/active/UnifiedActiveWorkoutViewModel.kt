@@ -11,6 +11,7 @@ import com.example.liftrix.domain.model.WorkoutSessionId
 import com.example.liftrix.domain.model.WorkoutTemplateId
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
 import com.example.liftrix.domain.repository.AuthRepository
+import com.example.liftrix.domain.model.common.LiftrixResult
 import java.time.Instant
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -511,9 +512,18 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                 }
                 
                 // Load the template from repository
-                val template = workoutTemplateRepository.getTemplateById(
+                val templateResult = workoutTemplateRepository.getTemplateById(
                     WorkoutTemplateId.fromString(templateId), 
                     userId
+                )
+                
+                val template = templateResult.fold(
+                    onSuccess = { it },
+                    onFailure = { exception ->
+                        timber.log.Timber.e("🔥 CREATE-TEMPLATE-SESSION-DEBUG: Error loading template: ${exception.message}")
+                        _uiState.value = UnifiedActiveWorkoutUiState.Error("Failed to load template: ${exception.message}")
+                        return@launch
+                    }
                 )
                 
                 if (template == null) {

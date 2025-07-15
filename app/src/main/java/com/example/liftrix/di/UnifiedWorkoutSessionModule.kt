@@ -30,7 +30,7 @@ object UnifiedWorkoutSessionModule {
     @Singleton
     fun provideUnifiedWorkoutSessionManager(
         context: android.content.Context,
-        workoutRepository: com.example.liftrix.data.repository.WorkoutRepository
+        workoutRepository: com.example.liftrix.domain.repository.workout.WorkoutRepository
     ): UnifiedWorkoutSessionManager {
         return UnifiedWorkoutSessionManager(context, workoutRepository)
     }
@@ -46,8 +46,8 @@ object UnifiedWorkoutSessionModule {
     @Provides
     fun provideAddExerciseToSessionUseCase(
         sessionManager: UnifiedWorkoutSessionManager,
-        exerciseLibraryRepository: com.example.liftrix.domain.repository.ExerciseLibraryRepository
+        exerciseRepository: com.example.liftrix.domain.repository.exercise.ExerciseRepository
     ): AddExerciseToSessionUseCase {
-        return AddExerciseToSessionUseCase(sessionManager, exerciseLibraryRepository)
+        return AddExerciseToSessionUseCase(sessionManager, exerciseRepository)
     }
 }

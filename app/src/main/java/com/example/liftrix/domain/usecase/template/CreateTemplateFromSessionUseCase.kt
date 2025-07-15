@@ -8,7 +8,11 @@ import com.example.liftrix.domain.model.TemplateExercise
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.Reps
 import com.example.liftrix.domain.model.Weight
+import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.model.common.liftrixCatching
+import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.domain.usecase.common.ErrorHandler
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import java.time.Instant
@@ -30,7 +34,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class CreateTemplateFromSessionUseCase @Inject constructor(
-    private val templateRepository: WorkoutTemplateRepository
+    private val templateRepository: WorkoutTemplateRepository,
+    private val errorHandler: ErrorHandler
 ) {
     
     /**
@@ -39,14 +44,31 @@ class CreateTemplateFromSessionUseCase @Inject constructor(
      * @param session The active workout session to convert
      * @param templateName Custom name for the template
      * @param templateDescription Optional description for the template
-     * @return Result containing the created template or error
+     * @return LiftrixResult containing the created template or error
      */
     suspend operator fun invoke(
         session: UnifiedWorkoutSession,
         templateName: String,
         templateDescription: String? = null
-    ): Result<WorkoutTemplate> {
-        return try {
+    ): LiftrixResult<WorkoutTemplate> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                when (throwable) {
+                    is IllegalArgumentException -> LiftrixError.ValidationError(
+                        field = when {
+                            throwable.message?.contains("Template name") == true -> "templateName"
+                            throwable.message?.contains("empty workout") == true -> "session"
+                            else -> "input"
+                        },
+                        violations = listOf(throwable.message ?: "Invalid input parameters")
+                    )
+                    else -> LiftrixError.DatabaseError(
+                        errorMessage = "Failed to create template from session",
+                        operation = "createTemplate"
+                    )
+                }
+            }
+        ) {
             validateInput(session, templateName)
             
             val template = convertSessionToTemplate(
@@ -55,10 +77,7 @@ class CreateTemplateFromSessionUseCase @Inject constructor(
                 templateDescription = templateDescription?.trim()?.takeIf { it.isNotBlank() }
             )
             
-            templateRepository.createTemplate(template)
-            
-        } catch (e: Exception) {
-            Result.failure(e)
+            templateRepository.createTemplate(template).getOrThrow()
         }
     }
     

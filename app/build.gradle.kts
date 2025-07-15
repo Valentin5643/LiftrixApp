@@ -149,6 +149,7 @@ dependencies {
     implementation(libs.firebase.ai)
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.perf)
+    implementation(libs.firebase.config)
     
     // Google Play Billing
     implementation("com.android.billingclient:billing-ktx:6.0.1")
@@ -183,6 +184,11 @@ dependencies {
     
     // Logging
     implementation(libs.timber)
+    
+    // Export Libraries
+    implementation(libs.itext7.core)
+    implementation(libs.itext7.layout)
+    implementation(libs.commons.csv)
     
     // Missing dependencies for KSP and ASM instrumentation
     implementation(libs.androidx.window)

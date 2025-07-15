@@ -29,11 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.repository.DurationDataPoint
-import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
-import com.patrykandpatrick.vico.core.cartesian.data.columnSeries
-import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
-import com.patrykandpatrick.vico.compose.cartesian.layer.rememberColumnCartesianLayer
-import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
+// Vico imports temporarily removed for simplified placeholder implementation
 
 import kotlin.math.roundToInt
 
@@ -173,30 +169,20 @@ private fun DurationBarChart(
     data: List<DurationDataPoint>,
     modifier: Modifier = Modifier
 ) {
-    val modelProducer = remember { CartesianChartModelProducer() }
-    
-    // Transform data to chart entries
-    val chartEntries = remember(data) {
-        data.map { it.durationMinutes.toFloat() }
-    }
-    
-    // Update chart data using LaunchedEffect for suspend function
-    LaunchedEffect(chartEntries) {
-        modelProducer.runTransaction {
-            columnSeries {
-                series(chartEntries)
-            }
-        }
-    }
-    
-    // Create the chart using Vico compose API with proper axes
-    CartesianChartHost(
-        rememberCartesianChart(
-            rememberColumnCartesianLayer()
-        ),
-        modelProducer,
+    // Simplified placeholder implementation while Vico integration is stabilized
+    Box(
         modifier = modifier
-    )
+            .fillMaxWidth()
+            .height(200.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "Duration Chart\n${data.size} workouts",
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        )
+    }
 }
 
 /**

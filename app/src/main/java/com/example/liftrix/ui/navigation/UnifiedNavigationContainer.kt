@@ -1,0 +1,651 @@
+package com.example.liftrix.ui.navigation
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
+import com.example.liftrix.ui.common.LiveSessionBar
+import com.example.liftrix.ui.home.HomeScreen
+import com.example.liftrix.ui.workout.WorkoutScreen
+import com.example.liftrix.ui.progress.ProgressDashboardScreen
+import com.example.liftrix.ui.coach.CoachScreen
+import com.example.liftrix.ui.social.SocialViewModel
+import com.example.liftrix.ui.social.SocialEvent
+import com.example.liftrix.service.UnifiedWorkoutSessionManager
+import javax.inject.Inject
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.launch
+
+/**
+ * Unified Navigation Container with Type-Safe Routes
+ * 
+ * This container replaces string-based navigation with type-safe LiftrixRoute sealed classes,
+ * providing compile-time route validation and eliminating runtime navigation errors.
+ * 
+ * Key features:
+ * - Type-safe navigation using LiftrixRoute sealed classes
+ * - Single NavHost handling all app navigation
+ * - Extension functions for clean navigation API
+ * - Deep linking support through kotlinx.serialization
+ * - Persistent live session bar across all screens
+ * - Global TopAppBar with settings and navigation
+ * - Backward compatibility maintained during transition
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun UnifiedNavigationContainer(
+    navController: NavHostController = rememberNavController(),
+    viewModel: UnifiedNavigationViewModel = hiltViewModel()
+) {
+    val currentSession by viewModel.currentSession.collectAsState()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = navBackStackEntry?.destination
+    
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        topBar = {
+            NavigationAwareTopAppBar(
+                navController = navController,
+                currentDestination = currentDestination
+            )
+        },
+        bottomBar = {
+            BottomNavigationBar(
+                navController = navController,
+                currentDestination = currentDestination
+            )
+        }
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            // Type-safe navigation with LiftrixRoute sealed classes
+            NavHost(
+                navController = navController,
+                startDestination = LiftrixRoute.Home,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                composable<LiftrixRoute.Home> {
+                    HomeScreen(
+                        onNavigateToWorkout = {
+                            navController.navigateToWorkout()
+                        },
+                        onNavigateToFriends = {
+                            navController.navigateToFriends()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.Workout> {
+                    WorkoutScreen(
+                        onNavigateToActiveWorkout = { templateId ->
+                            navController.navigateToActiveWorkout(templateId)
+                        },
+                        onNavigateToTemplateCreation = {
+                            navController.navigateToTemplateCreation()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.Progress> {
+                    ProgressDashboardScreen()
+                }
+                
+                composable<LiftrixRoute.Coach> {
+                    CoachScreen()
+                }
+                
+                composable<LiftrixRoute.Friends> {
+                    com.example.liftrix.ui.social.FriendsScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.WorkoutDetails> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.WorkoutDetails>()
+                    // TODO: Implement WorkoutDetailsScreen
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Workout Details Screen")
+                            Text("Workout ID: ${route.workoutId}")
+                            Button(
+                                onClick = { navController.popBackStackSafely() }
+                            ) {
+                                Text("Back")
+                            }
+                        }
+                    }
+                }
+                
+                composable<LiftrixRoute.ExerciseSelection> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.ExerciseSelection>()
+                    com.example.liftrix.ui.workout.selection.ExerciseSelectionScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        },
+                        onExerciseSelected = { exerciseLibrary ->
+                            if (route.isForTemplate) {
+                                // Pass selected exercise back to template creation
+                                navController.previousBackStackEntry?.savedStateHandle?.set(
+                                    "selected_exercise", 
+                                    exerciseLibrary
+                                )
+                                navController.popBackStackSafely()
+                            } else {
+                                // Add exercise to current session
+                                viewModel.addExerciseToCurrentSession(exerciseLibrary)
+                                navController.popBackStackSafely()
+                            }
+                        },
+                        onCreateCustomExercise = {
+                            // TODO: Navigate to custom exercise creation when implemented
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.ActiveWorkout> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.ActiveWorkout>()
+                    com.example.liftrix.ui.workout.active.UnifiedActiveWorkoutScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        },
+                        onAddExercise = {
+                            navController.navigateToExerciseSelection()
+                        },
+                        onNavigateToExercise = { exerciseId ->
+                            navController.navigateToExerciseDetails(exerciseId)
+                        },
+                        savedStateHandle = backStackEntry.savedStateHandle,
+                        isBlankWorkout = route.isBlankWorkout,
+                        templateId = route.templateId
+                    )
+                }
+                
+                composable<LiftrixRoute.TemplateCreation> { backStackEntry ->
+                    com.example.liftrix.ui.workout.create.WorkoutTemplateCreationScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        },
+                        onNavigateToExerciseSelection = {
+                            navController.navigateToExerciseSelection(isForTemplate = true)
+                        },
+                        savedStateHandle = backStackEntry.savedStateHandle
+                    )
+                }
+                
+                composable<LiftrixRoute.ExerciseDetails> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.ExerciseDetails>()
+                    // TODO: Implement ExerciseDetailsScreen
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Exercise Details Screen")
+                            Text("Exercise ID: ${route.exerciseId}")
+                            Button(
+                                onClick = { navController.popBackStackSafely() }
+                            ) {
+                                Text("Back")
+                            }
+                        }
+                    }
+                }
+                
+                composable<LiftrixRoute.Settings> {
+                    com.example.liftrix.ui.settings.SettingsScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        },
+                        onNavigateToProfile = {
+                            // TODO: Navigate to profile screen when implemented
+                        },
+                        onNavigateToAuth = {
+                            // TODO: Navigate to authentication screen
+                            navController.clearBackStackAndNavigate(LiftrixRoute.Home)
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.Onboarding> {
+                    com.example.liftrix.ui.onboarding.navigation.OnboardingNavigation(
+                        userId = "current_user", // TODO: Get actual user ID from auth state
+                        onComplete = {
+                            navController.clearBackStackAndNavigate(LiftrixRoute.Home)
+                        },
+                        onSkip = {
+                            navController.clearBackStackAndNavigate(LiftrixRoute.Home)
+                        }
+                    )
+                }
+            }
+            
+            // Persistent live session bar - only show if session exists and not on active workout screen
+            if (currentSession?.isLive() == true && 
+                currentDestination?.route?.contains("ActiveWorkout") != true) {
+                
+                LiveSessionBar(
+                    session = currentSession,
+                    onBarClick = {
+                        // Navigate to active workout screen - continue existing session
+                        val sessionTemplateId = currentSession!!.templateId
+                        navController.navigateToActiveWorkout(
+                            templateId = sessionTemplateId,
+                            isBlankWorkout = false
+                        )
+                    },
+                    onPauseResume = {
+                        viewModel.togglePauseResume()
+                    },
+                    onStopSession = {
+                        viewModel.showStopSessionDialog()
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 80.dp) // Account for bottom navigation
+                )
+            }
+        }
+    }
+    
+    // Handle stop session dialog
+    if (viewModel.showStopDialog) {
+        StopWorkoutDialog(
+            onConfirm = {
+                viewModel.completeWorkout()
+                viewModel.dismissStopDialog()
+            },
+            onDismiss = {
+                viewModel.dismissStopDialog()
+            },
+            onDiscard = {
+                viewModel.discardWorkout()
+                viewModel.dismissStopDialog()
+            }
+        )
+    }
+}
+
+/**
+ * Dialog for stopping/completing workout
+ */
+@Composable
+private fun StopWorkoutDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    onDiscard: () -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            androidx.compose.material3.Text("Stop Workout")
+        },
+        text = {
+            androidx.compose.material3.Text(
+                "What would you like to do with your current workout?"
+            )
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(
+                onClick = onConfirm
+            ) {
+                androidx.compose.material3.Text("Complete & Save")
+            }
+        },
+        dismissButton = {
+            androidx.compose.foundation.layout.Row {
+                androidx.compose.material3.TextButton(
+                    onClick = onDiscard
+                ) {
+                    androidx.compose.material3.Text("Discard")
+                }
+                
+                androidx.compose.material3.TextButton(
+                    onClick = onDismiss
+                ) {
+                    androidx.compose.material3.Text("Cancel")
+                }
+            }
+        }
+    )
+}
+
+/**
+ * Bottom navigation bar with main app tabs using type-safe navigation
+ */
+@Composable
+private fun BottomNavigationBar(
+    navController: NavHostController,
+    currentDestination: androidx.navigation.NavDestination?
+) {
+    val items = listOf(
+        BottomNavItem(LiftrixRoute.Home, "Home", Icons.Default.Home),
+        BottomNavItem(LiftrixRoute.Workout, "Workout", Icons.Default.FitnessCenter),
+        BottomNavItem(LiftrixRoute.Progress, "Progress", Icons.Default.TrendingUp),
+        BottomNavItem(LiftrixRoute.Coach, "Coach", Icons.Default.Psychology)
+    )
+    
+    NavigationBar {
+        items.forEach { item ->
+            val selected = currentDestination?.hierarchy?.any { 
+                it.route?.contains(item.route::class.simpleName.orEmpty()) == true 
+            } == true
+            
+            NavigationBarItem(
+                icon = {
+                    Icon(
+                        imageVector = item.icon,
+                        contentDescription = item.label
+                    )
+                },
+                label = {
+                    Text(item.label)
+                },
+                selected = selected,
+                onClick = {
+                    navController.navigate(item.route) {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            )
+        }
+    }
+}
+
+/**
+ * Data class for bottom navigation items with type-safe routes
+ */
+private data class BottomNavItem(
+    val route: LiftrixRoute,
+    val label: String,
+    val icon: ImageVector
+)
+
+/**
+ * ViewModel for unified navigation container
+ */
+@HiltViewModel
+class UnifiedNavigationViewModel @Inject constructor(
+    private val sessionManager: UnifiedWorkoutSessionManager
+) : ViewModel() {
+    
+    // Direct access to current session
+    val currentSession = sessionManager.currentSession
+    
+    // Stop dialog state
+    private val _showStopDialog = androidx.compose.runtime.mutableStateOf(false)
+    val showStopDialog: Boolean by _showStopDialog
+    
+    /**
+     * Toggles pause/resume for the current session
+     */
+    fun togglePauseResume() {
+        val session = currentSession.value
+        if (session == null) {
+            timber.log.Timber.w("Cannot toggle pause/resume - no active session")
+            return
+        }
+        
+        when (session.sessionStatus) {
+            com.example.liftrix.domain.model.UnifiedWorkoutSession.SessionStatus.ACTIVE -> {
+                sessionManager.pauseSession()
+            }
+            com.example.liftrix.domain.model.UnifiedWorkoutSession.SessionStatus.PAUSED -> {
+                sessionManager.resumeSession()
+            }
+            com.example.liftrix.domain.model.UnifiedWorkoutSession.SessionStatus.COMPLETED -> {
+                // Do nothing - session already completed
+            }
+        }
+    }
+    
+    /**
+     * Shows the stop session dialog
+     */
+    fun showStopSessionDialog() {
+        _showStopDialog.value = true
+    }
+    
+    /**
+     * Dismisses the stop session dialog
+     */
+    fun dismissStopDialog() {
+        _showStopDialog.value = false
+    }
+    
+    /**
+     * Completes the current workout
+     */
+    fun completeWorkout() {
+        viewModelScope.launch {
+            try {
+                val success = sessionManager.completeSession()
+                if (success) {
+                    timber.log.Timber.i("Workout completed from navigation")
+                } else {
+                    timber.log.Timber.w("Failed to complete workout from navigation")
+                }
+            } catch (e: Exception) {
+                timber.log.Timber.e(e, "Error completing workout from navigation")
+            }
+        }
+    }
+    
+    /**
+     * Discards the current workout
+     */
+    fun discardWorkout() {
+        viewModelScope.launch {
+            try {
+                sessionManager.discardSession()
+                timber.log.Timber.i("Workout discarded from navigation")
+            } catch (e: Exception) {
+                timber.log.Timber.e(e, "Error discarding workout from navigation")
+            }
+        }
+    }
+    
+    /**
+     * Adds an exercise to the current active session
+     */
+    fun addExerciseToCurrentSession(exerciseLibrary: com.example.liftrix.domain.model.ExerciseLibrary) {
+        viewModelScope.launch {
+            try {
+                // Convert ExerciseLibrary to SessionExercise
+                val sessionExercise = com.example.liftrix.domain.model.SessionExercise(
+                    exerciseId = com.example.liftrix.domain.model.ExerciseId(exerciseLibrary.id),
+                    name = exerciseLibrary.name,
+                    category = exerciseLibrary.primaryMuscleGroup,
+                    primaryMuscle = exerciseLibrary.primaryMuscleGroup,
+                    equipment = exerciseLibrary.equipment,
+                    secondaryMuscles = exerciseLibrary.secondaryMuscleGroups.toSet(),
+                    sets = emptyList(),
+                    orderIndex = 0 // Will be set by session manager
+                )
+                sessionManager.addExerciseToSession(sessionExercise)
+                timber.log.Timber.i("Added exercise to current session: ${exerciseLibrary.name}")
+            } catch (e: Exception) {
+                timber.log.Timber.e(e, "Error adding exercise to session: ${exerciseLibrary.name}")
+            }
+        }
+    }
+}
+
+/**
+ * Navigation-aware top app bar that dynamically shows content based on current route.
+ * 
+ * Features:
+ * - Global top bar with settings button for main tabs
+ * - Screen-specific top bars with back navigation for detail screens
+ * - Screen titles for proper navigation hierarchy
+ * - Refresh functionality for Friends screen
+ * - Type-safe route handling with LiftrixRoute sealed classes
+ * 
+ * @param navController Navigation controller for handling back navigation
+ * @param currentDestination Current navigation destination
+ */
+@Composable
+private fun NavigationAwareTopAppBar(
+    navController: NavHostController,
+    currentDestination: androidx.navigation.NavDestination?
+) {
+    val currentRoute = currentDestination?.route
+    
+    // Define screens that should show back navigation with custom titles
+    val routeTitles = mapOf(
+        "Settings" to "Settings",
+        "Friends" to "Friends", 
+        "ActiveWorkout" to "Active Workout",
+        "TemplateCreation" to "Create Template",
+        "ExerciseSelection" to "Add Exercise",
+        "WorkoutDetails" to "Workout Details",
+        "ExerciseDetails" to "Exercise Details"
+    )
+    
+    // Check if current route is a main tab (should show global top bar)
+    val isMainTab = currentRoute?.contains("Home") == true ||
+                   currentRoute?.contains("Workout") == true ||
+                   currentRoute?.contains("Progress") == true ||
+                   currentRoute?.contains("Coach") == true
+    
+    // Check if current route should show back navigation
+    val shouldShowBackNavigation = routeTitles.keys.any { 
+        currentRoute?.contains(it) == true 
+    }
+    
+    TopAppBar(
+        title = {
+            val title = when {
+                shouldShowBackNavigation -> {
+                    // Find matching title for current route
+                    routeTitles.entries.find { (key, _) -> 
+                        currentRoute?.contains(key) == true 
+                    }?.value ?: "Back"
+                }
+                else -> ""
+            }
+            
+            if (title.isNotEmpty()) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        navigationIcon = {
+            if (shouldShowBackNavigation) {
+                IconButton(
+                    onClick = {
+                        navController.popBackStackSafely()
+                    },
+                    modifier = Modifier.semantics {
+                        contentDescription = "Navigate back"
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        },
+        actions = {
+            // Show refresh button specifically for Friends screen
+            if (currentRoute?.contains("Friends") == true) {
+                // Get SocialViewModel instance for refresh functionality  
+                val socialViewModel: SocialViewModel = hiltViewModel()
+                
+                IconButton(
+                    onClick = {
+                        socialViewModel.onEvent(SocialEvent.Refresh)
+                    },
+                    modifier = Modifier.semantics {
+                        contentDescription = "Refresh friends"
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Sync,
+                        contentDescription = "Refresh",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+            
+            // Show settings button on all screens EXCEPT when already in settings
+            if (currentRoute?.contains("Settings") != true) {
+                IconButton(
+                    onClick = {
+                        navController.navigate(LiftrixRoute.Settings)
+                    },
+                    modifier = Modifier.semantics {
+                        contentDescription = "Open settings"
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Settings",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            actionIconContentColor = MaterialTheme.colorScheme.onSurface
+        )
+    )
+}

@@ -32,7 +32,7 @@ typealias LiftrixResult<T> = Result<T>
  * Example:
  * ```
  * val result = runCatching { workoutRepository.create(workout) }
- *     .mapError { LiftrixError.DatabaseError(errorCause = it) }
+ *     .mapError { LiftrixError.DatabaseError("Database operation failed") }
  * ```
  */
 fun <T> LiftrixResult<T>.mapError(transform: (Throwable) -> LiftrixError): LiftrixResult<T> {
@@ -210,7 +210,7 @@ fun <T> liftrixFailure(error: LiftrixError): LiftrixResult<T> = Result.failure(e
  * Example:
  * ```
  * val result = liftrixCatching(
- *     errorMapper = { LiftrixError.DatabaseError(errorCause = it) }
+ *     errorMapper = { LiftrixError.DatabaseError("Database operation failed") }
  * ) {
  *     workoutDao.insertWorkout(workout)
  * }

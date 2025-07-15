@@ -2,10 +2,11 @@ package com.example.liftrix.domain.usecase.exercise
 
 import com.example.liftrix.domain.model.CustomExercise
 import com.example.liftrix.domain.model.Equipment
+import com.example.liftrix.domain.model.ExerciseGroup
 import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.CustomExerciseRepository
-import com.example.liftrix.domain.repository.ExerciseLibraryRepository
+import com.example.liftrix.domain.repository.exercise.ExerciseRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -15,7 +16,7 @@ import javax.inject.Inject
  * Use case for getting exercise variations based on movement patterns and equipment
  */
 class GetExerciseVariationsUseCase @Inject constructor(
-    private val exerciseLibraryRepository: ExerciseLibraryRepository,
+    private val exerciseRepository: ExerciseRepository,
     private val customExerciseRepository: CustomExerciseRepository,
     private val authRepository: AuthRepository
 ) {
@@ -31,7 +32,7 @@ class GetExerciseVariationsUseCase @Inject constructor(
         
         return if (userId != null) {
             combine(
-                exerciseLibraryRepository.getAllExercises(),
+                exerciseRepository.getAllExercisesFlow(),
                 customExerciseRepository.getAllCustomExercises(userId)
             ) { libraryExercises, customExercises ->
                 val baseExercise = libraryExercises.find { it.id == exerciseId }
@@ -63,7 +64,7 @@ class GetExerciseVariationsUseCase @Inject constructor(
                 }
             }
         } else {
-            exerciseLibraryRepository.getAllExercises().map { libraryExercises ->
+            exerciseRepository.getAllExercisesFlow().map { libraryExercises ->
                 val baseExercise = libraryExercises.find { it.id == exerciseId }
                 
                 if (baseExercise != null) {
@@ -101,7 +102,7 @@ class GetExerciseVariationsUseCase @Inject constructor(
         
         return if (userId != null) {
             combine(
-                exerciseLibraryRepository.getVariationsByMovement(movementPattern, userEquipment),
+                exerciseRepository.getVariationsByMovement(movementPattern, userEquipment),
                 customExerciseRepository.getAllCustomExercises(userId)
             ) { libraryVariations, customExercises ->
                 val customVariations = customExercises.filter { 
@@ -116,7 +117,7 @@ class GetExerciseVariationsUseCase @Inject constructor(
                 )
             }
         } else {
-            exerciseLibraryRepository.getVariationsByMovement(movementPattern, userEquipment).map { variations ->
+            exerciseRepository.getVariationsByMovement(movementPattern, userEquipment).map { variations ->
                 ExerciseGroup(
                     movementPattern = movementPattern,
                     libraryVariations = variations,
@@ -130,7 +131,7 @@ class GetExerciseVariationsUseCase @Inject constructor(
      * Get all available movement patterns
      */
     fun getAvailableMovementPatterns(): Flow<List<String>> {
-        return exerciseLibraryRepository.getAllExercises().map { exercises ->
+        return exerciseRepository.getAllExercisesFlow().map { exercises ->
             exercises.map { it.movementPattern }.distinct().sorted()
         }
     }
@@ -147,7 +148,7 @@ class GetExerciseVariationsUseCase @Inject constructor(
         
         return if (userId != null) {
             combine(
-                exerciseLibraryRepository.getFilteredExercises(
+                exerciseRepository.getFilteredExercises(
                     muscleGroup = null,
                     equipment = null,
                     isCompound = null,
@@ -175,7 +176,7 @@ class GetExerciseVariationsUseCase @Inject constructor(
                 )
             }
         } else {
-            exerciseLibraryRepository.getFilteredExercises(
+            exerciseRepository.getFilteredExercises(
                 muscleGroup = null,
                 equipment = null,
                 isCompound = null,

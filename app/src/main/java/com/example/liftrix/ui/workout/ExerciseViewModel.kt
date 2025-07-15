@@ -3,7 +3,8 @@ package com.example.liftrix.ui.workout
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.WorkoutId
-import com.example.liftrix.domain.repository.ExerciseLibraryRepository
+import com.example.liftrix.domain.repository.exercise.ExerciseRepository
+import com.example.liftrix.domain.model.common.LiftrixResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,7 +19,7 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class ExerciseViewModel @Inject constructor(
-    private val exerciseLibraryRepository: ExerciseLibraryRepository
+    private val exerciseRepository: ExerciseRepository
 ) : ViewModel() {
 
     private val _uiState: MutableStateFlow<ExerciseUiState> = MutableStateFlow(ExerciseUiState())
@@ -31,12 +32,22 @@ class ExerciseViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-                exerciseLibraryRepository.getAllExercises()
-                    .collect { exerciseLibraries ->
-                        val exercises = exerciseLibraries.map { it.toExercise(WorkoutId.generate(), 0) }
-                        _uiState.value = _uiState.value.copy(
-                            exercises = exercises,
-                            isLoading = false
+                exerciseRepository.getAllExercises()
+                    .collect { result ->
+                        result.fold(
+                            onSuccess = { exerciseLibraries ->
+                                val exercises = exerciseLibraries.map { it.toExercise(WorkoutId.generate(), 0) }
+                                _uiState.value = _uiState.value.copy(
+                                    exercises = exercises,
+                                    isLoading = false
+                                )
+                            },
+                            onFailure = { exception ->
+                                _uiState.value = _uiState.value.copy(
+                                    isLoading = false,
+                                    errorMessage = "Failed to load exercises: ${exception.message}"
+                                )
+                            }
                         )
                     }
             } catch (exception: Exception) {
@@ -56,15 +67,23 @@ class ExerciseViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-                exerciseLibraryRepository.searchExercises(query)
-                    .collect { exerciseLibraries ->
+                val searchResult = exerciseRepository.searchExercises(query)
+                searchResult.fold(
+                    onSuccess = { exerciseLibraries ->
                         val exercises = exerciseLibraries.map { it.toExercise(WorkoutId.generate(), 0) }
                         _uiState.value = _uiState.value.copy(
                             exercises = exercises,
                             isLoading = false,
                             searchQuery = query
                         )
+                    },
+                    onFailure = { exception ->
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            errorMessage = "Failed to search exercises: ${exception.message}"
+                        )
                     }
+                )
             } catch (exception: Exception) {
                 Timber.e(exception, "Failed to search exercises")
                 _uiState.value = _uiState.value.copy(

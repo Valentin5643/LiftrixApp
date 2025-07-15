@@ -5,28 +5,39 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import androidx.navigation.navDeepLink
 import androidx.navigation.navigation
+import androidx.navigation.toRoute
 import com.example.liftrix.ui.home.HomeScreen
 import com.example.liftrix.ui.social.FriendsScreen
 
 /**
- * Navigation graph for the Home tab.
+ * DEPRECATED: Legacy Home Navigation Graph
  * 
- * Defines the navigation structure for the Home section of the app, including
- * the main home screen and any nested destinations within the home flow.
+ * This file is maintained for backward compatibility during the migration to
+ * type-safe navigation with LiftrixRoute sealed classes. All navigation is now
+ * handled centrally in UnifiedNavigationContainer.kt.
  * 
- * Features:
- * - Independent navigation stack for home functionality
- * - Deep linking support for home-related routes
- * - Settings screen integration with proper navigation callbacks
+ * @deprecated Use UnifiedNavigationContainer with LiftrixRoute sealed classes instead
  * 
- * @param onNavigateToAuth Callback to navigate to authentication flow
- * @param onNavigateToWorkout Callback to navigate to workout creation
+ * Migration Notes:
+ * - HomeRoutes.HOME_MAIN → LiftrixRoute.Home
+ * - HomeRoutes.FRIENDS → LiftrixRoute.Friends
+ * - All string-based routes replaced with type-safe LiftrixRoute variants
+ * - Deep linking now handled through kotlinx.serialization in LiftrixRoute
+ * 
+ * This file can be removed once all consumers are migrated to the unified navigation system.
  */
+@Deprecated(
+    message = "Use UnifiedNavigationContainer with LiftrixRoute sealed classes instead",
+    replaceWith = ReplaceWith("UnifiedNavigationContainer", "com.example.liftrix.ui.navigation.UnifiedNavigationContainer")
+)
 fun NavGraphBuilder.homeGraph(
     onNavigateToAuth: () -> Unit,
     onNavigateToWorkout: () -> Unit = {},
     navController: NavHostController
 ) {
+    // This function is deprecated and should not be used in new code
+    // All navigation is now handled by UnifiedNavigationContainer with type-safe routes
+    
     navigation(
         startDestination = HomeRoutes.HOME_MAIN,
         route = MainNavigationItem.HOME.route
@@ -34,20 +45,21 @@ fun NavGraphBuilder.homeGraph(
         composable(HomeRoutes.HOME_MAIN) {
             HomeScreen(
                 onNavigateToWorkout = { workoutId ->
-                    // Navigate to workout details - this will be handled by the workout navigation
-                    // For now, we'll navigate to the workout tab
+                    // Legacy navigation - replaced by type-safe LiftrixRoute.WorkoutDetails
                     onNavigateToWorkout()
                 },
                 onNavigateToFriends = {
+                    // Legacy navigation - replaced by LiftrixRoute.Friends
                     navController.navigate(HomeRoutes.FRIENDS)
                 },
                 onNavigateToMyWorkouts = {
+                    // Legacy navigation - functionality moved to Progress screen
                     navController.navigate(HomeRoutes.MY_WORKOUTS)
                 }
             )
         }
         
-        // Friends screen with deep link support for friend requests
+        // Friends screen with deep link support
         composable(
             route = HomeRoutes.FRIENDS,
             deepLinks = listOf(
@@ -63,25 +75,23 @@ fun NavGraphBuilder.homeGraph(
             )
         }
         
-        
-        // My Workouts screen for workout history - placeholder
+        // My Workouts screen - functionality moved to Progress dashboard
         composable(HomeRoutes.MY_WORKOUTS) {
-            // TODO: Implement MyWorkoutsScreen or redirect to workout history
-            // For now, navigate back
+            // Redirect to progress screen which now handles workout history
             navController.popBackStack()
         }
-        
-        // Future home-related destinations can be added here
-        // For example:
-        // - Workout details from home
-        // - Recent workout history
-        // - User profile quick access
     }
 }
 
 /**
- * Route definitions for the Home navigation graph.
+ * DEPRECATED: Legacy Route definitions for the Home navigation graph.
+ * 
+ * @deprecated Use LiftrixRoute sealed classes instead
  */
+@Deprecated(
+    message = "Use LiftrixRoute sealed classes instead", 
+    replaceWith = ReplaceWith("LiftrixRoute", "com.example.liftrix.ui.navigation.LiftrixRoute")
+)
 object HomeRoutes {
     const val HOME_MAIN = "home/main"
     const val FRIENDS = "home/friends"

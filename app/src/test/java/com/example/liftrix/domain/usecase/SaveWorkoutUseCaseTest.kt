@@ -1,7 +1,7 @@
 package com.example.liftrix.domain.usecase
 
 import com.example.liftrix.TestDataFactory
-import com.example.liftrix.data.repository.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk

@@ -55,11 +55,18 @@ class WorkoutTemplatesDashboardViewModel @Inject constructor(
                 val userId = getCurrentUserIdUseCase() ?: return@launch
                 _uiState.value = WorkoutTemplatesDashboardUiState.Loading
                 
-                workoutTemplateRepository.getAllTemplatesForUser(userId).collect { templates ->
-                    _uiState.value = WorkoutTemplatesDashboardUiState.Success(
-                        templates = templates,
-                        filteredTemplates = templates
-                    )
+                workoutTemplateRepository.getAllTemplatesForUser(userId).collect { result ->
+                    if (result.isSuccess) {
+                        val templates = result.getOrElse { emptyList() }
+                        _uiState.value = WorkoutTemplatesDashboardUiState.Success(
+                            templates = templates,
+                            filteredTemplates = templates
+                        )
+                    } else {
+                        _uiState.value = WorkoutTemplatesDashboardUiState.Error(
+                            message = result.exceptionOrNull()?.message ?: "Failed to load templates"
+                        )
+                    }
                 }
             } catch (exception: Exception) {
                 _uiState.value = WorkoutTemplatesDashboardUiState.Error(

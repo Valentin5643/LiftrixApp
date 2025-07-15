@@ -42,8 +42,13 @@ class StartWorkoutSessionUseCase @Inject constructor(
             }
             
             // Get the template
-            val template = workoutTemplateRepository.getTemplateById(templateId, userId)
+            val templateResult = workoutTemplateRepository.getTemplateById(templateId, userId)
+            if (templateResult.isFailure) {
+                Timber.w("Failed to get template: ${templateId.value}")
+                return Result.failure(templateResult.exceptionOrNull() ?: Exception("Failed to get template"))
+            }
             
+            val template = templateResult.getOrNull()
             if (template == null) {
                 Timber.w("Template not found: ${templateId.value}")
                 return Result.failure(Exception("Workout template not found"))

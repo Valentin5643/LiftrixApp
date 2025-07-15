@@ -10,6 +10,9 @@ import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.repository.ExerciseLibraryRepository
+import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.model.common.liftrixCatching
+import com.example.liftrix.domain.model.error.LiftrixError
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -117,8 +120,21 @@ class ExerciseLibraryRepositoryImpl @Inject constructor(
         query: String,
         equipment: Set<Equipment>?,
         muscleGroups: Set<ExerciseCategory>?
-    ): Result<List<ExerciseLibrary>> {
-        return try {
+    ): LiftrixResult<List<ExerciseLibrary>> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.DatabaseError(
+                    errorMessage = "Failed to search exercises",
+                    operation = "READ",
+                    table = "exercise_library",
+                    analyticsContext = mapOf(
+                        "query" to query,
+                        "equipment_count" to (equipment?.size?.toString() ?: "0"),
+                        "muscle_groups_count" to (muscleGroups?.size?.toString() ?: "0")
+                    )
+                )
+            }
+        ) {
             val allExercises = dao.getAllExercises().first()
             val domainExercises = mapper.toDomainList(allExercises)
             
@@ -144,14 +160,24 @@ class ExerciseLibraryRepositoryImpl @Inject constructor(
                     }
                 }
             
-            Result.success(filteredExercises)
-        } catch (e: Exception) {
-            Result.failure(e)
+            filteredExercises
         }
     }
     
-    override suspend fun getRecentExercises(userId: String, limit: Int): Result<List<ExerciseLibrary>> {
-        return try {
+    override suspend fun getRecentExercises(userId: String, limit: Int): LiftrixResult<List<ExerciseLibrary>> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.DatabaseError(
+                    errorMessage = "Failed to get recent exercises",
+                    operation = "READ",
+                    table = "exercise_usage_history",
+                    analyticsContext = mapOf(
+                        "user_id" to userId,
+                        "limit" to limit.toString()
+                    )
+                )
+            }
+        ) {
             val recentExerciseIds = usageHistoryDao.getRecentExerciseIds(userId, limit)
             val allExercises = dao.getAllExercises().first()
             val domainExercises = mapper.toDomainList(allExercises)
@@ -161,9 +187,7 @@ class ExerciseLibraryRepositoryImpl @Inject constructor(
                 domainExercises.find { it.id == exerciseId }
             }
             
-            Result.success(recentExercises)
-        } catch (e: Exception) {
-            Result.failure(e)
+            recentExercises
         }
     }
     

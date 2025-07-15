@@ -115,6 +115,12 @@ interface ProgressStatsRepository {
         userId: String,
         timeRange: TimeRange
     ): Flow<LiftrixResult<DashboardData>>
+    
+    // Analytics sync methods for AnalyticsSyncWorker
+    suspend fun getPendingSyncCalculations(userId: String): List<com.example.liftrix.sync.AnalyticsCalculation>
+    suspend fun markCalculationsAsSynced(userId: String, calculationIds: List<String>)
+    suspend fun queueCalculationForSync(calculation: com.example.liftrix.sync.AnalyticsCalculation)
+    suspend fun getUnsyncedCalculationsCount(userId: String): Int
 }
 
 /**

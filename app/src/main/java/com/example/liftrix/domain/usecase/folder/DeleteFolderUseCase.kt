@@ -63,13 +63,17 @@ class DeleteFolderUseCase @Inject constructor(
             
             // Move all templates from this folder to the default folder
             if (folder.templateCount > 0) {
-                val templates = workoutTemplateRepository.getTemplatesByFolder(input.userId, folder.id.value).first()
+                val templatesResult = workoutTemplateRepository.getTemplatesByFolder(input.userId, folder.id.value).first()
+                if (templatesResult.isFailure) {
+                    return Result.failure(templatesResult.exceptionOrNull()!!)
+                }
+                val templates = templatesResult.getOrThrow()
                 
                 // Move each template to default folder
-                templates.forEach { template ->
+                for (template in templates) {
                     val moveResult = folderRepository.moveTemplateToFolder(
                         templateId = template.id.value,
-                        targetFolderId = defaultFolder.id,
+                        targetFolderId = FolderId(defaultFolder.id.value),
                         userId = input.userId
                     )
                     if (moveResult.isFailure) {
