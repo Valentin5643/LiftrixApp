@@ -100,8 +100,88 @@ sealed class LiftrixRoute {
     data object Settings : LiftrixRoute()
     
     /**
+     * Widget settings screen for customizing dashboard widgets
+     */
+    @Serializable
+    data object WidgetSettings : LiftrixRoute()
+    
+    /**
      * Onboarding flow for new user setup
      */
     @Serializable
     data object Onboarding : LiftrixRoute()
+    
+    /**
+     * Anomaly detection dashboard - view and manage workout anomalies
+     */
+    @Serializable
+    data object AnomalyDashboard : LiftrixRoute()
+    
+    /**
+     * Anomaly detection settings - configure detection sensitivity
+     */
+    @Serializable
+    data object AnomalySettings : LiftrixRoute()
+    
+    /**
+     * Calorie analytics dashboard - detailed calorie insights and goal tracking
+     */
+    @Serializable
+    data object CalorieAnalytics : LiftrixRoute()
+    
+    /**
+     * Calorie goal settings screen for setting and managing daily calorie goals
+     */
+    @Serializable
+    data object CalorieGoalSettings : LiftrixRoute()
+    
+    /**
+     * Detailed calorie history screen showing historical calorie burn data
+     * 
+     * @param timePeriod Optional time period filter (week, month, quarter, year)
+     */
+    @Serializable
+    data class CalorieHistory(
+        val timePeriod: String? = null
+    ) : LiftrixRoute()
+    
+    // Guest Mode Routes
+    
+    /**
+     * Guest mode selection screen shown during onboarding
+     */
+    @Serializable
+    data object GuestModeSelection : LiftrixRoute()
+    
+    /**
+     * Guest session dashboard showing current limitations and conversion prompts
+     */
+    @Serializable
+    data object GuestDashboard : LiftrixRoute()
+    
+    /**
+     * Guest-to-registered conversion flow screen
+     * 
+     * @param source The source screen that triggered the conversion (e.g., "limit_reached", "nudge", "manual")
+     * @param returnTo Optional route to return to after successful conversion
+     */
+    @Serializable
+    data class GuestConversion(
+        val source: String = "manual",
+        val returnTo: String? = null
+    ) : LiftrixRoute()
+    
+    // Authentication Routes
+    
+    /**
+     * Sign-up screen for new user registration
+     */
+    @Serializable
+    data object AuthSignUp : LiftrixRoute()
+    
+    /**
+     * Sign-in screen for existing user authentication
+     */
+    @Serializable
+    data object AuthSignIn : LiftrixRoute()
 }

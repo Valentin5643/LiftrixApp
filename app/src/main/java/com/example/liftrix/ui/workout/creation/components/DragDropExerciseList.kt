@@ -110,16 +110,6 @@ fun DragDropExerciseList(
                     contentPadding = PaddingValues(vertical = 4.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(
-                            when {
-                                exercises.isEmpty() -> 100.dp
-                                exercises.size == 1 -> 200.dp
-                                exercises.size == 2 -> 300.dp
-                                exercises.size == 3 -> 400.dp
-                                exercises.size >= 4 -> 500.dp
-                                else -> 300.dp
-                            }
-                        )
                         .semantics {
                             contentDescription = "Draggable exercise list. Long press and drag to reorder exercises."
                         }

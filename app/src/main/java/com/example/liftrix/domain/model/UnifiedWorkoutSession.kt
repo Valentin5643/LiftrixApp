@@ -52,6 +52,10 @@ data class UnifiedWorkoutSession(
                 require(endedAt != null) { "Completed session must have end time" }
                 require(endedAt!! >= startedAt) { "End time must be after start time" }
             }
+            SessionStatus.FAILED_TO_SAVE -> {
+                require(endedAt != null) { "Failed to save session must have end time" }
+                require(endedAt!! >= startedAt) { "End time must be after start time" }
+            }
         }
         
         notes?.let { n ->
@@ -63,9 +67,10 @@ data class UnifiedWorkoutSession(
      * Session status - simplified from complex state machine
      */
     enum class SessionStatus {
-        ACTIVE,     // Currently working out
-        PAUSED,     // Temporarily paused
-        COMPLETED   // Finished and saved
+        ACTIVE,         // Currently working out
+        PAUSED,         // Temporarily paused
+        COMPLETED,      // Finished and saved
+        FAILED_TO_SAVE  // Completed but failed to save, ready for retry
     }
 
     companion object {
@@ -161,6 +166,11 @@ data class UnifiedWorkoutSession(
                     end.epochSecond - startedAt.epochSecond
                 } ?: elapsedTimeSeconds
             }
+            SessionStatus.FAILED_TO_SAVE -> {
+                endedAt?.let { end ->
+                    end.epochSecond - startedAt.epochSecond
+                } ?: elapsedTimeSeconds
+            }
         }
     }
 
@@ -205,6 +215,7 @@ data class UnifiedWorkoutSession(
             }
             SessionStatus.PAUSED -> elapsedTimeSeconds
             SessionStatus.COMPLETED -> elapsedTimeSeconds // Should not happen due to require
+            SessionStatus.FAILED_TO_SAVE -> elapsedTimeSeconds // Should not happen due to require
         }
         
         return copy(
@@ -359,7 +370,7 @@ data class UnifiedWorkoutSession(
     fun getTotalSetsCount(): Int = exercises.sumOf { it.sets.size }
 
     /**
-     * 🔥 SIMPLIFIED: Converts to completed workout for history
+     * 🔥 IMPROVED: Converts to completed workout for history with better error handling
      * No more complex dual conversion - session IS the workout
      */
     fun toCompletedWorkout(): Workout {
@@ -370,10 +381,14 @@ data class UnifiedWorkoutSession(
                 sessionExercise.toCompletedExercise()
             } catch (e: Exception) {
                 // Log error but don't crash entire conversion
-                timber.log.Timber.e(e, "Failed to convert exercise: ${sessionExercise.name}")
+                timber.log.Timber.e(e, "🔥 WORKOUT-CONVERSION: Failed to convert exercise: ${sessionExercise.name}")
                 null
             }
         }
+
+        timber.log.Timber.d("🔥 WORKOUT-CONVERSION: Converting session to workout")
+        timber.log.Timber.d("🔥 WORKOUT-CONVERSION: Session: $name with ${exercises.size} exercises")
+        timber.log.Timber.d("🔥 WORKOUT-CONVERSION: Converted: ${completedExercises.size} exercises successfully")
 
         return Workout(
             id = WorkoutId(id.value),

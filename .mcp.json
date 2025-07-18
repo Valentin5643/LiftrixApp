@@ -1,14 +1,3 @@
 {
-  "mcpServers": {
-    "sequential-thinking": {
-      "type": "stdio",
-      "command": "uv",
-      "args": [
-        "--directory",
-        "/home/vali/mcp-sequential-thinking",
-        "run",
-        "run_server.py"
-      ]
-    }
-  }
+  "mcpServers": {}
 }

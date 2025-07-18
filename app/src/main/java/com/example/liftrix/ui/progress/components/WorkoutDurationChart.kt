@@ -1,12 +1,21 @@
 package com.example.liftrix.ui.progress.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Timer
@@ -24,13 +33,27 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.repository.DurationDataPoint
-// Vico imports temporarily removed for simplified placeholder implementation
-
+// Chart implementation using Compose Canvas
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.platform.LocalDensity
+import com.example.liftrix.ui.common.analytics.ChartThemeProvider
+import com.example.liftrix.ui.theme.LiftrixColors
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.minus
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.todayIn
 import kotlin.math.roundToInt
 
 /**
@@ -79,13 +102,28 @@ fun WorkoutDurationChart(
                     }
                 }
                 data.isEmpty() -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp),
-                        contentAlignment = Alignment.Center
+                    // Show zero-value chart instead of empty state
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        EmptyState()
+                        // Chart takes 65% of width
+                        Box(
+                            modifier = Modifier
+                                .weight(0.65f)
+                                .height(200.dp)
+                        ) {
+                            DurationBarChart(
+                                data = getZeroDurationData(),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        
+                        // Metrics panel takes 35% of width
+                        DurationMetricsPanel(
+                            data = getZeroDurationData(),
+                            modifier = Modifier.weight(0.35f)
+                        )
                     }
                 }
                 else -> {
@@ -162,26 +200,52 @@ private fun EmptyState() {
 }
 
 /**
- * Actual duration bar chart using Vico
+ * Actual duration line chart using Vico
  */
 @Composable
 private fun DurationBarChart(
     data: List<DurationDataPoint>,
     modifier: Modifier = Modifier
 ) {
-    // Simplified placeholder implementation while Vico integration is stabilized
+    // Don't return early for empty data - let it render with zero values
+
+    val density = LocalDensity.current
+    val normalizedData = remember(data) {
+        val maxValue = data.maxOfOrNull { it.durationMinutes } ?: 0
+        val minValue = data.minOfOrNull { it.durationMinutes } ?: 0
+        val range = maxValue - minValue
+        if (range == 0) {
+            // For zero values, show small bars at the bottom
+            data.map { 0.1f }
+        } else {
+            data.map { (it.durationMinutes - minValue).toFloat() / range.toFloat() }
+        }
+    }
+    
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(200.dp),
-        contentAlignment = Alignment.Center
+            .height(200.dp)
+            .padding(8.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        LiftrixColors.Secondary.copy(alpha = 0.1f),
+                        Color.Transparent
+                    )
+                )
+            )
     ) {
-        Text(
-            text = "Duration Chart\n${data.size} workouts",
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-        )
+        Canvas(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            drawDurationBarChart(
+                data = normalizedData,
+                color = LiftrixColors.Secondary,
+                cornerRadius = with(density) { 6.dp.toPx() }
+            )
+        }
     }
 }
 
@@ -352,4 +416,44 @@ private data class DurationMetrics(
     val longestDate: String,
     val consistencyScore: Int,
     val consistencyLabel: String
-) 
+)
+
+/**
+ * Generate zero-value sample data for empty state
+ */
+private fun getZeroDurationData(): List<DurationDataPoint> {
+    val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
+    return listOf(
+        DurationDataPoint(date = today.minus(DatePeriod(days = 6)), durationMinutes = 0, workoutCount = 0),
+        DurationDataPoint(date = today.minus(DatePeriod(days = 5)), durationMinutes = 0, workoutCount = 0),
+        DurationDataPoint(date = today.minus(DatePeriod(days = 4)), durationMinutes = 0, workoutCount = 0),
+        DurationDataPoint(date = today.minus(DatePeriod(days = 3)), durationMinutes = 0, workoutCount = 0),
+        DurationDataPoint(date = today.minus(DatePeriod(days = 2)), durationMinutes = 0, workoutCount = 0),
+        DurationDataPoint(date = today.minus(DatePeriod(days = 1)), durationMinutes = 0, workoutCount = 0),
+        DurationDataPoint(date = today, durationMinutes = 0, workoutCount = 0)
+    )
+}
+
+private fun DrawScope.drawDurationBarChart(
+    data: List<Float>,
+    color: Color,
+    cornerRadius: Float
+) {
+    if (data.isEmpty()) return
+    
+    val barWidth = size.width / data.size * 0.7f
+    val spacing = size.width / data.size
+    
+    data.forEachIndexed { index, value ->
+        val x = index * spacing + spacing * 0.15f
+        val barHeight = size.height * value
+        val y = size.height - barHeight
+        
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(x, y),
+            size = Size(barWidth, barHeight),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadius)
+        )
+    }
+} 

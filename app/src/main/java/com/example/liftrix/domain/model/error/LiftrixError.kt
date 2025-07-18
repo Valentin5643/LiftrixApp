@@ -96,6 +96,32 @@ sealed class LiftrixError(
     ) : LiftrixError(errorMessage, isRecoverable, retryAfter, analyticsContext)
     
     /**
+     * Data retrieval and fetching errors.
+     * May be recoverable depending on the specific retrieval issue.
+     */
+    data class DataRetrievalError(
+        val errorMessage: String = "Data retrieval failed",
+        override val isRecoverable: Boolean = true,
+        override val retryAfter: Long? = 2000L, // 2 seconds retry for data retrieval
+        override val analyticsContext: Map<String, String> = emptyMap(),
+        val operation: String? = null,
+        val retryable: Boolean = true
+    ) : LiftrixError(errorMessage, isRecoverable, retryAfter, analyticsContext)
+    
+    /**
+     * Configuration and settings errors.
+     * May be recoverable depending on the specific configuration issue.
+     */
+    data class ConfigurationError(
+        val errorMessage: String = "Configuration error",
+        override val isRecoverable: Boolean = true,
+        override val retryAfter: Long? = 1000L, // 1 second retry for configuration
+        override val analyticsContext: Map<String, String> = emptyMap(),
+        val configKey: String? = null,
+        val configValue: String? = null
+    ) : LiftrixError(errorMessage, isRecoverable, retryAfter, analyticsContext)
+    
+    /**
      * Data export and file generation errors.
      * May be recoverable depending on the specific export issue.
      */
@@ -119,6 +145,19 @@ sealed class LiftrixError(
         override val analyticsContext: Map<String, String> = emptyMap(),
         val operation: String? = null,
         val filePath: String? = null
+    ) : LiftrixError(errorMessage, isRecoverable, retryAfter, analyticsContext)
+    
+    /**
+     * Resource not found errors.
+     * Typically not recoverable unless the resource is created.
+     */
+    data class NotFoundError(
+        val errorMessage: String = "Resource not found",
+        override val isRecoverable: Boolean = false,
+        override val retryAfter: Long? = null,
+        override val analyticsContext: Map<String, String> = emptyMap(),
+        val resourceType: String? = null,
+        val resourceId: String? = null
     ) : LiftrixError(errorMessage, isRecoverable, retryAfter, analyticsContext)
     
     /**
@@ -149,8 +188,11 @@ fun LiftrixError.withAnalyticsContext(additionalContext: Map<String, String>): L
         is LiftrixError.DatabaseError -> copy(analyticsContext = mergedContext)
         is LiftrixError.BusinessLogicError -> copy(analyticsContext = mergedContext)
         is LiftrixError.CalculationError -> copy(analyticsContext = mergedContext)
+        is LiftrixError.DataRetrievalError -> copy(analyticsContext = mergedContext)
+        is LiftrixError.ConfigurationError -> copy(analyticsContext = mergedContext)
         is LiftrixError.ExportError -> copy(analyticsContext = mergedContext)
         is LiftrixError.FileSystemError -> copy(analyticsContext = mergedContext)
+        is LiftrixError.NotFoundError -> copy(analyticsContext = mergedContext)
         is LiftrixError.UnknownError -> copy(analyticsContext = mergedContext)
     }
 }
@@ -166,8 +208,11 @@ fun LiftrixError.withRetryAfter(retryAfterMs: Long): LiftrixError {
         is LiftrixError.DatabaseError -> copy(retryAfter = retryAfterMs)
         is LiftrixError.BusinessLogicError -> copy(retryAfter = retryAfterMs)
         is LiftrixError.CalculationError -> copy(retryAfter = retryAfterMs)
+        is LiftrixError.DataRetrievalError -> copy(retryAfter = retryAfterMs)
+        is LiftrixError.ConfigurationError -> copy(retryAfter = retryAfterMs)
         is LiftrixError.ExportError -> copy(retryAfter = retryAfterMs)
         is LiftrixError.FileSystemError -> copy(retryAfter = retryAfterMs)
+        is LiftrixError.NotFoundError -> copy(retryAfter = retryAfterMs)
         is LiftrixError.UnknownError -> copy(retryAfter = retryAfterMs)
     }
 }

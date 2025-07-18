@@ -1,7 +1,9 @@
 package com.example.liftrix.ui.workout.create
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,9 +12,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
@@ -194,57 +196,130 @@ fun WorkoutTemplateCreationScreen(
             )
         }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
+                .padding(paddingValues),
+            contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Template Basic Information
-            TemplateBasicInfoCard(
-                name = templateName,
-                onNameChange = { templateName = it },
-                description = templateDescription,
-                onDescriptionChange = { templateDescription = it }
-            )
+            item {
+                // Template Basic Information
+                TemplateBasicInfoCard(
+                    name = templateName,
+                    onNameChange = { templateName = it },
+                    description = templateDescription,
+                    onDescriptionChange = { templateDescription = it }
+                )
+            }
             
-            // Exercise Selector Section
-            TemplateExerciseAddCard(
-                onNavigateToExerciseSelection = onNavigateToExerciseSelection
-            )
+            item {
+                // Exercise Selector Section
+                TemplateExerciseAddCard(
+                    onNavigateToExerciseSelection = onNavigateToExerciseSelection
+                )
+            }
             
-            // Exercises List Section with drag-and-drop (dynamic size based on exercises)
-            timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: Rendering DragDropExerciseList with ${uiState.exercises.size} exercises")
+            // Exercises List Section with drag-and-drop
+            timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: Rendering exercise items with ${uiState.exercises.size} exercises")
             timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: Current uiState type: ${uiState::class.simpleName}")
             timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: Exercises: ${uiState.exercises.map { "${it.name} (${it.name})" }}")
             
-            DragDropExerciseList(
-                exercises = uiState.exercises,
-                onReorder = viewModel::reorderExercises,
-                onRemoveExercise = viewModel::removeExercise,
-                onUpdateExercise = viewModel::updateExercise
-            )
+            if (uiState.exercises.isNotEmpty()) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .padding(8.dp)
+                                .fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "Template Exercises (${uiState.exercises.size})",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+                
+                itemsIndexed(
+                    items = uiState.exercises,
+                    key = { _, exercise -> exercise.exerciseId.value }
+                ) { index, exercise ->
+                    ExerciseListItem(
+                        exercise = exercise,
+                        onRemove = { viewModel.removeExercise(exercise) },
+                        onUpdate = viewModel::updateExercise,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            } else {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .padding(8.dp)
+                                .fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "Template Exercises (0)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            
+                            Text(
+                                text = "No exercises added yet. Use the exercise selector above to add exercises to your template.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp)
+                            )
+                        }
+                    }
+                }
+            }
             
             // Loading/Error States
             when (val state = uiState) {
                 is WorkoutTemplateCreationUiState.Loading -> {
-                    LiftrixProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            LiftrixProgressIndicator()
+                        }
+                    }
                 }
                 is WorkoutTemplateCreationUiState.Error -> {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer
-                        )
-                    ) {
-                        Text(
-                            text = state.error,
-                            modifier = Modifier.padding(16.dp),
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            )
+                        ) {
+                            Text(
+                                text = state.error,
+                                modifier = Modifier.padding(16.dp),
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                     }
                 }
                 else -> { /* No special handling needed */ }

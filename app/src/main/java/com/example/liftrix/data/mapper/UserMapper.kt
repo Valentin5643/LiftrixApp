@@ -13,12 +13,26 @@ object UserMapper {
     
     fun fromFirebaseUser(firebaseUser: FirebaseUser): User {
         val now = LocalDateTime.now()
+        
+        // Handle email validation based on user type
+        val email = firebaseUser.email ?: ""
+        val isAnonymous = firebaseUser.isAnonymous
+        
+        // For non-anonymous users, ensure email is not blank
+        // If email is missing for non-anonymous user, log warning and treat as anonymous
+        val effectiveIsAnonymous = if (!isAnonymous && email.isBlank()) {
+            timber.log.Timber.w("Non-anonymous Firebase user has blank email: ${firebaseUser.uid}. Treating as anonymous.")
+            true
+        } else {
+            isAnonymous
+        }
+        
         return User(
             uid = firebaseUser.uid,
-            email = firebaseUser.email ?: "",
+            email = if (effectiveIsAnonymous) "" else email,
             displayName = firebaseUser.displayName,
             photoUrl = firebaseUser.photoUrl?.toString(),
-            isAnonymous = firebaseUser.isAnonymous,
+            isAnonymous = effectiveIsAnonymous,
             subscriptionTier = SubscriptionTier.FREE, // Default for new users
             subscriptionStatus = SubscriptionStatus.ACTIVE,
             subscriptionExpiresAt = null,

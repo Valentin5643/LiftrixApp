@@ -102,8 +102,10 @@ abstract class AnalyticsModule {
          */
         @Provides
         @Singleton
-        fun provideCalorieCalculator(): CalorieCalculator {
-            return CalorieCalculator()
+        fun provideCalorieCalculator(
+            metDataRepository: com.example.liftrix.domain.repository.MetDataRepository
+        ): CalorieCalculator {
+            return CalorieCalculator(metDataRepository)
         }
 
         /**
@@ -111,17 +113,20 @@ abstract class AnalyticsModule {
          * 
          * @param workoutDao The workout DAO for data access
          * @param calorieCalculator The calorie calculator for MET-based calculations
+         * @param progressStatsRepository The progress stats repository for analytics data
          * @return Configured AnalyticsEngine instance
          */
         @Provides
         @Singleton
         fun provideAnalyticsEngine(
             workoutDao: WorkoutDao,
-            calorieCalculator: CalorieCalculator
+            calorieCalculator: CalorieCalculator,
+            progressStatsRepository: com.example.liftrix.domain.repository.ProgressStatsRepository
         ): AnalyticsEngine {
             return AnalyticsEngine(
                 workoutDao = workoutDao,
-                calorieCalculator = calorieCalculator
+                calorieCalculator = calorieCalculator,
+                progressStatsRepository = progressStatsRepository
             )
         }
 
@@ -245,6 +250,17 @@ abstract class AnalyticsModule {
             csvExporter: CsvExporter
         ): AnalyticsExporter {
             return AnalyticsExporter(pdfExporter, csvExporter)
+        }
+
+        /**
+         * Provides AnalyticsWidgetManager with proper dependency injection
+         * 
+         * @return Configured AnalyticsWidgetManager instance
+         */
+        @Provides
+        @Singleton
+        fun provideAnalyticsWidgetManager(): com.example.liftrix.ui.progress.components.AnalyticsWidgetManager {
+            return com.example.liftrix.ui.progress.components.AnalyticsWidgetManager()
         }
     }
 } 

@@ -28,9 +28,22 @@ class AuthRepositoryImpl @Inject constructor(
 
     override val currentUser: Flow<User?> = callbackFlow {
         val authStateListener = FirebaseAuth.AuthStateListener { auth ->
-            val firebaseUser = auth.currentUser
-            val user = firebaseUser?.let { UserMapper.fromFirebaseUser(it) }
-            trySend(user)
+            try {
+                val firebaseUser = auth.currentUser
+                val user = firebaseUser?.let { fbUser ->
+                    // Add validation before creating User object
+                    if (!fbUser.isAnonymous && fbUser.email.isNullOrBlank()) {
+                        Timber.w("Non-anonymous Firebase user has no email: ${fbUser.uid}. Skipping user creation.")
+                        null
+                    } else {
+                        UserMapper.fromFirebaseUser(fbUser)
+                    }
+                }
+                trySend(user)
+            } catch (exception: Exception) {
+                Timber.e(exception, "Error creating User from Firebase user in auth state listener")
+                // Don't send anything on error to prevent crash loops
+            }
         }
         
         firebaseAuth.addAuthStateListener(authStateListener)
@@ -137,7 +150,20 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getCurrentUser(): User? {
-        return firebaseAuth.currentUser?.let { UserMapper.fromFirebaseUser(it) }
+        return firebaseAuth.currentUser?.let { fbUser ->
+            try {
+                // Add validation before creating User object
+                if (!fbUser.isAnonymous && fbUser.email.isNullOrBlank()) {
+                    Timber.w("Non-anonymous Firebase user has no email: ${fbUser.uid}. Returning null.")
+                    null
+                } else {
+                    UserMapper.fromFirebaseUser(fbUser)
+                }
+            } catch (exception: Exception) {
+                Timber.e(exception, "Error creating User from Firebase user in getCurrentUser")
+                null
+            }
+        }
     }
 
     override suspend fun getCurrentUserId(): String? {

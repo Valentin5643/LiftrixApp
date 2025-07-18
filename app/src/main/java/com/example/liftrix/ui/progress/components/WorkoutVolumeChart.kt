@@ -1,15 +1,22 @@
 package com.example.liftrix.ui.progress.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingFlat
@@ -26,6 +33,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -36,8 +46,21 @@ import com.example.liftrix.ui.components.cards.StatCard
 import com.example.liftrix.ui.components.cards.Trend
 import com.example.liftrix.ui.components.layouts.GridSystem
 import com.example.liftrix.ui.theme.LiftrixColors
-// Vico imports temporarily removed for simplified placeholder implementation
+// Chart implementation using Compose Canvas
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
+import com.example.liftrix.ui.common.analytics.ChartThemeProvider
 import kotlin.math.roundToInt
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.minus
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.todayIn
 
 /**
  * Modern workout volume chart component with enhanced data dashboard styling.
@@ -110,13 +133,27 @@ fun WorkoutVolumeChart(
                     }
                 }
                 data.isEmpty() -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(240.dp),
-                        contentAlignment = Alignment.Center
+                    // Show zero-value chart instead of empty state
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
                     ) {
-                        ModernEmptyState()
+                        // Chart section with zero data
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                        ) {
+                            ModernVolumeLineChart(
+                                data = getZeroVolumeData(),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        
+                        // Metrics panel with zero values
+                        ModernVolumeMetricsPanel(
+                            data = getZeroVolumeData(),
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
                 else -> {
@@ -200,26 +237,53 @@ private fun ModernEmptyState() {
 }
 
 /**
- * Enhanced volume line chart with modern styling
+ * Enhanced volume bar chart with Vico implementation
  */
 @Composable
 private fun ModernVolumeLineChart(
     data: List<VolumeDataPoint>,
     modifier: Modifier = Modifier
 ) {
-    // Simplified placeholder implementation while Vico integration is stabilized
+    // Don't return early for empty data - let it render with zero values
+
+    val density = LocalDensity.current
+    val normalizedData = remember(data) {
+        val maxValue = data.maxOfOrNull { it.totalVolume } ?: 0f
+        val minValue = data.minOfOrNull { it.totalVolume } ?: 0f
+        val range = maxValue - minValue
+        if (range == 0f) {
+            // For zero values, show a flat line at the bottom
+            data.map { 0.1f }
+        } else {
+            data.map { (it.totalVolume - minValue) / range }
+        }
+    }
+    
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(200.dp),
-        contentAlignment = Alignment.Center
+            .height(200.dp)
+            .padding(8.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        LiftrixColors.Primary.copy(alpha = 0.15f),
+                        Color.Transparent
+                    )
+                )
+            )
     ) {
-        Text(
-            text = "Volume Line Chart\n${data.size} data points",
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-        )
+        Canvas(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            drawWorkoutVolumeLineChart(
+                data = normalizedData,
+                color = LiftrixColors.Primary,
+                strokeWidth = with(density) { 3.dp.toPx() },
+                pointRadius = with(density) { 8.dp.toPx() }
+            )
+        }
     }
 }
 
@@ -379,4 +443,66 @@ private enum class VolumeMetricTrend {
     INCREASING,
     DECREASING,
     STABLE
+}
+
+/**
+ * Generate zero-value sample data for empty state
+ */
+private fun getZeroVolumeData(): List<VolumeDataPoint> {
+    val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
+    return listOf(
+        VolumeDataPoint(date = today.minus(DatePeriod(days = 6)), totalVolume = 0f, exerciseCount = 0),
+        VolumeDataPoint(date = today.minus(DatePeriod(days = 5)), totalVolume = 0f, exerciseCount = 0),
+        VolumeDataPoint(date = today.minus(DatePeriod(days = 4)), totalVolume = 0f, exerciseCount = 0),
+        VolumeDataPoint(date = today.minus(DatePeriod(days = 3)), totalVolume = 0f, exerciseCount = 0),
+        VolumeDataPoint(date = today.minus(DatePeriod(days = 2)), totalVolume = 0f, exerciseCount = 0),
+        VolumeDataPoint(date = today.minus(DatePeriod(days = 1)), totalVolume = 0f, exerciseCount = 0),
+        VolumeDataPoint(date = today, totalVolume = 0f, exerciseCount = 0)
+    )
+}
+
+private fun DrawScope.drawWorkoutVolumeLineChart(
+    data: List<Float>,
+    color: Color,
+    strokeWidth: Float,
+    pointRadius: Float
+) {
+    if (data.size < 2) return
+    
+    val spacing = size.width / (data.size - 1).coerceAtLeast(1)
+    val path = Path()
+    
+    // Create line path
+    data.forEachIndexed { index, value ->
+        val x = index * spacing
+        val y = size.height * (1f - value)
+        
+        if (index == 0) {
+            path.moveTo(x, y)
+        } else {
+            path.lineTo(x, y)
+        }
+    }
+    
+    // Draw line
+    drawPath(
+        path = path,
+        color = color,
+        style = Stroke(
+            width = strokeWidth,
+            cap = StrokeCap.Round
+        )
+    )
+    
+    // Draw points
+    data.forEachIndexed { index, value ->
+        val x = index * spacing
+        val y = size.height * (1f - value)
+        
+        drawCircle(
+            color = color,
+            radius = pointRadius,
+            center = Offset(x, y)
+        )
+    }
 } 

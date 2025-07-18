@@ -26,8 +26,30 @@ class WorkoutMapper @Inject constructor(
      * Convert Room entity to domain model
      */
     fun toDomain(entity: WorkoutEntity): Workout = entity.run {
-        val exercisesType = object : TypeToken<List<Exercise>>() {}.type
-        val exercises: List<Exercise> = gson.fromJson(exercisesJson, exercisesType) ?: emptyList()
+        // Handle both old and new JSON formats for backward compatibility
+        val exercises: List<Exercise> = try {
+            // Try new enhanced format first
+            val enhancedType = object : TypeToken<Map<String, Any>>() {}.type
+            val enhancedData: Map<String, Any>? = gson.fromJson(exercisesJson, enhancedType)
+            
+            if (enhancedData?.containsKey("exercises") == true) {
+                // New format with exercises key
+                val exercisesType = object : TypeToken<List<Exercise>>() {}.type
+                gson.fromJson(gson.toJson(enhancedData["exercises"]), exercisesType) ?: emptyList()
+            } else {
+                // Old format - direct exercise list
+                val exercisesType = object : TypeToken<List<Exercise>>() {}.type
+                gson.fromJson(exercisesJson, exercisesType) ?: emptyList()
+            }
+        } catch (e: Exception) {
+            // Fallback to old format if parsing fails
+            try {
+                val exercisesType = object : TypeToken<List<Exercise>>() {}.type
+                gson.fromJson(exercisesJson, exercisesType) ?: emptyList()
+            } catch (e2: Exception) {
+                emptyList()
+            }
+        }
 
         Workout(
             userId = userId,
@@ -49,12 +71,30 @@ class WorkoutMapper @Inject constructor(
      * Convert domain model to Room entity
      */
     fun toEntity(workout: Workout, isSynced: Boolean = false): WorkoutEntity = workout.run {
+        // Create enhanced JSON that includes calculated totalVolume
+        val exercisesWithVolume = exercises.map { exercise ->
+            val volumeInKg = exercise.getTotalVolume()?.kilograms ?: 0.0
+            mapOf(
+                "exercise" to exercise,
+                "totalVolume" to volumeInKg
+            )
+        }
+        val workoutTotalVolume = exercises.mapNotNull { it.getTotalVolume() }
+            .fold(Weight.ZERO) { acc, weight -> acc + weight }
+            .kilograms
+        
+        val enhancedJson = mapOf(
+            "exercises" to exercises,
+            "totalVolume" to workoutTotalVolume,
+            "exercisesWithVolume" to exercisesWithVolume
+        )
+        
         WorkoutEntity(
             id = id.value,
             userId = userId,
             name = name,
             date = date,
-            exercisesJson = gson.toJson(exercises),
+            exercisesJson = gson.toJson(enhancedJson),
             status = status,
             startTime = startTime,
             endTime = endTime,

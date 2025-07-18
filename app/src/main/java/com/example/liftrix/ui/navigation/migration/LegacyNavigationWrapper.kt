@@ -174,12 +174,23 @@ class LegacyNavigationWrapper @Inject constructor(
                 is LiftrixRoute.Coach -> "Replace with: navController.navigate(LiftrixRoute.Coach)"
                 is LiftrixRoute.Friends -> "Replace with: navController.navigate(LiftrixRoute.Friends)"
                 is LiftrixRoute.Settings -> "Replace with: navController.navigate(LiftrixRoute.Settings)"
+                is LiftrixRoute.WidgetSettings -> "Replace with: navController.navigate(LiftrixRoute.WidgetSettings)"
                 is LiftrixRoute.Onboarding -> "Replace with: navController.navigate(LiftrixRoute.Onboarding)"
                 is LiftrixRoute.TemplateCreation -> "Replace with: navController.navigate(LiftrixRoute.TemplateCreation)"
                 is LiftrixRoute.WorkoutDetails -> "Replace with: navController.navigate(LiftrixRoute.WorkoutDetails(workoutId))"
                 is LiftrixRoute.ExerciseSelection -> "Replace with: navController.navigate(LiftrixRoute.ExerciseSelection(...))"
                 is LiftrixRoute.ActiveWorkout -> "Replace with: navController.navigate(LiftrixRoute.ActiveWorkout(...))"
                 is LiftrixRoute.ExerciseDetails -> "Replace with: navController.navigate(LiftrixRoute.ExerciseDetails(exerciseId))"
+                is LiftrixRoute.AnomalyDashboard -> "Replace with: navController.navigate(LiftrixRoute.AnomalyDashboard)"
+                is LiftrixRoute.AnomalySettings -> "Replace with: navController.navigate(LiftrixRoute.AnomalySettings)"
+                is LiftrixRoute.CalorieAnalytics -> "Replace with: navController.navigate(LiftrixRoute.CalorieAnalytics)"
+                is LiftrixRoute.CalorieGoalSettings -> "Replace with: navController.navigate(LiftrixRoute.CalorieGoalSettings)"
+                is LiftrixRoute.CalorieHistory -> "Replace with: navController.navigate(LiftrixRoute.CalorieHistory(...))"
+                is LiftrixRoute.GuestModeSelection -> "Replace with: navController.navigate(LiftrixRoute.GuestModeSelection)"
+                is LiftrixRoute.GuestDashboard -> "Replace with: navController.navigate(LiftrixRoute.GuestDashboard)"
+                is LiftrixRoute.GuestConversion -> "Replace with: navController.navigate(LiftrixRoute.GuestConversion(...))"
+                is LiftrixRoute.AuthSignUp -> "Replace with: navController.navigate(LiftrixRoute.AuthSignUp)"
+                is LiftrixRoute.AuthSignIn -> "Replace with: navController.navigate(LiftrixRoute.AuthSignIn)"
             }
         } else {
             null

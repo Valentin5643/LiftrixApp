@@ -62,16 +62,9 @@ import com.example.liftrix.ui.theme.LiftrixTheme
 // Import chart types for widget rendering
 import com.example.liftrix.ui.progress.components.ChartData
 import com.example.liftrix.ui.progress.components.ChartType
+import com.example.liftrix.ui.progress.components.WidgetLayoutMode
 
-/**
- * Layout mode for widget organization
- */
-enum class WidgetLayoutMode {
-    GRID,           // Traditional grid layout
-    STAGGERED,      // Staggered grid for varied card sizes
-    LIST,           // Vertical list layout
-    SECTIONS        // Categorized sections (Hevy-inspired)
-}
+// WidgetLayoutMode is now imported from the proper file
 
 /**
  * Container component for organizing analytics dashboard widgets.
@@ -443,6 +436,45 @@ private fun WidgetRenderer(
             )
         }
         
+        AnalyticsWidget.CALORIES_BURNED -> {
+            val basicData = widgetData as? BasicWidgetData
+            CaloriesBurnedCard(
+                caloriesBurned = basicData?.value?.replace(" cal", "")?.replace(",", "")?.toIntOrNull() ?: 0,
+                subtitle = basicData?.subtitle ?: "Today",
+                trend = basicData?.trend,
+                isLoading = isLoading,
+                onClick = onClick,
+                modifier = modifier
+            )
+        }
+        
+        AnalyticsWidget.DAILY_CALORIES -> {
+            val basicData = widgetData as? BasicWidgetData
+            val caloriesValue = basicData?.value?.replace(" cal", "")?.replace(",", "")?.toIntOrNull() ?: 0
+            DailyCaloriesCard(
+                caloriesInToday = caloriesValue,
+                dailyGoal = 400, // TODO: Get from user preferences
+                workoutCount = 1, // TODO: Get from actual data
+                trend = basicData?.trend,
+                isLoading = isLoading,
+                onClick = onClick,
+                modifier = modifier
+            )
+        }
+        
+        AnalyticsWidget.WEEKLY_CALORIE_TREND -> {
+            val basicData = widgetData as? BasicWidgetData
+            WeeklyCalorieTrendCard(
+                weeklyCalories = listOf(1200, 1450, 1380, 1520), // TODO: Get from actual data
+                averageCalories = 1387, // TODO: Calculate from actual data
+                trend = basicData?.trend,
+                trendPercentage = 12.5f, // TODO: Calculate from actual data
+                isLoading = isLoading,
+                onClick = onClick,
+                modifier = modifier
+            )
+        }
+        
         AnalyticsWidget.ProgressChart,
         AnalyticsWidget.OneRMProgression,
         AnalyticsWidget.VolumeLoadProgression -> {
@@ -500,6 +532,27 @@ private fun createSampleWidgetData(widget: AnalyticsWidget): WidgetData {
             value = "67 min",
             subtitle = "Average session",
             trend = TrendDirection.STABLE
+        )
+        AnalyticsWidget.CALORIES_BURNED -> BasicWidgetData(
+            widgetType = widget,
+            lastUpdated = kotlinx.datetime.Clock.System.now(),
+            value = "347 cal",
+            subtitle = "Today",
+            trend = TrendDirection.UP
+        )
+        AnalyticsWidget.DAILY_CALORIES -> BasicWidgetData(
+            widgetType = widget,
+            lastUpdated = kotlinx.datetime.Clock.System.now(),
+            value = "347 cal",
+            subtitle = "of 400 goal",
+            trend = TrendDirection.UP
+        )
+        AnalyticsWidget.WEEKLY_CALORIE_TREND -> BasicWidgetData(
+            widgetType = widget,
+            lastUpdated = kotlinx.datetime.Clock.System.now(),
+            value = "1,520 cal",
+            subtitle = "This week",
+            trend = TrendDirection.UP
         )
         else -> BasicWidgetData(
             widgetType = widget,

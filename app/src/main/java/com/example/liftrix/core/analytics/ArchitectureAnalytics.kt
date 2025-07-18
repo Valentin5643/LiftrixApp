@@ -129,6 +129,14 @@ class ArchitectureAnalytics @Inject constructor(
                             error.operation?.let { put("calculation_operation", it) }
                             put("calculation_context", error.analyticsContext.toString())
                         }
+                        is LiftrixError.DataRetrievalError -> {
+                            error.operation?.let { put("data_retrieval_operation", it) }
+                            put("data_retrieval_retryable", error.retryable.toString())
+                        }
+                        is LiftrixError.ConfigurationError -> {
+                            error.configKey?.let { put("configuration_key", it) }
+                            error.configValue?.let { put("configuration_value", it) }
+                        }
                         is LiftrixError.ExportError -> {
                             error.operation?.let { put("export_operation", it) }
                             error.format?.let { put("export_format", it) }
@@ -136,6 +144,10 @@ class ArchitectureAnalytics @Inject constructor(
                         is LiftrixError.FileSystemError -> {
                             error.operation?.let { put("file_operation", it) }
                             error.filePath?.let { put("file_path", it) }
+                        }
+                        is LiftrixError.NotFoundError -> {
+                            error.resourceType?.let { put("resource_type", it) }
+                            error.resourceId?.let { put("resource_id", it) }
                         }
                         is LiftrixError.UnknownError -> {
                             put("unknown_error_category", "unhandled")

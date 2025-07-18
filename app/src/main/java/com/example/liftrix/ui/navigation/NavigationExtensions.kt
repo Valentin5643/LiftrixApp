@@ -144,6 +144,61 @@ fun NavController.navigateToOnboarding() {
     navigate(LiftrixRoute.Onboarding)
 }
 
+/**
+ * Navigate to anomaly detection dashboard
+ */
+fun NavController.navigateToAnomalyDashboard() {
+    navigate(LiftrixRoute.AnomalyDashboard)
+}
+
+/**
+ * Navigate to anomaly detection settings
+ */
+fun NavController.navigateToAnomalySettings() {
+    navigate(LiftrixRoute.AnomalySettings)
+}
+
+/**
+ * Navigate to guest mode selection screen
+ */
+fun NavController.navigateToGuestModeSelection() {
+    navigate(LiftrixRoute.GuestModeSelection)
+}
+
+/**
+ * Navigate to guest dashboard
+ */
+fun NavController.navigateToGuestDashboard() {
+    navigate(LiftrixRoute.GuestDashboard)
+}
+
+/**
+ * Navigate to guest conversion screen
+ * 
+ * @param source The source that triggered the conversion
+ * @param returnTo Optional route to return to after conversion
+ */
+fun NavController.navigateToGuestConversion(
+    source: String = "manual",
+    returnTo: String? = null
+) {
+    navigate(LiftrixRoute.GuestConversion(source, returnTo))
+}
+
+/**
+ * Navigate to sign-up screen
+ */
+fun NavController.navigateToAuthSignUp() {
+    navigate(LiftrixRoute.AuthSignUp)
+}
+
+/**
+ * Navigate to sign-in screen
+ */
+fun NavController.navigateToAuthSignIn() {
+    navigate(LiftrixRoute.AuthSignIn)
+}
+
 // MARK: - Navigation Utilities
 
 /**
@@ -316,6 +371,12 @@ fun NavController.getCurrentLiftrixRoute(): LiftrixRoute? {
         isCurrentRoute(LiftrixRoute.TemplateCreation::class) -> LiftrixRoute.TemplateCreation
         isCurrentRoute(LiftrixRoute.Settings::class) -> LiftrixRoute.Settings
         isCurrentRoute(LiftrixRoute.Onboarding::class) -> LiftrixRoute.Onboarding
+        isCurrentRoute(LiftrixRoute.AnomalyDashboard::class) -> LiftrixRoute.AnomalyDashboard
+        isCurrentRoute(LiftrixRoute.AnomalySettings::class) -> LiftrixRoute.AnomalySettings
+        isCurrentRoute(LiftrixRoute.GuestModeSelection::class) -> LiftrixRoute.GuestModeSelection
+        isCurrentRoute(LiftrixRoute.GuestDashboard::class) -> LiftrixRoute.GuestDashboard
+        isCurrentRoute(LiftrixRoute.AuthSignUp::class) -> LiftrixRoute.AuthSignUp
+        isCurrentRoute(LiftrixRoute.AuthSignIn::class) -> LiftrixRoute.AuthSignIn
         else -> null // For parameterized routes, would need more complex logic
     }
 }

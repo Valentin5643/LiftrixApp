@@ -124,23 +124,66 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
             UnifiedWorkoutSession.SessionStatus.COMPLETED -> {
                 Timber.w("Cannot toggle pause/resume - session completed")
             }
+            UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE -> {
+                Timber.w("Cannot toggle pause/resume - session failed to save")
+            }
         }
     }
 
     /**
-     * 🔥 SIMPLIFIED: Completes the current workout
+     * 🔥 IMPROVED: Completes the current workout with proper state transitions
+     * 
+     * @param onNavigateToHome Callback to navigate to Home screen after successful completion
      */
-    fun completeWorkout() {
+    fun completeWorkout(onNavigateToHome: (() -> Unit)? = null) {
         viewModelScope.launch {
             try {
+                // Set completing state
+                val currentState = _uiState.value
+                if (currentState is UnifiedActiveWorkoutUiState.Success) {
+                    _uiState.value = currentState.copy(isCompleting = true)
+                    Timber.d("🔥 COMPLETE-WORKOUT: Starting completion process...")
+                }
+                
                 val success = sessionManager.completeSession()
                 if (success) {
-                    Timber.i("Workout completed successfully")
+                    Timber.i("🔥 COMPLETE-WORKOUT: Workout completion initiated")
+                    
+                    // Show completion state briefly
+                    _uiState.value = UnifiedActiveWorkoutUiState.WorkoutCompleted
+                    
+                    // Give user a moment to see completion state
+                    delay(1500)
+                    
+                    // Check if session is in failed state and offer retry
+                    val currentSession = sessionManager.currentSession.value
+                    if (currentSession?.sessionStatus == UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE) {
+                        Timber.w("🔥 COMPLETE-WORKOUT: Session failed to save, showing retry option")
+                        _uiState.value = UnifiedActiveWorkoutUiState.Error(
+                            message = "Workout completed but failed to save. Tap to retry.",
+                            isRetryable = true
+                        )
+                    } else {
+                        // Navigate to Home after successful completion
+                        try {
+                            onNavigateToHome?.invoke()
+                        } catch (navigationError: Exception) {
+                            Timber.w(navigationError, "Navigation to Home failed after workout completion")
+                            // Navigation failed, but workout was completed successfully
+                            // Don't show error to user as the main action succeeded
+                        }
+                        
+                        // Transition to NoSession state
+                        _uiState.value = UnifiedActiveWorkoutUiState.NoSession
+                    }
                 } else {
-                    Timber.w("Failed to complete workout")
+                    Timber.w("🔥 COMPLETE-WORKOUT: Failed to complete workout")
+                    _uiState.value = UnifiedActiveWorkoutUiState.Error(
+                        message = "Failed to complete workout. Please try again."
+                    )
                 }
             } catch (e: Exception) {
-                Timber.e(e, "Error completing workout")
+                Timber.e(e, "🔥 COMPLETE-WORKOUT: Error completing workout")
                 _uiState.value = UnifiedActiveWorkoutUiState.Error(
                     message = "Failed to complete workout: ${e.message}"
                 )
@@ -622,11 +665,45 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
     }
 
     /**
-     * Retries the current operation
+     * Retries the current operation, including save retry for failed sessions
      */
     fun retry() {
-        _uiState.value = UnifiedActiveWorkoutUiState.Loading
-        observeSessionState()
+        viewModelScope.launch {
+            val currentSession = sessionManager.currentSession.value
+            if (currentSession?.sessionStatus == UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE) {
+                // Retry saving the failed session
+                Timber.d("🔥 RETRY-SAVE: Attempting to retry save for failed session")
+                _uiState.value = UnifiedActiveWorkoutUiState.Loading
+                
+                val retrySuccess = sessionManager.retrySaveSession()
+                if (retrySuccess) {
+                    // Monitor session state to check if retry was successful
+                    delay(500) // Give it a moment to process
+                    val updatedSession = sessionManager.currentSession.value
+                    if (updatedSession?.sessionStatus == UnifiedWorkoutSession.SessionStatus.COMPLETED) {
+                        Timber.i("🔥 RETRY-SAVE: Session save retry successful")
+                        _uiState.value = UnifiedActiveWorkoutUiState.WorkoutCompleted
+                        delay(1000)
+                        _uiState.value = UnifiedActiveWorkoutUiState.NoSession
+                    } else {
+                        Timber.w("🔥 RETRY-SAVE: Session save retry failed")
+                        _uiState.value = UnifiedActiveWorkoutUiState.Error(
+                            message = "Retry failed. Please try again or contact support.",
+                            isRetryable = true
+                        )
+                    }
+                } else {
+                    Timber.w("🔥 RETRY-SAVE: Cannot retry - no failed session")
+                    _uiState.value = UnifiedActiveWorkoutUiState.Error(
+                        message = "Cannot retry at this time. Please try again."
+                    )
+                }
+            } else {
+                // Regular retry - reload session state
+                _uiState.value = UnifiedActiveWorkoutUiState.Loading
+                observeSessionState()
+            }
+        }
     }
 
     /**
@@ -643,12 +720,15 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
 sealed class UnifiedActiveWorkoutUiState {
     object Loading : UnifiedActiveWorkoutUiState()
     object NoSession : UnifiedActiveWorkoutUiState()
+    object WorkoutCompleted : UnifiedActiveWorkoutUiState()
     
     data class Success(
-        val session: UnifiedWorkoutSession
+        val session: UnifiedWorkoutSession,
+        val isCompleting: Boolean = false
     ) : UnifiedActiveWorkoutUiState()
     
     data class Error(
-        val message: String
+        val message: String,
+        val isRetryable: Boolean = false
     ) : UnifiedActiveWorkoutUiState()
 }

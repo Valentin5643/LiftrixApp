@@ -1,11 +1,14 @@
 package com.example.liftrix.ui.progress.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -17,6 +20,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -34,6 +40,15 @@ import kotlinx.datetime.toJavaLocalDate
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+// Chart implementation using Compose Canvas
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
 
 /**
  * Volume progress chart component using Vico LineChart with Material 3 theming.
@@ -81,17 +96,59 @@ fun VolumeProgressChart(
         } else if (data.isEmpty()) {
             EmptyState()
         } else {
-            // Simplified placeholder chart until Vico API is updated
-            Box(
+            // Actual Vico chart implementation
+            VolumeVicoChart(
+                data = data,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(280.dp),
-                contentAlignment = Alignment.Center
+                    .height(280.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun VolumeVicoChart(
+    data: List<VolumeDataPoint>,
+    modifier: Modifier = Modifier
+) {
+    val density = LocalDensity.current
+    val normalizedData = remember(data) {
+        if (data.isEmpty()) emptyList()
+        else {
+            val maxValue = data.maxByOrNull { it.volume.value }?.volume?.value ?: 0.0
+            val minValue = data.minByOrNull { it.volume.value }?.volume?.value ?: 0.0
+            val range = maxValue - minValue
+            if (range == 0.0) {
+                data.map { 0.5f }
+            } else {
+                data.map { ((it.volume.value - minValue) / range).toFloat() }
+            }
+        }
+    }
+    
+    Box(
+        modifier = modifier
+            .padding(8.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        LiftrixColors.Primary.copy(alpha = 0.1f),
+                        Color.Transparent
+                    )
+                )
+            )
+    ) {
+        if (normalizedData.isNotEmpty()) {
+            Canvas(
+                modifier = Modifier.fillMaxSize()
             ) {
-                Text(
-                    text = "Volume Progress Chart\n${data.size} data points",
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center
+                drawVolumeLineChart(
+                    data = normalizedData,
+                    color = LiftrixColors.Primary,
+                    strokeWidth = with(density) { 3.dp.toPx() },
+                    pointRadius = with(density) { 8.dp.toPx() }
                 )
             }
         }
@@ -191,11 +248,11 @@ private fun buildContentDescription(data: List<VolumeDataPoint>, title: String):
     return buildString {
         append("$title chart with ${data.size} data points. ")
         if (data.isNotEmpty()) {
-            val maxVolume = data.maxByOrNull { it.volume.kilograms }
-            val minVolume = data.minByOrNull { it.volume.kilograms }
-            val avgVolume = data.map { it.volume.kilograms }.average()
+            val maxVolume = data.maxByOrNull { it.volume.value }
+            val minVolume = data.minByOrNull { it.volume.value }
+            val avgVolume = data.map { it.volume.value }.average()
             
-            append("Volume ranges from ${minVolume?.volume?.kilograms?.toInt()} kg to ${maxVolume?.volume?.kilograms?.toInt()} kg, ")
+            append("Volume ranges from ${minVolume?.volume?.value?.toInt()} kg to ${maxVolume?.volume?.value?.toInt()} kg, ")
             append("with an average of ${avgVolume.toInt()} kg.")
         }
     }
@@ -221,11 +278,51 @@ data class DateRange(
     fun dayCount(): Int = (end.toJavaLocalDate().toEpochDay() - start.toJavaLocalDate().toEpochDay()).toInt() + 1
 }
 
-/**
- * Performance configuration import
- */
-private typealias ChartPerformanceConfig = com.example.liftrix.ui.common.analytics.ChartPerformanceConfig
-private typealias AccessibilityConfig = com.example.liftrix.ui.common.analytics.AccessibilityConfig
+private fun DrawScope.drawVolumeLineChart(
+    data: List<Float>,
+    color: Color,
+    strokeWidth: Float,
+    pointRadius: Float
+) {
+    if (data.size < 2) return
+    
+    val spacing = size.width / (data.size - 1).coerceAtLeast(1)
+    val path = Path()
+    
+    // Create line path
+    data.forEachIndexed { index, value ->
+        val x = index * spacing
+        val y = size.height * (1f - value)
+        
+        if (index == 0) {
+            path.moveTo(x, y)
+        } else {
+            path.lineTo(x, y)
+        }
+    }
+    
+    // Draw line
+    drawPath(
+        path = path,
+        color = color,
+        style = Stroke(
+            width = strokeWidth,
+            cap = StrokeCap.Round
+        )
+    )
+    
+    // Draw points
+    data.forEachIndexed { index, value ->
+        val x = index * spacing
+        val y = size.height * (1f - value)
+        
+        drawCircle(
+            color = color,
+            radius = pointRadius,
+            center = Offset(x, y)
+        )
+    }
+}
 
 
 @Preview(showBackground = true)

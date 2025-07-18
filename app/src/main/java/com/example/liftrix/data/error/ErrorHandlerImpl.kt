@@ -138,6 +138,18 @@ class ErrorHandlerImpl @Inject constructor(
                     "Context: ${error.analyticsContext}"
                 )
             }
+            is LiftrixError.DataRetrievalError -> {
+                Timber.tag(TAG).d(
+                    "Data retrieval error details - Operation: ${error.operation}, " +
+                    "Retryable: ${error.retryable}"
+                )
+            }
+            is LiftrixError.ConfigurationError -> {
+                Timber.tag(TAG).d(
+                    "Configuration error details - Key: ${error.configKey}, " +
+                    "Value: ${error.configValue}"
+                )
+            }
             is LiftrixError.ExportError -> {
                 Timber.tag(TAG).d(
                     "Export error details - Operation: ${error.operation}, " +
@@ -148,6 +160,12 @@ class ErrorHandlerImpl @Inject constructor(
                 Timber.tag(TAG).d(
                     "File system error details - Operation: ${error.operation}, " +
                     "FilePath: ${error.filePath}"
+                )
+            }
+            is LiftrixError.NotFoundError -> {
+                Timber.tag(TAG).d(
+                    "Resource not found - Type: ${error.resourceType}, " +
+                    "ID: ${error.resourceId}"
                 )
             }
             is LiftrixError.UnknownError -> {
@@ -314,8 +332,11 @@ class ErrorHandlerImpl @Inject constructor(
             is LiftrixError.NetworkError -> attemptCount < maxAttempts
             is LiftrixError.DatabaseError -> attemptCount < maxAttempts
             is LiftrixError.CalculationError -> attemptCount < maxAttempts
+            is LiftrixError.DataRetrievalError -> error.retryable && attemptCount < maxAttempts
+            is LiftrixError.ConfigurationError -> attemptCount < maxAttempts
             is LiftrixError.ExportError -> attemptCount < maxAttempts
             is LiftrixError.FileSystemError -> attemptCount < maxAttempts
+            is LiftrixError.NotFoundError -> false // Not found errors are typically not recoverable by retry
             is LiftrixError.UnknownError -> attemptCount < (maxAttempts - 1).coerceAtLeast(1)
         }
     }
@@ -380,6 +401,14 @@ class ErrorHandlerImpl @Inject constructor(
             is LiftrixError.CalculationError -> {
                 analyticsContext["calculation_operation"] = error.operation ?: "unknown"
             }
+            is LiftrixError.DataRetrievalError -> {
+                analyticsContext["data_retrieval_operation"] = error.operation ?: "unknown"
+                analyticsContext["data_retrieval_retryable"] = error.retryable.toString()
+            }
+            is LiftrixError.ConfigurationError -> {
+                analyticsContext["configuration_key"] = error.configKey ?: "unknown"
+                analyticsContext["configuration_value"] = error.configValue ?: "unknown"
+            }
             is LiftrixError.ExportError -> {
                 analyticsContext["export_operation"] = error.operation ?: "unknown"
                 analyticsContext["export_format"] = error.format ?: "unknown"
@@ -387,6 +416,10 @@ class ErrorHandlerImpl @Inject constructor(
             is LiftrixError.FileSystemError -> {
                 analyticsContext["file_operation"] = error.operation ?: "unknown"
                 analyticsContext["file_path"] = error.filePath ?: "unknown"
+            }
+            is LiftrixError.NotFoundError -> {
+                analyticsContext["resource_type"] = error.resourceType ?: "unknown"
+                analyticsContext["resource_id"] = error.resourceId ?: "unknown"
             }
             is LiftrixError.UnknownError -> {
                 analyticsContext["unknown_error_cause"] = error.cause?.javaClass?.simpleName ?: "none"

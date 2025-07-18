@@ -11,6 +11,7 @@ import com.example.liftrix.domain.usecase.auth.SignInWithGoogleUseCase
 import com.example.liftrix.domain.usecase.auth.SignOutUseCase
 import com.example.liftrix.domain.usecase.auth.SignUpWithEmailUseCase
 import com.example.liftrix.domain.repository.AuthRepository
+import com.example.liftrix.domain.usecase.guest.ManageGuestSessionUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +28,8 @@ class AuthViewModel @Inject constructor(
     private val signInAnonymouslyUseCase: SignInAnonymouslyUseCase,
     private val signOutUseCase: SignOutUseCase,
     private val forgotPasswordUseCase: ForgotPasswordUseCase,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val manageGuestSessionUseCase: ManageGuestSessionUseCase
 ) : ViewModel() {
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Initial)
@@ -151,6 +153,17 @@ class AuthViewModel @Inject constructor(
             
             signInAnonymouslyUseCase()
                 .onSuccess { user ->
+                    // Initialize guest session tracking for anonymous users
+                    if (user.isAnonymous) {
+                        manageGuestSessionUseCase.getOrCreateGuestSession(user.uid)
+                            .onSuccess { guestSession ->
+                                Timber.d("Guest session initialized for user: ${user.uid}, workouts remaining: ${guestSession.getWorkoutsRemaining()}")
+                            }
+                            .onFailure { error ->
+                                Timber.w("Failed to initialize guest session for ${user.uid}: ${error.message}")
+                                // Don't fail authentication, just log the warning
+                            }
+                    }
                     _authState.value = AuthState.Authenticated(user)
                     Timber.d("Anonymous sign in successful for user: ${user.uid}")
                 }

@@ -7,8 +7,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.ui.theme.LiftrixColors
-// Vico chart library imports - placeholder for future implementation
-// TODO: Update imports when Vico chart integration is fully implemented
+// Chart theming for custom Canvas-based charts
 
 /**
  * Centralized chart theme provider for Vico charts integration with Material 3 theming.
@@ -32,15 +31,21 @@ object ChartThemeProvider {
      * @return CartesianChartTheme configured with LiftrixColors and Material 3 theming
      */
     @Composable
-    fun createLiftrixChartTheme(): Any {
+    fun createLiftrixChartTheme(): LiftrixChartTheme {
         val colorScheme = MaterialTheme.colorScheme
         
         return remember(colorScheme) {
-            // TODO: Implement when Vico chart integration is complete
-            mapOf(
-                "primaryColor" to LiftrixColors.Primary,
-                "secondaryColor" to LiftrixColors.Secondary,
-                "surfaceColor" to colorScheme.surface
+            LiftrixChartTheme(
+                primaryColor = LiftrixColors.Primary,
+                secondaryColor = LiftrixColors.Secondary,
+                tertiaryColor = LiftrixColors.Accent,
+                surfaceColor = colorScheme.surface,
+                onSurfaceColor = colorScheme.onSurface,
+                outlineColor = colorScheme.outline,
+                lineWidth = 3.dp,
+                pointSize = 8.dp,
+                columnWidth = 16.dp,
+                cornerRadius = 6.dp
             )
         }
     }
@@ -49,14 +54,13 @@ object ChartThemeProvider {
      * Creates line chart theme with LiftrixColors primary gradient
      */
     @Composable
-    private fun createLineLayerTheme(): Any {
-        val colorScheme = MaterialTheme.colorScheme
-        
-        return mapOf(
-            "lineColor" to LiftrixColors.Primary,
-            "pointColor" to LiftrixColors.Primary,
-            "backgroundColor" to colorScheme.surface,
-            "strokeWidth" to 3f
+    fun createLineLayerTheme(): LineChartTheme {
+        return LineChartTheme(
+            lineColor = LiftrixColors.Primary,
+            lineWidth = 3.dp,
+            pointColor = LiftrixColors.Primary,
+            pointSize = 8.dp,
+            areaFillColor = LiftrixColors.Primary.copy(alpha = 0.2f)
         )
     }
     
@@ -64,14 +68,11 @@ object ChartThemeProvider {
      * Creates column/bar chart theme with LiftrixColors theming
      */
     @Composable
-    private fun createColumnLayerTheme(): Any {
-        val colorScheme = MaterialTheme.colorScheme
-        
-        return mapOf(
-            "columnColor" to LiftrixColors.Primary,
-            "strokeColor" to colorScheme.outline,
-            "cornerRadius" to 4.dp,
-            "spacing" to 4.dp
+    fun createColumnLayerTheme(): ColumnChartTheme {
+        return ColumnChartTheme(
+            columnColor = LiftrixColors.Primary,
+            columnWidth = 16.dp,
+            cornerRadius = 6.dp
         )
     }
     
@@ -79,16 +80,14 @@ object ChartThemeProvider {
      * Creates axis theme with Material 3 typography and colors
      */
     @Composable
-    private fun createAxisTheme(): Any {
+    fun createAxisTheme(): AxisTheme {
         val colorScheme = MaterialTheme.colorScheme
-        val typography = MaterialTheme.typography
         
-        return mapOf(
-            "lineColor" to colorScheme.outline,
-            "labelColor" to colorScheme.onSurface,
-            "titleColor" to colorScheme.onSurface,
-            "tickColor" to colorScheme.outline,
-            "guidelineColor" to colorScheme.outline.copy(alpha = 0.3f)
+        return AxisTheme(
+            lineColor = colorScheme.outline,
+            labelColor = colorScheme.onSurface,
+            tickColor = colorScheme.outline,
+            gridColor = colorScheme.outline.copy(alpha = 0.3f)
         )
     }
     
@@ -269,6 +268,52 @@ enum class RenderingMode {
     SOFTWARE,
     HARDWARE
 }
+
+/**
+ * Liftrix chart theme configuration
+ */
+data class LiftrixChartTheme(
+    val primaryColor: Color,
+    val secondaryColor: Color,
+    val tertiaryColor: Color,
+    val surfaceColor: Color,
+    val onSurfaceColor: Color,
+    val outlineColor: Color,
+    val lineWidth: androidx.compose.ui.unit.Dp,
+    val pointSize: androidx.compose.ui.unit.Dp,
+    val columnWidth: androidx.compose.ui.unit.Dp,
+    val cornerRadius: androidx.compose.ui.unit.Dp
+)
+
+/**
+ * Line chart specific theme
+ */
+data class LineChartTheme(
+    val lineColor: Color,
+    val lineWidth: androidx.compose.ui.unit.Dp,
+    val pointColor: Color,
+    val pointSize: androidx.compose.ui.unit.Dp,
+    val areaFillColor: Color
+)
+
+/**
+ * Column chart specific theme
+ */
+data class ColumnChartTheme(
+    val columnColor: Color,
+    val columnWidth: androidx.compose.ui.unit.Dp,
+    val cornerRadius: androidx.compose.ui.unit.Dp
+)
+
+/**
+ * Axis theme configuration
+ */
+data class AxisTheme(
+    val lineColor: Color,
+    val labelColor: Color,
+    val tickColor: Color,
+    val gridColor: Color
+)
 
 /**
  * Accessibility configuration

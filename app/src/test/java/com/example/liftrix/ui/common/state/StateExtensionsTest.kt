@@ -341,7 +341,7 @@ class StateExtensionsTest {
     @Test
     fun `executeWithUiState should call error callback`() = testScope.runTest {
         val viewModel = TestViewModel()
-        val error = LiftrixError.ValidationError("field", listOf("error"))
+        val error = LiftrixError.ValidationError(field = "field", violations = listOf("error"))
         val uiStateFlow = MutableStateFlow<UiState<String>>(UiState.Loading)
         var callbackCalled = false
         var callbackError: LiftrixError? = null

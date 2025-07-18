@@ -25,6 +25,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -55,31 +58,44 @@ import com.example.liftrix.ui.social.SocialEvent
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
 import com.example.liftrix.ui.navigation.migration.NavigationMigrationHelper
 import com.example.liftrix.ui.navigation.migration.LegacyNavigationWrapper
+import com.example.liftrix.ui.components.ConditionalWorkoutFab
+import com.example.liftrix.ui.components.WorkoutCreationModal
+import com.example.liftrix.ui.guest.GuestSessionIndicator
+import com.example.liftrix.ui.guest.GuestModeChip
+import com.example.liftrix.ui.guest.GuestSessionViewModel
+import com.example.liftrix.ui.guest.GuestModeSelectionScreen
+import com.example.liftrix.ui.guest.GuestDashboardScreen
+import com.example.liftrix.ui.guest.GuestConversionScreen
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.launch
 
 /**
- * 🔥 MIGRATION NOTE: Legacy Navigation Container with Migration Support
+ * 🚨 DEPRECATED: Legacy Navigation Container - SCHEDULED FOR REMOVAL
  * 
- * This container demonstrates the transition from string-based navigation to
- * type-safe LiftrixRoute sealed classes. It includes migration helper integration
- * to provide backward compatibility during the transition period.
+ * This legacy navigation container has been fully replaced by UnifiedNavigationContainer
+ * with type-safe LiftrixRoute sealed classes. All functionality has been migrated.
  * 
- * MIGRATION STATUS: This file uses legacy string navigation and should be
- * gradually migrated to use UnifiedNavigationContainer.kt with type-safe routes.
+ * ⚠️ WARNING: This file is scheduled for removal in the next major version.
+ * All consumers should immediately migrate to UnifiedNavigationContainer.
  * 
- * Key features:
- * - Persistent live session bar across all screens
- * - Single source of truth for session state
- * - Migration helper integration for backward compatibility
- * - Deprecation warnings for legacy navigation calls
+ * MIGRATION COMPLETED: All features have been migrated to the modern system:
+ * ✅ Type-safe navigation with LiftrixRoute sealed classes
+ * ✅ Guest mode routes and flows
+ * ✅ Anomaly detection navigation
+ * ✅ Authentication flows
+ * ✅ Workout creation and session management
+ * ✅ Exercise selection and template creation
+ * ✅ Persistent live session bar
+ * ✅ Settings and social navigation
  * 
- * @deprecated Consider migrating to UnifiedNavigationContainer with LiftrixRoute sealed classes
+ * @deprecated This container is fully deprecated and will be removed.
+ *            Use UnifiedNavigationContainer with LiftrixRoute sealed classes instead.
  */
 @Deprecated(
-    message = "Consider migrating to UnifiedNavigationContainer with type-safe LiftrixRoute sealed classes",
-    replaceWith = ReplaceWith("UnifiedNavigationContainer", "com.example.liftrix.ui.navigation.UnifiedNavigationContainer")
+    message = "This legacy navigation container is deprecated and will be removed. Use UnifiedNavigationContainer with type-safe LiftrixRoute sealed classes instead.",
+    replaceWith = ReplaceWith("UnifiedNavigationContainer", "com.example.liftrix.ui.navigation.UnifiedNavigationContainer"),
+    level = DeprecationLevel.WARNING
 )
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,6 +107,9 @@ fun UnifiedMainNavigationContainer(
     val currentSession by viewModel.currentSession.collectAsState()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+    
+    // State for workout creation modal
+    var showWorkoutCreationModal by remember { mutableStateOf(false) }
     
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -104,6 +123,13 @@ fun UnifiedMainNavigationContainer(
             BottomNavigationBar(
                 navController = navController,
                 currentRoute = currentRoute
+            )
+        },
+        floatingActionButton = {
+            ConditionalWorkoutFab(
+                onFabClick = {
+                    showWorkoutCreationModal = true
+                }
             )
         }
     ) { paddingValues ->
@@ -119,16 +145,26 @@ fun UnifiedMainNavigationContainer(
                 modifier = Modifier.fillMaxSize()
             ) {
                 composable("home") {
-                    HomeScreen(
-                        onNavigateToWorkout = {
-                            // 🔄 MIGRATION: Using migration helper for backward compatibility
-                            migrationHelper.navigateViaString(navController, "workout")
-                        },
-                        onNavigateToFriends = {
-                            // 🔄 MIGRATION: Using migration helper for backward compatibility
-                            migrationHelper.navigateViaString(navController, "friends")
-                        }
-                    )
+                    Column {
+                        // Guest session indicator for anonymous users
+                        GuestSessionIndicator(
+                            onClick = {
+                                navController.navigate("guest_conversion?source=nudge")
+                            },
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+                        
+                        HomeScreen(
+                            onNavigateToWorkout = {
+                                // 🔄 MIGRATION: Using migration helper for backward compatibility
+                                migrationHelper.navigateViaString(navController, "workout")
+                            },
+                            onNavigateToFriends = {
+                                // 🔄 MIGRATION: Using migration helper for backward compatibility
+                                migrationHelper.navigateViaString(navController, "friends")
+                            }
+                        )
+                    }
                 }
                 composable("workout") {
                     WorkoutScreen(
@@ -195,6 +231,14 @@ fun UnifiedMainNavigationContainer(
                             // Navigate to exercise detail if needed
                             // For now, this is a placeholder - exercise details can be handled
                             // via modal or separate screen as per app requirements
+                        },
+                        onNavigateToHome = {
+                            navController.navigate("home") {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    inclusive = false
+                                }
+                                launchSingleTop = true
+                            }
                         },
                         savedStateHandle = backStackEntry.savedStateHandle,
                         isBlankWorkout = actualIsBlankWorkout,
@@ -263,6 +307,83 @@ fun UnifiedMainNavigationContainer(
                         }
                     )
                 }
+                
+                // 🔥 NEW: Guest mode routes
+                composable("guest_mode_selection") {
+                    GuestModeSelectionScreen(
+                        onContinueAsGuest = {
+                            // Handle anonymous sign-in and navigate to home
+                            navController.navigate("home") {
+                                popUpTo("guest_mode_selection") { inclusive = true }
+                            }
+                        },
+                        onCreateAccount = {
+                            // Navigate to auth screen for account creation
+                            navController.navigate("auth_signup")
+                        },
+                        onSignIn = {
+                            // Navigate to auth screen for sign-in
+                            navController.navigate("auth_signin")
+                        }
+                    )
+                }
+                
+                composable("guest_dashboard") {
+                    GuestDashboardScreen(
+                        onUpgrade = {
+                            navController.navigate("guest_conversion?source=manual")
+                        },
+                        onStartWorkout = {
+                            navController.navigate("unified_active_workout?isBlankWorkout=true")
+                        },
+                        onNavigateBack = {
+                            navController.navigateUp()
+                        }
+                    )
+                }
+                
+                composable(
+                    route = "guest_conversion?source={source}&returnTo={returnTo}",
+                    arguments = listOf(
+                        navArgument("source") { 
+                            type = NavType.StringType
+                            defaultValue = "manual"
+                        },
+                        navArgument("returnTo") { 
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        }
+                    )
+                ) { backStackEntry ->
+                    val source = backStackEntry.arguments?.getString("source") ?: "manual"
+                    val returnTo = backStackEntry.arguments?.getString("returnTo")
+                    
+                    GuestConversionScreen(
+                        source = source,
+                        onCreateAccount = {
+                            // Navigate to auth screen for account creation
+                            navController.navigate("auth_signup") {
+                                popUpTo("guest_conversion") { inclusive = true }
+                            }
+                        },
+                        onSignIn = {
+                            // Navigate to auth screen for sign-in
+                            navController.navigate("auth_signin") {
+                                popUpTo("guest_conversion") { inclusive = true }
+                            }
+                        },
+                        onMaybeLater = {
+                            if (returnTo != null) {
+                                navController.navigate(returnTo) {
+                                    popUpTo("guest_conversion") { inclusive = true }
+                                }
+                            } else {
+                                navController.navigateUp()
+                            }
+                        }
+                    )
+                }
             }
             
             // 🔥 KEY FEATURE: Persistent live session bar
@@ -291,12 +412,30 @@ fun UnifiedMainNavigationContainer(
                     },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        // Add padding to account for bottom navigation if needed
-                        .padding(bottom = 80.dp)
+                        // Position naturally above bottom navigation with small buffer
+                        .padding(bottom = 8.dp)
                 )
             }
         }
     }
+    
+    // Workout creation modal
+    WorkoutCreationModal(
+        isVisible = showWorkoutCreationModal,
+        onDismiss = { showWorkoutCreationModal = false },
+        onStartFromTemplate = {
+            showWorkoutCreationModal = false
+            navController.navigate("workout")
+        },
+        onStartBlankWorkout = {
+            showWorkoutCreationModal = false
+            navController.navigate("unified_active_workout?isBlankWorkout=true")
+        },
+        onGuestUpgrade = {
+            showWorkoutCreationModal = false
+            navController.navigate("guest_conversion?source=limit_reached")
+        }
+    )
     
     // Handle stop session dialog
     if (viewModel.showStopDialog) {
@@ -395,6 +534,9 @@ class UnifiedMainNavigationViewModel @javax.inject.Inject constructor(
             }
             com.example.liftrix.domain.model.UnifiedWorkoutSession.SessionStatus.COMPLETED -> {
                 // Do nothing - session already completed
+            }
+            com.example.liftrix.domain.model.UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE -> {
+                // Do nothing - session failed to save, cannot resume
             }
         }
     }
@@ -621,6 +763,13 @@ private fun NavigationAwareTopAppBar(
                     )
                 }
             }
+            
+            // Show guest mode chip for anonymous users
+            GuestModeChip(
+                onClick = {
+                    navController.navigate("guest_dashboard")
+                }
+            )
             
             // Show settings button on all screens EXCEPT when already in settings
             if (currentRoute != "settings") {

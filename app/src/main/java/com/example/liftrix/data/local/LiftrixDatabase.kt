@@ -23,6 +23,11 @@ import com.example.liftrix.data.local.dao.FolderDao
 import com.example.liftrix.data.local.dao.SettingsDao
 import com.example.liftrix.data.local.dao.SubscriptionDao
 import com.example.liftrix.data.local.dao.MetDataDao
+import com.example.liftrix.data.local.dao.AnalyticsCacheDao
+import com.example.liftrix.data.local.dao.GuestSessionDao
+import com.example.liftrix.data.local.dao.WorkoutAnomalyDao
+import com.example.liftrix.data.local.dao.AnomalyDetectionSettingsDao
+import com.example.liftrix.data.local.dao.ExerciseHistoryDao
 
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.data.local.entity.FolderEntity
@@ -40,6 +45,10 @@ import com.example.liftrix.data.local.entity.FriendEntity
 import com.example.liftrix.data.local.entity.PrivacySettingsEntity
 import com.example.liftrix.data.local.entity.AnalyticsCacheEntity
 import com.example.liftrix.data.local.entity.MetDataEntity
+import com.example.liftrix.data.local.entity.GuestSessionEntity
+import com.example.liftrix.data.local.entity.WorkoutAnomalyEntity
+import com.example.liftrix.data.local.entity.AnomalyDetectionSettingsEntity
+import com.example.liftrix.data.local.entity.ExerciseHistoryEntity
 
 
 
@@ -61,8 +70,12 @@ import com.example.liftrix.data.local.entity.MetDataEntity
         SubscriptionEntity::class,
         AnalyticsCacheEntity::class,
         MetDataEntity::class,
+        GuestSessionEntity::class,
+        WorkoutAnomalyEntity::class,
+        AnomalyDetectionSettingsEntity::class,
+        ExerciseHistoryEntity::class,
     ],
-    version = 28,
+    version = 30,
     exportSchema = true
 )
 @TypeConverters(
@@ -89,4 +102,9 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun settingsDao(): SettingsDao
     abstract fun subscriptionDao(): SubscriptionDao
     abstract fun metDataDao(): MetDataDao
+    abstract fun analyticsCacheDao(): AnalyticsCacheDao
+    abstract fun guestSessionDao(): GuestSessionDao
+    abstract fun workoutAnomalyDao(): WorkoutAnomalyDao
+    abstract fun anomalyDetectionSettingsDao(): AnomalyDetectionSettingsDao
+    abstract fun exerciseHistoryDao(): ExerciseHistoryDao
 } 

@@ -19,7 +19,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.example.liftrix.ui.progress.TimePeriod
+import com.example.liftrix.domain.model.analytics.TimeRange
+import com.example.liftrix.domain.model.analytics.TimeRangeType
 
 /**
  * Time period selector component for filtering progress dashboard data.
@@ -28,14 +29,14 @@ import com.example.liftrix.ui.progress.TimePeriod
  * Uses Material 3 FilterChip components with proper accessibility support and theming.
  * Integrates with the progress dashboard's MVI pattern for state management.
  * 
- * @param selectedPeriod Currently selected time period
+ * @param selectedPeriod Currently selected time range
  * @param onPeriodSelected Callback when a time period is selected
  * @param modifier Modifier for styling the selector container
  */
 @Composable
 fun TimePeriodSelector(
-    selectedPeriod: TimePeriod,
-    onPeriodSelected: (TimePeriod) -> Unit,
+    selectedPeriod: TimeRange,
+    onPeriodSelected: (TimeRange) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -63,13 +64,20 @@ fun TimePeriodSelector(
                 modifier = Modifier.padding(end = 8.dp)
             )
             
-            TimePeriod.entries.forEach { period ->
+            TimeRangeType.getDashboardTypes().forEach { rangeType ->
+                val timeRange = when (rangeType) {
+                    TimeRangeType.WEEK -> TimeRange.lastWeek()
+                    TimeRangeType.MONTH -> TimeRange.lastMonth()
+                    TimeRangeType.QUARTER -> TimeRange.lastQuarter()
+                    TimeRangeType.YEAR -> TimeRange.lastYear()
+                }
+                
                 FilterChip(
-                    selected = selectedPeriod == period,
-                    onClick = { onPeriodSelected(period) },
+                    selected = selectedPeriod.type == rangeType,
+                    onClick = { onPeriodSelected(timeRange) },
                     label = {
                         Text(
-                            text = period.displayName,
+                            text = rangeType.displayName,
                             style = MaterialTheme.typography.bodySmall,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.width(60.dp)
@@ -82,10 +90,10 @@ fun TimePeriodSelector(
                         labelColor = MaterialTheme.colorScheme.onSurfaceVariant
                     ),
                     modifier = Modifier.semantics {
-                        contentDescription = if (selectedPeriod == period) {
-                            "Selected time period: ${period.displayName}"
+                        contentDescription = if (selectedPeriod.type == rangeType) {
+                            "Selected time period: ${rangeType.displayName}"
                         } else {
-                            "Select time period: ${period.displayName}"
+                            "Select time period: ${rangeType.displayName}"
                         }
                     }
                 )

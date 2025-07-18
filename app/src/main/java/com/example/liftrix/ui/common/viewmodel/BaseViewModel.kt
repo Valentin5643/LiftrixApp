@@ -61,22 +61,37 @@ abstract class BaseViewModel<S : UiState<*>, E : ViewModelEvent>(
 ) : ViewModel() {
 
     /**
-     * The initial state for this ViewModel.
+     * Internal mutable state flow for state management.
      * Must be implemented by concrete ViewModels to provide the starting state.
      */
-    protected abstract val initialState: S
-
-    /**
-     * Internal mutable state flow for state management.
-     * Protected to allow controlled access by subclasses.
-     */
-    protected val _uiState = MutableStateFlow<S>(initialState)
+    abstract val _uiState: MutableStateFlow<S>
 
     /**
      * Public read-only state flow for UI consumption.
      * Provides reactive state updates to Compose UI components.
+     * Lazily initialized to ensure _uiState is properly set up first.
      */
-    val uiState: StateFlow<S> = _uiState.asStateFlow()
+    val uiState: StateFlow<S> by lazy {
+        validateStateFlowInitialization()
+        _uiState.asStateFlow()
+    }
+
+    /**
+     * Validates that the StateFlow is properly initialized.
+     * Called during lazy initialization of uiState to ensure proper setup.
+     */
+    private fun validateStateFlowInitialization() {
+        try {
+            // Try to access the current value to ensure StateFlow is initialized
+            _uiState.value
+            Timber.d("ViewModel ${this::class.simpleName} StateFlow initialized successfully")
+        } catch (e: Exception) {
+            val errorMessage = "ViewModel ${this::class.simpleName} has uninitialized _uiState. " +
+                    "Ensure _uiState is initialized in the constructor before any other operations."
+            Timber.e(e, errorMessage)
+            throw IllegalStateException(errorMessage, e)
+        }
+    }
 
     /**
      * Handles events from the UI following the MVI pattern.
@@ -90,7 +105,7 @@ abstract class BaseViewModel<S : UiState<*>, E : ViewModelEvent>(
      * 
      * @param event The event to process
      */
-    abstract fun onEvent(event: E)
+    abstract fun handleEvent(event: E)
 
     /**
      * Thread-safe state update method with transformation function.
@@ -109,10 +124,10 @@ abstract class BaseViewModel<S : UiState<*>, E : ViewModelEvent>(
      * }
      * ```
      * 
-     * @param transform Function that takes current state and returns new state
+     * @param reducer Function that takes current state and returns new state
      */
-    protected fun updateState(transform: (S) -> S) {
-        _uiState.value = transform(_uiState.value)
+    protected fun updateState(reducer: (S) -> S) {
+        _uiState.value = reducer(_uiState.value)
     }
 
     /**
@@ -135,12 +150,9 @@ abstract class BaseViewModel<S : UiState<*>, E : ViewModelEvent>(
      * Updates the UI state with appropriate error information.
      * 
      * @param error The LiftrixError to handle
-     * @param context Additional context for error processing
      */
-    protected fun handleError(
-        error: LiftrixError,
-        context: Map<String, Any> = emptyMap()
-    ) {
+    protected fun handleError(error: LiftrixError) {
+        val context = emptyMap<String, Any>()
         viewModelScope.launch {
             try {
                 val result = errorHandler.handleError(error, context)
@@ -159,6 +171,9 @@ abstract class BaseViewModel<S : UiState<*>, E : ViewModelEvent>(
                     is LiftrixError.CalculationError -> updateErrorState(error)
                     is LiftrixError.ExportError -> updateErrorState(error)
                     is LiftrixError.FileSystemError -> updateErrorState(error)
+                    is LiftrixError.NotFoundError -> updateErrorState(error)
+                    is LiftrixError.ConfigurationError -> updateErrorState(error)
+                    is LiftrixError.DataRetrievalError -> updateErrorState(error)
                 }
             } catch (exception: Exception) {
                 Timber.e(exception, "Failed to handle error properly")
@@ -387,7 +402,7 @@ inline fun <S : UiState<*>, E : ViewModelEvent> createBaseViewModel(
     errorHandler: ErrorHandler,
     crossinline eventHandler: (E) -> Unit
 ): BaseViewModel<S, E> = object : BaseViewModel<S, E>(errorHandler) {
-    override val initialState: S = initialState
-    override fun onEvent(event: E) = eventHandler(event)
+    override val _uiState: MutableStateFlow<S> = MutableStateFlow(initialState)
+    override fun handleEvent(event: E) = eventHandler(event)
 }
 

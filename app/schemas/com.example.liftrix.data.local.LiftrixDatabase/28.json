@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 28,
-    "identityHash": "abe43bfb3b7232d1d57f44db7f020dff",
+    "identityHash": "846159052858d9ed1c88cde53d85a5a6",
     "entities": [
       {
         "tableName": "workouts",
@@ -96,7 +96,20 @@
           "columnNames": [
             "id"
           ]
-        }
+        },
+        "indices": [
+          {
+            "name": "idx_workout_analytics",
+            "unique": false,
+            "columnNames": [
+              "user_id",
+              "date",
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_workout_analytics` ON `${TABLE_NAME}` (`user_id`, `date`, `status`)"
+          }
+        ]
       },
       {
         "tableName": "user_profiles",
@@ -1516,7 +1529,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'abe43bfb3b7232d1d57f44db7f020dff')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '846159052858d9ed1c88cde53d85a5a6')"
     ]
   }
 }

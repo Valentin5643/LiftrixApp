@@ -160,6 +160,11 @@ class ValidateUnifiedWorkoutSessionUseCase @Inject constructor(
                     issues.add("Completed session must have end time")
                 }
             }
+            UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE -> {
+                if (session.endedAt == null) {
+                    issues.add("Failed to save session must have end time")
+                }
+            }
         }
     }
     

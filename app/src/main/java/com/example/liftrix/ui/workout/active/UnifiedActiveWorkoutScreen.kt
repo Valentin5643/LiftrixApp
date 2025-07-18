@@ -33,10 +33,10 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -91,6 +91,7 @@ fun UnifiedActiveWorkoutScreen(
     onNavigateBack: () -> Unit,
     onAddExercise: () -> Unit,
     onNavigateToExercise: (String) -> Unit,
+    onNavigateToHome: () -> Unit,
     viewModel: UnifiedActiveWorkoutViewModel = hiltViewModel(),
     savedStateHandle: SavedStateHandle? = null,
     isBlankWorkout: Boolean = false,
@@ -155,6 +156,7 @@ fun UnifiedActiveWorkoutScreen(
             is UnifiedActiveWorkoutUiState.Success -> timber.log.Timber.d("🔥 SCREEN-DEBUG: Showing success screen with session: ${(uiState as UnifiedActiveWorkoutUiState.Success).session.name}")
             is UnifiedActiveWorkoutUiState.Error -> timber.log.Timber.d("🔥 SCREEN-DEBUG: Showing error screen: ${(uiState as UnifiedActiveWorkoutUiState.Error).message}")
             is UnifiedActiveWorkoutUiState.NoSession -> timber.log.Timber.d("🔥 SCREEN-DEBUG: Showing no session screen")
+            is UnifiedActiveWorkoutUiState.WorkoutCompleted -> timber.log.Timber.d("🔥 SCREEN-DEBUG: Workout completed - should navigate away")
         }
     }
     
@@ -243,20 +245,6 @@ fun UnifiedActiveWorkoutScreen(
                         onDismissRequest = { showMenu = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Complete Workout") },
-                            onClick = {
-                                showMenu = false
-                                viewModel.completeWorkout()
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = null
-                                )
-                            }
-                        )
-                        
-                        DropdownMenuItem(
                             text = { Text("Stop Workout") },
                             onClick = {
                                 showMenu = false
@@ -275,21 +263,6 @@ fun UnifiedActiveWorkoutScreen(
                     containerColor = MaterialTheme.colorScheme.background
                 )
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onAddExercise,
-                modifier = Modifier.semantics { 
-                    contentDescription = "Add exercise to workout" 
-                },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = null
-                )
-            }
         }
     ) { paddingValues ->
         when (uiState) {
@@ -315,6 +288,13 @@ fun UnifiedActiveWorkoutScreen(
                 )
             }
             
+            is UnifiedActiveWorkoutUiState.WorkoutCompleted -> {
+                // Navigate to Home immediately when workout is completed
+                LaunchedEffect(Unit) {
+                    onNavigateToHome()
+                }
+            }
+            
             is UnifiedActiveWorkoutUiState.Success -> {
                 val successState = uiState as UnifiedActiveWorkoutUiState.Success
                 
@@ -325,6 +305,7 @@ fun UnifiedActiveWorkoutScreen(
                 
                 ActiveWorkoutContent(
                     session = successState.session,
+                    isCompleting = successState.isCompleting,
                     onNavigateToExercise = onNavigateToExercise,
                     onRemoveExercise = { exerciseId ->
                         viewModel.removeExercise(exerciseId)
@@ -334,6 +315,9 @@ fun UnifiedActiveWorkoutScreen(
                     },
                     onUpdateSet = { exerciseId, setNumber, updatedSet ->
                         viewModel.updateSetInExercise(exerciseId, setNumber, updatedSet)
+                    },
+                    onCompleteWorkout = {
+                        viewModel.completeWorkout(onNavigateToHome)
                     },
                     modifier = Modifier.padding(paddingValues)
                 )
@@ -345,60 +329,131 @@ fun UnifiedActiveWorkoutScreen(
 @Composable
 private fun ActiveWorkoutContent(
     session: UnifiedWorkoutSession,
+    isCompleting: Boolean,
     onNavigateToExercise: (String) -> Unit,
     onRemoveExercise: (String) -> Unit,
     onAddSet: (String) -> Unit,
     onUpdateSet: (String, Int, com.example.liftrix.domain.model.SessionSet) -> Unit,
+    onCompleteWorkout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp)
+    // Debug logging
+    timber.log.Timber.d("🔥 CONTENT-DEBUG: ActiveWorkoutContent rendering")
+    timber.log.Timber.d("🔥 CONTENT-DEBUG: session.exercises.size = ${session.exercises.size}")
+    timber.log.Timber.d("🔥 CONTENT-DEBUG: session.exercises.isEmpty() = ${session.exercises.isEmpty()}")
+    
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Session stats card
-        SessionStatsCard(
-            session = session,
-            modifier = Modifier.fillMaxWidth()
-        )
+        item {
+            SessionStatsCard(
+                session = session,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
         
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // Exercise list
-        timber.log.Timber.d("🔥 CONTENT-DEBUG: ActiveWorkoutContent rendering")
-        timber.log.Timber.d("🔥 CONTENT-DEBUG: session.exercises.size = ${session.exercises.size}")
-        timber.log.Timber.d("🔥 CONTENT-DEBUG: session.exercises.isEmpty() = ${session.exercises.isEmpty()}")
-        
+        // Exercise list or empty state
         if (session.exercises.isNotEmpty()) {
-            timber.log.Timber.d("🔥 CONTENT-DEBUG: Rendering LazyColumn with ${session.exercises.size} exercises")
+            timber.log.Timber.d("🔥 CONTENT-DEBUG: Rendering ${session.exercises.size} exercises")
             
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(bottom = 80.dp) // Account for FAB
-            ) {
-                itemsIndexed(session.exercises) { index, exercise ->
-                    timber.log.Timber.d("🔥 CONTENT-DEBUG: Rendering ExerciseCard for: ${exercise.name} at index $index")
-                    
-                    ExerciseCard(
-                        exercise = exercise,
-                        isCurrent = index == session.currentExerciseIndex,
-                        onExerciseClick = { onNavigateToExercise(exercise.exerciseId.value) },
-                        onRemoveExercise = { onRemoveExercise(exercise.exerciseId.value) },
-                        onAddSet = { onAddSet(exercise.exerciseId.value) },
-                        onUpdateSet = { setNumber, updatedSet ->
-                            onUpdateSet(exercise.exerciseId.value, setNumber, updatedSet)
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
+            itemsIndexed(session.exercises) { index, exercise ->
+                timber.log.Timber.d("🔥 CONTENT-DEBUG: Rendering ExerciseCard for: ${exercise.name} at index $index")
+                
+                ExerciseCard(
+                    exercise = exercise,
+                    isCurrent = index == session.currentExerciseIndex,
+                    onExerciseClick = { onNavigateToExercise(exercise.exerciseId.value) },
+                    onRemoveExercise = { onRemoveExercise(exercise.exerciseId.value) },
+                    onAddSet = { onAddSet(exercise.exerciseId.value) },
+                    onUpdateSet = { setNumber, updatedSet ->
+                        onUpdateSet(exercise.exerciseId.value, setNumber, updatedSet)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         } else {
             timber.log.Timber.d("🔥 CONTENT-DEBUG: Showing EmptyExerciseList - no exercises in session")
             
-            // Empty state
-            EmptyExerciseList(
+            item {
+                EmptyExerciseList(
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+        
+        // Complete Workout button at bottom
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
+            CompleteWorkoutButton(
+                isCompleting = isCompleting,
+                onCompleteWorkout = onCompleteWorkout,
                 modifier = Modifier.fillMaxWidth()
             )
+        }
+    }
+}
+
+@Composable
+private fun CompleteWorkoutButton(
+    isCompleting: Boolean,
+    onCompleteWorkout: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Button(
+        onClick = onCompleteWorkout,
+        modifier = modifier
+            .height(56.dp)
+            .semantics { 
+                contentDescription = "Complete workout and save progress" 
+            },
+        enabled = !isCompleting,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+            disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.6f)
+        ),
+        elevation = ButtonDefaults.buttonElevation(
+            defaultElevation = 4.dp,
+            pressedElevation = 2.dp,
+            disabledElevation = 0.dp
+        )
+    ) {
+        if (isCompleting) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+                Text(
+                    text = "Completing...",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        } else {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = "Complete Workout",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
     }
 }
@@ -455,6 +510,8 @@ private fun SessionStatsCard(
                                         MaterialTheme.colorScheme.outline
                                     UnifiedWorkoutSession.SessionStatus.COMPLETED ->
                                         MaterialTheme.colorScheme.tertiary
+                                    UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE ->
+                                        MaterialTheme.colorScheme.error
                                 }
                             )
                     )
@@ -466,6 +523,7 @@ private fun SessionStatsCard(
                             UnifiedWorkoutSession.SessionStatus.ACTIVE -> "Active"
                             UnifiedWorkoutSession.SessionStatus.PAUSED -> "Paused"
                             UnifiedWorkoutSession.SessionStatus.COMPLETED -> "Completed"
+                            UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE -> "Save Failed"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -831,10 +889,12 @@ private fun UnifiedActiveWorkoutScreenPreview() {
         
         ActiveWorkoutContent(
             session = mockSession,
+            isCompleting = false,
             onNavigateToExercise = { },
             onRemoveExercise = { },
             onAddSet = { },
-            onUpdateSet = { _, _, _ -> }
+            onUpdateSet = { _, _, _ -> },
+            onCompleteWorkout = { }
         )
     }
 }

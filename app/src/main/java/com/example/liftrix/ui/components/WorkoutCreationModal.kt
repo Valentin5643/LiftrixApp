@@ -27,6 +27,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.liftrix.ui.guest.GuestSessionViewModel
+import com.example.liftrix.ui.guest.GuestSessionState
 
 /**
  * Modal bottom sheet for workout creation options.
@@ -44,16 +49,18 @@ import androidx.compose.ui.unit.dp
  * 
  * @param isVisible Controls modal visibility state
  * @param onDismiss Callback triggered when modal should be dismissed
- * @param onTemplateWorkout Callback triggered when user selects template-based workout creation
- * @param onCustomWorkout Callback triggered when user selects custom workout creation
+ * @param onStartFromTemplate Callback triggered when user selects template-based workout creation
+ * @param onStartBlankWorkout Callback triggered when user selects blank workout creation
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkoutCreationModal(
     isVisible: Boolean,
     onDismiss: () -> Unit,
-    onTemplateWorkout: () -> Unit,
-    onCustomWorkout: () -> Unit
+    onStartFromTemplate: () -> Unit,
+    onStartBlankWorkout: () -> Unit,
+    onGuestUpgrade: (() -> Unit)? = null,
+    guestViewModel: GuestSessionViewModel = hiltViewModel()
 ) {
     if (isVisible) {
         ModalBottomSheet(
@@ -70,6 +77,8 @@ fun WorkoutCreationModal(
                     .padding(horizontal = 24.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                val guestSessionState by guestViewModel.guestSessionState.collectAsState()
+                
                 // Header
                 Text(
                     text = "Create Workout",
@@ -79,25 +88,73 @@ fun WorkoutCreationModal(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
                 
-                // Template workout option
+                // Guest limitation warning if applicable
+                val currentGuestState = guestSessionState
+                if (currentGuestState is GuestSessionState.Active) {
+                    val guestSession = currentGuestState.guestSession
+                    if (guestSession.isLimitReached) {
+                        GuestLimitReachedWarning(
+                            onUpgrade = {
+                                onGuestUpgrade?.invoke()
+                                onDismiss()
+                            }
+                        )
+                    } else if (guestSession.getWorkoutsRemaining() <= 1) {
+                        GuestLimitWarning(
+                            workoutsRemaining = guestSession.getWorkoutsRemaining(),
+                            onUpgrade = {
+                                onGuestUpgrade?.invoke()
+                                onDismiss()
+                            }
+                        )
+                    }
+                }
+                
+                // Determine if workout creation should be enabled
+                val isEnabled = when (currentGuestState) {
+                    is GuestSessionState.Active -> !currentGuestState.guestSession.isLimitReached
+                    else -> true // Not a guest user or loading
+                }
+                
+                // Start blank workout option
                 WorkoutCreationOption(
-                    icon = Icons.Default.FitnessCenter,
-                    title = "Start from Template",
-                    description = "Choose from pre-built workout routines and customize as needed",
+                    icon = Icons.Default.Create,
+                    title = "Make a Blank Workout",
+                    description = "Build your own workout from scratch with personalized exercises",
+                    enabled = isEnabled,
                     onClick = {
-                        onTemplateWorkout()
-                        onDismiss()
+                        if (isEnabled) {
+                            onStartBlankWorkout()
+                            onDismiss()
+                            
+                            // Record interaction for guest users
+                            if (guestSessionState is GuestSessionState.Active) {
+                                guestViewModel.recordSignificantInteraction(
+                                    com.example.liftrix.domain.model.SignificantInteraction.WORKOUT_COMPLETED
+                                )
+                            }
+                        }
                     }
                 )
                 
-                // Custom workout option
+                // Template workout option
                 WorkoutCreationOption(
-                    icon = Icons.Default.Create,
-                    title = "Create Custom Workout",
-                    description = "Build your own workout from scratch with personalized exercises",
+                    icon = Icons.Default.FitnessCenter,
+                    title = "Start a Workout",
+                    description = "Choose from pre-built workout routines and customize as needed",
+                    enabled = isEnabled,
                     onClick = {
-                        onCustomWorkout()
-                        onDismiss()
+                        if (isEnabled) {
+                            onStartFromTemplate()
+                            onDismiss()
+                            
+                            // Record interaction for guest users
+                            if (guestSessionState is GuestSessionState.Active) {
+                                guestViewModel.recordSignificantInteraction(
+                                    com.example.liftrix.domain.model.SignificantInteraction.TEMPLATE_VIEWED
+                                )
+                            }
+                        }
                     }
                 )
                 
@@ -126,20 +183,29 @@ private fun WorkoutCreationOption(
     title: String,
     description: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     Card(
-        onClick = onClick,
+        onClick = if (enabled) onClick else { {} },
         modifier = modifier
             .fillMaxWidth()
             .semantics {
                 contentDescription = "$title: $description"
             },
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            containerColor = if (enabled) {
+                MaterialTheme.colorScheme.surfaceVariant
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+            },
+            contentColor = if (enabled) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            }
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = if (enabled) 2.dp else 0.dp)
     ) {
         Row(
             modifier = Modifier
@@ -172,6 +238,89 @@ private fun WorkoutCreationOption(
                     text = description,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Warning component for guest users who have reached their workout limit
+ */
+@Composable
+private fun GuestLimitReachedWarning(
+    onUpgrade: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = "Guest Limit Reached",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Text(
+                text = "You've completed all 3 guest workouts. Create a free account to continue tracking your fitness journey.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            androidx.compose.material3.TextButton(
+                onClick = onUpgrade
+            ) {
+                Text(
+                    text = "Create Free Account",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Warning component for guest users approaching their workout limit
+ */
+@Composable
+private fun GuestLimitWarning(
+    workoutsRemaining: Int,
+    onUpgrade: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = "Almost at your limit!",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+            Text(
+                text = "You have $workoutsRemaining workout${if (workoutsRemaining != 1) "s" else ""} remaining. Create an account to unlock unlimited workouts.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            androidx.compose.material3.TextButton(
+                onClick = onUpgrade
+            ) {
+                Text(
+                    text = "Upgrade Now",
+                    fontWeight = FontWeight.Bold
                 )
             }
         }

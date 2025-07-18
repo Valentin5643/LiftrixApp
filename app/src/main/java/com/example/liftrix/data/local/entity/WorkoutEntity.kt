@@ -2,6 +2,7 @@ package com.example.liftrix.data.local.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverters
 import com.example.liftrix.data.local.converter.DateTimeConverters
@@ -13,7 +14,12 @@ import java.time.LocalDate
 /**
  * Room entity representing a workout in local database
  */
-@Entity(tableName = "workouts")
+@Entity(
+    tableName = "workouts",
+    indices = [
+        Index(value = ["user_id", "date", "status"], name = "idx_workout_analytics")
+    ]
+)
 @TypeConverters(DateTimeConverters::class, WorkoutConverters::class)
 data class WorkoutEntity(
     @PrimaryKey

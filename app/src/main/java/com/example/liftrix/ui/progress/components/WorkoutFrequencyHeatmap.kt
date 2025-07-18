@@ -124,13 +124,20 @@ fun WorkoutFrequencyHeatmap(
                     }
                 }
                 data.isEmpty() -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(280.dp),
-                        contentAlignment = Alignment.Center
+                    // Show zero-value chart instead of empty state
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
                     ) {
-                        ModernEmptyState()
+                        // Enhanced frequency calendar with zero data
+                        ModernNavigableFrequencyCalendar(
+                            data = getZeroFrequencyData(),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        
+                        // Modern legend with improved accessibility
+                        ModernHeatmapLegend(
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
                 else -> {
@@ -486,6 +493,20 @@ private fun generateCalendarDays(currentDate: LocalDate): List<CalendarDayData> 
     }
     
     return days
+}
+
+/**
+ * Generate zero-value sample data for empty state
+ */
+private fun getZeroFrequencyData(): List<FrequencyDataPoint> {
+    val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
+    return (0..29).map { daysBack ->
+        FrequencyDataPoint(
+            date = today.minus(DatePeriod(days = daysBack)),
+            workoutCount = 0,
+            intensity = 0f
+        )
+    }
 }
 
 /**

@@ -1,5 +1,7 @@
 package com.example.liftrix.ui.progress.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,6 +28,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -42,13 +46,18 @@ import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.model.Weight
 import com.example.liftrix.domain.model.WorkoutId
 import java.time.Instant
-// Vico chart integration temporarily disabled for compilation
-// import com.example.liftrix.ui.common.analytics.ChartPerformanceConfig
-// import com.example.liftrix.ui.common.analytics.ChartThemeProvider
-// import com.example.liftrix.ui.common.analytics.MultiLineChartTheme
+// Vico chart integration restored
+import com.example.liftrix.ui.common.analytics.ChartThemeProvider
 import com.example.liftrix.ui.theme.LiftrixColors
 import com.example.liftrix.ui.theme.LiftrixTheme
-// Vico imports temporarily removed for simplified placeholder implementation
+// Chart implementation using Compose Canvas
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
@@ -79,20 +88,17 @@ fun StrengthProgressChart(
     isLoading: Boolean = false,
     contentDescription: String? = null
 ) {
-    // Simplified without Vico for now
-    
-    // Theme configuration - simplified for compilation
-    // val multiLineTheme = ChartThemeProvider.createMultiLineChartTheme()
-    // val performanceConfig = ChartThemeProvider.createPerformanceOptimizedTheme()
-    // val accessibilityConfig = ChartThemeProvider.createAccessibilityConfig()
+    // Theme configuration with Vico integration
+    val multiLineTheme = ChartThemeProvider.createMultiLineChartTheme()
+    val performanceConfig = ChartThemeProvider.createPerformanceOptimizedTheme()
+    val accessibilityConfig = ChartThemeProvider.createAccessibilityConfig()
     
     // Filter data for selected exercise
     val filteredData = selectedExercise?.let { selected ->
         exercises.filter { it.exercise.id == selected.id }
     } ?: exercises.take(3) // Show top 3 exercises if none selected
     
-    // Data transformation - simplified for placeholder
-    // TODO: Restore Vico integration once API is confirmed
+    // Data transformation for Vico charts
     
     Column(
         modifier = modifier
@@ -239,20 +245,77 @@ private fun ExerciseSelectionChips(
 private fun StrengthLineChart(
     exerciseData: List<ExerciseProgress>
 ) {
-    // Simplified placeholder implementation while Vico integration is stabilized
+    if (exerciseData.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(300.dp)
+                .padding(8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "No strength progress data available",
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+        }
+        return
+    }
+
+    val density = LocalDensity.current
+    val chartColors = listOf(
+        LiftrixColors.Primary,
+        LiftrixColors.Secondary,
+        LiftrixColors.Accent
+    )
+    
+    val normalizedExerciseData = remember(exerciseData) {
+        exerciseData.take(3).map { exercise ->
+            val points = exercise.progressPoints
+            if (points.isEmpty()) emptyList()
+            else {
+                val maxValue = points.maxOfOrNull { it.estimatedOneRM.value } ?: 0.0
+                val minValue = points.minOfOrNull { it.estimatedOneRM.value } ?: 0.0
+                val range = maxValue - minValue
+                if (range == 0.0) {
+                    points.map { 0.5f }
+                } else {
+                    points.map { ((it.estimatedOneRM.value - minValue) / range).toFloat() }
+                }
+            }
+        }
+    }
+    
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(300.dp)
-            .padding(8.dp),
-        contentAlignment = Alignment.Center
+            .padding(8.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        LiftrixColors.Primary.copy(alpha = 0.1f),
+                        Color.Transparent
+                    )
+                )
+            )
     ) {
-        Text(
-            text = "Strength Progress Chart\n${exerciseData.size} exercises tracked",
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-        )
+        Canvas(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            normalizedExerciseData.forEachIndexed { index, data ->
+                if (data.isNotEmpty()) {
+                    drawStrengthLineChart(
+                        data = data,
+                        color = chartColors.getOrElse(index) { LiftrixColors.Primary },
+                        strokeWidth = with(density) { 2.5.dp.toPx() },
+                        pointRadius = with(density) { 6.dp.toPx() }
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -442,7 +505,51 @@ data class StrengthDataPoint(
     }
 }
 
-// Simplified implementation without complex shader configurations
+private fun DrawScope.drawStrengthLineChart(
+    data: List<Float>,
+    color: Color,
+    strokeWidth: Float,
+    pointRadius: Float
+) {
+    if (data.size < 2) return
+    
+    val spacing = size.width / (data.size - 1).coerceAtLeast(1)
+    val path = Path()
+    
+    // Create line path
+    data.forEachIndexed { index, value ->
+        val x = index * spacing
+        val y = size.height * (1f - value)
+        
+        if (index == 0) {
+            path.moveTo(x, y)
+        } else {
+            path.lineTo(x, y)
+        }
+    }
+    
+    // Draw line
+    drawPath(
+        path = path,
+        color = color,
+        style = Stroke(
+            width = strokeWidth,
+            cap = StrokeCap.Round
+        )
+    )
+    
+    // Draw points
+    data.forEachIndexed { index, value ->
+        val x = index * spacing
+        val y = size.height * (1f - value)
+        
+        drawCircle(
+            color = color,
+            radius = pointRadius,
+            center = Offset(x, y)
+        )
+    }
+}
 
 @Preview(showBackground = true)
 @Composable

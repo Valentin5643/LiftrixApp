@@ -12,7 +12,18 @@ import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.Weight
 import com.example.liftrix.domain.model.WorkoutTemplateId
+import com.example.liftrix.domain.model.Workout
+import com.example.liftrix.domain.model.WorkoutId
+import com.example.liftrix.domain.model.WorkoutStatus
+import com.example.liftrix.domain.model.Exercise
+import com.example.liftrix.domain.model.ExerciseLibrary
+import com.example.liftrix.domain.model.ExerciseSet
+import com.example.liftrix.domain.model.ExerciseSetId
+import com.example.liftrix.domain.model.Reps
+import com.example.liftrix.domain.model.RPE
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
+import java.time.LocalDate
+import java.time.Duration
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -160,7 +171,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
     }
 
     /**
-     * 🔥 SIMPLIFIED: Completes the current session
+     * 🔥 IMPROVED: Completes the current session with proper cleanup
      */
     fun completeSession(): Boolean {
         val session = _currentSession.value
@@ -178,20 +189,86 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         _currentSession.value = completedSession
         
         scope.launch {
-            // Save completed workout to repository
-            val completedWorkout = completedSession.toCompletedWorkout()
-            workoutRepository.saveWorkout(completedWorkout)
-                .onSuccess {
-                    Timber.i("Workout saved successfully: ${completedWorkout.name}")
-                    // Clear session after saving
-                    clearSession()
-                }
-                .onFailure { exception ->
-                    Timber.e(exception, "Failed to save completed workout")
-                }
+            try {
+                // Save completed workout to repository
+                val completedWorkout = completedSession.toCompletedWorkout()
+                Timber.d("🔥 SESSION-COMPLETE: Saving workout: ${completedWorkout.name}")
+                
+                workoutRepository.saveWorkout(completedWorkout)
+                    .onSuccess {
+                        Timber.i("🔥 SESSION-COMPLETE: Workout saved successfully: ${completedWorkout.name}")
+                        // Clear session after successful save
+                        clearSession()
+                    }
+                    .onFailure { exception ->
+                        Timber.e(exception, "🔥 SESSION-COMPLETE: Failed to save completed workout")
+                        
+                        // Check if error is recoverable to decide whether to preserve session
+                        val shouldPreserveSession = when (exception) {
+                            is com.example.liftrix.domain.model.error.LiftrixError.DatabaseError -> {
+                                exception.isRecoverable
+                            }
+                            is com.example.liftrix.domain.model.error.LiftrixError.NetworkError -> {
+                                exception.isRecoverable
+                            }
+                            else -> false
+                        }
+                        
+                        if (shouldPreserveSession) {
+                            Timber.w("🔥 SESSION-COMPLETE: Preserving session for recoverable error: ${exception.message}")
+                            // Mark session as failed but preserve for retry
+                            _currentSession.value = completedSession.copy(
+                                sessionStatus = UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE
+                            )
+                        } else {
+                            Timber.w("🔥 SESSION-COMPLETE: Clearing session for non-recoverable error")
+                            clearSession()
+                        }
+                    }
+            } catch (e: Exception) {
+                Timber.e(e, "🔥 SESSION-COMPLETE: Error in completion process")
+                // Clear session on unexpected errors to prevent stuck state
+                clearSession()
+            }
         }
         
-        Timber.d("Session completed: ${session.name}")
+        Timber.d("🔥 SESSION-COMPLETE: Session completed: ${session.name}")
+        return true
+    }
+
+    /**
+     * Retry saving a failed session
+     */
+    fun retrySaveSession(): Boolean {
+        val session = _currentSession.value
+        if (session == null || session.sessionStatus != UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE) {
+            Timber.w("Cannot retry - no failed session available")
+            return false
+        }
+
+        Timber.i("🔥 SESSION-RETRY: Retrying save for session: ${session.name}")
+        
+        scope.launch {
+            try {
+                val completedWorkout = session.toCompletedWorkout()
+                Timber.d("🔥 SESSION-RETRY: Attempting to save workout: ${completedWorkout.name}")
+                
+                workoutRepository.saveWorkout(completedWorkout)
+                    .onSuccess {
+                        Timber.i("🔥 SESSION-RETRY: Workout saved successfully on retry: ${completedWorkout.name}")
+                        // Update session status to completed and clear
+                        _currentSession.value = session.copy(sessionStatus = UnifiedWorkoutSession.SessionStatus.COMPLETED)
+                        clearSession()
+                    }
+                    .onFailure { exception ->
+                        Timber.e(exception, "🔥 SESSION-RETRY: Retry also failed for workout: ${completedWorkout.name}")
+                        // Keep session in FAILED_TO_SAVE state for another retry attempt
+                    }
+            } catch (e: Exception) {
+                Timber.e(e, "🔥 SESSION-RETRY: Error in retry process")
+            }
+        }
+        
         return true
     }
 
@@ -489,6 +566,53 @@ class UnifiedWorkoutSessionManager @Inject constructor(
     }
 
     /**
+     * 🔥 NEW: Completes the current session and persists it as a finished workout
+     */
+    suspend fun completeCurrentSession(): Boolean {
+        val currentSession = _currentSession.value
+        if (currentSession == null) {
+            Timber.w("🔥 COMPLETE-SESSION-DEBUG: No active session to complete")
+            return false
+        }
+        
+        if (currentSession.sessionStatus == UnifiedWorkoutSession.SessionStatus.COMPLETED) {
+            Timber.w("🔥 COMPLETE-SESSION-DEBUG: Session already completed")
+            return false
+        }
+        
+        try {
+            Timber.d("🔥 COMPLETE-SESSION-DEBUG: Completing session: ${currentSession.name}")
+            
+            // Complete the session in the unified session state
+            val completedSession = currentSession.complete()
+            
+            // Update the current session state
+            _currentSession.value = completedSession
+            
+            // Persist the completed session through the repository
+            val result = workoutRepository.saveWorkout(completedSession.toWorkout())
+            
+            result.fold(
+                onSuccess = {
+                    Timber.d("🔥 COMPLETE-SESSION-DEBUG: Successfully saved completed workout")
+                    
+                    // Clear the session after successful save
+                    clearSession()
+                    
+                    return true
+                },
+                onFailure = { exception ->
+                    Timber.e(exception, "🔥 COMPLETE-SESSION-DEBUG: Failed to save completed workout")
+                    return false
+                }
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "🔥 COMPLETE-SESSION-DEBUG: Exception during session completion")
+            return false
+        }
+    }
+    
+    /**
      * 🔥 SIMPLIFIED: Persists session to SharedPreferences
      */
     private suspend fun persistSession(session: UnifiedWorkoutSession) {
@@ -505,15 +629,16 @@ class UnifiedWorkoutSessionManager @Inject constructor(
     }
 
     /**
-     * 🔥 SIMPLIFIED: Clears persisted session
+     * 🔥 IMPROVED: Clears persisted session with proper logging
      */
     private fun clearSession() {
+        val currentSession = _currentSession.value
         _currentSession.value = null
         sharedPrefs.edit {
             remove(KEY_CURRENT_SESSION)
             remove(KEY_LAST_UPDATED)
         }
-        Timber.d("Session cleared")
+        Timber.d("🔥 SESSION-CLEAR: Session cleared${currentSession?.let { ": ${it.name}" } ?: ""}")
     }
 
     /**
@@ -724,5 +849,33 @@ private fun SerializableSessionSet.toSessionSet(): SessionSet {
         actualWeight = actualWeight?.let { Weight(it) },
         actualTime = actualTime,
         completedAt = completedAt?.let { Instant.ofEpochSecond(it) }
+    )
+}
+
+/**
+ * Extension function to convert UnifiedWorkoutSession to Workout for persistence
+ * 🔥 FIX: Ensures proper conversion of session data to workout format
+ */
+private fun UnifiedWorkoutSession.toWorkout(): Workout {
+    return Workout(
+        userId = this.userId,
+        id = WorkoutId(this.id.value),
+        name = this.name,
+        date = LocalDate.now(),
+        exercises = this.exercises.map { sessionExercise ->
+            sessionExercise.toCompletedExercise()
+        },
+        status = when (this.sessionStatus) {
+            UnifiedWorkoutSession.SessionStatus.COMPLETED -> WorkoutStatus.COMPLETED
+            UnifiedWorkoutSession.SessionStatus.ACTIVE -> WorkoutStatus.IN_PROGRESS
+            UnifiedWorkoutSession.SessionStatus.PAUSED -> WorkoutStatus.IN_PROGRESS
+            UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE -> WorkoutStatus.COMPLETED
+        },
+        startTime = this.startedAt,
+        endTime = this.endedAt,
+        notes = this.notes,
+        templateId = this.templateId?.let { WorkoutId(it) },
+        createdAt = this.startedAt,
+        updatedAt = this.lastModified
     )
 }

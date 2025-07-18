@@ -71,6 +71,24 @@ sealed class SettingsEvent {
      */
     object NavigateToAbout : SettingsEvent()
     
+    /**
+     * Triggered when user taps on anomaly detection settings.
+     * Should navigate to anomaly detection settings screen.
+     */
+    object NavigateToAnomalyDetection : SettingsEvent()
+    
+    /**
+     * Triggered when user taps on anomaly detection dashboard.
+     * Should navigate to anomaly detection dashboard screen.
+     */
+    object NavigateToAnomalyDashboard : SettingsEvent()
+    
+    /**
+     * Triggered when user taps on widget settings/customize dashboard.
+     * Should navigate to widget customization screen.
+     */
+    object NavigateToWidgetSettings : SettingsEvent()
+    
     // Authentication events
     /**
      * Triggered when user initiates logout process.

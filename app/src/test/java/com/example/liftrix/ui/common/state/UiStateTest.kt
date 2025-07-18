@@ -106,7 +106,7 @@ class UiStateTest {
 
     @Test
     fun `map should preserve non-Success states unchanged`() {
-        val error = LiftrixError.ValidationError("field", listOf("error"))
+        val error = LiftrixError.ValidationError(field = "field", violations = listOf("error"))
         val errorState = UiState.Error<Int>(error)
         val loadingState = UiState.Loading
         val emptyState = UiState.Empty()
@@ -228,7 +228,7 @@ class UiStateTest {
 
     @Test
     fun `asErrorState should create Error state correctly`() {
-        val error = LiftrixError.ValidationError("field", listOf("error"))
+        val error = LiftrixError.ValidationError(field = "field", violations = listOf("error"))
         val state = error.asErrorState<String>()
         
         assertTrue(state is UiState.Error)

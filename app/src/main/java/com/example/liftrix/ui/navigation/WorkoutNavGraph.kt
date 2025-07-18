@@ -14,6 +14,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.navigation
@@ -49,8 +50,9 @@ import timber.log.Timber
  * @param onNavigateToExerciseLibrary Callback to navigate to exercise library
  */
 @Deprecated(
-    message = "Use UnifiedNavigationContainer with LiftrixRoute sealed classes instead",
-    replaceWith = ReplaceWith("UnifiedNavigationContainer", "com.example.liftrix.ui.navigation.UnifiedNavigationContainer")
+    message = "This legacy workout navigation graph is deprecated and will be removed. Use UnifiedNavigationContainer with type-safe LiftrixRoute sealed classes instead.",
+    replaceWith = ReplaceWith("UnifiedNavigationContainer", "com.example.liftrix.ui.navigation.UnifiedNavigationContainer"),
+    level = DeprecationLevel.WARNING
 )
 fun NavGraphBuilder.workoutGraph(
     user: User,
@@ -110,6 +112,14 @@ fun NavGraphBuilder.workoutGraph(
                 onNavigateToExercise = { exerciseId ->
                     // Navigate to exercise detail if needed
                 },
+                onNavigateToHome = {
+                    navController.navigate("home") {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            inclusive = false
+                        }
+                        launchSingleTop = true
+                    }
+                },
                 savedStateHandle = backStackEntry.savedStateHandle,
                 isBlankWorkout = actualTemplateId == null, // 🔥 FIX: If no valid templateId, treat as blank workout
                 templateId = actualTemplateId // Pass cleaned templateId
@@ -127,6 +137,14 @@ fun NavGraphBuilder.workoutGraph(
                 },
                 onNavigateToExercise = { exerciseId ->
                     // Navigate to exercise detail if needed
+                },
+                onNavigateToHome = {
+                    navController.navigate("home") {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            inclusive = false
+                        }
+                        launchSingleTop = true
+                    }
                 },
                 savedStateHandle = backStackEntry.savedStateHandle,
                 isBlankWorkout = true

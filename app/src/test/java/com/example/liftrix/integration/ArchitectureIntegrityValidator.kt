@@ -5,7 +5,6 @@ import com.example.liftrix.domain.repository.*
 import com.example.liftrix.domain.usecase.*
 import com.example.liftrix.ui.home.HomeViewModel
 import com.example.liftrix.ui.workout.WorkoutViewModel
-import com.example.liftrix.ui.progress.ProgressDashboardViewModel
 import kotlin.reflect.KClass
 import kotlin.reflect.full.memberProperties
 import kotlin.reflect.full.primaryConstructor
@@ -24,8 +23,7 @@ class ArchitectureIntegrityValidator {
         
         val viewModelClasses = listOf(
             HomeViewModel::class,
-            WorkoutViewModel::class,
-            ProgressDashboardViewModel::class
+            WorkoutViewModel::class
         )
         
         viewModelClasses.forEach { viewModelClass ->

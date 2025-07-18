@@ -390,17 +390,41 @@ class SessionRepositoryImpl @Inject constructor(
             val activeSession = getActiveSession(userId).getOrThrow()
                 ?: throw IllegalStateException("No active session found to complete for user: $userId")
             
+            Timber.d("🔥 COMPLETE-SESSION-DEBUG: Completing session ${activeSession.id.value} for user $userId")
+            
             // Update session state to completed and mark as inactive
             val completedSession = activeSession.complete()
             
+            Timber.d("🔥 COMPLETE-SESSION-DEBUG: Session status after complete(): ${completedSession.sessionStatus}")
+            
+            // Convert to workout and ensure proper status mapping
+            val workout = completedSession.toWorkout()
+            
+            Timber.d("🔥 COMPLETE-SESSION-DEBUG: Converted workout status: ${workout.status}")
+            Timber.d("🔥 COMPLETE-SESSION-DEBUG: Workout name: ${workout.name}")
+            Timber.d("🔥 COMPLETE-SESSION-DEBUG: Workout endTime: ${workout.endTime}")
+            
             val workoutEntity = workoutMapper.toEntity(
-                workout = completedSession.toWorkout(), 
+                workout = workout, 
                 isSynced = false
-            ) // Note: isActive property might not exist in WorkoutEntity
+            )
+            
+            Timber.d("🔥 COMPLETE-SESSION-DEBUG: Entity status before update: ${workoutEntity.status}")
             
             val updatedRows = workoutDao.updateWorkout(workoutEntity)
             if (updatedRows == 0) {
                 throw RuntimeException("Failed to complete session - update affected 0 rows")
+            }
+            
+            Timber.d("🔥 COMPLETE-SESSION-DEBUG: Successfully updated $updatedRows rows")
+            
+            // Verify the update worked by querying the database
+            val verifyEntity = workoutDao.getWorkoutByIdForUser(activeSession.id.value, userId)
+            if (verifyEntity != null) {
+                Timber.d("🔥 COMPLETE-SESSION-DEBUG: Verification - Entity status: ${verifyEntity.status}")
+                Timber.d("🔥 COMPLETE-SESSION-DEBUG: Verification - Entity endTime: ${verifyEntity.endTime}")
+            } else {
+                Timber.w("🔥 COMPLETE-SESSION-DEBUG: Verification failed - workout not found after update")
             }
         }
     }
@@ -527,6 +551,7 @@ class SessionRepositoryImpl @Inject constructor(
 
     /**
      * Extension function to convert UnifiedWorkoutSession to Workout for persistence.
+     * 🔥 FIXED: Enhanced logging and explicit status mapping for completed sessions
      */
     private fun UnifiedWorkoutSession.toWorkout() = com.example.liftrix.domain.model.Workout(
         userId = this.userId,
@@ -536,7 +561,24 @@ class SessionRepositoryImpl @Inject constructor(
         exercises = this.exercises.map { sessionExercise ->
             sessionExercise.toCompletedExercise()
         },
-        status = if (this.sessionStatus == SessionStatus.COMPLETED) WorkoutStatus.COMPLETED else WorkoutStatus.IN_PROGRESS,
+        status = when (this.sessionStatus) {
+            SessionStatus.COMPLETED -> {
+                Timber.d("🔥 CONVERSION-DEBUG: Session status COMPLETED -> WorkoutStatus.COMPLETED")
+                WorkoutStatus.COMPLETED
+            }
+            SessionStatus.ACTIVE -> {
+                Timber.d("🔥 CONVERSION-DEBUG: Session status ACTIVE -> WorkoutStatus.IN_PROGRESS")
+                WorkoutStatus.IN_PROGRESS
+            }
+            SessionStatus.PAUSED -> {
+                Timber.d("🔥 CONVERSION-DEBUG: Session status PAUSED -> WorkoutStatus.IN_PROGRESS")
+                WorkoutStatus.IN_PROGRESS
+            }
+            SessionStatus.FAILED_TO_SAVE -> {
+                Timber.d("🔥 CONVERSION-DEBUG: Session status FAILED_TO_SAVE -> WorkoutStatus.COMPLETED")
+                WorkoutStatus.COMPLETED
+            }
+        },
         startTime = this.startedAt,
         endTime = this.endedAt,
         notes = this.notes,

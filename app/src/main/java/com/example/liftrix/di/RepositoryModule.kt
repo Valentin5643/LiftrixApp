@@ -8,6 +8,11 @@ import com.example.liftrix.data.repository.SocialRepositoryImpl
 import com.example.liftrix.data.repository.WorkoutTemplateRepositoryImpl
 import com.example.liftrix.data.repository.ExerciseLibraryRepositoryImpl
 import com.example.liftrix.data.repository.FolderRepositoryImpl
+import com.example.liftrix.data.repository.GuestSessionRepositoryImpl
+import com.example.liftrix.data.repository.AnomalyDetectionRepositoryImpl
+import com.example.liftrix.data.repository.MetDataRepositoryImpl
+import com.example.liftrix.data.repository.WidgetPreferencesRepositoryImpl
+import com.example.liftrix.data.repository.UserRepositoryImpl
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.CustomExerciseRepository
 import com.example.liftrix.domain.repository.ProfileRepository
@@ -16,6 +21,12 @@ import com.example.liftrix.domain.repository.SocialRepository
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
 import com.example.liftrix.domain.repository.ExerciseLibraryRepository
 import com.example.liftrix.domain.repository.FolderRepository
+import com.example.liftrix.domain.repository.GuestSessionRepository
+import com.example.liftrix.domain.repository.AnomalyDetectionRepository
+import com.example.liftrix.domain.repository.MetDataRepository
+import com.example.liftrix.domain.repository.WidgetPreferencesRepository
+import com.example.liftrix.domain.repository.UserRepository
+import com.example.liftrix.core.cache.CacheManager
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -81,4 +92,53 @@ abstract class RepositoryModule {
         exerciseLibraryRepositoryImpl: ExerciseLibraryRepositoryImpl
     ): ExerciseLibraryRepository
 
+    @Binds
+    @Singleton
+    abstract fun bindGuestSessionRepository(
+        guestSessionRepositoryImpl: GuestSessionRepositoryImpl
+    ): GuestSessionRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAnomalyDetectionRepository(
+        anomalyDetectionRepositoryImpl: AnomalyDetectionRepositoryImpl
+    ): AnomalyDetectionRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindMetDataRepository(
+        metDataRepositoryImpl: MetDataRepositoryImpl
+    ): MetDataRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindWidgetPreferencesRepository(
+        widgetPreferencesRepositoryImpl: WidgetPreferencesRepositoryImpl
+    ): WidgetPreferencesRepository
+
+
+    @Binds
+    @Singleton
+    abstract fun bindUserRepository(
+        userRepositoryImpl: UserRepositoryImpl
+    ): UserRepository
+
+    companion object {
+        
+        /**
+         * Provides CacheManager for service layer caching.
+         * 
+         * The CacheManager provides LRU cache with TTL support for service responses,
+         * reducing database load and improving performance for frequently accessed data.
+         * Configured with reasonable defaults for progress dashboard usage patterns.
+         * 
+         * @return CacheManager instance with default configuration (100 entries, 15min TTL)
+         */
+        @Provides
+        @Singleton
+        fun provideCacheManager(): CacheManager = CacheManager(
+            maxSize = 100,
+            defaultTtl = kotlin.time.Duration.parse("15m")
+        )
+    }
 } 

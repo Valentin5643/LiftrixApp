@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -168,6 +169,8 @@ private fun LiveSessionBarContent(
                                         MaterialTheme.colorScheme.outline
                                     UnifiedWorkoutSession.SessionStatus.COMPLETED ->
                                         MaterialTheme.colorScheme.tertiary
+                                    UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE ->
+                                        MaterialTheme.colorScheme.error
                                 }
                             )
                     )
@@ -227,6 +230,7 @@ private fun LiveSessionBarContent(
                                 UnifiedWorkoutSession.SessionStatus.ACTIVE -> "Active"
                                 UnifiedWorkoutSession.SessionStatus.PAUSED -> "Paused"
                                 UnifiedWorkoutSession.SessionStatus.COMPLETED -> "Completed"
+                                UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE -> "Save Failed"
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
@@ -248,11 +252,13 @@ private fun LiveSessionBarContent(
                                     UnifiedWorkoutSession.SessionStatus.ACTIVE -> Icons.Default.Pause
                                     UnifiedWorkoutSession.SessionStatus.PAUSED -> Icons.Default.PlayArrow
                                     UnifiedWorkoutSession.SessionStatus.COMPLETED -> Icons.Default.PlayArrow
+                                    UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE -> Icons.Default.Error
                                 },
                                 contentDescription = when (session.sessionStatus) {
                                     UnifiedWorkoutSession.SessionStatus.ACTIVE -> "Pause workout"
                                     UnifiedWorkoutSession.SessionStatus.PAUSED -> "Resume workout"
                                     UnifiedWorkoutSession.SessionStatus.COMPLETED -> "Workout completed"
+                                    UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE -> "Retry save workout"
                                 },
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.size(20.dp)
@@ -327,6 +333,8 @@ private fun LiveSessionBarPreview() {
                             UnifiedWorkoutSession.SessionStatus.ACTIVE
                         UnifiedWorkoutSession.SessionStatus.COMPLETED -> 
                             UnifiedWorkoutSession.SessionStatus.COMPLETED
+                        UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE -> 
+                            UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE
                     }
                 },
                 onStopSession = { 

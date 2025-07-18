@@ -26,6 +26,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -46,6 +47,17 @@ import com.example.liftrix.ui.theme.LiftrixTheme
 import kotlinx.datetime.LocalDate
 import kotlin.math.cos
 import kotlin.math.sin
+
+// Chart implementation using Compose Canvas for reliable rendering
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
+import com.example.liftrix.ui.common.analytics.ChartThemeProvider
 
 /**
  * Chart types supported by the ProgressChart component
@@ -269,8 +281,21 @@ private fun LineChart(
     data: ChartData,
     modifier: Modifier = Modifier
 ) {
-    // Simplified line chart implementation for immediate functionality
-    // TODO: Replace with Vico LineChart in UI-003 task
+    val density = LocalDensity.current
+    val normalizedData = remember(data.dataPoints) {
+        if (data.dataPoints.isEmpty()) emptyList()
+        else {
+            val maxValue = data.maxValue
+            val minValue = data.minValue
+            val range = maxValue - minValue
+            if (range == 0f) {
+                data.dataPoints.map { 0.5f }
+            } else {
+                data.dataPoints.map { (it.value - minValue) / range }
+            }
+        }
+    }
+    
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -286,8 +311,18 @@ private fun LineChart(
             )
             .padding(16.dp)
     ) {
-        // Placeholder line chart visualization
-        SimpleLineChartVisualization(data = data)
+        if (normalizedData.isNotEmpty()) {
+            Canvas(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                drawLineChart(
+                    data = normalizedData,
+                    color = data.primaryColor,
+                    strokeWidth = with(density) { 3.dp.toPx() },
+                    pointRadius = with(density) { 6.dp.toPx() }
+                )
+            }
+        }
     }
 }
 
@@ -296,15 +331,38 @@ private fun BarChart(
     data: ChartData,
     modifier: Modifier = Modifier
 ) {
-    // Simplified bar chart implementation for immediate functionality
-    // TODO: Replace with Vico BarChart in UI-003 task
+    val density = LocalDensity.current
+    val normalizedData = remember(data.dataPoints) {
+        if (data.dataPoints.isEmpty()) emptyList()
+        else {
+            val maxValue = data.maxValue
+            val minValue = data.minValue
+            val range = maxValue - minValue
+            if (range == 0f) {
+                data.dataPoints.map { 0.5f }
+            } else {
+                data.dataPoints.map { (it.value - minValue) / range }
+            }
+        }
+    }
+    
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(200.dp)
             .padding(vertical = 16.dp)
     ) {
-        SimpleBarChartVisualization(data = data)
+        if (normalizedData.isNotEmpty()) {
+            Canvas(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                drawBarChart(
+                    data = normalizedData,
+                    color = data.primaryColor,
+                    cornerRadius = with(density) { 4.dp.toPx() }
+                )
+            }
+        }
     }
 }
 
@@ -483,6 +541,76 @@ private fun StatisticItem(
             text = label,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        )
+    }
+}
+
+private fun DrawScope.drawLineChart(
+    data: List<Float>,
+    color: Color,
+    strokeWidth: Float,
+    pointRadius: Float
+) {
+    if (data.size < 2) return
+    
+    val spacing = size.width / (data.size - 1).coerceAtLeast(1)
+    val path = Path()
+    
+    // Create line path
+    data.forEachIndexed { index, value ->
+        val x = index * spacing
+        val y = size.height * (1f - value)
+        
+        if (index == 0) {
+            path.moveTo(x, y)
+        } else {
+            path.lineTo(x, y)
+        }
+    }
+    
+    // Draw line
+    drawPath(
+        path = path,
+        color = color,
+        style = Stroke(
+            width = strokeWidth,
+            cap = StrokeCap.Round
+        )
+    )
+    
+    // Draw points
+    data.forEachIndexed { index, value ->
+        val x = index * spacing
+        val y = size.height * (1f - value)
+        
+        drawCircle(
+            color = color,
+            radius = pointRadius,
+            center = Offset(x, y)
+        )
+    }
+}
+
+private fun DrawScope.drawBarChart(
+    data: List<Float>,
+    color: Color,
+    cornerRadius: Float
+) {
+    if (data.isEmpty()) return
+    
+    val barWidth = size.width / data.size * 0.7f
+    val spacing = size.width / data.size
+    
+    data.forEachIndexed { index, value ->
+        val x = index * spacing + spacing * 0.15f
+        val barHeight = size.height * value
+        val y = size.height - barHeight
+        
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(x, y),
+            size = Size(barWidth, barHeight),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadius)
         )
     }
 }

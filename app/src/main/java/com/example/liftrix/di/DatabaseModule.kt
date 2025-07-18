@@ -20,8 +20,16 @@ import com.example.liftrix.data.local.dao.PrivacySettingsDao
 import com.example.liftrix.data.local.dao.SubscriptionDao
 import com.example.liftrix.data.local.dao.SettingsDao
 import com.example.liftrix.data.local.dao.MetDataDao
+import com.example.liftrix.data.local.dao.AnalyticsCacheDao
+import com.example.liftrix.data.local.dao.GuestSessionDao
+import com.example.liftrix.data.local.dao.WorkoutAnomalyDao
+import com.example.liftrix.data.local.dao.AnomalyDetectionSettingsDao
+import com.example.liftrix.data.local.dao.ExerciseHistoryDao
 import com.example.liftrix.data.local.seed.ExerciseLibrarySeedData
+import com.example.liftrix.data.local.seed.MetDataSeedService
 import com.example.liftrix.data.local.migration.MIGRATION_27_28
+import com.example.liftrix.data.local.migration.MIGRATION_28_29
+import com.example.liftrix.data.local.migration.MIGRATION_29_30
 
 import dagger.Module
 import dagger.Provides
@@ -44,7 +52,8 @@ object DatabaseModule {
     @Singleton
     fun provideLiftrixDatabase(
         @ApplicationContext context: Context,
-        exerciseLibrarySeedData: ExerciseLibrarySeedData
+        exerciseLibrarySeedData: ExerciseLibrarySeedData,
+        metDataSeedService: MetDataSeedService
     ): LiftrixDatabase {
 
         val database = Room.databaseBuilder(
@@ -57,16 +66,36 @@ object DatabaseModule {
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onCreate(db: SupportSQLiteDatabase) {
                     super.onCreate(db)
-                    Timber.i("🏗️ Database created from scratch at version 28")
+                    Timber.i("🏗️ Database created from scratch at version 29")
                 }
                 
                 override fun onOpen(db: SupportSQLiteDatabase) {
                     super.onOpen(db)
                     Timber.d("📖 Database connection opened (routine operation)")
+                    
+                    // Validate analytics_cache table exists
+                    val cursor = db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='analytics_cache'")
+                    val tableExists = cursor.moveToFirst()
+                    cursor.close()
+                    
+                    if (tableExists) {
+                        Timber.i("✅ analytics_cache table confirmed in database")
+                        
+                        // Check table structure
+                        val columnsCursor = db.query("PRAGMA table_info(analytics_cache)")
+                        val columns = mutableListOf<String>()
+                        while (columnsCursor.moveToNext()) {
+                            columns.add(columnsCursor.getString(1))
+                        }
+                        columnsCursor.close()
+                        Timber.i("📊 analytics_cache columns: $columns")
+                        
+                    } else {
+                        Timber.e("❌ analytics_cache table MISSING from database")
+                    }
                 }
             })
-            .addMigrations(MIGRATION_27_28)
-            // Keep fallback for development environments
+            .addMigrations(MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30)
             .fallbackToDestructiveMigration()
             .build()
             
@@ -82,17 +111,40 @@ object DatabaseModule {
                 val cursor = database.openHelper.readableDatabase.query(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name='exercise_usage_history'"
                 )
-                val tableExists = cursor.moveToFirst()
+                val exerciseUsageHistoryExists = cursor.moveToFirst()
                 cursor.close()
                 
-                if (version == 28 && tableExists) {
-                    Timber.i("✅ Database ready - all migrations complete, exercise_usage_history confirmed")
+                // Check analytics_cache table specifically
+                val analyticsCursor = database.openHelper.readableDatabase.query(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='analytics_cache'"
+                )
+                val analyticsCacheExists = analyticsCursor.moveToFirst()
+                analyticsCursor.close()
+                
+                // Check new guest session and anomaly tables for v30
+                val guestSessionCursor = database.openHelper.readableDatabase.query(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='guest_sessions'"
+                )
+                val guestSessionExists = guestSessionCursor.moveToFirst()
+                guestSessionCursor.close()
+                
+                val anomalyCursor = database.openHelper.readableDatabase.query(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='workout_anomalies'"
+                )
+                val anomalyExists = anomalyCursor.moveToFirst()
+                anomalyCursor.close()
+                
+                if (version == 30 && exerciseUsageHistoryExists && analyticsCacheExists && guestSessionExists && anomalyExists) {
+                    Timber.i("✅ Database ready - all migrations complete, all tables confirmed")
                 } else {
-                    Timber.w("⚠️ Database initialization issue - version: $version, table exists: $tableExists")
+                    Timber.w("⚠️ Database initialization issue - version: $version, tables exist: exercise_usage_history=$exerciseUsageHistoryExists, analytics_cache=$analyticsCacheExists, guest_sessions=$guestSessionExists, workout_anomalies=$anomalyExists")
                 }
                 
                 // Populate exercise library if needed
                 exerciseLibrarySeedData.populateExerciseLibraryIfNeeded(database)
+                
+                // Populate MET data if needed
+                metDataSeedService.populateMetDataIfNeeded(database)
                 
             } catch (e: Exception) {
                 Timber.e(e, "❌ Database pre-warming failed")
@@ -177,6 +229,31 @@ object DatabaseModule {
     @Provides
     fun provideMetDataDao(database: LiftrixDatabase): MetDataDao {
         return database.metDataDao()
+    }
+
+    @Provides
+    fun provideAnalyticsCacheDao(database: LiftrixDatabase): AnalyticsCacheDao {
+        return database.analyticsCacheDao()
+    }
+
+    @Provides
+    fun provideGuestSessionDao(database: LiftrixDatabase): GuestSessionDao {
+        return database.guestSessionDao()
+    }
+
+    @Provides
+    fun provideWorkoutAnomalyDao(database: LiftrixDatabase): WorkoutAnomalyDao {
+        return database.workoutAnomalyDao()
+    }
+
+    @Provides
+    fun provideAnomalyDetectionSettingsDao(database: LiftrixDatabase): AnomalyDetectionSettingsDao {
+        return database.anomalyDetectionSettingsDao()
+    }
+
+    @Provides
+    fun provideExerciseHistoryDao(database: LiftrixDatabase): ExerciseHistoryDao {
+        return database.exerciseHistoryDao()
     }
 
 }

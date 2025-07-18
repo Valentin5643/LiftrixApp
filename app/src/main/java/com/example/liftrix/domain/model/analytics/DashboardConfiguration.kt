@@ -24,12 +24,13 @@ sealed class DashboardConfiguration(
     data object Beginner : DashboardConfiguration(
         name = "Beginner",
         description = "Simple view focused on basic progress tracking",
-        maxWidgets = 3
+        maxWidgets = 4
     ) {
         val widgets: List<AnalyticsWidget> = listOf(
-            AnalyticsWidget.WORKOUT_FREQUENCY,
-            AnalyticsWidget.TOTAL_VOLUME,
-            AnalyticsWidget.CONSISTENCY_STREAK
+            AnalyticsWidget.WorkoutFrequency,
+            AnalyticsWidget.TotalVolume,
+            AnalyticsWidget.ConsistencyStreak,
+            AnalyticsWidget.CALORIES_BURNED
         )
     }
     
@@ -40,14 +41,16 @@ sealed class DashboardConfiguration(
     data object Intermediate : DashboardConfiguration(
         name = "Intermediate", 
         description = "Balanced view with essential analytics and trends",
-        maxWidgets = 5
+        maxWidgets = 7
     ) {
         val widgets: List<AnalyticsWidget> = listOf(
-            AnalyticsWidget.WORKOUT_FREQUENCY,
-            AnalyticsWidget.TOTAL_VOLUME,
-            AnalyticsWidget.VOLUME_CALENDAR,
-            AnalyticsWidget.STRENGTH_PROGRESS,
-            AnalyticsWidget.CONSISTENCY_STREAK
+            AnalyticsWidget.WorkoutFrequency,
+            AnalyticsWidget.TotalVolume,
+            AnalyticsWidget.AverageDuration,
+            AnalyticsWidget.ConsistencyStreak,
+            AnalyticsWidget.CALORIES_BURNED,
+            AnalyticsWidget.DAILY_CALORIES,
+            AnalyticsWidget.ProgressChart
         )
     }
     
@@ -58,17 +61,19 @@ sealed class DashboardConfiguration(
     data object Advanced : DashboardConfiguration(
         name = "Advanced",
         description = "Comprehensive analytics with detailed insights and customization",
-        maxWidgets = 8
+        maxWidgets = 10
     ) {
         val widgets: List<AnalyticsWidget> = listOf(
-            AnalyticsWidget.WORKOUT_FREQUENCY,
-            AnalyticsWidget.TOTAL_VOLUME,
-            AnalyticsWidget.VOLUME_CALENDAR,
-            AnalyticsWidget.STRENGTH_PROGRESS,
-            AnalyticsWidget.CONSISTENCY_STREAK,
-            AnalyticsWidget.VOLUME_TRENDS,
-            AnalyticsWidget.RECOVERY_METRICS,
-            AnalyticsWidget.PERFORMANCE_ANALYSIS
+            AnalyticsWidget.WorkoutFrequency,
+            AnalyticsWidget.TotalVolume,
+            AnalyticsWidget.AverageDuration,
+            AnalyticsWidget.ConsistencyStreak,
+            AnalyticsWidget.VolumeLoadProgression,
+            AnalyticsWidget.OneRMProgression,
+            AnalyticsWidget.ProgressChart,
+            AnalyticsWidget.CALORIES_BURNED,
+            AnalyticsWidget.DAILY_CALORIES,
+            AnalyticsWidget.WEEKLY_CALORIE_TREND
         )
     }
     

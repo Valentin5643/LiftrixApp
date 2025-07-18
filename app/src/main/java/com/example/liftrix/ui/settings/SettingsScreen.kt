@@ -52,6 +52,9 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToProfile: () -> Unit,
     onNavigateToAuth: () -> Unit,
+    onNavigateToAnomalyDetection: (() -> Unit)? = null,
+    onNavigateToAnomalyDashboard: (() -> Unit)? = null,
+    onNavigateToWidgetSettings: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -66,6 +69,9 @@ fun SettingsScreen(
         val stableOnNavigateBack = remember(onNavigateBack) { onNavigateBack }
         val stableOnNavigateToProfile = remember(onNavigateToProfile) { onNavigateToProfile }
         val stableOnNavigateToAuth = remember(onNavigateToAuth) { onNavigateToAuth }
+        val stableOnNavigateToAnomalyDetection = remember(onNavigateToAnomalyDetection) { onNavigateToAnomalyDetection }
+        val stableOnNavigateToAnomalyDashboard = remember(onNavigateToAnomalyDashboard) { onNavigateToAnomalyDashboard }
+        val stableOnNavigateToWidgetSettings = remember(onNavigateToWidgetSettings) { onNavigateToWidgetSettings }
         
         // Optimized LaunchedEffect with stable key
         LaunchedEffect(uiState.isSigningOut, uiState.error) {
@@ -73,6 +79,12 @@ fun SettingsScreen(
                 // Navigate to auth screen after successful logout
                 stableOnNavigateToAuth()
             }
+        }
+        
+        // Handle navigation events from ViewModel
+        LaunchedEffect(viewModel) {
+            // For now, navigation is handled through callbacks in the UI composables
+            // The ViewModel only tracks analytics for navigation events
         }
     
         Column(
@@ -107,6 +119,9 @@ fun SettingsScreen(
                             uiState = uiState,
                             onEvent = stableOnEvent,
                             onNavigateToProfile = stableOnNavigateToProfile,
+                            onNavigateToAnomalyDetection = stableOnNavigateToAnomalyDetection,
+                            onNavigateToAnomalyDashboard = stableOnNavigateToAnomalyDashboard,
+                            onNavigateToWidgetSettings = stableOnNavigateToWidgetSettings,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -136,6 +151,9 @@ private fun SettingsContent(
     uiState: SettingsState,
     onEvent: (SettingsEvent) -> Unit,
     onNavigateToProfile: () -> Unit,
+    onNavigateToAnomalyDetection: (() -> Unit)? = null,
+    onNavigateToAnomalyDashboard: (() -> Unit)? = null,
+    onNavigateToWidgetSettings: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     // Stable callbacks and data to prevent unnecessary recompositions
@@ -188,7 +206,10 @@ private fun SettingsContent(
                 SettingsCategoryContent(
                     category = category,
                     uiState = uiState,
-                    onEvent = stableOnEvent
+                    onEvent = stableOnEvent,
+                    onNavigateToAnomalyDetection = onNavigateToAnomalyDetection,
+                    onNavigateToAnomalyDashboard = onNavigateToAnomalyDashboard,
+                    onNavigateToWidgetSettings = onNavigateToWidgetSettings
                 )
             }
         }
@@ -223,7 +244,10 @@ private fun SettingsContent(
 private fun SettingsCategoryContent(
     category: SettingsCategory,
     uiState: SettingsState,
-    onEvent: (SettingsEvent) -> Unit
+    onEvent: (SettingsEvent) -> Unit,
+    onNavigateToAnomalyDetection: (() -> Unit)? = null,
+    onNavigateToAnomalyDashboard: (() -> Unit)? = null,
+    onNavigateToWidgetSettings: (() -> Unit)? = null
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -232,7 +256,10 @@ private fun SettingsCategoryContent(
             "general" -> {
                 GeneralSettings(
                     uiState = uiState,
-                    onEvent = onEvent
+                    onEvent = onEvent,
+                    onNavigateToAnomalyDetection = onNavigateToAnomalyDetection,
+                    onNavigateToAnomalyDashboard = onNavigateToAnomalyDashboard,
+                    onNavigateToWidgetSettings = onNavigateToWidgetSettings
                 )
             }
             
@@ -266,7 +293,10 @@ private fun SettingsCategoryContent(
 @Composable
 private fun GeneralSettings(
     uiState: SettingsState,
-    onEvent: (SettingsEvent) -> Unit
+    onEvent: (SettingsEvent) -> Unit,
+    onNavigateToAnomalyDetection: (() -> Unit)? = null,
+    onNavigateToAnomalyDashboard: (() -> Unit)? = null,
+    onNavigateToWidgetSettings: (() -> Unit)? = null
 ) {
     // Stable callback to prevent unnecessary recompositions
     val stableOnEvent = remember(onEvent) { onEvent }
@@ -297,6 +327,42 @@ private fun GeneralSettings(
             isChecked = uiState.currentNotificationSetting,
             onToggle = onNotificationsToggle,
             enabled = !uiState.isUpdatingSettings
+        )
+        
+        SettingsNavigationItem(
+            title = "Anomaly Detection",
+            subtitle = "Configure error detection and sensitivity",
+            icon = Icons.Default.Warning,
+            onClick = { 
+                // Trigger analytics event
+                stableOnEvent(SettingsEvent.NavigateToAnomalyDetection)
+                // Navigate to anomaly detection settings
+                onNavigateToAnomalyDetection?.invoke()
+            }
+        )
+        
+        SettingsNavigationItem(
+            title = "Anomaly Dashboard",
+            subtitle = "View and manage detected anomalies",
+            icon = Icons.Default.Dashboard,
+            onClick = { 
+                // Trigger analytics event
+                stableOnEvent(SettingsEvent.NavigateToAnomalyDashboard)
+                // Navigate to anomaly detection dashboard
+                onNavigateToAnomalyDashboard?.invoke()
+            }
+        )
+        
+        SettingsNavigationItem(
+            title = "Customize Dashboard",
+            subtitle = "Personalize your dashboard widgets and layout",
+            icon = Icons.Default.Widgets,
+            onClick = { 
+                // Trigger analytics event
+                stableOnEvent(SettingsEvent.NavigateToWidgetSettings)
+                // Navigate to widget settings
+                onNavigateToWidgetSettings?.invoke()
+            }
         )
     }
 }

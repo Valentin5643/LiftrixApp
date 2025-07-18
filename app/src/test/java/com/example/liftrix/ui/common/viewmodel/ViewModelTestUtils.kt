@@ -302,16 +302,16 @@ object ViewModelTestUtils {
             UiState.Success(data)
         
         fun <T> createErrorState(message: String): UiState.Error<T> = 
-            UiState.Error(LiftrixError.ValidationError("test_field", listOf(message)))
+            UiState.Error(LiftrixError.ValidationError(field = "test_field", violations = listOf(message)))
         
         fun createNetworkError(): LiftrixError = 
             LiftrixError.NetworkError(Exception("Network connection failed"))
         
         fun createValidationError(field: String, violations: List<String>): LiftrixError = 
-            LiftrixError.ValidationError(field, violations)
+            LiftrixError.ValidationError(field = field, violations = violations)
         
         fun createAuthError(): LiftrixError = 
-            LiftrixError.AuthenticationError(Exception("Authentication required"))
+            LiftrixError.AuthenticationError(errorMessage = "Authentication required")
     }
 }
 

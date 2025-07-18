@@ -116,6 +116,7 @@ class HomeViewModel @Inject constructor(
 
     /**
      * Loads home screen data including recent workouts and statistics
+     * 🔥 IMPROVED: Now used for manual refresh, reactive updates handled separately
      */
     fun loadHomeData() {
         viewModelScope.launch {
@@ -128,7 +129,9 @@ class HomeViewModel @Inject constructor(
 
                 updateState { copy(isLoading = true, errorMessage = null) }
                 
-                // Load recent workouts for legacy support
+                // Load recent workouts for manual refresh
+                Timber.d("🔥 HOME-VM-DEBUG: Loading recent workouts for user: ${currentUser.uid}")
+                
                 workoutRepository.getRecentWorkouts(currentUser.uid, RECENT_WORKOUTS_LIMIT)
                 .catch { throwable ->
                     Timber.e(throwable, "Error loading home data")
@@ -139,28 +142,33 @@ class HomeViewModel @Inject constructor(
                         ) 
                     }
                 }
-                .collect { result ->
-                    result.fold(
-                        onSuccess = { recentWorkouts ->
-                            updateState {
-                                copy(
-                                    isLoading = false,
-                                    recentWorkouts = recentWorkouts,
-                                    errorMessage = null
-                                )
-                            }
-                        },
-                        onFailure = { throwable ->
-                            updateState {
-                                copy(
-                                    isLoading = false,
-                                    recentWorkouts = emptyList(),
-                                    errorMessage = throwable.message
-                                )
-                            }
+                .first() // Take only the first emission for manual refresh
+                .fold(
+                    onSuccess = { recentWorkouts ->
+                        Timber.d("🔥 HOME-VM-DEBUG: Successfully loaded ${recentWorkouts.size} recent workouts")
+                        recentWorkouts.forEachIndexed { index, workout ->
+                            Timber.d("🔥 HOME-VM-DEBUG: Workout[$index] - name: ${workout.name}, status: ${workout.status}, date: ${workout.date}")
                         }
-                    )
-                }
+                        
+                        updateState {
+                            copy(
+                                isLoading = false,
+                                recentWorkouts = recentWorkouts,
+                                errorMessage = null
+                            )
+                        }
+                    },
+                    onFailure = { throwable ->
+                        Timber.e(throwable, "🔥 HOME-VM-DEBUG: Failed to load recent workouts")
+                        updateState {
+                            copy(
+                                isLoading = false,
+                                recentWorkouts = emptyList(),
+                                errorMessage = throwable.message
+                            )
+                        }
+                    }
+                )
             } catch (exception: Exception) {
                 Timber.e(exception, "Error in loadHomeData")
                 updateState { 
@@ -520,6 +528,7 @@ class HomeViewModel @Inject constructor(
 
     /**
      * Observes authentication state and loads data when user is available
+     * 🔥 IMPROVED: Now reactively observes workout data changes
      */
     private fun observeUserDataAndLoadHome() {
         viewModelScope.launch {
@@ -530,7 +539,8 @@ class HomeViewModel @Inject constructor(
                 }
                 .collect { user ->
                     if (user != null) {
-                        loadHomeData()
+                        // Start observing workout data reactively
+                        observeWorkoutDataReactively(user.uid)
                     } else {
                         updateState { 
                             copy(
@@ -540,6 +550,50 @@ class HomeViewModel @Inject constructor(
                             ) 
                         }
                     }
+                }
+        }
+    }
+    
+    /**
+     * 🔥 NEW: Reactively observes workout data changes
+     * This ensures Home screen updates automatically when workouts are completed
+     */
+    private fun observeWorkoutDataReactively(userId: String) {
+        viewModelScope.launch {
+            // Observe recent workouts reactively
+            workoutRepository.getRecentWorkouts(userId, RECENT_WORKOUTS_LIMIT)
+                .catch { throwable ->
+                    Timber.e(throwable, "Error observing recent workouts")
+                    updateState { 
+                        copy(
+                            isLoading = false,
+                            errorMessage = "Failed to load workout data: ${throwable.message}"
+                        ) 
+                    }
+                }
+                .collect { result ->
+                    result.fold(
+                        onSuccess = { recentWorkouts ->
+                            Timber.d("🔥 HOME-REACTIVE: Received ${recentWorkouts.size} recent workouts")
+                            updateState {
+                                copy(
+                                    isLoading = false,
+                                    recentWorkouts = recentWorkouts,
+                                    errorMessage = null
+                                )
+                            }
+                        },
+                        onFailure = { throwable ->
+                            Timber.e(throwable, "Error in reactive workout observation")
+                            updateState {
+                                copy(
+                                    isLoading = false,
+                                    recentWorkouts = emptyList(),
+                                    errorMessage = throwable.message
+                                )
+                            }
+                        }
+                    )
                 }
         }
     }

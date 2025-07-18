@@ -1,14 +1,21 @@
 package com.example.liftrix.domain.model.analytics
 
+import com.example.liftrix.core.cache.MemoizationCache
+import com.example.liftrix.core.cache.createCacheKey
 import com.example.liftrix.domain.model.Exercise
 import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.UserProfile
 import com.example.liftrix.domain.model.Weight
 import com.example.liftrix.data.local.entity.MetDataEntity
 import com.example.liftrix.data.seed.MetDataSeed
+import com.example.liftrix.domain.repository.MetDataRepository
+import com.example.liftrix.domain.model.common.LiftrixResult
 import java.time.Duration
+import java.time.LocalDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
+import timber.log.Timber
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Comprehensive MET-based calorie calculation system with user profile integration
@@ -33,7 +40,9 @@ import javax.inject.Singleton
  * - Memory efficient with cached MET lookups
  */
 @Singleton
-class CalorieCalculator @Inject constructor() {
+class CalorieCalculator @Inject constructor(
+    private val metDataRepository: MetDataRepository
+) {
     
     companion object {
         // BMR calculation constants (Mifflin-St Jeor Equation)
@@ -73,8 +82,29 @@ class CalorieCalculator @Inject constructor() {
         private const val MAX_CALORIES_PER_MINUTE = 25.0f
     }
     
-    // Cached MET data for performance
-    private val metDataCache: Map<String, MetDataEntity> by lazy {
+    // Memoization caches for expensive calorie calculations
+    private val workoutCaloriesCache = MemoizationCache<String, Int>(
+        maxSize = 100,
+        defaultTtl = 20.minutes
+    )
+    
+    private val exerciseCaloriesCache = MemoizationCache<String, Int>(
+        maxSize = 200,
+        defaultTtl = 15.minutes
+    )
+    
+    private val bmrCache = MemoizationCache<String, Float>(
+        maxSize = 50,
+        defaultTtl = 60.minutes
+    )
+    
+    private val metValueCache = MemoizationCache<String, Float>(
+        maxSize = 150,
+        defaultTtl = 30.minutes
+    )
+    
+    // Legacy cached MET data for fallback when database is not available
+    private val fallbackMetDataCache: Map<String, MetDataEntity> by lazy {
         MetDataSeed.getMetDataEntities().associateBy { it.id }
     }
     
@@ -86,7 +116,7 @@ class CalorieCalculator @Inject constructor() {
      * @param userProfile User profile with age, weight, and fitness data
      * @return Estimated calories burned during the workout
      */
-    fun calculateCaloriesBurned(
+    suspend fun calculateCaloriesBurned(
         exercises: List<Exercise>,
         duration: Duration,
         userProfile: UserProfile
@@ -95,26 +125,39 @@ class CalorieCalculator @Inject constructor() {
             return 0
         }
         
-        // Calculate user-specific BMR
-        val bmr = calculateBasalMetabolicRate(userProfile)
-        val weight = userProfile.weight?.kilograms?.toFloat() ?: DEFAULT_WEIGHT_KG
+        // Use memoization for expensive calorie calculations
+        val cacheKey = createCacheKey(
+            "workout_calories",
+            exercises.map { "${it.libraryExercise.name}:${it.sets.size}:${it.getTotalVolume()?.kilograms}" }.joinToString(","),
+            duration.toMinutes(),
+            userProfile.userId,
+            userProfile.weight?.kilograms,
+            userProfile.age
+        )
         
-        // Calculate total MET value for all exercises
-        val totalMetValue = exercises.sumOf { exercise ->
-            val metValue = getMetValueForExercise(exercise, userProfile)
-            val exerciseIntensity = estimateExerciseIntensity(exercise)
-            (metValue * exerciseIntensity).toDouble()
-        }.toFloat()
-        
-        // Apply duration and convert to calories
-        val durationHours = duration.toMinutes() / MINUTES_PER_HOUR
-        val caloriesBurned = (totalMetValue * weight * durationHours * bmr).toInt()
-        
-        // Validate and clamp result
-        val maxCalories = (MAX_CALORIES_PER_MINUTE * duration.toMinutes()).toInt()
-        val minCalories = (MIN_CALORIES_PER_MINUTE * duration.toMinutes()).toInt()
-        
-        return caloriesBurned.coerceIn(minCalories, maxCalories)
+        return workoutCaloriesCache.memoize(cacheKey, ttl = 20.minutes) {
+            // Calculate user-specific BMR
+            val bmr = calculateBasalMetabolicRate(userProfile)
+            val weight = userProfile.weight?.kilograms?.toFloat() ?: DEFAULT_WEIGHT_KG
+            
+            // Calculate total MET value for all exercises
+            var totalMetValue = 0.0
+            for (exercise in exercises) {
+                val metValue = getMetValueForExercise(exercise, userProfile)
+                val exerciseIntensity = estimateExerciseIntensity(exercise)
+                totalMetValue += (metValue * exerciseIntensity).toDouble()
+            }
+            
+            // Apply duration and convert to calories
+            val durationHours = duration.toMinutes() / MINUTES_PER_HOUR
+            val caloriesBurned = (totalMetValue.toFloat() * weight * durationHours * bmr).toInt()
+            
+            // Validate and clamp result
+            val maxCalories = (MAX_CALORIES_PER_MINUTE * duration.toMinutes()).toInt()
+            val minCalories = (MIN_CALORIES_PER_MINUTE * duration.toMinutes()).toInt()
+            
+            caloriesBurned.coerceIn(minCalories, maxCalories)
+        }
     }
     
     /**
@@ -127,7 +170,7 @@ class CalorieCalculator @Inject constructor() {
      * @param loadPercentage Optional load percentage of 1RM
      * @return Estimated calories burned for the exercise
      */
-    fun calculateCaloriesForExercise(
+    suspend fun calculateCaloriesForExercise(
         exercise: Exercise,
         duration: Duration,
         userProfile: UserProfile,
@@ -138,25 +181,41 @@ class CalorieCalculator @Inject constructor() {
             return 0
         }
         
-        val bmr = calculateBasalMetabolicRate(userProfile)
-        val weight = userProfile.weight?.kilograms?.toFloat() ?: DEFAULT_WEIGHT_KG
+        // Use memoization for expensive exercise calorie calculations
+        val cacheKey = createCacheKey(
+            "exercise_calories",
+            exercise.libraryExercise.name,
+            exercise.sets.size,
+            exercise.getTotalVolume()?.kilograms,
+            duration.toMinutes(),
+            userProfile.userId,
+            userProfile.weight?.kilograms,
+            userProfile.age,
+            rpe,
+            loadPercentage
+        )
         
-        // Get base MET value for exercise
-        val baseMetValue = getMetValueForExercise(exercise, userProfile)
-        
-        // Apply intensity adjustments
-        val intensityMultiplier = MetDataSeed.getIntensityMultiplier(rpe, loadPercentage)
-        val adjustedMetValue = baseMetValue * intensityMultiplier
-        
-        // Calculate calories
-        val durationHours = duration.toMinutes() / MINUTES_PER_HOUR
-        val caloriesBurned = (adjustedMetValue * weight * durationHours * bmr).toInt()
-        
-        // Validate result
-        val maxCalories = (MAX_CALORIES_PER_MINUTE * duration.toMinutes()).toInt()
-        val minCalories = (MIN_CALORIES_PER_MINUTE * duration.toMinutes()).toInt()
-        
-        return caloriesBurned.coerceIn(minCalories, maxCalories)
+        return exerciseCaloriesCache.memoize(cacheKey, ttl = 15.minutes) {
+            val bmr = calculateBasalMetabolicRate(userProfile)
+            val weight = userProfile.weight?.kilograms?.toFloat() ?: DEFAULT_WEIGHT_KG
+            
+            // Get base MET value for exercise
+            val baseMetValue = getMetValueForExercise(exercise, userProfile)
+            
+            // Apply intensity adjustments
+            val intensityMultiplier = MetDataSeed.getIntensityMultiplier(rpe, loadPercentage)
+            val adjustedMetValue = baseMetValue * intensityMultiplier
+            
+            // Calculate calories
+            val durationHours = duration.toMinutes() / MINUTES_PER_HOUR
+            val caloriesBurned = (adjustedMetValue * weight * durationHours * bmr).toInt()
+            
+            // Validate result
+            val maxCalories = (MAX_CALORIES_PER_MINUTE * duration.toMinutes()).toInt()
+            val minCalories = (MIN_CALORIES_PER_MINUTE * duration.toMinutes()).toInt()
+            
+            caloriesBurned.coerceIn(minCalories, maxCalories)
+        }
     }
     
     /**
@@ -165,28 +224,38 @@ class CalorieCalculator @Inject constructor() {
      * @param userProfile User profile with age, weight, and gender
      * @return BMR factor for calorie calculations
      */
-    fun calculateBasalMetabolicRate(userProfile: UserProfile): Float {
-        val weight = userProfile.weight?.kilograms?.toFloat() ?: DEFAULT_WEIGHT_KG
-        val age = userProfile.age?.toFloat() ?: DEFAULT_AGE.toFloat()
-        val height = DEFAULT_HEIGHT_CM // Height not in UserProfile, using default
+    suspend fun calculateBasalMetabolicRate(userProfile: UserProfile): Float {
+        // Use memoization for BMR calculations since they're expensive but rarely change
+        val cacheKey = createCacheKey(
+            "bmr",
+            userProfile.userId,
+            userProfile.weight?.kilograms,
+            userProfile.age
+        )
         
-        // Determine gender from fitness goals or use male as default
-        val isMale = determineGenderFromProfile(userProfile)
-        
-        val bmr = if (isMale) {
-            BMR_MALE_WEIGHT_FACTOR * weight + 
-            BMR_MALE_HEIGHT_FACTOR * height - 
-            BMR_MALE_AGE_FACTOR * age + 
-            BMR_MALE_CONSTANT
-        } else {
-            BMR_FEMALE_WEIGHT_FACTOR * weight + 
-            BMR_FEMALE_HEIGHT_FACTOR * height - 
-            BMR_FEMALE_AGE_FACTOR * age + 
-            BMR_FEMALE_CONSTANT
+        return bmrCache.memoize(cacheKey, ttl = 60.minutes) {
+            val weight = userProfile.weight?.kilograms?.toFloat() ?: DEFAULT_WEIGHT_KG
+            val age = userProfile.age?.toFloat() ?: DEFAULT_AGE.toFloat()
+            val height = DEFAULT_HEIGHT_CM // Height not in UserProfile, using default
+            
+            // Determine gender from fitness goals or use male as default
+            val isMale = determineGenderFromProfile(userProfile)
+            
+            val bmr = if (isMale) {
+                BMR_MALE_WEIGHT_FACTOR * weight + 
+                BMR_MALE_HEIGHT_FACTOR * height - 
+                BMR_MALE_AGE_FACTOR * age + 
+                BMR_MALE_CONSTANT
+            } else {
+                BMR_FEMALE_WEIGHT_FACTOR * weight + 
+                BMR_FEMALE_HEIGHT_FACTOR * height - 
+                BMR_FEMALE_AGE_FACTOR * age + 
+                BMR_FEMALE_CONSTANT
+            }
+            
+            // Convert to activity factor (BMR × activity level)
+            (bmr / 1440.0f) * DEFAULT_BMR_FACTOR // 1440 minutes per day
         }
-        
-        // Convert to activity factor (BMR × activity level)
-        return (bmr / 1440.0f) * DEFAULT_BMR_FACTOR // 1440 minutes per day
     }
     
     /**
@@ -196,42 +265,85 @@ class CalorieCalculator @Inject constructor() {
      * @param userProfile User profile for personalization
      * @return MET value for the exercise
      */
-    private fun getMetValueForExercise(exercise: Exercise, userProfile: UserProfile): Float {
+    private suspend fun getMetValueForExercise(exercise: Exercise, userProfile: UserProfile): Float {
         val exerciseCategory = exercise.libraryExercise.primaryMuscleGroup.name
         val exerciseName = exercise.libraryExercise.name.lowercase()
+        val equipmentType = exercise.libraryExercise.equipment.name.lowercase()
         
-        // Try to find specific MET data for the exercise
-        val metData = findBestMatchingMetData(exerciseName, exerciseCategory)
+        // Use memoization for MET value calculations
+        val cacheKey = createCacheKey(
+            "met_value",
+            exerciseName,
+            exerciseCategory,
+            equipmentType,
+            userProfile.userId,
+            userProfile.weight?.kilograms,
+            userProfile.age
+        )
         
-        return if (metData != null) {
-            // Use specific MET data with user-specific adjustments
-            val baseValue = metData.getEffectiveMET()
-            applyUserSpecificAdjustments(baseValue, userProfile)
-        } else {
-            // Fall back to category default
-            val categoryDefault = MetDataSeed.getDefaultMetForCategory(exerciseCategory)
-            applyUserSpecificAdjustments(categoryDefault, userProfile)
+        return metValueCache.memoize(cacheKey, ttl = 30.minutes) {
+            // Try to find specific MET data for the exercise using repository
+            val metData = findBestMatchingMetDataFromRepository(exerciseName, exerciseCategory, equipmentType)
+            
+            if (metData != null) {
+                // Use specific MET data with user-specific adjustments
+                val baseValue = metData.getEffectiveMET()
+                applyUserSpecificAdjustments(baseValue, userProfile)
+            } else {
+                // Fall back to category default from static data
+                val categoryDefault = MetDataSeed.getDefaultMetForCategory(exerciseCategory)
+                applyUserSpecificAdjustments(categoryDefault, userProfile)
+            }
         }
     }
     
     /**
-     * Finds the best matching MET data for an exercise
+     * Finds the best matching MET data for an exercise using repository
      * 
      * @param exerciseName Name of the exercise
      * @param exerciseCategory Category of the exercise
+     * @param equipmentType Optional equipment type for more precise matching
      * @return Best matching MetDataEntity or null if not found
      */
-    private fun findBestMatchingMetData(exerciseName: String, exerciseCategory: String): MetDataEntity? {
+    private suspend fun findBestMatchingMetDataFromRepository(
+        exerciseName: String, 
+        exerciseCategory: String,
+        equipmentType: String? = null
+    ): MetDataEntity? {
+        return metDataRepository.findBestMatchingMetData(exerciseName, exerciseCategory, equipmentType).fold(
+            onSuccess = { it },
+            onFailure = { error ->
+                // Log error and fall back to static cache
+                Timber.w("Failed to find MET data from repository: ${error.message}, falling back to static cache")
+                findBestMatchingMetDataFromCache(exerciseName, exerciseCategory, equipmentType)
+            }
+        )
+    }
+    
+    /**
+     * Fallback method using static cache when repository is unavailable
+     * 
+     * @param exerciseName Name of the exercise
+     * @param exerciseCategory Category of the exercise
+     * @param equipmentType Optional equipment type
+     * @return Best matching MetDataEntity or null if not found
+     */
+    private fun findBestMatchingMetDataFromCache(
+        exerciseName: String, 
+        exerciseCategory: String,
+        equipmentType: String? = null
+    ): MetDataEntity? {
         // First try exact match by exercise type
-        val exactMatch = metDataCache.values.find { metData ->
+        val exactMatch = fallbackMetDataCache.values.find { metData ->
             metData.exerciseType.equals(exerciseName, ignoreCase = true) &&
-            metData.appliesToCategory(exerciseCategory)
+            metData.appliesToCategory(exerciseCategory) &&
+            (equipmentType == null || metData.appliesToEquipment(equipmentType))
         }
         
         if (exactMatch != null) return exactMatch
         
         // Try partial match by exercise name
-        val partialMatch = metDataCache.values.find { metData ->
+        val partialMatch = fallbackMetDataCache.values.find { metData ->
             exerciseName.contains(metData.exerciseType, ignoreCase = true) &&
             metData.appliesToCategory(exerciseCategory)
         }
@@ -239,7 +351,7 @@ class CalorieCalculator @Inject constructor() {
         if (partialMatch != null) return partialMatch
         
         // Try category-only match
-        return metDataCache.values.find { metData ->
+        return fallbackMetDataCache.values.find { metData ->
             metData.appliesToCategory(exerciseCategory)
         }
     }
@@ -333,12 +445,171 @@ class CalorieCalculator @Inject constructor() {
      * @param userProfile User profile
      * @return Estimated calories per minute
      */
-    fun getEstimatedCaloriesPerMinute(category: ExerciseCategory, userProfile: UserProfile): Float {
-        val metValue = MetDataSeed.getDefaultMetForCategory(category.name)
+    suspend fun getEstimatedCaloriesPerMinute(category: ExerciseCategory, userProfile: UserProfile): Float {
+        // Try to get average MET from repository first
+        val metValue = metDataRepository.getAverageMetForCategory(category.name).fold(
+            onSuccess = { it ?: MetDataSeed.getDefaultMetForCategory(category.name) },
+            onFailure = { error ->
+                Timber.w("Failed to get average MET from repository for ${category.name}: ${error.message}")
+                MetDataSeed.getDefaultMetForCategory(category.name)
+            }
+        )
+        
         val weight = userProfile.weight?.kilograms?.toFloat() ?: DEFAULT_WEIGHT_KG
         val bmr = calculateBasalMetabolicRate(userProfile)
         
         return (metValue * weight * bmr) / MINUTES_PER_HOUR
+    }
+    
+    /**
+     * Calculates workout calories from JSON exercises data
+     * 
+     * This method is used by the CalorieAnalyticsUseCase to calculate calories
+     * from workout data stored in the database as JSON format.
+     * 
+     * @param exercisesJson JSON string containing exercise data from workout
+     * @param durationMinutes Duration of the workout in minutes
+     * @param userId User ID for profile lookup and personalization
+     * @return Estimated calories burned during the workout
+     */
+    suspend fun calculateWorkoutCalories(
+        exercisesJson: String,
+        durationMinutes: Long,
+        userId: String
+    ): Int {
+        if (exercisesJson.isEmpty() || durationMinutes <= 0) {
+            return 0
+        }
+        
+        try {
+            // Parse JSON to extract exercise information
+            // For now, we'll use a simplified approach based on duration and volume
+            // This should be replaced with proper JSON parsing once JSON structure is defined
+            
+            val duration = Duration.ofMinutes(durationMinutes)
+            
+            // Extract volume from JSON if available (simplified approach)
+            val totalVolumeKg = try {
+                // Look for totalVolume in JSON - this is a simplified extraction
+                val volumeRegex = "\"totalVolume\"\\s*:\\s*(\\d+(?:\\.\\d+)?)".toRegex()
+                val match = volumeRegex.find(exercisesJson)
+                match?.groupValues?.get(1)?.toFloatOrNull() ?: 0f
+            } catch (e: Exception) {
+                0f
+            }
+            
+            // Use default user profile for now - in production this should fetch actual user profile
+            val defaultUserProfile = createDefaultUserProfile(userId)
+            
+            // Calculate base calories based on duration and estimated MET value
+            val estimatedMET = estimateMetFromVolumeAndDuration(totalVolumeKg, durationMinutes)
+            val weight = defaultUserProfile.weight?.kilograms?.toFloat() ?: DEFAULT_WEIGHT_KG
+            val bmr = calculateBasalMetabolicRate(defaultUserProfile)
+            
+            // Calculate calories using MET formula
+            val durationHours = durationMinutes / MINUTES_PER_HOUR
+            val caloriesBurned = (estimatedMET * weight * durationHours * bmr).toInt()
+            
+            // Validate and clamp result
+            val maxCalories = (MAX_CALORIES_PER_MINUTE * durationMinutes).toInt()
+            val minCalories = (MIN_CALORIES_PER_MINUTE * durationMinutes).toInt()
+            
+            return caloriesBurned.coerceIn(minCalories, maxCalories)
+            
+        } catch (e: Exception) {
+            // Log error and return conservative estimate
+            // In production, this should use proper logging
+            return estimateCaloriesFromDuration(durationMinutes)
+        }
+    }
+    
+    /**
+     * Creates a default user profile for calorie calculations when user profile is not available
+     */
+    private fun createDefaultUserProfile(userId: String): UserProfile {
+        return UserProfile(
+            userId = userId,
+            weight = Weight(DEFAULT_WEIGHT_KG.toDouble()),
+            age = DEFAULT_AGE,
+            availableEquipment = emptyList(),
+            otherEquipment = null,
+            fitnessGoals = emptyList(),
+            goalsPriority = null,
+            completedAt = null,
+            updatedAt = LocalDateTime.now()
+        )
+    }
+    
+    /**
+     * Estimates MET value from workout volume and duration
+     */
+    private fun estimateMetFromVolumeAndDuration(volumeKg: Float, durationMinutes: Long): Float {
+        // Base MET value for weight training
+        var metValue = 5.0f // Moderate weight training
+        
+        // Adjust based on volume intensity
+        val volumePerMinute = if (durationMinutes > 0) volumeKg / durationMinutes else 0f
+        
+        when {
+            volumePerMinute > 50f -> metValue = 8.0f  // High intensity
+            volumePerMinute > 25f -> metValue = 6.5f  // Moderate-high intensity  
+            volumePerMinute > 10f -> metValue = 5.5f  // Moderate intensity
+            else -> metValue = 4.0f  // Light intensity
+        }
+        
+        return metValue
+    }
+    
+    /**
+     * Provides a conservative calorie estimate based only on duration
+     */
+    private fun estimateCaloriesFromDuration(durationMinutes: Long): Int {
+        // Conservative estimate: 5 calories per minute for general exercise
+        return (durationMinutes * 5).toInt()
+    }
+
+    /**
+     * Clears all memoization caches for data invalidation
+     * 
+     * Should be called when user profile changes or when fresh calculations are needed
+     */
+    suspend fun clearMemoizationCaches() {
+        workoutCaloriesCache.clear()
+        exerciseCaloriesCache.clear()
+        bmrCache.clear()
+        metValueCache.clear()
+        Timber.d("Cleared all CalorieCalculator memoization caches")
+    }
+    
+    /**
+     * Invalidates specific cache entries for a user
+     * 
+     * @param userId The user ID to invalidate cache for
+     */
+    suspend fun invalidateUserCache(userId: String) {
+        // Clear BMR cache for user
+        bmrCache.clear() // Simple approach - clear all since keys contain userId
+        
+        // Clear MET value cache for user
+        metValueCache.clear() // Simple approach - clear all since keys contain userId
+        
+        // Clear calorie caches for user
+        workoutCaloriesCache.clear() // Simple approach - clear all since keys contain userId
+        exerciseCaloriesCache.clear() // Simple approach - clear all since keys contain userId
+        
+        Timber.d("Invalidated calorie caches for user: $userId")
+    }
+    
+    /**
+     * Gets cache statistics for monitoring
+     */
+    suspend fun getCacheStats(): Map<String, Any> {
+        return mapOf(
+            "workoutCaloriesCache" to workoutCaloriesCache.getStats(),
+            "exerciseCaloriesCache" to exerciseCaloriesCache.getStats(),
+            "bmrCache" to bmrCache.getStats(),
+            "metValueCache" to metValueCache.getStats()
+        )
     }
     
     /**

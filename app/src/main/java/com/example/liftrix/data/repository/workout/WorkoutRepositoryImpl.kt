@@ -7,6 +7,7 @@ import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.model.WorkoutSummary
 import com.example.liftrix.domain.model.WorkoutStats
 import com.example.liftrix.domain.model.FeedWorkout
+import com.example.liftrix.domain.model.toSummary
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -174,12 +175,43 @@ class WorkoutRepositoryImpl @Inject constructor(
                 )
             }
         ) {
+            Timber.d("🔥 UPDATE-WORKOUT-DEBUG: Attempting to update workout - ID: ${workout.id.value}, Name: ${workout.name}, Status: ${workout.status}")
+            
+            // First, check if workout exists in database
+            val existsResult = workoutExists(workout.id, workout.userId)
+            val workoutExists = existsResult.fold(
+                onSuccess = { exists -> exists },
+                onFailure = { 
+                    Timber.w("🔥 UPDATE-WORKOUT-DEBUG: Failed to check workout existence, proceeding with update attempt")
+                    true // Assume exists to proceed with update
+                }
+            )
+            
+            if (!workoutExists) {
+                Timber.w("🔥 UPDATE-WORKOUT-DEBUG: Workout ${workout.id.value} does not exist in database, falling back to create")
+                // Fallback to create if workout doesn't exist
+                return@liftrixCatching createWorkout(workout).fold(
+                    onSuccess = { createdWorkout ->
+                        Timber.i("🔥 UPDATE-WORKOUT-DEBUG: Successfully created workout as fallback - ID: ${createdWorkout.id.value}")
+                        createdWorkout
+                    },
+                    onFailure = { error ->
+                        Timber.e("🔥 UPDATE-WORKOUT-DEBUG: Fallback create also failed")
+                        throw RuntimeException("Workout update failed: not found in database, and fallback create failed: ${error.message}")
+                    }
+                )
+            }
+            
             val entity = workoutMapper.toEntity(workout, isSynced = false)
+            Timber.d("🔥 UPDATE-WORKOUT-DEBUG: Updating entity with ID: ${entity.id}, Status: ${entity.status}")
+            
             val updatedRows = workoutDao.updateWorkout(entity)
             
             if (updatedRows > 0) {
+                Timber.i("🔥 UPDATE-WORKOUT-DEBUG: Successfully updated workout - ID: ${workout.id.value}, Rows affected: $updatedRows")
                 workout
             } else {
+                Timber.e("🔥 UPDATE-WORKOUT-DEBUG: Update affected 0 rows for workout ID: ${workout.id.value}")
                 throw RuntimeException("Workout update operation affected 0 rows for ID: ${workout.id.value}")
             }
         }
@@ -224,10 +256,23 @@ class WorkoutRepositoryImpl @Inject constructor(
     }
 
     override fun getRecentWorkouts(userId: String, limit: Int): Flow<LiftrixResult<List<Workout>>> {
+        Timber.d("🔥 RECENT-WORKOUTS-DEBUG: Querying recent workouts for user: $userId, limit: $limit")
+        
         return workoutDao.getRecentCompletedWorkouts(userId, limit)
             .map { entities ->
                 try {
-                    val workouts = entities.map { workoutMapper.toDomain(it) }
+                    Timber.d("🔥 RECENT-WORKOUTS-DEBUG: Found ${entities.size} workout entities")
+                    entities.forEachIndexed { index, entity ->
+                        Timber.d("🔥 RECENT-WORKOUTS-DEBUG: Entity[$index] - id: ${entity.id}, name: ${entity.name}, status: ${entity.status}, endTime: ${entity.endTime}")
+                    }
+                    
+                    val workouts = entities.map { entity ->
+                        workoutMapper.toDomain(entity).also { workout ->
+                            Timber.d("🔥 RECENT-WORKOUTS-DEBUG: Mapped workout - id: ${workout.id.value}, name: ${workout.name}, status: ${workout.status}")
+                        }
+                    }
+                    
+                    Timber.d("🔥 RECENT-WORKOUTS-DEBUG: Successfully mapped ${workouts.size} workouts")
                     LiftrixResult.success(workouts)
                 } catch (throwable: Throwable) {
                     Timber.e(throwable, "Failed to map recent workout entities for user: $userId, limit: $limit")
@@ -318,7 +363,7 @@ class WorkoutRepositoryImpl @Inject constructor(
             val result = if (workout.id.value.isBlank()) {
                 createWorkout(workout)
             } else {
-                updateWorkout(workout)
+                updateWorkoutWithRetry(workout)
             }
             
             result.fold(
@@ -328,6 +373,45 @@ class WorkoutRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    /**
+     * Update workout with automatic retry logic for recoverable database errors
+     */
+    private suspend fun updateWorkoutWithRetry(
+        workout: Workout,
+        maxAttempts: Int = 3,
+        baseDelayMs: Long = 1000L
+    ): LiftrixResult<Workout> {
+        var lastError: LiftrixError? = null
+        
+        repeat(maxAttempts) { attempt ->
+            Timber.d("🔥 RETRY-DEBUG: Attempt ${attempt + 1}/$maxAttempts for workout ${workout.id.value}")
+            
+            val result = updateWorkout(workout)
+            
+            result.fold(
+                onSuccess = { updatedWorkout ->
+                    Timber.i("🔥 RETRY-DEBUG: Update succeeded on attempt ${attempt + 1}")
+                    return LiftrixResult.success(updatedWorkout)
+                },
+                onFailure = { error ->
+                    lastError = error as? LiftrixError
+                    
+                    if (error is LiftrixError.DatabaseError && error.isRecoverable && attempt < maxAttempts - 1) {
+                        val delayMs = error.retryAfter ?: (baseDelayMs * (1L shl attempt)) // Exponential backoff
+                        Timber.w("🔥 RETRY-DEBUG: Attempt ${attempt + 1} failed, retrying in ${delayMs}ms. Error: ${error.message}")
+                        
+                        kotlinx.coroutines.delay(delayMs)
+                    } else {
+                        Timber.e("🔥 RETRY-DEBUG: Attempt ${attempt + 1} failed, not retrying. Error: ${error.message}")
+                        return LiftrixResult.failure(error)
+                    }
+                }
+            )
+        }
+        
+        return LiftrixResult.failure(lastError ?: LiftrixError.UnknownError("Update failed after $maxAttempts attempts"))
     }
 
     override suspend fun getUserWorkoutHistory(userId: String, limit: Int, offset: Int): LiftrixResult<List<WorkoutSummary>> {
@@ -345,9 +429,22 @@ class WorkoutRepositoryImpl @Inject constructor(
                 )
             }
         ) {
-            // Simplified implementation - return empty list for now
-            // This should be implemented based on your actual WorkoutSummary mapping logic
-            emptyList<WorkoutSummary>()
+            // Get paginated workout history from database
+            val workoutEntities = workoutDao.getWorkoutHistoryPaginated(userId, limit, offset)
+                .catch { exception ->
+                    Timber.e(exception, "Error getting workout history for user: $userId")
+                    emit(emptyList())
+                }
+                .first() // Get current value from Flow
+            
+            // Convert entities to domain models then to WorkoutSummary
+            val workoutSummaries = workoutEntities.map { entity ->
+                val workout = workoutMapper.toDomain(entity)
+                workout.toSummary()
+            }
+            
+            Timber.d("Retrieved ${workoutSummaries.size} workout summaries for user: $userId (limit: $limit, offset: $offset)")
+            workoutSummaries
         }
     }
 
@@ -382,9 +479,10 @@ class WorkoutRepositoryImpl @Inject constructor(
                 )
             }
         ) {
-            // Placeholder implementation - return 0 for now
-            // This should query for workouts with unsynced flag
-            0
+            // Query for workouts with unsynced flag
+            val unsyncedCount = workoutDao.getUnsyncedCountForUser(userId)
+            Timber.d("Unsynced workout count for user $userId: $unsyncedCount")
+            unsyncedCount
         }
     }
 
@@ -443,6 +541,8 @@ class WorkoutRepositoryImpl @Inject constructor(
                 )
             }
         ) {
+            Timber.d("🔥 FEED-WORKOUTS-DEBUG: Getting feed workouts for user: $userId, limit: $limit")
+            
             // Get personal completed workouts from database
             val workoutEntities = workoutDao.getRecentCompletedWorkouts(userId, limit)
                 .catch { exception ->
@@ -451,11 +551,19 @@ class WorkoutRepositoryImpl @Inject constructor(
                 }
                 .first() // Get current value from Flow
             
+            Timber.d("🔥 FEED-WORKOUTS-DEBUG: Found ${workoutEntities.size} completed workout entities")
+            workoutEntities.forEachIndexed { index, entity ->
+                Timber.d("🔥 FEED-WORKOUTS-DEBUG: Entity[$index] - id: ${entity.id}, name: ${entity.name}, status: ${entity.status}")
+            }
+            
             // Map entities to FeedWorkout domain models
-            workoutEntities.map { entity ->
+            val feedWorkouts = workoutEntities.map { entity ->
                 val workout = workoutMapper.toDomain(entity)
                 FeedWorkout.forPersonalWorkout(workout)
             }
+            
+            Timber.d("🔥 FEED-WORKOUTS-DEBUG: Successfully mapped ${feedWorkouts.size} feed workouts")
+            feedWorkouts
         }
     }
 

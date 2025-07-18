@@ -26,6 +26,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -50,6 +53,8 @@ import com.example.liftrix.ui.coach.CoachScreen
 import com.example.liftrix.ui.social.SocialViewModel
 import com.example.liftrix.ui.social.SocialEvent
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
+import com.example.liftrix.ui.components.ConditionalWorkoutFab
+import com.example.liftrix.ui.components.WorkoutCreationModal
 import javax.inject.Inject
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -81,6 +86,9 @@ fun UnifiedNavigationContainer(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     
+    // State for workout creation modal
+    var showWorkoutCreationModal by remember { mutableStateOf(false) }
+    
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
@@ -93,6 +101,13 @@ fun UnifiedNavigationContainer(
             BottomNavigationBar(
                 navController = navController,
                 currentDestination = currentDestination
+            )
+        },
+        floatingActionButton = {
+            ConditionalWorkoutFab(
+                onFabClick = {
+                    showWorkoutCreationModal = true
+                }
             )
         }
     ) { paddingValues ->
@@ -108,14 +123,24 @@ fun UnifiedNavigationContainer(
                 modifier = Modifier.fillMaxSize()
             ) {
                 composable<LiftrixRoute.Home> {
-                    HomeScreen(
-                        onNavigateToWorkout = {
-                            navController.navigateToWorkout()
-                        },
-                        onNavigateToFriends = {
-                            navController.navigateToFriends()
-                        }
-                    )
+                    Column {
+                        // Guest session indicator for anonymous users
+                        com.example.liftrix.ui.guest.GuestSessionIndicator(
+                            onClick = {
+                                navController.navigateToGuestConversion(source = "nudge")
+                            },
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        )
+                        
+                        HomeScreen(
+                            onNavigateToWorkout = {
+                                navController.navigateToWorkout()
+                            },
+                            onNavigateToFriends = {
+                                navController.navigateToFriends()
+                            }
+                        )
+                    }
                 }
                 
                 composable<LiftrixRoute.Workout> {
@@ -202,6 +227,9 @@ fun UnifiedNavigationContainer(
                         onNavigateToExercise = { exerciseId ->
                             navController.navigateToExerciseDetails(exerciseId)
                         },
+                        onNavigateToHome = {
+                            navController.navigateAndReplace(LiftrixRoute.Home)
+                        },
                         savedStateHandle = backStackEntry.savedStateHandle,
                         isBlankWorkout = route.isBlankWorkout,
                         templateId = route.templateId
@@ -250,6 +278,42 @@ fun UnifiedNavigationContainer(
                         onNavigateToAuth = {
                             // TODO: Navigate to authentication screen
                             navController.clearBackStackAndNavigate(LiftrixRoute.Home)
+                        },
+                        onNavigateToAnomalyDetection = {
+                            navController.navigateToAnomalySettings()
+                        },
+                        onNavigateToAnomalyDashboard = {
+                            navController.navigateToAnomalyDashboard()
+                        },
+                        onNavigateToWidgetSettings = {
+                            navController.navigate(LiftrixRoute.WidgetSettings)
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.WidgetSettings> {
+                    com.example.liftrix.ui.settings.WidgetSettingsScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.AnomalyDashboard> {
+                    com.example.liftrix.ui.anomaly.AnomalyDashboardScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        },
+                        onNavigateToSettings = {
+                            navController.navigateToAnomalySettings()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.AnomalySettings> {
+                    com.example.liftrix.ui.anomaly.AnomalySettingsScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
                         }
                     )
                 }
@@ -264,6 +328,92 @@ fun UnifiedNavigationContainer(
                             navController.clearBackStackAndNavigate(LiftrixRoute.Home)
                         }
                     )
+                }
+                
+                // Guest Mode Routes
+                composable<LiftrixRoute.GuestModeSelection> {
+                    com.example.liftrix.ui.guest.GuestModeSelectionScreen(
+                        onContinueAsGuest = {
+                            // Handle anonymous sign-in and navigate to home
+                            navController.clearBackStackAndNavigate(LiftrixRoute.Home)
+                        },
+                        onCreateAccount = {
+                            navController.navigateToAuthSignUp()
+                        },
+                        onSignIn = {
+                            navController.navigateToAuthSignIn()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.GuestDashboard> {
+                    com.example.liftrix.ui.guest.GuestDashboardScreen(
+                        onUpgrade = {
+                            navController.navigateToGuestConversion(source = "manual")
+                        },
+                        onStartWorkout = {
+                            navController.navigateToActiveWorkout(isBlankWorkout = true)
+                        },
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.GuestConversion> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.GuestConversion>()
+                    com.example.liftrix.ui.guest.GuestConversionScreen(
+                        source = route.source,
+                        onCreateAccount = {
+                            navController.navigateAndReplace(LiftrixRoute.AuthSignUp)
+                        },
+                        onSignIn = {
+                            navController.navigateAndReplace(LiftrixRoute.AuthSignIn)
+                        },
+                        onMaybeLater = {
+                            if (route.returnTo != null) {
+                                // TODO: Convert returnTo string to LiftrixRoute for type-safe navigation
+                                navController.popBackStackSafely()
+                            } else {
+                                navController.popBackStackSafely()
+                            }
+                        }
+                    )
+                }
+                
+                // Authentication Routes
+                composable<LiftrixRoute.AuthSignUp> {
+                    // TODO: Implement AuthSignUpScreen
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Sign Up Screen")
+                            Button(
+                                onClick = { navController.clearBackStackAndNavigate(LiftrixRoute.Home) }
+                            ) {
+                                Text("Complete Sign Up")
+                            }
+                        }
+                    }
+                }
+                
+                composable<LiftrixRoute.AuthSignIn> {
+                    // TODO: Implement AuthSignInScreen
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Sign In Screen")
+                            Button(
+                                onClick = { navController.clearBackStackAndNavigate(LiftrixRoute.Home) }
+                            ) {
+                                Text("Complete Sign In")
+                            }
+                        }
+                    }
                 }
             }
             
@@ -295,11 +445,29 @@ fun UnifiedNavigationContainer(
         }
     }
     
+    // Workout creation modal
+    WorkoutCreationModal(
+        isVisible = showWorkoutCreationModal,
+        onDismiss = { showWorkoutCreationModal = false },
+        onStartFromTemplate = {
+            showWorkoutCreationModal = false
+            navController.navigateToWorkout()
+        },
+        onStartBlankWorkout = {
+            showWorkoutCreationModal = false
+            navController.navigateToActiveWorkout(isBlankWorkout = true)
+        },
+        onGuestUpgrade = {
+            showWorkoutCreationModal = false
+            navController.navigateToGuestConversion(source = "limit_reached")
+        }
+    )
+    
     // Handle stop session dialog
     if (viewModel.showStopDialog) {
         StopWorkoutDialog(
             onConfirm = {
-                viewModel.completeWorkout()
+                viewModel.completeWorkout(onNavigateToHome = { navController.navigateAndReplace(LiftrixRoute.Home) })
                 viewModel.dismissStopDialog()
             },
             onDismiss = {
@@ -447,6 +615,9 @@ class UnifiedNavigationViewModel @Inject constructor(
             com.example.liftrix.domain.model.UnifiedWorkoutSession.SessionStatus.COMPLETED -> {
                 // Do nothing - session already completed
             }
+            com.example.liftrix.domain.model.UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE -> {
+                // Do nothing - session failed to save, cannot resume
+            }
         }
     }
     
@@ -466,13 +637,23 @@ class UnifiedNavigationViewModel @Inject constructor(
     
     /**
      * Completes the current workout
+     * 
+     * @param onNavigateToHome Callback to navigate to Home screen after successful completion
      */
-    fun completeWorkout() {
+    fun completeWorkout(onNavigateToHome: (() -> Unit)? = null) {
         viewModelScope.launch {
             try {
                 val success = sessionManager.completeSession()
                 if (success) {
                     timber.log.Timber.i("Workout completed from navigation")
+                    // Navigate to Home after successful completion
+                    try {
+                        onNavigateToHome?.invoke()
+                    } catch (navigationError: Exception) {
+                        timber.log.Timber.w(navigationError, "Navigation to Home failed after workout completion")
+                        // Navigation failed, but workout was completed successfully
+                        // Don't show error to user as the main action succeeded
+                    }
                 } else {
                     timber.log.Timber.w("Failed to complete workout from navigation")
                 }
@@ -545,12 +726,15 @@ private fun NavigationAwareTopAppBar(
     // Define screens that should show back navigation with custom titles
     val routeTitles = mapOf(
         "Settings" to "Settings",
+        "WidgetSettings" to "Widget Settings",
         "Friends" to "Friends", 
         "ActiveWorkout" to "Active Workout",
         "TemplateCreation" to "Create Template",
         "ExerciseSelection" to "Add Exercise",
         "WorkoutDetails" to "Workout Details",
-        "ExerciseDetails" to "Exercise Details"
+        "ExerciseDetails" to "Exercise Details",
+        "AnomalyDashboard" to "Anomaly Detection",
+        "AnomalySettings" to "Detection Settings"
     )
     
     // Check if current route is a main tab (should show global top bar)
@@ -623,6 +807,13 @@ private fun NavigationAwareTopAppBar(
                     )
                 }
             }
+            
+            // Show guest mode chip for anonymous users
+            com.example.liftrix.ui.guest.GuestModeChip(
+                onClick = {
+                    navController.navigateToGuestDashboard()
+                }
+            )
             
             // Show settings button on all screens EXCEPT when already in settings
             if (currentRoute?.contains("Settings") != true) {

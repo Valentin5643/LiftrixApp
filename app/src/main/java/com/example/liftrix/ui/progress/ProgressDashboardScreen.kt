@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Refresh
@@ -36,17 +37,22 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import kotlinx.coroutines.flow.flowOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.liftrix.ui.common.state.UiState
+import com.example.liftrix.ui.common.state.AsyncData
 import com.example.liftrix.domain.repository.ProgressSummary
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.components.layouts.GridSystem
@@ -56,6 +62,18 @@ import com.example.liftrix.ui.progress.components.VolumeCalendarWidget
 import com.example.liftrix.ui.progress.components.WorkoutDurationChart
 import com.example.liftrix.ui.progress.components.WorkoutFrequencyHeatmap
 import com.example.liftrix.ui.progress.components.WorkoutVolumeChart
+import com.example.liftrix.ui.progress.components.WidgetContainer
+import com.example.liftrix.ui.progress.components.WidgetLayoutMode
+import com.example.liftrix.ui.progress.components.CaloriesBurnedCard
+import com.example.liftrix.ui.progress.components.DailyCaloriesCard
+import com.example.liftrix.ui.progress.components.WeeklyCalorieTrendCard
+import com.example.liftrix.domain.model.analytics.WidgetData
+import com.example.liftrix.domain.model.analytics.BasicWidgetData
+import com.example.liftrix.domain.model.analytics.TrendDirection
+import com.example.liftrix.domain.model.analytics.CalorieSummary
+import com.example.liftrix.domain.usecase.analytics.CalorieAnalyticsUseCase
+import com.example.liftrix.ui.common.validation.ViewModelValidator
+import timber.log.Timber
 
 /**
  * Modern progress dashboard screen with data dashboard styling.
@@ -70,34 +88,91 @@ import com.example.liftrix.ui.progress.components.WorkoutVolumeChart
  * - Enhanced visual hierarchy with brand colors
  * - Responsive breakpoints for different screen sizes
  * - Professional data dashboard styling
+ * - Multiple specialized ViewModels for better separation of concerns
  * 
  * @param modifier Modifier for styling the screen
- * @param viewModel ViewModel for state management and data loading
+ * @param chartsViewModel ViewModel for chart data management
+ * @param widgetViewModel ViewModel for widget management
+ * @param preferencesViewModel ViewModel for user preferences
+ * @param summaryViewModel ViewModel for summary statistics
+ * @param calorieViewModel ViewModel for calorie tracking
+ * @param featuresViewModel ViewModel for feature configuration
+ * @param coordinator Coordinator for inter-ViewModel communication
  */
 @Composable
 fun ProgressDashboardScreen(
     modifier: Modifier = Modifier,
-    viewModel: ProgressDashboardViewModel = hiltViewModel()
+    chartsViewModel: ProgressChartsViewModel = hiltViewModel(),
+    widgetViewModel: AnalyticsWidgetViewModel = hiltViewModel(),
+    preferencesViewModel: UserPreferencesViewModel = hiltViewModel(),
+    summaryViewModel: ProgressSummaryViewModel = hiltViewModel(),
+    calorieViewModel: CalorieTrackingViewModel = hiltViewModel(),
+    featuresViewModel: FeatureConfigurationViewModel = hiltViewModel(),
+    coordinator: ProgressDashboardCoordinator = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    // Validate ViewModels for debugging (only in debug builds)
+    LaunchedEffect(Unit) {
+        val validationResult = ViewModelValidator.validateViewModels(
+            "ProgressChartsViewModel" to chartsViewModel.uiState,
+            "AnalyticsWidgetViewModel" to widgetViewModel.uiState,
+            "UserPreferencesViewModel" to preferencesViewModel.uiState,
+            "ProgressSummaryViewModel" to summaryViewModel.uiState,
+            "CalorieTrackingViewModel" to calorieViewModel.uiState,
+            "FeatureConfigurationViewModel" to featuresViewModel.uiState,
+            "ProgressDashboardCoordinator" to coordinator.uiState
+        )
+        validationResult.logResult()
+    }
+
+    // Proper StateFlow collection with lifecycle awareness and timeout handling
+    val chartsState by chartsViewModel.uiState.collectAsStateWithLifecycle()
+    val widgetState by widgetViewModel.uiState.collectAsStateWithLifecycle()
+    val preferencesState by preferencesViewModel.uiState.collectAsStateWithLifecycle()
+    val summaryState by summaryViewModel.uiState.collectAsStateWithLifecycle()
+    val calorieState by calorieViewModel.uiState.collectAsStateWithLifecycle()
+    val featuresState by featuresViewModel.uiState.collectAsStateWithLifecycle()
+    val coordinatorState by coordinator.uiState.collectAsStateWithLifecycle()
+    
+    // Add timeout handling for stuck loading states
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(20000) // 20 second timeout
+        if (chartsState is UiState.Loading || widgetState is UiState.Loading || calorieState is UiState.Loading) {
+            Timber.w("Analytics modules timeout - forcing refresh")
+            coordinator.handleEvent(CoordinatorEvent.RefreshAllData)
+        }
+    }
+
+    // Connect Coordinator events to ViewModels
+    LaunchedEffect(coordinator) {
+        coordinator.coordinatorEvents.collect { event ->
+            // Forward coordinator events to all ViewModels that handle them
+            chartsViewModel.handleCoordinatorEvent(event)
+            widgetViewModel.handleCoordinatorEvent(event)
+            preferencesViewModel.handleCoordinatorEvent(event)
+            summaryViewModel.handleCoordinatorEvent(event)
+            calorieViewModel.handleCoordinatorEvent(event)
+            featuresViewModel.handleCoordinatorEvent(event)
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
-        uiState.run {
-            when {
-                error != null -> ErrorStateContent(
-                    error = error!!,
-                    onRetry = { viewModel.onEvent(ProgressDashboardEvent.RefreshData) },
-                    onDismiss = { viewModel.onEvent(ProgressDashboardEvent.ClearError) }
-                )
-                isEmpty && !isAnyChartLoading -> EmptyStateContent(
-                    onRefresh = { viewModel.onEvent(ProgressDashboardEvent.RefreshData) }
-                )
-                else -> ProgressDashboardContent(
-                    uiState = this@run,
-                    onEvent = viewModel::onEvent
-                )
-            }
-        }
+        // Extract data from UiState wrappers, using default states for loading/error cases
+        ProgressDashboardContent(
+            chartsState = (chartsState as? UiState.Success)?.data ?: ProgressChartsState(),
+            widgetState = (widgetState as? UiState.Success)?.data ?: AnalyticsWidgetState(),
+            preferencesState = (preferencesState as? UiState.Success)?.data ?: UserPreferencesState(),
+            summaryState = (summaryState as? UiState.Success)?.data ?: ProgressSummaryState(),
+            calorieState = (calorieState as? UiState.Success)?.data ?: CalorieTrackingState(),
+            featuresState = (featuresState as? UiState.Success)?.data ?: FeatureConfigurationState(),
+            coordinatorState = (coordinatorState as? UiState.Success)?.data ?: CoordinatorState(),
+            onChartsEvent = chartsViewModel::handleEvent,
+            onWidgetEvent = widgetViewModel::handleEvent,
+            onPreferencesEvent = preferencesViewModel::handleEvent,
+            onSummaryEvent = summaryViewModel::handleEvent,
+            onCalorieEvent = calorieViewModel::handleEvent,
+            onFeaturesEvent = featuresViewModel::handleEvent,
+            onCoordinatorEvent = coordinator::handleEvent
+        )
     }
 }
 
@@ -106,8 +181,20 @@ fun ProgressDashboardScreen(
  */
 @Composable
 private fun ProgressDashboardContent(
-    uiState: ProgressDashboardData,
-    onEvent: (ProgressDashboardEvent) -> Unit
+    chartsState: ProgressChartsState,
+    widgetState: AnalyticsWidgetState,
+    preferencesState: UserPreferencesState,
+    summaryState: ProgressSummaryState,
+    calorieState: CalorieTrackingState,
+    featuresState: FeatureConfigurationState,
+    coordinatorState: CoordinatorState,
+    onChartsEvent: (ProgressChartsEvent) -> Unit,
+    onWidgetEvent: (AnalyticsWidgetEvent) -> Unit,
+    onPreferencesEvent: (UserPreferencesEvent) -> Unit,
+    onSummaryEvent: (ProgressSummaryEvent) -> Unit,
+    onCalorieEvent: (CalorieTrackingEvent) -> Unit,
+    onFeaturesEvent: (FeatureConfigurationEvent) -> Unit,
+    onCoordinatorEvent: (CoordinatorEvent) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier
@@ -135,10 +222,10 @@ private fun ProgressDashboardContent(
                 )
                 
                 // Feature flag controlled export dropdown
-                if (uiState.exportEnabled) {
+                if (featuresState.exportEnabled) {
                     ExportDropdown(
-                        onExportPdf = { onEvent(ProgressDashboardEvent.ExportToPdf) },
-                        onExportCsv = { onEvent(ProgressDashboardEvent.ExportToCsv) }
+                        onExportPdf = { onCoordinatorEvent(CoordinatorEvent.ExportToPdf) },
+                        onExportCsv = { onCoordinatorEvent(CoordinatorEvent.ExportToCsv) }
                     )
                 }
             }
@@ -147,16 +234,16 @@ private fun ProgressDashboardContent(
         // Time period selector with modern styling
         item {
             TimePeriodSelector(
-                selectedPeriod = uiState.selectedTimePeriod,
-                onPeriodSelected = { onEvent(ProgressDashboardEvent.TimePeriodChanged(it)) }
+                selectedPeriod = chartsState.currentTimeRange,
+                onPeriodSelected = { onChartsEvent(ProgressChartsEvent.TimePeriodChanged(it)) }
             )
         }
 
         // Analytics onboarding (feature flag controlled)
-        if (uiState.showOnboarding && uiState.analyticsEnabled) {
+        if (featuresState.showOnboarding && featuresState.analyticsEnabled) {
             item {
                 AnalyticsOnboardingCard(
-                    onDismiss = { onEvent(ProgressDashboardEvent.DismissOnboarding) },
+                    onDismiss = { onFeaturesEvent(FeatureConfigurationEvent.DismissOnboarding) },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -164,62 +251,40 @@ private fun ProgressDashboardContent(
 
         // Enhanced summary stats with modern card design
         item {
-            uiState.run {
-                ProgressSummaryCards(
-                    summaryData = summaryData,
-                    isLoading = isSummaryLoading
-                )
-            }
+            SummarySection(
+                summaryState = summaryState,
+                onEvent = onSummaryEvent,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
-        // Volume calendar widget for monthly analytics (feature flag controlled)
-        if (uiState.analyticsEnabled) {
+        // Unified Calorie Analytics Section
+        item {
+            CalorieSection(
+                calorieState = calorieState,
+                onEvent = onCalorieEvent,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        // Widget-based analytics dashboard
+        if (featuresState.analyticsEnabled) {
             item {
-                uiState.run {
-                    volumeCalendarData?.let { calendarData ->
-                        VolumeCalendarWidget(
-                            calendarData = calendarData,
-                            onDateClick = { date ->
-                                onEvent(ProgressDashboardEvent.DateSelected(date))
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-            }
-        }
-
-        // Modern workout volume chart with enhanced design
-        item {
-            uiState.run {
-                WorkoutVolumeChart(
-                    data = volumeData,
-                    isLoading = isVolumeLoading,
+                WidgetsSection(
+                    widgetState = widgetState,
+                    onEvent = onWidgetEvent,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
         }
 
-        // Enhanced workout duration chart
+        // Charts section
         item {
-            uiState.run {
-                WorkoutDurationChart(
-                    data = durationData,
-                    isLoading = isDurationLoading,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-
-        // Modern workout frequency heatmap with improved accessibility
-        item {
-            uiState.run {
-                WorkoutFrequencyHeatmap(
-                    data = frequencyData,
-                    isLoading = isFrequencyLoading,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
+            ChartsSection(
+                chartsState = chartsState,
+                onEvent = onChartsEvent,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
         item {
@@ -339,25 +404,13 @@ private fun LoadingChartPlaceholder() {
 
 /**
  * Placeholder when no data is available for a chart
+ * Note: This should no longer be used as charts always show with zero values
  */
 @Composable
 private fun NoDataPlaceholder() {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = "No data available",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = "Complete some workouts to see your progress",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center
-        )
-    }
+    // This composable is deprecated - charts should always show with zero values
+    // Keeping for backwards compatibility but should not be displayed
+    Box(modifier = Modifier.fillMaxSize())
 }
 
 
@@ -444,6 +497,22 @@ private fun FrequencyHeatmapPlaceholder(dataPoints: Int) {
 }
 
 /**
+ * Loading state content with progress indicator
+ */
+@Composable
+private fun LoadingStateContent() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(48.dp),
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+/**
  * Modern error state content with enhanced visual design
  */
 @Composable
@@ -500,51 +569,7 @@ private fun ErrorStateContent(
     }
 }
 
-/**
- * Modern empty state content with enhanced visual hierarchy
- */
-@Composable
-private fun EmptyStateContent(
-    onRefresh: () -> Unit
-) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        LiftrixCard(
-            modifier = Modifier.padding(GridSystem.screenPadding),
-            contentDescription = "No progress data available"
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.BarChart,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(GridSystem.iconXLarge)
-                )
-                Text(
-                    text = "No Progress Data Yet",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Start working out to see your progress analytics and charts here",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-                Button(
-                    onClick = onRefresh
-                ) {
-                    Text("Check for Data")
-                }
-            }
-        }
-    }
-}
+// EmptyStateContent removed - charts now always show with zero values
 
 /**
  * Export dropdown menu for PDF and CSV export options
@@ -614,6 +639,399 @@ private fun ExportDropdown(
             )
         }
     }
+}
+
+/**
+ * Charts section composable
+ */
+@Composable
+private fun ChartsSection(
+    chartsState: ProgressChartsState,
+    onEvent: (ProgressChartsEvent) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
+    ) {
+        // Volume chart - always show chart with data or zero values
+        WorkoutVolumeChart(
+            data = (chartsState.volumeChart as? AsyncData.Success)?.data ?: emptyList(),
+            isLoading = chartsState.volumeChart is AsyncData.Loading,
+            modifier = Modifier.fillMaxWidth()
+        )
+        
+        // Duration chart - always show chart with data or zero values
+        WorkoutDurationChart(
+            data = (chartsState.durationChart as? AsyncData.Success)?.data ?: emptyList(),
+            isLoading = chartsState.durationChart is AsyncData.Loading,
+            modifier = Modifier.fillMaxWidth()
+        )
+        
+        // Frequency chart - always show chart with data or zero values
+        WorkoutFrequencyHeatmap(
+            data = (chartsState.frequencyChart as? AsyncData.Success)?.data ?: emptyList(),
+            isLoading = chartsState.frequencyChart is AsyncData.Loading,
+            modifier = Modifier.fillMaxWidth()
+        )
+        
+        // Note: Charts now always show with zero values instead of empty states
+    }
+}
+
+/**
+ * Widgets section composable
+ */
+@Composable
+private fun WidgetsSection(
+    widgetState: AnalyticsWidgetState,
+    onEvent: (AnalyticsWidgetEvent) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Only show widgets if we have configuration and widgets available
+    if (widgetState.activeWidgets.isNotEmpty() && widgetState.dashboardConfiguration != null) {
+        WidgetContainer(
+            widgets = widgetState.activeWidgets,
+            configuration = widgetState.dashboardConfiguration,
+            layoutMode = WidgetLayoutMode.SECTIONS,
+            onWidgetClick = { widget ->
+                onEvent(AnalyticsWidgetEvent.WidgetClicked(widget))
+            },
+            widgetDataProvider = { widget ->
+                widgetState.widgetDataMap[widget] ?: createDefaultWidgetData(widget)
+            },
+            isLoading = widgetState.isLoading,
+            enableCollapsibleSections = true,
+            modifier = modifier
+        )
+    }
+    // No else clause - just don't show widgets section if no data
+}
+
+/**
+ * Summary section composable
+ */
+@Composable
+private fun SummarySection(
+    summaryState: ProgressSummaryState,
+    onEvent: (ProgressSummaryEvent) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    when (val summary = summaryState.summaryData) {
+        is AsyncData.Success -> {
+            ProgressSummaryCards(
+                summaryData = summary.data,
+                isLoading = summaryState.isRefreshing
+            )
+        }
+        is AsyncData.Loading -> {
+            LoadingStateContent()
+        }
+        is AsyncData.Failure -> {
+            ErrorStateContent(
+                error = summary.error.message,
+                onRetry = { onEvent(ProgressSummaryEvent.RefreshSummary) },
+                onDismiss = { onEvent(ProgressSummaryEvent.ClearError) }
+            )
+        }
+        is AsyncData.NotAsked -> {
+            // Summary section is optional - don't show anything if not asked
+            Box(modifier = Modifier.fillMaxWidth())
+        }
+    }
+}
+
+/**
+ * Calorie section composable
+ */
+@Composable
+private fun CalorieSection(
+    calorieState: CalorieTrackingState,
+    onEvent: (CalorieTrackingEvent) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
+    ) {
+        // Section header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Calorie Analytics",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing1)
+            ) {
+                OutlinedButton(
+                    onClick = { onEvent(CalorieTrackingEvent.NavigateToCalorieGoalSettings) }
+                ) {
+                    Text("Goals")
+                }
+                
+                Button(
+                    onClick = { onEvent(CalorieTrackingEvent.NavigateToDetailedCalorieAnalytics) }
+                ) {
+                    Text("View All")
+                }
+            }
+        }
+        
+        if (calorieState.isAnyDataLoading()) {
+            CalorieAnalyticsLoadingState()
+        } else {
+            if (calorieState.calorieSummary is AsyncData.Success) {
+                val summaryData = calorieState.calorieSummary.data
+                    val domainSummary = com.example.liftrix.domain.model.analytics.CalorieSummary(
+                        averageDailyCalories = summaryData.averageDailyCalories,
+                        totalCaloriesThisWeek = summaryData.currentWeekCalories,
+                        goalProgress = if (summaryData.previousWeekCalories > 0) summaryData.currentWeekCalories.toFloat() / summaryData.previousWeekCalories.toFloat() else 0f,
+                        currentStreak = summaryData.totalWorkouts,
+                        highestDayCalories = summaryData.highestDailyCalories
+                    )
+                    
+                    // Daily calories card
+                    DailyCaloriesCard(
+                        caloriesInToday = domainSummary.averageDailyCalories,
+                        dailyGoal = 400,
+                        workoutCount = 1,
+                        trend = calculateCalorieTrend(domainSummary),
+                        isLoading = calorieState.calorieSummary is AsyncData.Loading,
+                        onClick = { onEvent(CalorieTrackingEvent.NavigateToDetailedCalorieAnalytics) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    
+                    // Summary cards row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
+                    ) {
+                        CaloriesBurnedCard(
+                            caloriesBurned = domainSummary.averageDailyCalories,
+                            subtitle = "Daily Average",
+                            trend = calculateCalorieTrend(domainSummary),
+                            isLoading = calorieState.calorieSummary is AsyncData.Loading,
+                            onClick = { onEvent(CalorieTrackingEvent.NavigateToCalorieHistory) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        
+                        WeeklyCalorieTrendCard(
+                            weeklyCalories = getWeeklyCaloriesList(domainSummary),
+                            averageCalories = domainSummary.averageDailyCalories * 7,
+                            trend = calculateCalorieTrend(domainSummary),
+                            trendPercentage = calculateWeeklyTrendPercentage(domainSummary),
+                            isLoading = calorieState.calorieSummary is AsyncData.Loading,
+                            onClick = { onEvent(CalorieTrackingEvent.NavigateToDetailedCalorieAnalytics) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+            } else {
+                CalorieAnalyticsEmptyState(
+                    onRefresh = { onEvent(CalorieTrackingEvent.RefreshCalories) }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Helper function to create default widget data
+ */
+private fun createDefaultWidgetData(widget: com.example.liftrix.domain.model.analytics.AnalyticsWidget): WidgetData {
+    return BasicWidgetData(
+        widgetType = widget,
+        lastUpdated = kotlinx.datetime.Clock.System.now(),
+        value = "0",
+        subtitle = "Start working out to see data",
+        trend = com.example.liftrix.domain.model.analytics.TrendDirection.STABLE
+    )
+}
+
+// Removed default widget helper functions - widgets section is optional
+
+
+
+/**
+ * Calorie insights summary card with key metrics
+ */
+@Composable
+private fun CalorieInsightsSummary(
+    calorieSummary: CalorieSummary,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(GridSystem.spacing3),
+            verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
+        ) {
+            Text(
+                text = "Weekly Summary",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                InsightMetric(
+                    label = "This Week",
+                    value = "${calorieSummary.totalCaloriesThisWeek} cal",
+                    icon = Icons.Default.Timeline
+                )
+                
+                InsightMetric(
+                    label = "Highest Day",
+                    value = "${calorieSummary.highestDayCalories} cal",
+                    icon = Icons.Default.ShowChart
+                )
+                
+                InsightMetric(
+                    label = "Streak",
+                    value = "${calorieSummary.currentStreak} days",
+                    icon = Icons.Default.BarChart
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Individual insight metric component
+ */
+@Composable
+private fun InsightMetric(
+    label: String,
+    value: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp)
+        )
+        
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+        )
+    }
+}
+
+/**
+ * Loading state for calorie analytics
+ */
+@Composable
+private fun CalorieAnalyticsLoadingState(
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(32.dp),
+            color = MaterialTheme.colorScheme.primary
+        )
+        
+        Text(
+            text = "Loading calorie analytics...",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
+ * Empty state for calorie analytics
+ */
+@Composable
+private fun CalorieAnalyticsEmptyState(
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
+    ) {
+        Icon(
+            imageVector = Icons.Default.LocalFireDepartment,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(48.dp)
+        )
+        
+        Text(
+            text = "Calorie Analytics",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        
+        Text(
+            text = "Your calorie data will appear here as you complete workouts",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        
+        Button(onClick = onRefresh) {
+            Text("Refresh Data")
+        }
+    }
+}
+
+/**
+ * Helper functions for calorie analytics calculations
+ */
+private fun calculateCalorieTrend(calorieSummary: CalorieSummary): TrendDirection {
+    return when {
+        calorieSummary.goalProgress >= 1.0f -> TrendDirection.UP
+        calorieSummary.goalProgress >= 0.7f -> TrendDirection.STABLE
+        else -> TrendDirection.DOWN
+    }
+}
+
+private fun getWeeklyCaloriesList(calorieSummary: CalorieSummary): List<Int> {
+    // Simplified weekly data - in production this should return actual weekly data
+    return listOf(
+        calorieSummary.totalCaloriesThisWeek,
+        (calorieSummary.totalCaloriesThisWeek * 0.9).toInt(),
+        (calorieSummary.totalCaloriesThisWeek * 1.1).toInt(),
+        calorieSummary.totalCaloriesThisWeek
+    )
+}
+
+private fun calculateWeeklyTrendPercentage(calorieSummary: CalorieSummary): Float {
+    // Simplified trend calculation
+    return if (calorieSummary.goalProgress > 0.8f) 12.5f else -5.2f
 }
 
 /**

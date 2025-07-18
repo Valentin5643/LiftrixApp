@@ -499,6 +499,9 @@ private fun getErrorIcon(error: LiftrixError): ImageVector {
         is LiftrixError.CalculationError -> Icons.Default.Calculate
         is LiftrixError.ExportError -> Icons.Default.FileDownload
         is LiftrixError.FileSystemError -> Icons.Default.FolderOff
+        is LiftrixError.NotFoundError -> Icons.Default.ErrorOutline
+        is LiftrixError.ConfigurationError -> Icons.Default.ErrorOutline
+        is LiftrixError.DataRetrievalError -> Icons.Default.CloudOff
     }
 }
 

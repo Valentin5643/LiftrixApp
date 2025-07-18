@@ -1,650 +1,197 @@
-# CLAUDE.md
+# Liftrix Android App - Claude Development Context
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## 🧠 Project Mental Model
 
-# Liftrix Android App - Development Guide
+Liftrix is a fitness tracking Android app with **Clean Architecture** and **offline-first design**:
 
-## Project Overview
+### Core System Layers
+- **Domain Layer**: Business logic with 60+ use cases, LiftrixResult<T> error handling
+- **Data Layer**: Room database (v30) with Firebase sync, user-scoped operations
+- **UI Layer**: 100% Jetpack Compose with type-safe navigation and Material 3
+- **DI Layer**: 19 specialized Hilt modules for clean dependency management
 
-**Liftrix** is a fitness tracking Android application built with modern Android development practices:
-- **Architecture**: Clean Architecture with MVVM/MVI pattern (UI/Domain/Data layers)
-- **UI Framework**: Jetpack Compose with Material 3 design system  
-- **Dependency Injection**: Dagger Hilt with 13 specialized modules
-- **Database**: Room (SQLite v27) with offline-first Firebase sync
-- **Backend**: Firebase (Auth, Firestore, Analytics, Crashlytics, Performance)
-- **Background Processing**: WorkManager + Foreground Services for workout tracking
-- **Language**: Kotlin with value classes, coroutines, and modern features
-
-## Development Commands
-
-### Build & Testing
-```bash
-./gradlew assembleDebug          # Build debug APK
-./gradlew testDebugUnitTest --tests="*.ExerciseLibraryRepositoryImplTest"  # Run single test
+### Data Flow Pattern
+```
+UI Event → ViewModel → Use Case → Repository → Room Database
+                                       ↓
+                              Firebase Sync (Background)
 ```
 
-### Database Operations
-```bash
-# Migration testing (check app/schemas/ for schema versions)
-./gradlew testDebugUnitTest --tests="*.Migration*Test"
-# Database inspection via Room Inspector in Android Studio
+### Key Architecture Principles
+- **Offline-First**: Room database is single source of truth
+- **User Scoping**: ALL database operations filter by userId
+- **Type Safety**: Sealed classes for navigation, state, and errors
+- **Error Handling**: Comprehensive LiftrixResult<T> with recovery strategies
+
+## 🧩 File Roles & Structure
+
+### Core File Types
+- **Entities**: `*Entity.kt` - Room database models with user scoping
+- **DAOs**: `*Dao.kt` - Database access objects with user filtering
+- **Repositories**: `*Repository.kt` (interfaces in domain, impls in data)
+- **Use Cases**: `*UseCase.kt` - Business logic operations
+- **ViewModels**: `*ViewModel.kt` - UI state management with BaseViewModel<S,E>
+- **Screens**: `*Screen.kt` - Compose UI screens
+- **Routes**: `LiftrixRoute.kt` - Type-safe navigation with @Serializable
+
+### Key Entry Points
+- **MainActivity**: Single activity with Compose navigation
+- **LiftrixApplication**: Hilt application class
+- **UnifiedWorkoutSessionManager**: Central session state management
+- **LiftrixDatabase**: Room database with migration chain
+- **Firebase Configuration**: Authentication, Firestore, Analytics
+
+### Directory Structure
+```
+app/src/main/java/com/example/liftrix/
+├── core/           # Error handling, extensions, utilities
+├── data/           # Room entities, DAOs, repositories
+├── di/             # 19 Hilt modules
+├── domain/         # Use cases, models, repository interfaces
+├── service/        # Business services and background workers
+└── ui/             # Compose screens, navigation, theme
 ```
 
-## Architecture Overview
-
-### Clean Architecture Implementation ✅ 
-```
-UI Layer (Jetpack Compose)
-   Screens & ViewModels (MVI pattern with StateFlow)
-   Navigation (UnifiedMainNavigationContainer)
-   Theme System (Material 3 + LiftrixTokens)
-
-Domain Layer (Business Logic)
-   Use Cases (feature-based: workout/, template/, exercise/)
-   Domain Models (value classes: WorkoutId, ExerciseId, Weight)
-   Repository Interfaces
-
-Data Layer (Persistence & Network)
-   Room Database (LiftrixDatabase v27, 14 entities)
-   Firebase Integration (Auth, Firestore, Storage)
-   Repository Implementations (offline-first pattern)
-   WorkManager Sync (bidirectional with conflict resolution)
-```
-
-### Key Architectural Patterns
-
-**Dependency Injection (13 Hilt Modules)**
-- `DatabaseModule`: Room, DAOs, type converters
-- `NetworkModule`: Firebase, API clients
-- `RepositoryModule`: Repository implementations
-- `UseCaseModule`: Business logic use cases
-- `UnifiedWorkoutSessionModule`: Session state management
-
-**Data Flow Pattern**
-```
-Firebase   Repository   Room Database   Domain Models   ViewModels   Compose UI
-```
-
-### Critical System Integration Points
-```
-Database ↔ Repository Layer
-├── Room entities → Domain models (mapper transformations)
-├── User-scoped filtering at DAO level
-└── Cascade operations with foreign key relationships
-
-Domain ↔ UI Layer  
-├── Use cases → ViewModels (business logic encapsulation)
-├── StateFlow → Compose UI (reactive state management)
-└── Event handling via sealed class hierarchies
-
-Background Services ↔ UI
-├── Session state synchronization via UnifiedWorkoutSessionManager
-├── Timer persistence and recovery mechanisms
-└── Notification integration with workout controls
-
-Firebase ↔ Local Storage
-├── Offline-first synchronization with conflict resolution
-├── Timestamp-based conflict resolution with user preference override
-├── Real-time listeners for bidirectional sync
-└── Exponential backoff retry logic (max 3 attempts)
-```
-
-**Session Management**
-- Unified session state via `UnifiedWorkoutSessionManager`
-- Foreground services for workout tracking (`WorkoutForegroundService`)
-- Timer persistence across app lifecycle
-
-## Domain Model Architecture & Aggregate Patterns
-
-### Core Domain Aggregates
-```kotlin
-// Domain Aggregate Structure
-UnifiedWorkoutSession (aggregate root)
-├── SessionExercise (entity)
-├── ExerciseSet (value object)  
-└── SessionMetrics (value object)
-
-WorkoutTemplate (aggregate root)
-├── TemplateExercise (entity)
-└── ExerciseConfiguration (value object)
-
-ExerciseLibrary (aggregate root)
-├── Exercise (entity)
-├── MuscleGroup (value object)
-└── Equipment (value object)
-```
-
-### Business Rules & Domain Constraints
-- **Workout Session Rules**: Time constraints, exercise validation
-- **Template Rules**: Exercise ordering, rest time validation  
-- **Progress Rules**: Weight progression calculations, volume tracking
-- **User Scope**: All operations filtered by userId for multi-tenancy
-
-### Domain Services & Use Case Patterns 
-- **Pattern**: Command/Query separation with focused use cases
-- **Error Handling**: LiftrixResult<T> pattern with comprehensive LiftrixError hierarchy
-- **Return Types**: Consistent LiftrixResult<T> across all repository and use case layers
-- **Organization**: Feature-based grouping (auth/, workout/, template/, exercise/)
-- **Testing**: Standardized patterns with comprehensive error scenario coverage
-
-### Key Architectural Modernization 
-```kotlin
-// STANDARDIZED PATTERNS FOR NEW FEATURES
-
-// 1. Navigation Pattern
-sealed class LiftrixRoute {
-    @Serializable data object Home : LiftrixRoute()
-    @Serializable data class WorkoutDetail(val workoutId: String) : LiftrixRoute()
-    @Serializable data class ExerciseLibrary(val categoryId: String? = null) : LiftrixRoute()
-}
-
-// 2. ViewModel Pattern
-abstract class BaseViewModel<S, E> : ViewModel() {
-    abstract val _uiState: MutableStateFlow<UiState<S>>
-    val uiState: StateFlow<UiState<S>> = _uiState.asStateFlow()
-    abstract fun handleEvent(event: E)
-}
-
-// 3. UiState Pattern
-sealed class UiState<out T> {
-    data object Loading : UiState<Nothing>()
-    data class Success<T>(val data: T) : UiState<T>()
-    data class Error(val error: LiftrixError) : UiState<Nothing>()
-    data object Empty : UiState<Nothing>()
-}
-
-// 4. Error Handling Pattern
-sealed class LiftrixError(val message: String) {
-    data class NetworkError(val networkMessage: String) : LiftrixError(networkMessage)
-    data class ValidationError(val field: String, val validationMessage: String) : LiftrixError(validationMessage)
-    data class BusinessRuleError(val rule: String, val ruleMessage: String) : LiftrixError(ruleMessage)
-    data class DatabaseError(val dbMessage: String) : LiftrixError(dbMessage)
-}
-```
-
-## Code Quality Standards
-
-### Kotlin Patterns
-- **Value Classes**: Use `@JvmInline value class` for type-safe primitives (WorkoutId, Weight, Reps)
-- **Sealed Classes**: Model UI state and results with sealed hierarchies
-- **Extension Functions**: Add domain-specific extensions to existing types
-- **Null Safety**: Leverage Kotlin's null safety, avoid `!!` operator
-
-### Clean Architecture Rules
-- **Dependency Direction**: UI   Domain   Data (never Domain   UI/Data)
-- **Layer Isolation**: Domain layer has zero Android/framework dependencies
-- **Interface Abstraction**: Repository interfaces in domain, implementations in data
-- **Use Case Pattern**: Single responsibility business logic encapsulation
-
-### Database Patterns
-- **User-Scoped Operations**: All queries filtered by `userId` for multi-tenancy
-- **Foreign Key Relationships**: Proper cascade operations and indexing
-- **Migration Strategy**: Incremental migrations with comprehensive testing
-- **Offline-First**: Room as source of truth, Firebase for sync
-
-### Core Entity Relationships & Schema Details
-```
-UserProfileEntity (1) ←→ (N) WorkoutEntity
-    ↓
-WorkoutTemplateEntity (1) ←→ (N) TemplateExerciseEntity
-    ↓
-ExerciseLibraryEntity (1) ←→ (N) SessionExerciseEntity
-    ↓
-SettingsEntity, SubscriptionEntity, FolderEntity
-```
-
-**Migration Evolution**: v11→v27 (16 migration files)
-- Progressive schema evolution with comprehensive test coverage
-- Legacy migration debt exists - could be consolidated
-- Backward compatibility maintained across all versions
-
-**Performance Characteristics**:
-- Complex joins in workout history queries (known bottleneck)
-- Denormalized fields used for performance gains
-- Composite indexes for user-scoped operations
-
-## UI/UX Development Rules
-
-### Jetpack Compose Standards
-- **No XML Layouts**: Compose-only UI implementation
-- **Material 3**: Strict adherence to Material Design 3 system
-- **Performance**: 60fps target with recomposition optimization
-- **Accessibility**: WCAG 2.1 AA compliance with TalkBack support
-
-### Design System Implementation
-```kotlin
-// Color System (semantic naming)
-LiftrixColors.Primary = #20C9B7      // Teal
-LiftrixColors.Secondary = #2A3B7D    // Indigo  
-LiftrixColors.Accent = #FF6B6B       // Coral
-
-// Typography Scale
-Headlines: Poppins Bold
-Body: Inter Medium
-Data: Roboto Mono Light
-```
-
-### Accessibility Requirements
-- Minimum 48dp touch targets with 8dp spacing
-- Content descriptions for all visual elements
-- Text scaling support up to 200%
-- High contrast mode compatibility
-- TalkBack and Switch Access navigation support
-
-### Performance Benchmarks & Quality Targets
-
-**UI Performance Targets**:
-- Frame rate: 60fps for all interactions (measured via custom monitors)
-- Frozen frames: <1.6% threshold
-- Animation performance: <50ms per frame
-- UI component recomposition: Optimized with remember/derivedStateOf
-
-**Database Performance Targets**:
-- Standard queries: <100ms execution time
-- Complex workout history joins: <500ms (known bottleneck area)
-- Migration execution: <5s for any single migration
-- Sync operation completion: <5s for standard workout data
-
-**App Performance Targets**:
-- Cold start: <3s to first screen
-- Warm start: <1s to UI ready
-- Background sync: <5s for standard workout synchronization
-- Memory usage: Leak-free operation with proper service lifecycle management
-
-**Testing Coverage Requirements**:
-- Unit test coverage: 90%+ for domain and data layers
-- Integration test coverage: All database migrations and repository patterns
-- UI test coverage: Critical user flows and component interactions
-- Performance test coverage: Frame rate validation and memory optimization
-
-## Firebase Integration Patterns
-
-### Authentication Flow
-```kotlin
-// Centralized auth via AuthRepository
-- Email/password sign-in
-- Google Sign-In integration
-- Anonymous sign-in for trial access
-- Custom claims for premium features
-```
-
-### Firestore Architecture
-```
-Collections Structure:
-   users/{userId}/
-   workouts/{workoutId}/
-   prs/{prId}/
-   friendships/{friendshipId}/
-```
-
-### Data Synchronization
-- **Conflict Resolution**: Timestamp-based with user preference override
-- **Batch Operations**: For workout sets and offline sync
-- **Real-time Listeners**: Firebase   Local updates
-- **Background Sync**: WorkManager jobs with retry logic (max 3 attempts)
-
-## Testing Strategy
-
-### Test Coverage Requirements
-- **Unit Tests**: 90%+ for domain and data layers (JUnit4, MockK)
-- **Integration Tests**: Database migrations, repository implementations
-- **UI Tests**: Compose testing for critical user flows
-- **Performance Tests**: Frame rate validation, memory optimization
-
-### Testing Patterns
-```kotlin
-// Given/When/Then structure
-class WorkoutTemplateRepositoryTest {
-    @Test
-    fun `given valid template, when creating, then returns success`() {
-        // Given: test setup
-        // When: action execution  
-        // Then: assertion verification
-    }
-}
-```
-
-### Test Infrastructure
-- `TestDataFactory`: Domain model builders and mock data
-- `ArchitectureValidator`: Clean Architecture compliance testing
-- `PerformanceMonitor`: Frame rate and memory validation
-
-## Background Processing
-
-### Service Architecture
-```kotlin
-WorkoutForegroundService (Android 14+ compliant)
-   Proper service type declarations  
-   Notification channel management
-   Timer persistence and recovery
-   Session state coordination
-
-WorkManager Jobs
-   WorkoutSyncWorker (bidirectional sync)
-   SettingsSyncWorker (preferences sync)
-   ProfileSyncWorker (user data sync)
-```
-
-### Sync Strategy
-- **Offline Queue**: Local changes queued for sync
-- **Conflict Resolution**: Last-write-wins with timestamp comparison
-- **Retry Logic**: Exponential backoff with 3 max attempts
-- **Network Constraints**: WiFi/cellular optimization
-
-## Common Development Patterns
-
-### ViewModel State Management 
-```kotlin
-// BaseViewModel<S, E> with unified UiState<T> pattern
-class WorkoutViewModel @Inject constructor(
-    private val useCase: CreateWorkoutUseCase,
-    private val errorHandler: ErrorHandler
-) : BaseViewModel<WorkoutData, WorkoutEvent>() {
-    
-    override val _uiState = MutableStateFlow(UiState.Loading<WorkoutData>())
-    
-    override fun handleEvent(event: WorkoutEvent) {
-        when (event) {
-            is WorkoutEvent.Create -> createWorkout(event.data)
-            is WorkoutEvent.Retry -> retryLastAction()
-            is WorkoutEvent.LoadWorkouts -> loadWorkouts()
-        }
-    }
-    
-    private fun createWorkout(data: WorkoutData) {
-        viewModelScope.launch {
-            _uiState.value = UiState.Loading
-            useCase(data).collect { result ->
-                _uiState.value = when (result) {
-                    is LiftrixResult.Success -> UiState.Success(result.data)
-                    is LiftrixResult.Error -> UiState.Error(result.error)
-                }
-            }
-        }
-    }
-}
-
-// Event pattern for ViewModels
-sealed class WorkoutEvent {
-    data class Create(val data: WorkoutData) : WorkoutEvent()
-    data object Retry : WorkoutEvent()
-    data object LoadWorkouts : WorkoutEvent()
-}
-```
-
-### Repository Implementation
-```kotlin
-// Offline-first pattern
-class WorkoutRepositoryImpl @Inject constructor(
-    private val workoutDao: WorkoutDao,
-    private val firestore: FirebaseFirestore
-) : WorkoutRepository {
-    
-    override fun getWorkouts(userId: String): Flow<List<Workout>> = 
-        workoutDao.getWorkoutsByUser(userId)
-            .map { entities -> entities.map { it.toDomain() } }
-}
-```
-
-### Error Handling 
-```kotlin
-// LiftrixResult<T> with comprehensive error hierarchy
-sealed class LiftrixResult<out T> {
-    data class Success<out T>(val data: T) : LiftrixResult<T>()
-    data class Error(val error: LiftrixError) : LiftrixResult<Nothing>()
-}
-
-// Use case implementation pattern
-class CreateWorkoutUseCase @Inject constructor(
-    private val repository: WorkoutRepository
-) {
-    suspend operator fun invoke(workoutData: WorkoutData): LiftrixResult<Workout> {
-        return try {
-            repository.createWorkout(workoutData)
-        } catch (e: Exception) {
-            LiftrixResult.Error(LiftrixError.UnknownError(e.message ?: "Unknown error"))
-        }
-    }
-}
-
-// Repository pattern with LiftrixResult<T>
-interface WorkoutRepository {
-    suspend fun createWorkout(data: WorkoutData): LiftrixResult<Workout>
-    suspend fun getWorkouts(userId: String): LiftrixResult<List<Workout>>
-}
-```
-
-## Key Dependencies & Versions
-
-### Core Android
-- Compile SDK: 35 (Android 15)
-- Min SDK: 26 (Android 8.0)
-- Target SDK: 35
-
-### Primary Libraries
-- Jetpack Compose BOM
-- Hilt for dependency injection
-- Room for local database
-- Firebase BOM for backend services
-- WorkManager for background processing
-- Navigation Compose for routing
-
-## Performance Optimization
-
-### Database Performance
-- Indexed queries for workout history retrieval
-- Pagination for large datasets
-- Lazy loading with proper cursor management
-- Query optimization for complex joins
-
-### UI Performance  
-- Stable classes for Compose recomposition
-- LazyColumn key stability
-- Remember and derivedStateOf optimization
-- Animation performance monitoring (60fps target)
-
-### Memory Management
-- Proper service lifecycle management
-- Resource cleanup in repositories
-- Leak detection with LeakCanary integration
-
-## Development Workflow
-
-### Feature Development Process
-1. **Domain First**: Define domain models and use cases
-2. **Data Layer**: Implement repository with offline-first pattern
-3. **UI Layer**: Create Compose screens with proper state management
-4. **Testing**: Unit tests for domain/data, UI tests for critical flows
-5. **Integration**: Firebase sync and background processing
-
-### Code Review Checklist
-- Clean Architecture layer separation maintained
-- Accessibility requirements implemented
-- Performance standards met (60fps, startup time)
-- Comprehensive test coverage
-- Firebase integration follows offline-first pattern
-
-## Cross-Cutting Concerns & System Monitoring
-
-### Analytics & Monitoring Integration
-```kotlin
-// System-Wide Monitoring
-Analytics System
-├── Firebase Analytics integration with custom events
-├── Performance monitoring for frame rate and ANR detection  
-├── Crash reporting via Crashlytics with custom metadata
-└── User behavior tracking for feature usage optimization
-
-Logging System
-├── Timber integration with proper log levels
-├── Debug logging utilities for development
-├── Structured logging for production debugging
-└── Log sanitization for sensitive data protection
-```
-
-### Configuration Management Patterns
-- Build variants: Debug/Release with ProGuard optimization
-- Feature flags: Configuration-based feature toggling capability
-- Environment switching: Firebase project configuration management
-- Settings sync: Cross-device preference synchronization via WorkManager
-
-### Security Implementation Details
-- Certificate pinning for Firebase network communications
-- SQLCipher encryption for sensitive local data storage
-- Firestore security rules implementation for data access control
-- User data scoping enforcement at repository level
-
-## Architecture Decision Context & Rationale
-
-### Core Decision Drivers
-- **Clean Architecture**: Chosen for testability and layer separation (prevents business logic leakage)
-- **Jetpack Compose**: Adopted over XML for declarative UI and performance benefits
-- **Room Database**: Selected over alternatives for compile-time SQL validation and coroutines support
-- **Firebase Integration**: Provides scalable backend with real-time sync capabilities
-- **Hilt DI**: Enables compile-time dependency validation and Android-aware scoping
-
-### Design Quirks & Non-Obvious Behaviors
-- **Session State Management**: Unified approach eliminates previous dual-state issues
-- **User Scoping**: ALL database operations filtered by userId (no global queries exist)
-- **Offline-First**: Room as single source of truth, Firebase used only for synchronization
-- **Value Classes**: Extensive use prevents primitive obsession and provides type safety
-- **Timer Persistence**: Background services designed for app termination recovery
-
-## Debugging & Troubleshooting
-
-### Known System Issues & Performance Bottlenecks
-
-**Identified Performance Issues**:
-- Complex joins in workout history queries (`WorkoutDao` - optimization needed)
-- UI recomposition triggers in some Compose components
-- Large data synchronization affecting UI performance during background sync
-
-**Resolved Architectural Conflicts** ✅ :
-- ✅ **Navigation Unified**: Type-safe LiftrixRoute sealed class system eliminates string-based routing
-- ✅ **State Management Standardized**: UiState<T> pattern across all ViewModels
-- ✅ **Error Handling Unified**: LiftrixError system with declarative UI integration
-
-**Remaining System Overlaps**:
-- Timer management: Multiple timer implementations across services (optimization opportunity)
-- Data validation logic scattered between UI, domain, and data layers
-- Dual state management issues (resolved via UnifiedWorkoutSessionManager)
-
-### Scenario-Based Debugging Guide
-
-**Database Issues**:
-- Migration failures → Check `app/src/test/java/migration/Migration*Test.kt`
-- Entity relationship errors → Validate in `LiftrixDatabase.kt:relationships`
-- Query performance → Review DAO implementations in repository tests
-- User-scoped data issues → Verify userId filtering in all DAO queries
-
-**UI State Issues**
-- ViewModel state inconsistencies → Examine BaseViewModel<S, E> implementations and UiState<T> transitions
-- Compose recomposition problems → Use Layout Inspector, check remember/derivedStateOf usage
-- Navigation state corruption → Validate LiftrixRoute sealed class definitions and UnifiedNavigationContainer
-- Timer display issues → Check session state coordination between services
-- Error display issues → Examine LiftrixError transformations and ErrorHandler integration
-
-**Background Processing Issues**:  
-- WorkManager job failures → Monitor execution in Android debug tools
-- Foreground service lifecycle → Check service type declarations (Android 14+ compliance)
-- Sync queue corruption → Validate sync queue operations in repository layer
-- Session state desync → Examine UnifiedWorkoutSessionManager state coordination
-
-**Performance Issues**:
-- Frame rate drops → Use 60fps monitoring utilities in `ui/common/PerformanceOptimizations`
-- Memory leaks → Check service lifecycle management with LeakCanary
-- Animation stuttering → Validate with custom performance monitors
-- Database query slowness → Check query optimization and indexing strategy
+## ⚙️ Debug/Extend Hot Zones
+
+### Most Common Touch Points
+1. **ViewModels** (`ui/*/ViewModel.kt`) - State management and user interactions
+2. **Use Cases** (`domain/usecase/*/`) - Business logic and validation
+3. **Repositories** (`data/repository/*/`) - Data access patterns
+4. **Navigation** (`ui/navigation/`) - Screen transitions and routing
+5. **Database Entities** (`data/local/entity/`) - Data model changes
+
+### Fragile/Complex Modules
+- **UnifiedWorkoutSessionManager** - Session state management (recently refactored)
+- **Database Migrations** - 19 migration files (v11→v30)
+- **Firebase Sync Workers** - Background synchronization with conflict resolution
+- **Analytics Engine** - Performance-critical calculations with caching
+
+### Common Debug Scenarios
+- **User Data Leakage**: Check all queries include `WHERE user_id = :userId`
+- **State Management Issues**: Verify StateFlow sharing strategies
+- **Navigation Problems**: Ensure @Serializable data classes
+- **Sync Conflicts**: Check timestamp-based conflict resolution
+- **Performance**: Monitor 60fps target with recomposition optimization
 
 ### Debug Tools
-- Layout Inspector for Compose hierarchy
-- Database Inspector for Room queries  
-- Network Profiler for Firebase operations
-- Memory Profiler for leak detection
+- **LiftrixResult<T>**: Error handling with context and recovery info
+- **ErrorHandler**: Centralized error mapping and logging
+- **Timber**: Structured logging (cleanup debug logs before production)
+- **LeakCanary**: Memory leak detection
 
-## Security Considerations
+## 🧱 Architectural Rules
 
-### Data Protection
-- User data scoped by `userId` throughout system
-- SQLCipher for sensitive local data encryption
-- Firebase Security Rules for Firestore access control
-- Certificate pinning for network communications
+### Android Architecture Rules
+- **Classes < 200 instructions, < 10 public methods/properties**
+- **No static context leaks** - Use Hilt for dependency injection
+- **Single Activity Architecture** with Compose navigation
+- **Proper lifecycle management** with ViewModels and StateFlow
 
-### Privacy Compliance
-- GDPR-compliant data handling patterns
-- User consent management for analytics
-- Data export and deletion capabilities
-- Minimal data collection principles
+### Database Rules
+- **NEVER mutate schemas directly** - Always create migration files
+- **User scoping mandatory** - All entities must have userId field
+- **Repository pattern** - Abstract all queries through repository interfaces
+- **Sync metadata required** - Include is_synced and sync_version fields
 
-## System Maturity & Technical Debt Assessment
+### UI/UX Rules
+- **Components < 200 lines** - Small, testable, layout-independent
+- **Accessibility mandatory** - Content descriptions and WCAG 2.1 AA compliance
+- **60fps target** - Monitor performance with custom metrics
+- **Material 3 compliance** - Use LiftrixTheme and semantic colors
 
-### Architecture Maturity Score: 9.5/10 ✅ 
+### Clean Architecture Rules
+- **Layer separation** - Domain has zero Android/framework dependencies
+- **Dependency inversion** - Interfaces in domain, implementations in data
+- **Single responsibility** - Each use case handles one business operation
+- **Error handling** - All operations return LiftrixResult<T>
 
-**Architectural Strengths** (Confidence Level: 98%):
-- ✅ **Clean Architecture**: Excellent layer separation with standardized patterns
-- ✅ **Modern Android Practices**: Cutting-edge Compose with type-safe navigation
-- ✅ **State Management**: Unified UiState<T> pattern across all ViewModels
-- ✅ **Error Handling**: Comprehensive LiftrixError hierarchy with declarative UI
-- ✅ **Testing Strategy**: Multi-layer coverage with standardized patterns
-- ✅ **Performance**: 60fps monitoring with advanced optimization
-- ✅ **Accessibility**: WCAG 2.1 AA compliance with enhanced support
+## 🛠️ Feature Extension Guidelines
 
-**Recently Resolved **:
-- ✅ **Navigation Consistency**: Type-safe LiftrixRoute sealed class system
-- ✅ **State Management Unification**: BaseViewModel<S, E> with UiState<T> standardization
-- ✅ **Error Handling Standardization**: LiftrixResult<T> across all layers
+### Adding New Features
+1. **Navigation**: Add to `LiftrixRoute` sealed class with @Serializable
+2. **ViewModel**: Extend `BaseViewModel<S, E>` with UiState<T> pattern
+3. **Use Cases**: Create in `domain/usecase/` returning LiftrixResult<T>
+4. **Repository**: Interface in domain, implementation in data with user scoping
+5. **Database**: Add entity with userId, create migration, update DAO
+6. **DI**: Add to appropriate Hilt module or create new feature module
 
-**Remaining Optimization Opportunities**:
-1. Timer management unification across services
-2. Database query optimization (workout history joins)
-3. Data validation centralization across layers
-4. Hilt module decomposition for complex modules
+### Safe Extension Points
+- **New Screens**: Follow `ui/*/Screen.kt` pattern with proper ViewModels
+- **New Entities**: Add to `data/local/entity/` with user scoping and migrations
+- **New Services**: Add to `service/` and register in ServiceModule
+- **New Utilities**: Add to `ui/common/` or `core/extensions/`
 
-**Development Velocity Impact**: Major architectural issues resolved, development velocity significantly increased. New features now follow standardized patterns for consistent implementation.
+### Testing Requirements
+- **Unit Tests**: Use cases and repositories with MockK
+- **UI Tests**: Compose tests for critical user flows
+- **Integration Tests**: Database operations and sync workflows
+- **Performance Tests**: 60fps validation and memory usage
 
-## New Feature Development Guide 
+### Registration Checklist
+- [ ] Add to appropriate Hilt module
+- [ ] Create migration file for database changes
+- [ ] Update Firestore security rules for new data
+- [ ] Add navigation extensions for new screens
+- [ ] Implement proper error handling with LiftrixResult<T>
+- [ ] Add accessibility support with content descriptions
+- [ ] Create comprehensive unit and UI tests
 
-### Mandatory Patterns for All New Features
+### Performance Considerations
+- **Database**: Use composite indexes for complex queries
+- **UI**: Implement lazy loading and proper recomposition optimization
+- **Network**: Batch Firebase operations and implement exponential backoff
+- **Memory**: Monitor with LeakCanary and target <100ms for standard operations
+
+## 🚨 Critical Gotchas
+
+### Database User Scoping
 ```kotlin
-// 1. NAVIGATION: Always use LiftrixRoute sealed classes
-@Serializable
-data class NewFeatureRoute(val featureId: String) : LiftrixRoute()
+// ✅ Correct - Always filter by userId
+@Query("SELECT * FROM workouts WHERE user_id = :userId")
 
-// 2. VIEWMODEL: Extend BaseViewModel<S, E>
-class NewFeatureViewModel @Inject constructor(
-    private val useCase: NewFeatureUseCase
-) : BaseViewModel<NewFeatureData, NewFeatureEvent>() {
-    
-    override val _uiState = MutableStateFlow(UiState.Loading<NewFeatureData>())
-    
-    override fun handleEvent(event: NewFeatureEvent) {
-        // Handle events with UiState transitions
-    }
-}
-
-// 3. USE CASES: Return LiftrixResult<T>
-class NewFeatureUseCase @Inject constructor(
-    private val repository: NewFeatureRepository
-) {
-    suspend operator fun invoke(data: InputData): LiftrixResult<OutputData> {
-        // Implementation with proper error handling
-    }
-}
-
-// 4. REPOSITORIES: Interface and implementation with LiftrixResult<T>
-interface NewFeatureRepository {
-    suspend fun performAction(data: InputData): LiftrixResult<OutputData>
-}
+// ❌ Incorrect - Will cause data leakage
+@Query("SELECT * FROM workouts")
 ```
 
-### Feature Development Checklist
-- [ ] Navigation uses LiftrixRoute sealed class with @Serializable
-- [ ] ViewModel extends BaseViewModel<S, E> with UiState<T>
-- [ ] Use cases return LiftrixResult<T> with proper error handling
-- [ ] Repository interface defined in domain layer
-- [ ] Repository implementation in data layer with LiftrixResult<T>
-- [ ] UI handles all UiState cases (Loading, Success, Error, Empty)
-- [ ] Events defined as sealed class hierarchy
-- [ ] Comprehensive unit tests for use cases and repositories
-- [ ] UI tests for critical user flows
-- [ ] Accessibility implementation with proper content descriptions
+### Session State Management
+```kotlin
+// ✅ Use UnifiedWorkoutSessionManager for session operations
+// ❌ Never create multiple session state sources
+```
+
+### Firebase Sync Priority
+```kotlin
+// ✅ Read from Room, sync to Firebase in background
+// ❌ Never read directly from Firebase in UI layer
+```
+
+### ViewModel Pattern
+```kotlin
+// ✅ Always extend BaseViewModel<S, E> with UiState<T>
+// ❌ Don't create custom state management patterns
+```
+
+## 🔍 Quick Reference
+
+### Key Classes to Know
+- `UnifiedWorkoutSessionManager` - Central session state
+- `LiftrixResult<T>` - Error handling wrapper
+- `BaseViewModel<S, E>` - ViewModel base class
+- `UiState<T>` - UI state management
+- `LiftrixRoute` - Type-safe navigation
+
+### Common Patterns
+- All database operations are user-scoped
+- Navigation uses @Serializable sealed classes
+- Error handling uses LiftrixResult<T> pattern
+- UI state follows Loading/Success/Error/Empty pattern
+- Background sync uses WorkManager with retry policies
+
+### Performance Targets
+- 60fps UI rendering
+- <100ms database queries
+- <5s sync operations
+- WCAG 2.1 AA accessibility compliance
+
+This context provides the foundation for understanding Liftrix's architecture and safely extending its functionality while maintaining code quality and performance standards.

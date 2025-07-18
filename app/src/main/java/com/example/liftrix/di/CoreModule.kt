@@ -4,15 +4,33 @@ import com.example.liftrix.data.error.ErrorHandlerImpl
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import dagger.Binds
 import dagger.Module
+import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import javax.inject.Qualifier
 import javax.inject.Singleton
+
+/**
+ * Qualifier for Default dispatcher used for CPU-intensive operations.
+ */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class DefaultDispatcher
+
+/**
+ * Qualifier for IO dispatcher used for I/O operations.
+ */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class IoDispatcher
 
 /**
  * Dagger Hilt module for core application services and utilities.
  * 
  * Provides dependency injection bindings for fundamental application components
- * including error handling, logging, and other core infrastructure services.
+ * including error handling, logging, dispatcher configuration, and other core infrastructure services.
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -33,4 +51,27 @@ abstract class CoreModule {
     abstract fun bindErrorHandler(
         errorHandlerImpl: ErrorHandlerImpl
     ): ErrorHandler
+    
+    companion object {
+        
+        /**
+         * Provides Default dispatcher for CPU-intensive operations.
+         * 
+         * Used for computational tasks like analytics calculations, data processing,
+         * and other CPU-bound operations that should not block the main thread.
+         */
+        @Provides
+        @DefaultDispatcher
+        fun provideDefaultDispatcher(): CoroutineDispatcher = Dispatchers.Default
+        
+        /**
+         * Provides IO dispatcher for I/O operations.
+         * 
+         * Used for database operations, network requests, file operations,
+         * and other I/O-bound operations that should not block the main thread.
+         */
+        @Provides
+        @IoDispatcher
+        fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO
+    }
 }

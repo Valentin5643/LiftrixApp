@@ -39,6 +39,20 @@ interface WorkoutDao {
     @Query("SELECT * FROM workouts WHERE user_id = :userId AND date BETWEEN :startDate AND :endDate ORDER BY date ASC")
     suspend fun getWorkoutsInDateRangeForUser(userId: String, startDate: String, endDate: String): List<WorkoutEntity>
     
+    /**
+     * Gets workouts for a user within a specific date range
+     * 
+     * This method is used by CalorieAnalyticsUseCase for calorie calculations
+     * and analytics data processing. Returns workouts ordered by date.
+     * 
+     * @param userId The user's ID
+     * @param startDate Start date in string format (inclusive)
+     * @param endDate End date in string format (inclusive)
+     * @return List of workout entities in the date range
+     */
+    @Query("SELECT * FROM workouts WHERE user_id = :userId AND date BETWEEN :startDate AND :endDate ORDER BY date ASC")
+    suspend fun getWorkoutsByDateRange(userId: String, startDate: String, endDate: String): List<WorkoutEntity>
+    
     @Query("SELECT w.* FROM workouts w JOIN exercises e ON w.id = e.workout_id WHERE e.id = :exerciseId")
     suspend fun getWorkoutByExerciseId(exerciseId: Long): WorkoutEntity?
     

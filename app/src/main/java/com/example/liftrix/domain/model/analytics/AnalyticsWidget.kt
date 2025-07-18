@@ -74,6 +74,65 @@ enum class AnalyticsWidget(
     ),
     
     /**
+     * Volume chart widget
+     * Visual chart displaying volume progression over time
+     */
+    VOLUME_CHART(
+        displayName = "Volume Chart",
+        description = "Visual chart showing volume progression over time",
+        complexity = WidgetComplexity.MODERATE,
+        updateFrequencyMinutes = 120,
+        category = WidgetCategory.CHARTS
+    ),
+    
+    /**
+     * Duration chart widget
+     * Visual chart displaying workout duration trends
+     */
+    DURATION_CHART(
+        displayName = "Duration Chart",
+        description = "Visual chart showing workout duration trends",
+        complexity = WidgetComplexity.MODERATE,
+        updateFrequencyMinutes = 120,
+        category = WidgetCategory.CHARTS
+    ),
+    
+    /**
+     * Frequency chart widget
+     * Visual chart displaying workout frequency patterns
+     */
+    FREQUENCY_CHART(
+        displayName = "Frequency Chart",
+        description = "Visual chart showing workout frequency patterns",
+        complexity = WidgetComplexity.MODERATE,
+        updateFrequencyMinutes = 120,
+        category = WidgetCategory.CHARTS
+    ),
+    
+    /**
+     * Workout streak widget
+     * Tracks current and historical workout streaks
+     */
+    WORKOUT_STREAK(
+        displayName = "Workout Streak",
+        description = "Track your current and historical workout streaks",
+        complexity = WidgetComplexity.SIMPLE,
+        updateFrequencyMinutes = 60
+    ),
+    
+    /**
+     * Personal records widget
+     * Displays recent and all-time personal records
+     */
+    PERSONAL_RECORDS(
+        displayName = "Personal Records",
+        description = "View your recent and all-time personal records",
+        complexity = WidgetComplexity.MODERATE,
+        updateFrequencyMinutes = 180,
+        category = WidgetCategory.PROGRESS
+    ),
+    
+    /**
      * Volume trends analysis widget
      * Advanced trend analysis with projections
      */
@@ -104,6 +163,45 @@ enum class AnalyticsWidget(
         description = "Detailed performance insights and recommendations",
         complexity = WidgetComplexity.COMPLEX,
         updateFrequencyMinutes = 720
+    ),
+    
+    /**
+     * Calories burned widget
+     * Shows daily calories burned from workouts with trend visualization
+     */
+    CALORIES_BURNED(
+        displayName = "Calories Burned",
+        description = "Track daily calories burned from your workouts",
+        complexity = WidgetComplexity.SIMPLE,
+        updateFrequencyMinutes = 30,
+        category = WidgetCategory.METRICS,
+        priority = WidgetPriority.ESSENTIAL
+    ),
+    
+    /**
+     * Daily calories widget
+     * Displays today's calorie burn with goal comparison
+     */
+    DAILY_CALORIES(
+        displayName = "Today's Calories",
+        description = "View calories burned today compared to your goals",
+        complexity = WidgetComplexity.SIMPLE,
+        updateFrequencyMinutes = 15,
+        category = WidgetCategory.METRICS,
+        priority = WidgetPriority.STANDARD
+    ),
+    
+    /**
+     * Weekly calorie trend widget
+     * Weekly calorie burn trends with pattern analysis
+     */
+    WEEKLY_CALORIE_TREND(
+        displayName = "Weekly Calorie Trend",
+        description = "Analyze your weekly calorie burn patterns and trends",
+        complexity = WidgetComplexity.MODERATE,
+        updateFrequencyMinutes = 240,
+        category = WidgetCategory.CHARTS,
+        priority = WidgetPriority.STANDARD
     ),
     
     /**
@@ -174,6 +272,42 @@ enum class AnalyticsWidget(
         description = "Track one rep max progression",
         complexity = WidgetComplexity.MODERATE,
         updateFrequencyMinutes = 180
+    ),
+    
+    /**
+     * Weekly trends analysis widget
+     * Advanced weekly trend analysis with pattern recognition
+     */
+    WeeklyTrends(
+        displayName = "Weekly Trends",
+        description = "Analyze weekly workout trends and patterns",
+        complexity = WidgetComplexity.COMPLEX,
+        updateFrequencyMinutes = 480,
+        category = WidgetCategory.ANALYTICS
+    ),
+    
+    /**
+     * Muscle group distribution widget
+     * Shows distribution of training across muscle groups
+     */
+    MuscleGroupDistribution(
+        displayName = "Muscle Group Distribution",
+        description = "View training distribution across muscle groups",
+        complexity = WidgetComplexity.MODERATE,
+        updateFrequencyMinutes = 240,
+        category = WidgetCategory.ANALYTICS
+    ),
+    
+    /**
+     * Recovery patterns widget
+     * Tracks recovery patterns and recommendations
+     */
+    RecoveryPatterns(
+        displayName = "Recovery Patterns",
+        description = "Monitor recovery patterns and recommendations",
+        complexity = WidgetComplexity.COMPLEX,
+        updateFrequencyMinutes = 360,
+        category = WidgetCategory.ANALYTICS
     );
     
     /**
@@ -188,6 +322,14 @@ enum class AnalyticsWidget(
         VOLUME_TRENDS -> 6
         RECOVERY_METRICS -> 7
         PERFORMANCE_ANALYSIS -> 8
+        CALORIES_BURNED -> 1
+        DAILY_CALORIES -> 2
+        WEEKLY_CALORIE_TREND -> 5
+        VOLUME_CHART -> 6
+        DURATION_CHART -> 7
+        FREQUENCY_CHART -> 8
+        WORKOUT_STREAK -> 3
+        PERSONAL_RECORDS -> 4
         TotalVolume -> 2
         WorkoutFrequency -> 1
         ConsistencyStreak -> 3
@@ -195,6 +337,9 @@ enum class AnalyticsWidget(
         VolumeLoadProgression -> 6
         ProgressChart -> 5
         OneRMProgression -> 7
+        WeeklyTrends -> 8
+        MuscleGroupDistribution -> 9
+        RecoveryPatterns -> 10
     }
     
     /**
@@ -307,6 +452,26 @@ data class BasicWidgetData(
     val trend: TrendDirection?
 ) : WidgetData {
     override val isValid: Boolean = value.isNotBlank()
+}
+
+/**
+ * Enhanced WidgetData implementation for UI components
+ */
+data class UIWidgetData(
+    val widget: AnalyticsWidget,
+    val value: String,
+    val subtitle: String = "",
+    val trend: TrendDirection = TrendDirection.STABLE,
+    val isLoading: Boolean = false
+) : WidgetData {
+    override val widgetType: AnalyticsWidget = widget
+    override val lastUpdated: kotlinx.datetime.Instant = kotlinx.datetime.Clock.System.now()
+    override val isValid: Boolean = value.isNotBlank()
+    
+    /**
+     * Creates a copy with updated loading state
+     */
+    fun copy(isLoading: Boolean): UIWidgetData = copy(isLoading = isLoading)
 }
 
 // Widget data interface for analytics widgets - no alias needed
