@@ -436,16 +436,24 @@ class WidgetPreferencesRepositoryImpl @Inject constructor(
         
         // Migration mapping from old widget names to new enum names
         val migrationMap = mapOf(
-            // Legacy display names to enum names
-            "Progress summary" to "ProgressSummary",
-            "Active time" to "ActiveDuration", 
-            "Best streak" to "BestStreak",
+            // Legacy display names to enum names - USER SPECIFIC MAPPINGS
+            "Progress summary" to "ProgressChart",
             "Total volume" to "TotalVolume",
+            "Active time" to "AverageDuration", 
+            "Best streak" to "ConsistencyStreak",
+            "Consistency" to "ConsistencyStreak",
+            "Today's calories" to "DailyCalories",
+            // "Calories burned" to "CaloriesBurned", // REMOVED - duplicate of CalorieSection widget
+            "Weekly calories" to "WeeklyCalorieTrend",
+            "Volume trend" to "VolumeTrends",
+            "Workout duration" to "AverageDuration",
+            "Frequency calendar" to "VolumeCalendar",
+            
+            // Additional legacy display names
             "Current streak" to "ConsistencyStreak",
             "Workout frequency" to "WorkoutFrequency",
-            "Daily calories" to "CaloriesBurned",
-            "Weekly average" to "WeeklyAverages",
-            "Volume trend" to "VolumeTrends",
+            // "Daily calories" to "CaloriesBurned", // REMOVED - duplicate, use DailyCalories instead
+            "Weekly average" to "WeeklyCalorieTrend",
             "Personal record" to "PersonalRecords",
             
             // Legacy technical names to current enum names
@@ -459,7 +467,7 @@ class WidgetPreferencesRepositoryImpl @Inject constructor(
             "volume_load_progression" to "VolumeLoadProgression",
             "recovery_patterns" to "RecoveryPatterns",
             "weekly_trends" to "WeeklyTrends",
-            "calories_burned" to "CaloriesBurned",
+            // "calories_burned" to "CaloriesBurned", // REMOVED - duplicate of CalorieSection widget
             "exercise_analysis" to "ExerciseAnalysis",
             "strength_progress" to "StrengthProgress",
             "cardio_analysis" to "CardioAnalysis",
@@ -476,7 +484,7 @@ class WidgetPreferencesRepositoryImpl @Inject constructor(
             // Any other legacy names that might exist
             "active_time" to "ActiveDuration",
             "best_streak" to "BestStreak",
-            "daily_calories_burned" to "CaloriesBurned",
+            // "daily_calories_burned" to "CaloriesBurned", // REMOVED - duplicate, use DailyCalories
             "weekly_calorie_trend" to "WeeklyTrends"
         )
         
@@ -512,7 +520,7 @@ class WidgetPreferencesRepositoryImpl @Inject constructor(
                 "TotalVolume",
                 "WorkoutFrequency", 
                 "ConsistencyStreak",
-                "CaloriesBurned"
+                "DailyCalories"  // Use DailyCalories instead of CaloriesBurned to avoid duplication
             ).filter { it in validWidgetNames }
             
             migratedWidgets.addAll(defaultWidgets)
@@ -520,5 +528,36 @@ class WidgetPreferencesRepositoryImpl @Inject constructor(
         
         Timber.d("Widget migration completed: ${widgetNames.size} -> ${migratedWidgets.size} widgets")
         return migratedWidgets
+    }
+    
+    /**
+     * Manually applies widget preference migration and saves the corrected preferences.
+     * This fixes the issue where old display names are stored instead of proper enum names.
+     * 
+     * @param userId The user whose preferences should be migrated
+     * @return LiftrixResult indicating success or failure
+     */
+    override suspend fun fixWidgetPreferenceMigration(userId: String): LiftrixResult<Unit> {
+        return try {
+            widgetPreferencesDataStore.edit { prefs ->
+                // Extract current preferences (this applies migration automatically)
+                val currentPreferences = extractPreferencesForUser(userId, prefs)
+                
+                // Force a repair to ensure consistency
+                val repairedPreferences = currentPreferences.repairConsistency()
+                
+                // Save the migrated preferences back to storage
+                savePreferencesForUser(repairedPreferences, prefs)
+                
+                Timber.i("Widget preference migration applied successfully for user: $userId")
+                Timber.d("Migrated visible widgets: ${repairedPreferences.visibleWidgets}")
+                Timber.d("Migrated widget order: ${repairedPreferences.widgetOrder}")
+            }
+            
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to apply widget preference migration for user: $userId")
+            Result.failure(LiftrixError.DatabaseError("Failed to apply migration: ${e.message}"))
+        }
     }
 }

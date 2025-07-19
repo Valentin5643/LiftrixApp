@@ -102,6 +102,16 @@ fun WidgetSettingsScreen(
                         }
                     }
                     
+                    // Fix widget migration button
+                    IconButton(
+                        onClick = { stableOnEvent(WidgetSettingsEvent.FixWidgetMigration) }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Build,
+                            contentDescription = "Fix widget preferences"
+                        )
+                    }
+                    
                     // Reset to defaults option
                     IconButton(
                         onClick = { stableOnEvent(WidgetSettingsEvent.ResetToDefaults) }

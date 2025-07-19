@@ -128,6 +128,7 @@ class AnalyticsWidgetViewModel @Inject constructor(
             is AnalyticsWidgetEvent.TrackInteraction -> trackInteraction(event.widgetId, event.interactionType, event.metadata)
             is AnalyticsWidgetEvent.ClearError -> clearError(event.widgetId)
             is AnalyticsWidgetEvent.WidgetClicked -> handleWidgetClick(event.widget)
+            is AnalyticsWidgetEvent.ForceAllWidgets -> forceAdvancedUserLevel()
         }
     }
 
@@ -1002,6 +1003,67 @@ class AnalyticsWidgetViewModel @Inject constructor(
                 )
                 updateState { UiState.Error(error) }
                 Timber.e(exception, "Unexpected error during widget migration")
+            }
+        }
+    }
+
+    /**
+     * Forces user to advanced level to show all 23 widgets.
+     */
+    fun forceAdvancedUserLevel() {
+        val user = _currentUser.value ?: return
+        
+        viewModelScope.launch {
+            try {
+                Timber.d("Forcing advanced user level for user: ${user.uid}")
+                
+                // Get current preferences and update to advanced level
+                val currentPrefs = when (val state = _uiState.value) {
+                    is UiState.Success -> state.data.preferences
+                    else -> null
+                }
+                
+                if (currentPrefs != null) {
+                    val updatedPrefs = currentPrefs.copy(
+                        userLevel = com.example.liftrix.domain.model.analytics.UserLevel.ADVANCED,
+                        visibleWidgets = setOf(
+                            "WorkoutFrequency", "TotalVolume", "AverageDuration", "ConsistencyStreak",
+                            "VolumeLoadProgression", "OneRMProgression", "ProgressChart", "WorkoutStreak", 
+                            // "CaloriesBurned", // REMOVED - duplicate of CalorieSection widget
+                            "DailyCalories", "VolumeCalendar", "StrengthProgress",
+                            "VolumeChart", "DurationChart", "FrequencyChart", "PersonalRecords",
+                            "WeeklyCalorieTrend", "MuscleGroupDistribution", "VolumeTrends", 
+                            "RecoveryMetrics", "PerformanceAnalysis", "WeeklyTrends", "RecoveryPatterns"
+                        )
+                    )
+                    
+                    val result = analyticsService.updateWidgetPreferences(updatedPrefs)
+                    
+                    result.fold(
+                        onSuccess = {
+                            loadPreferences()
+                            Timber.d("Advanced user level and all widgets set successfully")
+                        },
+                        onFailure = { throwable ->
+                            val error = throwable as? LiftrixError ?: LiftrixError.UnknownError(
+                                errorMessage = throwable.message ?: "Unknown error",
+                                analyticsContext = mapOf("operation" to "forceAdvancedUserLevel")
+                            )
+                            updateState { UiState.Error(error) }
+                            Timber.e("Failed to set advanced user level: ${error.message}")
+                        }
+                    )
+                }
+            } catch (exception: Exception) {
+                val error = LiftrixError.UnknownError(
+                    errorMessage = "Unexpected error setting advanced user level",
+                    analyticsContext = mapOf(
+                        "operation" to "forceAdvancedUserLevel",
+                        "exception" to exception.message.orEmpty()
+                    )
+                )
+                updateState { UiState.Error(error) }
+                Timber.e(exception, "Unexpected error setting advanced user level")
             }
         }
     }

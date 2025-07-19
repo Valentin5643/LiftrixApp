@@ -150,6 +150,18 @@ interface WidgetPreferencesRepository {
     ): LiftrixResult<Unit>
     
     /**
+     * Fixes widget preference migration by converting old display names to proper enum names.
+     * 
+     * This method specifically addresses the issue where widget preferences contain
+     * legacy display names like "Progress summary" instead of proper enum names like "ProgressChart".
+     * It applies the migration mapping and saves the corrected preferences permanently.
+     * 
+     * @param userId The user identifier
+     * @return LiftrixResult indicating success or failure
+     */
+    suspend fun fixWidgetPreferenceMigration(userId: String): LiftrixResult<Unit>
+    
+    /**
      * Exports widget preferences for backup or synchronization.
      * 
      * @param userId The user identifier

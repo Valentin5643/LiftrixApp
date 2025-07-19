@@ -232,65 +232,58 @@ private fun SectionedLayout(
 ) {
     val widgetsByCategory = widgets.groupBy { it.category }
     
-    LazyColumn(
-        modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(16.dp),
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Configuration header
-        item {
-            ConfigurationHeader(
-                configuration = configuration,
-                totalWidgets = widgets.size
-            )
-        }
+        ConfigurationHeader(
+            configuration = configuration,
+            totalWidgets = widgets.size
+        )
         
         // Essential widgets section (always visible)
         val essentialWidgets = widgets.filter { it.priority.configurationLevel == 1 }
         if (essentialWidgets.isNotEmpty()) {
-            item {
-                WidgetSection(
-                    title = "Essential Metrics",
-                    description = "Core analytics for tracking your progress",
-                    widgets = essentialWidgets,
-                    onWidgetClick = onWidgetClick,
-                    widgetDataProvider = widgetDataProvider,
-                    isCollapsible = false,
-                    isLoading = isLoading
-                )
-            }
+            WidgetSection(
+                title = "Essential Metrics",
+                description = "Core analytics for tracking your progress",
+                widgets = essentialWidgets,
+                onWidgetClick = onWidgetClick,
+                widgetDataProvider = widgetDataProvider,
+                isCollapsible = false,
+                isLoading = isLoading
+            )
         }
         
         // Intermediate widgets section
         val intermediateWidgets = widgets.filter { it.priority.configurationLevel == 2 }
         if (intermediateWidgets.isNotEmpty()) {
-            item {
-                WidgetSection(
-                    title = "Enhanced Insights",
-                    description = "Advanced metrics for optimization",
-                    widgets = intermediateWidgets,
-                    onWidgetClick = onWidgetClick,
-                    widgetDataProvider = widgetDataProvider,
-                    isCollapsible = enableCollapsibleSections,
-                    isLoading = isLoading
-                )
-            }
+            WidgetSection(
+                title = "Enhanced Insights",
+                description = "Advanced metrics for optimization",
+                widgets = intermediateWidgets,
+                onWidgetClick = onWidgetClick,
+                widgetDataProvider = widgetDataProvider,
+                isCollapsible = enableCollapsibleSections,
+                isLoading = isLoading
+            )
         }
         
         // Advanced widgets section
         val advancedWidgets = widgets.filter { it.priority.configurationLevel == 3 }
         if (advancedWidgets.isNotEmpty()) {
-            item {
-                WidgetSection(
-                    title = "Advanced Analytics",
-                    description = "Professional-level metrics and insights",
-                    widgets = advancedWidgets,
-                    onWidgetClick = onWidgetClick,
-                    widgetDataProvider = widgetDataProvider,
-                    isCollapsible = enableCollapsibleSections,
-                    isLoading = isLoading
-                )
-            }
+            WidgetSection(
+                title = "Advanced Analytics",
+                description = "Professional-level metrics and insights",
+                widgets = advancedWidgets,
+                onWidgetClick = onWidgetClick,
+                widgetDataProvider = widgetDataProvider,
+                isCollapsible = enableCollapsibleSections,
+                isLoading = isLoading
+            )
         }
     }
 }

@@ -281,6 +281,22 @@ sealed class AnalyticsWidgetEvent : ViewModelEvent {
     data class ClearError(
         val widgetId: String? = null
     ) : AnalyticsWidgetEvent()
+    
+    /**
+     * Event for forcing advanced user level with all widgets enabled.
+     * 
+     * Sets user to advanced level and enables all 23 available widgets.
+     * Used for troubleshooting when widgets aren't appearing properly.
+     * 
+     * Example:
+     * ```kotlin
+     * // Force show all widgets
+     * AnalyticsWidgetEvent.ForceAllWidgets()
+     * ```
+     */
+    data class ForceAllWidgets(
+        val dummy: Boolean = true
+    ) : AnalyticsWidgetEvent()
 }
 
 /**

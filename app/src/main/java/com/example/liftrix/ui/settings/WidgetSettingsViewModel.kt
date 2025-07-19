@@ -5,6 +5,7 @@ import com.example.liftrix.domain.model.analytics.*
 import kotlinx.datetime.Clock
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.usecase.analytics.FixWidgetPreferenceMigrationUseCase
 import com.example.liftrix.domain.usecase.analytics.GetWidgetPreferencesUseCase
 import com.example.liftrix.domain.usecase.analytics.ResetWidgetPreferencesUseCase
 import com.example.liftrix.domain.usecase.analytics.SaveWidgetPreferencesUseCase
@@ -48,6 +49,7 @@ class WidgetSettingsViewModel @Inject constructor(
     private val saveWidgetPreferencesUseCase: SaveWidgetPreferencesUseCase,
     private val updateWidgetVisibilityUseCase: UpdateWidgetVisibilityUseCase,
     private val resetWidgetPreferencesUseCase: ResetWidgetPreferencesUseCase,
+    private val fixWidgetPreferenceMigrationUseCase: FixWidgetPreferenceMigrationUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<WidgetSettingsUiState, WidgetSettingsEvent>(errorHandler) {
 
@@ -76,6 +78,7 @@ class WidgetSettingsViewModel @Inject constructor(
             is WidgetSettingsEvent.UpdateWidgetSize -> updateWidgetSize(event.widget, event.size)
             is WidgetSettingsEvent.ResetToDefaults -> resetToDefaults()
             is WidgetSettingsEvent.SavePreferences -> savePreferences()
+            is WidgetSettingsEvent.FixWidgetMigration -> fixWidgetMigration()
             is WidgetSettingsEvent.DismissError -> dismissError()
             is WidgetSettingsEvent.RetryLastAction -> retryLastAction()
             is WidgetSettingsEvent.ShowToast -> showToast(event.message)
@@ -271,6 +274,49 @@ class WidgetSettingsViewModel @Inject constructor(
                 currentState
             }
         }
+    }
+
+    /**
+     * Fixes widget preference migration by converting old display names to proper enum names
+     */
+    private fun fixWidgetMigration() {
+        updateState { currentState ->
+            val data = currentState.dataOrNull()
+            if (data != null) {
+                UiState.Success(
+                    data = data.copy(isLoading = true)
+                )
+            } else {
+                currentState
+            }
+        }
+
+        executeUseCase(
+            useCase = { 
+                fixWidgetPreferenceMigrationUseCase(currentUserId.value)
+            },
+            onSuccess = { _ ->
+                // Migration was successful, reload the preferences to show updated state
+                loadWidgetPreferences()
+                Timber.i("Widget preference migration fix applied successfully")
+                showToast("Widget preferences fixed successfully!")
+            },
+            onError = { error ->
+                updateState { currentState ->
+                    val data = currentState.dataOrNull()
+                    if (data != null) {
+                        UiState.Success(
+                            data = data.copy(isLoading = false)
+                        )
+                    } else {
+                        currentState
+                    }
+                }
+                Timber.e("Failed to fix widget preference migration: ${error.message}")
+                showToast("Failed to fix widget preferences. Please try again.")
+            },
+            showLoading = false
+        )
     }
 
     /**
@@ -480,6 +526,7 @@ sealed class WidgetSettingsEvent : ViewModelEvent {
     data class UpdateWidgetSize(val widget: AnalyticsWidget, val size: WidgetDisplaySize) : WidgetSettingsEvent()
     object ResetToDefaults : WidgetSettingsEvent()
     object SavePreferences : WidgetSettingsEvent()
+    object FixWidgetMigration : WidgetSettingsEvent()
     object DismissError : WidgetSettingsEvent()
     object RetryLastAction : WidgetSettingsEvent()
     data class ShowToast(val message: String) : WidgetSettingsEvent()

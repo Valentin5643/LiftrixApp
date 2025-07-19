@@ -291,8 +291,8 @@ private fun ProgressDashboardContent(
                     onCalorieRefresh = { onCalorieEvent(CalorieTrackingEvent.RefreshAllData) },
                     onSummaryRefresh = { onSummaryEvent(ProgressSummaryEvent.RefreshSummary) },
                     onWidgetMigrate = { 
-                        // Use the event system to trigger widget migration
-                        onWidgetEvent(AnalyticsWidgetEvent.ResetPreferences(confirmationRequired = false, preserveCustomizations = false))
+                        // Force show all 23 widgets
+                        onWidgetEvent(AnalyticsWidgetEvent.ForceAllWidgets())
                     },
                     modifier = Modifier.fillMaxWidth()
                 )
