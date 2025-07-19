@@ -131,7 +131,7 @@ fun FrequencyMetricCard(
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Header with icon and title
             Row(
@@ -172,12 +172,13 @@ fun FrequencyMetricCard(
                 }
             }
             
-            // Main frequency display
+            // Main frequency display with compact progress
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
+                verticalAlignment = Alignment.Top
             ) {
+                // Left side - Main stats
                 Column(
                     modifier = Modifier.weight(1f)
                 ) {
@@ -194,31 +195,32 @@ fun FrequencyMetricCard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
+                    
+                    // Compact progress bar
+                    Spacer(modifier = Modifier.height(8.dp))
+                    CompactFrequencyProgressBar(
+                        progress = completionProgress,
+                        progressColor = progressColor,
+                        targetSessions = frequencyStats.targetSessions
+                    )
                 }
                 
-                // Completion badge
+                // Right side - Completion badge
                 FrequencyCompletionBadge(
                     completionRate = frequencyStats.completionRate,
                     color = progressColor
                 )
             }
             
-            // Progress bar
-            FrequencyProgressBar(
-                progress = completionProgress,
-                progressColor = progressColor,
-                targetSessions = frequencyStats.targetSessions
-            )
-            
-            // Daily frequency heatmap
+            // Daily frequency heatmap - more compact
             if (frequencyStats.dailyFrequencies.isNotEmpty()) {
-                FrequencyHeatmap(
+                CompactFrequencyHeatmap(
                     dailyFrequencies = frequencyStats.dailyFrequencies
                 )
             }
             
-            // Streak and insights
-            FrequencyInsights(
+            // Streak and insights - combined in one row
+            CompactFrequencyInsights(
                 stats = frequencyStats
             )
         }
@@ -248,6 +250,51 @@ private fun FrequencyCompletionBadge(
             text = badgeText,
             style = MaterialTheme.typography.labelMedium,
             color = color,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun CompactFrequencyProgressBar(
+    progress: Float,
+    progressColor: Color,
+    targetSessions: Int,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Segmented progress bar (one segment per target session)
+        Row(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            repeat(targetSessions) { index ->
+                val segmentProgress = ((progress * targetSessions) - index).coerceIn(0f, 1f)
+                
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(
+                            if (segmentProgress > 0.5f) {
+                                progressColor
+                            } else {
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                            }
+                        )
+                )
+            }
+        }
+        
+        Text(
+            text = "${(progress * 100).roundToInt()}%",
+            style = MaterialTheme.typography.labelMedium,
+            color = progressColor,
             fontWeight = FontWeight.SemiBold
         )
     }
@@ -311,6 +358,36 @@ private fun FrequencyProgressBar(
 }
 
 @Composable
+private fun CompactFrequencyHeatmap(
+    dailyFrequencies: List<DailyFrequency>,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "Last 7 Days",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+            fontWeight = FontWeight.Medium
+        )
+        
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            items(dailyFrequencies.takeLast(7)) { dailyFreq ->
+                CompactFrequencyDayIndicator(
+                    dailyFrequency = dailyFreq
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun FrequencyHeatmap(
     dailyFrequencies: List<DailyFrequency>,
     modifier: Modifier = Modifier
@@ -336,6 +413,38 @@ private fun FrequencyHeatmap(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun CompactFrequencyDayIndicator(
+    dailyFrequency: DailyFrequency,
+    modifier: Modifier = Modifier
+) {
+    val indicatorColor = when {
+        dailyFrequency.workoutCount >= 2 -> LiftrixColors.Primary
+        dailyFrequency.workoutCount == 1 -> LiftrixColors.Secondary
+        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+    }
+    
+    val icon = when {
+        dailyFrequency.workoutCount >= 1 -> Icons.Default.CheckCircle
+        else -> Icons.Default.RadioButtonUnchecked
+    }
+    
+    Box(
+        modifier = modifier
+            .size(20.dp)
+            .clip(CircleShape)
+            .background(indicatorColor.copy(alpha = 0.15f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = "${dailyFrequency.date.dayOfWeek.name}: ${if (dailyFrequency.hasWorkout) "workout completed" else "rest day"}",
+            modifier = Modifier.size(12.dp),
+            tint = indicatorColor
+        )
     }
 }
 
@@ -392,6 +501,54 @@ private fun FrequencyDayIndicator(
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
             fontWeight = FontWeight.Medium
         )
+    }
+}
+
+@Composable
+private fun CompactFrequencyInsights(
+    stats: FrequencyStats,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Streak information - compact
+        if (stats.currentStreak > 0) {
+            Text(
+                text = "Streak: ${stats.currentStreak} days",
+                style = MaterialTheme.typography.bodyMedium,
+                color = LiftrixColors.Primary,
+                fontWeight = FontWeight.SemiBold
+            )
+        } else {
+            Text(
+                text = "Best: ${stats.longestStreak} days",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                fontWeight = FontWeight.Medium
+            )
+        }
+        
+        // Single top insight
+        val insights = getFrequencyInsights(stats)
+        if (insights.isNotEmpty()) {
+            val (insight, color) = insights.first()
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(color.copy(alpha = 0.1f))
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = insight,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = color,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
     }
 }
 

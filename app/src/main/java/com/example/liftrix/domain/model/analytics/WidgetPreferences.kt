@@ -75,7 +75,7 @@ data class WidgetPreferences(
                 AnalyticsWidget.TotalVolume.name,
                 AnalyticsWidget.WorkoutFrequency.name,
                 AnalyticsWidget.ConsistencyStreak.name,
-                AnalyticsWidget.CALORIES_BURNED.name
+                AnalyticsWidget.CaloriesBurned.name
             )
         }
         
@@ -87,7 +87,7 @@ data class WidgetPreferences(
                 AnalyticsWidget.TotalVolume.name,
                 AnalyticsWidget.WorkoutFrequency.name,
                 AnalyticsWidget.ConsistencyStreak.name,
-                AnalyticsWidget.CALORIES_BURNED.name
+                AnalyticsWidget.CaloriesBurned.name
             )
         }
         
@@ -125,7 +125,43 @@ data class WidgetPreferences(
         require(userId.isNotBlank()) { "User ID cannot be blank" }
         require(refreshIntervalMinutes in 1..60) { "Refresh interval must be between 1 and 60 minutes" }
         require(visibleWidgets.isNotEmpty()) { "At least one widget must be visible" }
-        require(widgetOrder.containsAll(visibleWidgets)) { "Widget order must include all visible widgets" }
+        require(widgetOrder.containsAll(visibleWidgets)) { 
+            val missingWidgets = visibleWidgets - widgetOrder.toSet()
+            "Widget order must include all visible widgets. Missing: ${missingWidgets.joinToString(", ")}"
+        }
+    }
+    
+    /**
+     * Repairs inconsistent widget preferences by ensuring widget order includes all visible widgets.
+     * 
+     * @return WidgetPreferences with consistent widget order
+     */
+    fun repairConsistency(): WidgetPreferences {
+        // Get available widget names for validation
+        val availableWidgetNames = try {
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.values().map { it.name }.toSet()
+        } catch (e: Exception) {
+            // Fallback if enum access fails
+            emptySet<String>()
+        }
+        
+        // Filter out invalid widget names
+        val validVisibleWidgets = if (availableWidgetNames.isNotEmpty()) {
+            visibleWidgets.filter { it in availableWidgetNames }.toSet()
+        } else {
+            visibleWidgets
+        }
+        
+        // Ensure widget order contains all visible widgets
+        val existingValidOrder = widgetOrder.filter { it in validVisibleWidgets }
+        val missingFromOrder = validVisibleWidgets - existingValidOrder.toSet()
+        val repairedWidgetOrder = existingValidOrder + missingFromOrder.toList()
+        
+        return copy(
+            visibleWidgets = validVisibleWidgets,
+            widgetOrder = repairedWidgetOrder,
+            lastModified = Clock.System.now()
+        )
     }
     
     /**

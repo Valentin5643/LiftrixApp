@@ -803,14 +803,17 @@ class AnalyticsWidgetViewModel @Inject constructor(
      */
     private fun initializeWidgets() {
         val defaultWidgets = listOf(
-            AnalyticsWidget.TOTAL_VOLUME,
-            AnalyticsWidget.WORKOUT_FREQUENCY,
-            AnalyticsWidget.STRENGTH_PROGRESS,
-            AnalyticsWidget.PERSONAL_RECORDS,
-            AnalyticsWidget.VOLUME_TRENDS
+            AnalyticsWidget.TotalVolume,
+            AnalyticsWidget.WorkoutFrequency,
+            AnalyticsWidget.StrengthProgress,
+            AnalyticsWidget.PersonalRecords,
+            AnalyticsWidget.VolumeTrends
         )
 
         availableWidgets.value = defaultWidgets
+        
+        // Log available widgets for debugging
+        Timber.d("Initialized ${defaultWidgets.size} available widgets: ${defaultWidgets.map { it.name }}")
     }
 
     /**
@@ -833,16 +836,20 @@ class AnalyticsWidgetViewModel @Inject constructor(
                 
                 result.fold(
                     onSuccess = { preferences ->
+                        Timber.d("Loaded preferences with ${preferences.visibleWidgets.size} visible widgets: ${preferences.visibleWidgets}")
+                        
                         updateState { currentState ->
                             when (currentState) {
                                 is UiState.Success -> UiState.Success(
                                     currentState.data
                                         .withPreferences(preferences)
+                                        .withActiveWidgets(preferences)
                                         .withLoading(false)
                                 )
                                 else -> UiState.Success(
                                     AnalyticsWidgetState()
                                         .withPreferences(preferences)
+                                        .withActiveWidgets(preferences)
                                         .withLoading(false)
                                 )
                             }
@@ -952,6 +959,53 @@ class AnalyticsWidgetViewModel @Inject constructor(
     }
 
     /**
+     * Forces migration of widget preferences to fix invalid widget names.
+     * This method should be called when the user is seeing invalid or missing widgets.
+     */
+    fun forceMigrateWidgetPreferences() {
+        val user = _currentUser.value
+        if (user == null) {
+            Timber.w("Cannot migrate preferences: no user authenticated")
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                Timber.i("Force migrating widget preferences for user: ${user.uid}")
+                
+                // Reset to default preferences to clear any invalid data
+                val result = analyticsService.resetPreferences(user.uid)
+                
+                result.fold(
+                    onSuccess = {
+                        Timber.i("Widget preferences reset successfully")
+                        // Reload preferences after reset
+                        loadPreferences()
+                    },
+                    onFailure = { throwable ->
+                        val error = throwable as? LiftrixError ?: LiftrixError.UnknownError(
+                            errorMessage = throwable.message ?: "Unknown error",
+                            analyticsContext = mapOf("operation" to "forceMigrateWidgetPreferences")
+                        )
+                        updateState { UiState.Error(error) }
+                        Timber.e("Failed to force migrate widget preferences: ${error.message}")
+                    }
+                )
+            } catch (exception: Exception) {
+                val error = LiftrixError.UnknownError(
+                    errorMessage = "Unexpected error during preference migration",
+                    analyticsContext = mapOf(
+                        "operation" to "forceMigrateWidgetPreferences",
+                        "exception" to exception.message.orEmpty()
+                    )
+                )
+                updateState { UiState.Error(error) }
+                Timber.e(exception, "Unexpected error during preference migration")
+            }
+        }
+    }
+
+    /**
      * Cleanup method called when ViewModel is cleared.
      */
     override fun onCleared() {
@@ -963,14 +1017,12 @@ class AnalyticsWidgetViewModel @Inject constructor(
 
 /**
  * Extension function to create AnalyticsWidget from string identifier.
+ * Uses enum valueOf for complete coverage of all 23 widget types.
  */
 private fun AnalyticsWidget.Companion.fromString(widgetId: String): AnalyticsWidget? {
-    return when (widgetId) {
-        "TotalVolume" -> AnalyticsWidget.TotalVolume
-        "WorkoutFrequency" -> AnalyticsWidget.WorkoutFrequency
-        "StrengthProgress" -> AnalyticsWidget.STRENGTH_PROGRESS
-        "TopExercises" -> AnalyticsWidget.PERSONAL_RECORDS
-        "MonthlyComparison" -> AnalyticsWidget.VOLUME_TRENDS
-        else -> null
+    return try {
+        AnalyticsWidget.valueOf(widgetId)
+    } catch (e: IllegalArgumentException) {
+        null
     }
 }

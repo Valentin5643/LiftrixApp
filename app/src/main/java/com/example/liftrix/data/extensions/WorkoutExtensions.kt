@@ -8,6 +8,10 @@ import com.example.liftrix.domain.repository.DurationDataPoint
 import com.example.liftrix.domain.repository.FrequencyDataPoint
 import com.example.liftrix.domain.repository.ProgressSummary
 import com.example.liftrix.domain.repository.VolumeDataPoint
+import com.example.liftrix.domain.model.Exercise
+import com.example.liftrix.domain.model.ExerciseSet
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -39,10 +43,8 @@ data class WorkoutDayMetrics(
 /**
  * Calculate comprehensive daily metrics from a list of workouts
  */
-suspend fun List<WorkoutEntity>.calculateDailyMetrics(
-    exerciseDao: ExerciseDao,
-    exerciseSetDao: ExerciseSetDao
-): Map<LocalDate, WorkoutDayMetrics> {
+suspend fun List<WorkoutEntity>.calculateDailyMetrics(): Map<LocalDate, WorkoutDayMetrics> {
+    val gson = Gson()
     return groupBy { it.date.toKotlinLocalDate() }.mapValues { (_, workouts) ->
         val validWorkouts = workouts.filter { it.startTime != null && it.endTime != null }
         
@@ -51,17 +53,82 @@ suspend fun List<WorkoutEntity>.calculateDailyMetrics(
         
         // Calculate volume and exercise counts
         workouts.forEach { workout ->
-            val exercises = exerciseDao.getExercisesByWorkoutId(workout.id)
+            timber.log.Timber.d("🔍 Processing workout: ${workout.id}, name: ${workout.name}, userId: ${workout.userId}")
+            
+            // Parse exercises from JSON
+            timber.log.Timber.d("🔍 Raw exercisesJson for workout ${workout.id}: ${workout.exercisesJson.take(200)}...")
+            
+            val exercises: List<Exercise> = try {
+                // First, try to determine the JSON structure
+                if (workout.exercisesJson.trim().startsWith("{")) {
+                    // Object format: { "exercises": [...] } or { "someKey": [...] }
+                    timber.log.Timber.d("🔍 Detected object JSON format for workout ${workout.id}")
+                    val enhancedType = object : TypeToken<Map<String, Any>>() {}.type
+                    val enhancedData: Map<String, Any>? = gson.fromJson(workout.exercisesJson, enhancedType)
+                    
+                    if (enhancedData?.containsKey("exercises") == true) {
+                        // New format with exercises key
+                        timber.log.Timber.d("🔍 Using object JSON format with 'exercises' key for workout ${workout.id}")
+                        val exercisesType = object : TypeToken<List<Exercise>>() {}.type
+                        gson.fromJson(gson.toJson(enhancedData["exercises"]), exercisesType) ?: emptyList()
+                    } else {
+                        // Object format but no exercises key - might be wrapped differently
+                        timber.log.Timber.d("🔍 Object format detected but no 'exercises' key found. Keys: ${enhancedData?.keys}")
+                        // Try to find any array in the object
+                        val firstArrayValue = enhancedData?.values?.firstOrNull { it is List<*> }
+                        if (firstArrayValue != null) {
+                            val exercisesType = object : TypeToken<List<Exercise>>() {}.type
+                            gson.fromJson(gson.toJson(firstArrayValue), exercisesType) ?: emptyList()
+                        } else {
+                            emptyList()
+                        }
+                    }
+                } else {
+                    // Array format: [...]
+                    timber.log.Timber.d("🔍 Detected array JSON format for workout ${workout.id}")
+                    val exercisesType = object : TypeToken<List<Exercise>>() {}.type
+                    gson.fromJson(workout.exercisesJson, exercisesType) ?: emptyList()
+                }
+            } catch (e: Exception) {
+                // Fallback parsing attempts
+                timber.log.Timber.w(e, "⚠️ Initial JSON parsing failed for workout ${workout.id}, trying fallback approaches")
+                
+                // Try direct array parsing
+                try {
+                    val exercisesType = object : TypeToken<List<Exercise>>() {}.type
+                    gson.fromJson(workout.exercisesJson, exercisesType) ?: emptyList()
+                } catch (e2: Exception) {
+                    timber.log.Timber.e(e2, "❌ All JSON parsing attempts failed for workout ${workout.id}")
+                    timber.log.Timber.e("❌ JSON content (first 500 chars): ${workout.exercisesJson.take(500)}")
+                    emptyList()
+                }
+            }
+            
+            timber.log.Timber.d("📋 Found ${exercises.size} exercises from JSON for workout: ${workout.id}")
             exerciseCount += exercises.size
             
-            exercises.forEach { exercise ->
-                val sets = exerciseSetDao.getSetsByExercise(exercise.id)
-                totalVolume += sets.sumOf { set: com.example.liftrix.data.local.entity.ExerciseSetEntity ->
-                    if (set.weightKg != null && set.reps != null) {
-                        (set.weightKg * set.reps).toDouble()
-                    } else 0.0
-                }.toFloat()
+            exercises.forEachIndexed { exerciseIndex, exercise ->
+                timber.log.Timber.d("💪 Processing exercise $exerciseIndex: ${exercise.id}, libraryId: ${exercise.libraryExercise.id}")
+                timber.log.Timber.d("🏋️ Found ${exercise.sets.size} sets for exercise: ${exercise.id}")
+                
+                var exerciseVolume = 0f
+                exercise.sets.forEachIndexed { setIndex, set ->
+                    val setVolume = if (set.weight != null && set.reps != null) {
+                        val volume = (set.weight.kilograms * set.reps.count).toFloat()
+                        timber.log.Timber.d("📊 Set $setIndex: weight=${set.weight.kilograms}kg, reps=${set.reps.count}, volume=${volume}kg")
+                        volume
+                    } else {
+                        timber.log.Timber.w("⚠️ Set $setIndex has null data: weight=${set.weight?.kilograms}, reps=${set.reps?.count}")
+                        0f
+                    }
+                    exerciseVolume += setVolume
+                }
+                
+                timber.log.Timber.d("💪 Exercise ${exercise.id} total volume: ${exerciseVolume}kg")
+                totalVolume += exerciseVolume
             }
+            
+            timber.log.Timber.d("🏋️ Workout ${workout.id} total volume so far: ${totalVolume}kg")
         }
         
         // Calculate duration metrics
@@ -74,13 +141,17 @@ suspend fun List<WorkoutEntity>.calculateDailyMetrics(
             totalDurationMinutes / validWorkouts.size
         } else 0
         
-        WorkoutDayMetrics(
+        val metrics = WorkoutDayMetrics(
             totalVolume = totalVolume,
             exerciseCount = exerciseCount,
             workoutCount = workouts.size,
             totalDurationMinutes = totalDurationMinutes,
             averageDurationMinutes = averageDurationMinutes
         )
+        
+        timber.log.Timber.d("📈 Final metrics: totalVolume=${metrics.totalVolume}kg, exerciseCount=${metrics.exerciseCount}, workoutCount=${metrics.workoutCount}")
+        
+        metrics
     }
 }
 
@@ -147,17 +218,27 @@ fun LocalDate.toDateString(): String = toJavaLocalDate().format(DateTimeFormatte
 suspend fun WorkoutDao.getWorkoutsInDateRangeWithMetrics(
     userId: String,
     startDate: LocalDate,
-    endDate: LocalDate,
-    exerciseDao: ExerciseDao,
-    exerciseSetDao: ExerciseSetDao
+    endDate: LocalDate
 ): Map<LocalDate, WorkoutDayMetrics> {
+    timber.log.Timber.d("🔍 WorkoutExtensions: Querying workouts for user: $userId, range: ${startDate.toDateString()} to ${endDate.toDateString()}")
+    
     val workouts = getWorkoutsInDateRangeForUser(
         userId = userId,
         startDate = startDate.toDateString(),
         endDate = endDate.toDateString()
     )
     
-    return workouts.calculateDailyMetrics(exerciseDao, exerciseSetDao)
+    timber.log.Timber.d("📊 WorkoutExtensions: Found ${workouts.size} workouts for user: $userId")
+    
+    if (workouts.isEmpty()) {
+        timber.log.Timber.w("⚠️ WorkoutExtensions: No workouts found for user: $userId in range: ${startDate.toDateString()} to ${endDate.toDateString()}")
+        return emptyMap()
+    }
+    
+    val metrics = workouts.calculateDailyMetrics()
+    timber.log.Timber.d("✅ WorkoutExtensions: Calculated metrics for ${metrics.size} days")
+    
+    return metrics
 }
 
 /**

@@ -338,13 +338,16 @@ class WidgetPreferencesRepositoryImpl @Inject constructor(
         val refreshIntervalKey = intPreferencesKey("${userId}_refresh_interval")
         val lastModifiedKey = longPreferencesKey("${userId}_last_modified")
         
-        val visibleWidgets = prefs[visibleWidgetsKey] ?: WidgetPreferences.createDefault(userId).visibleWidgets
+        val rawVisibleWidgets = prefs[visibleWidgetsKey] ?: WidgetPreferences.createDefault(userId).visibleWidgets
+        val migratedVisibleWidgets = migrateWidgetNames(rawVisibleWidgets)
+        
         val widgetOrderString = prefs[widgetOrderKey] ?: ""
-        val widgetOrder = if (widgetOrderString.isNotBlank()) {
+        val rawWidgetOrder = if (widgetOrderString.isNotBlank()) {
             widgetOrderString.split(",").map { it.trim() }
         } else {
             WidgetPreferences.createDefault(userId).widgetOrder
         }
+        val migratedWidgetOrder = migrateWidgetNames(rawWidgetOrder.toSet()).toList()
         
         val dashboardLayoutString = prefs[dashboardLayoutKey] ?: DashboardLayoutMode.SECTIONS.name
         val dashboardLayout = DashboardLayoutMode.values().find { it.name == dashboardLayoutString }
@@ -373,8 +376,8 @@ class WidgetPreferencesRepositoryImpl @Inject constructor(
         
         return WidgetPreferences(
             userId = userId,
-            visibleWidgets = visibleWidgets,
-            widgetOrder = widgetOrder,
+            visibleWidgets = migratedVisibleWidgets,
+            widgetOrder = migratedWidgetOrder,
             dashboardLayout = dashboardLayout,
             userLevel = userLevel,
             collapsedSections = collapsedSections,
@@ -410,5 +413,112 @@ class WidgetPreferencesRepositoryImpl @Inject constructor(
         prefs[autoRefreshEnabledKey] = preferences.enableAutoRefresh
         prefs[refreshIntervalKey] = preferences.refreshIntervalMinutes
         prefs[lastModifiedKey] = preferences.lastModified.epochSeconds
+    }
+    
+    /**
+     * Migrates old widget names to current AnalyticsWidget enum values.
+     * 
+     * This function handles migration of widget preferences from previous versions
+     * where widget names may have changed or been removed. It maps old widget names
+     * to their current equivalents and removes invalid widget names.
+     * 
+     * @param widgetNames Collection of widget names to migrate
+     * @return Set of valid widget names that exist in the current AnalyticsWidget enum
+     */
+    private fun migrateWidgetNames(widgetNames: Collection<String>): Set<String> {
+        // Get all current valid widget names
+        val validWidgetNames = try {
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.values().map { it.name }.toSet()
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get valid widget names")
+            return emptySet()
+        }
+        
+        // Migration mapping from old widget names to new enum names
+        val migrationMap = mapOf(
+            // Legacy display names to enum names
+            "Progress summary" to "ProgressSummary",
+            "Active time" to "ActiveDuration", 
+            "Best streak" to "BestStreak",
+            "Total volume" to "TotalVolume",
+            "Current streak" to "ConsistencyStreak",
+            "Workout frequency" to "WorkoutFrequency",
+            "Daily calories" to "CaloriesBurned",
+            "Weekly average" to "WeeklyAverages",
+            "Volume trend" to "VolumeTrends",
+            "Personal record" to "PersonalRecords",
+            
+            // Legacy technical names to current enum names
+            "total_volume" to "TotalVolume",
+            "workout_frequency" to "WorkoutFrequency",
+            "consistency_streak" to "ConsistencyStreak",
+            "progress_chart" to "ProgressChart",
+            "volume_calendar" to "VolumeCalendar",
+            "muscle_group_distribution" to "MuscleGroupProgress",
+            "one_rm_progression" to "OneRMProgression",
+            "volume_load_progression" to "VolumeLoadProgression",
+            "recovery_patterns" to "RecoveryPatterns",
+            "weekly_trends" to "WeeklyTrends",
+            "calories_burned" to "CaloriesBurned",
+            "exercise_analysis" to "ExerciseAnalysis",
+            "strength_progress" to "StrengthProgress",
+            "cardio_analysis" to "CardioAnalysis",
+            "body_measurements" to "BodyMeasurements",
+            "nutrition_summary" to "NutritionSummary",
+            "goal_progress" to "GoalProgress",
+            "achievement_badges" to "AchievementBadges",
+            "sleep_recovery" to "SleepRecovery",
+            "workout_intensity" to "WorkoutIntensity",
+            "training_load" to "TrainingLoad",
+            "progressive_overload" to "ProgressiveOverload",
+            "volume_distribution" to "VolumeDistribution",
+            
+            // Any other legacy names that might exist
+            "active_time" to "ActiveDuration",
+            "best_streak" to "BestStreak",
+            "daily_calories_burned" to "CaloriesBurned",
+            "weekly_calorie_trend" to "WeeklyTrends"
+        )
+        
+        val migratedWidgets = mutableSetOf<String>()
+        
+        for (widgetName in widgetNames) {
+            when {
+                // Widget name is already valid
+                widgetName in validWidgetNames -> {
+                    migratedWidgets.add(widgetName)
+                }
+                // Widget name needs migration
+                migrationMap.containsKey(widgetName) -> {
+                    val migratedName = migrationMap[widgetName]!!
+                    if (migratedName in validWidgetNames) {
+                        migratedWidgets.add(migratedName)
+                        Timber.d("Migrated widget: '$widgetName' -> '$migratedName'")
+                    } else {
+                        Timber.w("Migration target '$migratedName' for '$widgetName' is not valid")
+                    }
+                }
+                // Widget name is invalid and can't be migrated
+                else -> {
+                    Timber.w("Removing invalid widget name: '$widgetName'")
+                }
+            }
+        }
+        
+        // If no valid widgets remain after migration, provide safe defaults
+        if (migratedWidgets.isEmpty()) {
+            Timber.i("No valid widgets after migration, using defaults")
+            val defaultWidgets = setOf(
+                "TotalVolume",
+                "WorkoutFrequency", 
+                "ConsistencyStreak",
+                "CaloriesBurned"
+            ).filter { it in validWidgetNames }
+            
+            migratedWidgets.addAll(defaultWidgets)
+        }
+        
+        Timber.d("Widget migration completed: ${widgetNames.size} -> ${migratedWidgets.size} widgets")
+        return migratedWidgets
     }
 }

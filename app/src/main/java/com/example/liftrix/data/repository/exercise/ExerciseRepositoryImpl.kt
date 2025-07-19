@@ -359,57 +359,56 @@ class ExerciseRepositoryImpl @Inject constructor(
     
     override fun searchExercisesFlow(query: String): Flow<List<ExerciseLibrary>> {
         return flow {
-            val exercises = try {
-                // First, check if database is populated
-                val dbExercises = exerciseLibraryDao.getAllExercises().first()
-                Timber.d("ExerciseRepo.searchFlow: Database contains ${dbExercises.size} exercises")
+            // First, check if database is populated
+            val dbExercises = exerciseLibraryDao.getAllExercises().first()
+            Timber.d("ExerciseRepo.searchFlow: Database contains ${dbExercises.size} exercises")
+            
+            val exercises = if (dbExercises.isEmpty()) {
+                Timber.d("Database empty during flow search, triggering population")
+                exerciseLibrarySeedData.populateExerciseLibraryIfNeeded(database)
                 
-                if (dbExercises.isEmpty()) {
-                    Timber.d("Database empty during flow search, triggering population")
-                    exerciseLibrarySeedData.populateExerciseLibraryIfNeeded(database)
-                    
-                    // Get updated exercises from database after population
-                    val updatedExercises = exerciseLibraryDao.getAllExercises().first()
-                    Timber.d("ExerciseRepo.searchFlow: After population: ${updatedExercises.size} exercises")
-                    
-                    if (updatedExercises.isNotEmpty()) {
-                        val domainExercises = updatedExercises.map { exerciseLibraryMapper.toDomain(it) }
-                        if (query.isBlank()) {
-                            domainExercises
-                        } else {
-                            implementFuzzySearch(query, domainExercises)
-                        }
-                    } else {
-                        // Fallback to placeholder exercises if population failed
-                        Timber.w("ExerciseRepo.searchFlow: Population failed, using placeholders")
-                        val placeholderExercises = placeholderService.getPlaceholderExercises()
-                        if (query.isBlank()) {
-                            placeholderExercises
-                        } else {
-                            implementFuzzySearch(query, placeholderExercises)
-                        }
-                    }
-                } else {
-                    // Database has exercises, perform normal search
-                    val domainExercises = dbExercises.map { exerciseLibraryMapper.toDomain(it) }
+                // Get updated exercises from database after population
+                val updatedExercises = exerciseLibraryDao.getAllExercises().first()
+                Timber.d("ExerciseRepo.searchFlow: After population: ${updatedExercises.size} exercises")
+                
+                if (updatedExercises.isNotEmpty()) {
+                    val domainExercises = updatedExercises.map { exerciseLibraryMapper.toDomain(it) }
                     if (query.isBlank()) {
                         domainExercises
                     } else {
                         implementFuzzySearch(query, domainExercises)
                     }
-                }
-            } catch (e: Exception) {
-                Timber.e(e, "Error during flow search, falling back to placeholders")
-                // Fallback to placeholder exercises if search fails
-                val placeholderExercises = placeholderService.getPlaceholderExercises()
-                if (query.isBlank()) {
-                    placeholderExercises
                 } else {
-                    implementFuzzySearch(query, placeholderExercises)
+                    // Fallback to placeholder exercises if population failed
+                    Timber.w("ExerciseRepo.searchFlow: Population failed, using placeholders")
+                    val placeholderExercises = placeholderService.getPlaceholderExercises()
+                    if (query.isBlank()) {
+                        placeholderExercises
+                    } else {
+                        implementFuzzySearch(query, placeholderExercises)
+                    }
+                }
+            } else {
+                // Database has exercises, perform normal search
+                val domainExercises = dbExercises.map { exerciseLibraryMapper.toDomain(it) }
+                if (query.isBlank()) {
+                    domainExercises
+                } else {
+                    implementFuzzySearch(query, domainExercises)
                 }
             }
             
             emit(exercises)
+        }.catch { e ->
+            Timber.e(e, "Error during flow search, falling back to placeholders")
+            // Fallback to placeholder exercises if search fails
+            val placeholderExercises = placeholderService.getPlaceholderExercises()
+            val fallbackExercises = if (query.isBlank()) {
+                placeholderExercises
+            } else {
+                implementFuzzySearch(query, placeholderExercises)
+            }
+            emit(fallbackExercises)
         }
     }
     
@@ -490,47 +489,45 @@ class ExerciseRepositoryImpl @Inject constructor(
     
     override fun getAllExercisesFlow(): Flow<List<ExerciseLibrary>> {
         return flow {
-            val exercises = try {
-                // First, try to get exercises from database
-                val dbExercises = exerciseLibraryDao.getAllExercises().first()
-                Timber.d("ExerciseRepo.getAllFlow: Database contains ${dbExercises.size} exercises")
+            // First, try to get exercises from database
+            val dbExercises = exerciseLibraryDao.getAllExercises().first()
+            Timber.d("ExerciseRepo.getAllFlow: Database contains ${dbExercises.size} exercises")
+            
+            val exercises = if (dbExercises.isEmpty()) {
+                Timber.d("Database empty in getAllFlow, triggering population")
                 
-                if (dbExercises.isEmpty()) {
-                    Timber.d("Database empty in getAllFlow, triggering population")
-                    
-                    // Trigger database population in background
-                    exerciseLibrarySeedData.populateExerciseLibraryIfNeeded(database)
-                    
-                    // Get updated exercises from database
-                    val updatedExercises = exerciseLibraryDao.getAllExercises().first()
-                    Timber.d("ExerciseRepo.getAllFlow: After population: ${updatedExercises.size} exercises")
-                    
-                    if (updatedExercises.isNotEmpty()) {
-                        val domainExercises = updatedExercises.map { exerciseLibraryMapper.toDomain(it) }
-                        Timber.d("ExerciseRepo.getAllFlow: Returning ${domainExercises.size} domain exercises")
-                        domainExercises
-                    } else {
-                        // Use placeholders if population failed
-                        Timber.w("ExerciseRepo.getAllFlow: Population failed, using placeholders")
-                        val placeholderExercises = placeholderService.getPlaceholderExercises()
-                        Timber.d("ExerciseRepo.getAllFlow: Returning ${placeholderExercises.size} placeholder exercises")
-                        placeholderExercises
-                    }
-                } else {
-                    // Database has exercises, use them
-                    val domainExercises = dbExercises.map { exerciseLibraryMapper.toDomain(it) }
-                    Timber.d("ExerciseRepo.getAllFlow: Returning ${domainExercises.size} domain exercises from DB")
+                // Trigger database population in background
+                exerciseLibrarySeedData.populateExerciseLibraryIfNeeded(database)
+                
+                // Get updated exercises from database
+                val updatedExercises = exerciseLibraryDao.getAllExercises().first()
+                Timber.d("ExerciseRepo.getAllFlow: After population: ${updatedExercises.size} exercises")
+                
+                if (updatedExercises.isNotEmpty()) {
+                    val domainExercises = updatedExercises.map { exerciseLibraryMapper.toDomain(it) }
+                    Timber.d("ExerciseRepo.getAllFlow: Returning ${domainExercises.size} domain exercises")
                     domainExercises
+                } else {
+                    // Use placeholders if population failed
+                    Timber.w("ExerciseRepo.getAllFlow: Population failed, using placeholders")
+                    val placeholderExercises = placeholderService.getPlaceholderExercises()
+                    Timber.d("ExerciseRepo.getAllFlow: Returning ${placeholderExercises.size} placeholder exercises")
+                    placeholderExercises
                 }
-            } catch (e: Exception) {
-                Timber.e(e, "Error loading exercises in getAllFlow, falling back to placeholders")
-                // Use placeholders if database fails
-                val placeholderExercises = placeholderService.getPlaceholderExercises()
-                Timber.d("ExerciseRepo.getAllFlow: Returning ${placeholderExercises.size} placeholder exercises after error")
-                placeholderExercises
+            } else {
+                // Database has exercises, use them
+                val domainExercises = dbExercises.map { exerciseLibraryMapper.toDomain(it) }
+                Timber.d("ExerciseRepo.getAllFlow: Returning ${domainExercises.size} domain exercises from DB")
+                domainExercises
             }
             
             emit(exercises)
+        }.catch { e ->
+            Timber.e(e, "Error loading exercises in getAllFlow, falling back to placeholders")
+            // Use placeholders if database fails
+            val placeholderExercises = placeholderService.getPlaceholderExercises()
+            Timber.d("ExerciseRepo.getAllFlow: Returning ${placeholderExercises.size} placeholder exercises after error")
+            emit(placeholderExercises)
         }
     }
     

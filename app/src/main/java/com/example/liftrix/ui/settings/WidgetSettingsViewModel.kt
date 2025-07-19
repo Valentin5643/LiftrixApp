@@ -142,14 +142,33 @@ class WidgetSettingsViewModel @Inject constructor(
         updateState { currentState ->
             val data = currentState.dataOrNull()
             if (data != null) {
-                val updatedPreferences = data.preferences.copy(
-                    visibleWidgets = if (data.preferences.visibleWidgets.contains(widget.name)) {
-                        data.preferences.visibleWidgets - widget.name
+                val isCurrentlyVisible = data.preferences.visibleWidgets.contains(widget.name)
+                
+                val updatedVisibleWidgets = if (isCurrentlyVisible) {
+                    data.preferences.visibleWidgets - widget.name
+                } else {
+                    data.preferences.visibleWidgets + widget.name
+                }
+                
+                // Update widget order to ensure it includes all visible widgets
+                val updatedWidgetOrder = if (isCurrentlyVisible) {
+                    // Remove from order when hiding widget
+                    data.preferences.widgetOrder.filter { it != widget.name }
+                } else {
+                    // Add to end of order when showing widget, if not already present
+                    if (widget.name in data.preferences.widgetOrder) {
+                        data.preferences.widgetOrder
                     } else {
-                        data.preferences.visibleWidgets + widget.name
-                    },
+                        data.preferences.widgetOrder + widget.name
+                    }
+                }
+                
+                val updatedPreferences = data.preferences.copy(
+                    visibleWidgets = updatedVisibleWidgets,
+                    widgetOrder = updatedWidgetOrder,
                     lastModified = kotlinx.datetime.Clock.System.now()
                 )
+                
                 UiState.Success(
                     data = data.copy(
                         preferences = updatedPreferences,

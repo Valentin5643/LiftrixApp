@@ -78,7 +78,7 @@ fun GoalProgressCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(12.dp)
         ) {
             // Header row with goal type and status
             Row(
@@ -154,76 +154,101 @@ fun GoalProgressCard(
             
             Spacer(modifier = Modifier.height(12.dp))
             
-            // Milestone and deadline info
+            // Combined milestone and deadline info
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Milestone progress
+                // Combined milestone and deadline in single compact row
                 if (milestones.isNotEmpty()) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.weight(1f)
                     ) {
+                        // Milestone icon + count
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                         
                         Spacer(modifier = Modifier.width(4.dp))
                         
                         Text(
-                            text = "$completedMilestones/${milestones.size} milestones",
+                            text = "$completedMilestones/${milestones.size}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        
+                        // Separator dot
+                        Text(
+                            text = " • ",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        
+                        // Deadline icon + text
+                        Icon(
+                            imageVector = Icons.Default.Schedule,
+                            contentDescription = null,
+                            tint = getDeadlineColor(goal.daysRemaining),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        
+                        Spacer(modifier = Modifier.width(4.dp))
+                        
+                        Text(
+                            text = getDeadlineText(goal.daysRemaining),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = getDeadlineColor(goal.daysRemaining)
+                        )
                     }
-                }
-                
-                // Deadline info
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Schedule,
-                        contentDescription = null,
-                        tint = getDeadlineColor(goal.daysRemaining),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    
-                    Spacer(modifier = Modifier.width(4.dp))
-                    
-                    Text(
-                        text = getDeadlineText(goal.daysRemaining),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = getDeadlineColor(goal.daysRemaining)
-                    )
+                } else {
+                    // Just deadline when no milestones
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Schedule,
+                            contentDescription = null,
+                            tint = getDeadlineColor(goal.daysRemaining),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        
+                        Spacer(modifier = Modifier.width(4.dp))
+                        
+                        Text(
+                            text = getDeadlineText(goal.daysRemaining),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = getDeadlineColor(goal.daysRemaining)
+                        )
+                    }
                 }
             }
             
-            // Next milestone preview (if exists)
+            // Next milestone preview (if exists) - compact
             nextMilestone?.let { milestone ->
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(6.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(8.dp),
+                        modifier = Modifier.padding(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Default.Flag,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(12.dp)
                         )
                         
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         
                         Text(
                             text = "Next: ${milestone.title}",

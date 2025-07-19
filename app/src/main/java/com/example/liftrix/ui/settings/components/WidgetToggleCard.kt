@@ -245,22 +245,22 @@ fun WidgetPreviewThumbnail(
     modifier: Modifier = Modifier
 ) {
     val previewIcon = when (widget) {
-        AnalyticsWidget.WORKOUT_FREQUENCY, AnalyticsWidget.WorkoutFrequency -> Icons.Default.Timeline
-        AnalyticsWidget.TOTAL_VOLUME, AnalyticsWidget.TotalVolume -> Icons.Default.FitnessCenter
-        AnalyticsWidget.VOLUME_CALENDAR -> Icons.Default.CalendarMonth
-        AnalyticsWidget.STRENGTH_PROGRESS -> Icons.Default.TrendingUp
-        AnalyticsWidget.CONSISTENCY_STREAK, AnalyticsWidget.ConsistencyStreak -> Icons.Default.LocalFireDepartment
-        AnalyticsWidget.VOLUME_CHART -> Icons.Default.BarChart
-        AnalyticsWidget.DURATION_CHART -> Icons.Default.Timeline
-        AnalyticsWidget.FREQUENCY_CHART -> Icons.Default.Analytics
-        AnalyticsWidget.WORKOUT_STREAK -> Icons.Default.LocalFireDepartment
-        AnalyticsWidget.PERSONAL_RECORDS -> Icons.Default.EmojiEvents
-        AnalyticsWidget.VOLUME_TRENDS -> Icons.Default.Analytics
-        AnalyticsWidget.RECOVERY_METRICS -> Icons.Default.Healing
-        AnalyticsWidget.PERFORMANCE_ANALYSIS -> Icons.Default.Assessment
-        AnalyticsWidget.CALORIES_BURNED -> Icons.Default.LocalFireDepartment
-        AnalyticsWidget.DAILY_CALORIES -> Icons.Default.Today
-        AnalyticsWidget.WEEKLY_CALORIE_TREND -> Icons.Default.DateRange
+        AnalyticsWidget.WorkoutFrequency -> Icons.Default.Timeline
+        AnalyticsWidget.TotalVolume -> Icons.Default.FitnessCenter
+        AnalyticsWidget.VolumeCalendar -> Icons.Default.CalendarMonth
+        AnalyticsWidget.StrengthProgress -> Icons.Default.TrendingUp
+        AnalyticsWidget.ConsistencyStreak -> Icons.Default.LocalFireDepartment
+        AnalyticsWidget.VolumeChart -> Icons.Default.BarChart
+        AnalyticsWidget.DurationChart -> Icons.Default.Timeline
+        AnalyticsWidget.FrequencyChart -> Icons.Default.Analytics
+        AnalyticsWidget.WorkoutStreak -> Icons.Default.LocalFireDepartment
+        AnalyticsWidget.PersonalRecords -> Icons.Default.EmojiEvents
+        AnalyticsWidget.VolumeTrends -> Icons.Default.Analytics
+        AnalyticsWidget.RecoveryMetrics -> Icons.Default.Healing
+        AnalyticsWidget.PerformanceAnalysis -> Icons.Default.Assessment
+        AnalyticsWidget.CaloriesBurned -> Icons.Default.LocalFireDepartment
+        AnalyticsWidget.DailyCalories -> Icons.Default.Today
+        AnalyticsWidget.WeeklyCalorieTrend -> Icons.Default.DateRange
         AnalyticsWidget.AverageDuration -> Icons.Default.Timer
         AnalyticsWidget.VolumeLoadProgression -> Icons.Default.ShowChart
         AnalyticsWidget.ProgressChart -> Icons.Default.BarChart
@@ -306,21 +306,21 @@ private fun WidgetToggleCardPreview() {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             WidgetToggleCard(
-                widget = AnalyticsWidget.TOTAL_VOLUME,
+                widget = AnalyticsWidget.TotalVolume,
                 isEnabled = true,
                 onToggle = { },
                 onReorder = { }
             )
             
             WidgetToggleCard(
-                widget = AnalyticsWidget.PERFORMANCE_ANALYSIS,
+                widget = AnalyticsWidget.PerformanceAnalysis,
                 isEnabled = false,
                 onToggle = { },
                 onReorder = { }
             )
             
             WidgetToggleCard(
-                widget = AnalyticsWidget.CALORIES_BURNED,
+                widget = AnalyticsWidget.CaloriesBurned,
                 isEnabled = true,
                 isLoading = true,
                 onToggle = { }
@@ -341,15 +341,15 @@ private fun WidgetPreviewThumbnailPreview() {
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             WidgetPreviewThumbnail(
-                widget = AnalyticsWidget.TOTAL_VOLUME,
+                widget = AnalyticsWidget.TotalVolume,
                 size = WidgetDisplaySize.COMPACT
             )
             WidgetPreviewThumbnail(
-                widget = AnalyticsWidget.STRENGTH_PROGRESS,
+                widget = AnalyticsWidget.StrengthProgress,
                 size = WidgetDisplaySize.STANDARD
             )
             WidgetPreviewThumbnail(
-                widget = AnalyticsWidget.PERFORMANCE_ANALYSIS,
+                widget = AnalyticsWidget.PerformanceAnalysis,
                 size = WidgetDisplaySize.EXPANDED
             )
         }

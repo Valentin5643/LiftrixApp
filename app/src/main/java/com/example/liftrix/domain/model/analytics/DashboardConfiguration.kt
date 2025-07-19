@@ -30,7 +30,7 @@ sealed class DashboardConfiguration(
             AnalyticsWidget.WorkoutFrequency,
             AnalyticsWidget.TotalVolume,
             AnalyticsWidget.ConsistencyStreak,
-            AnalyticsWidget.CALORIES_BURNED
+            AnalyticsWidget.CaloriesBurned
         )
     }
     
@@ -48,8 +48,8 @@ sealed class DashboardConfiguration(
             AnalyticsWidget.TotalVolume,
             AnalyticsWidget.AverageDuration,
             AnalyticsWidget.ConsistencyStreak,
-            AnalyticsWidget.CALORIES_BURNED,
-            AnalyticsWidget.DAILY_CALORIES,
+            AnalyticsWidget.CaloriesBurned,
+            AnalyticsWidget.DailyCalories,
             AnalyticsWidget.ProgressChart
         )
     }
@@ -71,9 +71,9 @@ sealed class DashboardConfiguration(
             AnalyticsWidget.VolumeLoadProgression,
             AnalyticsWidget.OneRMProgression,
             AnalyticsWidget.ProgressChart,
-            AnalyticsWidget.CALORIES_BURNED,
-            AnalyticsWidget.DAILY_CALORIES,
-            AnalyticsWidget.WEEKLY_CALORIE_TREND
+            AnalyticsWidget.CaloriesBurned,
+            AnalyticsWidget.DailyCalories,
+            AnalyticsWidget.WeeklyCalorieTrend
         )
     }
     

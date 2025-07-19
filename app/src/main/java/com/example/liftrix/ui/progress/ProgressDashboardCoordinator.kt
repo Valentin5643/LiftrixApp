@@ -108,6 +108,16 @@ class ProgressDashboardCoordinator @Inject constructor(
         // Set initial state
         updateUiState()
         
+        // Send initial time period event for default Month period
+        // This ensures widget ViewModels receive the initial time period and start loading data
+        viewModelScope.launch {
+            // Small delay to ensure ViewModels are initialized
+            kotlinx.coroutines.delay(500) // 500ms delay
+            val defaultTimeRange = com.example.liftrix.domain.model.analytics.TimeRange.lastMonth()
+            Timber.d("Coordinator: Sending initial time period event for default Month period")
+            _coordinatorEvents.tryEmit(CoordinatorEvent.TimePeriodChanged(defaultTimeRange))
+        }
+        
         // Add initialization timeout safety
         viewModelScope.launch {
             kotlinx.coroutines.delay(5000) // 5 second delay

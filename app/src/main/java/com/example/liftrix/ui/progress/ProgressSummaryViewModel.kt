@@ -324,15 +324,22 @@ class ProgressSummaryViewModel @Inject constructor(
         
         result.fold(
             onSuccess = { data ->
+                Timber.d("✅ ProgressSummaryViewModel: Successfully loaded summary data")
                 val updatedState = state.toSuccessState(data)
                 _uiState.value = UiState.Success(updatedState)
             },
             onFailure = { throwable ->
+                Timber.e(throwable, "❌ ProgressSummaryViewModel: Failed to load summary data")
                 val error = throwable as? LiftrixError ?: LiftrixError.UnknownError(
-                    errorMessage = throwable.message ?: "Unknown error"
+                    errorMessage = "Summary data loading failed: ${throwable.message}",
+                    analyticsContext = mapOf(
+                        "userId" to userId,
+                        "timeRange" to timeRange.toString(),
+                        "originalError" to (throwable.message ?: "Unknown"),
+                        "errorType" to (throwable::class.simpleName ?: "Unknown")
+                    )
                 )
-                val updatedState = state.toErrorState(error)
-                _uiState.value = UiState.Success(updatedState)
+                _uiState.value = UiState.Error(error)
                 handleError(error)
             }
         )

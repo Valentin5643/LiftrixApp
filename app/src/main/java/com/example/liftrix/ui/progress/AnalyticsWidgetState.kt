@@ -474,3 +474,37 @@ fun AnalyticsWidgetState.withClearedErrors(widgetId: String? = null): AnalyticsW
     } else {
         copy(widgetErrors = emptyMap(), globalError = null)
     }
+
+/**
+ * Creates a new state with active widgets populated from preferences.
+ * 
+ * @param preferences The widget preferences containing visible widgets
+ * @return New state with updated active widgets list
+ */
+fun AnalyticsWidgetState.withActiveWidgets(
+    preferences: WidgetPreferences?
+): AnalyticsWidgetState {
+    val widgets = preferences?.visibleWidgets?.mapNotNull { widgetName ->
+        try {
+            AnalyticsWidget.valueOf(widgetName)
+        } catch (e: IllegalArgumentException) {
+            timber.log.Timber.w("Invalid widget name in preferences: '$widgetName' - skipping")
+            null // Skip invalid widget names
+        }
+    } ?: emptyList()
+    
+    // If no valid widgets were found, provide safe defaults
+    val finalWidgets = if (widgets.isEmpty() && preferences?.visibleWidgets?.isNotEmpty() == true) {
+        timber.log.Timber.i("No valid widgets found from preferences, using defaults")
+        listOf(
+            AnalyticsWidget.TotalVolume,
+            AnalyticsWidget.WorkoutFrequency,
+            AnalyticsWidget.ConsistencyStreak,
+            AnalyticsWidget.CaloriesBurned
+        )
+    } else {
+        widgets
+    }
+    
+    return copy(activeWidgets = finalWidgets)
+}

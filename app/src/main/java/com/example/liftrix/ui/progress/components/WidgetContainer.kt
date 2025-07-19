@@ -436,7 +436,7 @@ private fun WidgetRenderer(
             )
         }
         
-        AnalyticsWidget.CALORIES_BURNED -> {
+        AnalyticsWidget.CaloriesBurned -> {
             val basicData = widgetData as? BasicWidgetData
             CaloriesBurnedCard(
                 caloriesBurned = basicData?.value?.replace(" cal", "")?.replace(",", "")?.toIntOrNull() ?: 0,
@@ -448,7 +448,7 @@ private fun WidgetRenderer(
             )
         }
         
-        AnalyticsWidget.DAILY_CALORIES -> {
+        AnalyticsWidget.DailyCalories -> {
             val basicData = widgetData as? BasicWidgetData
             val caloriesValue = basicData?.value?.replace(" cal", "")?.replace(",", "")?.toIntOrNull() ?: 0
             DailyCaloriesCard(
@@ -462,7 +462,7 @@ private fun WidgetRenderer(
             )
         }
         
-        AnalyticsWidget.WEEKLY_CALORIE_TREND -> {
+        AnalyticsWidget.WeeklyCalorieTrend -> {
             val basicData = widgetData as? BasicWidgetData
             WeeklyCalorieTrendCard(
                 weeklyCalories = listOf(1200, 1450, 1380, 1520), // TODO: Get from actual data
@@ -472,6 +472,7 @@ private fun WidgetRenderer(
                 isLoading = isLoading,
                 onClick = onClick,
                 modifier = modifier
+                // windowSizeClass will be calculated inside the card component
             )
         }
         
@@ -533,21 +534,21 @@ private fun createSampleWidgetData(widget: AnalyticsWidget): WidgetData {
             subtitle = "Average session",
             trend = TrendDirection.STABLE
         )
-        AnalyticsWidget.CALORIES_BURNED -> BasicWidgetData(
+        AnalyticsWidget.CaloriesBurned -> BasicWidgetData(
             widgetType = widget,
             lastUpdated = kotlinx.datetime.Clock.System.now(),
             value = "347 cal",
             subtitle = "Today",
             trend = TrendDirection.UP
         )
-        AnalyticsWidget.DAILY_CALORIES -> BasicWidgetData(
+        AnalyticsWidget.DailyCalories -> BasicWidgetData(
             widgetType = widget,
             lastUpdated = kotlinx.datetime.Clock.System.now(),
             value = "347 cal",
             subtitle = "of 400 goal",
             trend = TrendDirection.UP
         )
-        AnalyticsWidget.WEEKLY_CALORIE_TREND -> BasicWidgetData(
+        AnalyticsWidget.WeeklyCalorieTrend -> BasicWidgetData(
             widgetType = widget,
             lastUpdated = kotlinx.datetime.Clock.System.now(),
             value = "1,520 cal",

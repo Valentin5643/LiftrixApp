@@ -32,29 +32,36 @@ class SaveWidgetPreferencesUseCase @Inject constructor(
      */
     suspend operator fun invoke(preferences: WidgetPreferences): LiftrixResult<Unit> {
         return try {
-            // Validate preferences before saving
-            preferences.validate()
+            // Repair any consistency issues in preferences before validation
+            val repairedPreferences = preferences.repairConsistency()
+            
+            // Log for debugging
+            Timber.d("Original preferences - Visible: ${preferences.visibleWidgets.joinToString(", ")}, Order: ${preferences.widgetOrder.joinToString(", ")}")
+            Timber.d("Repaired preferences - Visible: ${repairedPreferences.visibleWidgets.joinToString(", ")}, Order: ${repairedPreferences.widgetOrder.joinToString(", ")}")
+            
+            // Validate repaired preferences before saving
+            repairedPreferences.validate()
             
             // Log the save operation for debugging
-            Timber.d("Saving widget preferences for user: ${preferences.userId}")
-            Timber.d("Visible widgets: ${preferences.visibleWidgets}")
-            Timber.d("Dashboard layout: ${preferences.dashboardLayout}")
-            Timber.d("User level: ${preferences.userLevel}")
+            Timber.d("Saving widget preferences for user: ${repairedPreferences.userId}")
+            Timber.d("Visible widgets: ${repairedPreferences.visibleWidgets}")
+            Timber.d("Dashboard layout: ${repairedPreferences.dashboardLayout}")
+            Timber.d("User level: ${repairedPreferences.userLevel}")
             
-            // Perform the save operation
-            val result = widgetPreferencesRepository.saveWidgetPreferences(preferences)
+            // Perform the save operation with repaired preferences
+            val result = widgetPreferencesRepository.saveWidgetPreferences(repairedPreferences)
             
             result.fold(
                 onSuccess = {
-                    Timber.i("Widget preferences saved successfully for user: ${preferences.userId}")
+                    Timber.i("Widget preferences saved successfully for user: ${repairedPreferences.userId}")
                 },
                 onFailure = { error ->
-                    Timber.e("Failed to save widget preferences for user: ${preferences.userId} - ${error.message}")
+                    Timber.e("Failed to save widget preferences for user: ${repairedPreferences.userId} - ${error.message}")
                 }
             )
             result
         } catch (e: IllegalArgumentException) {
-            Timber.e(e, "Invalid widget preferences for user: ${preferences.userId}")
+            Timber.e(e, "Invalid widget preferences for user: ${preferences.userId} - ${e.message}")
             Result.failure(LiftrixError.ValidationError(field = "preferences", violations = listOf(e.message ?: "Invalid preferences")))
         } catch (e: Exception) {
             Timber.e(e, "Unexpected error saving widget preferences for user: ${preferences.userId}")

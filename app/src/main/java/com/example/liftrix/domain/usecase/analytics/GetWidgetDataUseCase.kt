@@ -86,7 +86,7 @@ class GetWidgetDataUseCase @Inject constructor(
             // Since AnalyticsService doesn't have a direct widget data method,
             // we'll simulate the data retrieval based on widget type
             val data = when (widgetType) {
-                AnalyticsWidget.VOLUME_CHART -> {
+                AnalyticsWidget.VolumeChart -> {
                     // Mock volume data - in real implementation, this would come from analytics service
                     mapOf(
                         "totalVolume" to 12500,
@@ -95,7 +95,7 @@ class GetWidgetDataUseCase @Inject constructor(
                         "chartData" to listOf(2000, 2200, 2400, 2600, 2500)
                     )
                 }
-                AnalyticsWidget.DURATION_CHART -> {
+                AnalyticsWidget.DurationChart -> {
                     mapOf(
                         "averageDuration" to 65,
                         "totalTime" to 325,
@@ -103,7 +103,7 @@ class GetWidgetDataUseCase @Inject constructor(
                         "chartData" to listOf(60, 70, 65, 58, 72)
                     )
                 }
-                AnalyticsWidget.FREQUENCY_CHART -> {
+                AnalyticsWidget.FrequencyChart -> {
                     mapOf(
                         "weeklyFrequency" to 4,
                         "consistency" to 0.85,
@@ -111,7 +111,7 @@ class GetWidgetDataUseCase @Inject constructor(
                         "chartData" to listOf(3, 4, 5, 4, 4)
                     )
                 }
-                AnalyticsWidget.STRENGTH_PROGRESS -> {
+                AnalyticsWidget.StrengthProgress -> {
                     mapOf(
                         "totalPRs" to 8,
                         "recentPRs" to 2,
@@ -119,7 +119,7 @@ class GetWidgetDataUseCase @Inject constructor(
                         "topExercises" to listOf("Bench Press", "Squat", "Deadlift")
                     )
                 }
-                AnalyticsWidget.CALORIES_BURNED -> {
+                AnalyticsWidget.CaloriesBurned -> {
                     mapOf(
                         "dailyCalories" to 420,
                         "weeklyTotal" to 1680,
@@ -127,7 +127,7 @@ class GetWidgetDataUseCase @Inject constructor(
                         "goalProgress" to 1.05
                     )
                 }
-                AnalyticsWidget.WORKOUT_STREAK -> {
+                AnalyticsWidget.WorkoutStreak -> {
                     mapOf(
                         "currentStreak" to 15,
                         "longestStreak" to 23,
@@ -135,7 +135,7 @@ class GetWidgetDataUseCase @Inject constructor(
                         "nextMilestone" to 30
                     )
                 }
-                AnalyticsWidget.PERSONAL_RECORDS -> {
+                AnalyticsWidget.PersonalRecords -> {
                     mapOf(
                         "recentPRs" to listOf(
                             mapOf("exercise" to "Bench Press", "weight" to 185, "date" to "2024-01-15"),

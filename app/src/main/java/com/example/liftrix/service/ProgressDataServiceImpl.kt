@@ -194,11 +194,14 @@ class ProgressDataServiceImpl @Inject constructor(
             errorMapper = { throwable ->
                 Timber.e(throwable, "$TAG: Failed to get progress summary for user: $userId")
                 LiftrixError.DatabaseError(
-                    errorMessage = "Failed to retrieve progress summary",
+                    errorMessage = "Database query failed: ${throwable.message ?: "Unknown database error"}",
                     operation = "getProgressSummary",
                     analyticsContext = mapOf(
                         "userId" to userId,
-                        "timeRange" to timeRange.toString()
+                        "timeRange" to timeRange.toString(),
+                        "originalError" to (throwable.message ?: "Unknown"),
+                        "errorType" to (throwable::class.simpleName ?: "Unknown"),
+                        "stackTrace" to throwable.stackTraceToString().take(500)
                     )
                 )
             }
@@ -221,7 +224,9 @@ class ProgressDataServiceImpl @Inject constructor(
                 (timeRange.endDate.time / (24 * 60 * 60 * 1000)).toInt()
             )
             
-            val data = progressStatsRepository.getProgressSummary(userId, startDate, endDate).first()
+            val data = kotlinx.coroutines.withTimeout(15000) { // 15 second timeout
+                progressStatsRepository.getProgressSummary(userId, startDate, endDate).first()
+            }
             
             // Cache the result with 15-minute TTL
             cacheManager.put(cacheKey, data, ttl = 15.minutes)

@@ -51,6 +51,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.state.AsyncData
 import com.example.liftrix.domain.repository.ProgressSummary
@@ -171,7 +180,15 @@ fun ProgressDashboardScreen(
             onSummaryEvent = summaryViewModel::handleEvent,
             onCalorieEvent = calorieViewModel::handleEvent,
             onFeaturesEvent = featuresViewModel::handleEvent,
-            onCoordinatorEvent = coordinator::handleEvent
+            onCoordinatorEvent = coordinator::handleEvent,
+            // Pass raw UiState for debugging
+            rawChartsState = chartsState,
+            rawWidgetState = widgetState,
+            rawPreferencesState = preferencesState,
+            rawSummaryState = summaryState,
+            rawCalorieState = calorieState,
+            rawFeaturesState = featuresState,
+            rawCoordinatorState = coordinatorState
         )
     }
 }
@@ -194,8 +211,18 @@ private fun ProgressDashboardContent(
     onSummaryEvent: (ProgressSummaryEvent) -> Unit,
     onCalorieEvent: (CalorieTrackingEvent) -> Unit,
     onFeaturesEvent: (FeatureConfigurationEvent) -> Unit,
-    onCoordinatorEvent: (CoordinatorEvent) -> Unit
+    onCoordinatorEvent: (CoordinatorEvent) -> Unit,
+    // Raw UiState for debugging
+    rawChartsState: UiState<ProgressChartsState>,
+    rawWidgetState: UiState<AnalyticsWidgetState>,
+    rawPreferencesState: UiState<UserPreferencesState>,
+    rawSummaryState: UiState<ProgressSummaryState>,
+    rawCalorieState: UiState<CalorieTrackingState>,
+    rawFeaturesState: UiState<FeatureConfigurationState>,
+    rawCoordinatorState: UiState<CoordinatorState>
 ) {
+    // Debug panel state
+    var showDebugPanel by remember { mutableStateOf(false) }
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -221,13 +248,51 @@ private fun ProgressDashboardContent(
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 
-                // Feature flag controlled export dropdown
-                if (featuresState.exportEnabled) {
-                    ExportDropdown(
-                        onExportPdf = { onCoordinatorEvent(CoordinatorEvent.ExportToPdf) },
-                        onExportCsv = { onCoordinatorEvent(CoordinatorEvent.ExportToCsv) }
-                    )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Debug panel toggle button
+                    IconButton(
+                        onClick = { showDebugPanel = !showDebugPanel }
+                    ) {
+                        Icon(
+                            imageVector = if (showDebugPanel) Icons.Default.VisibilityOff else Icons.Default.BugReport,
+                            contentDescription = if (showDebugPanel) "Hide Debug Panel" else "Show Debug Panel",
+                            tint = if (showDebugPanel) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    
+                    // Feature flag controlled export dropdown
+                    if (featuresState.exportEnabled) {
+                        ExportDropdown(
+                            onExportPdf = { onCoordinatorEvent(CoordinatorEvent.ExportToPdf) },
+                            onExportCsv = { onCoordinatorEvent(CoordinatorEvent.ExportToCsv) }
+                        )
+                    }
                 }
+            }
+        }
+
+        // Debug Panel - shows all ViewModel states and debugging info
+        if (showDebugPanel) {
+            item {
+                DebugPanel(
+                    rawChartsState = rawChartsState,
+                    rawWidgetState = rawWidgetState,
+                    rawPreferencesState = rawPreferencesState,
+                    rawSummaryState = rawSummaryState,
+                    rawCalorieState = rawCalorieState,
+                    rawFeaturesState = rawFeaturesState,
+                    rawCoordinatorState = rawCoordinatorState,
+                    calorieState = calorieState,
+                    coordinatorState = coordinatorState,
+                    onRefresh = { onCoordinatorEvent(CoordinatorEvent.RefreshAllData) },
+                    onCalorieRefresh = { onCalorieEvent(CalorieTrackingEvent.RefreshAllData) },
+                    onSummaryRefresh = { onSummaryEvent(ProgressSummaryEvent.RefreshSummary) },
+                    onWidgetMigrate = { widgetViewModel.forceMigrateWidgetPreferences() },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
 
@@ -1073,5 +1138,309 @@ private fun AnalyticsOnboardingCard(
                 }
             }
         }
+    }
+}
+
+/**
+ * Debug Panel - Visual debugging for Progress Dashboard
+ */
+@Composable
+private fun DebugPanel(
+    rawChartsState: UiState<ProgressChartsState>,
+    rawWidgetState: UiState<AnalyticsWidgetState>,
+    rawPreferencesState: UiState<UserPreferencesState>,
+    rawSummaryState: UiState<ProgressSummaryState>,
+    rawCalorieState: UiState<CalorieTrackingState>,
+    rawFeaturesState: UiState<FeatureConfigurationState>,
+    rawCoordinatorState: UiState<CoordinatorState>,
+    calorieState: CalorieTrackingState,
+    coordinatorState: CoordinatorState,
+    onRefresh: () -> Unit,
+    onCalorieRefresh: () -> Unit,
+    onSummaryRefresh: () -> Unit,
+    onWidgetMigrate: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .border(2.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(12.dp)),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            // Debug Panel Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "🐛 DEBUG PANEL",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onRefresh,
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Text("Refresh All", style = MaterialTheme.typography.bodySmall)
+                    }
+                    
+                    OutlinedButton(
+                        onClick = onCalorieRefresh,
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Text("Refresh Calories", style = MaterialTheme.typography.bodySmall)
+                    }
+                    
+                    OutlinedButton(
+                        onClick = { onSummaryRefresh() },
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Text("Refresh Summary", style = MaterialTheme.typography.bodySmall)
+                    }
+                    
+                    OutlinedButton(
+                        onClick = onWidgetMigrate,
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Text("Fix Widgets", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Summary ViewModel Debug (MAIN ISSUE)
+            DebugSection(
+                title = "🚨 SUMMARY ERROR DEBUG",
+                content = {
+                    DebugStateRow("Summary State", rawSummaryState)
+                    
+                    // Show summary data details if successful
+                    if (rawSummaryState is UiState.Success) {
+                        val summaryState = rawSummaryState.data
+                        Spacer(modifier = Modifier.height(8.dp))
+                        DebugInfoRow("User ID", summaryState.userId ?: "null")
+                        DebugInfoRow("Time Range", summaryState.currentTimeRange.toString())
+                        
+                        // Check if summary data is available
+                        when (val summaryData = summaryState.summaryData) {
+                            is AsyncData.Success -> {
+                                val data = summaryData.data
+                                DebugInfoRow("📊 Total Volume", "${data.totalVolume}kg", 
+                                    isError = data.totalVolume == 0f)
+                                DebugInfoRow("📊 Total Workouts", data.totalWorkouts.toString(),
+                                    isError = data.totalWorkouts == 0)
+                                DebugInfoRow("📊 Active Time", "${data.totalActiveTime}min")
+                                DebugInfoRow("📊 Current Streak", data.currentStreak.toString())
+                                DebugInfoRow("📊 Average Duration", "${data.averageDuration}min")
+                            }
+                            is AsyncData.Loading -> {
+                                DebugInfoRow("Summary Data", "Loading...", isError = false)
+                            }
+                            is AsyncData.Failure -> {
+                                DebugInfoRow("Summary Data", "Failed: ${summaryData.error.message}", isError = true)
+                            }
+                            is AsyncData.NotAsked -> {
+                                DebugInfoRow("Summary Data", "Not Asked", isError = true)
+                            }
+                        }
+                    }
+                    
+                    if (rawSummaryState is UiState.Error) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        DebugInfoRow("Error Message", rawSummaryState.error.message, isError = true)
+                        DebugInfoRow("Error Type", rawSummaryState.error::class.simpleName ?: "Unknown", isError = true)
+                        DebugInfoRow("Is Recoverable", rawSummaryState.error.isRecoverable.toString())
+                        rawSummaryState.error.analyticsContext?.let { context ->
+                            context.forEach { (key, value) ->
+                                DebugInfoRow("Context: $key", value.toString())
+                            }
+                        }
+                    }
+                }
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Widget Debug Section
+            DebugSection(
+                title = "🧩 WIDGETS DEBUG",
+                content = {
+                    DebugStateRow("Widget State", rawWidgetState)
+                    
+                    if (rawWidgetState is UiState.Success) {
+                        val widgetState = rawWidgetState.data
+                        Spacer(modifier = Modifier.height(8.dp))
+                        DebugInfoRow("Active Widgets Count", widgetState.activeWidgets.size.toString())
+                        DebugInfoRow("Visible Widgets", widgetState.preferences?.visibleWidgets?.size?.toString() ?: "null")
+                        DebugInfoRow("Has Preferences", (widgetState.preferences != null).toString())
+                        
+                        if (widgetState.activeWidgets.isNotEmpty()) {
+                            DebugInfoRow("Active Widget Names", widgetState.activeWidgets.map { it.name }.joinToString(", "))
+                        }
+                        
+                        if (widgetState.preferences?.visibleWidgets?.isNotEmpty() == true) {
+                            DebugInfoRow("Preference Widget Names", widgetState.preferences.visibleWidgets.joinToString(", "))
+                        }
+                        
+                        if (widgetState.hasWidgetErrors()) {
+                            DebugInfoRow("Widget Errors", widgetState.widgetErrors.size.toString(), isError = true)
+                            widgetState.widgetErrors.forEach { (widgetId, error) ->
+                                DebugInfoRow("Error: $widgetId", error.message, isError = true)
+                            }
+                        }
+                    }
+                    
+                    if (rawWidgetState is UiState.Error) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        DebugInfoRow("Widget Error", rawWidgetState.error.message, isError = true)
+                    }
+                }
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // User & Time Range Info
+            DebugSection(
+                title = "User & Time Range",
+                content = {
+                    DebugInfoRow("User ID", coordinatorState.getCurrentUserId() ?: "null")
+                    DebugInfoRow("Time Range", calorieState.getTimeRangeDisplayText())
+                    DebugInfoRow("Data Fresh", calorieState.isDataFresh().toString())
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun DebugSection(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    Column {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        content()
+    }
+}
+
+@Composable
+private fun DebugStateRow(
+    name: String,
+    state: UiState<*>
+) {
+    val (statusText, statusColor) = when (state) {
+        is UiState.Loading -> "Loading" to MaterialTheme.colorScheme.primary
+        is UiState.Success -> "Success" to MaterialTheme.colorScheme.tertiary
+        is UiState.Error -> "Error" to MaterialTheme.colorScheme.error
+        is UiState.Empty -> "Empty" to MaterialTheme.colorScheme.outline
+    }
+    
+    Column(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = name,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = statusColor,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        
+        // Show error details if in error state
+        if (state is UiState.Error) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Error: ${state.error.message}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(start = 16.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun DebugInfoRow(
+    label: String,
+    value: String,
+    isError: Boolean = false
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+            fontWeight = if (isError) FontWeight.Bold else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun DebugAsyncDataRow(
+    label: String,
+    asyncData: AsyncData<*>
+) {
+    val (statusText, statusColor) = when (asyncData) {
+        is AsyncData.NotAsked -> "Not Asked" to MaterialTheme.colorScheme.outline
+        is AsyncData.Loading -> "Loading" to MaterialTheme.colorScheme.primary
+        is AsyncData.Success -> "Success (${asyncData.data?.let { "Data Available" } ?: "Null Data"})" to MaterialTheme.colorScheme.tertiary
+        is AsyncData.Failure -> "Failed: ${asyncData.error.message}" to MaterialTheme.colorScheme.error
+    }
+    
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = statusText,
+            style = MaterialTheme.typography.bodySmall,
+            color = statusColor,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 } 

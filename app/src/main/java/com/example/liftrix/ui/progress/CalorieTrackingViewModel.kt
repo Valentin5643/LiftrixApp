@@ -349,6 +349,14 @@ class CalorieTrackingViewModel @Inject constructor(
                             Timber.d("Calories: User logged out, clearing state")
                         } else {
                             Timber.d("CalorieTrackingViewModel: User unchanged, no action needed")
+                            // If user is the same but we have no data loaded, trigger loading
+                            // This handles the case where coordinator events arrive before reactive state is ready
+                            val currentUiState = _uiState.value
+                            if (currentUiState is UiState.Loading || 
+                                (currentUiState is UiState.Success && currentUiState.data.areAllDataNotAsked())) {
+                                Timber.d("CalorieTrackingViewModel: User unchanged but no data loaded, triggering load")
+                                handleEvent(CalorieTrackingEvent.LoadInitialData)
+                            }
                         }
                     }
                     is CoordinatorEvent.RefreshAllData -> {
@@ -366,6 +374,13 @@ class CalorieTrackingViewModel @Inject constructor(
                     is CoordinatorEvent.TimePeriodChanged -> {
                         handleEvent(CalorieTrackingEvent.TimePeriodChanged(event.timeRange))
                         Timber.d("Calories: Time period changed to ${event.timeRange}")
+                        
+                        // Directly trigger data loading when time period changes
+                        // This ensures immediate data loading without relying on reactive state timing
+                        if (_currentUser.value != null) {
+                            Timber.d("CalorieTrackingViewModel: Directly triggering data load for time period change")
+                            handleEvent(CalorieTrackingEvent.LoadInitialData)
+                        }
                     }
                     else -> {
                         // Ignore other coordinator events
@@ -732,22 +747,34 @@ class CalorieTrackingViewModel @Inject constructor(
      * @param userId User identifier for data scoping
      */
     private suspend fun loadCalorieSummaryInternal(userId: String) {
+        Timber.d("🔄 CalorieTrackingViewModel: Starting calorie summary load for user: $userId")
         updateCalorieDataStates(calorieSummary = AsyncData.Loading())
         
-        val result = calorieService.getCalorieSummary(userId)
-        
-        result.fold(
-            onSuccess = { data ->
-                updateCalorieDataStates(calorieSummary = AsyncData.Success(data))
-            },
-            onFailure = { throwable ->
-                val error = throwable as? LiftrixError ?: LiftrixError.UnknownError(
-                    errorMessage = throwable.message ?: "Unknown error",
-                    analyticsContext = mapOf("operation" to "loadCalorieSummaryInternal")
-                )
-                updateCalorieDataStates(calorieSummary = AsyncData.Failure(error))
-            }
-        )
+        try {
+            val result = calorieService.getCalorieSummary(userId)
+            
+            result.fold(
+                onSuccess = { data ->
+                    Timber.d("✅ CalorieTrackingViewModel: Successfully loaded calorie summary: totalCalories=${data.totalCaloriesBurned}, avgDaily=${data.averageDailyCalories}")
+                    updateCalorieDataStates(calorieSummary = AsyncData.Success(data))
+                },
+                onFailure = { throwable ->
+                    val error = throwable as? LiftrixError ?: LiftrixError.UnknownError(
+                        errorMessage = throwable.message ?: "Unknown error",
+                        analyticsContext = mapOf("operation" to "loadCalorieSummaryInternal")
+                    )
+                    Timber.e("❌ CalorieTrackingViewModel: Failed to load calorie summary: ${error.message}")
+                    updateCalorieDataStates(calorieSummary = AsyncData.Failure(error))
+                }
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "💥 CalorieTrackingViewModel: Exception during calorie summary load")
+            val error = LiftrixError.UnknownError(
+                errorMessage = "Service call exception: ${e.message}",
+                analyticsContext = mapOf("operation" to "loadCalorieSummaryInternal", "exception" to e.javaClass.simpleName)
+            )
+            updateCalorieDataStates(calorieSummary = AsyncData.Failure(error))
+        }
     }
 
     /**
@@ -757,22 +784,34 @@ class CalorieTrackingViewModel @Inject constructor(
      * @param timeRange Time range for data retrieval
      */
     private suspend fun loadDailyCaloriesInternal(userId: String, timeRange: TimeRange) {
+        Timber.d("🔄 CalorieTrackingViewModel: Starting daily calories load for user: $userId, timeRange: $timeRange")
         updateCalorieDataStates(dailyCalories = AsyncData.Loading())
         
-        val result = calorieService.getDailyCalories(userId, timeRange)
-        
-        result.fold(
-            onSuccess = { data ->
-                updateCalorieDataStates(dailyCalories = AsyncData.Success(data))
-            },
-            onFailure = { throwable ->
-                val error = throwable as? LiftrixError ?: LiftrixError.UnknownError(
-                    errorMessage = throwable.message ?: "Unknown error",
-                    analyticsContext = mapOf("operation" to "loadDailyCaloriesInternal")
-                )
-                updateCalorieDataStates(dailyCalories = AsyncData.Failure(error))
-            }
-        )
+        try {
+            val result = calorieService.getDailyCalories(userId, timeRange)
+            
+            result.fold(
+                onSuccess = { data ->
+                    Timber.d("✅ CalorieTrackingViewModel: Successfully loaded daily calories: ${data.size} data points")
+                    updateCalorieDataStates(dailyCalories = AsyncData.Success(data))
+                },
+                onFailure = { throwable ->
+                    val error = throwable as? LiftrixError ?: LiftrixError.UnknownError(
+                        errorMessage = throwable.message ?: "Unknown error",
+                        analyticsContext = mapOf("operation" to "loadDailyCaloriesInternal")
+                    )
+                    Timber.e("❌ CalorieTrackingViewModel: Failed to load daily calories: ${error.message}")
+                    updateCalorieDataStates(dailyCalories = AsyncData.Failure(error))
+                }
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "💥 CalorieTrackingViewModel: Exception during daily calories load")
+            val error = LiftrixError.UnknownError(
+                errorMessage = "Service call exception: ${e.message}",
+                analyticsContext = mapOf("operation" to "loadDailyCaloriesInternal", "exception" to e.javaClass.simpleName)
+            )
+            updateCalorieDataStates(dailyCalories = AsyncData.Failure(error))
+        }
     }
 
     /**
@@ -781,22 +820,34 @@ class CalorieTrackingViewModel @Inject constructor(
      * @param userId User identifier for data scoping
      */
     private suspend fun loadWeeklyTrendInternal(userId: String) {
+        Timber.d("🔄 CalorieTrackingViewModel: Starting weekly trend load for user: $userId")
         updateCalorieDataStates(weeklyTrend = AsyncData.Loading())
         
-        val result = calorieService.getWeeklyTrend(userId)
-        
-        result.fold(
-            onSuccess = { data ->
-                updateCalorieDataStates(weeklyTrend = AsyncData.Success(data))
-            },
-            onFailure = { throwable ->
-                val error = throwable as? LiftrixError ?: LiftrixError.UnknownError(
-                    errorMessage = throwable.message ?: "Unknown error",
-                    analyticsContext = mapOf("operation" to "loadWeeklyTrendInternal")
-                )
-                updateCalorieDataStates(weeklyTrend = AsyncData.Failure(error))
-            }
-        )
+        try {
+            val result = calorieService.getWeeklyTrend(userId)
+            
+            result.fold(
+                onSuccess = { data ->
+                    Timber.d("✅ CalorieTrackingViewModel: Successfully loaded weekly trend: ${data.weeklyData.size} weeks, consistency=${data.consistency}")
+                    updateCalorieDataStates(weeklyTrend = AsyncData.Success(data))
+                },
+                onFailure = { throwable ->
+                    val error = throwable as? LiftrixError ?: LiftrixError.UnknownError(
+                        errorMessage = throwable.message ?: "Unknown error",
+                        analyticsContext = mapOf("operation" to "loadWeeklyTrendInternal")
+                    )
+                    Timber.e("❌ CalorieTrackingViewModel: Failed to load weekly trend: ${error.message}")
+                    updateCalorieDataStates(weeklyTrend = AsyncData.Failure(error))
+                }
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "💥 CalorieTrackingViewModel: Exception during weekly trend load")
+            val error = LiftrixError.UnknownError(
+                errorMessage = "Service call exception: ${e.message}",
+                analyticsContext = mapOf("operation" to "loadWeeklyTrendInternal", "exception" to e.javaClass.simpleName)
+            )
+            updateCalorieDataStates(weeklyTrend = AsyncData.Failure(error))
+        }
     }
 
     /**

@@ -127,14 +127,14 @@ class AnalyticsServiceImpl @Inject constructor(
                 AnalyticsWidget.TotalVolume -> loadTotalVolumeData(userId)
                 AnalyticsWidget.WorkoutFrequency -> loadWorkoutFrequencyData(userId)
                 AnalyticsWidget.ConsistencyStreak -> loadConsistencyStreakData(userId)
-                AnalyticsWidget.CALORIES_BURNED -> loadCaloriesBurnedData(userId)
-                AnalyticsWidget.DAILY_CALORIES -> loadDailyCaloriesData(userId)
-                AnalyticsWidget.WEEKLY_CALORIE_TREND -> loadWeeklyCalorieTrendData(userId)
-                AnalyticsWidget.STRENGTH_PROGRESS -> loadStrengthProgressData(userId)
-                AnalyticsWidget.VOLUME_CALENDAR -> loadVolumeCalendarData(userId)
-                AnalyticsWidget.VOLUME_TRENDS -> loadVolumeTrendsData(userId)
-                AnalyticsWidget.RECOVERY_METRICS -> loadRecoveryMetricsData(userId)
-                AnalyticsWidget.PERFORMANCE_ANALYSIS -> loadPerformanceAnalysisData(userId)
+                AnalyticsWidget.CaloriesBurned -> loadCaloriesBurnedData(userId)
+                AnalyticsWidget.DailyCalories -> loadDailyCaloriesData(userId)
+                AnalyticsWidget.WeeklyCalorieTrend -> loadWeeklyCalorieTrendData(userId)
+                AnalyticsWidget.StrengthProgress -> loadStrengthProgressData(userId)
+                AnalyticsWidget.VolumeCalendar -> loadVolumeCalendarData(userId)
+                AnalyticsWidget.VolumeTrends -> loadVolumeTrendsData(userId)
+                AnalyticsWidget.RecoveryMetrics -> loadRecoveryMetricsData(userId)
+                AnalyticsWidget.PerformanceAnalysis -> loadPerformanceAnalysisData(userId)
                 AnalyticsWidget.AverageDuration -> loadAverageDurationData(userId)
                 AnalyticsWidget.VolumeLoadProgression -> loadVolumeLoadProgressionData(userId)
                 AnalyticsWidget.ProgressChart -> loadProgressChartData(userId)
@@ -535,7 +535,7 @@ class AnalyticsServiceImpl @Inject constructor(
     
     private suspend fun loadCaloriesBurnedData(userId: String): UIWidgetData {
         return UIWidgetData(
-            widget = AnalyticsWidget.CALORIES_BURNED,
+            widget = AnalyticsWidget.CaloriesBurned,
             value = "245 kcal",
             subtitle = "Today",
             trend = TrendDirection.UP,
@@ -545,7 +545,7 @@ class AnalyticsServiceImpl @Inject constructor(
     
     private suspend fun loadDailyCaloriesData(userId: String): UIWidgetData {
         return UIWidgetData(
-            widget = AnalyticsWidget.DAILY_CALORIES,
+            widget = AnalyticsWidget.DailyCalories,
             value = "245 kcal",
             subtitle = "Today's total",
             trend = TrendDirection.UP,
@@ -555,7 +555,7 @@ class AnalyticsServiceImpl @Inject constructor(
     
     private suspend fun loadWeeklyCalorieTrendData(userId: String): UIWidgetData {
         return UIWidgetData(
-            widget = AnalyticsWidget.WEEKLY_CALORIE_TREND,
+            widget = AnalyticsWidget.WeeklyCalorieTrend,
             value = "1,680 kcal",
             subtitle = "This week",
             trend = TrendDirection.UP,
@@ -565,7 +565,7 @@ class AnalyticsServiceImpl @Inject constructor(
     
     private suspend fun loadStrengthProgressData(userId: String): UIWidgetData {
         return UIWidgetData(
-            widget = AnalyticsWidget.STRENGTH_PROGRESS,
+            widget = AnalyticsWidget.StrengthProgress,
             value = "+12%",
             subtitle = "This month",
             trend = TrendDirection.UP,
@@ -575,7 +575,7 @@ class AnalyticsServiceImpl @Inject constructor(
     
     private suspend fun loadVolumeCalendarData(userId: String): UIWidgetData {
         return UIWidgetData(
-            widget = AnalyticsWidget.VOLUME_CALENDAR,
+            widget = AnalyticsWidget.VolumeCalendar,
             value = "18 days",
             subtitle = "Active this month",
             trend = TrendDirection.STABLE,
@@ -585,7 +585,7 @@ class AnalyticsServiceImpl @Inject constructor(
     
     private suspend fun loadVolumeTrendsData(userId: String): UIWidgetData {
         return UIWidgetData(
-            widget = AnalyticsWidget.VOLUME_TRENDS,
+            widget = AnalyticsWidget.VolumeTrends,
             value = "+8.5%",
             subtitle = "Trending up",
             trend = TrendDirection.UP,
@@ -595,7 +595,7 @@ class AnalyticsServiceImpl @Inject constructor(
     
     private suspend fun loadRecoveryMetricsData(userId: String): UIWidgetData {
         return UIWidgetData(
-            widget = AnalyticsWidget.RECOVERY_METRICS,
+            widget = AnalyticsWidget.RecoveryMetrics,
             value = "Good",
             subtitle = "Recovery status",
             trend = TrendDirection.STABLE,
@@ -605,7 +605,7 @@ class AnalyticsServiceImpl @Inject constructor(
     
     private suspend fun loadPerformanceAnalysisData(userId: String): UIWidgetData {
         return UIWidgetData(
-            widget = AnalyticsWidget.PERFORMANCE_ANALYSIS,
+            widget = AnalyticsWidget.PerformanceAnalysis,
             value = "87%",
             subtitle = "Performance score",
             trend = TrendDirection.UP,

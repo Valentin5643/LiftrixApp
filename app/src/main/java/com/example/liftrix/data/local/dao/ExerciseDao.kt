@@ -14,13 +14,13 @@ import kotlinx.coroutines.flow.Flow
 interface ExerciseDao {
     
     @Query("SELECT * FROM exercises WHERE workout_id = :workoutId ORDER BY order_index ASC")
-    suspend fun getExercisesByWorkout(workoutId: Long): List<ExerciseEntity>
+    suspend fun getExercisesByWorkout(workoutId: String): List<ExerciseEntity>
     
     @Query("SELECT * FROM exercises WHERE workout_id = :workoutId ORDER BY order_index ASC")
     suspend fun getExercisesByWorkoutId(workoutId: String): List<ExerciseEntity>
     
     @Query("SELECT * FROM exercises WHERE workout_id = :workoutId ORDER BY order_index ASC")
-    fun getExercisesByWorkoutFlow(workoutId: Long): Flow<List<ExerciseEntity>>
+    fun getExercisesByWorkoutFlow(workoutId: String): Flow<List<ExerciseEntity>>
     
     @Query("SELECT * FROM exercises WHERE id = :exerciseId")
     suspend fun getExerciseById(exerciseId: Long): ExerciseEntity?
@@ -54,19 +54,19 @@ interface ExerciseDao {
     suspend fun deleteExerciseById(exerciseId: Long): Int
     
     @Query("DELETE FROM exercises WHERE workout_id = :workoutId")
-    suspend fun deleteExercisesForWorkout(workoutId: Long): Int
+    suspend fun deleteExercisesForWorkout(workoutId: String): Int
     
     @Query("SELECT COUNT(*) FROM exercises WHERE workout_id = :workoutId")
-    suspend fun getExerciseCountForWorkout(workoutId: Long): Int
+    suspend fun getExerciseCountForWorkout(workoutId: String): Int
     
     @Query("SELECT MAX(order_index) FROM exercises WHERE workout_id = :workoutId")
-    suspend fun getMaxOrderIndex(workoutId: Long): Int?
+    suspend fun getMaxOrderIndex(workoutId: String): Int?
     
     @Query("UPDATE exercises SET order_index = :newIndex WHERE id = :exerciseId")
     suspend fun updateExerciseOrder(exerciseId: Long, newIndex: Int): Int
     
     @Transaction
-    suspend fun reorderExercises(workoutId: Long, exerciseIds: List<Long>) {
+    suspend fun reorderExercises(workoutId: String, exerciseIds: List<Long>) {
         exerciseIds.forEachIndexed { index, exerciseId ->
             updateExerciseOrder(exerciseId, index)
         }
@@ -89,4 +89,19 @@ interface ExerciseDao {
         ORDER BY e.created_at DESC
     """)
     suspend fun getExerciseHistoryInDateRange(userId: String, exerciseLibraryId: String, startDate: String, endDate: String): List<ExerciseEntity>
+    
+    @Query("""
+        SELECT e.* FROM exercises e 
+        JOIN workouts w ON e.workout_id = w.id 
+        WHERE w.user_id = :userId 
+        ORDER BY e.created_at DESC
+    """)
+    suspend fun getAllExercisesForUser(userId: String): List<ExerciseEntity>
+    
+    @Query("""
+        SELECT COUNT(*) FROM exercises e 
+        JOIN workouts w ON e.workout_id = w.id 
+        WHERE w.user_id = :userId AND e.workout_id = :workoutId
+    """)
+    suspend fun validateWorkoutExerciseRelationship(userId: String, workoutId: String): Int
 }

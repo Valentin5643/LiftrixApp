@@ -22,7 +22,7 @@ enum class AnalyticsWidget(
      * Basic workout frequency tracking widget
      * Shows workouts per week/month with simple visualization
      */
-    WORKOUT_FREQUENCY(
+    WorkoutFrequency(
         displayName = "Workout Frequency",
         description = "Track your workout consistency over time",
         complexity = WidgetComplexity.SIMPLE,
@@ -33,7 +33,7 @@ enum class AnalyticsWidget(
      * Total volume tracking widget
      * Displays cumulative volume lifted with trend analysis
      */
-    TOTAL_VOLUME(
+    TotalVolume(
         displayName = "Total Volume",
         description = "Monitor your total weight lifted progress",
         complexity = WidgetComplexity.SIMPLE,
@@ -44,7 +44,7 @@ enum class AnalyticsWidget(
      * Volume calendar widget
      * Monthly calendar view with daily volume color coding
      */
-    VOLUME_CALENDAR(
+    VolumeCalendar(
         displayName = "Volume Calendar",
         description = "Visual calendar showing daily workout volume",
         complexity = WidgetComplexity.MODERATE,
@@ -55,7 +55,7 @@ enum class AnalyticsWidget(
      * Strength progression widget
      * Tracks personal records and strength gains over time
      */
-    STRENGTH_PROGRESS(
+    StrengthProgress(
         displayName = "Strength Progress",
         description = "Track personal records and strength improvements",
         complexity = WidgetComplexity.MODERATE,
@@ -66,7 +66,7 @@ enum class AnalyticsWidget(
      * Consistency streak widget
      * Shows current and longest workout streaks
      */
-    CONSISTENCY_STREAK(
+    ConsistencyStreak(
         displayName = "Consistency Streak",
         description = "Monitor your workout consistency streaks",
         complexity = WidgetComplexity.SIMPLE,
@@ -77,7 +77,7 @@ enum class AnalyticsWidget(
      * Volume chart widget
      * Visual chart displaying volume progression over time
      */
-    VOLUME_CHART(
+    VolumeChart(
         displayName = "Volume Chart",
         description = "Visual chart showing volume progression over time",
         complexity = WidgetComplexity.MODERATE,
@@ -89,7 +89,7 @@ enum class AnalyticsWidget(
      * Duration chart widget
      * Visual chart displaying workout duration trends
      */
-    DURATION_CHART(
+    DurationChart(
         displayName = "Duration Chart",
         description = "Visual chart showing workout duration trends",
         complexity = WidgetComplexity.MODERATE,
@@ -101,7 +101,7 @@ enum class AnalyticsWidget(
      * Frequency chart widget
      * Visual chart displaying workout frequency patterns
      */
-    FREQUENCY_CHART(
+    FrequencyChart(
         displayName = "Frequency Chart",
         description = "Visual chart showing workout frequency patterns",
         complexity = WidgetComplexity.MODERATE,
@@ -113,7 +113,7 @@ enum class AnalyticsWidget(
      * Workout streak widget
      * Tracks current and historical workout streaks
      */
-    WORKOUT_STREAK(
+    WorkoutStreak(
         displayName = "Workout Streak",
         description = "Track your current and historical workout streaks",
         complexity = WidgetComplexity.SIMPLE,
@@ -124,7 +124,7 @@ enum class AnalyticsWidget(
      * Personal records widget
      * Displays recent and all-time personal records
      */
-    PERSONAL_RECORDS(
+    PersonalRecords(
         displayName = "Personal Records",
         description = "View your recent and all-time personal records",
         complexity = WidgetComplexity.MODERATE,
@@ -136,7 +136,7 @@ enum class AnalyticsWidget(
      * Volume trends analysis widget
      * Advanced trend analysis with projections
      */
-    VOLUME_TRENDS(
+    VolumeTrends(
         displayName = "Volume Trends",
         description = "Advanced analysis of volume trends and projections",
         complexity = WidgetComplexity.COMPLEX,
@@ -147,7 +147,7 @@ enum class AnalyticsWidget(
      * Recovery metrics widget
      * Tracks rest days, recovery patterns, and recommendations
      */
-    RECOVERY_METRICS(
+    RecoveryMetrics(
         displayName = "Recovery Metrics",
         description = "Monitor rest patterns and recovery recommendations",
         complexity = WidgetComplexity.COMPLEX,
@@ -158,7 +158,7 @@ enum class AnalyticsWidget(
      * Performance analysis widget
      * Comprehensive performance analytics with detailed insights
      */
-    PERFORMANCE_ANALYSIS(
+    PerformanceAnalysis(
         displayName = "Performance Analysis",
         description = "Detailed performance insights and recommendations",
         complexity = WidgetComplexity.COMPLEX,
@@ -169,7 +169,7 @@ enum class AnalyticsWidget(
      * Calories burned widget
      * Shows daily calories burned from workouts with trend visualization
      */
-    CALORIES_BURNED(
+    CaloriesBurned(
         displayName = "Calories Burned",
         description = "Track daily calories burned from your workouts",
         complexity = WidgetComplexity.SIMPLE,
@@ -182,7 +182,7 @@ enum class AnalyticsWidget(
      * Daily calories widget
      * Displays today's calorie burn with goal comparison
      */
-    DAILY_CALORIES(
+    DailyCalories(
         displayName = "Today's Calories",
         description = "View calories burned today compared to your goals",
         complexity = WidgetComplexity.SIMPLE,
@@ -195,7 +195,7 @@ enum class AnalyticsWidget(
      * Weekly calorie trend widget
      * Weekly calorie burn trends with pattern analysis
      */
-    WEEKLY_CALORIE_TREND(
+    WeeklyCalorieTrend(
         displayName = "Weekly Calorie Trend",
         description = "Analyze your weekly calorie burn patterns and trends",
         complexity = WidgetComplexity.MODERATE,
@@ -204,35 +204,6 @@ enum class AnalyticsWidget(
         priority = WidgetPriority.STANDARD
     ),
     
-    /**
-     * Total volume widget (alias for TOTAL_VOLUME)
-     */
-    TotalVolume(
-        displayName = "Total Volume",
-        description = "Monitor your total weight lifted progress",
-        complexity = WidgetComplexity.SIMPLE,
-        updateFrequencyMinutes = 30
-    ),
-    
-    /**
-     * Workout frequency widget (alias for WORKOUT_FREQUENCY)
-     */
-    WorkoutFrequency(
-        displayName = "Workout Frequency",
-        description = "Track your workout consistency over time",
-        complexity = WidgetComplexity.SIMPLE,
-        updateFrequencyMinutes = 60
-    ),
-    
-    /**
-     * Consistency streak widget (alias for CONSISTENCY_STREAK)
-     */
-    ConsistencyStreak(
-        displayName = "Consistency Streak",
-        description = "Monitor your workout consistency streaks",
-        complexity = WidgetComplexity.SIMPLE,
-        updateFrequencyMinutes = 60
-    ),
     
     /**
      * Average duration widget
@@ -314,25 +285,22 @@ enum class AnalyticsWidget(
      * Gets the widget priority for layout ordering (lower = higher priority)
      */
     fun getLayoutPriority(): Int = when (this) {
-        WORKOUT_FREQUENCY -> 1
-        TOTAL_VOLUME -> 2
-        CONSISTENCY_STREAK -> 3
-        STRENGTH_PROGRESS -> 4
-        VOLUME_CALENDAR -> 5
-        VOLUME_TRENDS -> 6
-        RECOVERY_METRICS -> 7
-        PERFORMANCE_ANALYSIS -> 8
-        CALORIES_BURNED -> 1
-        DAILY_CALORIES -> 2
-        WEEKLY_CALORIE_TREND -> 5
-        VOLUME_CHART -> 6
-        DURATION_CHART -> 7
-        FREQUENCY_CHART -> 8
-        WORKOUT_STREAK -> 3
-        PERSONAL_RECORDS -> 4
-        TotalVolume -> 2
         WorkoutFrequency -> 1
+        TotalVolume -> 2
         ConsistencyStreak -> 3
+        StrengthProgress -> 4
+        VolumeCalendar -> 5
+        VolumeTrends -> 6
+        RecoveryMetrics -> 7
+        PerformanceAnalysis -> 8
+        CaloriesBurned -> 1
+        DailyCalories -> 2
+        WeeklyCalorieTrend -> 5
+        VolumeChart -> 6
+        DurationChart -> 7
+        FrequencyChart -> 8
+        WorkoutStreak -> 3
+        PersonalRecords -> 4
         AverageDuration -> 4
         VolumeLoadProgression -> 6
         ProgressChart -> 5

@@ -113,19 +113,22 @@ class AnalyticsABTestManager @Inject constructor(
     }
     
     /**
-     * Analytics widget types for configuration
+     * Analytics widget types for configuration.
+     * 
+     * IMPORTANT: These widget IDs and names must match the main AnalyticsWidget enum
+     * to avoid conflicts and ensure consistency across the application.
      */
     sealed class AnalyticsWidget(val id: String, val displayName: String) {
-        object TotalVolume : AnalyticsWidget("total_volume", "Total Volume")
-        object WorkoutFrequency : AnalyticsWidget("workout_frequency", "Workout Frequency")
-        object ProgressChart : AnalyticsWidget("progress_chart", "Progress Chart")
-        object ConsistencyStreak : AnalyticsWidget("consistency_streak", "Consistency Streak")
-        object VolumeCalendar : AnalyticsWidget("volume_calendar", "Volume Calendar")
-        object MuscleGroupDistribution : AnalyticsWidget("muscle_group_distribution", "Muscle Group Balance")
-        object OneRMProgression : AnalyticsWidget("one_rm_progression", "1RM Progression")
-        object VolumeLoadProgression : AnalyticsWidget("volume_load_progression", "Volume Load Progression")
-        object RecoveryPatterns : AnalyticsWidget("recovery_patterns", "Recovery Patterns")
-        object WeeklyTrends : AnalyticsWidget("weekly_trends", "Weekly Trends")
+        object TotalVolume : AnalyticsWidget("TotalVolume", "Total Volume")
+        object WorkoutFrequency : AnalyticsWidget("WorkoutFrequency", "Workout Frequency")
+        object ProgressChart : AnalyticsWidget("ProgressChart", "Progress Chart")
+        object ConsistencyStreak : AnalyticsWidget("ConsistencyStreak", "Consistency Streak")
+        object VolumeCalendar : AnalyticsWidget("VolumeCalendar", "Volume Calendar")
+        object MuscleGroupDistribution : AnalyticsWidget("MuscleGroupProgress", "Muscle Group Balance")
+        object OneRMProgression : AnalyticsWidget("OneRMProgression", "1RM Progression")
+        object VolumeLoadProgression : AnalyticsWidget("VolumeLoadProgression", "Volume Load Progression")
+        object RecoveryPatterns : AnalyticsWidget("RecoveryPatterns", "Recovery Patterns")
+        object WeeklyTrends : AnalyticsWidget("WeeklyTrends", "Weekly Trends")
     }
     
     /**

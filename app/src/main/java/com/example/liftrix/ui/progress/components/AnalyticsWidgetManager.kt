@@ -343,9 +343,19 @@ class AnalyticsWidgetManager @Inject constructor() {
         
         // Check if all visible widgets are valid
         val availableWidgetNames = AnalyticsWidget.values().map { it.name }.toSet()
-        val invalidWidgets = preferences.visibleWidgets.filter { it !in availableWidgetNames }
+        val availableDisplayNames = AnalyticsWidget.values().map { it.displayName }.toSet()
+        
+        // Log for debugging
+        timber.log.Timber.d("Available widget names: ${availableWidgetNames.joinToString(", ")}")
+        timber.log.Timber.d("Preferences visible widgets: ${preferences.visibleWidgets.joinToString(", ")}")
+        
+        // Check against both enum names and display names for compatibility
+        val invalidWidgets = preferences.visibleWidgets.filter { 
+            it !in availableWidgetNames && it !in availableDisplayNames
+        }
         
         if (invalidWidgets.isNotEmpty()) {
+            timber.log.Timber.w("Invalid widget names found: ${invalidWidgets.joinToString(", ")}")
             issues.add("Invalid widget names found: ${invalidWidgets.joinToString(", ")}")
             recommendations.add("Remove invalid widgets or update to valid widget names")
         }
@@ -353,15 +363,19 @@ class AnalyticsWidgetManager @Inject constructor() {
         // Check if widget order contains all visible widgets
         val missingFromOrder = preferences.visibleWidgets.filter { it !in preferences.widgetOrder }
         if (missingFromOrder.isNotEmpty()) {
+            timber.log.Timber.w("Widget order missing widgets: ${missingFromOrder.joinToString(", ")}")
             issues.add("Widget order missing some visible widgets: ${missingFromOrder.joinToString(", ")}")
             recommendations.add("Update widget order to include all visible widgets")
         }
         
         // Validate refresh interval
         if (preferences.refreshIntervalMinutes !in 1..60) {
+            timber.log.Timber.w("Invalid refresh interval: ${preferences.refreshIntervalMinutes}")
             issues.add("Invalid refresh interval: ${preferences.refreshIntervalMinutes} minutes")
             recommendations.add("Set refresh interval between 1 and 60 minutes")
         }
+        
+        timber.log.Timber.d("Validation result: isValid=${issues.isEmpty()}, issues=${issues.joinToString("; ")}")
         
         return PreferencesValidation(
             isValid = issues.isEmpty(),

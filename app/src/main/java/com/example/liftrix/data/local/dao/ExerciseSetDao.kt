@@ -59,7 +59,7 @@ interface ExerciseSetDao {
     suspend fun deleteSetsForExercise(exerciseId: Long): Int
     
     @Query("DELETE FROM exercise_sets WHERE exercise_id IN (SELECT id FROM exercises WHERE workout_id = :workoutId)")
-    suspend fun deleteSetsForWorkout(workoutId: Long): Int
+    suspend fun deleteSetsForWorkout(workoutId: String): Int
     
     @Query("SELECT COUNT(*) FROM exercise_sets WHERE exercise_id = :exerciseId")
     suspend fun getSetCountForExercise(exerciseId: Long): Int

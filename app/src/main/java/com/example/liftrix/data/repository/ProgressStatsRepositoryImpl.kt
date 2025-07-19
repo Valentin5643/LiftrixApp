@@ -23,6 +23,7 @@ import com.example.liftrix.domain.repository.VolumeDataPoint
 import com.example.liftrix.sync.AnalyticsCalculation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.datetime.LocalDate
 import timber.log.Timber
 import javax.inject.Inject
@@ -47,19 +48,16 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         startDate: LocalDate,
         endDate: LocalDate
     ): Flow<List<VolumeDataPoint>> = flow {
-        try {
-            val dailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(
-                userId, startDate, endDate, exerciseDao, exerciseSetDao
-            )
-            
-            val volumeData = dailyMetrics.toVolumeDataPoints()
-            
-            emit(volumeData)
-            
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to get workout volume data for user: $userId")
-            emit(emptyList())
-        }
+        val dailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(
+            userId, startDate, endDate
+        )
+        
+        val volumeData = dailyMetrics.toVolumeDataPoints()
+        
+        emit(volumeData)
+    }.catch { e ->
+        Timber.e(e, "Failed to get workout volume data for user: $userId")
+        emit(emptyList())
     }
 
     override fun getWorkoutDurationData(
@@ -67,19 +65,16 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         startDate: LocalDate,
         endDate: LocalDate
     ): Flow<List<DurationDataPoint>> = flow {
-        try {
-            val dailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(
-                userId, startDate, endDate, exerciseDao, exerciseSetDao
-            )
-            
-            val durationData = dailyMetrics.toDurationDataPoints()
-            
-            emit(durationData)
-            
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to get workout duration data for user: $userId")
-            emit(emptyList())
-        }
+        val dailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(
+            userId, startDate, endDate
+        )
+        
+        val durationData = dailyMetrics.toDurationDataPoints()
+        
+        emit(durationData)
+    }.catch { e ->
+        Timber.e(e, "Failed to get workout duration data for user: $userId")
+        emit(emptyList())
     }
 
     override fun getWorkoutFrequencyData(
@@ -87,19 +82,16 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         startDate: LocalDate,
         endDate: LocalDate
     ): Flow<List<FrequencyDataPoint>> = flow {
-        try {
-            val dailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(
-                userId, startDate, endDate, exerciseDao, exerciseSetDao
-            )
-            
-            val frequencyData = dailyMetrics.toFrequencyDataPoints()
-            
-            emit(frequencyData)
-            
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to get workout frequency data for user: $userId")
-            emit(emptyList())
-        }
+        val dailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(
+            userId, startDate, endDate
+        )
+        
+        val frequencyData = dailyMetrics.toFrequencyDataPoints()
+        
+        emit(frequencyData)
+    }.catch { e ->
+        Timber.e(e, "Failed to get workout frequency data for user: $userId")
+        emit(emptyList())
     }
 
     override fun getProgressSummary(
@@ -107,27 +99,29 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         startDate: LocalDate,
         endDate: LocalDate
     ): Flow<ProgressSummary> = flow {
-        try {
-            val dailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(
-                userId, startDate, endDate, exerciseDao, exerciseSetDao
-            )
-            
-            val summary = dailyMetrics.calculateProgressSummary(startDate, endDate)
-            
-            emit(summary)
-            
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to get progress summary for user: $userId")
-            emit(ProgressSummary(
-                totalWorkouts = 0,
-                totalVolume = 0f,
-                averageDuration = 0,
-                currentStreak = 0,
-                longestStreak = 0,
-                averageWorkoutsPerWeek = 0f,
-                totalActiveTime = 0
-            ))
-        }
+        Timber.d("ProgressStatsRepository: Loading progress summary for user: $userId, range: $startDate to $endDate")
+        
+        val dailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(userId, startDate, endDate)
+        Timber.d("ProgressStatsRepository: Found ${dailyMetrics.size} days with metrics")
+        
+        val summary = dailyMetrics.calculateProgressSummary(startDate, endDate)
+        Timber.d("ProgressStatsRepository: Summary calculated - workouts: ${summary.totalWorkouts}, volume: ${summary.totalVolume}")
+        
+        emit(summary)
+    }.catch { e ->
+        // FIXED: Use Flow.catch operator instead of try-catch with emit
+        Timber.e(e, "ProgressStatsRepository: Failed to get progress summary for user: $userId")
+        
+        // Emit fallback summary using Flow.catch which is the correct pattern
+        emit(ProgressSummary(
+            totalWorkouts = 0,
+            totalVolume = 0f,
+            averageDuration = 0,
+            currentStreak = 0,
+            longestStreak = 0,
+            averageWorkoutsPerWeek = 0f,
+            totalActiveTime = 0
+        ))
     }
 
     override fun getExerciseVolumeProgression(
@@ -170,7 +164,6 @@ class ProgressStatsRepositoryImpl @Inject constructor(
                 .sortedBy { it.date }
             
             emit(volumeData)
-            
         } catch (e: Exception) {
             Timber.e(e, "Failed to get exercise volume progression for user: $userId, exercise: $exerciseLibraryId")
             emit(emptyList())

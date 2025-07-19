@@ -276,7 +276,7 @@ private fun WidgetPreviewArea(
         shape = RoundedCornerShape(8.dp)
     ) {
         when (widget) {
-            AnalyticsWidget.TOTAL_VOLUME, AnalyticsWidget.TotalVolume -> {
+            AnalyticsWidget.TotalVolume -> {
                 MetricPreview(
                     title = "Total Volume",
                     value = "12.5K",
@@ -286,7 +286,7 @@ private fun WidgetPreviewArea(
                 )
             }
             
-            AnalyticsWidget.WORKOUT_FREQUENCY, AnalyticsWidget.WorkoutFrequency -> {
+            AnalyticsWidget.WorkoutFrequency -> {
                 MetricPreview(
                     title = "Frequency",
                     value = "4.2",
@@ -296,7 +296,7 @@ private fun WidgetPreviewArea(
                 )
             }
             
-            AnalyticsWidget.CONSISTENCY_STREAK, AnalyticsWidget.ConsistencyStreak -> {
+            AnalyticsWidget.ConsistencyStreak -> {
                 MetricPreview(
                     title = "Streak",
                     value = "12",
@@ -306,7 +306,7 @@ private fun WidgetPreviewArea(
                 )
             }
             
-            AnalyticsWidget.STRENGTH_PROGRESS -> {
+            AnalyticsWidget.StrengthProgress -> {
                 ChartPreview(
                     title = "Strength",
                     subtitle = "1RM Progress",
@@ -314,7 +314,7 @@ private fun WidgetPreviewArea(
                 )
             }
             
-            AnalyticsWidget.CALORIES_BURNED -> {
+            AnalyticsWidget.CaloriesBurned -> {
                 MetricPreview(
                     title = "Calories",
                     value = "2,450",
@@ -324,7 +324,7 @@ private fun WidgetPreviewArea(
                 )
             }
             
-            AnalyticsWidget.DAILY_CALORIES -> {
+            AnalyticsWidget.DailyCalories -> {
                 MetricPreview(
                     title = "Today",
                     value = "850",
@@ -334,7 +334,7 @@ private fun WidgetPreviewArea(
                 )
             }
             
-            AnalyticsWidget.VOLUME_CALENDAR -> {
+            AnalyticsWidget.VolumeCalendar -> {
                 CalendarPreview()
             }
             
@@ -540,21 +540,21 @@ private fun WidgetPreviewCardPreview() {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             WidgetPreviewCard(
-                widget = AnalyticsWidget.TOTAL_VOLUME,
+                widget = AnalyticsWidget.TotalVolume,
                 currentSize = WidgetDisplaySize.STANDARD,
                 onSizeChange = { },
                 onPreviewClick = { }
             )
             
             WidgetPreviewCard(
-                widget = AnalyticsWidget.CALORIES_BURNED,
+                widget = AnalyticsWidget.CaloriesBurned,
                 currentSize = WidgetDisplaySize.COMPACT,
                 isSelected = true,
                 onSizeChange = { }
             )
             
             WidgetPreviewCard(
-                widget = AnalyticsWidget.VOLUME_CALENDAR,
+                widget = AnalyticsWidget.VolumeCalendar,
                 currentSize = WidgetDisplaySize.EXPANDED,
                 onSizeChange = { }
             )

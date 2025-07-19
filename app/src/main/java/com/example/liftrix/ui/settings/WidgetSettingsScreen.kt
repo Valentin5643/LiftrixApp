@@ -558,7 +558,7 @@ private fun WidgetSettingsScreenPreview() {
                     
                     item {
                         WidgetToggleCard(
-                            widget = AnalyticsWidget.TOTAL_VOLUME,
+                            widget = AnalyticsWidget.TotalVolume,
                             isEnabled = true,
                             onToggle = { }
                         )

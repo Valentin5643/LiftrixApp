@@ -126,13 +126,13 @@ private fun DailyCaloriesContent(
             // Circular progress
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(80.dp)
+                modifier = Modifier.size(60.dp)
             ) {
                 CircularProgressIndicator(
                     progress = progress,
-                    modifier = Modifier.size(80.dp),
+                    modifier = Modifier.size(60.dp),
                     color = if (isGoalReached) LiftrixColors.Primary else LiftrixColors.Primary,
-                    strokeWidth = 8.dp,
+                    strokeWidth = 6.dp,
                     trackColor = LiftrixColors.OnSurface.copy(alpha = 0.1f)
                 )
                 
@@ -206,7 +206,7 @@ private fun DailyCaloriesLoadingContent() {
                 
                 Box(
                     modifier = Modifier
-                        .width(80.dp)
+                        .width(60.dp)
                         .height(16.dp)
                         .background(
                             color = LiftrixColors.OnSurface.copy(alpha = 0.1f),
@@ -225,7 +225,7 @@ private fun DailyCaloriesLoadingContent() {
             // Progress circle skeleton
             Box(
                 modifier = Modifier
-                    .size(80.dp)
+                    .size(60.dp)
                     .background(
                         color = LiftrixColors.OnSurface.copy(alpha = 0.1f),
                         shape = RoundedCornerShape(40.dp)
@@ -248,7 +248,7 @@ private fun DailyCaloriesLoadingContent() {
                 
                 Box(
                     modifier = Modifier
-                        .width(80.dp)
+                        .width(60.dp)
                         .height(16.dp)
                         .background(
                             color = LiftrixColors.OnSurface.copy(alpha = 0.1f),
