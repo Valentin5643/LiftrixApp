@@ -167,12 +167,6 @@ data class AnalyticsWidgetState(
      */
     val activeWidgets: List<AnalyticsWidget> = emptyList(),
     
-    /**
-     * Dashboard configuration for widget layout and management.
-     * 
-     * Controls how widgets are arranged and displayed on the dashboard.
-     */
-    val dashboardConfiguration: DashboardConfiguration? = null,
     
     /**
      * Map of widget data indexed by widget type.
@@ -484,14 +478,27 @@ fun AnalyticsWidgetState.withClearedErrors(widgetId: String? = null): AnalyticsW
 fun AnalyticsWidgetState.withActiveWidgets(
     preferences: WidgetPreferences?
 ): AnalyticsWidgetState {
+    timber.log.Timber.d("Converting preferences to active widgets")
+    timber.log.Timber.d("Preferences visible widgets: ${preferences?.visibleWidgets?.joinToString(", ") ?: "null"}")
+    
     val widgets = preferences?.visibleWidgets?.mapNotNull { widgetName ->
         try {
+            // Try exact enum name match first
             AnalyticsWidget.valueOf(widgetName)
         } catch (e: IllegalArgumentException) {
-            timber.log.Timber.w("Invalid widget name in preferences: '$widgetName' - skipping")
-            null // Skip invalid widget names
+            // Try to find by display name as fallback
+            val byDisplayName = AnalyticsWidget.values().find { it.displayName == widgetName }
+            if (byDisplayName != null) {
+                timber.log.Timber.d("Found widget by display name: '$widgetName' -> ${byDisplayName.name}")
+                byDisplayName
+            } else {
+                timber.log.Timber.w("Invalid widget name in preferences: '$widgetName' - available: ${AnalyticsWidget.values().map { it.name }.joinToString(", ")}")
+                null // Skip invalid widget names
+            }
         }
     } ?: emptyList()
+    
+    timber.log.Timber.d("Successfully converted ${widgets.size} widgets: ${widgets.map { it.name }.joinToString(", ")}")
     
     // If no valid widgets were found, provide safe defaults
     val finalWidgets = if (widgets.isEmpty() && preferences?.visibleWidgets?.isNotEmpty() == true) {
@@ -505,6 +512,8 @@ fun AnalyticsWidgetState.withActiveWidgets(
     } else {
         widgets
     }
+    
+    timber.log.Timber.d("Final active widgets: ${finalWidgets.map { it.name }.joinToString(", ")}")
     
     return copy(activeWidgets = finalWidgets)
 }

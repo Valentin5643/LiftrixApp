@@ -855,6 +855,9 @@ class AnalyticsWidgetViewModel @Inject constructor(
                             }
                         }
                         
+                        // Immediately load configuration after preferences are set
+                        loadConfiguration()
+                        
                         // Load data for visible widgets
                         preferences.visibleWidgets.forEach { widgetId ->
                             loadWidgetData(widgetId, forceRefresh = false)
@@ -957,30 +960,28 @@ class AnalyticsWidgetViewModel @Inject constructor(
         // Additional click handling logic can be added here
         Timber.d("Widget clicked: $widgetId")
     }
-
+    
     /**
-     * Forces migration of widget preferences to fix invalid widget names.
-     * This method should be called when the user is seeing invalid or missing widgets.
+     * Forces migration of widget preferences for legacy data compatibility.
+     * 
+     * This function clears existing preferences and forces a reload, which will
+     * trigger the migration system to convert legacy widget names to current enum values.
      */
     fun forceMigrateWidgetPreferences() {
-        val user = _currentUser.value
-        if (user == null) {
-            Timber.w("Cannot migrate preferences: no user authenticated")
-            return
-        }
-
+        val user = _currentUser.value ?: return
+        
         viewModelScope.launch {
             try {
-                Timber.i("Force migrating widget preferences for user: ${user.uid}")
+                Timber.d("Force migrating widget preferences for user: ${user.uid}")
                 
-                // Reset to default preferences to clear any invalid data
+                // Clear current preferences to force reload
                 val result = analyticsService.resetPreferences(user.uid)
                 
                 result.fold(
                     onSuccess = {
-                        Timber.i("Widget preferences reset successfully")
-                        // Reload preferences after reset
+                        // Reload preferences and data
                         loadPreferences()
+                        Timber.d("Widget preferences force migration completed")
                     },
                     onFailure = { throwable ->
                         val error = throwable as? LiftrixError ?: LiftrixError.UnknownError(
@@ -993,14 +994,14 @@ class AnalyticsWidgetViewModel @Inject constructor(
                 )
             } catch (exception: Exception) {
                 val error = LiftrixError.UnknownError(
-                    errorMessage = "Unexpected error during preference migration",
+                    errorMessage = "Unexpected error during widget migration",
                     analyticsContext = mapOf(
                         "operation" to "forceMigrateWidgetPreferences",
                         "exception" to exception.message.orEmpty()
                     )
                 )
                 updateState { UiState.Error(error) }
-                Timber.e(exception, "Unexpected error during preference migration")
+                Timber.e(exception, "Unexpected error during widget migration")
             }
         }
     }

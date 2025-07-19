@@ -290,7 +290,10 @@ private fun ProgressDashboardContent(
                     onRefresh = { onCoordinatorEvent(CoordinatorEvent.RefreshAllData) },
                     onCalorieRefresh = { onCalorieEvent(CalorieTrackingEvent.RefreshAllData) },
                     onSummaryRefresh = { onSummaryEvent(ProgressSummaryEvent.RefreshSummary) },
-                    onWidgetMigrate = { widgetViewModel.forceMigrateWidgetPreferences() },
+                    onWidgetMigrate = { 
+                        // Use the event system to trigger widget migration
+                        onWidgetEvent(AnalyticsWidgetEvent.ResetPreferences(confirmationRequired = false, preserveCustomizations = false))
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -754,10 +757,10 @@ private fun WidgetsSection(
     modifier: Modifier = Modifier
 ) {
     // Only show widgets if we have configuration and widgets available
-    if (widgetState.activeWidgets.isNotEmpty() && widgetState.dashboardConfiguration != null) {
+    if (widgetState.activeWidgets.isNotEmpty() && widgetState.configuration != null) {
         WidgetContainer(
             widgets = widgetState.activeWidgets,
-            configuration = widgetState.dashboardConfiguration,
+            configuration = widgetState.configuration,
             layoutMode = WidgetLayoutMode.SECTIONS,
             onWidgetClick = { widget ->
                 onEvent(AnalyticsWidgetEvent.WidgetClicked(widget))
@@ -1289,11 +1292,23 @@ private fun DebugPanel(
                         
                         if (widgetState.activeWidgets.isNotEmpty()) {
                             DebugInfoRow("Active Widget Names", widgetState.activeWidgets.map { it.name }.joinToString(", "))
+                        } else {
+                            DebugInfoRow("Active Widgets", "EMPTY - No widgets to display!", isError = true)
                         }
                         
                         if (widgetState.preferences?.visibleWidgets?.isNotEmpty() == true) {
                             DebugInfoRow("Preference Widget Names", widgetState.preferences.visibleWidgets.joinToString(", "))
+                        } else {
+                            DebugInfoRow("Visible Widgets in Prefs", "EMPTY or NULL", isError = true)
                         }
+                        
+                        DebugInfoRow("Has Configuration", (widgetState.configuration != null).toString(), 
+                            isError = widgetState.configuration == null)
+                        
+                        // Check the condition that determines if widgets section is shown
+                        val shouldShowWidgets = widgetState.activeWidgets.isNotEmpty() && widgetState.configuration != null
+                        DebugInfoRow("WIDGETS SECTION VISIBLE", shouldShowWidgets.toString(), 
+                            isError = !shouldShowWidgets)
                         
                         if (widgetState.hasWidgetErrors()) {
                             DebugInfoRow("Widget Errors", widgetState.widgetErrors.size.toString(), isError = true)
