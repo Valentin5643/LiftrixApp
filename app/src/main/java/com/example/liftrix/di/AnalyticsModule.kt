@@ -255,12 +255,15 @@ abstract class AnalyticsModule {
         /**
          * Provides AnalyticsWidgetManager with proper dependency injection
          * 
+         * @param widgetResolver Widget resolution service for dynamic widget selection
          * @return Configured AnalyticsWidgetManager instance
          */
         @Provides
         @Singleton
-        fun provideAnalyticsWidgetManager(): com.example.liftrix.ui.progress.components.AnalyticsWidgetManager {
-            return com.example.liftrix.ui.progress.components.AnalyticsWidgetManager()
+        fun provideAnalyticsWidgetManager(
+            widgetResolver: com.example.liftrix.service.WidgetResolver
+        ): com.example.liftrix.ui.progress.components.AnalyticsWidgetManager {
+            return com.example.liftrix.ui.progress.components.AnalyticsWidgetManager(widgetResolver)
         }
     }
 } 

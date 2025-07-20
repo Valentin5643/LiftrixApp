@@ -2,7 +2,7 @@ package com.example.liftrix.ui.progress
 
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.DashboardConfiguration
-import com.example.liftrix.domain.model.analytics.UIWidgetData
+import com.example.liftrix.domain.model.analytics.WidgetData
 import com.example.liftrix.domain.model.analytics.WidgetPreferences
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.ui.common.state.UiState
@@ -51,9 +51,9 @@ data class AnalyticsWidgetState(
      * Contains the actual widget data for display, including formatted values,
      * trends, and metadata. Each widget maintains its own data state independently.
      * 
-     * Structure: widgetId -> UIWidgetData
+     * Structure: widgetId -> WidgetData
      */
-    val widgetData: Map<String, UIWidgetData> = emptyMap(),
+    val widgetData: Map<String, WidgetData> = emptyMap(),
     
     /**
      * User's widget preferences including visibility and configuration.
@@ -173,7 +173,7 @@ data class AnalyticsWidgetState(
      * 
      * Provides access to widget data by widget type for easier lookup.
      */
-    val widgetDataMap: Map<AnalyticsWidget, UIWidgetData> = emptyMap()
+    val widgetDataMap: Map<AnalyticsWidget, WidgetData> = emptyMap()
 ) {
     
     /**
@@ -235,9 +235,9 @@ data class AnalyticsWidgetState(
      * Gets the data for a specific widget.
      * 
      * @param widgetId The widget identifier to get data for
-     * @return UIWidgetData if available, null otherwise
+     * @return WidgetData if available, null otherwise
      */
-    fun getWidgetData(widgetId: String): UIWidgetData? = widgetData[widgetId]
+    fun getWidgetData(widgetId: String): WidgetData? = widgetData[widgetId]
     
     /**
      * Checks if a specific widget has data loaded.
@@ -339,7 +339,7 @@ data class WidgetInteraction(
  */
 fun AnalyticsWidgetState.withWidgetData(
     widgetId: String, 
-    data: UIWidgetData
+    data: WidgetData
 ): AnalyticsWidgetState = copy(
     widgetData = widgetData + (widgetId to data),
     lastRefreshTimestamp = System.currentTimeMillis()
@@ -472,48 +472,127 @@ fun AnalyticsWidgetState.withClearedErrors(widgetId: String? = null): AnalyticsW
 /**
  * Creates a new state with active widgets populated from preferences.
  * 
+ * DEPRECATED: This method has limited widget resolution capabilities.
+ * Use withResolvedWidgets() with WidgetResolver.resolveWidgetsFromPreferences() instead.
+ * 
  * @param preferences The widget preferences containing visible widgets
  * @return New state with updated active widgets list
  */
+@Deprecated("Use withResolvedWidgets() with WidgetResolver for proper widget resolution")
 fun AnalyticsWidgetState.withActiveWidgets(
     preferences: WidgetPreferences?
 ): AnalyticsWidgetState {
-    timber.log.Timber.d("Converting preferences to active widgets")
-    timber.log.Timber.d("Preferences visible widgets: ${preferences?.visibleWidgets?.joinToString(", ") ?: "null"}")
+    timber.log.Timber.w("Using deprecated withActiveWidgets() - consider migrating to withResolvedWidgets() with WidgetResolver")
     
-    val widgets = preferences?.visibleWidgets?.mapNotNull { widgetName ->
-        try {
-            // Try exact enum name match first
-            AnalyticsWidget.valueOf(widgetName)
-        } catch (e: IllegalArgumentException) {
-            // Try to find by display name as fallback
-            val byDisplayName = AnalyticsWidget.values().find { it.displayName == widgetName }
-            if (byDisplayName != null) {
-                timber.log.Timber.d("Found widget by display name: '$widgetName' -> ${byDisplayName.name}")
-                byDisplayName
-            } else {
-                timber.log.Timber.w("Invalid widget name in preferences: '$widgetName' - available: ${AnalyticsWidget.values().map { it.name }.joinToString(", ")}")
-                null // Skip invalid widget names
-            }
+    val resolvedWidgets = if (preferences != null) {
+        val allWidgets = AnalyticsWidget.getAllWidgets()
+        preferences.getOrderedVisibleWidgets().mapNotNull { widgetId ->
+            allWidgets.find { it.id == widgetId }
         }
-    } ?: emptyList()
-    
-    timber.log.Timber.d("Successfully converted ${widgets.size} widgets: ${widgets.map { it.name }.joinToString(", ")}")
-    
-    // If no valid widgets were found, provide safe defaults
-    val finalWidgets = if (widgets.isEmpty() && preferences?.visibleWidgets?.isNotEmpty() == true) {
-        timber.log.Timber.i("No valid widgets found from preferences, using defaults")
-        listOf(
-            AnalyticsWidget.TotalVolume,
-            AnalyticsWidget.WorkoutFrequency,
-            AnalyticsWidget.ConsistencyStreak,
-            AnalyticsWidget.CaloriesBurned
-        )
     } else {
-        widgets
+        emptyList()
     }
     
-    timber.log.Timber.d("Final active widgets: ${finalWidgets.map { it.name }.joinToString(", ")}")
+    // CRITICAL BUG FIX: Create level-appropriate defaults using proper widget selection
+    val finalWidgets = if (resolvedWidgets.isEmpty() && preferences != null) {
+        val userLevel = preferences.userLevel
+        timber.log.Timber.i("No widgets resolved from preferences, creating level-appropriate defaults for $userLevel")
+        
+        // Use the same logic as WidgetResolver to create appropriate defaults
+        val allWidgets = AnalyticsWidget.getAllWidgets()
+        when (userLevel) {
+            com.example.liftrix.domain.model.analytics.UserLevel.BEGINNER -> {
+                // 4 essential widgets for building workout habits
+                allWidgets
+                    .filter { it.priority == com.example.liftrix.domain.model.analytics.WidgetPriority.ESSENTIAL }
+                    .sortedWith(compareBy({ it.complexity }, { it.getLayoutPriority() }))
+                    .take(4)
+                    .ifEmpty {
+                        // Fallback: select simplest widgets if no essential ones
+                        allWidgets
+                            .filter { it.complexity == com.example.liftrix.domain.model.analytics.WidgetComplexity.SIMPLE }
+                            .sortedBy { it.getLayoutPriority() }
+                            .take(4)
+                    }
+            }
+            com.example.liftrix.domain.model.analytics.UserLevel.INTERMEDIATE -> {
+                // 7 widgets: essential + some trend analysis
+                val essential = allWidgets.filter { it.priority == com.example.liftrix.domain.model.analytics.WidgetPriority.ESSENTIAL }
+                val trends = allWidgets.filter { 
+                    it.category == com.example.liftrix.domain.model.analytics.WidgetCategory.CHARTS && 
+                    it.complexity != com.example.liftrix.domain.model.analytics.WidgetComplexity.COMPLEX 
+                }
+                val metrics = allWidgets.filter { 
+                    it.category == com.example.liftrix.domain.model.analytics.WidgetCategory.METRICS && 
+                    it.priority == com.example.liftrix.domain.model.analytics.WidgetPriority.STANDARD 
+                }
+                
+                (essential + trends + metrics)
+                    .distinctBy { it.id }
+                    .sortedBy { it.getLayoutPriority() }
+                    .take(7)
+            }
+            com.example.liftrix.domain.model.analytics.UserLevel.ADVANCED -> {
+                // 10 widgets: comprehensive analytics with balanced selection across categories
+                val byCategory = allWidgets.groupBy { it.category }
+                val selected = mutableListOf<AnalyticsWidget>()
+                
+                // Ensure essential widgets are included
+                val essential = allWidgets.filter { it.priority == com.example.liftrix.domain.model.analytics.WidgetPriority.ESSENTIAL }
+                selected.addAll(essential.take(3))
+                
+                // Add widgets from each category
+                byCategory.forEach { (category, categoryWidgets) ->
+                    val remaining = 10 - selected.size
+                    if (remaining > 0) {
+                        val toAdd = categoryWidgets
+                            .filter { !selected.contains(it) }
+                            .sortedWith(compareBy({ it.complexity }, { it.getLayoutPriority() }))
+                            .take(minOf(remaining / byCategory.size + 1, 3))
+                        selected.addAll(toAdd)
+                    }
+                }
+                
+                selected.take(10).sortedBy { it.getLayoutPriority() }
+            }
+        }
+    } else if (resolvedWidgets.isEmpty()) {
+        // No preferences at all - use beginner defaults
+        timber.log.Timber.i("No preferences available, using beginner defaults")
+        val allWidgets = AnalyticsWidget.getAllWidgets()
+        allWidgets
+            .filter { it.priority == com.example.liftrix.domain.model.analytics.WidgetPriority.ESSENTIAL }
+            .sortedWith(compareBy({ it.complexity }, { it.getLayoutPriority() }))
+            .take(4)
+            .ifEmpty {
+                // Final fallback: select simplest widgets if no essential ones
+                allWidgets
+                    .filter { it.complexity == com.example.liftrix.domain.model.analytics.WidgetComplexity.SIMPLE }
+                    .sortedBy { it.getLayoutPriority() }
+                    .take(4)
+            }
+    } else {
+        resolvedWidgets
+    }
+    
+    timber.log.Timber.d("Resolved ${finalWidgets.size} active widgets from preferences for level ${preferences?.userLevel ?: "UNKNOWN"}")
     
     return copy(activeWidgets = finalWidgets)
+}
+
+/**
+ * Creates a new state with resolved widgets from WidgetResolver.
+ * 
+ * This method updates the state with widgets resolved by WidgetResolver based on 
+ * user level and layout mode. Used for dynamic widget resolution.
+ * 
+ * @param resolvedWidgets The widgets resolved by WidgetResolver
+ * @return New state with updated active widgets list
+ */
+fun AnalyticsWidgetState.withResolvedWidgets(
+    resolvedWidgets: List<AnalyticsWidget>
+): AnalyticsWidgetState {
+    timber.log.Timber.d("Setting ${resolvedWidgets.size} resolved widgets: ${resolvedWidgets.map { it.displayName }.joinToString(", ")}")
+    
+    return copy(activeWidgets = resolvedWidgets)
 }

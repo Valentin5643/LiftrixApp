@@ -2,12 +2,14 @@ package com.example.liftrix.ui.progress.components
 
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.DashboardConfiguration
+import com.example.liftrix.domain.model.analytics.DashboardLayoutMode
 import com.example.liftrix.domain.model.analytics.UserLevel
 import com.example.liftrix.domain.model.analytics.WidgetCategory
 import com.example.liftrix.domain.model.analytics.WidgetData
 import com.example.liftrix.domain.model.analytics.WidgetPriority
 import com.example.liftrix.domain.model.analytics.WidgetPreferences
 import com.example.liftrix.domain.model.analytics.TrendDirection
+import com.example.liftrix.service.WidgetResolver
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import javax.inject.Inject
@@ -19,34 +21,64 @@ import javax.inject.Singleton
  * Handles widget configuration, data coordination, and personalization
  * following Hevy-inspired collapsible sections with Material 3 design.
  * 
+ * Now integrates with WidgetResolver for dynamic widget resolution
+ * based on user level and layout mode, supporting:
+ * - Beginner: 4 widgets, Intermediate: 7 widgets, Advanced: 10 widgets
+ * - CUSTOM layout mode with user preferences
+ * - Dynamic widget selection replacing hardcoded lists
+ * 
  * Key Responsibilities:
  * - Configuration management for Beginner/Intermediate/Advanced users
  * - Widget data loading and caching coordination  
  * - Personalization and settings persistence
  * - Performance optimization through lazy loading
+ * - Integration with WidgetResolver for dynamic widget selection
  */
 @Singleton
-class AnalyticsWidgetManager @Inject constructor() {
+class AnalyticsWidgetManager @Inject constructor(
+    private val widgetResolver: WidgetResolver
+) {
     
     /**
-     * Get widget configuration based on user experience level
+     * Get widget configuration based on user experience level and layout mode.
+     * 
+     * Now uses WidgetResolver for dynamic widget selection instead of hardcoded lists.
      * 
      * @param userLevel Experience level determining widget complexity
-     * @return List of widgets appropriate for the user level
+     * @param layoutMode Dashboard layout mode (GRID, SECTIONS, LIST, CUSTOM)
+     * @return Dashboard configuration appropriate for the user level and layout
      */
-    fun getConfigurationForLevel(userLevel: UserLevel): DashboardConfiguration {
-        return when (userLevel) {
-            UserLevel.BEGINNER -> DashboardConfiguration.Beginner
-            UserLevel.INTERMEDIATE -> DashboardConfiguration.Intermediate  
-            UserLevel.ADVANCED -> DashboardConfiguration.Advanced
-        }
+    fun getConfigurationForLevel(
+        userLevel: UserLevel,
+        layoutMode: DashboardLayoutMode = DashboardLayoutMode.SECTIONS
+    ): DashboardConfiguration {
+        return DashboardConfiguration.fromUserLevelAndLayout(userLevel, layoutMode)
+    }
+    
+    /**
+     * Get widgets for a configuration using WidgetResolver.
+     * 
+     * This replaces the hardcoded widget lists with dynamic resolution.
+     * 
+     * @param configuration Dashboard configuration
+     * @param preferences Optional user preferences for CUSTOM mode
+     * @param layoutMode Layout mode for widget resolution
+     * @return List of widgets for the configuration
+     */
+    fun getWidgetsForConfiguration(
+        configuration: DashboardConfiguration,
+        preferences: WidgetPreferences? = null,
+        layoutMode: DashboardLayoutMode = DashboardLayoutMode.SECTIONS
+    ): List<AnalyticsWidget> {
+        val userLevel = configuration.getUserLevel()
+        return widgetResolver.resolveWidgets(userLevel, layoutMode, preferences)
     }
     
     /**
      * Get a widget by its ID
      */
     fun getWidgetById(widgetId: String): AnalyticsWidget? {
-        return AnalyticsWidget.values().find { it.name == widgetId }
+        return AnalyticsWidget.getById(widgetId)
     }
     
     /**
@@ -56,7 +88,7 @@ class AnalyticsWidgetManager @Inject constructor() {
      * @return List of widgets at or above the specified priority
      */
     fun getWidgetsByPriority(priority: WidgetPriority): List<AnalyticsWidget> {
-        return AnalyticsWidget.values().filter { widget ->
+        return AnalyticsWidget.getAllWidgets().filter { widget ->
             when (priority) {
                 WidgetPriority.ESSENTIAL -> true
                 WidgetPriority.STANDARD -> widget.priority != WidgetPriority.ADVANCED
@@ -69,7 +101,7 @@ class AnalyticsWidgetManager @Inject constructor() {
      * Get all available widgets
      */
     fun getAllWidgets(): List<AnalyticsWidget> {
-        return AnalyticsWidget.values().toList()
+        return AnalyticsWidget.getAllWidgets()
     }
     
     /**
@@ -78,7 +110,7 @@ class AnalyticsWidgetManager @Inject constructor() {
      * @return Map of categories to their respective widgets
      */
     fun getWidgetsByCategory(): Map<WidgetCategory, List<AnalyticsWidget>> {
-        return AnalyticsWidget.values().groupBy { it.category }
+        return AnalyticsWidget.getAllWidgets().groupBy { it.category }
     }
     
     /**
@@ -227,7 +259,7 @@ class AnalyticsWidgetManager @Inject constructor() {
     fun getWidgetsByPreferences(preferences: WidgetPreferences): List<AnalyticsWidget> {
         return preferences.getOrderedVisibleWidgets()
             .mapNotNull { widgetName -> 
-                AnalyticsWidget.values().find { it.name == widgetName }
+                AnalyticsWidget.getAllWidgets().find { it.id == widgetName }
             }
     }
     
@@ -239,7 +271,7 @@ class AnalyticsWidgetManager @Inject constructor() {
      * @return Boolean indicating if widget should be displayed
      */
     fun isWidgetVisible(widget: AnalyticsWidget, preferences: WidgetPreferences?): Boolean {
-        return preferences?.isWidgetVisible(widget.name) ?: true
+        return preferences?.isWidgetVisible(widget.id) ?: true
     }
     
     /**
@@ -253,7 +285,7 @@ class AnalyticsWidgetManager @Inject constructor() {
         widget: AnalyticsWidget, 
         preferences: WidgetPreferences?
     ): com.example.liftrix.domain.model.analytics.WidgetDisplaySize {
-        return preferences?.getWidgetSize(widget.name) 
+        return preferences?.getWidgetSize(widget.id) 
             ?: com.example.liftrix.domain.model.analytics.WidgetDisplaySize.STANDARD
     }
     
@@ -296,7 +328,7 @@ class AnalyticsWidgetManager @Inject constructor() {
     }
     
     /**
-     * Apply preferences to widget configuration
+     * Apply preferences to widget configuration using WidgetResolver
      * 
      * @param baseConfiguration Base dashboard configuration
      * @param preferences User preferences
@@ -306,29 +338,12 @@ class AnalyticsWidgetManager @Inject constructor() {
         baseConfiguration: DashboardConfiguration,
         preferences: WidgetPreferences
     ): List<AnalyticsWidget> {
-        val baseWidgets = when (baseConfiguration) {
-            is DashboardConfiguration.Beginner -> baseConfiguration.widgets
-            is DashboardConfiguration.Intermediate -> baseConfiguration.widgets
-            is DashboardConfiguration.Advanced -> baseConfiguration.widgets
-        }
-        
-        // Filter widgets based on visibility preferences
-        val visibleWidgets = baseWidgets.filter { widget ->
-            preferences.isWidgetVisible(widget.name)
-        }
-        
-        // Apply custom ordering from preferences
-        val orderedWidgets = preferences.getOrderedVisibleWidgets()
-            .mapNotNull { widgetName -> 
-                visibleWidgets.find { it.name == widgetName }
-            }
-        
-        // Add any remaining visible widgets that aren't in the custom order
-        val remainingWidgets = visibleWidgets.filter { widget ->
-            !orderedWidgets.contains(widget)
-        }
-        
-        return orderedWidgets + remainingWidgets
+        // Use WidgetResolver to get widgets dynamically
+        return widgetResolver.resolveWidgets(
+            userLevel = preferences.userLevel,
+            layoutMode = preferences.dashboardLayout,
+            preferences = preferences
+        )
     }
     
     /**
@@ -342,8 +357,8 @@ class AnalyticsWidgetManager @Inject constructor() {
         val recommendations = mutableListOf<String>()
         
         // Check if all visible widgets are valid
-        val availableWidgetNames = AnalyticsWidget.values().map { it.name }.toSet()
-        val availableDisplayNames = AnalyticsWidget.values().map { it.displayName }.toSet()
+        val availableWidgetNames = AnalyticsWidget.getAllWidgets().map { it.id }.toSet()
+        val availableDisplayNames = AnalyticsWidget.getAllWidgets().map { it.displayName }.toSet()
         
         // Log for debugging
         timber.log.Timber.d("Available widget names: ${availableWidgetNames.joinToString(", ")}")
@@ -385,7 +400,7 @@ class AnalyticsWidgetManager @Inject constructor() {
     }
     
     /**
-     * Applies a dashboard configuration to existing widget preferences.
+     * Applies a dashboard configuration to existing widget preferences using WidgetResolver.
      * 
      * This method takes the current widget preferences and applies configuration
      * changes while preserving user customizations where possible.
@@ -398,20 +413,18 @@ class AnalyticsWidgetManager @Inject constructor() {
         preferences: WidgetPreferences,
         configuration: DashboardConfiguration
     ): WidgetPreferences {
-        // Get widgets from the configuration
-        val configurationWidgets = when (configuration) {
-            is DashboardConfiguration.Beginner -> configuration.widgets
-            is DashboardConfiguration.Intermediate -> configuration.widgets
-            is DashboardConfiguration.Advanced -> configuration.widgets
-        }
+        // Get widgets from WidgetResolver based on configuration
+        val configurationWidgets = widgetResolver.resolveWidgets(
+            userLevel = configuration.getUserLevel(),
+            layoutMode = preferences.dashboardLayout,
+            preferences = if (configuration.supportsCustomization()) preferences else null
+        )
         
-        // Create new visible widgets set based on configuration
-        val newVisibleWidgets = configurationWidgets.map { it.name }.toSet()
+        // Create new visible widgets set based on resolved configuration
+        val newVisibleWidgets = configurationWidgets.map { it.id }.toSet()
         
-        // Create new widget order based on configuration priority
-        val newWidgetOrder = configurationWidgets
-            .sortedWith(compareBy({ it.priority }, { it.name }))
-            .map { it.name }
+        // Create new widget order based on resolved configuration
+        val newWidgetOrder = configurationWidgets.map { it.id }
         
         // Preserve user widget sizes for widgets that exist in both old and new configuration
         val preservedSizes = preferences.widgetSizes.filterKeys { widgetName ->
@@ -427,7 +440,7 @@ class AnalyticsWidgetManager @Inject constructor() {
     }
     
     /**
-     * Creates default widget preferences for a user based on configuration.
+     * Creates default widget preferences for a user based on configuration using WidgetResolver.
      * 
      * This method generates a complete set of default preferences for a user
      * based on their experience level and the provided configuration.
@@ -440,46 +453,11 @@ class AnalyticsWidgetManager @Inject constructor() {
         userId: String,
         configuration: DashboardConfiguration
     ): WidgetPreferences {
-        // Get widgets from the configuration
-        val configurationWidgets = when (configuration) {
-            is DashboardConfiguration.Beginner -> configuration.widgets
-            is DashboardConfiguration.Intermediate -> configuration.widgets
-            is DashboardConfiguration.Advanced -> configuration.widgets
-        }
-        
-        // Create visible widgets set
-        val visibleWidgets = configurationWidgets.map { it.name }.toSet()
-        
-        // Create widget order based on priority
-        val widgetOrder = configurationWidgets
-            .sortedWith(compareBy({ it.priority }, { it.name }))
-            .map { it.name }
-        
-        // Create default widget customizations
-        val defaultCustomizations = configurationWidgets.associate { widget ->
-            widget.name to mapOf(
-                "displaySize" to com.example.liftrix.domain.model.analytics.WidgetDisplaySize.STANDARD.name,
-                "showTrend" to "true",
-                "refreshInterval" to "300" // 5 minutes
-            )
-        }
-        
-        // Determine default layout mode based on configuration
-        val defaultLayoutMode = when (configuration) {
-            is DashboardConfiguration.Beginner -> com.example.liftrix.domain.model.analytics.DashboardLayoutMode.SECTIONS
-            is DashboardConfiguration.Intermediate -> com.example.liftrix.domain.model.analytics.DashboardLayoutMode.SECTIONS
-            is DashboardConfiguration.Advanced -> com.example.liftrix.domain.model.analytics.DashboardLayoutMode.GRID
-        }
-        
-        return WidgetPreferences(
+        // Use WidgetResolver to create default preferences
+        return widgetResolver.createDefaultPreferences(
             userId = userId,
-            visibleWidgets = visibleWidgets,
-            widgetOrder = widgetOrder,
-            collapsedSections = emptySet(),
-            dashboardLayout = defaultLayoutMode,
-            enableAutoRefresh = true,
-            refreshIntervalMinutes = 5,
-            lastModified = kotlinx.datetime.Clock.System.now()
+            userLevel = configuration.getUserLevel(),
+            layoutMode = if (configuration.supportsCustomization()) DashboardLayoutMode.CUSTOM else DashboardLayoutMode.SECTIONS
         )
     }
     
@@ -499,15 +477,16 @@ class AnalyticsWidgetManager @Inject constructor() {
         widgetId: String,
         newPosition: Int
     ): DashboardConfiguration? {
-        // Get current widgets from configuration
+        // Get current widgets from configuration using WidgetResolver
         val currentWidgets = when (configuration) {
-            is DashboardConfiguration.Beginner -> configuration.widgets
-            is DashboardConfiguration.Intermediate -> configuration.widgets
-            is DashboardConfiguration.Advanced -> configuration.widgets
+            is DashboardConfiguration.Beginner -> widgetResolver.resolveStandardWidgets(UserLevel.BEGINNER)
+            is DashboardConfiguration.Intermediate -> widgetResolver.resolveStandardWidgets(UserLevel.INTERMEDIATE)
+            is DashboardConfiguration.Advanced -> widgetResolver.resolveStandardWidgets(UserLevel.ADVANCED)
+            is DashboardConfiguration.Custom -> widgetResolver.resolveStandardWidgets(UserLevel.ADVANCED) // Custom allows advanced-level widgets
         }
         
         // Find the widget to reorder
-        val widgetToMove = currentWidgets.find { it.name == widgetId }
+        val widgetToMove = currentWidgets.find { it.id == widgetId }
             ?: return null // Widget not found
         
         // Validate new position
@@ -517,7 +496,7 @@ class AnalyticsWidgetManager @Inject constructor() {
         
         // Create new widget list with reordered widget
         val mutableWidgets = currentWidgets.toMutableList()
-        mutableWidgets.remove(widgetToMove)
+        mutableWidgets.removeAt(mutableWidgets.indexOf(widgetToMove))
         mutableWidgets.add(newPosition, widgetToMove)
         
         // Return new configuration with reordered widgets
@@ -543,7 +522,7 @@ class AnalyticsWidgetManager @Inject constructor() {
         // Get widgets based on preferences
         val orderedWidgets = preferences.getOrderedVisibleWidgets()
             .mapNotNull { widgetName -> 
-                AnalyticsWidget.values().find { it.name == widgetName }
+                AnalyticsWidget.getAllWidgets().find { it.id == widgetName }
             }
         
         // Determine configuration type based on widget count and complexity
@@ -586,7 +565,7 @@ data class WidgetUsageHistory(
             .sortedByDescending { it.second }
             .take(limit)
             .mapNotNull { (widgetId, _) -> 
-                AnalyticsWidget.values().find { it.name == widgetId }
+                AnalyticsWidget.getAllWidgets().find { it.id == widgetId }
             }
     }
 }

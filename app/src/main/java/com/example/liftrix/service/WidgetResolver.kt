@@ -149,7 +149,7 @@ class WidgetResolver @Inject constructor() {
      * @param userLevel User's experience level
      * @return List of widgets appropriate for the user level
      */
-    private fun resolveStandardWidgets(userLevel: UserLevel): List<AnalyticsWidget> {
+    fun resolveStandardWidgets(userLevel: UserLevel): List<AnalyticsWidget> {
         val allWidgets = AnalyticsWidget.getAllWidgets()
         
         val selectedWidgets = when (userLevel) {
@@ -509,6 +509,89 @@ class WidgetResolver @Inject constructor() {
             widgetOrder = validWidgetOrder,
             lastModified = kotlinx.datetime.Clock.System.now()
         )
+    }
+    
+    /**
+     * Resolves widgets from preferences with user level context and fallbacks.
+     * 
+     * CRITICAL BUG FIX: This method ensures proper widget counts for all user levels
+     * instead of always falling back to 4 hardcoded widgets.
+     * 
+     * @param preferences Widget preferences containing visible widgets
+     * @param userLevel Current user level for appropriate fallbacks
+     * @return List of resolved AnalyticsWidget objects
+     */
+    fun resolveWidgetsFromPreferences(
+        preferences: WidgetPreferences?,
+        userLevel: UserLevel = UserLevel.BEGINNER
+    ): List<AnalyticsWidget> {
+        Timber.d("Resolving widgets from preferences for user level: $userLevel")
+        Timber.d("Preferences visible widgets: ${preferences?.visibleWidgets?.joinToString(", ") ?: "null"}")
+        
+        if (preferences == null) {
+            Timber.i("No preferences provided, using level-appropriate defaults for $userLevel")
+            return resolveStandardWidgets(userLevel)
+        }
+        
+        val allWidgets = AnalyticsWidget.getAllWidgets()
+        val availableWidgetIds = allWidgets.map { it.id }.toSet()
+        
+        // Resolve widget names to AnalyticsWidget objects using migration mapping
+        val resolvedWidgets = preferences.visibleWidgets.mapNotNull { widgetName ->
+            // Try direct lookup first
+            val byId = allWidgets.find { it.id == widgetName }
+            if (byId != null) {
+                byId
+            } else {
+                // Try migration mapping
+                val migratedId = WIDGET_NAME_MIGRATION_MAP[widgetName]
+                if (migratedId != null) {
+                    val byMigratedId = allWidgets.find { it.id == migratedId }
+                    if (byMigratedId != null) {
+                        Timber.d("Migrated widget name: '$widgetName' -> '${byMigratedId.id}'")
+                        byMigratedId
+                    } else {
+                        Timber.w("Migration target not found: '$widgetName' -> '$migratedId'")
+                        null
+                    }
+                } else {
+                    // Try display name match as final fallback
+                    val byDisplayName = allWidgets.find { it.displayName == widgetName }
+                    if (byDisplayName != null) {
+                        Timber.d("Found widget by display name: '$widgetName' -> ${byDisplayName.id}")
+                        byDisplayName
+                    } else {
+                        Timber.w("Invalid widget name: '$widgetName' - no resolution available")
+                        null
+                    }
+                }
+            }
+        }
+        
+        Timber.d("Successfully resolved ${resolvedWidgets.size} widgets: ${resolvedWidgets.map { it.id }.joinToString(", ")}")
+        
+        // CRITICAL FIX: Use level-appropriate defaults instead of always falling back to 4 widgets
+        val finalWidgets = if (resolvedWidgets.isEmpty() && preferences.visibleWidgets.isNotEmpty()) {
+            Timber.i("No valid widgets resolved from preferences, using level-appropriate defaults for $userLevel")
+            resolveStandardWidgets(userLevel)
+        } else if (resolvedWidgets.isEmpty()) {
+            Timber.i("No widgets in preferences, using level-appropriate defaults for $userLevel")
+            resolveStandardWidgets(userLevel)
+        } else {
+            resolvedWidgets
+        }
+        
+        // Validate widget count matches user level expectations
+        val expectedCount = getMaxWidgetCount(userLevel)
+        if (finalWidgets.size != expectedCount) {
+            Timber.w("Widget count mismatch: expected $expectedCount for $userLevel, got ${finalWidgets.size}")
+        } else {
+            Timber.d("Widget count correct: ${finalWidgets.size} widgets for $userLevel")
+        }
+        
+        Timber.d("Final resolved widgets (${finalWidgets.size}): ${finalWidgets.map { it.id }.joinToString(", ")}")
+        
+        return finalWidgets.sortedBy { it.getLayoutPriority() }
     }
 }
 

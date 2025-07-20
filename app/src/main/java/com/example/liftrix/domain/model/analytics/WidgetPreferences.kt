@@ -55,8 +55,8 @@ data class WidgetPreferences(
             
             return WidgetPreferences(
                 userId = userId,
-                visibleWidgets = getWidgetsFromConfiguration(defaultConfiguration).map { it.name }.toSet(),
-                widgetOrder = getWidgetsFromConfiguration(defaultConfiguration).map { it.name },
+                visibleWidgets = getWidgetsFromConfiguration(defaultConfiguration).map { it.id }.toSet(),
+                widgetOrder = getWidgetsFromConfiguration(defaultConfiguration).map { it.id },
                 dashboardLayout = DashboardLayoutMode.SECTIONS,
                 userLevel = userLevel,
                 collapsedSections = emptySet(),
@@ -72,10 +72,10 @@ data class WidgetPreferences(
          */
         private fun getDefaultVisibleWidgets(): Set<String> {
             return setOf(
-                AnalyticsWidget.TotalVolume.name,
-                AnalyticsWidget.WorkoutFrequency.name,
-                AnalyticsWidget.ConsistencyStreak.name,
-                AnalyticsWidget.CaloriesBurned.name
+                AnalyticsWidget.TotalVolume.id,
+                AnalyticsWidget.WorkoutFrequency.id,
+                AnalyticsWidget.ConsistencyStreak.id,
+                AnalyticsWidget.CaloriesBurned.id
             )
         }
         
@@ -84,21 +84,81 @@ data class WidgetPreferences(
          */
         private fun getDefaultWidgetOrder(): List<String> {
             return listOf(
-                AnalyticsWidget.TotalVolume.name,
-                AnalyticsWidget.WorkoutFrequency.name,
-                AnalyticsWidget.ConsistencyStreak.name,
-                AnalyticsWidget.CaloriesBurned.name
+                AnalyticsWidget.TotalVolume.id,
+                AnalyticsWidget.WorkoutFrequency.id,
+                AnalyticsWidget.ConsistencyStreak.id,
+                AnalyticsWidget.CaloriesBurned.id
             )
         }
         
         /**
-         * Get widgets from dashboard configuration
+         * Get widgets from dashboard configuration using proper widget selection logic.
+         * 
+         * NOTE: This method now uses the same logic as WidgetResolver for consistency.
+         * In practice, WidgetResolver should be used directly instead of this method.
          */
         private fun getWidgetsFromConfiguration(config: DashboardConfiguration): List<AnalyticsWidget> {
+            val allWidgets = AnalyticsWidget.getAllWidgets()
+            
             return when (config) {
-                is DashboardConfiguration.Beginner -> DashboardConfiguration.Beginner.widgets
-                is DashboardConfiguration.Intermediate -> DashboardConfiguration.Intermediate.widgets
-                is DashboardConfiguration.Advanced -> DashboardConfiguration.Advanced.widgets
+                is DashboardConfiguration.Beginner -> {
+                    // 4 essential widgets for building workout habits
+                    allWidgets
+                        .filter { it.priority == WidgetPriority.ESSENTIAL }
+                        .sortedWith(compareBy({ it.complexity }, { it.getLayoutPriority() }))
+                        .take(4)
+                        .ifEmpty {
+                            // Fallback: select simplest widgets if no essential ones
+                            allWidgets
+                                .filter { it.complexity == WidgetComplexity.SIMPLE }
+                                .sortedBy { it.getLayoutPriority() }
+                                .take(4)
+                        }
+                }
+                is DashboardConfiguration.Intermediate -> {
+                    // 7 widgets: essential + some trend analysis
+                    val essential = allWidgets.filter { it.priority == WidgetPriority.ESSENTIAL }
+                    val trends = allWidgets.filter { 
+                        it.category == WidgetCategory.CHARTS && 
+                        it.complexity != WidgetComplexity.COMPLEX 
+                    }
+                    val metrics = allWidgets.filter { 
+                        it.category == WidgetCategory.METRICS && 
+                        it.priority == WidgetPriority.STANDARD 
+                    }
+                    
+                    (essential + trends + metrics)
+                        .distinctBy { it.id }
+                        .sortedBy { it.getLayoutPriority() }
+                        .take(7)
+                }
+                is DashboardConfiguration.Advanced -> {
+                    // 10 widgets: comprehensive analytics with balanced selection across categories
+                    val byCategory = allWidgets.groupBy { it.category }
+                    val selected = mutableListOf<AnalyticsWidget>()
+                    
+                    // Ensure essential widgets are included
+                    val essential = allWidgets.filter { it.priority == WidgetPriority.ESSENTIAL }
+                    selected.addAll(essential.take(3))
+                    
+                    // Add widgets from each category
+                    byCategory.forEach { (category, categoryWidgets) ->
+                        val remaining = 10 - selected.size
+                        if (remaining > 0) {
+                            val toAdd = categoryWidgets
+                                .filter { !selected.contains(it) }
+                                .sortedWith(compareBy({ it.complexity }, { it.getLayoutPriority() }))
+                                .take(minOf(remaining / byCategory.size + 1, 3))
+                            selected.addAll(toAdd)
+                        }
+                    }
+                    
+                    selected.take(10).sortedBy { it.getLayoutPriority() }
+                }
+                is DashboardConfiguration.Custom -> {
+                    // Custom configuration allows all widgets up to advanced level
+                    allWidgets.sortedBy { it.getLayoutPriority() }.take(10)
+                }
             }
         }
         
@@ -107,7 +167,7 @@ data class WidgetPreferences(
          */
         private fun createDefaultSizes(widgets: List<AnalyticsWidget>): Map<String, WidgetDisplaySize> {
             return widgets.associate { widget ->
-                widget.name to when (widget.getRecommendedSize()) {
+                widget.id to when (widget.getRecommendedSize()) {
                     com.example.liftrix.domain.model.analytics.WidgetSize.SMALL -> WidgetDisplaySize.COMPACT
                     com.example.liftrix.domain.model.analytics.WidgetSize.MEDIUM -> WidgetDisplaySize.STANDARD
                     com.example.liftrix.domain.model.analytics.WidgetSize.LARGE -> WidgetDisplaySize.EXPANDED
@@ -139,9 +199,9 @@ data class WidgetPreferences(
     fun repairConsistency(): WidgetPreferences {
         // Get available widget names for validation
         val availableWidgetNames = try {
-            com.example.liftrix.domain.model.analytics.AnalyticsWidget.values().map { it.name }.toSet()
+            AnalyticsWidget.getAllWidgets().map { it.id }.toSet()
         } catch (e: Exception) {
-            // Fallback if enum access fails
+            // Fallback if widget access fails
             emptySet<String>()
         }
         
@@ -232,8 +292,8 @@ data class WidgetPreferences(
         
         return copy(
             userLevel = newLevel,
-            visibleWidgets = getWidgetsFromConfiguration(newConfiguration).map { it.name }.toSet(),
-            widgetOrder = getWidgetsFromConfiguration(newConfiguration).map { it.name },
+            visibleWidgets = getWidgetsFromConfiguration(newConfiguration).map { it.id }.toSet(),
+            widgetOrder = getWidgetsFromConfiguration(newConfiguration).map { it.id },
             lastModified = Clock.System.now()
         )
     }
