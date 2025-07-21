@@ -7,6 +7,7 @@ import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutTemplatePreview
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.domain.usecase.auth.GetAuthenticatedUserIdUseCase
 import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.usecase.SaveWorkoutUseCase
 import com.example.liftrix.domain.usecase.analytics.LogWorkoutEventUseCase
@@ -35,6 +36,7 @@ class WorkoutViewModel @Inject constructor(
     private val workoutTemplateRepository: WorkoutTemplateRepository,
     private val folderRepository: FolderRepository,
     private val authRepository: AuthRepository,
+    private val getAuthenticatedUserIdUseCase: GetAuthenticatedUserIdUseCase,
     private val saveWorkoutUseCase: SaveWorkoutUseCase,
     private val syncManager: SyncManager,
     private val logWorkoutEventUseCase: LogWorkoutEventUseCase,
@@ -199,18 +201,21 @@ class WorkoutViewModel @Inject constructor(
 
     fun syncNow() {
         viewModelScope.launch {
-            val user = _currentUser.value
-            if (user != null) {
-                val result = workoutRepository.syncNowForUser(user.uid)
+            try {
+                _uiState.value = _uiState.value.copy(isWaitingForAuth = true)
+                val userId = getAuthenticatedUserIdUseCase()
+                _uiState.value = _uiState.value.copy(isWaitingForAuth = false)
+                val result = workoutRepository.syncNowForUser(userId)
                 
                 if (result.isFailure) {
                     _uiState.value = _uiState.value.copy(
                         errorMessage = "Failed to start sync: ${result.exceptionOrNull()?.message}"
                     )
                 }
-            } else {
+            } catch (exception: Exception) {
                 _uiState.value = _uiState.value.copy(
-                    errorMessage = "Cannot sync: user not authenticated"
+                    isWaitingForAuth = false,
+                    errorMessage = "Cannot sync: ${exception.message}"
                 )
             }
         }
@@ -218,11 +223,13 @@ class WorkoutViewModel @Inject constructor(
 
     fun getUnsyncedCount() {
         viewModelScope.launch {
-            val user = _currentUser.value
-            if (user != null) {
-                val countResult = workoutRepository.getUnsyncedCountForUser(user.uid)
+            try {
+                val userId = getAuthenticatedUserIdUseCase()
+                val countResult = workoutRepository.getUnsyncedCountForUser(userId)
                 val count = countResult.getOrElse { 0 }
                 _uiState.value = _uiState.value.copy(unsyncedCount = count)
+            } catch (exception: Exception) {
+                Timber.e(exception, "Failed to get unsynced count")
             }
         }
     }
@@ -288,7 +295,8 @@ data class WorkoutUiState(
     val unsyncedCount: Int = 0,
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val isWaitingForAuth: Boolean = false
 )
 
 /**

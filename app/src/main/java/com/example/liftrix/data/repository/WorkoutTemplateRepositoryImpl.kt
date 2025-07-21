@@ -10,6 +10,7 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import timber.log.Timber
 import java.time.Instant
@@ -23,6 +24,19 @@ class WorkoutTemplateRepositoryImpl @Inject constructor(
 ) : WorkoutTemplateRepository {
 
     override fun getAllTemplatesForUser(userId: String): Flow<LiftrixResult<List<WorkoutTemplate>>> {
+        // Validate user ID early to prevent queries with blank userId
+        if (userId.isBlank()) {
+            return flowOf(
+                LiftrixResult.failure(
+                    LiftrixError.ValidationError(
+                        field = "userId",
+                        violations = listOf("User ID cannot be blank when retrieving templates"),
+                        errorMessage = "User ID is required"
+                    )
+                )
+            )
+        }
+        
         return workoutTemplateDao.getAllTemplatesForUser(userId)
             .map { entities ->
                 try {
@@ -271,6 +285,17 @@ class WorkoutTemplateRepositoryImpl @Inject constructor(
     }
 
     override suspend fun createTemplate(template: WorkoutTemplate): LiftrixResult<WorkoutTemplate> {
+        // Validate user ID
+        if (template.userId.isBlank()) {
+            return LiftrixResult.failure(
+                LiftrixError.ValidationError(
+                    field = "userId",
+                    violations = listOf("User ID cannot be blank when creating workout template"),
+                    errorMessage = "User ID is required"
+                )
+            )
+        }
+        
         return liftrixCatching(
             errorMapper = { throwable ->
                 LiftrixError.DatabaseError(

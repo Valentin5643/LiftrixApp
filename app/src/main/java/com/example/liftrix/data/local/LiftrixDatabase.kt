@@ -8,6 +8,7 @@ import com.example.liftrix.data.local.converter.UserProfileConverters
 import com.example.liftrix.data.local.converter.WorkoutConverters
 import com.example.liftrix.data.local.converter.ExerciseConverters
 import com.example.liftrix.data.local.converter.SubscriptionConverters
+import com.example.liftrix.data.local.converter.WeightUnitConverter
 import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.local.dao.CustomExerciseDao
@@ -28,6 +29,7 @@ import com.example.liftrix.data.local.dao.GuestSessionDao
 import com.example.liftrix.data.local.dao.WorkoutAnomalyDao
 import com.example.liftrix.data.local.dao.AnomalyDetectionSettingsDao
 import com.example.liftrix.data.local.dao.ExerciseHistoryDao
+import com.example.liftrix.data.local.dao.WidgetPreferencesDao
 
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.data.local.entity.FolderEntity
@@ -49,6 +51,8 @@ import com.example.liftrix.data.local.entity.GuestSessionEntity
 import com.example.liftrix.data.local.entity.WorkoutAnomalyEntity
 import com.example.liftrix.data.local.entity.AnomalyDetectionSettingsEntity
 import com.example.liftrix.data.local.entity.ExerciseHistoryEntity
+import com.example.liftrix.data.local.entity.WidgetPreferenceEntity
+import com.example.liftrix.data.local.entity.DashboardConfigurationEntity
 
 
 
@@ -74,8 +78,10 @@ import com.example.liftrix.data.local.entity.ExerciseHistoryEntity
         WorkoutAnomalyEntity::class,
         AnomalyDetectionSettingsEntity::class,
         ExerciseHistoryEntity::class,
+        WidgetPreferenceEntity::class,
+        DashboardConfigurationEntity::class,
     ],
-    version = 30,
+    version = 34,
     exportSchema = true
 )
 @TypeConverters(
@@ -83,7 +89,8 @@ import com.example.liftrix.data.local.entity.ExerciseHistoryEntity
     WorkoutConverters::class,
     UserProfileConverters::class,
     ExerciseConverters::class,
-    SubscriptionConverters::class
+    SubscriptionConverters::class,
+    WeightUnitConverter::class
 )
 abstract class LiftrixDatabase : RoomDatabase() {
     
@@ -107,4 +114,5 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun workoutAnomalyDao(): WorkoutAnomalyDao
     abstract fun anomalyDetectionSettingsDao(): AnomalyDetectionSettingsDao
     abstract fun exerciseHistoryDao(): ExerciseHistoryDao
+    abstract fun widgetPreferencesDao(): WidgetPreferencesDao
 } 

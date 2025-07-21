@@ -391,7 +391,7 @@ data class UnifiedWorkoutSession(
         timber.log.Timber.d("🔥 WORKOUT-CONVERSION: Converted: ${completedExercises.size} exercises successfully")
 
         return Workout(
-            id = WorkoutId(id.value),
+            id = WorkoutId(id.value), // Keep session ID for workout tracking
             userId = userId,
             name = name,
             date = startedAt.atZone(ZoneId.systemDefault()).toLocalDate(),

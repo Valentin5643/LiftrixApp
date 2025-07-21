@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.liftrix.BuildConfig
+import java.io.File
 import com.example.liftrix.data.local.LiftrixDatabase
 import com.example.liftrix.data.local.dao.CustomExerciseDao
 import com.example.liftrix.data.local.dao.ExerciseLibraryDao
@@ -25,11 +27,16 @@ import com.example.liftrix.data.local.dao.GuestSessionDao
 import com.example.liftrix.data.local.dao.WorkoutAnomalyDao
 import com.example.liftrix.data.local.dao.AnomalyDetectionSettingsDao
 import com.example.liftrix.data.local.dao.ExerciseHistoryDao
+import com.example.liftrix.data.local.dao.WidgetPreferencesDao
 import com.example.liftrix.data.local.seed.ExerciseLibrarySeedData
 import com.example.liftrix.data.local.seed.MetDataSeedService
 import com.example.liftrix.data.local.migration.MIGRATION_27_28
 import com.example.liftrix.data.local.migration.MIGRATION_28_29
 import com.example.liftrix.data.local.migration.MIGRATION_29_30
+import com.example.liftrix.data.local.migration.MIGRATION_30_31
+import com.example.liftrix.data.local.migration.MIGRATION_31_32
+import com.example.liftrix.data.local.migration.MIGRATION_32_33
+import com.example.liftrix.data.local.migration.MIGRATION_33_34
 
 import dagger.Module
 import dagger.Provides
@@ -55,6 +62,12 @@ object DatabaseModule {
         exerciseLibrarySeedData: ExerciseLibrarySeedData,
         metDataSeedService: MetDataSeedService
     ): LiftrixDatabase {
+
+        // 🔥 DISABLED: Aggressive database clearing that was causing workout data loss
+        // This was wiping the entire database on every debug app launch
+        // if (BuildConfig.DEBUG) {
+        //     clearDatabaseIfCorrupted(context)
+        // }
 
         val database = Room.databaseBuilder(
             context.applicationContext,
@@ -95,8 +108,11 @@ object DatabaseModule {
                     }
                 }
             })
-            .addMigrations(MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30)
-            .fallbackToDestructiveMigration()
+            .addMigrations(MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34)
+            // TESTING MODE: Temporarily disabled destructive migration to preserve test data
+            // .fallbackToDestructiveMigration()
+            // .fallbackToDestructiveMigrationOnDowngrade()
+            .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING) // WAL mode for better data persistence
             .build()
             
         // Pre-warm the database to establish stable connection and complete any migrations
@@ -134,10 +150,36 @@ object DatabaseModule {
                 val anomalyExists = anomalyCursor.moveToFirst()
                 anomalyCursor.close()
                 
-                if (version == 30 && exerciseUsageHistoryExists && analyticsCacheExists && guestSessionExists && anomalyExists) {
+                // Check widget_preferences table for v31+
+                val widgetPreferencesCursor = database.openHelper.readableDatabase.query(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='widget_preferences'"
+                )
+                val widgetPreferencesExists = widgetPreferencesCursor.moveToFirst()
+                widgetPreferencesCursor.close()
+                
+                if (widgetPreferencesExists) {
+                    // Verify widget_preferences table schema
+                    val schemaQuery = database.openHelper.readableDatabase.query("PRAGMA table_info(widget_preferences)")
+                    val primaryKeyColumns = mutableListOf<String>()
+                    while (schemaQuery.moveToNext()) {
+                        val isPrimaryKey = schemaQuery.getInt(5) > 0 // pk column
+                        if (isPrimaryKey) {
+                            primaryKeyColumns.add(schemaQuery.getString(1)) // name column
+                        }
+                    }
+                    schemaQuery.close()
+                    Timber.i("🔍 widget_preferences primary key columns: $primaryKeyColumns")
+                    
+                    val hasCorrectPrimaryKey = primaryKeyColumns.containsAll(listOf("user_id", "widget_type"))
+                    if (!hasCorrectPrimaryKey) {
+                        Timber.w("⚠️ widget_preferences table has incorrect primary key: $primaryKeyColumns, expected: [user_id, widget_type]")
+                    }
+                }
+                
+                if (version >= 34 && exerciseUsageHistoryExists && analyticsCacheExists && guestSessionExists && anomalyExists && widgetPreferencesExists) {
                     Timber.i("✅ Database ready - all migrations complete, all tables confirmed")
                 } else {
-                    Timber.w("⚠️ Database initialization issue - version: $version, tables exist: exercise_usage_history=$exerciseUsageHistoryExists, analytics_cache=$analyticsCacheExists, guest_sessions=$guestSessionExists, workout_anomalies=$anomalyExists")
+                    Timber.w("⚠️ Database initialization issue - version: $version, tables exist: exercise_usage_history=$exerciseUsageHistoryExists, analytics_cache=$analyticsCacheExists, guest_sessions=$guestSessionExists, workout_anomalies=$anomalyExists, widget_preferences=$widgetPreferencesExists")
                 }
                 
                 // Populate exercise library if needed
@@ -254,6 +296,64 @@ object DatabaseModule {
     @Provides
     fun provideExerciseHistoryDao(database: LiftrixDatabase): ExerciseHistoryDao {
         return database.exerciseHistoryDao()
+    }
+
+    @Provides
+    fun provideWidgetPreferencesDao(database: LiftrixDatabase): WidgetPreferencesDao {
+        return database.widgetPreferencesDao()
+    }
+
+    /**
+     * Clears corrupted database files for testing environments.
+     * This helps recover from migration issues during development.
+     */
+    private fun clearDatabaseIfCorrupted(context: Context) {
+        try {
+            Timber.w("🧹 AGGRESSIVE database clearing for testing - removing all database files")
+            
+            val databasePath = context.getDatabasePath("liftrix_database")
+            val shmFile = File(databasePath.absolutePath + "-shm")
+            val walFile = File(databasePath.absolutePath + "-wal")
+            val journalFile = File(databasePath.absolutePath + "-journal")
+            
+            // Also clear database directory entirely for thorough cleanup
+            val databaseDir = databasePath.parentFile
+            
+            // Delete all database-related files
+            listOf(databasePath, shmFile, walFile, journalFile).forEach { file ->
+                if (file.exists()) {
+                    val deleted = file.delete()
+                    Timber.d("Deleted ${file.name}: $deleted")
+                }
+            }
+            
+            // Clear any other database files in the directory
+            databaseDir?.listFiles { file ->
+                file.name.startsWith("liftrix_database")
+            }?.forEach { file ->
+                val deleted = file.delete()
+                Timber.d("Deleted additional db file ${file.name}: $deleted")
+            }
+            
+            // Force clear app's internal database cache
+            try {
+                val dbDir = File(context.applicationInfo.dataDir, "databases")
+                if (dbDir.exists()) {
+                    dbDir.listFiles { file ->
+                        file.name.contains("liftrix")
+                    }?.forEach { file ->
+                        val deleted = file.delete()
+                        Timber.d("Deleted cached db file ${file.name}: $deleted")
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to clear database cache directory")
+            }
+            
+            Timber.i("✅ AGGRESSIVE database clearing completed - fresh start guaranteed")
+        } catch (e: Exception) {
+            Timber.e(e, "❌ Failed to clear database files")
+        }
     }
 
 }

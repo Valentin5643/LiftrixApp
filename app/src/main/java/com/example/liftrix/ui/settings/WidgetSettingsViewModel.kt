@@ -10,6 +10,7 @@ import com.example.liftrix.domain.usecase.analytics.GetWidgetPreferencesUseCase
 import com.example.liftrix.domain.usecase.analytics.ResetWidgetPreferencesUseCase
 import com.example.liftrix.domain.usecase.analytics.SaveWidgetPreferencesUseCase
 import com.example.liftrix.domain.usecase.analytics.UpdateWidgetVisibilityUseCase
+import com.example.liftrix.domain.usecase.auth.GetAuthenticatedUserIdUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.state.UiState
@@ -50,19 +51,37 @@ class WidgetSettingsViewModel @Inject constructor(
     private val updateWidgetVisibilityUseCase: UpdateWidgetVisibilityUseCase,
     private val resetWidgetPreferencesUseCase: ResetWidgetPreferencesUseCase,
     private val fixWidgetPreferenceMigrationUseCase: FixWidgetPreferenceMigrationUseCase,
+    private val getAuthenticatedUserIdUseCase: GetAuthenticatedUserIdUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<WidgetSettingsUiState, WidgetSettingsEvent>(errorHandler) {
 
     override val _uiState = MutableStateFlow<WidgetSettingsUiState>(UiState.Loading)
 
-    // Current user ID - would typically come from auth state
-    private val currentUserId = MutableStateFlow("current_user") // TODO: Get from auth repository
+    // Current user ID - loaded from authentication
+    private val currentUserId = MutableStateFlow<String?>(null)
 
     /**
      * Initialize widget preferences loading when ViewModel is created
      */
     init {
+        loadAuthenticatedUser()
         loadWidgetPreferences()
+    }
+    
+    /**
+     * Loads the current authenticated user ID
+     */
+    private fun loadAuthenticatedUser() {
+        viewModelScope.launch {
+            try {
+                val userId = getAuthenticatedUserIdUseCase()
+                currentUserId.value = userId
+                Timber.d("🔐 AUTH: Loaded authenticated user ID: $userId")
+            } catch (e: Exception) {
+                Timber.e(e, "🔐 AUTH: Failed to load authenticated user ID")
+                updateState { UiState.Error(LiftrixError.AuthenticationError("Failed to authenticate user")) }
+            }
+        }
     }
 
     /**
@@ -107,12 +126,17 @@ class WidgetSettingsViewModel @Inject constructor(
      */
     private fun loadWidgetPreferences() {
         viewModelScope.launch {
+            // Wait for user ID to be loaded first
+            val userId = currentUserId.filterNotNull().first()
+            Timber.d("🔧 SETTINGS: Loading preferences for user: $userId")
+            
             setState(UiState.Loading)
             
-            getWidgetPreferencesUseCase(currentUserId.value)
+            getWidgetPreferencesUseCase(userId)
                 .collect { result ->
                     result.fold(
                         onSuccess = { preferences ->
+                            Timber.d("🔧 SETTINGS: Successfully loaded preferences with layout: ${preferences.dashboardLayout}")
                             setState(
                                 UiState.Success(
                                     data = WidgetSettingsData(
@@ -188,13 +212,17 @@ class WidgetSettingsViewModel @Inject constructor(
      * Updates dashboard layout mode
      */
     private fun updateLayoutMode(layoutMode: DashboardLayoutMode) {
+        Timber.d("🎛️ SETTINGS: updateLayoutMode called with $layoutMode")
         updateState { currentState ->
             val data = currentState.dataOrNull()
+            Timber.d("🎛️ SETTINGS: currentState data = $data")
             if (data != null) {
                 val updatedPreferences = data.preferences.copy(
                     dashboardLayout = layoutMode,
                     lastModified = kotlinx.datetime.Clock.System.now()
                 )
+                Timber.d("🎛️ SETTINGS: updatedPreferences.dashboardLayout = ${updatedPreferences.dashboardLayout}")
+                Timber.d("🎛️ SETTINGS: Setting hasUnsavedChanges = true")
                 UiState.Success(
                     data = data.copy(
                         preferences = updatedPreferences,
@@ -202,6 +230,7 @@ class WidgetSettingsViewModel @Inject constructor(
                     )
                 )
             } else {
+                Timber.e("🎛️ SETTINGS: No data available, cannot update layout mode")
                 currentState
             }
         }
@@ -293,7 +322,8 @@ class WidgetSettingsViewModel @Inject constructor(
 
         executeUseCase(
             useCase = { 
-                fixWidgetPreferenceMigrationUseCase(currentUserId.value)
+                val userId = currentUserId.value ?: return@executeUseCase Result.failure(IllegalStateException("User not authenticated"))
+                fixWidgetPreferenceMigrationUseCase(userId)
             },
             onSuccess = { _ ->
                 // Migration was successful, reload the preferences to show updated state
@@ -336,8 +366,9 @@ class WidgetSettingsViewModel @Inject constructor(
 
         executeUseCase(
             useCase = { 
+                val userId = currentUserId.value ?: return@executeUseCase Result.failure(IllegalStateException("User not authenticated"))
                 resetWidgetPreferencesUseCase(
-                    userId = currentUserId.value,
+                    userId = userId,
                     userLevel = uiState.value.dataOrNull()?.preferences?.userLevel ?: UserLevel.BEGINNER
                 )
             },
@@ -385,6 +416,9 @@ class WidgetSettingsViewModel @Inject constructor(
             }
         }
 
+        Timber.d("💾 SETTINGS: About to save preferences: ${currentData.preferences}")
+        Timber.d("💾 SETTINGS: Dashboard layout being saved: ${currentData.preferences.dashboardLayout}")
+        
         executeUseCase(
             useCase = { saveWidgetPreferencesUseCase(currentData.preferences) },
             onSuccess = {

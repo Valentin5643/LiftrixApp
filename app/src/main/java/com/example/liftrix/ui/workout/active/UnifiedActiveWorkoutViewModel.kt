@@ -142,12 +142,12 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                 val currentState = _uiState.value
                 if (currentState is UnifiedActiveWorkoutUiState.Success) {
                     _uiState.value = currentState.copy(isCompleting = true)
-                    Timber.d("🔥 COMPLETE-WORKOUT: Starting completion process...")
+                    Timber.d("Starting completion process...")
                 }
                 
                 val success = sessionManager.completeSession()
                 if (success) {
-                    Timber.i("🔥 COMPLETE-WORKOUT: Workout completion initiated")
+                    Timber.i("Workout completion initiated")
                     
                     // Show completion state briefly
                     _uiState.value = UnifiedActiveWorkoutUiState.WorkoutCompleted
@@ -498,12 +498,12 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
     private fun createBlankSession() {
         viewModelScope.launch {
             try {
-                timber.log.Timber.d("🔥 CREATE-SESSION-DEBUG: Creating blank workout session")
+                timber.log.Timber.d("Creating blank workout session")
                 
                 // Get current user ID
                 val userId = authRepository.getCurrentUserId()
                 if (userId == null) {
-                    timber.log.Timber.e("🔥 CREATE-SESSION-DEBUG: No authenticated user - cannot create session")
+                    timber.log.Timber.e("No authenticated user - cannot create session")
                     _uiState.value = UnifiedActiveWorkoutUiState.Error("Please sign in to start a workout")
                     return@launch
                 }

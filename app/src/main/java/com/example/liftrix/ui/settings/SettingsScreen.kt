@@ -313,6 +313,12 @@ private fun GeneralSettings(
             stableOnEvent(SettingsEvent.UpdateNotifications(enabled))
         }}
         
+        val onWeightUnitToggle = remember(stableOnEvent) { { useMetric: Boolean ->
+            val newUnit = if (useMetric) WeightUnit.KILOGRAMS else WeightUnit.POUNDS
+            stableOnEvent(SettingsEvent.UpdateWeightUnit(newUnit))
+        }}
+        
+        
         SettingsToggleItem(
             title = "Dark Mode",
             subtitle = "Use dark theme throughout the app",
@@ -328,6 +334,15 @@ private fun GeneralSettings(
             onToggle = onNotificationsToggle,
             enabled = !uiState.isUpdatingSettings
         )
+        
+        SettingsToggleItem(
+            title = "Metric System (kg)",
+            subtitle = "Use kilograms instead of pounds for weight display",
+            isChecked = uiState.currentWeightUnit == WeightUnit.KILOGRAMS,
+            onToggle = onWeightUnitToggle,
+            enabled = !uiState.isUpdatingSettings
+        )
+        
         
         SettingsNavigationItem(
             title = "Anomaly Detection",

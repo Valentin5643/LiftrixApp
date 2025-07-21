@@ -676,6 +676,17 @@ class SocialRepositoryImpl @Inject constructor(
             Timber.d("Found ${recommendations.size} mutual friends recommendations")
             recommendations
             
+        } catch (e: com.google.firebase.firestore.FirebaseFirestoreException) {
+            when (e.code) {
+                com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED -> {
+                    Timber.w("Permission denied for mutual friends recommendations - social features may be disabled")
+                    emptyList()
+                }
+                else -> {
+                    Timber.e(e, "Failed to get mutual friends recommendations")
+                    emptyList()
+                }
+            }
         } catch (e: Exception) {
             Timber.e(e, "Failed to get mutual friends recommendations")
             emptyList()
@@ -741,6 +752,17 @@ class SocialRepositoryImpl @Inject constructor(
             Timber.d("Found ${finalRecommendations.size} general recommendations")
             finalRecommendations
             
+        } catch (e: com.google.firebase.firestore.FirebaseFirestoreException) {
+            when (e.code) {
+                com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED -> {
+                    Timber.w("Permission denied for user recommendations - social features may be disabled")
+                    emptyList()
+                }
+                else -> {
+                    Timber.e(e, "Failed to get general recommendations")
+                    emptyList()
+                }
+            }
         } catch (e: Exception) {
             Timber.e(e, "Failed to get general recommendations")
             emptyList()

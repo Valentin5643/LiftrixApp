@@ -14,13 +14,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.Timeline
@@ -37,6 +40,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -71,18 +75,45 @@ import com.example.liftrix.ui.progress.components.VolumeCalendarWidget
 import com.example.liftrix.ui.progress.components.WorkoutDurationChart
 import com.example.liftrix.ui.progress.components.WorkoutFrequencyHeatmap
 import com.example.liftrix.ui.progress.components.WorkoutVolumeChart
+import com.example.liftrix.domain.model.WeightUnit
+import com.example.liftrix.core.formatting.WeightFormatter
 import com.example.liftrix.ui.progress.components.WidgetContainer
 import com.example.liftrix.ui.progress.components.WidgetLayoutMode
+import com.example.liftrix.ui.progress.components.ResponsiveDashboardLayout
+import com.example.liftrix.ui.progress.components.DashboardLayoutMode
+import com.example.liftrix.ui.common.rememberWindowSizeClass
 import com.example.liftrix.ui.progress.components.CaloriesBurnedCard
 import com.example.liftrix.ui.progress.components.DailyCaloriesCard
 import com.example.liftrix.ui.progress.components.WeeklyCalorieTrendCard
+import com.example.liftrix.ui.export.ExportBottomSheet
+import com.example.liftrix.ui.export.ExportConfiguration
+import com.example.liftrix.service.export.ExportProgress
 import com.example.liftrix.domain.model.analytics.WidgetData
 import com.example.liftrix.domain.model.analytics.BasicWidgetData
+import com.example.liftrix.domain.model.analytics.MetricWidgetData
 import com.example.liftrix.domain.model.analytics.TrendDirection
 import com.example.liftrix.domain.model.analytics.CalorieSummary
+import com.example.liftrix.domain.model.analytics.UserLevel
+import com.example.liftrix.domain.model.analytics.WidgetPriority
 import com.example.liftrix.domain.usecase.analytics.CalorieAnalyticsUseCase
 import com.example.liftrix.ui.common.validation.ViewModelValidator
+import com.example.liftrix.core.extensions.collectAsOptimizedState
 import timber.log.Timber
+
+/**
+ * Maps domain DashboardLayoutMode to UI DashboardLayoutMode
+ */
+private fun mapDomainLayoutModeToUI(
+    domainMode: com.example.liftrix.domain.model.analytics.DashboardLayoutMode?
+): DashboardLayoutMode? {
+    return when (domainMode) {
+        com.example.liftrix.domain.model.analytics.DashboardLayoutMode.GRID -> DashboardLayoutMode.GRID
+        com.example.liftrix.domain.model.analytics.DashboardLayoutMode.SECTIONS -> DashboardLayoutMode.SECTIONS
+        com.example.liftrix.domain.model.analytics.DashboardLayoutMode.LIST -> DashboardLayoutMode.LIST
+        com.example.liftrix.domain.model.analytics.DashboardLayoutMode.CUSTOM -> DashboardLayoutMode.CUSTOM
+        null -> null
+    }
+}
 
 /**
  * Modern progress dashboard screen with data dashboard styling.
@@ -133,14 +164,15 @@ fun ProgressDashboardScreen(
         validationResult.logResult()
     }
 
-    // Proper StateFlow collection with lifecycle awareness and timeout handling
-    val chartsState by chartsViewModel.uiState.collectAsStateWithLifecycle()
-    val widgetState by widgetViewModel.uiState.collectAsStateWithLifecycle()
-    val preferencesState by preferencesViewModel.uiState.collectAsStateWithLifecycle()
-    val summaryState by summaryViewModel.uiState.collectAsStateWithLifecycle()
-    val calorieState by calorieViewModel.uiState.collectAsStateWithLifecycle()
-    val featuresState by featuresViewModel.uiState.collectAsStateWithLifecycle()
-    val coordinatorState by coordinator.uiState.collectAsStateWithLifecycle()
+    // Optimized StateFlow collection with performance monitoring
+    val chartsState by chartsViewModel.uiState.collectAsOptimizedState()
+    val widgetState by widgetViewModel.uiState.collectAsOptimizedState() 
+    val preferencesState by preferencesViewModel.uiState.collectAsOptimizedState()
+    val summaryState by summaryViewModel.uiState.collectAsOptimizedState()
+    val calorieState by calorieViewModel.uiState.collectAsOptimizedState()
+    val featuresState by featuresViewModel.uiState.collectAsOptimizedState()
+    val coordinatorState by coordinator.uiState.collectAsOptimizedState()
+    
     
     // Add timeout handling for stuck loading states
     LaunchedEffect(Unit) {
@@ -182,13 +214,13 @@ fun ProgressDashboardScreen(
             onFeaturesEvent = featuresViewModel::handleEvent,
             onCoordinatorEvent = coordinator::handleEvent,
             // Pass raw UiState for debugging
-            rawChartsState = chartsState,
-            rawWidgetState = widgetState,
-            rawPreferencesState = preferencesState,
-            rawSummaryState = summaryState,
-            rawCalorieState = calorieState,
-            rawFeaturesState = featuresState,
-            rawCoordinatorState = coordinatorState
+            rawChartsState = chartsState ?: UiState.Loading,
+            rawWidgetState = widgetState ?: UiState.Loading,
+            rawPreferencesState = preferencesState ?: UiState.Loading,
+            rawSummaryState = summaryState ?: UiState.Loading,
+            rawCalorieState = calorieState ?: UiState.Loading,
+            rawFeaturesState = featuresState ?: UiState.Loading,
+            rawCoordinatorState = coordinatorState ?: UiState.Loading
         )
     }
 }
@@ -221,6 +253,13 @@ private fun ProgressDashboardContent(
     rawFeaturesState: UiState<FeatureConfigurationState>,
     rawCoordinatorState: UiState<CoordinatorState>
 ) {
+    // Extract weight unit from coordinator preferences with fallback to system default
+    val weightUnit = remember(coordinatorState.coordinatorPreferences) {
+        coordinatorState.coordinatorPreferences["weightUnit"] as? WeightUnit 
+            ?: WeightUnit.getSystemDefault()
+    }
+    val weightFormatter = remember { WeightFormatter() }
+    
     // Debug panel state
     var showDebugPanel by remember { mutableStateOf(false) }
     LazyColumn(
@@ -263,11 +302,43 @@ private fun ProgressDashboardContent(
                         )
                     }
                     
-                    // Feature flag controlled export dropdown
+                    // Feature flag controlled export button
                     if (featuresState.exportEnabled) {
-                        ExportDropdown(
-                            onExportPdf = { onCoordinatorEvent(CoordinatorEvent.ExportToPdf) },
-                            onExportCsv = { onCoordinatorEvent(CoordinatorEvent.ExportToCsv) }
+                        var showExportBottomSheet by remember { mutableStateOf(false) }
+                        
+                        IconButton(
+                            onClick = { showExportBottomSheet = true }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FileDownload,
+                                contentDescription = "Export data",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        
+                        // Export Bottom Sheet
+                        ExportBottomSheet(
+                            isVisible = showExportBottomSheet,
+                            onDismiss = { showExportBottomSheet = false },
+                            onStartExport = { configuration ->
+                                // Handle export configuration
+                                when (configuration.type) {
+                                    com.example.liftrix.ui.export.ExportType.ANALYTICS -> {
+                                        if (configuration.analyticsFormat == com.example.liftrix.service.export.ExportFormat.PDF) {
+                                            onCoordinatorEvent(CoordinatorEvent.ExportToPdf)
+                                        } else {
+                                            onCoordinatorEvent(CoordinatorEvent.ExportToCsv)
+                                        }
+                                    }
+                                    com.example.liftrix.ui.export.ExportType.RAW_DATA -> {
+                                        // Handle raw data export through coordinator
+                                        onCoordinatorEvent(CoordinatorEvent.ExportRawData(configuration))
+                                    }
+                                }
+                                showExportBottomSheet = false
+                            },
+                            exportProgress = coordinatorState.exportProgress,
+                            onCancelExport = { onCoordinatorEvent(CoordinatorEvent.CancelExport) }
                         )
                     }
                 }
@@ -322,23 +393,17 @@ private fun ProgressDashboardContent(
             SummarySection(
                 summaryState = summaryState,
                 onEvent = onSummaryEvent,
+                weightUnit = weightUnit,
+                weightFormatter = weightFormatter,
                 modifier = Modifier.fillMaxWidth()
             )
         }
 
-        // Unified Calorie Analytics Section
-        item {
-            CalorieSection(
-                calorieState = calorieState,
-                onEvent = onCalorieEvent,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
 
-        // Widget-based analytics dashboard
+        // Widget-based analytics dashboard with responsive layout
         if (featuresState.analyticsEnabled) {
             item {
-                WidgetsSection(
+                ResponsiveWidgetsSection(
                     widgetState = widgetState,
                     onEvent = onWidgetEvent,
                     modifier = Modifier.fillMaxWidth()
@@ -351,6 +416,8 @@ private fun ProgressDashboardContent(
             ChartsSection(
                 chartsState = chartsState,
                 onEvent = onChartsEvent,
+                weightUnit = weightUnit,
+                weightFormatter = weightFormatter,
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -639,75 +706,6 @@ private fun ErrorStateContent(
 
 // EmptyStateContent removed - charts now always show with zero values
 
-/**
- * Export dropdown menu for PDF and CSV export options
- */
-@Composable
-private fun ExportDropdown(
-    onExportPdf: () -> Unit,
-    onExportCsv: () -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    
-    Box {
-        IconButton(
-            onClick = { expanded = true }
-        ) {
-            Icon(
-                imageVector = Icons.Default.FileDownload,
-                contentDescription = "Export data",
-                tint = MaterialTheme.colorScheme.primary
-            )
-        }
-        
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            DropdownMenuItem(
-                text = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PictureAsPdf,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Export as PDF")
-                    }
-                },
-                onClick = {
-                    expanded = false
-                    onExportPdf()
-                }
-            )
-            
-            DropdownMenuItem(
-                text = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.TableChart,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Export as CSV")
-                    }
-                },
-                onClick = {
-                    expanded = false
-                    onExportCsv()
-                }
-            )
-        }
-    }
-}
 
 /**
  * Charts section composable
@@ -716,6 +714,8 @@ private fun ExportDropdown(
 private fun ChartsSection(
     chartsState: ProgressChartsState,
     onEvent: (ProgressChartsEvent) -> Unit,
+    weightUnit: WeightUnit,
+    weightFormatter: WeightFormatter,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -726,6 +726,8 @@ private fun ChartsSection(
         WorkoutVolumeChart(
             data = (chartsState.volumeChart as? AsyncData.Success)?.data ?: emptyList(),
             isLoading = chartsState.volumeChart is AsyncData.Loading,
+            weightUnit = weightUnit,
+            weightFormatter = weightFormatter,
             modifier = Modifier.fillMaxWidth()
         )
         
@@ -777,19 +779,165 @@ private fun WidgetsSection(
 }
 
 /**
+ * Responsive widgets section with adaptive layout
+ */
+@Composable
+private fun ResponsiveWidgetsSection(
+    widgetState: AnalyticsWidgetState,
+    onEvent: (AnalyticsWidgetEvent) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val windowSizeClass = rememberWindowSizeClass()
+    
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Widget customization button (only for Intermediate/Advanced users)
+        val userLevel = widgetState.preferences?.userLevel ?: UserLevel.BEGINNER
+        if (userLevel != UserLevel.BEGINNER) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val configurableCount = widgetState.activeWidgets.count { 
+                        it.priority != WidgetPriority.FIXED_BEGINNER 
+                    }
+                    Text(
+                        text = "$configurableCount configurable widgets",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    IconButton(
+                        onClick = { onEvent(AnalyticsWidgetEvent.NavigateToDashboardCustomization) }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Customize dashboard",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+        }
+        
+        // Debug widget visibility conditions
+        Timber.d("=== UI DEBUG: activeWidgets.size = ${widgetState.activeWidgets.size}")
+        Timber.d("=== UI DEBUG: configuration = ${widgetState.configuration?.javaClass?.simpleName ?: "null"}")
+        Timber.d("=== UI DEBUG: activeWidgets = ${widgetState.activeWidgets.map { it.displayName }}")
+        
+        // Only show widgets if we have configuration and widgets available
+        if (widgetState.activeWidgets.isNotEmpty() && widgetState.configuration != null) {
+            ResponsiveDashboardLayout(
+                widgets = widgetState.activeWidgets,
+                configuration = widgetState.configuration,
+                layoutMode = run {
+                    val userPreference = mapDomainLayoutModeToUI(widgetState.preferences?.dashboardLayout)
+                    Timber.d("🔍 DEBUG LAYOUT: preferences=${widgetState.preferences}")
+                    Timber.d("🔍 DEBUG LAYOUT: dashboardLayout=${widgetState.preferences?.dashboardLayout}")
+                    Timber.d("🔍 DEBUG LAYOUT: userPreference=$userPreference")
+                    Timber.d("🔍 DEBUG LAYOUT: screenWidth=${windowSizeClass.widthDp.value.toInt()}")
+                    Timber.d("🔍 DEBUG LAYOUT: widgetCount=${widgetState.activeWidgets.size}")
+                    
+                    val result = DashboardLayoutMode.getOptimalMode(
+                        screenWidthDp = windowSizeClass.widthDp.value.toInt(),
+                        widgetCount = widgetState.activeWidgets.size,
+                        userPreference = userPreference
+                    )
+                    
+                    Timber.d("🔍 DEBUG LAYOUT: FINAL RESULT=$result")
+                    result
+                },
+                onWidgetClick = { widget ->
+                    onEvent(AnalyticsWidgetEvent.WidgetClicked(widget))
+                },
+                onWidgetReorder = { from, to ->
+                    onEvent(AnalyticsWidgetEvent.WidgetReordered(from, to))
+                },
+                widgetDataProvider = { widget ->
+                    widgetState.widgetDataMap[widget] ?: createDefaultWidgetData(widget)
+                },
+                isLoading = widgetState.isLoading,
+                enableDragAndDrop = mapDomainLayoutModeToUI(widgetState.preferences?.dashboardLayout) == DashboardLayoutMode.CUSTOM || windowSizeClass.supportsDragAndDrop,
+                windowSizeClass = windowSizeClass
+            )
+        } else {
+            // Empty state with customization prompt
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Dashboard,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    Text(
+                        text = "No Active Widgets",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    
+                    Text(
+                        text = "Customize your dashboard to add analytics widgets",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    
+                    Button(
+                        onClick = { onEvent(AnalyticsWidgetEvent.NavigateToDashboardCustomization) },
+                        modifier = Modifier.padding(top = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Customize Dashboard")
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
  * Summary section composable
  */
 @Composable
 private fun SummarySection(
     summaryState: ProgressSummaryState,
     onEvent: (ProgressSummaryEvent) -> Unit,
+    weightUnit: WeightUnit,
+    weightFormatter: WeightFormatter,
     modifier: Modifier = Modifier
 ) {
     when (val summary = summaryState.summaryData) {
         is AsyncData.Success -> {
             ProgressSummaryCards(
                 summaryData = summary.data,
-                isLoading = summaryState.isRefreshing
+                isLoading = summaryState.isRefreshing,
+                weightUnit = weightUnit,
+                weightFormatter = weightFormatter
             )
         }
         is AsyncData.Loading -> {
@@ -912,11 +1060,12 @@ private fun CalorieSection(
  * Helper function to create default widget data
  */
 private fun createDefaultWidgetData(widget: com.example.liftrix.domain.model.analytics.AnalyticsWidget): WidgetData {
-    return BasicWidgetData(
+    return MetricWidgetData(
         widgetType = widget,
         lastUpdated = kotlinx.datetime.Clock.System.now(),
-        value = "0",
-        subtitle = "Start working out to see data",
+        primaryValue = "0",
+        secondaryValue = "Start working out to see data",
+        unit = "",
         trend = com.example.liftrix.domain.model.analytics.TrendDirection.STABLE
     )
 }
@@ -1224,9 +1373,69 @@ private fun DebugPanel(
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            // Summary ViewModel Debug (MAIN ISSUE)
+            // Volume Chart Debug Section (PRIMARY ISSUE)
             DebugSection(
-                title = "🚨 SUMMARY ERROR DEBUG",
+                title = "🔥 VOLUME CHART DEBUG (PRIMARY ISSUE)",
+                content = {
+                    DebugStateRow("Charts State", rawChartsState)
+                    
+                    if (rawChartsState is UiState.Success) {
+                        val chartsState = rawChartsState.data
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        // Volume chart specific debugging
+                        when (val volumeChart = chartsState.volumeChart) {
+                            is AsyncData.Success -> {
+                                val volumeData = volumeChart.data
+                                DebugInfoRow("📊 Volume Data Points", volumeData.size.toString())
+                                
+                                if (volumeData.isNotEmpty()) {
+                                    val totalVolume = volumeData.sumOf { it.totalVolume.toDouble() }.toFloat()
+                                    val maxVolume = volumeData.maxOfOrNull { it.totalVolume } ?: 0f
+                                    val nonZeroPoints = volumeData.count { it.totalVolume > 0f }
+                                    
+                                    DebugInfoRow("📈 Total Volume", "${totalVolume}kg", isError = totalVolume == 0f)
+                                    DebugInfoRow("📈 Max Volume", "${maxVolume}kg", isError = maxVolume == 0f)
+                                    DebugInfoRow("📈 Non-Zero Points", "$nonZeroPoints/${volumeData.size}", 
+                                        isError = nonZeroPoints == 0)
+                                    DebugInfoRow("📈 Exercise Count", volumeData.sumOf { it.exerciseCount }.toString())
+                                    
+                                    // Show recent data points
+                                    volumeData.takeLast(3).forEachIndexed { index, point ->
+                                        DebugInfoRow("Recent ${index + 1}", "${point.date}: ${point.totalVolume}kg", 
+                                            isError = point.totalVolume == 0f)
+                                    }
+                                } else {
+                                    DebugInfoRow("Volume Data", "EMPTY DATASET", isError = true)
+                                }
+                            }
+                            is AsyncData.Loading -> {
+                                DebugInfoRow("Volume Chart", "Loading...", isError = false)
+                            }
+                            is AsyncData.Failure -> {
+                                DebugInfoRow("Volume Chart", "Failed: ${volumeChart.error.message}", isError = true)
+                            }
+                            is AsyncData.NotAsked -> {
+                                DebugInfoRow("Volume Chart", "Not Asked", isError = true)
+                            }
+                        }
+                        
+                        DebugInfoRow("User ID", chartsState.userId ?: "null")
+                        DebugInfoRow("Time Range", chartsState.currentTimeRange.toString())
+                    }
+                    
+                    if (rawChartsState is UiState.Error) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        DebugInfoRow("Charts Error", rawChartsState.error.message, isError = true)
+                    }
+                }
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Summary ViewModel Debug (Secondary Issue)
+            DebugSection(
+                title = "📊 SUMMARY DEBUG",
                 content = {
                     DebugStateRow("Summary State", rawSummaryState)
                     
@@ -1291,7 +1500,7 @@ private fun DebugPanel(
                         DebugInfoRow("Has Preferences", (widgetState.preferences != null).toString())
                         
                         if (widgetState.activeWidgets.isNotEmpty()) {
-                            DebugInfoRow("Active Widget Names", widgetState.activeWidgets.map { it.name }.joinToString(", "))
+                            DebugInfoRow("Active Widget Names", widgetState.activeWidgets.map { it.displayName }.joinToString(", "))
                         } else {
                             DebugInfoRow("Active Widgets", "EMPTY - No widgets to display!", isError = true)
                         }

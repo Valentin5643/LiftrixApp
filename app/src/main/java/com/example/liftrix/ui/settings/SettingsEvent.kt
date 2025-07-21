@@ -1,5 +1,7 @@
 package com.example.liftrix.ui.settings
 
+import com.example.liftrix.domain.model.WeightUnit
+
 /**
  * Sealed class representing all possible events that can occur in the settings screen.
  * 
@@ -39,6 +41,13 @@ sealed class SettingsEvent {
      * @property enabled New notification state
      */
     data class UpdateNotifications(val enabled: Boolean) : SettingsEvent()
+    
+    /**
+     * Triggered when user changes weight unit preference.
+     * 
+     * @property weightUnit New weight unit preference
+     */
+    data class UpdateWeightUnit(val weightUnit: WeightUnit) : SettingsEvent()
     
     // Navigation events
     /**

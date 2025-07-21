@@ -145,6 +145,13 @@ fun NavController.navigateToOnboarding() {
 }
 
 /**
+ * Navigate to dashboard customization screen
+ */
+fun NavController.navigateToDashboardCustomization() {
+    navigate(LiftrixRoute.DashboardCustomization)
+}
+
+/**
  * Navigate to anomaly detection dashboard
  */
 fun NavController.navigateToAnomalyDashboard() {
@@ -371,6 +378,7 @@ fun NavController.getCurrentLiftrixRoute(): LiftrixRoute? {
         isCurrentRoute(LiftrixRoute.TemplateCreation::class) -> LiftrixRoute.TemplateCreation
         isCurrentRoute(LiftrixRoute.Settings::class) -> LiftrixRoute.Settings
         isCurrentRoute(LiftrixRoute.Onboarding::class) -> LiftrixRoute.Onboarding
+        isCurrentRoute(LiftrixRoute.DashboardCustomization::class) -> LiftrixRoute.DashboardCustomization
         isCurrentRoute(LiftrixRoute.AnomalyDashboard::class) -> LiftrixRoute.AnomalyDashboard
         isCurrentRoute(LiftrixRoute.AnomalySettings::class) -> LiftrixRoute.AnomalySettings
         isCurrentRoute(LiftrixRoute.GuestModeSelection::class) -> LiftrixRoute.GuestModeSelection

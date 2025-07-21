@@ -366,9 +366,12 @@ class ProgressChartsViewModel @Inject constructor(
         
         result.fold(
             onSuccess = { data ->
+                val totalVolume = data.sumOf { it.totalVolume.toDouble() }.toFloat()
+                timber.log.Timber.d("VolumeDebug ViewModel received ${data.size} points, ${totalVolume}kg total")
                 updateChartStates(volumeChart = AsyncData.Success(data))
             },
             onFailure = { error ->
+                timber.log.Timber.e("VolumeDebug ViewModel failed: ${error.message}")
                 val liftrixError = if (error is LiftrixError) error else LiftrixError.UnknownError(error.message ?: "Unknown error")
                 updateChartStates(volumeChart = AsyncData.Failure(liftrixError))
                 handleError(liftrixError)

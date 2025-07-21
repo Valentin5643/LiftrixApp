@@ -12,12 +12,14 @@ import java.time.Instant
  * @property userId The unique identifier for the user
  * @property darkMode Whether dark mode is enabled
  * @property notificationsEnabled Whether notifications are enabled
+ * @property weightUnit The user's preferred weight unit (kg or lbs)
  * @property updatedAt The timestamp of the last update
  */
 data class UserSettings(
     val userId: String,
     val darkMode: Boolean = false,
     val notificationsEnabled: Boolean = true,
+    val weightUnit: WeightUnit = WeightUnit.getSystemDefault(),
     val updatedAt: Instant = Instant.now()
 ) {
     companion object {
@@ -31,6 +33,7 @@ data class UserSettings(
             userId = userId,
             darkMode = false,
             notificationsEnabled = true,
+            weightUnit = WeightUnit.getSystemDefault(),
             updatedAt = Instant.now()
         )
     }

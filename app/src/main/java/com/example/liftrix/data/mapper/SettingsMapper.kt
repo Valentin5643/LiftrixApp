@@ -26,6 +26,7 @@ class SettingsMapper @Inject constructor() {
             userId = entity.userId,
             darkMode = entity.darkMode,
             notificationsEnabled = entity.notificationsEnabled,
+            weightUnit = entity.weightUnit,
             updatedAt = entity.updatedAt
         )
     }
@@ -41,6 +42,7 @@ class SettingsMapper @Inject constructor() {
             userId = domain.userId,
             darkMode = domain.darkMode,
             notificationsEnabled = domain.notificationsEnabled,
+            weightUnit = domain.weightUnit,
             updatedAt = domain.updatedAt
         )
     }

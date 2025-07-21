@@ -9,6 +9,7 @@ import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.model.TemplateExercise
 import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.GetAuthenticatedUserIdUseCase
 import com.example.liftrix.domain.usecase.exercise.GetExerciseDefaultsUseCase
 import com.example.liftrix.domain.usecase.exercise.SearchExercisesUseCase
 import com.example.liftrix.domain.usecase.exercise.SearchableExercise
@@ -37,6 +38,7 @@ import javax.inject.Inject
 @HiltViewModel
 class WorkoutTemplateCreationViewModel @Inject constructor(
     private val createWorkoutTemplateUseCase: CreateWorkoutTemplateUseCase,
+    private val getAuthenticatedUserIdUseCase: GetAuthenticatedUserIdUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     private val searchExercisesUseCase: SearchExercisesUseCase,
     private val getExerciseDefaultsUseCase: GetExerciseDefaultsUseCase,
@@ -46,13 +48,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<WorkoutTemplateCreationUiState>(
-        WorkoutTemplateCreationUiState.Editing(
-            exercises = emptyList(),
-            availableExercises = emptyList(),
-            exerciseSearchQuery = "",
-            selectedExercise = null,
-            isExerciseSelectorExpanded = false
-        )
+        WorkoutTemplateCreationUiState.WaitingForAuth
     )
     val uiState: StateFlow<WorkoutTemplateCreationUiState> = _uiState.asStateFlow()
     
@@ -60,8 +56,37 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
     val loadedTemplate: StateFlow<WorkoutTemplate?> = _loadedTemplate.asStateFlow()
     
     init {
-        loadAvailableExercises()
-        ensureDefaultFolderExists()
+        initializeWhenAuthenticated()
+    }
+    
+    /**
+     * Initialize ViewModel after authentication completes
+     */
+    private fun initializeWhenAuthenticated() {
+        viewModelScope.launch {
+            try {
+                // Wait for authentication to complete
+                val userId = getAuthenticatedUserIdUseCase()
+                Timber.d("User authenticated, initializing template creation for user: $userId")
+                
+                // Transition to editing state
+                _uiState.value = WorkoutTemplateCreationUiState.Editing(
+                    exercises = emptyList(),
+                    availableExercises = emptyList(),
+                    exerciseSearchQuery = "",
+                    selectedExercise = null,
+                    isExerciseSelectorExpanded = false
+                )
+                
+                loadAvailableExercises()
+                ensureDefaultFolderExists()
+            } catch (exception: Exception) {
+                _uiState.value = WorkoutTemplateCreationUiState.Error(
+                    error = "Authentication failed: ${exception.message}"
+                )
+                Timber.e(exception, "Error in initializeWhenAuthenticated")
+            }
+        }
     }
     
     /**
@@ -70,7 +95,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
     private fun ensureDefaultFolderExists() {
         viewModelScope.launch {
             try {
-                val userId = getCurrentUserIdUseCase() ?: return@launch
+                val userId = getAuthenticatedUserIdUseCase()
                 val result = folderRepository.getOrCreateDefaultFolder(userId)
                 if (result.isFailure) {
                     Timber.e(result.exceptionOrNull(), "Failed to create default folder for user $userId")
@@ -112,8 +137,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
             try {
                 _uiState.value = WorkoutTemplateCreationUiState.Loading
                 
-                val userId = getCurrentUserIdUseCase() 
-                    ?: throw IllegalStateException("User not authenticated")
+                val userId = getAuthenticatedUserIdUseCase()
                 
                 val result = createWorkoutTemplateUseCase(
                     userId = userId,
@@ -163,8 +187,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
             try {
                 _uiState.value = WorkoutTemplateCreationUiState.Loading
                 
-                val userId = getCurrentUserIdUseCase() 
-                    ?: throw IllegalStateException("User not authenticated")
+                val userId = getAuthenticatedUserIdUseCase()
                 
                 val loadedTemplate = _loadedTemplate.value
                     ?: throw IllegalStateException("No template loaded for editing")
@@ -321,7 +344,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
     private fun applySmartDefaults(templateExercise: TemplateExercise, exerciseLibrary: ExerciseLibrary) {
         viewModelScope.launch {
             try {
-                val userId = getCurrentUserIdUseCase() ?: return@launch
+                val userId = getAuthenticatedUserIdUseCase()
                 
                 val defaultsResult = getExerciseDefaultsUseCase(
                     exerciseId = templateExercise.exerciseId,
@@ -373,7 +396,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                 if (currentState is WorkoutTemplateCreationUiState.Editing && currentState.exercises.isNotEmpty()) {
                     // Create a temporary template for duration estimation
                     val tempTemplate = WorkoutTemplate.create(
-                        userId = getCurrentUserIdUseCase() ?: "",
+                        userId = getAuthenticatedUserIdUseCase(),
                         name = "Temporary",
                         folderId = "temp",
                         exercises = currentState.exercises
@@ -567,7 +590,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
     fun loadTemplateForEditing(templateId: String) {
         viewModelScope.launch {
             try {
-                val userId = getCurrentUserIdUseCase() ?: return@launch
+                val userId = getAuthenticatedUserIdUseCase()
                 val templateResult = workoutTemplateRepository.getTemplateById(
                     WorkoutTemplateId(templateId), 
                     userId
@@ -617,6 +640,14 @@ sealed class WorkoutTemplateCreationUiState {
     abstract val exerciseSearchQuery: String
     abstract val selectedExercise: SearchableExercise?
     abstract val isExerciseSelectorExpanded: Boolean
+    
+    object WaitingForAuth : WorkoutTemplateCreationUiState() {
+        override val exercises: List<TemplateExercise> = emptyList()
+        override val availableExercises: List<SearchableExercise> = emptyList()
+        override val exerciseSearchQuery: String = ""
+        override val selectedExercise: SearchableExercise? = null
+        override val isExerciseSelectorExpanded: Boolean = false
+    }
     
     data class Editing(
         override val exercises: List<TemplateExercise>,

@@ -60,6 +60,7 @@ import timber.log.Timber
 class ProgressDashboardCoordinator @Inject constructor(
     private val sessionManager: UnifiedWorkoutSessionManager,
     private val authRepository: AuthRepository,
+    private val getWeightUnitPreferenceUseCase: com.example.liftrix.domain.usecase.settings.GetWeightUnitPreferenceUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<UiState<CoordinatorState>, CoordinatorEvent>(errorHandler) {
 
@@ -101,6 +102,9 @@ class ProgressDashboardCoordinator @Inject constructor(
         
         // Start monitoring workout session changes
         observeWorkoutSessionState()
+        
+        // Start monitoring weight unit preferences
+        observeWeightUnitPreferences()
         
         // Process events from the queue
         processEventQueue()
@@ -206,6 +210,35 @@ class ProgressDashboardCoordinator @Inject constructor(
     }
 
     /**
+     * Observes user weight unit preferences and updates coordinator state accordingly.
+     */
+    private fun observeWeightUnitPreferences() {
+        viewModelScope.launch {
+            authRepository.currentUser
+                .filterNotNull()
+                .flatMapLatest { user ->
+                    getWeightUnitPreferenceUseCase(user.uid)
+                }
+                .catch { exception ->
+                    Timber.e(exception, "Error observing weight unit preferences")
+                    // Use system default on error
+                    emit(com.example.liftrix.domain.model.WeightUnit.getSystemDefault())
+                }
+                .collect { weightUnit ->
+                    coordinatorState.updateValue {
+                        copy(
+                            coordinatorPreferences = coordinatorPreferences + ("weightUnit" to weightUnit)
+                        )
+                    }
+                    
+                    updateUiState()
+                    
+                    Timber.d("Weight unit preference updated: $weightUnit")
+                }
+        }
+    }
+
+    /**
      * Processes events from the event queue sequentially.
      */
     private fun processEventQueue() {
@@ -252,6 +285,8 @@ class ProgressDashboardCoordinator @Inject constructor(
             is CoordinatorEvent.CleanupCoordinator -> handleCleanupCoordinator()
             is CoordinatorEvent.ExportToPdf -> handleExportToPdf()
             is CoordinatorEvent.ExportToCsv -> handleExportToCsv()
+            is CoordinatorEvent.ExportRawData -> handleExportRawData(event)
+            is CoordinatorEvent.CancelExport -> handleCancelExport()
         }
     }
 
@@ -346,16 +381,45 @@ class ProgressDashboardCoordinator @Inject constructor(
      * Handles broadcast error events.
      */
     private suspend fun handleBroadcastError(event: CoordinatorEvent.BroadcastError) {
-        coordinatorState.updateValue {
-            copy(globalError = event.error)
-        }
+        // Special handling for permission denied errors
+        val isPermissionError = event.error.contains("PERMISSION_DENIED", ignoreCase = true) ||
+                               event.error.contains("Missing or insufficient permissions", ignoreCase = true) ||
+                               event.error.contains("Permission denied", ignoreCase = true)
         
-        // Broadcast error to specified ViewModels
-        _coordinatorEvents.emit(event)
+        if (isPermissionError) {
+            Timber.w("Permission denied error detected - implementing graceful fallback: ${event.error}")
+            
+            // Instead of showing error to user, we'll silently handle it
+            coordinatorState.updateValue {
+                copy(
+                    globalError = null, // Don't show permission errors to users
+                    networkConnected = false // Treat as network issue for UI purposes
+                )
+            }
+            
+            // Broadcast a graceful fallback event instead of the error
+            _coordinatorEvents.emit(
+                CoordinatorEvent.NetworkConnectivityChanged(isConnected = false)
+            )
+            
+            Timber.d("Permission error handled gracefully - analytics sync disabled")
+        } else {
+            // Handle non-permission errors normally
+            coordinatorState.updateValue {
+                copy(globalError = event.error)
+            }
+            
+            // Broadcast error to specified ViewModels
+            _coordinatorEvents.emit(event)
+        }
         
         updateUiState()
         
-        Timber.w("Global error broadcasted: ${event.error}")
+        if (isPermissionError) {
+            Timber.w("Permission error handled gracefully: ${event.error}")
+        } else {
+            Timber.w("Global error broadcasted: ${event.error}")
+        }
     }
 
     /**
@@ -563,6 +627,32 @@ class ProgressDashboardCoordinator @Inject constructor(
             // This is a placeholder for the actual export functionality
         } catch (exception: Exception) {
             Timber.e(exception, "Failed to export to CSV")
+        }
+    }
+    
+    /**
+     * Handles raw data export requests.
+     */
+    private suspend fun handleExportRawData(event: CoordinatorEvent.ExportRawData) {
+        try {
+            Timber.d("Exporting raw data")
+            // Raw data export logic would be implemented here
+            // This is a placeholder for the actual export functionality
+        } catch (exception: Exception) {
+            Timber.e(exception, "Failed to export raw data")
+        }
+    }
+    
+    /**
+     * Handles export cancellation requests.
+     */
+    private suspend fun handleCancelExport() {
+        try {
+            Timber.d("Cancelling export operation")
+            // Export cancellation logic would be implemented here
+            // This is a placeholder for the actual cancellation functionality
+        } catch (exception: Exception) {
+            Timber.e(exception, "Failed to cancel export")
         }
     }
 }

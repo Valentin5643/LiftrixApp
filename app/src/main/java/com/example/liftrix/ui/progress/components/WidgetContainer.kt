@@ -197,7 +197,7 @@ fun WidgetContainer(
                 onWidgetClick = onWidgetClick,
                 onWidgetReorder = if (enableDragAndDrop) onWidgetReorder else { _, _ -> },
                 widgetDataProvider = widgetDataProvider,
-                enableCollapsibleSections = enableCollapsibleSections && windowSizeClass.widthDp.value >= 400,
+                enableCollapsibleSections = enableCollapsibleSections && windowSizeClass.widthDp.value >= 600,
                 enableDragAndDrop = enableDragAndDrop,
                 isLoading = isLoading,
                 windowSizeClass = windowSizeClass
@@ -315,105 +315,28 @@ private fun SectionedLayout(
     isLoading: Boolean,
     windowSizeClass: WindowSizeClass = rememberWindowSizeClass()
 ) {
-    val widgetsByCategory = widgets.groupBy { it.category }
-    
-    val padding = when {
-        windowSizeClass.widthDp.value < 400 -> 12.dp
-        windowSizeClass.widthDp.value < 600 -> 16.dp
-        else -> 20.dp
-    }
-    val spacing = when {
-        windowSizeClass.widthDp.value < 400 -> 8.dp
-        windowSizeClass.widthDp.value < 600 -> 12.dp
-        else -> 16.dp
-    }
-    
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(padding),
-        verticalArrangement = Arrangement.spacedBy(spacing)
-    ) {
-        // Configuration header
-        ConfigurationHeader(
-            configuration = configuration,
-            totalWidgets = widgets.size
-        )
-        
-        // Essential widgets section (always visible)
-        val essentialWidgets = widgets.filter { it.priority.configurationLevel == 1 }
-        if (essentialWidgets.isNotEmpty()) {
-            WidgetSection(
-                title = "Essential Metrics",
-                description = "Core analytics for tracking your progress",
-                widgets = essentialWidgets,
-                onWidgetClick = onWidgetClick,
-                onWidgetReorder = onWidgetReorder,
-                widgetDataProvider = widgetDataProvider,
-                isCollapsible = false,
-                enableDragAndDrop = enableDragAndDrop,
-                isLoading = isLoading
-            )
-        }
-        
-        // Intermediate widgets section
-        val intermediateWidgets = widgets.filter { it.priority.configurationLevel == 2 }
-        if (intermediateWidgets.isNotEmpty()) {
-            WidgetSection(
-                title = "Enhanced Insights",
-                description = "Advanced metrics for optimization",
-                widgets = intermediateWidgets,
-                onWidgetClick = onWidgetClick,
-                onWidgetReorder = onWidgetReorder,
-                widgetDataProvider = widgetDataProvider,
-                isCollapsible = enableCollapsibleSections,
-                enableDragAndDrop = enableDragAndDrop,
-                isLoading = isLoading
-            )
-        }
-        
-        // Advanced widgets section
-        val advancedWidgets = widgets.filter { it.priority.configurationLevel == 3 }
-        if (advancedWidgets.isNotEmpty()) {
-            WidgetSection(
-                title = "Advanced Analytics",
-                description = "Professional-level metrics and insights",
-                widgets = advancedWidgets,
-                onWidgetClick = onWidgetClick,
-                onWidgetReorder = onWidgetReorder,
-                widgetDataProvider = widgetDataProvider,
-                isCollapsible = enableCollapsibleSections,
-                enableDragAndDrop = enableDragAndDrop,
-                isLoading = isLoading
-            )
-        }
-    }
+    // Use the enhanced responsive grid with collapsible sections
+    EnhancedResponsiveGrid(
+        widgets = widgets,
+        windowSizeClass = windowSizeClass,
+        modifier = modifier,
+        onWidgetClick = onWidgetClick,
+        widgetDataProvider = widgetDataProvider,
+        isLoading = isLoading,
+        enableCollapsibleSections = enableCollapsibleSections,
+        useVerticalList = shouldUseVerticalList(windowSizeClass)
+    )
 }
 
-@Composable
-private fun ConfigurationHeader(
-    configuration: DashboardConfiguration,
-    totalWidgets: Int,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Text(
-            text = "${configuration.name} Dashboard",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Bold
-        )
-        
-        Text(
-            text = "${configuration.description} • $totalWidgets widgets",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-        )
-    }
+/**
+ * Determines if vertical list layout should be used based on screen size
+ * Mobile-optimized: Use vertical list for seamless 2x1 experience
+ */
+private fun shouldUseVerticalList(windowSizeClass: WindowSizeClass): Boolean {
+    return windowSizeClass.widthDp.value < 600
 }
+
+// ConfigurationHeader removed to eliminate duplicate widget count display
 
 @Composable
 private fun WidgetSection(
@@ -445,57 +368,55 @@ private fun WidgetSection(
             .fillMaxWidth()
             .animateContentSize(animationSpec = tween(300))
     ) {
-        // Section header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(
-                modifier = Modifier.weight(1f)
+        // Section header - only show if title is not empty
+        if (title.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.semantics {
-                        heading()
-                        contentDescription = "$title section header"
-                    }
-                )
-                
-                Text(
-                    text = "$description • ${widgets.size} widgets",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-            }
-            
-            if (isCollapsible) {
-                IconButton(
-                    onClick = { 
-                        isExpanded = !isExpanded
-                    },
-                    modifier = Modifier.semantics {
-                        contentDescription = if (isExpanded) "Collapse $title section" else "Expand $title section"
-                        role = Role.Button
-                        stateDescription = "$title section is ${if (isExpanded) "expanded" else "collapsed"}"
-                    }
+                Column(
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.ExpandMore,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(24.dp)
-                            .rotate(rotationAngle),
-                        tint = LiftrixColors.Primary
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.semantics {
+                            heading()
+                            contentDescription = "$title section header"
+                        }
                     )
+                    
+                    // Section description removed to eliminate duplicate widget count display
+                }
+                
+                if (isCollapsible) {
+                    IconButton(
+                        onClick = { 
+                            isExpanded = !isExpanded
+                        },
+                        modifier = Modifier.semantics {
+                            contentDescription = if (isExpanded) "Collapse $title section" else "Expand $title section"
+                            role = Role.Button
+                            stateDescription = "$title section is ${if (isExpanded) "expanded" else "collapsed"}"
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ExpandMore,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(24.dp)
+                                .rotate(rotationAngle),
+                            tint = LiftrixColors.Primary
+                        )
+                    }
                 }
             }
+            
+            Spacer(modifier = Modifier.height(12.dp))
         }
-        
-        Spacer(modifier = Modifier.height(12.dp))
         
         // Section content
         AnimatedVisibility(

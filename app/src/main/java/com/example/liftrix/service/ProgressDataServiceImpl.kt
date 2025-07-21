@@ -87,6 +87,7 @@ class ProgressDataServiceImpl @Inject constructor(
                 progressStatsRepository.getWorkoutVolumeData(userId, startDate, endDate).first()
             }
             
+            
             // Cache the result with 15-minute TTL
             cacheManager.put(cacheKey, data, ttl = 15.minutes)
             

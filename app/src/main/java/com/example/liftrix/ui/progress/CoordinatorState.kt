@@ -5,6 +5,7 @@ import com.example.liftrix.ui.common.state.AsyncData
 import com.example.liftrix.ui.common.state.isSuccess
 import com.example.liftrix.ui.common.state.getOrNull
 import com.example.liftrix.domain.model.User
+import com.example.liftrix.service.export.ExportProgress
 
 /**
  * State for the ProgressDashboardCoordinator managing inter-ViewModel communication.
@@ -134,7 +135,15 @@ data class CoordinatorState(
      * Map of preference keys to values that influence how the coordinator
      * manages updates and communication between ViewModels.
      */
-    val coordinatorPreferences: Map<String, Any> = emptyMap()
+    val coordinatorPreferences: Map<String, Any> = emptyMap(),
+    
+    /**
+     * Current export operation progress.
+     * 
+     * Tracks the progress of export operations initiated through the dashboard.
+     * Null when no export operation is active.
+     */
+    val exportProgress: ExportProgress? = null
 ) {
     
     /**

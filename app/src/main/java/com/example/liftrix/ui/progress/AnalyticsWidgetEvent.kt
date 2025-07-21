@@ -246,6 +246,29 @@ sealed class AnalyticsWidgetEvent : ViewModelEvent {
     ) : AnalyticsWidgetEvent()
     
     /**
+     * Event for drag-and-drop widget reordering.
+     * 
+     * Handles drag-and-drop reordering operations with from/to indices for
+     * immediate UI updates and preference persistence. Used by the drag-and-drop
+     * grid component to communicate reorder operations to the ViewModel.
+     * 
+     * @property fromIndex The original index position of the widget
+     * @property toIndex The new index position for the widget
+     * @property shouldPersist Whether to persist the reordering changes
+     * 
+     * Example:
+     * ```kotlin
+     * // Reorder widget from position 0 to position 2
+     * AnalyticsWidgetEvent.WidgetReordered(fromIndex = 0, toIndex = 2)
+     * ```
+     */
+    data class WidgetReordered(
+        val fromIndex: Int,
+        val toIndex: Int,
+        val shouldPersist: Boolean = true
+    ) : AnalyticsWidgetEvent()
+    
+    /**
      * Event for widget click handling.
      * 
      * Handles widget click events and navigation or detail view actions.
@@ -297,6 +320,20 @@ sealed class AnalyticsWidgetEvent : ViewModelEvent {
     data class ForceAllWidgets(
         val dummy: Boolean = true
     ) : AnalyticsWidgetEvent()
+    
+    /**
+     * Event for navigating to dashboard customization screen.
+     * 
+     * Triggers navigation to the enhanced dashboard customization interface
+     * where users can configure widget visibility, layout modes, and preferences.
+     * 
+     * Example:
+     * ```kotlin
+     * // Navigate to customization screen
+     * AnalyticsWidgetEvent.NavigateToDashboardCustomization
+     * ```
+     */
+    data object NavigateToDashboardCustomization : AnalyticsWidgetEvent()
 }
 
 /**
@@ -324,6 +361,14 @@ fun AnalyticsWidgetEvent.ToggleVisibility.isValid(): Boolean = widgetId.isNotBla
  */
 fun AnalyticsWidgetEvent.ReorderWidget.isValid(): Boolean = 
     widgetId.isNotBlank() && newPosition >= 0
+
+/**
+ * Validates that a WidgetReordered event has valid parameters.
+ * 
+ * @return true if the from/to indices are valid, false otherwise
+ */
+fun AnalyticsWidgetEvent.WidgetReordered.isValid(): Boolean = 
+    fromIndex >= 0 && toIndex >= 0 && fromIndex != toIndex
 
 /**
  * Validates that a TrackInteraction event has valid parameters.

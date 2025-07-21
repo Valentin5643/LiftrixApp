@@ -17,6 +17,9 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.time.LocalDate
 import java.time.Duration
@@ -44,6 +47,17 @@ class WorkoutRepositoryImpl @Inject constructor(
 ) : WorkoutRepository {
 
     override suspend fun createWorkout(workout: Workout): LiftrixResult<Workout> {
+        // Validate user ID
+        if (workout.userId.isBlank()) {
+            return LiftrixResult.failure(
+                LiftrixError.ValidationError(
+                    field = "userId",
+                    violations = listOf("User ID cannot be blank when creating workout"),
+                    errorMessage = "User ID is required"
+                )
+            )
+        }
+        
         return liftrixCatching(
             errorMapper = { throwable ->
                 LiftrixError.DatabaseError(
@@ -62,7 +76,16 @@ class WorkoutRepositoryImpl @Inject constructor(
             val insertedId = workoutDao.insertWorkout(entity)
             
             if (insertedId > 0) {
-                workout.copy(id = WorkoutId(insertedId.toString()))
+                // 🔥 CRITICAL FIX: Preserve the original workout ID instead of overwriting with auto-increment
+                Timber.d("WORKOUT-DEBUG: Saved ${workout.name} (${workout.id.value}) for user: ${workout.userId}")
+                
+                // Verify the workout can be retrieved immediately
+                val verifyEntity = workoutDao.getWorkoutByIdForUser(workout.id.value, workout.userId)
+                if (verifyEntity == null) {
+                    Timber.d("WORKOUT-DEBUG: CRITICAL - Workout not found immediately after insert!")
+                }
+                
+                workout // Return original workout with preserved ID
             } else {
                 throw RuntimeException("Workout insert operation returned invalid ID: $insertedId")
             }
@@ -70,6 +93,17 @@ class WorkoutRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getWorkoutById(id: WorkoutId, userId: String): LiftrixResult<Workout?> {
+        // Validate user ID
+        if (userId.isBlank()) {
+            return LiftrixResult.failure(
+                LiftrixError.ValidationError(
+                    field = "userId",
+                    violations = listOf("User ID cannot be blank when retrieving workout"),
+                    errorMessage = "User ID is required"
+                )
+            )
+        }
+        
         return liftrixCatching(
             errorMapper = { throwable ->
                 LiftrixError.DatabaseError(
@@ -256,15 +290,29 @@ class WorkoutRepositoryImpl @Inject constructor(
     }
 
     override fun getRecentWorkouts(userId: String, limit: Int): Flow<LiftrixResult<List<Workout>>> {
-        Timber.d("🔥 RECENT-WORKOUTS-DEBUG: Querying recent workouts for user: $userId, limit: $limit")
+        // Check total workout count on startup
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val totalCount = workoutDao.getWorkoutCountForUser(userId)
+                Timber.d("WORKOUT-DEBUG: Total workouts for user: $totalCount")
+                
+                if (totalCount > 0) {
+                    val allWorkoutsFlow = workoutDao.getAllWorkoutsForUser(userId)
+                    allWorkoutsFlow.first().let { allEntities ->
+                        allEntities.forEach { entity ->
+                            Timber.d("WORKOUT-DEBUG: Found entity - ID: ${entity.id.take(8)}..., Status: ${entity.status}")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.d("WORKOUT-DEBUG: Error during verification - ${e.message}")
+            }
+        }
         
         return workoutDao.getRecentCompletedWorkouts(userId, limit)
             .map { entities ->
                 try {
-                    Timber.d("🔥 RECENT-WORKOUTS-DEBUG: Found ${entities.size} workout entities")
-                    entities.forEachIndexed { index, entity ->
-                        Timber.d("🔥 RECENT-WORKOUTS-DEBUG: Entity[$index] - id: ${entity.id}, name: ${entity.name}, status: ${entity.status}, endTime: ${entity.endTime}")
-                    }
+                    Timber.d("Found ${entities.size} recent completed workouts")
                     
                     val workouts = entities.map { entity ->
                         workoutMapper.toDomain(entity).also { workout ->
@@ -360,9 +408,14 @@ class WorkoutRepositoryImpl @Inject constructor(
 
     override suspend fun saveWorkout(workout: Workout): Result<Unit> {
         return try {
-            val result = if (workout.id.value.isBlank()) {
+            // Check if workout already exists in database
+            val existingWorkout = getWorkoutById(workout.id, workout.userId).getOrNull()
+            
+            val result = if (workout.id.value.isBlank() || existingWorkout == null) {
+                // Create new workout if ID is blank OR workout doesn't exist
                 createWorkout(workout)
             } else {
+                // Only update if workout actually exists
                 updateWorkoutWithRetry(workout)
             }
             

@@ -213,7 +213,7 @@ private fun WidgetSettingsContent(
         
         items(
             items = visibleWidgets,
-            key = { widget -> widget.name }
+            key = { widget -> widget.id }
         ) { widget ->
             WidgetToggleCard(
                 widget = widget,
@@ -240,7 +240,7 @@ private fun WidgetSettingsContent(
             
             items(
                 items = hiddenWidgets,
-                key = { widget -> widget.name }
+                key = { widget -> widget.id }
             ) { widget ->
                 WidgetToggleCard(
                     widget = widget,
@@ -263,11 +263,11 @@ private fun WidgetSettingsContent(
         
         items(
             items = visibleWidgets.take(3), // Show preview for first 3 visible widgets
-            key = { widget -> "${widget.name}_preview" }
+            key = { widget -> "${widget.id}_preview" }
         ) { widget ->
             WidgetPreviewCard(
                 widget = widget,
-                currentSize = data.preferences.getWidgetSize(widget.name),
+                currentSize = data.preferences.getWidgetSize(widget.id),
                 onSizeChange = { size ->
                     stableOnEvent(WidgetSettingsEvent.UpdateWidgetSize(widget, size))
                 }

@@ -2,6 +2,7 @@ package com.example.liftrix.domain.model.analytics
 
 import kotlinx.datetime.Instant
 import kotlinx.datetime.Clock
+import timber.log.Timber
 
 /**
  * Domain model representing user widget preferences and dashboard configuration.
@@ -432,7 +433,7 @@ enum class WidgetDisplaySize(val displayName: String, val heightMultiplier: Floa
  * User experience levels for widget configuration compatibility
  */
 enum class UserLevel(val displayName: String, val description: String) {
-    BEGINNER("Beginner", "Essential metrics for building workout consistency"),
-    INTERMEDIATE("Intermediate", "Enhanced metrics for optimizing training progress"), 
-    ADVANCED("Advanced", "Comprehensive analytics for advanced training optimization")
+    BEGINNER("Beginner", "Essential metrics"),
+    INTERMEDIATE("Intermediate", ""), 
+    ADVANCED("Advanced", "")
 }

@@ -10,6 +10,7 @@ import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutStats
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SocialRepository
+import com.example.liftrix.domain.usecase.auth.GetAuthenticatedUserIdUseCase
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.domain.usecase.GetWorkoutHistoryUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.filled.LocalFireDepartment
 class HomeViewModel @Inject constructor(
     private val workoutRepository: WorkoutRepository,
     private val authRepository: AuthRepository,
+    private val getAuthenticatedUserIdUseCase: GetAuthenticatedUserIdUseCase,
     private val analyticsService: AnalyticsService,
     private val socialRepository: SocialRepository,
     private val getWorkoutHistoryUseCase: GetWorkoutHistoryUseCase,
@@ -121,18 +123,16 @@ class HomeViewModel @Inject constructor(
     fun loadHomeData() {
         viewModelScope.launch {
             try {
-                val currentUser = authRepository.getCurrentUser()
-                if (currentUser == null) {
-                    updateState { copy(isLoading = false, errorMessage = "User not authenticated") }
-                    return@launch
-                }
+                updateState { copy(isWaitingForAuth = true, isLoading = true, errorMessage = null) }
+                val userId = getAuthenticatedUserIdUseCase()
+                updateState { copy(isWaitingForAuth = false) }
 
                 updateState { copy(isLoading = true, errorMessage = null) }
                 
                 // Load recent workouts for manual refresh
-                Timber.d("🔥 HOME-VM-DEBUG: Loading recent workouts for user: ${currentUser.uid}")
+                Timber.d("🔥 HOME-VM-DEBUG: Loading recent workouts for user: $userId")
                 
-                workoutRepository.getRecentWorkouts(currentUser.uid, RECENT_WORKOUTS_LIMIT)
+                workoutRepository.getRecentWorkouts(userId, RECENT_WORKOUTS_LIMIT)
                 .catch { throwable ->
                     Timber.e(throwable, "Error loading home data")
                     updateState { 
@@ -203,18 +203,12 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             val startTime = System.currentTimeMillis()
             try {
-                val currentUser = authRepository.getCurrentUser()
-                if (currentUser == null) {
-                    updateState { 
-                        copy(workoutFeedState = FeedState.Error("User not authenticated"))
-                    }
-                    return@launch
-                }
+                val userId = getAuthenticatedUserIdUseCase()
 
                 updateState { copy(workoutFeedState = FeedState.Loading) }
                 currentFeedOffset = 0
 
-                val feedResult = workoutRepository.getFeedWorkouts(currentUser.uid, FEED_LIMIT)
+                val feedResult = workoutRepository.getFeedWorkouts(userId, FEED_LIMIT)
                 feedResult.fold(
                     onSuccess = { workouts ->
                         val loadTime = System.currentTimeMillis() - startTime
@@ -265,14 +259,13 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             val startTime = System.currentTimeMillis()
             try {
-                val currentUser = authRepository.getCurrentUser()
-                if (currentUser == null) return@launch
+                val userId = getAuthenticatedUserIdUseCase()
 
                 updateState { 
                     copy(workoutFeedState = currentState.copy(isLoadingMore = true))
                 }
 
-                val moreWorkoutsResult = workoutRepository.getFeedWorkouts(currentUser.uid, FEED_LIMIT)
+                val moreWorkoutsResult = workoutRepository.getFeedWorkouts(userId, FEED_LIMIT)
                 moreWorkoutsResult.fold(
                     onSuccess = { newWorkouts ->
                         val loadTime = System.currentTimeMillis() - startTime
@@ -940,7 +933,8 @@ data class HomeUiState(
     val workoutStats: WorkoutStats? = null,
     // Legacy properties for backward compatibility during transition
     val recentWorkouts: List<Workout> = emptyList(),
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    val isWaitingForAuth: Boolean = false
 ) {
     /**
      * Indicates if the screen should show empty state

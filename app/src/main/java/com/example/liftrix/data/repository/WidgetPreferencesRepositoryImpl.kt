@@ -419,73 +419,99 @@ class WidgetPreferencesRepositoryImpl @Inject constructor(
      * Migrates old widget names to current AnalyticsWidget enum values.
      * 
      * This function handles migration of widget preferences from previous versions
-     * where widget names may have changed or been removed. It maps old widget names
-     * to their current equivalents and removes invalid widget names.
+     * where widget names may have changed or been removed. It maps legacy widget names
+     * (PascalCase, display names, legacy snake_case) to the canonical snake_case IDs
+     * used by the AnalyticsWidget enum.
      * 
      * @param widgetNames Collection of widget names to migrate
      * @return Set of valid widget names that exist in the current AnalyticsWidget enum
      */
     private fun migrateWidgetNames(widgetNames: Collection<String>): Set<String> {
-        // Get all current valid widget names
+        // Get all current valid widget names (canonical snake_case format)
         val validWidgetNames = try {
-            com.example.liftrix.domain.model.analytics.AnalyticsWidget.values().map { it.name }.toSet()
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.getAllWidgets().map { it.id }.toSet()
         } catch (e: Exception) {
             Timber.e(e, "Failed to get valid widget names")
             return emptySet()
         }
         
-        // Migration mapping from old widget names to new enum names
+        // Migration mapping FROM legacy formats TO canonical snake_case format
         val migrationMap = mapOf(
-            // Legacy display names to enum names - USER SPECIFIC MAPPINGS
-            "Progress summary" to "ProgressChart",
-            "Total volume" to "TotalVolume",
-            "Active time" to "AverageDuration", 
-            "Best streak" to "ConsistencyStreak",
-            "Consistency" to "ConsistencyStreak",
-            "Today's calories" to "DailyCalories",
-            // "Calories burned" to "CaloriesBurned", // REMOVED - duplicate of CalorieSection widget
-            "Weekly calories" to "WeeklyCalorieTrend",
-            "Volume trend" to "VolumeTrends",
-            "Workout duration" to "AverageDuration",
-            "Frequency calendar" to "VolumeCalendar",
+            // PRIORITY: PascalCase legacy IDs to snake_case canonical IDs
+            "WorkoutFrequency" to "workout_frequency",
+            "TotalVolume" to "total_volume",
+            "CaloriesBurned" to "calories_burned",
+            "ConsistencyStreak" to "consistency_streak",
+            "ProgressChart" to "progress_chart",
+            "VolumeCalendar" to "volume_calendar",
+            "StrengthProgress" to "strength_progress",
+            "PersonalRecords" to "personal_records",
+            "VolumeTrends" to "volume_trends",
+            "RecoveryMetrics" to "recovery_metrics",
+            "PerformanceAnalysis" to "performance_analysis",
+            "DailyCalories" to "daily_calories",
+            "WeeklyCalorieTrend" to "weekly_calorie_trend",
+            "AverageDuration" to "average_duration",
+            "VolumeLoadProgression" to "volume_load_progression",
+            "OneRMProgression" to "one_rm_progression",
+            "WeeklyTrends" to "weekly_trends",
+            "MuscleGroupDistribution" to "muscle_group_distribution",
+            "RecoveryPatterns" to "recovery_patterns",
+            "TrainingIntensity" to "training_intensity",
+            "ExerciseVariety" to "exercise_variety",
+            "TimeOfDayAnalysis" to "time_of_day_analysis",
+            "SetCompletionRate" to "set_completion_rate",
+            "MonthlySummary" to "monthly_summary",
+            "GoalAchievement" to "goal_achievement",
+            "VolumeChart" to "volume_chart",
+            "DurationChart" to "duration_chart",
+            "FrequencyChart" to "frequency_chart",
+            "WorkoutStreak" to "workout_streak",
             
-            // Additional legacy display names
-            "Current streak" to "ConsistencyStreak",
-            "Workout frequency" to "WorkoutFrequency",
-            // "Daily calories" to "CaloriesBurned", // REMOVED - duplicate, use DailyCalories instead
-            "Weekly average" to "WeeklyCalorieTrend",
-            "Personal record" to "PersonalRecords",
+            // Legacy display names to canonical snake_case
+            "Workout Frequency" to "workout_frequency",
+            "Total Volume" to "total_volume",
+            "Calories Burned" to "calories_burned",
+            "Consistency Streak" to "consistency_streak",
+            "Progress Chart" to "progress_chart",
+            "Volume Calendar" to "volume_calendar",
+            "Strength Progress" to "strength_progress",
+            "Personal Records" to "personal_records",
+            "Volume Trends" to "volume_trends",
+            "Recovery Metrics" to "recovery_metrics",
+            "Performance Analysis" to "performance_analysis",
+            "Today's Calories" to "daily_calories",
+            "Daily Calories" to "daily_calories",
+            "Weekly Calorie Trend" to "weekly_calorie_trend",
+            "Average Duration" to "average_duration",
+            "Volume Progression" to "volume_load_progression",
+            "1RM Progression" to "one_rm_progression",
+            "Weekly Trends" to "weekly_trends",
+            "Muscle Group Distribution" to "muscle_group_distribution",
+            "Recovery Patterns" to "recovery_patterns",
+            "Training Intensity" to "training_intensity",
+            "Exercise Variety" to "exercise_variety",
+            "Optimal Timing" to "time_of_day_analysis",
+            "Set Completion Rate" to "set_completion_rate",
+            "Monthly Summary" to "monthly_summary",
+            "Goal Achievement" to "goal_achievement",
+            "Volume Chart" to "volume_chart",
+            "Duration Chart" to "duration_chart",
+            "Frequency Chart" to "frequency_chart",
+            "Workout Streak" to "workout_streak",
             
-            // Legacy technical names to current enum names
-            "total_volume" to "TotalVolume",
-            "workout_frequency" to "WorkoutFrequency",
-            "consistency_streak" to "ConsistencyStreak",
-            "progress_chart" to "ProgressChart",
-            "volume_calendar" to "VolumeCalendar",
-            "muscle_group_distribution" to "MuscleGroupProgress",
-            "one_rm_progression" to "OneRMProgression",
-            "volume_load_progression" to "VolumeLoadProgression",
-            "recovery_patterns" to "RecoveryPatterns",
-            "weekly_trends" to "WeeklyTrends",
-            // "calories_burned" to "CaloriesBurned", // REMOVED - duplicate of CalorieSection widget
-            "exercise_analysis" to "ExerciseAnalysis",
-            "strength_progress" to "StrengthProgress",
-            "cardio_analysis" to "CardioAnalysis",
-            "body_measurements" to "BodyMeasurements",
-            "nutrition_summary" to "NutritionSummary",
-            "goal_progress" to "GoalProgress",
-            "achievement_badges" to "AchievementBadges",
-            "sleep_recovery" to "SleepRecovery",
-            "workout_intensity" to "WorkoutIntensity",
-            "training_load" to "TrainingLoad",
-            "progressive_overload" to "ProgressiveOverload",
-            "volume_distribution" to "VolumeDistribution",
-            
-            // Any other legacy names that might exist
-            "active_time" to "ActiveDuration",
-            "best_streak" to "BestStreak",
-            // "daily_calories_burned" to "CaloriesBurned", // REMOVED - duplicate, use DailyCalories
-            "weekly_calorie_trend" to "WeeklyTrends"
+            // Legacy variations
+            "Current streak" to "consistency_streak",
+            "Best streak" to "consistency_streak",
+            "Consistency" to "consistency_streak",
+            "Active time" to "average_duration",
+            "Workout duration" to "average_duration",
+            "Personal record" to "personal_records",
+            "Weekly calories" to "weekly_calorie_trend",
+            "Weekly average" to "weekly_calorie_trend",
+            "Volume trend" to "volume_trends",
+            "Progress summary" to "progress_chart",
+            "Frequency calendar" to "volume_calendar"
         )
         
         val migratedWidgets = mutableSetOf<String>()
@@ -513,14 +539,14 @@ class WidgetPreferencesRepositoryImpl @Inject constructor(
             }
         }
         
-        // If no valid widgets remain after migration, provide safe defaults
+        // If no valid widgets remain after migration, provide safe defaults (canonical snake_case)
         if (migratedWidgets.isEmpty()) {
             Timber.i("No valid widgets after migration, using defaults")
             val defaultWidgets = setOf(
-                "TotalVolume",
-                "WorkoutFrequency", 
-                "ConsistencyStreak",
-                "DailyCalories"  // Use DailyCalories instead of CaloriesBurned to avoid duplication
+                "total_volume",
+                "workout_frequency", 
+                "consistency_streak",
+                "calories_burned"
             ).filter { it in validWidgetNames }
             
             migratedWidgets.addAll(defaultWidgets)

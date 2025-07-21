@@ -9,6 +9,8 @@ import com.example.liftrix.domain.usecase.settings.EnhancedSignOutUseCase
 import com.example.liftrix.domain.usecase.settings.GetSubscriptionStatusUseCase
 import com.example.liftrix.domain.usecase.settings.GetUserSettingsUseCase
 import com.example.liftrix.domain.usecase.settings.UpdateSettingsUseCase
+import com.example.liftrix.domain.usecase.settings.UpdateWeightUnitPreferenceUseCase
+import com.example.liftrix.domain.model.WeightUnit
 import com.example.liftrix.ui.theme.ThemeManager
 import com.example.liftrix.ui.theme.ThemeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -46,6 +48,7 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val getUserSettingsUseCase: GetUserSettingsUseCase,
     private val updateSettingsUseCase: UpdateSettingsUseCase,
+    private val updateWeightUnitPreferenceUseCase: UpdateWeightUnitPreferenceUseCase,
     private val getSubscriptionStatusUseCase: GetSubscriptionStatusUseCase,
     private val enhancedSignOutUseCase: EnhancedSignOutUseCase,
     private val authRepository: AuthRepository,
@@ -79,6 +82,7 @@ class SettingsViewModel @Inject constructor(
             is SettingsEvent.RefreshSettings -> refreshSettings()
             is SettingsEvent.UpdateDarkMode -> updateDarkMode(event.enabled)
             is SettingsEvent.UpdateNotifications -> updateNotifications(event.enabled)
+            is SettingsEvent.UpdateWeightUnit -> updateWeightUnit(event.weightUnit)
             is SettingsEvent.NavigateToProfile -> handleProfileNavigation()
             is SettingsEvent.NavigateToSubscription -> handleSubscriptionNavigation()
             is SettingsEvent.NavigateToPrivacy -> handlePrivacyNavigation()
@@ -236,6 +240,44 @@ class SettingsViewModel @Inject constructor(
                     withError("Failed to update notifications")
                 }
                 lastFailedEvent = SettingsEvent.UpdateNotifications(enabled)
+            }
+        }
+    }
+
+    /**
+     * Updates the user's weight unit preference.
+     */
+    private fun updateWeightUnit(weightUnit: WeightUnit) {
+        val userId = currentUserId ?: return
+        
+        viewModelScope.launch {
+            updateState { copy(isUpdatingSettings = true) }
+            
+            try {
+                Timber.d("Updating weight unit for user $userId to: ${weightUnit.symbol}")
+                
+                val result = updateWeightUnitPreferenceUseCase(userId, weightUnit)
+                
+                result.fold(
+                    onSuccess = {
+                        Timber.d("Weight unit updated successfully")
+                        trackSettingChanged("weight_unit", weightUnit.symbol)
+                        // State will be updated through the reactive flow
+                    },
+                    onFailure = { exception ->
+                        Timber.e(exception, "Failed to update weight unit")
+                        updateState { 
+                            withError("Failed to update weight unit: ${exception.message}")
+                        }
+                        lastFailedEvent = SettingsEvent.UpdateWeightUnit(weightUnit)
+                    }
+                )
+            } catch (exception: Exception) {
+                Timber.e(exception, "Exception updating weight unit")
+                updateState { 
+                    withError("Failed to update weight unit")
+                }
+                lastFailedEvent = SettingsEvent.UpdateWeightUnit(weightUnit)
             }
         }
     }

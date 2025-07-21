@@ -267,7 +267,7 @@ class AnalyticsServiceTest {
     fun `given valid user and widget id, when toggling widget visibility, then returns success`() = runTest {
         // Given
         val userId = "user123"
-        val widgetId = "TotalVolume"
+        val widgetId = "total_volume"
         val widget = AnalyticsWidget.TotalVolume
         val currentPreferences = WidgetPreferences.createDefault(userId)
         val updatedPreferences = currentPreferences.toggleWidget(widgetId)
@@ -291,7 +291,7 @@ class AnalyticsServiceTest {
     fun `given attempt to hide last visible widget, when toggling widget visibility, then returns business rule error`() = runTest {
         // Given
         val userId = "user123"
-        val widgetId = "TotalVolume"
+        val widgetId = "total_volume"
         val widget = AnalyticsWidget.TotalVolume
         val currentPreferences = mockk<WidgetPreferences> {
             every { isWidgetVisible(widgetId) } returns true
@@ -318,7 +318,7 @@ class AnalyticsServiceTest {
     fun `given blank user id, when toggling widget visibility, then returns validation error`() = runTest {
         // Given
         val userId = ""
-        val widgetId = "TotalVolume"
+        val widgetId = "total_volume"
         
         // When
         val result = analyticsService.toggleWidgetVisibility(userId, widgetId)

@@ -11,6 +11,7 @@ import androidx.work.WorkManager
 import com.example.liftrix.data.local.dao.SettingsDao
 import com.example.liftrix.data.mapper.SettingsMapper
 import com.example.liftrix.domain.model.UserSettings
+import com.example.liftrix.domain.model.WeightUnit
 import com.example.liftrix.domain.repository.SettingsRepository
 import com.example.liftrix.sync.SettingsSyncWorker
 import kotlinx.coroutines.flow.Flow
@@ -46,6 +47,7 @@ class SettingsRepositoryImpl @Inject constructor(
         // DataStore preference keys
         private val DARK_MODE_KEY = booleanPreferencesKey("dark_mode")
         private val NOTIFICATIONS_ENABLED_KEY = booleanPreferencesKey("notifications_enabled")
+        private val WEIGHT_UNIT_KEY = stringPreferencesKey("weight_unit")
         private val USER_ID_KEY = stringPreferencesKey("user_id")
         private val UPDATED_AT_KEY = stringPreferencesKey("updated_at")
     }
@@ -136,6 +138,33 @@ class SettingsRepositoryImpl @Inject constructor(
         }
     }
     
+    override suspend fun updateWeightUnit(userId: String, weightUnit: WeightUnit): Result<Unit> {
+        return try {
+            val updatedAt = Instant.now()
+            
+            // Update DataStore immediately for UI reactivity
+            dataStore.edit { preferences ->
+                preferences[WEIGHT_UNIT_KEY] = weightUnit.symbol
+                preferences[USER_ID_KEY] = userId
+                preferences[UPDATED_AT_KEY] = updatedAt.toString()
+            }
+            
+            // Update Room for offline persistence
+            settingsDao.updateWeightUnit(userId, weightUnit, updatedAt)
+            
+            // Schedule Firebase sync
+            scheduleFirebaseSync(userId)
+            
+            Timber.d("Weight unit updated successfully: ${weightUnit.symbol} for user: $userId")
+            Result.success(Unit)
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to update weight unit for user: $userId")
+            Result.failure(e)
+        }
+    }
+    
+    
     override suspend fun saveSettings(settings: UserSettings): Result<Unit> {
         return try {
             settings.validate()
@@ -144,6 +173,7 @@ class SettingsRepositoryImpl @Inject constructor(
             dataStore.edit { preferences ->
                 preferences[DARK_MODE_KEY] = settings.darkMode
                 preferences[NOTIFICATIONS_ENABLED_KEY] = settings.notificationsEnabled
+                preferences[WEIGHT_UNIT_KEY] = settings.weightUnit.symbol
                 preferences[USER_ID_KEY] = settings.userId
                 preferences[UPDATED_AT_KEY] = settings.updatedAt.toString()
             }
@@ -190,6 +220,7 @@ class SettingsRepositoryImpl @Inject constructor(
                 preferences[USER_ID_KEY] == userId && 
                 preferences.contains(DARK_MODE_KEY) && 
                 preferences.contains(NOTIFICATIONS_ENABLED_KEY)
+                // Note: Not checking WEIGHT_UNIT_KEY for backward compatibility
             }
             
             if (dataStoreHasData) {
@@ -270,6 +301,7 @@ class SettingsRepositoryImpl @Inject constructor(
             dataStore.edit { preferences ->
                 preferences[DARK_MODE_KEY] = settings.darkMode
                 preferences[NOTIFICATIONS_ENABLED_KEY] = settings.notificationsEnabled
+                preferences[WEIGHT_UNIT_KEY] = settings.weightUnit.symbol
                 preferences[USER_ID_KEY] = settings.userId
                 preferences[UPDATED_AT_KEY] = settings.updatedAt.toString()
             }
@@ -311,6 +343,9 @@ private fun Preferences.toUserSettings(userId: String): UserSettings? {
             userId = userId,
             darkMode = this[booleanPreferencesKey("dark_mode")] ?: false,
             notificationsEnabled = this[booleanPreferencesKey("notifications_enabled")] ?: true,
+            weightUnit = this[stringPreferencesKey("weight_unit")]?.let { 
+                WeightUnit.fromSymbol(it) 
+            } ?: WeightUnit.getSystemDefault(),
             updatedAt = this[stringPreferencesKey("updated_at")]?.let { 
                 try { 
                     Instant.parse(it) 

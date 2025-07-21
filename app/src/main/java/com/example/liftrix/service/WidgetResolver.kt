@@ -130,14 +130,22 @@ class WidgetResolver @Inject constructor() {
         layoutMode: DashboardLayoutMode = DashboardLayoutMode.SECTIONS,
         preferences: WidgetPreferences? = null
     ): List<AnalyticsWidget> {
-        return when (layoutMode) {
+        Timber.d("=== RESOLVER DEBUG: resolveWidgets called with userLevel=$userLevel, layoutMode=$layoutMode")
+        Timber.d("=== RESOLVER DEBUG: preferences visibleWidgets count = ${preferences?.visibleWidgets?.size ?: 0}")
+        
+        val result = when (layoutMode) {
             DashboardLayoutMode.CUSTOM -> {
+                Timber.d("=== RESOLVER DEBUG: Using CUSTOM mode resolution")
                 resolveCustomWidgets(preferences, userLevel)
             }
             else -> {
+                Timber.d("=== RESOLVER DEBUG: Using standard mode resolution for $userLevel")
                 resolveStandardWidgets(userLevel)
             }
         }
+        
+        Timber.d("=== RESOLVER DEBUG: Final result - ${result.size} widgets resolved")
+        return result
     }
     
     /**
@@ -154,28 +162,33 @@ class WidgetResolver @Inject constructor() {
         
         val selectedWidgets = when (userLevel) {
             UserLevel.BEGINNER -> {
-                // 4 essential widgets for building workout habits
-                selectWidgetsByStrategy(
-                    widgets = allWidgets,
-                    maxCount = 4,
-                    strategy = SelectionStrategy.ESSENTIAL_ONLY
-                )
+                // 4 fixed widgets for beginners - non-configurable
+                allWidgets.filter { it.priority == WidgetPriority.FIXED_BEGINNER }
+                    .sortedBy { it.getLayoutPriority() }
             }
             UserLevel.INTERMEDIATE -> {
-                // 7 widgets: essential + some trend analysis
-                selectWidgetsByStrategy(
-                    widgets = allWidgets,
-                    maxCount = 7,
-                    strategy = SelectionStrategy.ESSENTIAL_AND_TRENDS
-                )
+                // 7 widgets: 4 fixed + 3 configurable (any complexity)
+                val fixedWidgets = allWidgets.filter { it.priority == WidgetPriority.FIXED_BEGINNER }
+                val configurableWidgets = allWidgets
+                    .filter { it.priority != WidgetPriority.FIXED_BEGINNER }
+                    .sortedWith(compareBy(
+                        { it.priority?.configurationLevel ?: 2 }, // Default to STANDARD level if no priority
+                        { it.getLayoutPriority() }
+                    ))
+                    .take(3)
+                (fixedWidgets + configurableWidgets).sortedBy { it.getLayoutPriority() }
             }
             UserLevel.ADVANCED -> {
-                // 10 widgets: comprehensive analytics
-                selectWidgetsByStrategy(
-                    widgets = allWidgets,
-                    maxCount = 10,
-                    strategy = SelectionStrategy.COMPREHENSIVE
-                )
+                // 10 widgets: 4 fixed + 6 configurable (any complexity)
+                val fixedWidgets = allWidgets.filter { it.priority == WidgetPriority.FIXED_BEGINNER }
+                val configurableWidgets = allWidgets
+                    .filter { it.priority != WidgetPriority.FIXED_BEGINNER }
+                    .sortedWith(compareBy(
+                        { it.priority?.configurationLevel ?: 2 }, // Default to STANDARD level if no priority
+                        { it.getLayoutPriority() }
+                    ))
+                    .take(6)
+                (fixedWidgets + configurableWidgets).sortedBy { it.getLayoutPriority() }
             }
         }
         
@@ -444,6 +457,9 @@ class WidgetResolver @Inject constructor() {
         val defaultWidgets = resolveStandardWidgets(userLevel)
         val widgetIds = defaultWidgets.map { it.id }.toSet()
         val widgetOrder = defaultWidgets.map { it.id }
+        
+        Timber.d("=== PREFS DEBUG: Creating default preferences for $userLevel with ${defaultWidgets.size} widgets")
+        Timber.d("=== PREFS DEBUG: Widget IDs = $widgetIds")
         
         return WidgetPreferences(
             userId = userId,

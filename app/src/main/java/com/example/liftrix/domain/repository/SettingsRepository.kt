@@ -1,6 +1,7 @@
 package com.example.liftrix.domain.repository
 
 import com.example.liftrix.domain.model.UserSettings
+import com.example.liftrix.domain.model.WeightUnit
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -50,6 +51,18 @@ interface SettingsRepository {
      * @return A Result indicating success or failure
      */
     suspend fun updateNotifications(userId: String, enabled: Boolean): Result<Unit>
+    
+    /**
+     * Updates the weight unit preference for a user.
+     * 
+     * This operation will immediately persist to DataStore for instant UI updates
+     * and asynchronously sync to Room for offline availability.
+     * 
+     * @param userId The ID of the user whose setting to update
+     * @param weightUnit The preferred weight unit (kg or lbs)
+     * @return A Result indicating success or failure
+     */
+    suspend fun updateWeightUnit(userId: String, weightUnit: WeightUnit): Result<Unit>
     
     /**
      * Saves complete user settings.

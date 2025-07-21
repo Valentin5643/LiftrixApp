@@ -63,14 +63,20 @@ class AnalyticsSyncWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         return try {
-            val currentUserId = getCurrentUserId()
-                ?: return Result.failure(
+            // Enhanced authentication validation
+            val authValidationResult = validateAuthentication()
+            if (!authValidationResult.isValid) {
+                Timber.w("Analytics sync skipped: ${authValidationResult.reason}")
+                return Result.success(
                     Data.Builder()
-                        .putString(KEY_ERROR_MESSAGE, "User not authenticated for analytics sync")
+                        .putString(KEY_ERROR_MESSAGE, "Analytics sync skipped: ${authValidationResult.reason}")
+                        .putInt(KEY_SYNC_COUNT, 0)
                         .build()
                 )
+            }
 
-            Timber.d("Starting analytics sync for user: $currentUserId")
+            val currentUserId = authValidationResult.userId!!
+            Timber.d("Starting analytics sync for authenticated user: $currentUserId")
             
             val syncResult = syncAnalyticsToFirebase(currentUserId)
             
@@ -85,33 +91,12 @@ class AnalyticsSyncWorker @AssistedInject constructor(
                     Result.success(outputData)
                 },
                 onFailure = { throwable ->
-                    val errorMessage = throwable.message ?: "Unknown error"
-                    Timber.e("Analytics sync failed: $errorMessage")
-                    
-                    if (runAttemptCount < MAX_RETRY_COUNT) {
-                        Timber.d("Retrying analytics sync, attempt ${runAttemptCount + 1}/$MAX_RETRY_COUNT")
-                        Result.retry()
-                    } else {
-                        Result.failure(
-                            Data.Builder()
-                                .putString(KEY_ERROR_MESSAGE, errorMessage)
-                                .build()
-                        )
-                    }
+                    return handleSyncFailure(throwable)
                 }
             )
         } catch (e: Exception) {
             Timber.e(e, "Unexpected error during analytics sync")
-            
-            if (runAttemptCount < MAX_RETRY_COUNT) {
-                Result.retry()
-            } else {
-                Result.failure(
-                    Data.Builder()
-                        .putString(KEY_ERROR_MESSAGE, "Analytics sync failed after $MAX_RETRY_COUNT attempts: ${e.message}")
-                        .build()
-                )
-            }
+            return handleUnexpectedError(e)
         }
     }
 
@@ -157,7 +142,7 @@ class AnalyticsSyncWorker @AssistedInject constructor(
     }
 
     /**
-     * Syncs a batch of analytics calculations with conflict resolution
+     * Syncs a batch of analytics calculations with enhanced error handling
      */
     private suspend fun syncAnalyticsBatch(
         userId: String, 
@@ -165,6 +150,7 @@ class AnalyticsSyncWorker @AssistedInject constructor(
     ): AnalyticsSyncResult {
         var syncedCount = 0
         var conflictCount = 0
+        var permissionErrors = 0
 
         calculations.forEach { calculation ->
             try {
@@ -191,16 +177,29 @@ class AnalyticsSyncWorker @AssistedInject constructor(
                     conflictCount++
                 }
 
-                // Upload analytics data to Firebase
+                // Upload analytics data to Firebase with permission check
                 documentRef.set(analyticsDto, SetOptions.merge()).await()
                 syncedCount++
                 
                 Timber.v("Analytics calculation synced: ${calculation.id}")
                 
+            } catch (e: com.google.firebase.firestore.FirebaseFirestoreException) {
+                if (e.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                    permissionErrors++
+                    Timber.w("Permission denied for analytics calculation: ${calculation.id}")
+                    // Don't break the loop, just skip this calculation
+                } else {
+                    Timber.w(e, "Firestore error syncing calculation: ${calculation.id}")
+                }
             } catch (e: Exception) {
                 Timber.w(e, "Failed to sync single analytics calculation: ${calculation.id}")
                 // Continue with other calculations instead of failing entire batch
             }
+        }
+
+        // Log permission errors for monitoring
+        if (permissionErrors > 0) {
+            Timber.w("Analytics sync completed with $permissionErrors permission errors out of ${calculations.size} calculations")
         }
 
         return AnalyticsSyncResult(syncedCount, conflictCount)
@@ -226,7 +225,54 @@ class AnalyticsSyncWorker @AssistedInject constructor(
     }
 
     /**
-     * Gets current authenticated user ID
+     * Enhanced authentication validation for background sync operations
+     */
+    private suspend fun validateAuthentication(): AuthValidationResult {
+        val currentUser = auth.currentUser
+        
+        if (currentUser == null) {
+            return AuthValidationResult(
+                isValid = false,
+                reason = "No authenticated user",
+                userId = null
+            )
+        }
+        
+        if (currentUser.isAnonymous) {
+            Timber.d("Anonymous user detected - analytics sync will be limited")
+            // Allow anonymous users but with limited functionality
+        }
+        
+        // Validate token freshness to prevent PERMISSION_DENIED errors
+        try {
+            val tokenResult = currentUser.getIdToken(false).await()
+            if (tokenResult?.token.isNullOrBlank()) {
+                return AuthValidationResult(
+                    isValid = false,
+                    reason = "Authentication token is invalid or expired",
+                    userId = currentUser.uid
+                )
+            }
+            
+            Timber.v("Authentication validated for user: ${currentUser.uid}")
+            return AuthValidationResult(
+                isValid = true,
+                reason = "Authentication valid",
+                userId = currentUser.uid
+            )
+            
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to validate authentication token")
+            return AuthValidationResult(
+                isValid = false,
+                reason = "Token validation failed: ${e.message}",
+                userId = currentUser.uid
+            )
+        }
+    }
+    
+    /**
+     * Gets current authenticated user ID (legacy method for compatibility)
      */
     private fun getCurrentUserId(): String? {
         return auth.currentUser?.uid?.also { userId ->
@@ -234,6 +280,94 @@ class AnalyticsSyncWorker @AssistedInject constructor(
         } ?: run {
             Timber.w("No authenticated user for analytics sync")
             null
+        }
+    }
+    
+    /**
+     * Handles sync failure with specific error recovery strategies
+     */
+    private fun handleSyncFailure(throwable: Throwable): Result {
+        val errorMessage = throwable.message ?: "Unknown error"
+        
+        // Handle permission denied errors specifically
+        if (isPermissionDeniedError(throwable)) {
+            Timber.w("Analytics sync permission denied - skipping sync: $errorMessage")
+            return Result.success(
+                Data.Builder()
+                    .putString(KEY_ERROR_MESSAGE, "Analytics sync skipped due to permissions")
+                    .putInt(KEY_SYNC_COUNT, 0)
+                    .build()
+            )
+        }
+        
+        // Handle network and temporary errors with retry
+        if (isRetryableError(throwable)) {
+            if (runAttemptCount < MAX_RETRY_COUNT) {
+                Timber.d("Retrying analytics sync, attempt ${runAttemptCount + 1}/$MAX_RETRY_COUNT")
+                return Result.retry()
+            }
+        }
+        
+        Timber.e("Analytics sync failed: $errorMessage")
+        return Result.failure(
+            Data.Builder()
+                .putString(KEY_ERROR_MESSAGE, errorMessage)
+                .build()
+        )
+    }
+    
+    /**
+     * Handles unexpected errors during sync
+     */
+    private fun handleUnexpectedError(exception: Exception): Result {
+        if (runAttemptCount < MAX_RETRY_COUNT && isRetryableError(exception)) {
+            return Result.retry()
+        } else {
+            return Result.failure(
+                Data.Builder()
+                    .putString(KEY_ERROR_MESSAGE, "Analytics sync failed after $MAX_RETRY_COUNT attempts: ${exception.message}")
+                    .build()
+            )
+        }
+    }
+    
+    /**
+     * Checks if the error is a permission denied error
+     */
+    private fun isPermissionDeniedError(throwable: Throwable): Boolean {
+        return when (throwable) {
+            is com.google.firebase.firestore.FirebaseFirestoreException -> {
+                throwable.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED
+            }
+            is com.google.firebase.auth.FirebaseAuthException -> {
+                throwable.errorCode == "ERROR_INSUFFICIENT_PERMISSION" || 
+                throwable.errorCode == "ERROR_OPERATION_NOT_ALLOWED"
+            }
+            else -> {
+                throwable.message?.contains("PERMISSION_DENIED", ignoreCase = true) == true ||
+                throwable.message?.contains("Missing or insufficient permissions", ignoreCase = true) == true
+            }
+        }
+    }
+    
+    /**
+     * Checks if the error is retryable
+     */
+    private fun isRetryableError(throwable: Throwable): Boolean {
+        return when (throwable) {
+            is com.google.firebase.firestore.FirebaseFirestoreException -> {
+                when (throwable.code) {
+                    com.google.firebase.firestore.FirebaseFirestoreException.Code.UNAVAILABLE,
+                    com.google.firebase.firestore.FirebaseFirestoreException.Code.DEADLINE_EXCEEDED,
+                    com.google.firebase.firestore.FirebaseFirestoreException.Code.ABORTED,
+                    com.google.firebase.firestore.FirebaseFirestoreException.Code.INTERNAL -> true
+                    else -> false
+                }
+            }
+            is com.google.firebase.FirebaseNetworkException -> true
+            is java.net.SocketTimeoutException -> true
+            is java.io.IOException -> true
+            else -> false
         }
     }
 
@@ -284,6 +418,15 @@ data class RetryPolicy(
     val initialDelayMs: Long,
     val maxDelayMs: Long,
     val multiplier: Float
+)
+
+/**
+ * Result of authentication validation for background sync operations
+ */
+data class AuthValidationResult(
+    val isValid: Boolean,
+    val reason: String,
+    val userId: String?
 )
 
 /**

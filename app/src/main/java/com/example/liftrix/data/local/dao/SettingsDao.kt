@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.example.liftrix.data.local.entity.SettingsEntity
+import com.example.liftrix.domain.model.WeightUnit
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -70,6 +71,17 @@ interface SettingsDao {
      */
     @Query("UPDATE user_settings SET notifications_enabled = :enabled, updated_at = :updatedAt WHERE user_id = :userId")
     suspend fun updateNotifications(userId: String, enabled: Boolean, updatedAt: java.time.Instant)
+    
+    /**
+     * Updates weight unit setting for a user
+     * 
+     * @param userId The user's unique identifier
+     * @param weightUnit The new weight unit preference
+     * @param updatedAt The timestamp of the update
+     */
+    @Query("UPDATE user_settings SET weight_unit = :weightUnit, updated_at = :updatedAt WHERE user_id = :userId")
+    suspend fun updateWeightUnit(userId: String, weightUnit: WeightUnit, updatedAt: java.time.Instant)
+    
     
     /**
      * Deletes user settings for a specific user

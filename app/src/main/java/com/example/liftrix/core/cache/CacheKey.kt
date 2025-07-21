@@ -97,7 +97,7 @@ sealed class CacheKey {
             val userId: String,
             val widget: com.example.liftrix.domain.model.analytics.AnalyticsWidget
         ) : AnalyticsWidget() {
-            override val keyString: String = "analytics:widget:$userId:${widget.name}"
+            override val keyString: String = "analytics:widget:$userId:${widget.id}"
         }
         
         /**
@@ -115,7 +115,7 @@ sealed class CacheKey {
         data class Metadata(
             val widget: com.example.liftrix.domain.model.analytics.AnalyticsWidget
         ) : AnalyticsWidget() {
-            override val keyString: String = "analytics:metadata:${widget.name}"
+            override val keyString: String = "analytics:metadata:${widget.id}"
         }
     }
     

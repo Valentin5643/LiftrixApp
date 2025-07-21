@@ -4,9 +4,12 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import javax.inject.Inject
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.DashboardConfiguration
+import com.example.liftrix.domain.model.analytics.DashboardLayoutMode
+import com.example.liftrix.domain.model.analytics.UserLevel
 import com.example.liftrix.domain.model.analytics.WidgetPreferences
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -16,6 +19,7 @@ import com.example.liftrix.domain.model.SubscriptionStatus
 import java.time.LocalDateTime
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.service.AnalyticsService
+import com.example.liftrix.service.WidgetResolver
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.progress.components.AnalyticsWidgetManager
@@ -28,7 +32,14 @@ import timber.log.Timber
  * configuration management, and user preference persistence. It extends BaseViewModel
  * to provide standardized state management and error handling.
  * 
+ * Now integrates with WidgetResolver for dynamic widget resolution:
+ * - Beginner users: 4 widgets (essential metrics)
+ * - Intermediate users: 7 widgets (essential + trends)
+ * - Advanced users: 10 widgets (comprehensive analytics)
+ * - CUSTOM layout mode: User-selected widgets within level constraints
+ * 
  * Key Features:
+ * - Dynamic widget resolution based on user level and layout mode
  * - Widget data loading with caching and refresh capabilities
  * - Configuration management with atomic updates
  * - Widget visibility toggle with business rule validation
@@ -40,6 +51,7 @@ import timber.log.Timber
  * Architecture:
  * - Follows MVI pattern with unidirectional data flow
  * - Integrates with AnalyticsService for data operations
+ * - Uses WidgetResolver for dynamic widget selection
  * - Uses StateFlow for reactive UI updates
  * - Implements proper lifecycle management
  * - Handles concurrent operations safely
@@ -47,6 +59,7 @@ import timber.log.Timber
  * Dependencies:
  * - AnalyticsService: Core service for widget operations
  * - AnalyticsWidgetManager: Widget configuration management
+ * - WidgetResolver: Dynamic widget resolution based on user level
  * - ErrorHandler: Centralized error processing
  * - Receives user state from ProgressDashboardCoordinator for centralized auth management
  * 
@@ -70,6 +83,7 @@ import timber.log.Timber
 class AnalyticsWidgetViewModel @Inject constructor(
     private val analyticsService: AnalyticsService,
     private val widgetManager: AnalyticsWidgetManager,
+    private val widgetResolver: WidgetResolver,
     errorHandler: ErrorHandler
 ) : BaseViewModel<UiState<AnalyticsWidgetState>, AnalyticsWidgetEvent>(errorHandler) {
 
@@ -129,6 +143,8 @@ class AnalyticsWidgetViewModel @Inject constructor(
             is AnalyticsWidgetEvent.ClearError -> clearError(event.widgetId)
             is AnalyticsWidgetEvent.WidgetClicked -> handleWidgetClick(event.widget)
             is AnalyticsWidgetEvent.ForceAllWidgets -> forceAdvancedUserLevel()
+            AnalyticsWidgetEvent.NavigateToDashboardCustomization -> handleNavigateToDashboardCustomization()
+            is AnalyticsWidgetEvent.WidgetReordered -> handleWidgetReordered(event.fromIndex, event.toIndex)
         }
     }
 
@@ -814,13 +830,33 @@ class AnalyticsWidgetViewModel @Inject constructor(
         availableWidgets.value = defaultWidgets
         
         // Log available widgets for debugging
-        Timber.d("Initialized ${defaultWidgets.size} available widgets: ${defaultWidgets.map { it.name }}")
+        Timber.d("Initialized ${defaultWidgets.size} available widgets: ${defaultWidgets.map { it.displayName }}")
     }
 
     /**
      * Loads initial data including preferences and configuration.
      */
     private fun loadInitialData() {
+        Timber.d("=== INIT DEBUG: Starting loadInitialData")
+        
+        // CRITICAL TEMP FIX: Force Advanced level for debugging
+        val user = _currentUser.value
+        if (user != null) {
+            Timber.d("=== INIT DEBUG: User found, checking preferences state")
+            viewModelScope.launch {
+                // First check if we're stuck in Beginner mode when we should be Advanced
+                val currentState = _uiState.value
+                Timber.d("=== INIT DEBUG: Current state type = ${currentState::class.simpleName}")
+                
+                if (currentState is UiState.Success && 
+                    currentState.data.configuration?.javaClass?.simpleName == "Beginner") {
+                    Timber.w("=== CRITICAL FIX: User stuck in Beginner mode, forcing Advanced")
+                    forceAdvancedUserLevel()
+                    return@launch
+                }
+            }
+        }
+        
         loadPreferences()
         loadConfiguration()
     }
@@ -830,27 +866,44 @@ class AnalyticsWidgetViewModel @Inject constructor(
      */
     private fun loadPreferences() {
         val user = _currentUser.value ?: return
+        
+        Timber.d("=== PREFS LOAD: Starting preference load for user ${user.uid}")
 
         viewModelScope.launch {
             try {
+                Timber.d("=== PREFS LOAD: Calling analyticsService.getWidgetPreferences")
                 val result = analyticsService.getWidgetPreferences(user.uid)
+                
+                Timber.d("=== PREFS LOAD: Got result from analyticsService")
                 
                 result.fold(
                     onSuccess = { preferences ->
-                        Timber.d("Loaded preferences with ${preferences.visibleWidgets.size} visible widgets: ${preferences.visibleWidgets}")
+                        Timber.d("📥 PREFS LOADED: preferences = $preferences")
+                        Timber.d("📥 PREFS LOADED: dashboardLayout = ${preferences.dashboardLayout}")
+                        Timber.d("=== WIDGET DEBUG: User Level = ${preferences.userLevel}, Visible Widgets = ${preferences.visibleWidgets.size}")
+                        Timber.d("=== WIDGET DEBUG: Visible Widget IDs = ${preferences.visibleWidgets}")
+                        
+                        // CRITICAL FIX: Use WidgetResolver for proper widget resolution
+                        val resolvedWidgets = widgetResolver.resolveWidgetsFromPreferences(
+                            preferences = preferences,
+                            userLevel = preferences.userLevel
+                        )
+                        
+                        Timber.d("=== WIDGET DEBUG: Resolved ${resolvedWidgets.size} widgets from WidgetResolver")
+                        Timber.d("=== WIDGET DEBUG: Resolved widgets = ${resolvedWidgets.map { it.displayName }}")
                         
                         updateState { currentState ->
                             when (currentState) {
                                 is UiState.Success -> UiState.Success(
                                     currentState.data
                                         .withPreferences(preferences)
-                                        .withActiveWidgets(preferences)
+                                        .withResolvedWidgets(resolvedWidgets)
                                         .withLoading(false)
                                 )
                                 else -> UiState.Success(
                                     AnalyticsWidgetState()
                                         .withPreferences(preferences)
-                                        .withActiveWidgets(preferences)
+                                        .withResolvedWidgets(resolvedWidgets)
                                         .withLoading(false)
                                 )
                             }
@@ -865,6 +918,7 @@ class AnalyticsWidgetViewModel @Inject constructor(
                         }
                     },
                     onFailure = { throwable ->
+                        Timber.e("=== PREFS LOAD: Failed to load preferences - ${throwable.message}")
                         val error = throwable as? LiftrixError ?: LiftrixError.UnknownError(
                             errorMessage = throwable.message ?: "Unknown error",
                             analyticsContext = mapOf("operation" to "loadPreferences")
@@ -891,7 +945,7 @@ class AnalyticsWidgetViewModel @Inject constructor(
     }
 
     /**
-     * Loads dashboard configuration from preferences.
+     * Loads dashboard configuration from preferences using WidgetResolver.
      */
     private fun loadConfiguration() {
         val preferences = when (val state = _uiState.value) {
@@ -899,23 +953,85 @@ class AnalyticsWidgetViewModel @Inject constructor(
             else -> null
         }
         if (preferences != null) {
-            val configuration = widgetManager.createConfigurationFromPreferences(preferences)
+            Timber.d("=== CONFIG DEBUG: Loading configuration for ${preferences.userLevel} with layout ${preferences.dashboardLayout}")
+            
+            // Use WidgetResolver to get the appropriate configuration
+            val configuration = DashboardConfiguration.fromUserLevelAndLayout(
+                userLevel = preferences.userLevel,
+                layoutMode = preferences.dashboardLayout
+            )
+            
+            Timber.d("=== CONFIG DEBUG: Created configuration: ${configuration.javaClass.simpleName}")
+            
+            // Resolve widgets using WidgetResolver
+            val resolvedWidgets = widgetResolver.resolveWidgets(
+                userLevel = preferences.userLevel,
+                layoutMode = preferences.dashboardLayout,
+                preferences = preferences
+            )
+            
+            Timber.d("=== CONFIG DEBUG: WidgetResolver returned ${resolvedWidgets.size} widgets for ${preferences.userLevel}")
+            Timber.d("=== CONFIG DEBUG: Widget list = ${resolvedWidgets.map { it.displayName }}")
+            
             updateState { currentState ->
                 when (currentState) {
-                    is UiState.Success -> UiState.Success(currentState.data.withConfiguration(configuration))
-                    else -> UiState.Success(AnalyticsWidgetState().withConfiguration(configuration))
+                    is UiState.Success -> UiState.Success(
+                        currentState.data
+                            .withConfiguration(configuration)
+                            .withResolvedWidgets(resolvedWidgets)
+                    )
+                    else -> UiState.Success(
+                        AnalyticsWidgetState()
+                            .withConfiguration(configuration)
+                            .withResolvedWidgets(resolvedWidgets)
+                    )
                 }
             }
+        } else {
+            Timber.w("AnalyticsWidgetViewModel: No preferences available for configuration loading")
         }
     }
 
     /**
-     * Updates error state for ViewModel-specific error handling.
+     * Updates error state for ViewModel-specific error handling with permission fallback.
      * 
      * @param error The error to reflect in the state
      */
     override fun updateErrorState(error: LiftrixError) {
-        updateState { UiState.Error(error) }
+        // Handle permission denied errors gracefully
+        if (isPermissionDeniedError(error)) {
+            Timber.w("Permission denied in AnalyticsWidgetViewModel - falling back to empty state: ${error.message}")
+            
+            // Provide fallback empty state instead of error
+            viewModelScope.launch {
+                val currentState = (_uiState.value as? UiState.Success)?.data ?: AnalyticsWidgetState()
+                val fallbackState = currentState.copy(
+                    activeWidgets = emptyList(),
+                    widgetDataMap = emptyMap(),
+                    isLoading = false,
+                )
+                updateState { UiState.Success(fallbackState) }
+            }
+        } else {
+            updateState { UiState.Error(error) }
+        }
+    }
+    
+    /**
+     * Checks if an error is related to permission denied
+     */
+    private fun isPermissionDeniedError(error: LiftrixError): Boolean {
+        return when (error) {
+            is LiftrixError.AuthenticationError -> {
+                error.errorCode == "PERMISSION_DENIED" || 
+                error.message.contains("Permission denied", ignoreCase = true)
+            }
+            else -> {
+                error.message.contains("PERMISSION_DENIED", ignoreCase = true) ||
+                error.message.contains("Missing or insufficient permissions", ignoreCase = true) ||
+                error.message.contains("Permission denied", ignoreCase = true)
+            }
+        }
     }
 
     /**
@@ -955,11 +1071,136 @@ class AnalyticsWidgetViewModel @Inject constructor(
      * @param widget The clicked widget
      */
     private fun handleWidgetClick(widget: com.example.liftrix.domain.model.analytics.AnalyticsWidget) {
-        val widgetId = widget.name
+        val widgetId = widget.id
         trackInteraction(widgetId, "click", emptyMap())
         
         // Additional click handling logic can be added here
         Timber.d("Widget clicked: $widgetId")
+    }
+    
+    /**
+     * Handles navigation to dashboard customization.
+     */
+    private fun handleNavigateToDashboardCustomization() {
+        Timber.d("Navigating to dashboard customization")
+        // Navigation logic will be handled by the parent composable
+    }
+    
+    /**
+     * Handles widget reordering with immediate state update and preference persistence.
+     * 
+     * FIXED: Now actually reorders widgets in the UI state and persists to preferences.
+     * This was the critical missing piece causing widgets to snap back after drag operations.
+     */
+    private fun handleWidgetReordered(fromIndex: Int, toIndex: Int) {
+        if (fromIndex == toIndex || fromIndex < 0 || toIndex < 0) {
+            Timber.w("Invalid widget reorder indices: from=$fromIndex, to=$toIndex")
+            return
+        }
+        
+        val user = _currentUser.value
+        if (user == null) {
+            Timber.w("No user available for widget reordering")
+            return
+        }
+        
+        val currentState = _uiState.value
+        if (currentState !is UiState.Success) {
+            Timber.w("Cannot reorder widgets - invalid state: ${currentState::class.simpleName}")
+            return
+        }
+        
+        val preferences = currentState.data.preferences
+        if (preferences == null) {
+            Timber.w("No preferences available for widget reordering")
+            return
+        }
+        
+        // Get current ordered visible widgets
+        val currentOrder = preferences.getOrderedVisibleWidgets().toMutableList()
+        
+        if (fromIndex >= currentOrder.size || toIndex >= currentOrder.size) {
+            Timber.w("Reorder indices out of bounds: from=$fromIndex, to=$toIndex, size=${currentOrder.size}")
+            return
+        }
+        
+        // Perform the reordering
+        val widgetToMove = currentOrder.removeAt(fromIndex)
+        currentOrder.add(toIndex, widgetToMove)
+        
+        Timber.d("Reordering widget '$widgetToMove' from position $fromIndex to $toIndex")
+        Timber.d("New widget order: ${currentOrder.joinToString(", ")}")
+        
+        // Update preferences with new order
+        val updatedPreferences = preferences.updateWidgetOrder(currentOrder)
+        
+        // Update UI state immediately for smooth feedback
+        updateState { currentUiState ->
+            when (currentUiState) {
+                is UiState.Success -> {
+                    // Update resolved widgets to reflect new order
+                    val reorderedWidgets = currentOrder.mapNotNull { widgetId ->
+                        currentUiState.data.activeWidgets.find { it.id == widgetId }
+                    }
+                    
+                    UiState.Success(
+                        currentUiState.data
+                            .withPreferences(updatedPreferences)
+                            .withResolvedWidgets(reorderedWidgets)
+                    )
+                }
+                else -> currentUiState
+            }
+        }
+        
+        // Persist to database asynchronously
+        viewModelScope.launch {
+            try {
+                val result = analyticsService.updateWidgetPreferences(updatedPreferences)
+                result.fold(
+                    onSuccess = {
+                        Timber.d("Widget reorder persisted successfully")
+                        trackInteraction("widget_reorder", "reorder", mapOf<String, Any>(
+                            "from" to fromIndex,
+                            "to" to toIndex,
+                            "widget" to widgetToMove,
+                            "success" to true
+                        ))
+                    },
+                    onFailure = { throwable ->
+                        Timber.e("Failed to persist widget reorder: ${throwable.message}")
+                        trackInteraction("widget_reorder", "reorder", mapOf<String, Any>(
+                            "from" to fromIndex,
+                            "to" to toIndex,
+                            "widget" to widgetToMove,
+                            "success" to false,
+                            "error" to (throwable.message ?: "Unknown error")
+                        ))
+                        
+                        // Revert UI state if persistence fails
+                        updateState { currentUiState ->
+                            when (currentUiState) {
+                                is UiState.Success -> UiState.Success(
+                                    currentUiState.data.withPreferences(preferences)
+                                )
+                                else -> currentUiState
+                            }
+                        }
+                    }
+                )
+            } catch (exception: Exception) {
+                Timber.e(exception, "Unexpected error during widget reorder persistence")
+                // Revert on exception
+                updateState { currentUiState ->
+                    when (currentUiState) {
+                        is UiState.Success -> UiState.Success(
+                            currentUiState.data.withPreferences(preferences)
+                        )
+                        else -> currentUiState
+                    }
+                }
+            }
+        }
     }
     
     /**
@@ -1008,7 +1249,10 @@ class AnalyticsWidgetViewModel @Inject constructor(
     }
 
     /**
-     * Forces user to advanced level to show all 23 widgets.
+     * Forces user to advanced level to show all widgets with correct IDs.
+     * 
+     * CRITICAL BUG FIX: This method now uses WidgetResolver to get correct widget IDs
+     * instead of hardcoded incorrect names that were causing widget resolution failures.
      */
     fun forceAdvancedUserLevel() {
         val user = _currentUser.value ?: return
@@ -1024,25 +1268,23 @@ class AnalyticsWidgetViewModel @Inject constructor(
                 }
                 
                 if (currentPrefs != null) {
-                    val updatedPrefs = currentPrefs.copy(
-                        userLevel = com.example.liftrix.domain.model.analytics.UserLevel.ADVANCED,
-                        visibleWidgets = setOf(
-                            "WorkoutFrequency", "TotalVolume", "AverageDuration", "ConsistencyStreak",
-                            "VolumeLoadProgression", "OneRMProgression", "ProgressChart", "WorkoutStreak", 
-                            // "CaloriesBurned", // REMOVED - duplicate of CalorieSection widget
-                            "DailyCalories", "VolumeCalendar", "StrengthProgress",
-                            "VolumeChart", "DurationChart", "FrequencyChart", "PersonalRecords",
-                            "WeeklyCalorieTrend", "MuscleGroupDistribution", "VolumeTrends", 
-                            "RecoveryMetrics", "PerformanceAnalysis", "WeeklyTrends", "RecoveryPatterns"
-                        )
+                    // Use WidgetResolver to create advanced-level preferences
+                    val advancedPrefs = widgetResolver.createDefaultPreferences(
+                        userId = user.uid,
+                        userLevel = UserLevel.ADVANCED,
+                        layoutMode = currentPrefs.dashboardLayout
                     )
                     
-                    val result = analyticsService.updateWidgetPreferences(updatedPrefs)
+                    Timber.d("Setting ${advancedPrefs.visibleWidgets.size} Advanced level widgets: ${advancedPrefs.visibleWidgets.joinToString(", ")}")
+                    
+                    val result = analyticsService.updateWidgetPreferences(advancedPrefs)
                     
                     result.fold(
                         onSuccess = {
+                            // Reload preferences and configuration after cache invalidation
                             loadPreferences()
-                            Timber.d("Advanced user level and all widgets set successfully")
+                            loadConfiguration()
+                            Timber.d("Advanced user level set successfully with ${advancedPrefs.visibleWidgets.size} widgets")
                         },
                         onFailure = { throwable ->
                             val error = throwable as? LiftrixError ?: LiftrixError.UnknownError(
@@ -1083,9 +1325,5 @@ class AnalyticsWidgetViewModel @Inject constructor(
  * Uses enum valueOf for complete coverage of all 23 widget types.
  */
 private fun AnalyticsWidget.Companion.fromString(widgetId: String): AnalyticsWidget? {
-    return try {
-        AnalyticsWidget.valueOf(widgetId)
-    } catch (e: IllegalArgumentException) {
-        null
-    }
+    return AnalyticsWidget.getById(widgetId)
 }

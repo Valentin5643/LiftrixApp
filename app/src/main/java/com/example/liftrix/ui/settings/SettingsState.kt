@@ -2,6 +2,7 @@ package com.example.liftrix.ui.settings
 
 import com.example.liftrix.domain.model.SubscriptionStatus
 import com.example.liftrix.domain.model.UserSettings
+import com.example.liftrix.domain.model.WeightUnit
 
 /**
  * Data class representing the UI state for the settings screen.
@@ -73,6 +74,13 @@ data class SettingsState(
      */
     val currentNotificationSetting: Boolean
         get() = userSettings?.notificationsEnabled ?: true
+
+    /**
+     * Gets the current weight unit preference.
+     * Defaults to system default if settings not loaded.
+     */
+    val currentWeightUnit: WeightUnit
+        get() = userSettings?.weightUnit ?: WeightUnit.getSystemDefault()
 
     /**
      * Gets the subscription display name for UI.

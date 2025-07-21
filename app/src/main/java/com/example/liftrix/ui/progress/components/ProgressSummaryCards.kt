@@ -66,6 +66,8 @@ import kotlin.math.min
 fun ProgressSummaryCards(
     summaryData: ProgressSummary,
     isLoading: Boolean,
+    weightUnit: com.example.liftrix.domain.model.WeightUnit,
+    weightFormatter: com.example.liftrix.core.formatting.WeightFormatter,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -98,7 +100,7 @@ fun ProgressSummaryCards(
                     horizontalArrangement = Arrangement.spacedBy(GridSystem.gapMedium),
                     verticalArrangement = Arrangement.spacedBy(GridSystem.gapMedium)
                 ) {
-                    items(getCompactStats(summaryData)) { stat ->
+                    items(getCompactStats(summaryData, weightUnit, weightFormatter)) { stat ->
                         CompactStatCard(
                             title = stat.title,
                             value = stat.value,
@@ -278,11 +280,20 @@ private fun LoadingState() {
 /**
  * Generate compact stat items for grid display
  */
-private fun getCompactStats(summaryData: ProgressSummary): List<CompactStatItem> {
+private fun getCompactStats(
+    summaryData: ProgressSummary,
+    weightUnit: com.example.liftrix.domain.model.WeightUnit,
+    weightFormatter: com.example.liftrix.core.formatting.WeightFormatter
+): List<CompactStatItem> {
+    // Convert total volume from kg to user's preferred unit
+    val totalVolumeInKg = summaryData.totalVolume.toDouble()
+    val totalVolumeInUserUnit = weightUnit.convertFromKilograms(totalVolumeInKg)
+    val formattedVolume = "${(totalVolumeInUserUnit / 1000).toInt()}K ${weightUnit.symbol}"
+    
     return listOf(
         CompactStatItem(
             title = "Total Volume",
-            value = "${(summaryData.totalVolume / 1000).toInt()}K lbs",
+            value = formattedVolume,
             trend = Trend.Positive(12.5f, "increase")
         ),
         CompactStatItem(

@@ -117,12 +117,14 @@ object FirebaseErrorMapper {
             )
             
             com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED -> LiftrixError.AuthenticationError(
-                errorMessage = "Permission denied for Firestore operation",
+                errorMessage = "Permission denied for Firestore operation. This may indicate insufficient permissions, expired authentication, or missing security rules.",
                 isRecoverable = false,
                 analyticsContext = mapOf(
                     "firestore_code" to "PERMISSION_DENIED",
                     "firebase_service" to "firestore",
-                    "error_type" to "FirebaseFirestoreException"
+                    "error_type" to "FirebaseFirestoreException",
+                    "suggestion" to "Check authentication state and Firebase Security Rules",
+                    "recovery_action" to "Re-authenticate or skip operation"
                 ),
                 authProvider = "Firestore",
                 errorCode = "PERMISSION_DENIED"

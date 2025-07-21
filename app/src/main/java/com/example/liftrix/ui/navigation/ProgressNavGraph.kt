@@ -30,7 +30,8 @@ import androidx.compose.ui.unit.dp
  * @param onNavigateToAuth Callback to navigate to authentication flow
  */
 fun NavGraphBuilder.progressGraph(
-    onNavigateToAuth: () -> Unit
+    onNavigateToAuth: () -> Unit,
+    onNavigateBack: () -> Unit = {}
 ) {
     navigation(
         startDestination = ProgressRoutes.PROGRESS_DASHBOARD,
@@ -62,6 +63,13 @@ fun NavGraphBuilder.progressGraph(
             ProgressScreenPlaceholder(
                 title = "Achievements",
                 subtitle = "Your fitness milestones and achievements"
+            )
+        }
+        
+        composable<LiftrixRoute.DashboardCustomization> {
+            // Dashboard customization screen for analytics widgets
+            com.example.liftrix.ui.settings.DashboardCustomizationScreen(
+                onNavigateBack = onNavigateBack
             )
         }
     }

@@ -333,7 +333,7 @@ class PreferencesServiceTest {
     fun `given valid user and widget, when updating widget visibility, then returns success`() = runTest {
         // Given
         val userId = "user123"
-        val widgetName = "TotalVolume"
+        val widgetName = "total_volume"
         val visible = true
         
         coEvery { preferencesRepository.updateWidgetVisibility(userId, widgetName, visible) } returns 
@@ -352,7 +352,7 @@ class PreferencesServiceTest {
     fun `given repository error, when updating widget visibility, then returns business rule error`() = runTest {
         // Given
         val userId = "user123"
-        val widgetName = "TotalVolume"
+        val widgetName = "total_volume"
         val visible = false
         val repositoryError = RuntimeException("Visibility update failed")
         
@@ -377,7 +377,7 @@ class PreferencesServiceTest {
     fun `given valid user and widget order, when updating widget order, then returns success`() = runTest {
         // Given
         val userId = "user123"
-        val widgetOrder = listOf("TotalVolume", "WorkoutFrequency", "ConsistencyStreak")
+        val widgetOrder = listOf("total_volume", "workout_frequency", "consistency_streak")
         
         coEvery { preferencesRepository.updateWidgetOrder(userId, widgetOrder) } returns 
             LiftrixResult.Success(Unit)
@@ -395,7 +395,7 @@ class PreferencesServiceTest {
     fun `given repository error, when updating widget order, then returns business rule error`() = runTest {
         // Given
         val userId = "user123"
-        val widgetOrder = listOf("TotalVolume", "WorkoutFrequency")
+        val widgetOrder = listOf("total_volume", "workout_frequency")
         val repositoryError = RuntimeException("Order update failed")
         
         coEvery { preferencesRepository.updateWidgetOrder(userId, widgetOrder) } throws repositoryError
@@ -549,7 +549,7 @@ class PreferencesServiceTest {
         val operations = listOf(
             { preferencesService.updateLayoutMode(userId, WidgetLayoutMode.GRID) },
             { preferencesService.updateUserLevel(userId, UserLevel.INTERMEDIATE) },
-            { preferencesService.updateWidgetVisibility(userId, "TotalVolume", true) },
+            { preferencesService.updateWidgetVisibility(userId, "total_volume", true) },
             { preferencesService.updateAutoRefreshSettings(userId, true, 30) },
             { preferencesService.toggleSection(userId, "analytics_section") }
         )

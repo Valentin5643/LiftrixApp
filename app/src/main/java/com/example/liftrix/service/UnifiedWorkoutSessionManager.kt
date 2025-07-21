@@ -192,16 +192,40 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             try {
                 // Save completed workout to repository
                 val completedWorkout = completedSession.toCompletedWorkout()
-                Timber.d("🔥 SESSION-COMPLETE: Saving workout: ${completedWorkout.name}")
+                Timber.d("WORKOUT-DEBUG: Completing session: ${completedWorkout.name} for user: ${completedWorkout.userId}")
                 
-                workoutRepository.saveWorkout(completedWorkout)
-                    .onSuccess {
-                        Timber.i("🔥 SESSION-COMPLETE: Workout saved successfully: ${completedWorkout.name}")
-                        // Clear session after successful save
-                        clearSession()
+                // 🔥 CRITICAL FIX: Use synchronous save to ensure database commit before session cleanup
+                val saveResult = if (workoutRepository is com.example.liftrix.data.repository.workout.WorkoutRepositoryImpl) {
+                    // Use the LiftrixResult-based method for proper error handling
+                    workoutRepository.createWorkout(completedWorkout)
+                } else {
+                    // Fallback to legacy save method
+                    val legacyResult = workoutRepository.saveWorkout(completedWorkout)
+                    if (legacyResult.isSuccess) {
+                        com.example.liftrix.domain.model.common.LiftrixResult.success(completedWorkout)
+                    } else {
+                        com.example.liftrix.domain.model.common.LiftrixResult.failure(
+                            com.example.liftrix.domain.model.error.LiftrixError.DatabaseError(
+                                errorMessage = "Failed to save workout: ${legacyResult.exceptionOrNull()?.message}",
+                                operation = "CREATE",
+                                table = "workouts"
+                            )
+                        )
                     }
-                    .onFailure { exception ->
-                        Timber.e(exception, "🔥 SESSION-COMPLETE: Failed to save completed workout")
+                }
+                
+                saveResult.fold(
+                    onSuccess = { savedWorkout ->
+                        Timber.d("WORKOUT-DEBUG: Session completed successfully - ID: ${savedWorkout.id.value}")
+                        
+                        // Add small delay to ensure database transaction is fully committed
+                        kotlinx.coroutines.delay(100)
+                        
+                        // Only clear session after confirmed database save
+                        clearSession()
+                    },
+                    onFailure = { exception ->
+                        Timber.e("🔥 SESSION-COMPLETE: Failed to save completed workout: ${exception.message}")
                         
                         // Check if error is recoverable to decide whether to preserve session
                         val shouldPreserveSession = when (exception) {
@@ -220,15 +244,26 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                             _currentSession.value = completedSession.copy(
                                 sessionStatus = UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE
                             )
+                            
+                            // Persist the failed session state to SharedPreferences
+                            persistSession(_currentSession.value!!)
                         } else {
                             Timber.w("🔥 SESSION-COMPLETE: Clearing session for non-recoverable error")
                             clearSession()
                         }
                     }
+                )
             } catch (e: Exception) {
                 Timber.e(e, "🔥 SESSION-COMPLETE: Error in completion process")
-                // Clear session on unexpected errors to prevent stuck state
-                clearSession()
+                
+                // 🔥 CRITICAL FIX: Preserve session on unexpected errors to prevent data loss
+                Timber.w("🔥 SESSION-COMPLETE: Preserving session due to unexpected error")
+                _currentSession.value = completedSession.copy(
+                    sessionStatus = UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE
+                )
+                scope.launch {
+                    persistSession(_currentSession.value!!)
+                }
             }
         }
         
@@ -253,17 +288,42 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                 val completedWorkout = session.toCompletedWorkout()
                 Timber.d("🔥 SESSION-RETRY: Attempting to save workout: ${completedWorkout.name}")
                 
-                workoutRepository.saveWorkout(completedWorkout)
-                    .onSuccess {
-                        Timber.i("🔥 SESSION-RETRY: Workout saved successfully on retry: ${completedWorkout.name}")
+                // 🔥 CRITICAL FIX: Use same robust save method as completion
+                val saveResult = if (workoutRepository is com.example.liftrix.data.repository.workout.WorkoutRepositoryImpl) {
+                    // Use the LiftrixResult-based method for proper error handling
+                    workoutRepository.createWorkout(completedWorkout)
+                } else {
+                    // Fallback to legacy save method
+                    val legacyResult = workoutRepository.saveWorkout(completedWorkout)
+                    if (legacyResult.isSuccess) {
+                        com.example.liftrix.domain.model.common.LiftrixResult.success(completedWorkout)
+                    } else {
+                        com.example.liftrix.domain.model.common.LiftrixResult.failure(
+                            com.example.liftrix.domain.model.error.LiftrixError.DatabaseError(
+                                errorMessage = "Failed to save workout: ${legacyResult.exceptionOrNull()?.message}",
+                                operation = "CREATE",
+                                table = "workouts"
+                            )
+                        )
+                    }
+                }
+                
+                saveResult.fold(
+                    onSuccess = { savedWorkout ->
+                        Timber.i("🔥 SESSION-RETRY: Workout saved successfully on retry with ID: ${savedWorkout.id.value}")
+                        
+                        // 🔥 CRITICAL FIX: Add delay for transaction commit
+                        kotlinx.coroutines.delay(100)
+                        
                         // Update session status to completed and clear
                         _currentSession.value = session.copy(sessionStatus = UnifiedWorkoutSession.SessionStatus.COMPLETED)
                         clearSession()
-                    }
-                    .onFailure { exception ->
-                        Timber.e(exception, "🔥 SESSION-RETRY: Retry also failed for workout: ${completedWorkout.name}")
+                    },
+                    onFailure = { exception ->
+                        Timber.e("🔥 SESSION-RETRY: Retry also failed for workout: ${completedWorkout.name}, error: ${exception.message}")
                         // Keep session in FAILED_TO_SAVE state for another retry attempt
                     }
+                )
             } catch (e: Exception) {
                 Timber.e(e, "🔥 SESSION-RETRY: Error in retry process")
             }
@@ -667,11 +727,10 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                         // 🔥 KEY FIX: Immediately set session state for UI visibility
                         _currentSession.value = session
                         
-                        Timber.i("Session recovered successfully: ${session.name} with ${session.exercises.size} exercises")
-                        
-                        // Log exercise details for debugging
-                        session.exercises.forEachIndexed { index, exercise ->
-                            Timber.d("Recovered exercise $index: ${exercise.name} with ${exercise.sets.size} sets")
+                        if (session.sessionStatus == UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE) {
+                            Timber.w("Failed save session recovered: ${session.name}")
+                        } else {
+                            Timber.i("Session recovered successfully: ${session.name} with ${session.exercises.size} exercises")
                         }
                     } else {
                         // Session was completed, clear it

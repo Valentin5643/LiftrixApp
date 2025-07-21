@@ -90,8 +90,9 @@ class AnalyticsWidgetManager @Inject constructor(
     fun getWidgetsByPriority(priority: WidgetPriority): List<AnalyticsWidget> {
         return AnalyticsWidget.getAllWidgets().filter { widget ->
             when (priority) {
-                WidgetPriority.ESSENTIAL -> true
-                WidgetPriority.STANDARD -> widget.priority != WidgetPriority.ADVANCED
+                WidgetPriority.FIXED_BEGINNER -> widget.priority == WidgetPriority.FIXED_BEGINNER
+                WidgetPriority.ESSENTIAL -> widget.priority == WidgetPriority.ESSENTIAL
+                WidgetPriority.STANDARD -> widget.priority == WidgetPriority.STANDARD
                 WidgetPriority.ADVANCED -> widget.priority == WidgetPriority.ADVANCED
             }
         }

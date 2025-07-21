@@ -4,6 +4,8 @@ import com.example.liftrix.data.local.dao.FolderDao
 import com.example.liftrix.data.local.dao.WorkoutTemplateDao
 import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.mapper.FolderMapper
+import androidx.room.withTransaction
+import com.example.liftrix.data.local.LiftrixDatabase
 import com.example.liftrix.domain.model.Folder
 import com.example.liftrix.domain.model.FolderId
 import com.example.liftrix.domain.repository.FolderRepository
@@ -23,6 +25,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class FolderRepositoryImpl @Inject constructor(
+    private val database: LiftrixDatabase,
     private val folderDao: FolderDao,
     private val workoutTemplateDao: WorkoutTemplateDao,
     private val userProfileDao: UserProfileDao,
@@ -295,34 +298,39 @@ class FolderRepositoryImpl @Inject constructor(
                 return Result.success(domain)
             }
 
-            // Ensure UserProfileEntity exists before creating folder
-            val userProfile = userProfileDao.getProfileForUserSuspend(userId)
-            val profileId = if (userProfile == null) {
-                // Create minimal UserProfileEntity for FK constraint
-                val minimalProfile = createMinimalUserProfile(userId)
-                val insertResult = userProfileDao.insertProfile(minimalProfile)
-                if (insertResult <= 0) {
-                    return Result.failure(RuntimeException("Failed to create user profile for FK constraint"))
+            // Use database transaction for atomic folder + user profile creation
+            val result = database.withTransaction {
+                // Ensure UserProfileEntity exists before creating folder
+                val userProfile = userProfileDao.getProfileForUserSuspend(userId)
+                val profileId = if (userProfile == null) {
+                    // Create minimal UserProfileEntity for FK constraint within transaction
+                    val minimalProfile = createMinimalUserProfile(userId)
+                    val insertResult = userProfileDao.insertProfile(minimalProfile)
+                    if (insertResult <= 0) {
+                        throw RuntimeException("Failed to create user profile for FK constraint")
+                    }
+                    Timber.d("Created minimal user profile for user $userId")
+                    minimalProfile.id
+                } else {
+                    userProfile.id
                 }
-                Timber.d("Created minimal user profile for user $userId")
-                minimalProfile.id
-            } else {
-                userProfile.id
-            }
 
-            // Create default folder with Firebase UID (domain model)
-            val defaultFolder = Folder.createDefault(userId) // Use Firebase UID for domain model
-            val entity = folderMapper.toNewEntity(defaultFolder).copy(
-                userId = profileId // Override with profile ID for FK constraint
-            )
-            val insertResult = folderDao.insertFolder(entity)
+                // Create default folder with Firebase UID (domain model)
+                val defaultFolder = Folder.createDefault(userId) // Use Firebase UID for domain model
+                val entity = folderMapper.toNewEntity(defaultFolder).copy(
+                    userId = profileId // Override with profile ID for FK constraint
+                )
+                val insertResult = folderDao.insertFolder(entity)
 
-            if (insertResult > 0) {
-                Timber.d("Created default folder for user $userId")
-                Result.success(defaultFolder)
-            } else {
-                Result.failure(RuntimeException("Failed to create default folder"))
+                if (insertResult <= 0) {
+                    throw RuntimeException("Failed to create default folder - insert returned $insertResult")
+                }
+                
+                Timber.d("Created default folder for user $userId within transaction")
+                defaultFolder
             }
+            
+            Result.success(result)
         } catch (e: Exception) {
             // Provide specific error message for FK constraint failures
             val errorMessage = when {

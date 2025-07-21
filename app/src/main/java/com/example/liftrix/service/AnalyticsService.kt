@@ -1,7 +1,7 @@
 package com.example.liftrix.service
 
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
-import com.example.liftrix.domain.model.analytics.UIWidgetData
+import com.example.liftrix.domain.model.analytics.WidgetData
 import com.example.liftrix.domain.model.analytics.WidgetPreferences
 import com.example.liftrix.domain.model.common.LiftrixResult
 
@@ -35,7 +35,7 @@ interface AnalyticsService {
      * 
      * @param userId The unique identifier for the user
      * @param widget The specific widget type to retrieve data for
-     * @return LiftrixResult containing UIWidgetData with formatted display values or error
+     * @return LiftrixResult containing WidgetData with formatted display values or error
      * 
      * Error Cases:
      * - ValidationError: Invalid userId or widget type
@@ -52,7 +52,7 @@ interface AnalyticsService {
      * )
      * ```
      */
-    suspend fun getWidgetData(userId: String, widget: AnalyticsWidget): LiftrixResult<UIWidgetData>
+    suspend fun getWidgetData(userId: String, widget: AnalyticsWidget): LiftrixResult<WidgetData>
     
     /**
      * Retrieves widget preferences for a specific user.

@@ -21,22 +21,27 @@ import com.example.liftrix.domain.repository.ProgressStatsRepository
 import com.example.liftrix.domain.repository.ProgressSummary
 import com.example.liftrix.domain.repository.VolumeDataPoint
 import com.example.liftrix.sync.AnalyticsCalculation
+import com.example.liftrix.service.sync.RealtimeSyncManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone as KotlinTimeZone
+import kotlinx.datetime.toJavaInstant
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.datetime.Clock
-import kotlinx.datetime.TimeZone
+import java.time.ZoneId
 
 @Singleton
 class ProgressStatsRepositoryImpl @Inject constructor(
     private val workoutDao: WorkoutDao,
     private val exerciseDao: ExerciseDao,
     private val exerciseSetDao: ExerciseSetDao,
-    private val analyticsMapper: AnalyticsMapper
+    private val analyticsMapper: AnalyticsMapper,
+    private val cacheManager: com.example.liftrix.core.cache.CacheManager,
+    private val realtimeSyncManager: RealtimeSyncManager
 ) : ProgressStatsRepository {
 
     companion object {
@@ -48,11 +53,32 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         startDate: LocalDate,
         endDate: LocalDate
     ): Flow<List<VolumeDataPoint>> = flow {
+        val timeRange = TimeRange(
+            java.util.Date.from(java.time.LocalDate.of(startDate.year, startDate.monthNumber, startDate.dayOfMonth).atStartOfDay(ZoneId.systemDefault()).toInstant()),
+            java.util.Date.from(java.time.LocalDate.of(endDate.year, endDate.monthNumber, endDate.dayOfMonth).atStartOfDay(ZoneId.systemDefault()).toInstant())
+        )
+        val cacheKey = com.example.liftrix.core.cache.CacheKeyUtils.createVolumeKey(userId, timeRange)
+        
+        // Check cache first
+        val cachedEntry = cacheManager.get<List<VolumeDataPoint>>(cacheKey)
+        if (cachedEntry != null && cachedEntry.isValid()) {
+            emit(cachedEntry.data)
+            return@flow
+        }
+        
+        // Cache miss - compute data
         val dailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(
             userId, startDate, endDate
         )
         
         val volumeData = dailyMetrics.toVolumeDataPoints()
+        
+        
+        // Cache the result for 1 hour
+        cacheManager.put(cacheKey, volumeData, kotlin.time.Duration.parse("1h"))
+        
+        // Trigger sync event for volume data changes
+        triggerSyncIfSignificantChange(userId, "volume_data", volumeData.size)
         
         emit(volumeData)
     }.catch { e ->
@@ -243,11 +269,11 @@ class ProgressStatsRepositoryImpl @Inject constructor(
                 kotlinx.datetime.Month.values()[month - 1]
             )
             
-            emit(Result.success(volumeCalendarData))
+            emit(LiftrixResult.success(volumeCalendarData))
             
         } catch (e: Exception) {
             Timber.e(e, "Failed to get volume calendar data for user: $userId, month: $month")
-            emit(Result.failure(LiftrixError.DatabaseError("Failed to load volume calendar data")))
+            emit(LiftrixResult.failure(LiftrixError.DatabaseError("Failed to load volume calendar data")))
         }
     }
     
@@ -272,11 +298,11 @@ class ProgressStatsRepositoryImpl @Inject constructor(
                 userId
             )
             
-            emit(Result.success(progressMetrics))
+            emit(LiftrixResult.success(progressMetrics))
             
         } catch (e: Exception) {
             Timber.e(e, "Failed to get progress metrics for user: $userId, timeRange: $timeRange")
-            emit(Result.failure(LiftrixError.DatabaseError("Failed to load progress metrics")))
+            emit(LiftrixResult.failure(LiftrixError.DatabaseError("Failed to load progress metrics")))
         }
     }
     
@@ -295,7 +321,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
                 result.fold(
                     onSuccess = { volumeCalendarData = it },
                     onFailure = { 
-                        emit(Result.failure(it))
+                        emit(LiftrixResult.failure(it))
                         return@collect
                     }
                 )
@@ -309,7 +335,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
                 result.fold(
                     onSuccess = { progressMetrics = it },
                     onFailure = { 
-                        emit(Result.failure(it))
+                        emit(LiftrixResult.failure(it))
                         return@collect
                     }
                 )
@@ -323,11 +349,11 @@ class ProgressStatsRepositoryImpl @Inject constructor(
                 lastUpdated = kotlinx.datetime.Clock.System.now()
             )
             
-            emit(Result.success(dashboardData))
+            emit(LiftrixResult.success(dashboardData))
             
         } catch (e: Exception) {
             Timber.e(e, "Failed to get dashboard data for user: $userId, timeRange: $timeRange")
-            emit(Result.failure(LiftrixError.DatabaseError("Failed to load dashboard data")))
+            emit(LiftrixResult.failure(LiftrixError.DatabaseError("Failed to load dashboard data")))
         }
     }
     
@@ -388,6 +414,60 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Failed to get unsynced calculations count for user: $userId")
             0
+        }
+    }
+    
+    /**
+     * Triggers real-time sync if there are significant changes in the data
+     */
+    private suspend fun triggerSyncIfSignificantChange(userId: String, dataType: String, changeCount: Int) {
+        try {
+            // Only trigger sync for significant changes (e.g., new workouts, PRs)
+            if (changeCount > 0) {
+                Timber.d("ProgressStatsRepository: Triggering sync for $dataType changes (count: $changeCount)")
+                
+                // Start real-time sync for this user to propagate changes
+                realtimeSyncManager.startRealtimeSync(userId)
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to trigger sync for $dataType changes")
+        }
+    }
+    
+    /**
+     * Notifies sync manager about workout data updates
+     */
+    suspend fun notifyWorkoutDataUpdate(userId: String, workoutId: String) {
+        try {
+            Timber.d("ProgressStatsRepository: Notifying workout data update - user: $userId, workout: $workoutId")
+            
+            // Invalidate relevant cache entries
+            val volumeCacheKey = com.example.liftrix.core.cache.CacheKeyUtils.createVolumeKey(
+                userId, 
+                TimeRange.lastWeek()
+            )
+            cacheManager.invalidate(volumeCacheKey)
+            
+            // Trigger sync for workout-related widgets
+            realtimeSyncManager.startRealtimeSync(userId)
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to notify workout data update for user: $userId")
+        }
+    }
+    
+    /**
+     * Notifies sync manager about personal record updates
+     */
+    suspend fun notifyPersonalRecordUpdate(userId: String, exerciseId: String, recordType: String) {
+        try {
+            Timber.d("ProgressStatsRepository: Notifying PR update - user: $userId, exercise: $exerciseId, type: $recordType")
+            
+            // Trigger immediate sync for strength-related widgets
+            realtimeSyncManager.startRealtimeSync(userId)
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to notify personal record update for user: $userId")
         }
     }
 

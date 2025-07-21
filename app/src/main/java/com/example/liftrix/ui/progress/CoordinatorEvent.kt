@@ -136,4 +136,16 @@ sealed class CoordinatorEvent : ViewModelEvent {
      * Coordinates data collection and export across ViewModels.
      */
     object ExportToCsv : CoordinatorEvent()
+    
+    /**
+     * Event to export raw data.
+     * Coordinates raw data collection and export across ViewModels.
+     */
+    data class ExportRawData(val configuration: Any) : CoordinatorEvent()
+    
+    /**
+     * Event to cancel ongoing export operations.
+     * Coordinates cancellation across all ViewModels.
+     */
+    object CancelExport : CoordinatorEvent()
 }

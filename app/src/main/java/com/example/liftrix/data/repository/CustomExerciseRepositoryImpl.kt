@@ -2,15 +2,20 @@ package com.example.liftrix.data.repository
 
 import com.example.liftrix.data.local.dao.CustomExerciseDao
 import com.example.liftrix.data.mapper.CustomExerciseMapper
+import androidx.room.withTransaction
+import com.example.liftrix.data.local.LiftrixDatabase
 import com.example.liftrix.domain.model.CustomExercise
 import com.example.liftrix.domain.model.CustomExerciseId
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.repository.CustomExerciseRepository
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import javax.inject.Inject
@@ -21,10 +26,14 @@ import javax.inject.Singleton
  */
 @Singleton
 class CustomExerciseRepositoryImpl @Inject constructor(
+    private val database: LiftrixDatabase,
     private val dao: CustomExerciseDao,
     private val mapper: CustomExerciseMapper,
     private val firestore: FirebaseFirestore
 ) : CustomExerciseRepository {
+    
+    // Repository-scoped coroutine scope for structured concurrency
+    private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
     companion object {
         private const val COLLECTION_CUSTOM_EXERCISES = "custom_exercises"
@@ -43,32 +52,45 @@ class CustomExerciseRepositoryImpl @Inject constructor(
         notes: String?
     ): Result<CustomExercise> = withContext(Dispatchers.IO) {
         try {
-            // Create entity
-            val entity = mapper.createEntity(
-                userId = userId,
-                name = name,
-                primaryMuscle = primaryMuscle,
-                equipment = equipment,
-                secondaryMuscles = secondaryMuscles,
-                difficulty = difficulty,
-                notes = notes,
-                isSynced = false
-            )
+            // Use database transaction for atomic operation
+            val result = database.withTransaction {
+                // Create entity
+                val entity = mapper.createEntity(
+                    userId = userId,
+                    name = name,
+                    primaryMuscle = primaryMuscle,
+                    equipment = equipment,
+                    secondaryMuscles = secondaryMuscles,
+                    difficulty = difficulty,
+                    notes = notes,
+                    isSynced = false
+                )
+                
+                // Insert to local database within transaction
+                dao.insertCustomExercise(entity)
+                
+                // Return the domain model
+                mapper.toDomain(entity)
+            }
             
-            // Insert to local database
-            dao.insertCustomExercise(entity)
-            
-            // Convert to domain model
-            val domainModel = mapper.toDomain(entity)
-            
-            // Sync to Firestore in background (don't block on this)
+            // Sync to Firestore in background (outside transaction)
             try {
+                val entity = mapper.createEntity(
+                    userId = userId,
+                    name = name,
+                    primaryMuscle = primaryMuscle,
+                    equipment = equipment,
+                    secondaryMuscles = secondaryMuscles,
+                    difficulty = difficulty,
+                    notes = notes,
+                    isSynced = false
+                )
                 syncToFirestore(entity)
             } catch (e: Exception) {
                 Timber.w(e, "Failed to sync custom exercise to Firestore, will retry later")
             }
             
-            Result.success(domainModel)
+            Result.success(result)
             
         } catch (e: Exception) {
             Timber.e(e, "Failed to create custom exercise")
@@ -232,13 +254,14 @@ class CustomExerciseRepositoryImpl @Inject constructor(
                 .set(firestoreData)
                 .addOnSuccessListener {
                     Timber.d("Successfully synced custom exercise ${entity.id} to Firestore")
-                    // Mark as synced in local database
-                    try {
-                        kotlinx.coroutines.runBlocking {
+                    // Mark as synced in local database using repository scope for structured concurrency
+                    repositoryScope.launch {
+                        try {
                             dao.markCustomExercisesAsSynced(listOf(entity.id))
+                            Timber.d("Marked exercise ${entity.id} as synced")
+                        } catch (e: Exception) {
+                            Timber.w(e, "Failed to mark exercise as synced")
                         }
-                    } catch (e: Exception) {
-                        Timber.w(e, "Failed to mark exercise as synced")
                     }
                 }
                 .addOnFailureListener { e ->

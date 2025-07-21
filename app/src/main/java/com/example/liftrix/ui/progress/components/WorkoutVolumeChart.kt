@@ -41,6 +41,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.repository.VolumeDataPoint
+import com.example.liftrix.domain.model.WeightUnit
+import com.example.liftrix.core.formatting.WeightFormatter
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.components.cards.StatCard
 import com.example.liftrix.ui.components.cards.Trend
@@ -78,14 +80,21 @@ import kotlinx.datetime.todayIn
  * 
  * @param data List of volume data points to display
  * @param isLoading Whether the chart is currently loading data
+ * @param weightUnit The user's preferred weight unit for display
+ * @param weightFormatter Formatter for weight values
  * @param modifier Modifier for styling the chart container
  */
 @Composable
 fun WorkoutVolumeChart(
     data: List<VolumeDataPoint>,
     isLoading: Boolean,
+    weightUnit: WeightUnit,
+    weightFormatter: WeightFormatter,
     modifier: Modifier = Modifier
 ) {
+    // VolumeDebug: Check what the chart receives
+    val totalVolume = data.sumOf { it.totalVolume.toDouble() }.toFloat()
+    timber.log.Timber.d("VolumeDebug Chart received ${data.size} points, ${totalVolume}kg total, isLoading=$isLoading")
     LiftrixCard(
         modifier = modifier.fillMaxWidth(),
         contentDescription = "Workout volume trend chart with statistics"
@@ -123,6 +132,7 @@ fun WorkoutVolumeChart(
             
             when {
                 isLoading -> {
+                    timber.log.Timber.d("VolumeDebug Chart showing LOADING state")
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -133,6 +143,7 @@ fun WorkoutVolumeChart(
                     }
                 }
                 data.isEmpty() -> {
+                    timber.log.Timber.d("VolumeDebug Chart showing EMPTY state (zero data)")
                     // Show zero-value chart instead of empty state
                     Column(
                         verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
@@ -152,11 +163,13 @@ fun WorkoutVolumeChart(
                         // Metrics panel with zero values
                         ModernVolumeMetricsPanel(
                             data = getZeroVolumeData(),
+                            weightUnit = weightUnit,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }
                 else -> {
+                    timber.log.Timber.d("VolumeDebug Chart showing DATA state with ${data.size} points")
                     // Modern asymmetrical layout: Chart + Metrics
                     Column(
                         verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
@@ -176,6 +189,7 @@ fun WorkoutVolumeChart(
                         // Metrics panel
                         ModernVolumeMetricsPanel(
                             data = data,
+                            weightUnit = weightUnit,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -251,11 +265,17 @@ private fun ModernVolumeLineChart(
         val maxValue = data.maxOfOrNull { it.totalVolume } ?: 0f
         val minValue = data.minOfOrNull { it.totalVolume } ?: 0f
         val range = maxValue - minValue
+        
+        timber.log.Timber.d("VolumeDebug Chart normalization: min=${minValue}kg, max=${maxValue}kg, range=${range}kg")
+        
         if (range == 0f) {
             // For zero values, show a flat line at the bottom
+            timber.log.Timber.d("VolumeDebug Chart using flat line (range=0)")
             data.map { 0.1f }
         } else {
-            data.map { (it.totalVolume - minValue) / range }
+            val normalized = data.map { (it.totalVolume - minValue) / range }
+            timber.log.Timber.d("VolumeDebug Chart normalized to: ${normalized}")
+            normalized
         }
     }
     
@@ -293,6 +313,7 @@ private fun ModernVolumeLineChart(
 @Composable
 private fun ModernVolumeMetricsPanel(
     data: List<VolumeDataPoint>,
+    weightUnit: WeightUnit,
     modifier: Modifier = Modifier
 ) {
     val totalVolume = data.sumOf { it.totalVolume.toDouble() }.toFloat()
@@ -320,7 +341,7 @@ private fun ModernVolumeMetricsPanel(
             // Total volume
             MetricCard(
                 title = "Total Volume",
-                value = "${(totalVolume / 1000).roundToInt()}K lbs",
+                value = formatVolumeInUserUnit(totalVolume, weightUnit),
                 subtitle = "${data.size} workouts",
                 modifier = Modifier.weight(1f)
             )
@@ -328,7 +349,7 @@ private fun ModernVolumeMetricsPanel(
             // Average volume
             MetricCard(
                 title = "Average",
-                value = "${(averageVolume / 1000).roundToInt()}K lbs",
+                value = formatVolumeInUserUnit(averageVolume, weightUnit),
                 subtitle = "per workout",
                 modifier = Modifier.weight(1f)
             )
@@ -336,7 +357,7 @@ private fun ModernVolumeMetricsPanel(
             // Peak volume
             MetricCard(
                 title = "Peak Volume",
-                value = "${(peakVolume / 1000).roundToInt()}K lbs",
+                value = formatVolumeInUserUnit(peakVolume, weightUnit),
                 subtitle = "best session",
                 trend = trend,
                 modifier = Modifier.weight(1f)
@@ -467,7 +488,26 @@ private fun DrawScope.drawWorkoutVolumeLineChart(
     strokeWidth: Float,
     pointRadius: Float
 ) {
-    if (data.size < 2) return
+    timber.log.Timber.d("VolumeDebug Canvas drawing with ${data.size} points: $data")
+    
+    if (data.isEmpty()) {
+        timber.log.Timber.d("VolumeDebug Canvas skipped - no data")
+        return
+    }
+    
+    if (data.size == 1) {
+        timber.log.Timber.d("VolumeDebug Canvas drawing single point as centered dot")
+        // For single data point, draw a centered dot
+        val centerX = size.width / 2f
+        val centerY = size.height * (1f - data[0])
+        
+        drawCircle(
+            color = color,
+            radius = pointRadius * 1.5f, // Slightly larger for single point visibility
+            center = Offset(centerX, centerY)
+        )
+        return
+    }
     
     val spacing = size.width / (data.size - 1).coerceAtLeast(1)
     val path = Path()
@@ -504,5 +544,23 @@ private fun DrawScope.drawWorkoutVolumeLineChart(
             radius = pointRadius,
             center = Offset(x, y)
         )
+    }
+}
+
+/**
+ * Formats volume values in user's preferred unit with appropriate scaling.
+ * Shows volumes in thousands (K) for better readability.
+ */
+private fun formatVolumeInUserUnit(volumeKg: Float, weightUnit: WeightUnit): String {
+    // Volume is stored in kg in database, convert to user's preferred unit
+    val convertedVolume = when (weightUnit) {
+        WeightUnit.KILOGRAMS -> volumeKg
+        WeightUnit.POUNDS -> volumeKg / 0.453592f  // Convert kg to lbs: kg ÷ 0.453592
+    }
+    
+    return when {
+        convertedVolume >= 1000 -> "${(convertedVolume / 1000).toInt()}K ${weightUnit.symbol}"
+        convertedVolume >= 100 -> "${convertedVolume.toInt()} ${weightUnit.symbol}"
+        else -> "${"%.1f".format(convertedVolume)} ${weightUnit.symbol}"
     }
 } 

@@ -5,6 +5,8 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverters
 import com.example.liftrix.data.local.converter.DateTimeConverters
+import com.example.liftrix.data.local.converter.WeightUnitConverter
+import com.example.liftrix.domain.model.WeightUnit
 import java.time.Instant
 
 /**
@@ -12,10 +14,10 @@ import java.time.Instant
  * Stores theme preferences, notification settings, and other user configurations
  * 
  * Uses snake_case column names following existing database conventions
- * and proper type converters for Instant fields
+ * and proper type converters for Instant and WeightUnit fields
  */
 @Entity(tableName = "user_settings")
-@TypeConverters(DateTimeConverters::class)
+@TypeConverters(DateTimeConverters::class, WeightUnitConverter::class)
 data class SettingsEntity(
     @PrimaryKey
     @ColumnInfo(name = "user_id")
@@ -26,6 +28,10 @@ data class SettingsEntity(
     
     @ColumnInfo(name = "notifications_enabled")
     val notificationsEnabled: Boolean = true,
+    
+    @ColumnInfo(name = "weight_unit")
+    val weightUnit: WeightUnit = WeightUnit.getSystemDefault(),
+    
     
     @ColumnInfo(name = "updated_at")
     val updatedAt: Instant = Instant.now()
@@ -41,6 +47,7 @@ data class SettingsEntity(
             userId = userId,
             darkMode = false,
             notificationsEnabled = true,
+            weightUnit = WeightUnit.getSystemDefault(),
             updatedAt = Instant.now()
         )
     }

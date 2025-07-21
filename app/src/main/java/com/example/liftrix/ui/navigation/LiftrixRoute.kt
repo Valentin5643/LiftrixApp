@@ -106,6 +106,12 @@ sealed class LiftrixRoute {
     data object WidgetSettings : LiftrixRoute()
     
     /**
+     * Dashboard customization screen - enhanced widget management interface
+     */
+    @Serializable
+    data object DashboardCustomization : LiftrixRoute()
+    
+    /**
      * Onboarding flow for new user setup
      */
     @Serializable

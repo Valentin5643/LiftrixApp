@@ -4,12 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.domain.usecase.auth.GetAuthenticatedUserIdUseCase
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -18,6 +21,7 @@ import javax.inject.Inject
  * UI state for WorkoutTemplatesDashboard
  */
 sealed class WorkoutTemplatesDashboardUiState {
+    object WaitingForAuth : WorkoutTemplatesDashboardUiState()
     object Loading : WorkoutTemplatesDashboardUiState()
     data class Success(
         val templates: List<WorkoutTemplate> = emptyList(),
@@ -33,27 +37,31 @@ sealed class WorkoutTemplatesDashboardUiState {
  */
 @HiltViewModel
 class WorkoutTemplatesDashboardViewModel @Inject constructor(
+    private val getAuthenticatedUserIdUseCase: GetAuthenticatedUserIdUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     private val workoutTemplateRepository: WorkoutTemplateRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<WorkoutTemplatesDashboardUiState>(
-        WorkoutTemplatesDashboardUiState.Loading
+        WorkoutTemplatesDashboardUiState.WaitingForAuth
     )
     val uiState: StateFlow<WorkoutTemplatesDashboardUiState> = _uiState.asStateFlow()
 
     init {
-        loadTemplates()
+        loadTemplatesWhenAuthenticated()
     }
 
     /**
-     * Load all templates for the current user
+     * Load templates once user is authenticated
      */
-    private fun loadTemplates() {
+    private fun loadTemplatesWhenAuthenticated() {
         viewModelScope.launch {
             try {
-                val userId = getCurrentUserIdUseCase() ?: return@launch
                 _uiState.value = WorkoutTemplatesDashboardUiState.Loading
+                
+                // Wait for authentication to complete, then load templates
+                val userId = getAuthenticatedUserIdUseCase()
+                Timber.d("User authenticated, loading templates for user: $userId")
                 
                 workoutTemplateRepository.getAllTemplatesForUser(userId).collect { result ->
                     if (result.isSuccess) {
@@ -62,17 +70,17 @@ class WorkoutTemplatesDashboardViewModel @Inject constructor(
                             templates = templates,
                             filteredTemplates = templates
                         )
+                        Timber.d("Successfully loaded ${templates.size} templates for user $userId")
                     } else {
-                        _uiState.value = WorkoutTemplatesDashboardUiState.Error(
-                            message = result.exceptionOrNull()?.message ?: "Failed to load templates"
-                        )
+                        val errorMessage = result.exceptionOrNull()?.message ?: "Failed to load templates"
+                        _uiState.value = WorkoutTemplatesDashboardUiState.Error(errorMessage)
+                        Timber.e("Failed to load templates: $errorMessage")
                     }
                 }
             } catch (exception: Exception) {
-                _uiState.value = WorkoutTemplatesDashboardUiState.Error(
-                    "Failed to load templates: ${exception.message}"
-                )
-                Timber.e(exception, "Error loading templates")
+                val errorMessage = "Authentication or template loading failed: ${exception.message}"
+                _uiState.value = WorkoutTemplatesDashboardUiState.Error(errorMessage)
+                Timber.e(exception, "Error in loadTemplatesWhenAuthenticated")
             }
         }
     }

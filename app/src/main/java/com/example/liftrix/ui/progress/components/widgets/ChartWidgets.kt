@@ -1,0 +1,583 @@
+package com.example.liftrix.ui.progress.components.widgets
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.example.liftrix.domain.model.analytics.*
+import com.example.liftrix.ui.theme.LiftrixColors
+import kotlin.math.max
+import kotlin.math.min
+
+/**
+ * Chart category widgets for trend visualization and pattern analysis.
+ * 
+ * All chart widgets follow consistent patterns:
+ * - Visual data representation with charts
+ * - Summary statistics and trends
+ * - Time range indicators
+ * - Interactive chart elements
+ */
+
+/**
+ * Volume chart widget - visual volume progression
+ */
+@Composable
+fun VolumeChartWidget(
+    data: ChartWidgetData?,
+    onRefresh: () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    BaseWidget(
+        title = "Volume Chart",
+        subtitle = data?.timeRange,
+        isLoading = data?.isLoading == true,
+        error = data?.error?.message,
+        onRefresh = onRefresh,
+        onClick = onClick,
+        modifier = modifier
+    ) {
+        data?.let { chartData ->
+            ChartDisplay(
+                chartData = chartData,
+                chartColor = LiftrixColors.Primary,
+                icon = Icons.Default.TrendingUp
+            )
+        }
+    }
+}
+
+/**
+ * Duration chart widget - workout duration trends
+ */
+@Composable
+fun DurationChartWidget(
+    data: ChartWidgetData?,
+    onRefresh: () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    BaseWidget(
+        title = "Duration Chart",
+        subtitle = data?.timeRange,
+        isLoading = data?.isLoading == true,
+        error = data?.error?.message,
+        onRefresh = onRefresh,
+        onClick = onClick,
+        modifier = modifier
+    ) {
+        data?.let { chartData ->
+            ChartDisplay(
+                chartData = chartData,
+                chartColor = Color(0xFF2196F3),
+                icon = Icons.Default.Schedule
+            )
+        }
+    }
+}
+
+/**
+ * Frequency chart widget - workout frequency patterns
+ */
+@Composable
+fun FrequencyChartWidget(
+    data: ChartWidgetData?,
+    onRefresh: () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    BaseWidget(
+        title = "Frequency Chart",
+        subtitle = data?.timeRange,
+        isLoading = data?.isLoading == true,
+        error = data?.error?.message,
+        onRefresh = onRefresh,
+        onClick = onClick,
+        modifier = modifier
+    ) {
+        data?.let { chartData ->
+            ChartDisplay(
+                chartData = chartData,
+                chartColor = Color(0xFF4CAF50),
+                icon = Icons.Default.BarChart
+            )
+        }
+    }
+}
+
+/**
+ * Volume calendar widget - monthly calendar with daily volume
+ */
+@Composable
+fun VolumeCalendarWidget(
+    data: ChartWidgetData?,
+    onRefresh: () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    BaseWidget(
+        title = "Volume Calendar",
+        subtitle = data?.timeRange,
+        isLoading = data?.isLoading == true,
+        error = data?.error?.message,
+        onRefresh = onRefresh,
+        onClick = onClick,
+        modifier = modifier
+    ) {
+        data?.let { chartData ->
+            CalendarDisplay(
+                chartData = chartData,
+                primaryColor = LiftrixColors.Primary
+            )
+        }
+    }
+}
+
+/**
+ * Progress chart widget - comprehensive progress visualization
+ */
+@Composable
+fun ProgressChartWidget(
+    data: ChartWidgetData?,
+    onRefresh: () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    BaseWidget(
+        title = "Progress Chart",
+        subtitle = data?.timeRange,
+        isLoading = data?.isLoading == true,
+        error = data?.error?.message,
+        onRefresh = onRefresh,
+        onClick = onClick,
+        modifier = modifier
+    ) {
+        data?.let { chartData ->
+            ChartDisplay(
+                chartData = chartData,
+                chartColor = Color(0xFF9C27B0),
+                icon = Icons.Default.ShowChart
+            )
+        }
+    }
+}
+
+/**
+ * Weekly calorie trend widget - weekly calorie burn patterns
+ */
+@Composable
+fun WeeklyCalorieTrendWidget(
+    data: ChartWidgetData?,
+    onRefresh: () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    BaseWidget(
+        title = "Weekly Calorie Trend",
+        subtitle = data?.timeRange,
+        isLoading = data?.isLoading == true,
+        error = data?.error?.message,
+        onRefresh = onRefresh,
+        onClick = onClick,
+        modifier = modifier
+    ) {
+        data?.let { chartData ->
+            ChartDisplay(
+                chartData = chartData,
+                chartColor = Color(0xFFFF9800),
+                icon = Icons.Default.LocalFireDepartment
+            )
+        }
+    }
+}
+
+/**
+ * Compact chart widget for smaller layouts
+ */
+@Composable
+fun CompactChartWidget(
+    widget: AnalyticsWidget,
+    data: ChartWidgetData?,
+    onRefresh: () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    CompactBaseWidget(
+        title = widget.displayName,
+        isLoading = data?.isLoading == true,
+        error = data?.error?.message,
+        onRefresh = onRefresh,
+        onClick = onClick,
+        modifier = modifier
+    ) {
+        data?.let { chartData ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = chartData.summary.getFormattedSummary(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = LiftrixColors.OnSurface
+                    )
+                    
+                    Text(
+                        text = chartData.timeRange,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = LiftrixColors.OnSurface.copy(alpha = 0.6f)
+                    )
+                }
+                
+                // Mini chart visualization
+                MiniChart(
+                    dataPoints = chartData.dataPoints.take(7), // Show last 7 points
+                    color = LiftrixColors.Primary,
+                    modifier = Modifier.size(40.dp, 24.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Standard chart display component
+ */
+@Composable
+private fun ChartDisplay(
+    chartData: ChartWidgetData,
+    chartColor: Color,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Chart header with icon and summary
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = RoundedCornerShape(10.dp),
+                color = chartColor.copy(alpha = 0.1f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = chartColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = chartData.summary.getFormattedSummary(),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = LiftrixColors.OnSurface
+                )
+                
+                Text(
+                    text = "${chartData.yAxisLabel} • ${chartData.dataPoints.size} data points",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LiftrixColors.OnSurface.copy(alpha = 0.6f)
+                )
+            }
+        }
+        
+        // Chart visualization
+        LineChart(
+            dataPoints = chartData.dataPoints,
+            color = chartColor,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp)
+        )
+        
+        // Chart statistics
+        ChartStatistics(
+            summary = chartData.summary,
+            primaryColor = chartColor
+        )
+    }
+}
+
+/**
+ * Calendar display for volume calendar widget
+ */
+@Composable
+private fun CalendarDisplay(
+    chartData: ChartWidgetData,
+    primaryColor: Color
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Calendar header
+        Text(
+            text = "Daily Volume Activity",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            color = LiftrixColors.OnSurface
+        )
+        
+        // Calendar grid (simplified 7x4 grid)
+        Column(
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            // Week headers
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                listOf("S", "M", "T", "W", "T", "F", "S").forEach { day ->
+                    Text(
+                        text = day,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = LiftrixColors.OnSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.width(24.dp)
+                    )
+                }
+            }
+            
+            // Calendar days (4 weeks)
+            val maxValue = chartData.dataPoints.maxOfOrNull { it.y } ?: 1f
+            for (week in 0..3) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    for (day in 0..6) {
+                        val dataIndex = week * 7 + day
+                        val intensity = if (dataIndex < chartData.dataPoints.size) {
+                            (chartData.dataPoints[dataIndex].y / maxValue).coerceIn(0f, 1f)
+                        } else 0f
+                        
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(
+                                    if (intensity > 0f) 
+                                        primaryColor.copy(alpha = 0.2f + intensity * 0.8f)
+                                    else
+                                        LiftrixColors.OnSurface.copy(alpha = 0.05f)
+                                )
+                        )
+                    }
+                }
+            }
+        }
+        
+        // Legend
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Less",
+                style = MaterialTheme.typography.bodySmall,
+                color = LiftrixColors.OnSurface.copy(alpha = 0.6f)
+            )
+            
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                listOf(0.2f, 0.4f, 0.6f, 0.8f, 1.0f).forEach { alpha ->
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(primaryColor.copy(alpha = alpha))
+                    )
+                }
+            }
+            
+            Text(
+                text = "More",
+                style = MaterialTheme.typography.bodySmall,
+                color = LiftrixColors.OnSurface.copy(alpha = 0.6f)
+            )
+        }
+    }
+}
+
+/**
+ * Chart statistics display
+ */
+@Composable
+private fun ChartStatistics(
+    summary: ChartSummary,
+    primaryColor: Color
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly
+    ) {
+        StatItem(
+            label = "Average",
+            value = "${summary.average.toInt()} ${summary.unit}",
+            color = LiftrixColors.OnSurface
+        )
+        
+        StatItem(
+            label = "Peak",
+            value = "${summary.peak.toInt()} ${summary.unit}",
+            color = primaryColor
+        )
+        
+        StatItem(
+            label = "Change",
+            value = summary.trend.getPercentageDescription(summary.changePercentage),
+            color = summary.trend.getColor()
+        )
+    }
+}
+
+/**
+ * Individual statistic item
+ */
+@Composable
+private fun StatItem(
+    label: String,
+    value: String,
+    color: Color
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            color = color
+        )
+        
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = LiftrixColors.OnSurface.copy(alpha = 0.6f)
+        )
+    }
+}
+
+/**
+ * Line chart component
+ */
+@Composable
+private fun LineChart(
+    dataPoints: List<DataPoint>,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier) {
+        if (dataPoints.isEmpty()) return@Canvas
+        
+        val maxY = dataPoints.maxOfOrNull { it.y } ?: 1f
+        val minY = dataPoints.minOfOrNull { it.y } ?: 0f
+        val range = max(maxY - minY, 1f)
+        
+        val stepX = size.width / max(dataPoints.size - 1, 1)
+        val path = Path()
+        
+        dataPoints.forEachIndexed { index, point ->
+            val x = index * stepX
+            val y = size.height - ((point.y - minY) / range) * size.height
+            
+            if (index == 0) {
+                path.moveTo(x, y)
+            } else {
+                path.lineTo(x, y)
+            }
+            
+            // Draw data points
+            drawCircle(
+                color = color,
+                radius = 3.dp.toPx(),
+                center = Offset(x, y)
+            )
+        }
+        
+        // Draw line
+        drawPath(
+            path = path,
+            color = color,
+            style = Stroke(width = 2.dp.toPx())
+        )
+    }
+}
+
+/**
+ * Mini chart for compact displays
+ */
+@Composable
+private fun MiniChart(
+    dataPoints: List<DataPoint>,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier) {
+        if (dataPoints.isEmpty()) return@Canvas
+        
+        val maxY = dataPoints.maxOfOrNull { it.y } ?: 1f
+        val minY = dataPoints.minOfOrNull { it.y } ?: 0f
+        val range = max(maxY - minY, 1f)
+        
+        val stepX = size.width / max(dataPoints.size - 1, 1)
+        val path = Path()
+        
+        dataPoints.forEachIndexed { index, point ->
+            val x = index * stepX
+            val y = size.height - ((point.y - minY) / range) * size.height
+            
+            if (index == 0) {
+                path.moveTo(x, y)
+            } else {
+                path.lineTo(x, y)
+            }
+        }
+        
+        // Draw mini line
+        drawPath(
+            path = path,
+            color = color,
+            style = Stroke(width = 1.dp.toPx())
+        )
+    }
+}
+
+/**
+ * Extension function to get trend color
+ */
+private fun TrendDirection.getColor(): Color = when (this) {
+    TrendDirection.UP -> Color(0xFF4CAF50)
+    TrendDirection.DOWN -> Color(0xFFF44336)
+    TrendDirection.STABLE -> Color(0xFF9E9E9E)
+    TrendDirection.UNKNOWN -> Color(0xFF9E9E9E)
+}

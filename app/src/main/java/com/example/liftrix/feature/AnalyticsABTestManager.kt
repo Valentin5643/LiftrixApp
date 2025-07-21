@@ -46,47 +46,47 @@ class AnalyticsABTestManager @Inject constructor(
     sealed class DashboardConfiguration(val variant: String, val displayName: String) {
         object Beginner : DashboardConfiguration("beginner", "Beginner") {
             val widgets = listOf(
-                AnalyticsWidget.TotalVolume,
-                AnalyticsWidget.WorkoutFrequency,
-                AnalyticsWidget.ConsistencyStreak,
-                AnalyticsWidget.ProgressChart
+                AnalyticsWidgetRefs.TotalVolume,
+                AnalyticsWidgetRefs.WorkoutFrequency,
+                AnalyticsWidgetRefs.ConsistencyStreak,
+                AnalyticsWidgetRefs.ProgressChart
             )
             val maxWidgets = 4
         }
         
         object Intermediate : DashboardConfiguration("intermediate", "Intermediate") {
             val widgets = listOf(
-                AnalyticsWidget.TotalVolume,
-                AnalyticsWidget.WorkoutFrequency,
-                AnalyticsWidget.ProgressChart,
-                AnalyticsWidget.ConsistencyStreak,
-                AnalyticsWidget.VolumeCalendar,
-                AnalyticsWidget.WeeklyTrends
+                AnalyticsWidgetRefs.TotalVolume,
+                AnalyticsWidgetRefs.WorkoutFrequency,
+                AnalyticsWidgetRefs.ProgressChart,
+                AnalyticsWidgetRefs.ConsistencyStreak,
+                AnalyticsWidgetRefs.VolumeCalendar,
+                AnalyticsWidgetRefs.WeeklyTrends
             )
             val maxWidgets = 6
         }
         
         object Advanced : DashboardConfiguration("advanced", "Advanced") {
             val widgets = listOf(
-                AnalyticsWidget.TotalVolume,
-                AnalyticsWidget.WorkoutFrequency,
-                AnalyticsWidget.ProgressChart,
-                AnalyticsWidget.ConsistencyStreak,
-                AnalyticsWidget.VolumeCalendar,
-                AnalyticsWidget.MuscleGroupDistribution,
-                AnalyticsWidget.OneRMProgression,
-                AnalyticsWidget.VolumeLoadProgression,
-                AnalyticsWidget.RecoveryPatterns,
-                AnalyticsWidget.WeeklyTrends
+                AnalyticsWidgetRefs.TotalVolume,
+                AnalyticsWidgetRefs.WorkoutFrequency,
+                AnalyticsWidgetRefs.ProgressChart,
+                AnalyticsWidgetRefs.ConsistencyStreak,
+                AnalyticsWidgetRefs.VolumeCalendar,
+                AnalyticsWidgetRefs.MuscleGroupDistribution,
+                AnalyticsWidgetRefs.OneRMProgression,
+                AnalyticsWidgetRefs.VolumeLoadProgression,
+                AnalyticsWidgetRefs.RecoveryPatterns,
+                AnalyticsWidgetRefs.WeeklyTrends
             )
             val maxWidgets = 10
         }
         
         object Compact : DashboardConfiguration("compact", "Compact") {
             val widgets = listOf(
-                AnalyticsWidget.TotalVolume,
-                AnalyticsWidget.WorkoutFrequency,
-                AnalyticsWidget.ProgressChart
+                AnalyticsWidgetRefs.TotalVolume,
+                AnalyticsWidgetRefs.WorkoutFrequency,
+                AnalyticsWidgetRefs.ProgressChart
             )
             val maxWidgets = 3
         }
@@ -113,22 +113,21 @@ class AnalyticsABTestManager @Inject constructor(
     }
     
     /**
-     * Analytics widget types for configuration.
+     * Analytics widget references using canonical IDs from the main AnalyticsWidget enum.
      * 
-     * IMPORTANT: These widget IDs and names must match the main AnalyticsWidget enum
-     * to avoid conflicts and ensure consistency across the application.
+     * Uses the domain enum directly to ensure consistency and avoid duplication.
      */
-    sealed class AnalyticsWidget(val id: String, val displayName: String) {
-        object TotalVolume : AnalyticsWidget("TotalVolume", "Total Volume")
-        object WorkoutFrequency : AnalyticsWidget("WorkoutFrequency", "Workout Frequency")
-        object ProgressChart : AnalyticsWidget("ProgressChart", "Progress Chart")
-        object ConsistencyStreak : AnalyticsWidget("ConsistencyStreak", "Consistency Streak")
-        object VolumeCalendar : AnalyticsWidget("VolumeCalendar", "Volume Calendar")
-        object MuscleGroupDistribution : AnalyticsWidget("MuscleGroupProgress", "Muscle Group Balance")
-        object OneRMProgression : AnalyticsWidget("OneRMProgression", "1RM Progression")
-        object VolumeLoadProgression : AnalyticsWidget("VolumeLoadProgression", "Volume Load Progression")
-        object RecoveryPatterns : AnalyticsWidget("RecoveryPatterns", "Recovery Patterns")
-        object WeeklyTrends : AnalyticsWidget("WeeklyTrends", "Weekly Trends")
+    object AnalyticsWidgetRefs {
+        val TotalVolume = com.example.liftrix.domain.model.analytics.AnalyticsWidget.TotalVolume
+        val WorkoutFrequency = com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutFrequency
+        val ProgressChart = com.example.liftrix.domain.model.analytics.AnalyticsWidget.ProgressChart
+        val ConsistencyStreak = com.example.liftrix.domain.model.analytics.AnalyticsWidget.ConsistencyStreak
+        val VolumeCalendar = com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeCalendar
+        val MuscleGroupDistribution = com.example.liftrix.domain.model.analytics.AnalyticsWidget.MuscleGroupDistribution
+        val OneRMProgression = com.example.liftrix.domain.model.analytics.AnalyticsWidget.OneRMProgression
+        val VolumeLoadProgression = com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeLoadProgression
+        val RecoveryPatterns = com.example.liftrix.domain.model.analytics.AnalyticsWidget.RecoveryPatterns
+        val WeeklyTrends = com.example.liftrix.domain.model.analytics.AnalyticsWidget.WeeklyTrends
     }
     
     /**

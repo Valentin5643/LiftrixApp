@@ -114,12 +114,16 @@ abstract class ServiceModule {
             preferencesRepository: WidgetPreferencesRepository,
             analyticsEngine: AnalyticsEngine,
             cacheManager: com.example.liftrix.core.cache.CacheManager,
+            widgetCacheManager: com.example.liftrix.service.cache.WidgetCacheManager,
+            realtimeSyncManager: com.example.liftrix.service.sync.RealtimeSyncManager,
             @IoDispatcher ioDispatcher: CoroutineDispatcher
         ): AnalyticsService = AnalyticsServiceImpl(
             widgetManager = widgetManager,
             preferencesRepository = preferencesRepository,
             analyticsEngine = analyticsEngine,
             cacheManager = cacheManager,
+            widgetCacheManager = widgetCacheManager,
+            realtimeSyncManager = realtimeSyncManager,
             ioDispatcher = ioDispatcher
         )
         

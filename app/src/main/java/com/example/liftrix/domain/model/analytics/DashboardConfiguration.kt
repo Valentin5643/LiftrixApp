@@ -4,12 +4,14 @@ package com.example.liftrix.domain.model.analytics
  * Dashboard configuration levels for analytics display customization
  * 
  * Defines different levels of dashboard complexity to match user experience levels:
- * - Beginner: Simple metrics focused on basic progress tracking
- * - Intermediate: Balanced view with essential analytics and trends
- * - Advanced: Comprehensive analytics with detailed insights and customization
+ * - Beginner: Simple metrics focused on basic progress tracking (4 widgets)
+ * - Intermediate: Balanced view with essential analytics and trends (7 widgets)
+ * - Advanced: Comprehensive analytics with detailed insights (10 widgets)
+ * - Custom: User-defined widget selection based on preferences
  * 
- * Each configuration determines which widgets are displayed, chart complexity,
- * and the level of detail in analytics calculations.
+ * This configuration system now integrates with WidgetResolver for dynamic
+ * widget selection instead of hardcoded lists, supporting proper user level
+ * progression and CUSTOM layout mode.
  */
 sealed class DashboardConfiguration(
     val name: String,
@@ -17,22 +19,17 @@ sealed class DashboardConfiguration(
     val maxWidgets: Int
 ) {
     
+    constructor() : this("", "", 0)
+    
     /**
      * Beginner configuration for new users
      * Focus on simple, encouraging metrics
      */
     data object Beginner : DashboardConfiguration(
         name = "Beginner",
-        description = "Simple view focused on basic progress tracking",
+        description = "Essential metrics",
         maxWidgets = 4
-    ) {
-        val widgets: List<AnalyticsWidget> = listOf(
-            AnalyticsWidget.WorkoutFrequency,
-            AnalyticsWidget.TotalVolume,
-            AnalyticsWidget.ConsistencyStreak,
-            AnalyticsWidget.CaloriesBurned
-        )
-    }
+    )
     
     /**
      * Intermediate configuration for regular users
@@ -40,19 +37,9 @@ sealed class DashboardConfiguration(
      */
     data object Intermediate : DashboardConfiguration(
         name = "Intermediate", 
-        description = "Balanced view with essential analytics and trends",
+        description = "",
         maxWidgets = 7
-    ) {
-        val widgets: List<AnalyticsWidget> = listOf(
-            AnalyticsWidget.WorkoutFrequency,
-            AnalyticsWidget.TotalVolume,
-            AnalyticsWidget.AverageDuration,
-            AnalyticsWidget.ConsistencyStreak,
-            AnalyticsWidget.CaloriesBurned,
-            AnalyticsWidget.DailyCalories,
-            AnalyticsWidget.ProgressChart
-        )
-    }
+    )
     
     /**
      * Advanced configuration for experienced users
@@ -60,39 +47,47 @@ sealed class DashboardConfiguration(
      */
     data object Advanced : DashboardConfiguration(
         name = "Advanced",
-        description = "Comprehensive analytics with detailed insights and customization",
+        description = "",
         maxWidgets = 10
-    ) {
-        val widgets: List<AnalyticsWidget> = listOf(
-            AnalyticsWidget.WorkoutFrequency,
-            AnalyticsWidget.TotalVolume,
-            AnalyticsWidget.AverageDuration,
-            AnalyticsWidget.ConsistencyStreak,
-            AnalyticsWidget.VolumeLoadProgression,
-            AnalyticsWidget.OneRMProgression,
-            AnalyticsWidget.ProgressChart,
-            AnalyticsWidget.CaloriesBurned,
-            AnalyticsWidget.DailyCalories,
-            AnalyticsWidget.WeeklyCalorieTrend
-        )
-    }
+    )
     
     /**
-     * Checks if this configuration supports a specific widget
+     * Custom configuration for user-defined widget selection
+     * Allows users to choose their own widgets within their level constraints
      */
-    fun supportsWidget(widget: AnalyticsWidget): Boolean = when (this) {
-        is Beginner -> Beginner.widgets.contains(widget)
-        is Intermediate -> Intermediate.widgets.contains(widget)
-        is Advanced -> Advanced.widgets.contains(widget)
+    data object Custom : DashboardConfiguration(
+        name = "Custom",
+        description = "",
+        maxWidgets = 10 // Same as Advanced but user-controlled
+    )
+    
+    /**
+     * Gets the
+     * user level associated with this configuration
+     */
+    fun getUserLevel(): UserLevel = when (this) {
+        is Beginner -> UserLevel.BEGINNER
+        is Intermediate -> UserLevel.INTERMEDIATE
+        is Advanced -> UserLevel.ADVANCED
+        is Custom -> UserLevel.ADVANCED // Custom allows advanced-level widgets
     }
     
     /**
-     * Gets the priority level of this configuration (1-3, higher = more advanced)
+     * Checks if this configuration supports custom widget selection
+     */
+    fun supportsCustomization(): Boolean = when (this) {
+        is Custom -> true
+        else -> false
+    }
+    
+    /**
+     * Gets the priority level of this configuration (1-4, higher = more advanced)
      */
     fun getPriorityLevel(): Int = when (this) {
         is Beginner -> 1
         is Intermediate -> 2
         is Advanced -> 3
+        is Custom -> 4
     }
     
     /**
@@ -102,6 +97,7 @@ sealed class DashboardConfiguration(
         is Beginner -> true     // Simple metrics update quickly
         is Intermediate -> true // Balanced updates
         is Advanced -> false    // Complex calculations may not update real-time
+        is Custom -> false      // User-defined layouts may have complex widgets
     }
     
     companion object {
@@ -111,7 +107,8 @@ sealed class DashboardConfiguration(
         fun getAllConfigurations(): List<DashboardConfiguration> = listOf(
             Beginner,
             Intermediate, 
-            Advanced
+            Advanced,
+            Custom
         )
         
         /**
@@ -133,7 +130,28 @@ sealed class DashboardConfiguration(
             "beginner" -> Beginner
             "intermediate" -> Intermediate
             "advanced" -> Advanced
+            "custom" -> Custom
             else -> null
+        }
+        
+        /**
+         * Gets configuration from user level (excludes Custom)
+         */
+        fun fromUserLevel(userLevel: UserLevel): DashboardConfiguration = when (userLevel) {
+            UserLevel.BEGINNER -> Beginner
+            UserLevel.INTERMEDIATE -> Intermediate
+            UserLevel.ADVANCED -> Advanced
+        }
+        
+        /**
+         * Creates a configuration from user level and layout mode
+         */
+        fun fromUserLevelAndLayout(
+            userLevel: UserLevel, 
+            layoutMode: DashboardLayoutMode
+        ): DashboardConfiguration = when {
+            layoutMode == DashboardLayoutMode.CUSTOM -> Custom
+            else -> fromUserLevel(userLevel)
         }
     }
 }

@@ -12,13 +12,19 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.WidgetComplexity
+import com.example.liftrix.ui.accessibility.AccessibilityUtils
+import com.example.liftrix.ui.accessibility.AccessibilityUtils.widgetToggleAccessibilitySemantics
 import com.example.liftrix.domain.model.analytics.WidgetDisplaySize
+import com.example.liftrix.ui.accessibility.TalkBackAnnouncements
 import com.example.liftrix.ui.components.cards.ElevatedLiftrixCard
 import com.example.liftrix.ui.theme.LiftrixTheme
 
@@ -59,9 +65,16 @@ fun WidgetToggleCard(
     ElevatedLiftrixCard(
         modifier = modifier
             .fillMaxWidth()
-            .semantics {
-                contentDescription = "${widget.displayName} widget toggle. Currently ${if (isEnabled) "enabled" else "disabled"}. ${widget.description}"
-            },
+            .widgetToggleAccessibilitySemantics(
+                widget = widget,
+                isEnabled = isEnabled,
+                isLoading = isLoading,
+                canReorder = canReorder,
+                onToggle = { newState ->
+                    stableOnToggle(newState)
+                },
+                onReorder = stableOnReorder
+            ),
         contentDescription = "${widget.displayName} widget control"
     ) {
         Row(
@@ -71,17 +84,24 @@ fun WidgetToggleCard(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Drag handle (visual indicator only for now)
+            // Drag handle with accessibility support
             if (canReorder && stableOnReorder != null) {
                 IconButton(
                     onClick = { stableOnReorder() },
                     modifier = Modifier
-                        .size(24.dp)
+                        .size(44.dp) // Ensure minimum touch target
                         .alpha(if (isEnabled) 1f else 0.5f)
+                        .semantics {
+                            contentDescription = "Reorder ${widget.displayName} widget. Use custom actions to move up or down"
+                            role = Role.Button
+                            if (!isEnabled) {
+                                stateDescription = "Widget must be enabled to reorder"
+                            }
+                        }
                 ) {
                     Icon(
                         imageVector = Icons.Default.DragHandle,
-                        contentDescription = "Drag to reorder ${widget.displayName}",
+                        contentDescription = null, // Handled by parent semantics
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(16.dp)
                     )
@@ -134,7 +154,7 @@ fun WidgetToggleCard(
                 
                 // Update frequency info
                 Text(
-                    text = "Updates every ${widget.updateFrequencyMinutes} minutes",
+                    text = "Updates every ${widget.complexity.defaultRefreshIntervalMinutes} minutes",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
@@ -153,7 +173,14 @@ fun WidgetToggleCard(
                 } else {
                     Switch(
                         checked = isEnabled,
-                        onCheckedChange = stableOnToggle,
+                        onCheckedChange = { newState ->
+                            stableOnToggle(newState)
+                        },
+                        modifier = Modifier.semantics {
+                            contentDescription = "${if (isEnabled) "Disable" else "Enable"} ${widget.displayName}"
+                            role = Role.Switch
+                            stateDescription = "${widget.displayName} is ${if (isEnabled) "enabled" else "disabled"}"
+                        },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = MaterialTheme.colorScheme.primary,
                             checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
@@ -268,6 +295,12 @@ fun WidgetPreviewThumbnail(
         AnalyticsWidget.WeeklyTrends -> Icons.Default.Analytics
         AnalyticsWidget.MuscleGroupDistribution -> Icons.Default.Category
         AnalyticsWidget.RecoveryPatterns -> Icons.Default.Healing
+        AnalyticsWidget.TrainingIntensity -> Icons.Default.FitnessCenter
+        AnalyticsWidget.ExerciseVariety -> Icons.Default.Category
+        AnalyticsWidget.TimeOfDayAnalysis -> Icons.Default.Schedule
+        AnalyticsWidget.SetCompletionRate -> Icons.Default.CheckCircle
+        AnalyticsWidget.MonthlySummary -> Icons.Default.DateRange
+        AnalyticsWidget.GoalAchievement -> Icons.Default.EmojiEvents
     }
     
     Surface(
