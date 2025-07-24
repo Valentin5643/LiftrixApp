@@ -28,7 +28,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import com.example.liftrix.ui.theme.LiftrixAnimations
 import com.example.liftrix.ui.theme.LiftrixColors
 import com.example.liftrix.ui.theme.LiftrixTheme
-import com.example.liftrix.ui.theme.LiftrixTeal
+// Removed LiftrixColors.PersianGreen import - using PersianGreen directly
 
 /**
  * Animated completion checkmark with bouncy entrance animation and haptic feedback.

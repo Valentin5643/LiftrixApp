@@ -56,7 +56,7 @@ fun VolumeChartWidget(
         data?.let { chartData ->
             ChartDisplay(
                 chartData = chartData,
-                chartColor = LiftrixColors.Primary,
+                chartColor = MaterialTheme.colorScheme.primary,
                 icon = Icons.Default.TrendingUp
             )
         }
@@ -85,7 +85,7 @@ fun DurationChartWidget(
         data?.let { chartData ->
             ChartDisplay(
                 chartData = chartData,
-                chartColor = Color(0xFF2196F3),
+                chartColor = MaterialTheme.colorScheme.secondary,
                 icon = Icons.Default.Schedule
             )
         }
@@ -114,7 +114,7 @@ fun FrequencyChartWidget(
         data?.let { chartData ->
             ChartDisplay(
                 chartData = chartData,
-                chartColor = Color(0xFF4CAF50),
+                chartColor = MaterialTheme.colorScheme.primary,
                 icon = Icons.Default.BarChart
             )
         }
@@ -143,7 +143,7 @@ fun VolumeCalendarWidget(
         data?.let { chartData ->
             CalendarDisplay(
                 chartData = chartData,
-                primaryColor = LiftrixColors.Primary
+                primaryColor = MaterialTheme.colorScheme.primary
             )
         }
     }
@@ -171,7 +171,7 @@ fun ProgressChartWidget(
         data?.let { chartData ->
             ChartDisplay(
                 chartData = chartData,
-                chartColor = Color(0xFF9C27B0),
+                chartColor = MaterialTheme.colorScheme.secondary,
                 icon = Icons.Default.ShowChart
             )
         }
@@ -200,7 +200,7 @@ fun WeeklyCalorieTrendWidget(
         data?.let { chartData ->
             ChartDisplay(
                 chartData = chartData,
-                chartColor = Color(0xFFFF9800),
+                chartColor = MaterialTheme.colorScheme.primary,
                 icon = Icons.Default.LocalFireDepartment
             )
         }
@@ -237,20 +237,20 @@ fun CompactChartWidget(
                         text = chartData.summary.getFormattedSummary(),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        color = LiftrixColors.OnSurface
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     
                     Text(
                         text = chartData.timeRange,
                         style = MaterialTheme.typography.bodySmall,
-                        color = LiftrixColors.OnSurface.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                 }
                 
                 // Mini chart visualization
                 MiniChart(
                     dataPoints = chartData.dataPoints.take(7), // Show last 7 points
-                    color = LiftrixColors.Primary,
+                    color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(40.dp, 24.dp)
                 )
             }
@@ -297,13 +297,13 @@ private fun ChartDisplay(
                     text = chartData.summary.getFormattedSummary(),
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
-                    color = LiftrixColors.OnSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 
                 Text(
                     text = "${chartData.yAxisLabel} • ${chartData.dataPoints.size} data points",
                     style = MaterialTheme.typography.bodySmall,
-                    color = LiftrixColors.OnSurface.copy(alpha = 0.6f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
         }
@@ -342,7 +342,7 @@ private fun CalendarDisplay(
             text = "Daily Volume Activity",
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
-            color = LiftrixColors.OnSurface
+            color = MaterialTheme.colorScheme.onSurface
         )
         
         // Calendar grid (simplified 7x4 grid)
@@ -358,7 +358,7 @@ private fun CalendarDisplay(
                     Text(
                         text = day,
                         style = MaterialTheme.typography.bodySmall,
-                        color = LiftrixColors.OnSurface.copy(alpha = 0.6f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         modifier = Modifier.width(24.dp)
                     )
                 }
@@ -385,7 +385,7 @@ private fun CalendarDisplay(
                                     if (intensity > 0f) 
                                         primaryColor.copy(alpha = 0.2f + intensity * 0.8f)
                                     else
-                                        LiftrixColors.OnSurface.copy(alpha = 0.05f)
+                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
                                 )
                         )
                     }
@@ -402,7 +402,7 @@ private fun CalendarDisplay(
             Text(
                 text = "Less",
                 style = MaterialTheme.typography.bodySmall,
-                color = LiftrixColors.OnSurface.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
             
             Row(
@@ -421,7 +421,7 @@ private fun CalendarDisplay(
             Text(
                 text = "More",
                 style = MaterialTheme.typography.bodySmall,
-                color = LiftrixColors.OnSurface.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
         }
     }
@@ -442,7 +442,7 @@ private fun ChartStatistics(
         StatItem(
             label = "Average",
             value = "${summary.average.toInt()} ${summary.unit}",
-            color = LiftrixColors.OnSurface
+            color = MaterialTheme.colorScheme.onSurface
         )
         
         StatItem(
@@ -482,7 +482,7 @@ private fun StatItem(
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
-            color = LiftrixColors.OnSurface.copy(alpha = 0.6f)
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
         )
     }
 }
@@ -575,9 +575,10 @@ private fun MiniChart(
 /**
  * Extension function to get trend color
  */
+@Composable
 private fun TrendDirection.getColor(): Color = when (this) {
-    TrendDirection.UP -> Color(0xFF4CAF50)
-    TrendDirection.DOWN -> Color(0xFFF44336)
-    TrendDirection.STABLE -> Color(0xFF9E9E9E)
-    TrendDirection.UNKNOWN -> Color(0xFF9E9E9E)
+    TrendDirection.UP -> MaterialTheme.colorScheme.primary  // Persian Green for positive trends
+    TrendDirection.DOWN -> MaterialTheme.colorScheme.error  // Red for negative trends (exception to 5-color rule) 
+    TrendDirection.STABLE -> MaterialTheme.colorScheme.onSurfaceVariant  // Neutral color for stable
+    TrendDirection.UNKNOWN -> MaterialTheme.colorScheme.onSurfaceVariant  // Neutral color for unknown
 }

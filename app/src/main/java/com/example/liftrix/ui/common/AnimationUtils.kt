@@ -33,10 +33,12 @@ object LiftrixAnimationUtils {
     /**
      * Creates a micro-interaction scale effect for pressable components
      * Scales down slightly when pressed for tactile feedback
+     * 
+     * Task ANIM-001: Updated default scale to match task specification (0.98x)
      */
     @Composable
     fun Modifier.pressScale(
-        pressedScale: Float = 0.95f,
+        pressedScale: Float = 0.98f, // Task ANIM-001: Updated from 0.95f to 0.98f per specification
         unpressedScale: Float = 1.0f,
         interactionSource: MutableInteractionSource = remember { MutableInteractionSource() }
     ): Modifier = composed {
@@ -53,10 +55,12 @@ object LiftrixAnimationUtils {
     /**
      * Athletic press scale with natural weight-shifting feel
      * Uses athletic spring physics for confident motion
+     * 
+     * Task ANIM-001: Updated to align with task specification scale factor
      */
     @Composable
     fun Modifier.athleticPressScale(
-        pressedScale: Float = 0.96f,
+        pressedScale: Float = 0.98f, // Task ANIM-001: Updated from 0.96f to 0.98f for consistency
         unpressedScale: Float = 1.0f,
         interactionSource: MutableInteractionSource = remember { MutableInteractionSource() }
     ): Modifier = composed {
@@ -126,10 +130,12 @@ object LiftrixAnimationUtils {
     
     /**
      * Combines press scale and haptic feedback for complete interaction
+     * 
+     * Task ANIM-001: Updated scale factor to match task specification
      */
     @Composable
     fun Modifier.pressInteraction(
-        pressedScale: Float = 0.95f,
+        pressedScale: Float = 0.98f, // Task ANIM-001: Updated from 0.95f to 0.98f
         hapticEnabled: Boolean = true,
         interactionSource: MutableInteractionSource = remember { MutableInteractionSource() }
     ): Modifier = composed {
@@ -147,10 +153,12 @@ object LiftrixAnimationUtils {
     /**
      * Athletic press interaction with enhanced haptic feedback
      * Combines athletic scaling with stronger tactile response
+     * 
+     * Task ANIM-001: Updated scale factor for consistency
      */
     @Composable
     fun Modifier.athleticPressInteraction(
-        pressedScale: Float = 0.96f,
+        pressedScale: Float = 0.98f, // Task ANIM-001: Updated from 0.96f to 0.98f
         hapticEnabled: Boolean = true,
         strongHaptic: Boolean = false,
         interactionSource: MutableInteractionSource = remember { MutableInteractionSource() }
@@ -399,7 +407,7 @@ fun AthleticButtonPress(
     content: @Composable () -> Unit
 ) {
     val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.96f else 1f,
+        targetValue = if (pressed) 0.98f else 1f, // Task ANIM-001: Updated from 0.96f to 0.98f
         animationSpec = LiftrixAnimations.LiftrixSpring,
         label = "athleticButtonPress"
     )
@@ -419,7 +427,7 @@ fun EnhancedAthleticButtonPress(
     content: @Composable () -> Unit
 ) {
     val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.96f else 1f,
+        targetValue = if (pressed) 0.98f else 1f, // Task ANIM-001: Updated from 0.96f to 0.98f
         animationSpec = LiftrixAnimations.LiftrixSpring,
         label = "enhancedAthleticButtonPress"
     )

@@ -121,7 +121,7 @@ sealed class UiState<out T> {
  * @return UiState<R> with transformed data or unchanged non-Success state
  */
 inline fun <T, R> UiState<T>.map(transform: (T) -> R): UiState<R> = when (this) {
-    is UiState.Loading -> UiState.Loading
+    UiState.Loading -> UiState.Loading
     is UiState.Success -> UiState.Success(
         data = transform(data),
         isRefreshing = isRefreshing,
@@ -131,7 +131,12 @@ inline fun <T, R> UiState<T>.map(transform: (T) -> R): UiState<R> = when (this) 
         error = error,
         previousData = previousData?.let(transform)
     )
-    is UiState.Empty -> this
+    is UiState.Empty -> UiState.Empty(
+        message = message,
+        actionText = actionText,
+        showAction = showAction
+    )
+    else -> UiState.Loading // Fallback for unknown states
 }
 
 /**
@@ -143,7 +148,10 @@ inline fun <T, R> UiState<T>.map(transform: (T) -> R): UiState<R> = when (this) 
  */
 inline fun <T> UiState<T>.mapError(transform: (LiftrixError) -> LiftrixError): UiState<T> = when (this) {
     is UiState.Error -> copy(error = transform(error))
-    else -> this
+    UiState.Loading -> this
+    is UiState.Success -> this
+    is UiState.Empty -> this
+    else -> this // Fallback for unknown states
 }
 
 /**
@@ -153,7 +161,9 @@ inline fun <T> UiState<T>.mapError(transform: (LiftrixError) -> LiftrixError): U
 fun <T> UiState<T>.dataOrNull(): T? = when (this) {
     is UiState.Success -> data
     is UiState.Error -> previousData
-    else -> null
+    UiState.Loading -> null
+    is UiState.Empty -> null
+    else -> null // Fallback for unknown states
 }
 
 /**
@@ -162,7 +172,10 @@ fun <T> UiState<T>.dataOrNull(): T? = when (this) {
  */
 fun <T> UiState<T>.errorOrNull(): LiftrixError? = when (this) {
     is UiState.Error -> error
-    else -> null
+    UiState.Loading -> null
+    is UiState.Success -> null
+    is UiState.Empty -> null
+    else -> null // Fallback for unknown states
 }
 
 /**
@@ -170,9 +183,11 @@ fun <T> UiState<T>.errorOrNull(): LiftrixError? = when (this) {
  * True for Loading state or Success state with isRefreshing = true.
  */
 fun <T> UiState<T>.isLoading(): Boolean = when (this) {
-    is UiState.Loading -> true
+    UiState.Loading -> true
     is UiState.Success -> isRefreshing
-    else -> false
+    is UiState.Error -> false
+    is UiState.Empty -> false
+    else -> false // Fallback for unknown states
 }
 
 /**
@@ -181,7 +196,9 @@ fun <T> UiState<T>.isLoading(): Boolean = when (this) {
 fun <T> UiState<T>.hasData(): Boolean = when (this) {
     is UiState.Success -> true
     is UiState.Error -> previousData != null
-    else -> false
+    UiState.Loading -> false
+    is UiState.Empty -> false
+    else -> false // Fallback for unknown states
 }
 
 /**
@@ -199,7 +216,10 @@ fun <T> UiState<T>.isEmpty(): Boolean = this is UiState.Empty
  */
 fun <T> UiState<T>.canRetry(): Boolean = when (this) {
     is UiState.Error -> error.isRecoverable
-    else -> false
+    UiState.Loading -> false
+    is UiState.Success -> false
+    is UiState.Empty -> false
+    else -> false // Fallback for unknown states
 }
 
 /**
@@ -207,10 +227,11 @@ fun <T> UiState<T>.canRetry(): Boolean = when (this) {
  * Useful for displaying status messages in UI.
  */
 fun <T> UiState<T>.getDisplayMessage(): String? = when (this) {
-    is UiState.Loading -> "Loading..."
+    UiState.Loading -> "Loading..."
     is UiState.Success -> if (isRefreshing) "Refreshing..." else null
     is UiState.Error -> error.message
     is UiState.Empty -> message
+    else -> null // Fallback for unknown states
 }
 
 /**

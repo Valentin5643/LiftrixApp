@@ -242,8 +242,8 @@ tasks.register<Exec>("validateRoomQueries") {
     dependsOn("compileDebugKotlin")
     
     // Use Exec task type for configuration cache compatibility
-    commandLine("bash", "$projectDir/../scripts/validate_room_defaults.sh")
-    workingDir = projectDir.parentFile
+    commandLine("bash", "../scripts/validate_room_defaults.sh")
+    workingDir = projectDir
     
     doLast {
         println("✅ Room query validation completed successfully")

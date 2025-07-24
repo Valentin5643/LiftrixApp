@@ -267,7 +267,7 @@ private fun StrengthLineChart(
     val chartColors = listOf(
         LiftrixColors.Primary,
         LiftrixColors.Secondary,
-        LiftrixColors.Accent
+        LiftrixColors.TiffanyBlue
     )
     
     val normalizedExerciseData = remember(exerciseData) {
@@ -377,7 +377,7 @@ private fun ProgressStatisticItem(
             
             if (improvement != 0) {
                 Spacer(modifier = Modifier.width(8.dp))
-                val improvementColor = if (improvement > 0) LiftrixColors.Primary else LiftrixColors.Accent
+                val improvementColor = if (improvement > 0) LiftrixColors.Primary else LiftrixColors.TiffanyBlue
                 val improvementText = if (improvement > 0) "+$improvement%" else "$improvement%"
                 
                 Text(

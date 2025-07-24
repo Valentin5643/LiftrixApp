@@ -20,6 +20,9 @@ data class UserSettings(
     val darkMode: Boolean = false,
     val notificationsEnabled: Boolean = true,
     val weightUnit: WeightUnit = WeightUnit.getSystemDefault(),
+    val terminologyPreference: String = "NEW", // NEW or LEGACY
+    val migrationCompleted: Boolean = false,
+    val migrationExplanationSeen: Boolean = false,
     val updatedAt: Instant = Instant.now()
 ) {
     companion object {
@@ -34,6 +37,9 @@ data class UserSettings(
             darkMode = false,
             notificationsEnabled = true,
             weightUnit = WeightUnit.getSystemDefault(),
+            terminologyPreference = "NEW",
+            migrationCompleted = false,
+            migrationExplanationSeen = false,
             updatedAt = Instant.now()
         )
     }

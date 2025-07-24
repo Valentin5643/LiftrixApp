@@ -78,7 +78,7 @@ fun NavGraphBuilder.workoutGraph(
                         navController.navigate(WorkoutDestinations.BLANK_WORKOUT_SESSION)
                     }
                 },
-                onNavigateToTemplateCreation = {
+                onNavigateToWorkoutCreation = {
                     navController.navigate(WorkoutDestinations.CREATE_TEMPLATE)
                 }
             )

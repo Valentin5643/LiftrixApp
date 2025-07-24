@@ -3,6 +3,7 @@ package com.example.liftrix.ui.navigation
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavOptionsBuilder
+import com.example.liftrix.ui.animations.TransitionType
 
 /**
  * Type-Safe Navigation Extension Functions
@@ -16,14 +17,22 @@ import androidx.navigation.NavOptionsBuilder
  * - Safe back stack management
  * - Support for deep linking and external navigation
  * - Error prevention through type safety
+ * - Animated transitions with 300ms timing (Task ANIM-002)
+ * - Athletic design principles with smooth screen transitions
  */
 
 // MARK: - Core Navigation Functions
 
 /**
  * Navigate to workout details screen with specific workout ID
+ * 
+ * @param workoutId The unique identifier for the workout
+ * @param transitionType Animation transition type for screen change
  */
-fun NavController.navigateToWorkoutDetails(workoutId: String) {
+fun NavController.navigateToWorkoutDetails(
+    workoutId: String,
+    transitionType: TransitionType = TransitionType.VERTICAL
+) {
     navigate(LiftrixRoute.WorkoutDetails(workoutId))
 }
 
@@ -48,7 +57,8 @@ fun NavController.navigateToExerciseSelection(
  */
 fun NavController.navigateToActiveWorkout(
     templateId: String? = null,
-    isBlankWorkout: Boolean = false
+    isBlankWorkout: Boolean = false,
+    transitionType: TransitionType = TransitionType.ATHLETIC
 ) {
     navigate(LiftrixRoute.ActiveWorkout(templateId, isBlankWorkout))
 }
@@ -131,6 +141,35 @@ fun NavController.navigateToTemplateCreation() {
 }
 
 /**
+ * Navigate to create workout screen (updated terminology from template creation)
+ * 
+ * @param transitionType Animation transition type for screen change
+ */
+fun NavController.navigateToCreateWorkout(
+    transitionType: TransitionType = TransitionType.MODAL
+) {
+    navigate(LiftrixRoute.CreateWorkout)
+}
+
+/**
+ * Navigate to edit workout routine screen
+ * 
+ * @param workoutId Unique identifier for the workout routine to edit
+ */
+fun NavController.navigateToEditWorkout(workoutId: String) {
+    navigate(LiftrixRoute.EditWorkout(workoutId))
+}
+
+/**
+ * Navigate to edit workout session screen  
+ * 
+ * @param sessionId Unique identifier for the workout session to edit
+ */
+fun NavController.navigateToEditSession(sessionId: String) {
+    navigate(LiftrixRoute.EditSession(sessionId))
+}
+
+/**
  * Navigate to settings screen
  */
 fun NavController.navigateToSettings() {
@@ -204,6 +243,88 @@ fun NavController.navigateToAuthSignUp() {
  */
 fun NavController.navigateToAuthSignIn() {
     navigate(LiftrixRoute.AuthSignIn)
+}
+
+// MARK: - Animated Navigation Extensions (Task ANIM-002)
+
+/**
+ * Navigate with animated transitions using specified transition type
+ * 
+ * @param route The target route to navigate to
+ * @param transitionType Animation transition type for screen change
+ * @param clearStack Whether to clear the back stack
+ */
+fun NavController.navigateAnimated(
+    route: LiftrixRoute,
+    transitionType: TransitionType = TransitionType.VERTICAL,
+    clearStack: Boolean = false
+) {
+    navigate(route) {
+        if (clearStack) {
+            popUpTo(0) {
+                inclusive = true
+            }
+        }
+        launchSingleTop = true
+    }
+}
+
+/**
+ * Navigate to workout details with card transition animation
+ * Provides smooth card-to-detail transition experience
+ */
+fun NavController.navigateToWorkoutDetailsAnimated(workoutId: String) {
+    navigateAnimated(
+        route = LiftrixRoute.WorkoutDetails(workoutId),
+        transitionType = TransitionType.CARD
+    )
+}
+
+/**
+ * Navigate to active workout with athletic transition
+ * Enhanced animation for workout start experience
+ */
+fun NavController.navigateToActiveWorkoutAnimated(
+    templateId: String? = null,
+    isBlankWorkout: Boolean = false
+) {
+    navigateAnimated(
+        route = LiftrixRoute.ActiveWorkout(templateId, isBlankWorkout),
+        transitionType = TransitionType.ATHLETIC
+    )
+}
+
+/**
+ * Navigate to create workout with modal transition
+ * Bottom-up modal animation for creation flow
+ */
+fun NavController.navigateToCreateWorkoutAnimated() {
+    navigateAnimated(
+        route = LiftrixRoute.CreateWorkout,
+        transitionType = TransitionType.MODAL
+    )
+}
+
+/**
+ * Navigate with horizontal forward transition
+ * For progressive navigation flows
+ */
+fun NavController.navigateForwardAnimated(route: LiftrixRoute) {
+    navigateAnimated(
+        route = route,
+        transitionType = TransitionType.HORIZONTAL_FORWARD
+    )
+}
+
+/**
+ * Navigate with horizontal back transition
+ * For return navigation flows
+ */
+fun NavController.navigateBackAnimated(route: LiftrixRoute) {
+    navigateAnimated(
+        route = route,
+        transitionType = TransitionType.HORIZONTAL_BACK
+    )
 }
 
 // MARK: - Navigation Utilities
@@ -376,6 +497,7 @@ fun NavController.getCurrentLiftrixRoute(): LiftrixRoute? {
         isCurrentRoute(LiftrixRoute.Coach::class) -> LiftrixRoute.Coach
         isCurrentRoute(LiftrixRoute.Friends::class) -> LiftrixRoute.Friends
         isCurrentRoute(LiftrixRoute.TemplateCreation::class) -> LiftrixRoute.TemplateCreation
+        isCurrentRoute(LiftrixRoute.CreateWorkout::class) -> LiftrixRoute.CreateWorkout
         isCurrentRoute(LiftrixRoute.Settings::class) -> LiftrixRoute.Settings
         isCurrentRoute(LiftrixRoute.Onboarding::class) -> LiftrixRoute.Onboarding
         isCurrentRoute(LiftrixRoute.DashboardCustomization::class) -> LiftrixRoute.DashboardCustomization
@@ -385,6 +507,6 @@ fun NavController.getCurrentLiftrixRoute(): LiftrixRoute? {
         isCurrentRoute(LiftrixRoute.GuestDashboard::class) -> LiftrixRoute.GuestDashboard
         isCurrentRoute(LiftrixRoute.AuthSignUp::class) -> LiftrixRoute.AuthSignUp
         isCurrentRoute(LiftrixRoute.AuthSignIn::class) -> LiftrixRoute.AuthSignIn
-        else -> null // For parameterized routes, would need more complex logic
+        else -> null // For parameterized routes like EditWorkout(workoutId), EditSession(sessionId), would need more complex logic
     }
 }

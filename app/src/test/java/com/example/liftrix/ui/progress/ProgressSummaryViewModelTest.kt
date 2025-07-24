@@ -142,7 +142,7 @@ class ProgressSummaryViewModelTest {
     @Test
     fun `given authenticated user, when LoadSummary event, then loads summary data successfully`() = runTest {
         // Given
-        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns LiftrixResult.Success(testProgressSummary)
+        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns Result.success(testProgressSummary)
         
         // When
         viewModel.handleEvent(ProgressSummaryEvent.LoadSummary)
@@ -167,7 +167,7 @@ class ProgressSummaryViewModelTest {
     fun `given service error, when LoadSummary event, then shows error state`() = runTest {
         // Given
         val testError = LiftrixError.DatabaseError("Failed to load summary data")
-        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns LiftrixResult.Error(testError)
+        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns Result.failure(testError)
         
         // When
         viewModel.handleEvent(ProgressSummaryEvent.LoadSummary)
@@ -219,7 +219,7 @@ class ProgressSummaryViewModelTest {
     @Test
     fun `given existing summary data, when RefreshSummary event, then reloads data with refresh indicator`() = runTest {
         // Given - load initial data
-        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns LiftrixResult.Success(testProgressSummary)
+        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns Result.success(testProgressSummary)
         viewModel.handleEvent(ProgressSummaryEvent.LoadSummary)
         testDispatcher.scheduler.advanceUntilIdle()
         
@@ -232,7 +232,7 @@ class ProgressSummaryViewModelTest {
             every { lastUpdated } returns Instant.fromEpochMilliseconds(1641081600000) // New timestamp
         }
         
-        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns LiftrixResult.Success(refreshedSummary)
+        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns Result.success(refreshedSummary)
         
         // When
         viewModel.handleEvent(ProgressSummaryEvent.RefreshSummary)
@@ -270,7 +270,7 @@ class ProgressSummaryViewModelTest {
             }
             
             // Complete the deferred to allow test to finish
-            refreshDeferred.complete(LiftrixResult.Success(testProgressSummary))
+            refreshDeferred.complete(Result.success(testProgressSummary))
         }
     }
 
@@ -287,7 +287,7 @@ class ProgressSummaryViewModelTest {
             every { timeRange } returns newTimeRange
         }
         
-        coEvery { mockProgressDataService.getProgressSummary(testUserId, newTimeRange) } returns LiftrixResult.Success(newSummary)
+        coEvery { mockProgressDataService.getProgressSummary(testUserId, newTimeRange) } returns Result.success(newSummary)
         
         // When
         viewModel.handleEvent(ProgressSummaryEvent.TimePeriodChanged(newTimeRange))
@@ -344,13 +344,13 @@ class ProgressSummaryViewModelTest {
     fun `given failed summary load, when RetryLoad event, then retries loading data`() = runTest {
         // Given - initial failure
         val testError = LiftrixError.NetworkError("Network failure")
-        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns LiftrixResult.Error(testError)
+        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns Result.failure(testError)
         
         viewModel.handleEvent(ProgressSummaryEvent.LoadSummary)
         testDispatcher.scheduler.advanceUntilIdle()
         
         // Update service to succeed on retry
-        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns LiftrixResult.Success(testProgressSummary)
+        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns Result.success(testProgressSummary)
         
         // When
         viewModel.handleEvent(ProgressSummaryEvent.RetryLoad)
@@ -375,7 +375,7 @@ class ProgressSummaryViewModelTest {
     fun `given error state, when ClearError event, then clears error and resets summary to NotAsked`() = runTest {
         // Given - start with error state
         val testError = LiftrixError.ValidationError(field = "timeRange", violations = listOf("Invalid time range"))
-        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns LiftrixResult.Error(testError)
+        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns Result.failure(testError)
         
         viewModel.handleEvent(ProgressSummaryEvent.LoadSummary)
         testDispatcher.scheduler.advanceUntilIdle()
@@ -399,7 +399,7 @@ class ProgressSummaryViewModelTest {
     @Test
     fun `given any summary state, when ForceRefresh event, then bypasses cache and reloads data`() = runTest {
         // Given - load initial data
-        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns LiftrixResult.Success(testProgressSummary)
+        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns Result.success(testProgressSummary)
         viewModel.handleEvent(ProgressSummaryEvent.LoadSummary)
         testDispatcher.scheduler.advanceUntilIdle()
         
@@ -433,7 +433,7 @@ class ProgressSummaryViewModelTest {
             every { timeRange } returns predefinedRange
         }
         
-        coEvery { mockProgressDataService.getProgressSummary(testUserId, predefinedRange) } returns LiftrixResult.Success(yearSummary)
+        coEvery { mockProgressDataService.getProgressSummary(testUserId, predefinedRange) } returns Result.success(yearSummary)
         
         // When
         viewModel.handleEvent(ProgressSummaryEvent.QuickTimeRangeSelected(predefinedRange))
@@ -458,7 +458,7 @@ class ProgressSummaryViewModelTest {
     @Test
     fun `given background update available, when BackgroundDataUpdate event, then updates data silently`() = runTest {
         // Given - load initial data
-        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns LiftrixResult.Success(testProgressSummary)
+        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns Result.success(testProgressSummary)
         viewModel.handleEvent(ProgressSummaryEvent.LoadSummary)
         testDispatcher.scheduler.advanceUntilIdle()
         
@@ -470,7 +470,7 @@ class ProgressSummaryViewModelTest {
             every { lastUpdated } returns Instant.fromEpochMilliseconds(1641168000000) // Newer timestamp
         }
         
-        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns LiftrixResult.Success(backgroundSummary)
+        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns Result.success(backgroundSummary)
         
         // When
         viewModel.handleEvent(ProgressSummaryEvent.BackgroundDataUpdate)
@@ -527,7 +527,7 @@ class ProgressSummaryViewModelTest {
         val userFlow = MutableSharedFlow<com.example.liftrix.domain.model.User?>()
         every { mockAuthRepository.currentUser } returns userFlow
         
-        coEvery { mockProgressDataService.getProgressSummary(testUserId, any()) } returns LiftrixResult.Success(testProgressSummary)
+        coEvery { mockProgressDataService.getProgressSummary(testUserId, any()) } returns Result.success(testProgressSummary)
         
         val authChangeViewModel = ProgressSummaryViewModel(
             progressDataService = mockProgressDataService,
@@ -585,7 +585,7 @@ class ProgressSummaryViewModelTest {
             every { lastUpdated } returns Instant.fromEpochMilliseconds(1609459200000) // Very old timestamp
         }
         
-        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns LiftrixResult.Success(staleSummary)
+        coEvery { mockProgressDataService.getProgressSummary(testUserId, testTimeRange) } returns Result.success(staleSummary)
         
         viewModel.handleEvent(ProgressSummaryEvent.LoadSummary)
         testDispatcher.scheduler.advanceUntilIdle()
@@ -611,9 +611,9 @@ class ProgressSummaryViewModelTest {
         val range2 = TimeRange.lastMonth()
         val range3 = TimeRange.lastQuarter()
         
-        coEvery { mockProgressDataService.getProgressSummary(testUserId, range1) } returns LiftrixResult.Success(testProgressSummary)
-        coEvery { mockProgressDataService.getProgressSummary(testUserId, range2) } returns LiftrixResult.Success(testProgressSummary)
-        coEvery { mockProgressDataService.getProgressSummary(testUserId, range3) } returns LiftrixResult.Success(testProgressSummary)
+        coEvery { mockProgressDataService.getProgressSummary(testUserId, range1) } returns Result.success(testProgressSummary)
+        coEvery { mockProgressDataService.getProgressSummary(testUserId, range2) } returns Result.success(testProgressSummary)
+        coEvery { mockProgressDataService.getProgressSummary(testUserId, range3) } returns Result.success(testProgressSummary)
         
         // When - rapidly change time ranges
         viewModel.handleEvent(ProgressSummaryEvent.TimePeriodChanged(range1))

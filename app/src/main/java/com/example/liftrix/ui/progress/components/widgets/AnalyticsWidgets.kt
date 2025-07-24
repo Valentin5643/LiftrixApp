@@ -54,7 +54,7 @@ fun VolumeTrendsWidget(
             AnalyticsDisplay(
                 analyticsData = analyticsData,
                 icon = Icons.Default.TrendingUp,
-                primaryColor = LiftrixColors.Primary,
+                primaryColor = MaterialTheme.colorScheme.primary,
                 showMetrics = true
             )
         }
@@ -83,7 +83,7 @@ fun RecoveryMetricsWidget(
         data?.let { analyticsData ->
             RecoveryDisplay(
                 analyticsData = analyticsData,
-                primaryColor = Color(0xFF4CAF50)
+                primaryColor = MaterialTheme.colorScheme.secondary
             )
         }
     }
@@ -111,7 +111,7 @@ fun PerformanceAnalysisWidget(
         data?.let { analyticsData ->
             PerformanceDisplay(
                 analyticsData = analyticsData,
-                primaryColor = Color(0xFF9C27B0)
+                primaryColor = MaterialTheme.colorScheme.primary
             )
         }
     }
@@ -140,7 +140,7 @@ fun WeeklyTrendsWidget(
             AnalyticsDisplay(
                 analyticsData = analyticsData,
                 icon = Icons.Default.CalendarMonth,
-                primaryColor = Color(0xFF2196F3),
+                primaryColor = MaterialTheme.colorScheme.secondary,
                 showMetrics = false
             )
         }
@@ -169,7 +169,7 @@ fun MuscleGroupDistributionWidget(
         data?.let { analyticsData ->
             MuscleGroupDisplay(
                 analyticsData = analyticsData,
-                primaryColor = Color(0xFFFF5722)
+                primaryColor = MaterialTheme.colorScheme.primary
             )
         }
     }
@@ -197,7 +197,7 @@ fun RecoveryPatternsWidget(
         data?.let { analyticsData ->
             RecoveryPatternsDisplay(
                 analyticsData = analyticsData,
-                primaryColor = Color(0xFF009688)
+                primaryColor = MaterialTheme.colorScheme.secondary
             )
         }
     }
@@ -225,7 +225,7 @@ fun TrainingIntensityWidget(
         data?.let { analyticsData ->
             IntensityDisplay(
                 analyticsData = analyticsData,
-                primaryColor = Color(0xFFE91E63)
+                primaryColor = MaterialTheme.colorScheme.primary
             )
         }
     }
@@ -253,7 +253,7 @@ fun ExerciseVarietyWidget(
         data?.let { analyticsData ->
             VarietyDisplay(
                 analyticsData = analyticsData,
-                primaryColor = Color(0xFF673AB7)
+                primaryColor = MaterialTheme.colorScheme.secondary
             )
         }
     }
@@ -281,7 +281,7 @@ fun TimeOfDayAnalysisWidget(
         data?.let { analyticsData ->
             TimeAnalysisDisplay(
                 analyticsData = analyticsData,
-                primaryColor = Color(0xFFFF9800)
+                primaryColor = MaterialTheme.colorScheme.primary
             )
         }
     }
@@ -318,7 +318,7 @@ fun CompactAnalyticsWidget(
                             text = analyticsData.insights.first().title,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium,
-                            color = LiftrixColors.OnSurface,
+                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1
                         )
                     }
@@ -326,7 +326,7 @@ fun CompactAnalyticsWidget(
                     Text(
                         text = "Confidence: ${(analyticsData.confidence * 100).toInt()}%",
                         style = MaterialTheme.typography.bodySmall,
-                        color = LiftrixColors.OnSurface.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                 }
                 
@@ -379,7 +379,7 @@ private fun AnalyticsDisplay(
                     text = "${analyticsData.insights.size} insights generated",
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium,
-                    color = LiftrixColors.OnSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 
                 ConfidenceDisplay(
@@ -439,7 +439,7 @@ private fun RecoveryDisplay(
                 Text(
                     text = "Recovery Score",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = LiftrixColors.OnSurface.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
                 
                 Text(
@@ -551,13 +551,13 @@ private fun MuscleGroupDisplay(
                             text = insight.title,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium,
-                            color = LiftrixColors.OnSurface
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         
                         Text(
                             text = insight.description,
                             style = MaterialTheme.typography.bodySmall,
-                            color = LiftrixColors.OnSurface.copy(alpha = 0.7f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
                     }
                 }
@@ -606,7 +606,7 @@ private fun IntensityDisplay(
                 modifier = Modifier.size(80.dp),
                 color = primaryColor,
                 strokeWidth = 8.dp,
-                trackColor = LiftrixColors.OnSurface.copy(alpha = 0.1f)
+                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
             )
             
             Column(
@@ -622,7 +622,7 @@ private fun IntensityDisplay(
                 Text(
                     text = "Avg RPE",
                     style = MaterialTheme.typography.bodySmall,
-                    color = LiftrixColors.OnSurface.copy(alpha = 0.6f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
         }
@@ -661,7 +661,7 @@ private fun VarietyDisplay(
                 Text(
                     text = "Variety Score",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = LiftrixColors.OnSurface.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
                 
                 Text(
@@ -737,7 +737,7 @@ private fun TimeAnalysisDisplay(
                 Text(
                     text = "Optimal Time",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = LiftrixColors.OnSurface.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
                 
                 Text(
@@ -774,7 +774,7 @@ private fun InsightsDisplay(
             text = "Insights",
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
-            color = LiftrixColors.OnSurface
+            color = MaterialTheme.colorScheme.onSurface
         )
         
         insights.forEach { insight ->
@@ -797,7 +797,7 @@ private fun InsightItem(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
-        color = LiftrixColors.OnSurface.copy(alpha = 0.05f)
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -813,13 +813,13 @@ private fun InsightItem(
                     text = insight.title,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
-                    color = LiftrixColors.OnSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 
                 Text(
                     text = insight.description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = LiftrixColors.OnSurface.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
             }
         }
@@ -841,7 +841,7 @@ private fun RecommendationsDisplay(
             text = "Recommendations",
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
-            color = LiftrixColors.OnSurface
+            color = MaterialTheme.colorScheme.onSurface
         )
         
         recommendations.forEach { recommendation ->
@@ -885,14 +885,14 @@ private fun RecommendationItem(
                     text = recommendation.title,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
-                    color = LiftrixColors.OnSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
             
             Text(
                 text = recommendation.description,
                 style = MaterialTheme.typography.bodySmall,
-                color = LiftrixColors.OnSurface.copy(alpha = 0.7f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
         }
     }
@@ -913,7 +913,7 @@ private fun MetricsDisplay(
             text = "Key Metrics",
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
-            color = LiftrixColors.OnSurface
+            color = MaterialTheme.colorScheme.onSurface
         )
         
         LazyRow(
@@ -942,7 +942,7 @@ private fun MetricCard(
     Surface(
         modifier = Modifier.width(80.dp),
         shape = RoundedCornerShape(8.dp),
-        color = LiftrixColors.OnSurface.copy(alpha = 0.05f)
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
@@ -959,7 +959,7 @@ private fun MetricCard(
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodySmall,
-                color = LiftrixColors.OnSurface.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 maxLines = 2
             )
         }
@@ -995,7 +995,7 @@ private fun PerformanceMetricCard(
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodySmall,
-                color = LiftrixColors.OnSurface.copy(alpha = 0.7f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
         }
     }
@@ -1020,14 +1020,14 @@ private fun MuscleGroupBar(
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodySmall,
-                color = LiftrixColors.OnSurface
+                color = MaterialTheme.colorScheme.onSurface
             )
             
             Text(
                 text = "${percentage.toInt()}%",
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
-                color = LiftrixColors.OnSurface
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
         
@@ -1038,7 +1038,7 @@ private fun MuscleGroupBar(
                 .height(6.dp)
                 .clip(RoundedCornerShape(3.dp)),
             color = primaryColor,
-            trackColor = LiftrixColors.OnSurface.copy(alpha = 0.1f)
+            trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
         )
     }
 }
@@ -1058,7 +1058,7 @@ private fun ConfidenceDisplay(
         Text(
             text = "Confidence:",
             style = MaterialTheme.typography.bodySmall,
-            color = LiftrixColors.OnSurface.copy(alpha = 0.6f)
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
         )
         
         Text(
@@ -1084,9 +1084,9 @@ private fun ConfidenceIndicator(
     modifier: Modifier = Modifier
 ) {
     val color = when {
-        confidence >= 0.8f -> Color(0xFF4CAF50)
-        confidence >= 0.6f -> Color(0xFFFF9800)
-        else -> Color(0xFFF44336)
+        confidence >= 0.8f -> MaterialTheme.colorScheme.primary  // Persian Green for high confidence
+        confidence >= 0.6f -> MaterialTheme.colorScheme.secondary  // Tiffany Blue for medium confidence
+        else -> MaterialTheme.colorScheme.error  // Preserve red for low confidence (exception to 5-color rule)
     }
     
     Box(

@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.ui.components.animations.AnimatedProgressRingWithGradient
 import com.example.liftrix.ui.theme.LiftrixColors
+import com.example.liftrix.ui.theme.PrimaryGradient
 
 @Composable
 fun LineChartProgress() {
@@ -50,10 +51,10 @@ fun RadialProgressIndicator(
             Box(
                 contentAlignment = Alignment.Center
             ) {
-                // Animated progress ring with teal-indigo gradient
+                // Animated progress ring with Persian Green to Tiffany Blue gradient
                 AnimatedProgressRingWithGradient(
                     progress = progress,
-                    progressBrush = LiftrixColors.BrandGradients.TealIndigo,
+                    progressBrush = PrimaryGradient,
                     size = size,
                     strokeWidth = (size.value * 0.08f).dp // 8% of size for proportional stroke
                 )

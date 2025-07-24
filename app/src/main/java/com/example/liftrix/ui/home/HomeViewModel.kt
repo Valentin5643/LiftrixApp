@@ -15,6 +15,12 @@ import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.domain.usecase.GetWorkoutHistoryUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.ui.common.state.UiState
+import com.example.liftrix.ui.common.state.HomeScreenData
+import com.example.liftrix.ui.common.state.FeedState
+import com.example.liftrix.ui.common.state.RecommendationsState
+import com.example.liftrix.ui.common.state.dataOrNull
+import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.components.cards.Trend
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -46,15 +52,11 @@ class HomeViewModel @Inject constructor(
     private val analyticsService: AnalyticsService,
     private val socialRepository: SocialRepository,
     private val getWorkoutHistoryUseCase: GetWorkoutHistoryUseCase,
-    private val errorHandler: ErrorHandler
-) : ViewModel() {
+    errorHandler: ErrorHandler
+) : BaseViewModel<UiState<HomeScreenData>, HomeEvent>(errorHandler) {
 
-    private val _uiState = MutableStateFlow(HomeUiState())
-    val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+    override val _uiState = MutableStateFlow<UiState<HomeScreenData>>(UiState.Loading)
 
-    private fun updateState(update: HomeUiState.() -> HomeUiState) {
-        _uiState.value = _uiState.value.update()
-    }
 
     private var currentFeedOffset = 0
     private var currentRecommendationsOffset = 0
@@ -66,9 +68,9 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * Handles UI events from the home screen following MVI pattern
+     * Handles events from the UI following BaseViewModel MVI pattern
      */
-    fun onEvent(event: HomeEvent) {
+    override fun handleEvent(event: HomeEvent) {
         when (event) {
             is HomeEvent.RefreshData -> {
                 refreshData()
@@ -93,11 +95,11 @@ class HomeViewModel @Inject constructor(
                 unfollowUser(event.userId)
             }
             is HomeEvent.ErrorDismissed -> {
-                updateState { copy(errorMessage = null) }
+                clearError()
             }
             is HomeEvent.FeedErrorDismissed -> {
-                updateState { 
-                    copy(workoutFeedState = when (val current = uiState.value.workoutFeedState) {
+                updateHomeScreenData { currentData -> 
+                    currentData.copy(workoutFeedState = when (val current = currentData.workoutFeedState) {
                         is FeedState.Error -> FeedState.Loading
                         else -> current
                     })
@@ -105,8 +107,8 @@ class HomeViewModel @Inject constructor(
                 loadFeedWorkouts()
             }
             is HomeEvent.RecommendationsErrorDismissed -> {
-                updateState { 
-                    copy(recommendationsState = when (val current = uiState.value.recommendationsState) {
+                updateHomeScreenData { currentData -> 
+                    currentData.copy(recommendationsState = when (val current = currentData.recommendationsState) {
                         is RecommendationsState.Error -> RecommendationsState.Loading
                         else -> current
                     })
@@ -117,68 +119,60 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
+     * Override to handle loading state updates
+     */
+    override fun setLoadingState() {
+        setState(UiState.Loading)
+    }
+
+    /**
+     * Override to handle error state updates
+     */
+    override fun updateErrorState(error: com.example.liftrix.domain.model.error.LiftrixError) {
+        val currentData = (_uiState.value as? UiState.Success)?.data ?: HomeScreenData()
+        setState(UiState.Error(error, currentData))
+    }
+
+    private fun clearError() {
+        updateState { currentState ->
+            when (currentState) {
+                is UiState.Error -> UiState.Success(currentState.previousData ?: HomeScreenData())
+                else -> currentState
+            }
+        }
+    }
+    
+    /**
+     * Helper method to update HomeScreenData within a Success state
+     */
+    private fun updateHomeScreenData(transform: (HomeScreenData) -> HomeScreenData) {
+        val currentData = (_uiState.value as? UiState.Success)?.data ?: HomeScreenData()
+        setState(UiState.Success(transform(currentData)))
+    }
+
+    /**
      * Loads home screen data including recent workouts and statistics
      * 🔥 IMPROVED: Now used for manual refresh, reactive updates handled separately
      */
     fun loadHomeData() {
-        viewModelScope.launch {
-            try {
-                updateState { copy(isWaitingForAuth = true, isLoading = true, errorMessage = null) }
+        executeUseCase(
+            useCase = {
                 val userId = getAuthenticatedUserIdUseCase()
-                updateState { copy(isWaitingForAuth = false) }
-
-                updateState { copy(isLoading = true, errorMessage = null) }
-                
-                // Load recent workouts for manual refresh
-                Timber.d("🔥 HOME-VM-DEBUG: Loading recent workouts for user: $userId")
-                
-                workoutRepository.getRecentWorkouts(userId, RECENT_WORKOUTS_LIMIT)
-                .catch { throwable ->
-                    Timber.e(throwable, "Error loading home data")
-                    updateState { 
-                        copy(
-                            isLoading = false, 
-                            errorMessage = "Failed to load workout data: ${throwable.message}"
-                        ) 
-                    }
+                val result = workoutRepository.getRecentWorkouts(userId, RECENT_WORKOUTS_LIMIT).first()
+                result
+            },
+            onSuccess = { recentWorkouts ->
+                Timber.d("🔥 HOME-VM-DEBUG: Successfully loaded ${recentWorkouts.size} recent workouts")
+                recentWorkouts.forEachIndexed { index, workout ->
+                    Timber.d("🔥 HOME-VM-DEBUG: Workout[$index] - name: ${workout.name}, status: ${workout.status}, date: ${workout.date}")
                 }
-                .first() // Take only the first emission for manual refresh
-                .fold(
-                    onSuccess = { recentWorkouts ->
-                        Timber.d("🔥 HOME-VM-DEBUG: Successfully loaded ${recentWorkouts.size} recent workouts")
-                        recentWorkouts.forEachIndexed { index, workout ->
-                            Timber.d("🔥 HOME-VM-DEBUG: Workout[$index] - name: ${workout.name}, status: ${workout.status}, date: ${workout.date}")
-                        }
-                        
-                        updateState {
-                            copy(
-                                isLoading = false,
-                                recentWorkouts = recentWorkouts,
-                                errorMessage = null
-                            )
-                        }
-                    },
-                    onFailure = { throwable ->
-                        Timber.e(throwable, "🔥 HOME-VM-DEBUG: Failed to load recent workouts")
-                        updateState {
-                            copy(
-                                isLoading = false,
-                                recentWorkouts = emptyList(),
-                                errorMessage = throwable.message
-                            )
-                        }
-                    }
-                )
-            } catch (exception: Exception) {
-                Timber.e(exception, "Error in loadHomeData")
-                updateState { 
-                    copy(
-                        isLoading = false, 
-                        errorMessage = "Failed to load home data: ${exception.message}"
-                    ) 
-                }
+                
+                updateHomeScreenData { it.copy(recentWorkouts = recentWorkouts) }
+            },
+            onError = { error ->
+                Timber.e("Error in loadHomeData: ${error.message}")
             }
-        }
+        )
     }
 
     /**
@@ -205,7 +199,7 @@ class HomeViewModel @Inject constructor(
             try {
                 val userId = getAuthenticatedUserIdUseCase()
 
-                updateState { copy(workoutFeedState = FeedState.Loading) }
+                updateHomeScreenData { it.copy(workoutFeedState = FeedState.Loading) }
                 currentFeedOffset = 0
 
                 val feedResult = workoutRepository.getFeedWorkouts(userId, FEED_LIMIT)
@@ -215,8 +209,7 @@ class HomeViewModel @Inject constructor(
                         analyticsService.trackFeedLoadTime(loadTime)
                         
                         val hasMore = workouts.size == FEED_LIMIT
-                        updateState {
-                            copy(
+                        updateHomeScreenData { it.copy(
                                 workoutFeedState = FeedState.Success(
                                     workouts = workouts,
                                     hasMore = hasMore,
@@ -231,8 +224,8 @@ class HomeViewModel @Inject constructor(
                         Timber.e(exception, "Error loading feed workouts")
                         val loadTime = System.currentTimeMillis() - startTime
                         analyticsService.trackFeedLoadTime(loadTime)
-                        updateState { 
-                            copy(workoutFeedState = FeedState.Error(exception.message ?: "Failed to load workout feed"))
+                        updateHomeScreenData { 
+                            it.copy(workoutFeedState = FeedState.Error(exception.message ?: "Failed to load workout feed"))
                         }
                     }
                 )
@@ -240,8 +233,8 @@ class HomeViewModel @Inject constructor(
                 Timber.e(exception, "Error in loadFeedWorkouts")
                 val loadTime = System.currentTimeMillis() - startTime
                 analyticsService.trackFeedLoadTime(loadTime)
-                updateState { 
-                    copy(workoutFeedState = FeedState.Error("Failed to load workout feed"))
+                updateHomeScreenData { 
+                    it.copy(workoutFeedState = FeedState.Error("Failed to load workout feed"))
                 }
             }
         }
@@ -251,7 +244,8 @@ class HomeViewModel @Inject constructor(
      * Loads more workout feed data for pagination
      */
     fun loadMoreWorkouts() {
-        val currentState = uiState.value.workoutFeedState
+        val currentData = _uiState.value.dataOrNull() ?: HomeScreenData()
+        val currentState = currentData.workoutFeedState
         if (currentState !is FeedState.Success || !currentState.hasMore || currentState.isLoadingMore) {
             return
         }
@@ -261,8 +255,12 @@ class HomeViewModel @Inject constructor(
             try {
                 val userId = getAuthenticatedUserIdUseCase()
 
-                updateState { 
-                    copy(workoutFeedState = currentState.copy(isLoadingMore = true))
+                updateHomeScreenData { currentData ->
+                    val updatedFeedState = when (val feedState = currentData.workoutFeedState) {
+                        is FeedState.Success -> feedState.copy(isLoadingMore = true)
+                        else -> feedState
+                    }
+                    currentData.copy(workoutFeedState = updatedFeedState)
                 }
 
                 val moreWorkoutsResult = workoutRepository.getFeedWorkouts(userId, FEED_LIMIT)
@@ -271,12 +269,17 @@ class HomeViewModel @Inject constructor(
                         val loadTime = System.currentTimeMillis() - startTime
                         analyticsService.trackFeedLoadTime(loadTime)
                         
-                        val allWorkouts = currentState.workouts + newWorkouts
+                        val currentData = (_uiState.value as? UiState.Success)?.data ?: HomeScreenData()
+                        val existingWorkouts = when (val feedState = currentData.workoutFeedState) {
+                            is FeedState.Success -> feedState.workouts
+                            else -> emptyList()
+                        }
+                        val allWorkouts = existingWorkouts + newWorkouts
                         val hasMore = newWorkouts.size == FEED_LIMIT && allWorkouts.size < MAX_FEED_WORKOUTS
                         val showEndMessage = allWorkouts.size >= MAX_FEED_WORKOUTS
-
-                        updateState {
-                            copy(
+                        
+                        updateHomeScreenData { 
+                            it.copy(
                                 workoutFeedState = FeedState.Success(
                                     workouts = allWorkouts,
                                     hasMore = hasMore,
@@ -285,6 +288,7 @@ class HomeViewModel @Inject constructor(
                                 showEndOfFeedMessage = showEndMessage
                             )
                         }
+                        
                         currentFeedOffset = allWorkouts.size
                         trackMoreWorkoutsLoaded(newWorkouts.size)
                         
@@ -296,8 +300,12 @@ class HomeViewModel @Inject constructor(
                         val loadTime = System.currentTimeMillis() - startTime
                         // Track pagination performance with <1s target
                         analyticsService.trackFeedLoadTime(loadTime)
-                        updateState { 
-                            copy(workoutFeedState = currentState.copy(isLoadingMore = false))
+                        updateHomeScreenData { currentData ->
+                            val updatedFeedState = when (val feedState = currentData.workoutFeedState) {
+                                is FeedState.Success -> feedState.copy(isLoadingMore = false)
+                                else -> feedState
+                            }
+                            currentData.copy(workoutFeedState = updatedFeedState)
                         }
                     }
                 )
@@ -305,8 +313,12 @@ class HomeViewModel @Inject constructor(
                 Timber.e(exception, "Error in loadMoreWorkouts")
                 val loadTime = System.currentTimeMillis() - startTime
                 analyticsService.trackFeedLoadTime(loadTime)
-                updateState { 
-                    copy(workoutFeedState = currentState.copy(isLoadingMore = false))
+                updateHomeScreenData { currentData ->
+                    val updatedFeedState = when (val feedState = currentData.workoutFeedState) {
+                        is FeedState.Success -> feedState.copy(isLoadingMore = false)
+                        else -> feedState
+                    }
+                    currentData.copy(workoutFeedState = updatedFeedState)
                 }
             }
         }
@@ -318,20 +330,19 @@ class HomeViewModel @Inject constructor(
     fun loadRecommendations() {
         viewModelScope.launch {
             try {
-                updateState { copy(recommendationsState = RecommendationsState.Loading) }
+                updateHomeScreenData { it.copy(recommendationsState = RecommendationsState.Loading) }
                 currentRecommendationsOffset = 0
 
                 socialRepository.getRecommendedUsers(RECOMMENDATIONS_LIMIT, 0)
                     .catch { exception ->
                         Timber.e(exception, "Error loading recommendations")
-                        updateState { 
-                            copy(recommendationsState = RecommendationsState.Error(exception.message ?: "Failed to load user recommendations"))
+                        updateHomeScreenData { 
+                            it.copy(recommendationsState = RecommendationsState.Error(exception.message ?: "Failed to load user recommendations"))
                         }
                     }
                     .collect { users ->
                         val hasMore = users.size == RECOMMENDATIONS_LIMIT
-                        updateState {
-                            copy(
+                        updateHomeScreenData { it.copy(
                                 recommendationsState = RecommendationsState.Success(
                                     users = users,
                                     hasMore = hasMore,
@@ -344,8 +355,8 @@ class HomeViewModel @Inject constructor(
                     }
             } catch (exception: Exception) {
                 Timber.e(exception, "Error in loadRecommendations")
-                updateState { 
-                    copy(recommendationsState = RecommendationsState.Error("Failed to load user recommendations"))
+                updateHomeScreenData { 
+                    it.copy(recommendationsState = RecommendationsState.Error("Failed to load user recommendations"))
                 }
             }
         }
@@ -355,7 +366,8 @@ class HomeViewModel @Inject constructor(
      * Loads more user recommendations for pagination
      */
     fun loadMoreRecommendations() {
-        val currentState = uiState.value.recommendationsState
+        val currentData = uiState.value.dataOrNull() ?: HomeScreenData()
+        val currentState = currentData.recommendationsState
         if (currentState !is RecommendationsState.Success || !currentState.hasMore || currentState.isLoadingMore) {
             return
         }
@@ -366,28 +378,27 @@ class HomeViewModel @Inject constructor(
                 analyticsService.trackUserDiscoveryEngagement(
                     action = "carousel_scroll",
                     additionalData = mapOf(
-                        "current_user_count" to currentState.users.size,
+                        "user_count" to currentState.users.size,
                         "timestamp" to System.currentTimeMillis()
                     )
                 )
                 
-                updateState { 
-                    copy(recommendationsState = currentState.copy(isLoadingMore = true))
+                updateHomeScreenData { 
+                    it.copy(recommendationsState = currentState.copy(isLoadingMore = true))
                 }
 
                 socialRepository.getRecommendedUsers(RECOMMENDATIONS_LIMIT, currentRecommendationsOffset)
                     .catch { exception ->
                         Timber.e(exception, "Error loading more recommendations")
-                        updateState { 
-                            copy(recommendationsState = currentState.copy(isLoadingMore = false))
+                        updateHomeScreenData { 
+                            it.copy(recommendationsState = currentState.copy(isLoadingMore = false))
                         }
                     }
                     .collect { newUsers ->
                         val allUsers = currentState.users + newUsers
                         val hasMore = newUsers.size == RECOMMENDATIONS_LIMIT
 
-                        updateState {
-                            copy(
+                        updateHomeScreenData { it.copy(
                                 recommendationsState = RecommendationsState.Success(
                                     users = allUsers,
                                     hasMore = hasMore,
@@ -400,8 +411,8 @@ class HomeViewModel @Inject constructor(
                     }
             } catch (exception: Exception) {
                 Timber.e(exception, "Error in loadMoreRecommendations")
-                updateState { 
-                    copy(recommendationsState = currentState.copy(isLoadingMore = false))
+                updateHomeScreenData { 
+                    it.copy(recommendationsState = currentState.copy(isLoadingMore = false))
                 }
             }
         }
@@ -412,7 +423,7 @@ class HomeViewModel @Inject constructor(
      */
     fun refreshFeed() {
         viewModelScope.launch {
-            updateState { copy(isRefreshing = true) }
+            updateHomeScreenData { it.copy(isRefreshing = true) }
             try {
                 // Refresh discovery cache first
                 socialRepository.refreshDiscoveryCache()
@@ -425,7 +436,7 @@ class HomeViewModel @Inject constructor(
             } catch (exception: Exception) {
                 Timber.e(exception, "Error refreshing feed")
             } finally {
-                updateState { copy(isRefreshing = false) }
+                updateHomeScreenData { it.copy(isRefreshing = false) }
             }
         }
     }
@@ -448,7 +459,8 @@ class HomeViewModel @Inject constructor(
                 socialRepository.followUser(userId).fold(
                     onSuccess = {
                         // Update recommendations state to reflect follow action
-                        val currentState = uiState.value.recommendationsState
+                        val currentData = uiState.value.dataOrNull() ?: HomeScreenData()
+                        val currentState = currentData.recommendationsState
                         if (currentState is RecommendationsState.Success) {
                             val updatedUsers = currentState.users.map { user ->
                                 if (user.userId == userId) {
@@ -457,24 +469,24 @@ class HomeViewModel @Inject constructor(
                                     user
                                 }
                             }
-                            updateState {
-                                copy(recommendationsState = currentState.copy(users = updatedUsers))
+                            updateHomeScreenData {
+                                it.copy(recommendationsState = currentState.copy(users = updatedUsers))
                             }
                         }
                         trackUserFollowed(userId)
                     },
                     onFailure = { exception ->
                         Timber.e(exception, "Failed to follow user: $userId")
-                        updateState { 
-                            copy(errorMessage = "Failed to follow user: ${exception.message}")
-                        }
+                        updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.NetworkError(
+                            "Failed to follow user: ${exception.message}"
+                        ))
                     }
                 )
             } catch (exception: Exception) {
                 Timber.e(exception, "Error in followUser")
-                updateState { 
-                    copy(errorMessage = "Failed to follow user")
-                }
+                updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.NetworkError(
+                    "Failed to follow user"
+                ))
             }
         }
     }
@@ -488,7 +500,8 @@ class HomeViewModel @Inject constructor(
                 socialRepository.removeFriend(userId).fold(
                     onSuccess = {
                         // Update recommendations state to reflect unfollow action
-                        val currentState = uiState.value.recommendationsState
+                        val currentData = uiState.value.dataOrNull() ?: HomeScreenData()
+                        val currentState = currentData.recommendationsState
                         if (currentState is RecommendationsState.Success) {
                             val updatedUsers = currentState.users.map { user ->
                                 if (user.userId == userId) {
@@ -497,24 +510,24 @@ class HomeViewModel @Inject constructor(
                                     user
                                 }
                             }
-                            updateState {
-                                copy(recommendationsState = currentState.copy(users = updatedUsers))
+                            updateHomeScreenData {
+                                it.copy(recommendationsState = currentState.copy(users = updatedUsers))
                             }
                         }
                         trackUserUnfollowed(userId)
                     },
                     onFailure = { exception ->
                         Timber.e(exception, "Failed to unfollow user: $userId")
-                        updateState { 
-                            copy(errorMessage = "Failed to unfollow user: ${exception.message}")
-                        }
+                        updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.NetworkError(
+                            "Failed to unfollow user: ${exception.message}"
+                        ))
                     }
                 )
             } catch (exception: Exception) {
                 Timber.e(exception, "Error in unfollowUser")
-                updateState { 
-                    copy(errorMessage = "Failed to unfollow user")
-                }
+                updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.NetworkError(
+                    "Failed to unfollow user"
+                ))
             }
         }
     }
@@ -528,19 +541,17 @@ class HomeViewModel @Inject constructor(
             authRepository.currentUser
                 .catch { throwable ->
                     Timber.e(throwable, "Error observing auth state")
-                    updateState { copy(isLoading = false, errorMessage = "Authentication error") }
+                    updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.AuthenticationError(
+                        "Authentication error"
+                    ))
                 }
                 .collect { user ->
                     if (user != null) {
                         // Start observing workout data reactively
                         observeWorkoutDataReactively(user.uid)
                     } else {
-                        updateState { 
-                            copy(
-                                isLoading = false,
-                                recentWorkouts = emptyList(),
-                                errorMessage = null
-                            ) 
+                        updateHomeScreenData { 
+                            it.copy(recentWorkouts = emptyList()) 
                         }
                     }
                 }
@@ -557,33 +568,25 @@ class HomeViewModel @Inject constructor(
             workoutRepository.getRecentWorkouts(userId, RECENT_WORKOUTS_LIMIT)
                 .catch { throwable ->
                     Timber.e(throwable, "Error observing recent workouts")
-                    updateState { 
-                        copy(
-                            isLoading = false,
-                            errorMessage = "Failed to load workout data: ${throwable.message}"
-                        ) 
-                    }
+                    updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.DataRetrievalError(
+                        "Failed to load workout data: ${throwable.message}"
+                    ))
                 }
                 .collect { result ->
                     result.fold(
                         onSuccess = { recentWorkouts ->
                             Timber.d("🔥 HOME-REACTIVE: Received ${recentWorkouts.size} recent workouts")
-                            updateState {
-                                copy(
-                                    isLoading = false,
-                                    recentWorkouts = recentWorkouts,
-                                    errorMessage = null
-                                )
+                            updateHomeScreenData {
+                                it.copy(recentWorkouts = recentWorkouts)
                             }
                         },
                         onFailure = { throwable ->
                             Timber.e(throwable, "Error in reactive workout observation")
-                            updateState {
-                                copy(
-                                    isLoading = false,
-                                    recentWorkouts = emptyList(),
-                                    errorMessage = throwable.message
-                                )
+                            updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.DataRetrievalError(
+                                throwable.message ?: "Failed to load workouts"
+                            ))
+                            updateHomeScreenData {
+                                it.copy(recentWorkouts = emptyList())
                             }
                         }
                     )
@@ -806,19 +809,6 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Sets the loading state for the home screen
-     */
-    private fun setLoadingState() {
-        updateState { copy(isLoading = true, errorMessage = null) }
-    }
-
-    /**
-     * Updates state to reflect error condition
-     */
-    private fun updateErrorState(error: com.example.liftrix.domain.model.error.LiftrixError) {
-        updateState { copy(isLoading = false, errorMessage = error.message) }
-    }
 
     private val currentUserIdFlow: StateFlow<String> = 
         authRepository.currentUser
@@ -835,7 +825,7 @@ class HomeViewModel @Inject constructor(
      */
     val cardData: StateFlow<List<CardData>> = combine(
         currentUserIdFlow,
-        uiState.map { it.recentWorkouts }
+        uiState.map { it.dataOrNull()?.recentWorkouts ?: emptyList() }
     ) { userId, recentWorkouts ->
         val stats = if (userId.isNotEmpty()) {
             try {
@@ -918,153 +908,8 @@ class HomeViewModel @Inject constructor(
     }
 }
 
-/**
- * Comprehensive UI state for the enhanced home screen architecture
- * 
- * Manages state for workout feed and user recommendations with proper loading states,
- * pagination support, and error handling following Material 3 design principles.
- */
-data class HomeUiState(
-    val workoutFeedState: FeedState = FeedState.Loading,
-    val recommendationsState: RecommendationsState = RecommendationsState.Loading,
-    val showEndOfFeedMessage: Boolean = false,
-    val isRefreshing: Boolean = false,
-    val errorMessage: String? = null,
-    val workoutStats: WorkoutStats? = null,
-    // Legacy properties for backward compatibility during transition
-    val recentWorkouts: List<Workout> = emptyList(),
-    val isLoading: Boolean = false,
-    val isWaitingForAuth: Boolean = false
-) {
-    /**
-     * Indicates if the screen should show empty state
-     * Empty when there are no recent workouts and not loading
-     */
-    val shouldShowEmptyState: Boolean
-        get() = recentWorkouts.isEmpty() &&
-                !isLoading &&
-                !isRefreshing &&
-                errorMessage == null
+// HomeUiState is now defined in ViewModelState.kt as a proper sealed class hierarchy
 
-    /**
-     * Indicates if the screen should show error state
-     * Shows error when there's a global error message
-     */
-    val shouldShowError: Boolean
-        get() = errorMessage != null
-
-    /**
-     * Indicates if the screen should show content
-     * Shows content when there are workouts and no error
-     */
-    val shouldShowContent: Boolean
-        get() = !shouldShowEmptyState && !shouldShowError
-
-    /**
-     * Indicates if any initial loading is happening
-     * True when data is being loaded
-     */
-    val isInitialLoading: Boolean
-        get() = isLoading
-
-    /**
-     * Gets the global error message for display
-     */
-    val displayErrorMessage: String?
-        get() = errorMessage
-}
-
-/**
- * Sealed class representing the state of the workout feed
- * 
- * Supports initial loading, paginated data loading, and error states
- * following reactive programming patterns.
- */
-sealed class FeedState {
-    /**
-     * Initial loading state when no feed data is available
-     */
-    object Loading : FeedState()
-    
-    /**
-     * Success state containing workout feed data with pagination support
-     * 
-     * @property workouts List of feed workouts in chronological order
-     * @property hasMore True if more workouts can be loaded via pagination
-     * @property isLoadingMore True when additional workouts are being loaded
-     */
-    data class Success(
-        val workouts: List<FeedWorkout>,
-        val hasMore: Boolean,
-        val isLoadingMore: Boolean = false
-    ) : FeedState() {
-        
-        /**
-         * Indicates if the feed has data to display
-         */
-        val hasData: Boolean get() = workouts.isNotEmpty()
-        
-        /**
-         * Gets the count of workouts for analytics and UI display
-         */
-        val workoutCount: Int get() = workouts.size
-    }
-    
-    /**
-     * Error state when feed loading fails
-     * 
-     * @property message User-friendly error message for display
-     */
-    data class Error(val message: String) : FeedState()
-}
-
-/**
- * Sealed class representing the state of user recommendations
- * 
- * Supports lazy loading with pagination and caching for optimal performance.
- */
-sealed class RecommendationsState {
-    /**
-     * Initial loading state when no recommendation data is available
-     */
-    object Loading : RecommendationsState()
-    
-    /**
-     * Success state containing user recommendations with pagination support
-     * 
-     * @property users List of recommended users for discovery carousel
-     * @property hasMore True if more recommendations can be loaded
-     * @property isLoadingMore True when additional recommendations are being loaded
-     */
-    data class Success(
-        val users: List<RecommendedUser>,
-        val hasMore: Boolean,
-        val isLoadingMore: Boolean = false
-    ) : RecommendationsState() {
-        
-        /**
-         * Indicates if recommendations have data to display
-         */
-        val hasData: Boolean get() = users.isNotEmpty()
-        
-        /**
-         * Gets the count of recommendations for carousel display
-         */
-        val userCount: Int get() = users.size
-        
-        /**
-         * Checks if cache is valid for all recommendations
-         */
-        val isCacheValid: Boolean get() = users.all { it.isCacheValid }
-    }
-    
-    /**
-     * Error state when recommendation loading fails
-     * 
-     * @property message User-friendly error message for display
-     */
-    data class Error(val message: String) : RecommendationsState()
-}
 
 /**
  * Events that can be triggered from the home screen UI

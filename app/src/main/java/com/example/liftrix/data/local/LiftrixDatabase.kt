@@ -81,7 +81,7 @@ import com.example.liftrix.data.local.entity.DashboardConfigurationEntity
         WidgetPreferenceEntity::class,
         DashboardConfigurationEntity::class,
     ],
-    version = 34,
+    version = 35,
     exportSchema = true
 )
 @TypeConverters(

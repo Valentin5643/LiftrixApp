@@ -113,7 +113,7 @@ class UserPreferencesViewModelTest {
     @Test
     fun `given preferences service success, when LoadPreferences event, then loads preferences successfully`() = runTest {
         // Given
-        coEvery { mockPreferencesService.getUserPreferences(any()) } returns LiftrixResult.Success(testWidgetPreferences)
+        coEvery { mockPreferencesService.getUserPreferences(any()) } returns Result.success(testWidgetPreferences)
         
         // When
         viewModel.handleEvent(UserPreferencesEvent.LoadPreferences)
@@ -139,7 +139,7 @@ class UserPreferencesViewModelTest {
     fun `given preferences service error, when LoadPreferences event, then shows error state`() = runTest {
         // Given
         val testError = LiftrixError.DatabaseError("Failed to load preferences")
-        coEvery { mockPreferencesService.getUserPreferences(any()) } returns LiftrixResult.Error(testError)
+        coEvery { mockPreferencesService.getUserPreferences(any()) } returns Result.failure(testError)
         
         // When
         viewModel.handleEvent(UserPreferencesEvent.LoadPreferences)
@@ -163,7 +163,7 @@ class UserPreferencesViewModelTest {
     @Test
     fun `given valid layout mode, when UpdateLayoutMode event, then updates mode and marks as unsaved`() = runTest {
         // Given - load initial preferences
-        coEvery { mockPreferencesService.getUserPreferences(any()) } returns LiftrixResult.Success(testWidgetPreferences)
+        coEvery { mockPreferencesService.getUserPreferences(any()) } returns Result.success(testWidgetPreferences)
         viewModel.handleEvent(UserPreferencesEvent.LoadPreferences)
         testDispatcher.scheduler.advanceUntilIdle()
         
@@ -185,7 +185,7 @@ class UserPreferencesViewModelTest {
     fun `given layout mode validation error, when UpdateLayoutMode event, then shows validation error`() = runTest {
         // Given
         val validationError = LiftrixError.ValidationError(field = "layoutMode", violations = listOf("Invalid layout mode for user level"))
-        coEvery { mockPreferencesService.updateLayoutMode(any(), any()) } returns LiftrixResult.Error(validationError)
+        coEvery { mockPreferencesService.updateLayoutMode(any(), any()) } returns Result.failure(validationError)
         
         // When
         viewModel.handleEvent(UserPreferencesEvent.UpdateLayoutMode(WidgetLayoutMode.COMPACT))
@@ -208,7 +208,7 @@ class UserPreferencesViewModelTest {
     @Test
     fun `given valid user level, when UpdateUserLevel event, then updates level and cascades changes`() = runTest {
         // Given
-        coEvery { mockPreferencesService.updateUserLevel(any(), any()) } returns LiftrixResult.Success(Unit)
+        coEvery { mockPreferencesService.updateUserLevel(any(), any()) } returns Result.success(Unit)
         
         // When
         viewModel.handleEvent(UserPreferencesEvent.UpdateUserLevel(UserLevel.ADVANCED))
@@ -235,7 +235,7 @@ class UserPreferencesViewModelTest {
             userLevel = UserLevel.ADVANCED
         )
         
-        coEvery { mockPreferencesService.updateUserLevel(any(), any()) } returns LiftrixResult.Success(Unit)
+        coEvery { mockPreferencesService.updateUserLevel(any(), any()) } returns Result.success(Unit)
         
         // When - downgrade to beginner (incompatible with compact layout)
         viewModel.handleEvent(UserPreferencesEvent.UpdateUserLevel(UserLevel.BEGINNER))
@@ -257,8 +257,8 @@ class UserPreferencesViewModelTest {
     @Test
     fun `given custom preferences, when ResetToDefaults event, then resets all preferences to defaults`() = runTest {
         // Given
-        coEvery { mockPreferencesService.resetToDefaults(any()) } returns LiftrixResult.Success(Unit)
-        coEvery { mockPreferencesService.getUserPreferences(any()) } returns LiftrixResult.Success(testDefaultPreferences)
+        coEvery { mockPreferencesService.resetToDefaults(any()) } returns Result.success(Unit)
+        coEvery { mockPreferencesService.getUserPreferences(any()) } returns Result.success(testDefaultPreferences)
         
         // When
         viewModel.handleEvent(UserPreferencesEvent.ResetToDefaults)
@@ -284,7 +284,7 @@ class UserPreferencesViewModelTest {
     @Test
     fun `given widget visibility change, when UpdateWidgetVisibility event, then updates visibility and marks unsaved`() = runTest {
         // Given - load initial preferences
-        coEvery { mockPreferencesService.getUserPreferences(any()) } returns LiftrixResult.Success(testWidgetPreferences)
+        coEvery { mockPreferencesService.getUserPreferences(any()) } returns Result.success(testWidgetPreferences)
         viewModel.handleEvent(UserPreferencesEvent.LoadPreferences)
         testDispatcher.scheduler.advanceUntilIdle()
         
@@ -326,7 +326,7 @@ class UserPreferencesViewModelTest {
     fun `given valid widget order, when UpdateWidgetOrder event, then updates order and marks unsaved`() = runTest {
         // Given
         val newWidgetOrder = listOf("workout_frequency", "total_volume", "average_duration")
-        coEvery { mockPreferencesService.getUserPreferences(any()) } returns LiftrixResult.Success(testWidgetPreferences)
+        coEvery { mockPreferencesService.getUserPreferences(any()) } returns Result.success(testWidgetPreferences)
         viewModel.handleEvent(UserPreferencesEvent.LoadPreferences)
         testDispatcher.scheduler.advanceUntilIdle()
         
@@ -350,7 +350,7 @@ class UserPreferencesViewModelTest {
     @Test
     fun `given valid auto-refresh settings, when UpdateAutoRefreshSettings event, then updates settings`() = runTest {
         // Given
-        coEvery { mockPreferencesService.getUserPreferences(any()) } returns LiftrixResult.Success(testWidgetPreferences)
+        coEvery { mockPreferencesService.getUserPreferences(any()) } returns Result.success(testWidgetPreferences)
         viewModel.handleEvent(UserPreferencesEvent.LoadPreferences)
         testDispatcher.scheduler.advanceUntilIdle()
         
@@ -393,7 +393,7 @@ class UserPreferencesViewModelTest {
     @Test
     fun `given section visibility change, when ToggleSection event, then updates section visibility`() = runTest {
         // Given
-        coEvery { mockPreferencesService.getUserPreferences(any()) } returns LiftrixResult.Success(testWidgetPreferences)
+        coEvery { mockPreferencesService.getUserPreferences(any()) } returns Result.success(testWidgetPreferences)
         viewModel.handleEvent(UserPreferencesEvent.LoadPreferences)
         testDispatcher.scheduler.advanceUntilIdle()
         
@@ -418,7 +418,7 @@ class UserPreferencesViewModelTest {
     @Test
     fun `given valid widget size, when UpdateWidgetSize event, then updates widget size`() = runTest {
         // Given
-        coEvery { mockPreferencesService.getUserPreferences(any()) } returns LiftrixResult.Success(testWidgetPreferences)
+        coEvery { mockPreferencesService.getUserPreferences(any()) } returns Result.success(testWidgetPreferences)
         viewModel.handleEvent(UserPreferencesEvent.LoadPreferences)
         testDispatcher.scheduler.advanceUntilIdle()
         
@@ -448,7 +448,7 @@ class UserPreferencesViewModelTest {
             every { layoutMode } returns WidgetLayoutMode.COMPACT
         }
         
-        coEvery { mockPreferencesService.getUserPreferences(any()) } returns LiftrixResult.Success(invalidPreferences)
+        coEvery { mockPreferencesService.getUserPreferences(any()) } returns Result.success(invalidPreferences)
         viewModel.handleEvent(UserPreferencesEvent.LoadPreferences)
         testDispatcher.scheduler.advanceUntilIdle()
         
@@ -471,8 +471,8 @@ class UserPreferencesViewModelTest {
     @Test
     fun `given unsaved changes, when SaveChanges event, then persists changes successfully`() = runTest {
         // Given - make changes to preferences
-        coEvery { mockPreferencesService.getUserPreferences(any()) } returns LiftrixResult.Success(testWidgetPreferences)
-        coEvery { mockPreferencesService.updateLayoutMode(any(), any()) } returns LiftrixResult.Success(Unit)
+        coEvery { mockPreferencesService.getUserPreferences(any()) } returns Result.success(testWidgetPreferences)
+        coEvery { mockPreferencesService.updateLayoutMode(any(), any()) } returns Result.success(Unit)
         
         viewModel.handleEvent(UserPreferencesEvent.LoadPreferences)
         testDispatcher.scheduler.advanceUntilIdle()
@@ -500,7 +500,7 @@ class UserPreferencesViewModelTest {
     @Test
     fun `given unsaved changes, when DiscardChanges event, then reverts to last saved state`() = runTest {
         // Given - load initial preferences and make changes
-        coEvery { mockPreferencesService.getUserPreferences(any()) } returns LiftrixResult.Success(testWidgetPreferences)
+        coEvery { mockPreferencesService.getUserPreferences(any()) } returns Result.success(testWidgetPreferences)
         
         viewModel.handleEvent(UserPreferencesEvent.LoadPreferences)
         testDispatcher.scheduler.advanceUntilIdle()
@@ -528,7 +528,7 @@ class UserPreferencesViewModelTest {
     fun `given error state, when DismissError event, then clears error and returns to previous state`() = runTest {
         // Given - create error state
         val testError = LiftrixError.NetworkError("Network error")
-        coEvery { mockPreferencesService.getUserPreferences(any()) } returns LiftrixResult.Error(testError)
+        coEvery { mockPreferencesService.getUserPreferences(any()) } returns Result.failure(testError)
         
         viewModel.handleEvent(UserPreferencesEvent.LoadPreferences)
         testDispatcher.scheduler.advanceUntilIdle()
@@ -567,7 +567,7 @@ class UserPreferencesViewModelTest {
             }
             
             // Complete the operation
-            preferencesDeferred.complete(LiftrixResult.Success(testWidgetPreferences))
+            preferencesDeferred.complete(Result.success(testWidgetPreferences))
         }
     }
 
@@ -604,8 +604,8 @@ class UserPreferencesViewModelTest {
             every { layoutMode } returns WidgetLayoutMode.GRID
         }
         
-        coEvery { mockPreferencesService.refreshFromRemote(any()) } returns LiftrixResult.Success(Unit)
-        coEvery { mockPreferencesService.getUserPreferences(any()) } returns LiftrixResult.Success(freshPreferences)
+        coEvery { mockPreferencesService.refreshFromRemote(any()) } returns Result.success(Unit)
+        coEvery { mockPreferencesService.getUserPreferences(any()) } returns Result.success(freshPreferences)
         
         // When
         viewModel.handleEvent(UserPreferencesEvent.RefreshPreferences)

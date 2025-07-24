@@ -18,6 +18,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -27,11 +31,10 @@ import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
+import com.example.liftrix.ui.workout.components.PrimaryActionButton
+import com.example.liftrix.ui.workout.components.SecondaryActionButton
+import com.example.liftrix.ui.workout.components.SaveAsTemplateDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -307,6 +310,7 @@ fun UnifiedActiveWorkoutScreen(
                     session = successState.session,
                     isCompleting = successState.isCompleting,
                     onNavigateToExercise = onNavigateToExercise,
+                    onAddExercise = onAddExercise,
                     onRemoveExercise = { exerciseId ->
                         viewModel.removeExercise(exerciseId)
                     },
@@ -317,10 +321,26 @@ fun UnifiedActiveWorkoutScreen(
                         viewModel.updateSetInExercise(exerciseId, setNumber, updatedSet)
                     },
                     onCompleteWorkout = {
-                        viewModel.completeWorkout(onNavigateToHome)
+                        viewModel.completeWorkout()
                     },
                     modifier = Modifier.padding(paddingValues)
                 )
+                
+                // Show template update dialog when needed
+                if (successState.showSaveAsTemplateDialog) {
+                    SaveAsTemplateDialog(
+                        workoutName = successState.session.name,
+                        onUpdateTemplate = {
+                            viewModel.updateOriginalTemplate()
+                        },
+                        onSkip = {
+                            viewModel.skipTemplateUpdate()
+                        },
+                        onDismiss = {
+                            viewModel.dismissTemplateUpdateDialog()
+                        }
+                    )
+                }
             }
         }
     }
@@ -331,6 +351,7 @@ private fun ActiveWorkoutContent(
     session: UnifiedWorkoutSession,
     isCompleting: Boolean,
     onNavigateToExercise: (String) -> Unit,
+    onAddExercise: () -> Unit,
     onRemoveExercise: (String) -> Unit,
     onAddSet: (String) -> Unit,
     onUpdateSet: (String, Int, com.example.liftrix.domain.model.SessionSet) -> Unit,
@@ -384,6 +405,16 @@ private fun ActiveWorkoutContent(
             }
         }
         
+        // Add Exercise button
+        item {
+            SecondaryActionButton(
+                text = "Add Exercise",
+                onClick = onAddExercise,
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = Icons.Default.Add
+            )
+        }
+        
         // Complete Workout button at bottom
         item {
             Spacer(modifier = Modifier.height(16.dp))
@@ -402,60 +433,13 @@ private fun CompleteWorkoutButton(
     onCompleteWorkout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Button(
+    PrimaryActionButton(
+        text = if (isCompleting) "Completing..." else "Complete Workout",
         onClick = onCompleteWorkout,
-        modifier = modifier
-            .height(56.dp)
-            .semantics { 
-                contentDescription = "Complete workout and save progress" 
-            },
+        modifier = modifier.height(56.dp),
         enabled = !isCompleting,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-            disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.6f)
-        ),
-        elevation = ButtonDefaults.buttonElevation(
-            defaultElevation = 4.dp,
-            pressedElevation = 2.dp,
-            disabledElevation = 0.dp
-        )
-    ) {
-        if (isCompleting) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary
-                )
-                Text(
-                    text = "Completing...",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        } else {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-                Text(
-                    text = "Complete Workout",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
-    }
+        leadingIcon = if (isCompleting) null else Icons.Default.Check
+    )
 }
 
 @Composable
@@ -891,6 +875,7 @@ private fun UnifiedActiveWorkoutScreenPreview() {
             session = mockSession,
             isCompleting = false,
             onNavigateToExercise = { },
+            onAddExercise = { },
             onRemoveExercise = { },
             onAddSet = { },
             onUpdateSet = { _, _, _ -> },

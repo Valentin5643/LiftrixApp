@@ -27,8 +27,10 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.Timeline
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import com.example.liftrix.ui.workout.components.PrimaryActionButton
+import com.example.liftrix.ui.workout.components.SecondaryActionButton
+import com.example.liftrix.ui.workout.components.TertiaryActionButton
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -688,16 +690,14 @@ private fun ErrorStateContent(
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
                 ) {
-                    Button(
+                    PrimaryActionButton(
+                        text = "Retry",
                         onClick = onRetry
-                    ) {
-                        Text("Retry")
-                    }
-                    OutlinedButton(
+                    )
+                    SecondaryActionButton(
+                        text = "Dismiss",
                         onClick = onDismiss
-                    ) {
-                        Text("Dismiss")
-                    }
+                    )
                 }
             }
         }
@@ -902,18 +902,12 @@ private fun ResponsiveWidgetsSection(
                         textAlign = TextAlign.Center
                     )
                     
-                    Button(
+                    PrimaryActionButton(
+                        text = "Customize Dashboard",
                         onClick = { onEvent(AnalyticsWidgetEvent.NavigateToDashboardCustomization) },
-                        modifier = Modifier.padding(top = 8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Customize Dashboard")
-                    }
+                        modifier = Modifier.padding(top = 8.dp),
+                        leadingIcon = Icons.Default.Add
+                    )
                 }
             }
         }
@@ -985,17 +979,15 @@ private fun CalorieSection(
             Row(
                 horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing1)
             ) {
-                OutlinedButton(
+                SecondaryActionButton(
+                    text = "Goals",
                     onClick = { onEvent(CalorieTrackingEvent.NavigateToCalorieGoalSettings) }
-                ) {
-                    Text("Goals")
-                }
+                )
                 
-                Button(
+                PrimaryActionButton(
+                    text = "View All",
                     onClick = { onEvent(CalorieTrackingEvent.NavigateToDetailedCalorieAnalytics) }
-                ) {
-                    Text("View All")
-                }
+                )
             }
         }
         
@@ -1219,9 +1211,11 @@ private fun CalorieAnalyticsEmptyState(
             textAlign = TextAlign.Center
         )
         
-        Button(onClick = onRefresh) {
-            Text("Refresh Data")
-        }
+        PrimaryActionButton(
+            text = "Refresh Data",
+            onClick = onRefresh,
+            leadingIcon = Icons.Default.Refresh
+        )
     }
 }
 
@@ -1285,9 +1279,10 @@ private fun AnalyticsOnboardingCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                OutlinedButton(onClick = onDismiss) {
-                    Text("Got it!")
-                }
+                SecondaryActionButton(
+                    text = "Got it!",
+                    onClick = onDismiss
+                )
             }
         }
     }
@@ -1341,33 +1336,29 @@ private fun DebugPanel(
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedButton(
+                    TertiaryActionButton(
+                        text = "Refresh All",
                         onClick = onRefresh,
                         modifier = Modifier.height(32.dp)
-                    ) {
-                        Text("Refresh All", style = MaterialTheme.typography.bodySmall)
-                    }
+                    )
                     
-                    OutlinedButton(
+                    TertiaryActionButton(
+                        text = "Refresh Calories",
                         onClick = onCalorieRefresh,
                         modifier = Modifier.height(32.dp)
-                    ) {
-                        Text("Refresh Calories", style = MaterialTheme.typography.bodySmall)
-                    }
+                    )
                     
-                    OutlinedButton(
+                    TertiaryActionButton(
+                        text = "Refresh Summary",
                         onClick = { onSummaryRefresh() },
                         modifier = Modifier.height(32.dp)
-                    ) {
-                        Text("Refresh Summary", style = MaterialTheme.typography.bodySmall)
-                    }
+                    )
                     
-                    OutlinedButton(
+                    TertiaryActionButton(
+                        text = "Fix Widgets",
                         onClick = onWidgetMigrate,
                         modifier = Modifier.height(32.dp)
-                    ) {
-                        Text("Fix Widgets", style = MaterialTheme.typography.bodySmall)
-                    }
+                    )
                 }
             }
             
@@ -1576,6 +1567,7 @@ private fun DebugStateRow(
         is UiState.Success -> "Success" to MaterialTheme.colorScheme.tertiary
         is UiState.Error -> "Error" to MaterialTheme.colorScheme.error
         is UiState.Empty -> "Empty" to MaterialTheme.colorScheme.outline
+        else -> "Unknown" to MaterialTheme.colorScheme.outline
     }
     
     Column(

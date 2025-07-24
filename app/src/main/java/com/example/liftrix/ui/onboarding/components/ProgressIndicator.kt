@@ -109,7 +109,7 @@ private fun ProgressBar(
             .semantics {
                 contentDescription = "Progress bar showing $currentStep of $totalSteps steps completed"
             },
-        color = MaterialTheme.colorScheme.primary,
+        color = MaterialTheme.colorScheme.secondary,
         trackColor = MaterialTheme.colorScheme.surfaceVariant,
         strokeCap = StrokeCap.Round
     )
@@ -175,18 +175,18 @@ private fun StepIndicator(
     val colors = remember(isCompleted, isCurrent, colorScheme) {
         StepColors(
             background = when {
-                isCompleted -> colorScheme.primary
+                isCompleted -> colorScheme.secondary
                 isCurrent -> colorScheme.background
                 else -> colorScheme.background
             },
             border = when {
-                isCompleted -> colorScheme.primary
-                isCurrent -> colorScheme.primary
+                isCompleted -> colorScheme.secondary
+                isCurrent -> colorScheme.secondary
                 else -> colorScheme.outline
             },
             content = when {
-                isCompleted -> colorScheme.onPrimary
-                isCurrent -> colorScheme.primary
+                isCompleted -> colorScheme.onSecondary
+                isCurrent -> colorScheme.secondary
                 else -> colorScheme.onSurfaceVariant
             }
         )
@@ -251,7 +251,7 @@ private fun StepConnector(
             .height(2.dp)
             .background(
                 color = if (isCompleted) {
-                    MaterialTheme.colorScheme.primary
+                    MaterialTheme.colorScheme.secondary
                 } else {
                     MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
                 }
@@ -283,7 +283,7 @@ private fun ProgressText(
         Text(
             text = "${(progress * 100).toInt()}%",
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
+            color = MaterialTheme.colorScheme.secondary,
             fontWeight = FontWeight.Bold
         )
     }

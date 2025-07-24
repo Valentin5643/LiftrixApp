@@ -86,7 +86,7 @@ fun VolumeMetricCard(
             progress >= 1f -> LiftrixColors.Primary
             progress >= 0.7f -> LiftrixColors.Primary.copy(alpha = 0.8f)
             progress >= 0.4f -> LiftrixColors.Secondary.copy(alpha = 0.8f)
-            else -> LiftrixColors.Accent.copy(alpha = 0.6f)
+            else -> LiftrixColors.TiffanyBlue.copy(alpha = 0.6f)
         },
         animationSpec = tween(durationMillis = 800),
         label = "progress_color"
@@ -220,7 +220,7 @@ private fun VolumeChangeIndicator(
     
     val indicatorColor = when (trend) {
         TrendDirection.UP -> LiftrixColors.Primary
-        TrendDirection.DOWN -> LiftrixColors.Accent
+        TrendDirection.DOWN -> LiftrixColors.TiffanyBlue
         TrendDirection.STABLE -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
         TrendDirection.UNKNOWN -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
     }
@@ -341,7 +341,7 @@ private fun VolumeInsights(
             totalVolume.value >= 10000 -> add("Elite volume level" to LiftrixColors.Primary)
             totalVolume.value >= 5000 -> add("High volume training" to LiftrixColors.Primary)
             totalVolume.value >= 2000 -> add("Moderate volume" to LiftrixColors.Secondary)
-            else -> add("Building volume" to LiftrixColors.Accent)
+            else -> add("Building volume" to LiftrixColors.TiffanyBlue)
         }
         
         // Change insight
@@ -349,7 +349,7 @@ private fun VolumeInsights(
             when {
                 change > 0.2f -> add("Significant increase" to LiftrixColors.Primary)
                 change > 0.05f -> add("Steady progress" to LiftrixColors.Primary)
-                change < -0.1f -> add("Consider deload" to LiftrixColors.Accent)
+                change < -0.1f -> add("Consider deload" to LiftrixColors.TiffanyBlue)
                 else -> add("Consistent training" to LiftrixColors.Secondary)
             }
         }
@@ -360,7 +360,7 @@ private fun VolumeInsights(
                 prog >= 1f -> add("Goal achieved!" to LiftrixColors.Primary)
                 prog >= 0.8f -> add("Nearly there" to LiftrixColors.Primary)
                 prog >= 0.5f -> add("Good progress" to LiftrixColors.Secondary)
-                else -> add("Keep pushing" to LiftrixColors.Accent)
+                else -> add("Keep pushing" to LiftrixColors.TiffanyBlue)
             }
         }
     }

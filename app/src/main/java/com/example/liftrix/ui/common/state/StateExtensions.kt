@@ -262,6 +262,10 @@ fun <T> UiState<T>.Render(
             } else null
             empty(message, emptyAction)
         }
+        else -> {
+            // Fallback case - show loading
+            loading()
+        }
     }
 }
 
@@ -324,3 +328,4 @@ data class PaginatedState<T>(
     val canLoadMore: Boolean get() = hasMorePages && !isLoadingMore && items.hasData()
     val totalItems: Int get() = items.dataOrNull()?.size ?: 0
 }
+

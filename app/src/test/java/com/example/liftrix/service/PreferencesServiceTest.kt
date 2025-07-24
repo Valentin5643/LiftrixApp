@@ -61,7 +61,7 @@ class PreferencesServiceTest {
         val expectedPreferences = WidgetPreferences.createDefault(userId)
         
         coEvery { preferencesRepository.getWidgetPreferences(userId) } returns 
-            flowOf(LiftrixResult.Success(expectedPreferences))
+            flowOf(Result.success(expectedPreferences))
         
         // When
         val result = preferencesService.getUserPreferences(userId)
@@ -80,9 +80,9 @@ class PreferencesServiceTest {
         val notFoundError = LiftrixError.NotFoundError("No preferences found")
         
         coEvery { preferencesRepository.getWidgetPreferences(userId) } returns 
-            flowOf(LiftrixResult.Error(notFoundError))
+            flowOf(Result.failure(notFoundError))
         coEvery { preferencesRepository.saveWidgetPreferences(any()) } returns 
-            LiftrixResult.Success(Unit)
+            Result.success(Unit)
         
         // When
         val result = preferencesService.getUserPreferences(userId)
@@ -105,7 +105,7 @@ class PreferencesServiceTest {
         }
         
         coEvery { preferencesRepository.getWidgetPreferences(userId) } returns 
-            flowOf(LiftrixResult.Success(invalidPreferences))
+            flowOf(Result.success(invalidPreferences))
         
         // When
         val result = preferencesService.getUserPreferences(userId)
@@ -151,9 +151,9 @@ class PreferencesServiceTest {
         val updatedPreferences = currentPreferences.updateLayout(DashboardLayoutMode.GRID)
         
         coEvery { preferencesRepository.getWidgetPreferences(userId) } returns 
-            flowOf(LiftrixResult.Success(currentPreferences))
+            flowOf(Result.success(currentPreferences))
         coEvery { preferencesRepository.saveWidgetPreferences(any()) } returns 
-            LiftrixResult.Success(Unit)
+            Result.success(Unit)
         
         // When
         val result = preferencesService.updateLayoutMode(userId, layoutMode)
@@ -178,9 +178,9 @@ class PreferencesServiceTest {
         )
         
         coEvery { preferencesRepository.getWidgetPreferences(userId) } returns 
-            flowOf(LiftrixResult.Success(currentPreferences))
+            flowOf(Result.success(currentPreferences))
         coEvery { preferencesRepository.saveWidgetPreferences(any()) } returns 
-            LiftrixResult.Success(Unit)
+            Result.success(Unit)
         
         // When & Then
         layoutModes.forEach { layoutMode ->
@@ -224,9 +224,9 @@ class PreferencesServiceTest {
         val updatedPreferences = currentPreferences.updateUserLevel(userLevel)
         
         coEvery { preferencesRepository.getWidgetPreferences(userId) } returns 
-            flowOf(LiftrixResult.Success(currentPreferences))
+            flowOf(Result.success(currentPreferences))
         coEvery { preferencesRepository.saveWidgetPreferences(any()) } returns 
-            LiftrixResult.Success(Unit)
+            Result.success(Unit)
         
         // When
         val result = preferencesService.updateUserLevel(userId, userLevel)
@@ -250,9 +250,9 @@ class PreferencesServiceTest {
         )
         
         coEvery { preferencesRepository.getWidgetPreferences(userId) } returns 
-            flowOf(LiftrixResult.Success(currentPreferences))
+            flowOf(Result.success(currentPreferences))
         coEvery { preferencesRepository.saveWidgetPreferences(any()) } returns 
-            LiftrixResult.Success(Unit)
+            Result.success(Unit)
         
         // When & Then
         userLevels.forEach { userLevel ->
@@ -294,9 +294,9 @@ class PreferencesServiceTest {
         val currentPreferences = WidgetPreferences.createDefault(userId)
         
         coEvery { preferencesRepository.getWidgetPreferences(userId) } returns 
-            flowOf(LiftrixResult.Success(currentPreferences))
+            flowOf(Result.success(currentPreferences))
         coEvery { preferencesRepository.saveWidgetPreferences(any()) } returns 
-            LiftrixResult.Success(Unit)
+            Result.success(Unit)
         
         // When
         val result = preferencesService.resetToDefaults(userId)
@@ -337,7 +337,7 @@ class PreferencesServiceTest {
         val visible = true
         
         coEvery { preferencesRepository.updateWidgetVisibility(userId, widgetName, visible) } returns 
-            LiftrixResult.Success(Unit)
+            Result.success(Unit)
         
         // When
         val result = preferencesService.updateWidgetVisibility(userId, widgetName, visible)
@@ -380,7 +380,7 @@ class PreferencesServiceTest {
         val widgetOrder = listOf("total_volume", "workout_frequency", "consistency_streak")
         
         coEvery { preferencesRepository.updateWidgetOrder(userId, widgetOrder) } returns 
-            LiftrixResult.Success(Unit)
+            Result.success(Unit)
         
         // When
         val result = preferencesService.updateWidgetOrder(userId, widgetOrder)
@@ -422,7 +422,7 @@ class PreferencesServiceTest {
         val intervalMinutes = 30
         
         coEvery { preferencesRepository.updateAutoRefreshSettings(userId, enabled, intervalMinutes) } returns 
-            LiftrixResult.Success(Unit)
+            Result.success(Unit)
         
         // When
         val result = preferencesService.updateAutoRefreshSettings(userId, enabled, intervalMinutes)
@@ -507,7 +507,7 @@ class PreferencesServiceTest {
         val sectionName = "analytics_section"
         
         coEvery { preferencesRepository.toggleSection(userId, sectionName) } returns 
-            LiftrixResult.Success(Unit)
+            Result.success(Unit)
         
         // When
         val result = preferencesService.toggleSection(userId, sectionName)
@@ -555,15 +555,15 @@ class PreferencesServiceTest {
         )
         
         coEvery { preferencesRepository.getWidgetPreferences(userId) } returns 
-            flowOf(LiftrixResult.Success(currentPreferences))
+            flowOf(Result.success(currentPreferences))
         coEvery { preferencesRepository.saveWidgetPreferences(any()) } returns 
-            LiftrixResult.Success(Unit)
+            Result.success(Unit)
         coEvery { preferencesRepository.updateWidgetVisibility(userId, any(), any()) } returns 
-            LiftrixResult.Success(Unit)
+            Result.success(Unit)
         coEvery { preferencesRepository.updateAutoRefreshSettings(userId, any(), any()) } returns 
-            LiftrixResult.Success(Unit)
+            Result.success(Unit)
         coEvery { preferencesRepository.toggleSection(userId, any()) } returns 
-            LiftrixResult.Success(Unit)
+            Result.success(Unit)
         
         // When - Execute multiple concurrent operations
         val results = operations.map { operation ->

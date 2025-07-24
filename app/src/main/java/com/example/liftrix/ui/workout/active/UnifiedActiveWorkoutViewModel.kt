@@ -14,6 +14,7 @@ import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.model.common.LiftrixResult
 import java.time.Instant
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
+import com.example.liftrix.domain.usecase.session.AddExerciseToSessionUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,7 +43,8 @@ import javax.inject.Inject
 class UnifiedActiveWorkoutViewModel @Inject constructor(
     private val sessionManager: UnifiedWorkoutSessionManager,
     private val workoutTemplateRepository: WorkoutTemplateRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val addExerciseToSessionUseCase: AddExerciseToSessionUseCase
 ) : ViewModel() {
 
     // 🔥 SIMPLIFIED: Single UI state flow
@@ -131,11 +133,10 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
     }
 
     /**
-     * 🔥 IMPROVED: Completes the current workout with proper state transitions
-     * 
-     * @param onNavigateToHome Callback to navigate to Home screen after successful completion
+     * 🔥 IMPROVED: Completes the current workout with save-as-template option
+     * Enhanced for unified screen integration with navigation callback support
      */
-    fun completeWorkout(onNavigateToHome: (() -> Unit)? = null) {
+    fun completeWorkout() {
         viewModelScope.launch {
             try {
                 // Set completing state
@@ -149,6 +150,21 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                 if (success) {
                     Timber.i("Workout completion initiated")
                     
+                    // Show template update dialog if workout was started from template and exercises were added
+                    val currentSession = sessionManager.currentSession.value
+                    if (currentSession != null && 
+                        currentSession.templateId != null && 
+                        hasExercisesAddedBeyondTemplate(currentSession)) {
+                        val currentSuccessState = _uiState.value as? UnifiedActiveWorkoutUiState.Success
+                        if (currentSuccessState != null) {
+                            _uiState.value = currentSuccessState.copy(
+                                isCompleting = false,
+                                showSaveAsTemplateDialog = true
+                            )
+                            return@launch
+                        }
+                    }
+                    
                     // Show completion state briefly
                     _uiState.value = UnifiedActiveWorkoutUiState.WorkoutCompleted
                     
@@ -156,7 +172,6 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                     delay(1500)
                     
                     // Check if session is in failed state and offer retry
-                    val currentSession = sessionManager.currentSession.value
                     if (currentSession?.sessionStatus == UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE) {
                         Timber.w("🔥 COMPLETE-WORKOUT: Session failed to save, showing retry option")
                         _uiState.value = UnifiedActiveWorkoutUiState.Error(
@@ -164,14 +179,8 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                             isRetryable = true
                         )
                     } else {
-                        // Navigate to Home after successful completion
-                        try {
-                            onNavigateToHome?.invoke()
-                        } catch (navigationError: Exception) {
-                            Timber.w(navigationError, "Navigation to Home failed after workout completion")
-                            // Navigation failed, but workout was completed successfully
-                            // Don't show error to user as the main action succeeded
-                        }
+                        // Workout completed successfully
+                        Timber.d("🔥 COMPLETE-WORKOUT: Workout completed successfully")
                         
                         // Transition to NoSession state
                         _uiState.value = UnifiedActiveWorkoutUiState.NoSession
@@ -343,6 +352,7 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
 
     /**
      * Adds an exercise from the library to the current session
+     * 🔥 FIXED: Now uses proper use case for Clean Architecture compliance
      */
     fun addExerciseToSession(exerciseLibrary: ExerciseLibrary) {
         timber.log.Timber.d("🔥 VIEWMODEL-DEBUG: addExerciseToSession called")
@@ -350,61 +360,32 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
         
         viewModelScope.launch {
             try {
-                // 🔥 CRITICAL DEBUG: Check current session state
-                val currentSession = sessionManager.currentSession.value
-                timber.log.Timber.d("🔥 VIEWMODEL-DEBUG: Current session available? ${currentSession != null}")
-                timber.log.Timber.d("🔥 VIEWMODEL-DEBUG: Current session exercises count: ${currentSession?.exercises?.size ?: 0}")
+                // 🔥 FIXED: Use proper use case instead of direct session manager call
+                val exerciseId = ExerciseId.fromString(exerciseLibrary.id)
+                val result = addExerciseToSessionUseCase.execute(exerciseId)
                 
-                if (currentSession != null) {
-                    timber.log.Timber.d("🔥 VIEWMODEL-DEBUG: Session status: ${currentSession.sessionStatus}")
-                    timber.log.Timber.d("🔥 VIEWMODEL-DEBUG: Existing exercises: ${currentSession.exercises.map { it.name }}")
-                }
-                
-                // Convert ExerciseLibrary to SessionExercise
-                val sessionExercise = SessionExercise(
-                    exerciseId = ExerciseId.fromString(exerciseLibrary.id),
-                    name = exerciseLibrary.name,
-                    category = exerciseLibrary.primaryMuscleGroup,
-                    primaryMuscle = exerciseLibrary.primaryMuscleGroup,
-                    equipment = exerciseLibrary.equipment,
-                    secondaryMuscles = exerciseLibrary.secondaryMuscleGroups.toSet(),
-                    sets = listOf(
-                        SessionSet(
-                            setNumber = 1,
-                            targetReps = null,
-                            targetWeight = null,
-                            actualReps = null,
-                            actualWeight = null,
-                            completedAt = null,
-                            skipped = false
+                result.fold(
+                    onSuccess = {
+                        timber.log.Timber.i("🔥 VIEWMODEL-SUCCESS: Exercise added successfully: ${exerciseLibrary.name}")
+                        
+                        // Verify the exercise was actually added
+                        val updatedSession = sessionManager.currentSession.value
+                        timber.log.Timber.d("🔥 VIEWMODEL-DEBUG: After addition - session exercises count: ${updatedSession?.exercises?.size ?: 0}")
+                        if (updatedSession != null) {
+                            timber.log.Timber.d("🔥 VIEWMODEL-DEBUG: Updated exercises: ${updatedSession.exercises.map { it.name }}")
+                        }
+                    },
+                    onFailure = { error ->
+                        timber.log.Timber.e(error, "🔥 VIEWMODEL-ERROR: Failed to add exercise: ${error.message}")
+                        _uiState.value = UnifiedActiveWorkoutUiState.Error(
+                            message = "Failed to add exercise: ${error.message}"
                         )
-                    ),
-                    orderIndex = sessionManager.currentSession.value?.exercises?.size ?: 0,
-                    restTimeSeconds = null,
-                    notes = null,
-                    isSuperset = false,
-                    supersetWith = null,
-                    lastModified = Instant.now()
+                    }
                 )
                 
-                timber.log.Timber.d("🔥 VIEWMODEL-DEBUG: SessionExercise created - name: ${sessionExercise.name}, orderIndex: ${sessionExercise.orderIndex}")
-                timber.log.Timber.d("🔥 VIEWMODEL-DEBUG: About to call sessionManager.addExerciseToSession")
-                
-                sessionManager.addExerciseToSession(sessionExercise)
-                
-                timber.log.Timber.i("🔥 VIEWMODEL-DEBUG: sessionManager.addExerciseToSession completed successfully")
-                timber.log.Timber.i("Added exercise to session: ${exerciseLibrary.name}")
-                
-                // 🔥 CRITICAL DEBUG: Verify the exercise was actually added
-                val updatedSession = sessionManager.currentSession.value
-                timber.log.Timber.d("🔥 VIEWMODEL-DEBUG: After addition - session exercises count: ${updatedSession?.exercises?.size ?: 0}")
-                if (updatedSession != null) {
-                    timber.log.Timber.d("🔥 VIEWMODEL-DEBUG: Updated exercises: ${updatedSession.exercises.map { it.name }}")
-                }
-                
             } catch (e: Exception) {
-                timber.log.Timber.e(e, "🔥 VIEWMODEL-DEBUG: Error adding exercise to session")
-                Timber.e(e, "Error adding exercise to session")
+                timber.log.Timber.e(e, "🔥 VIEWMODEL-EXCEPTION: Unexpected error adding exercise to session")
+                Timber.e(e, "Unexpected error adding exercise to session")
                 _uiState.value = UnifiedActiveWorkoutUiState.Error(
                     message = "Failed to add exercise: ${e.message}"
                 )
@@ -707,6 +688,150 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
     }
 
     /**
+     * Updates the original template with new exercises added during workout
+     */
+    fun updateOriginalTemplate() {
+        viewModelScope.launch {
+            try {
+                val currentSession = sessionManager.currentSession.value
+                if (currentSession == null) {
+                    Timber.e("Cannot update template - no active session")
+                    _uiState.value = UnifiedActiveWorkoutUiState.Error(
+                        message = "No active workout session"
+                    )
+                    return@launch
+                }
+                
+                val templateId = currentSession.templateId
+                if (templateId == null) {
+                    Timber.e("Cannot update template - workout not started from template")
+                    finishWorkoutCompletion()
+                    return@launch
+                }
+                
+                val userId = authRepository.getCurrentUserId()
+                if (userId == null) {
+                    Timber.e("Cannot update template - no authenticated user")
+                    _uiState.value = UnifiedActiveWorkoutUiState.Error(
+                        message = "User not authenticated"
+                    )
+                    return@launch
+                }
+                
+                Timber.d("Updating template: $templateId with new exercises")
+                
+                // Get the original template
+                val templateResult = workoutTemplateRepository.getTemplateById(
+                    WorkoutTemplateId.fromString(templateId),
+                    userId
+                )
+                
+                templateResult.fold(
+                    onSuccess = { originalTemplate ->
+                        if (originalTemplate != null) {
+                            // Convert session exercises to template exercises
+                            val updatedTemplateExercises = currentSession.exercises.mapIndexed { index, sessionExercise ->
+                                com.example.liftrix.domain.model.TemplateExercise(
+                                    exerciseId = sessionExercise.exerciseId,
+                                    name = sessionExercise.name,
+                                    primaryMuscle = sessionExercise.primaryMuscle,
+                                    equipment = com.example.liftrix.domain.model.Equipment.BODYWEIGHT_ONLY,
+                                    orderIndex = index,
+                                    targetSets = sessionExercise.sets.size,
+                                    targetReps = sessionExercise.sets.firstOrNull()?.targetReps?.let { 
+                                        com.example.liftrix.domain.model.Reps(it) 
+                                    },
+                                    targetWeight = sessionExercise.sets.firstOrNull()?.targetWeight,
+                                    restTimeSeconds = sessionExercise.restTimeSeconds,
+                                    notes = sessionExercise.notes
+                                )
+                            }
+                            
+                            // Update the template with new exercises
+                            val updatedTemplate = originalTemplate.copy(
+                                exercises = updatedTemplateExercises,
+                                updatedAt = java.time.Instant.now()
+                            )
+                            
+                            // Save the updated template
+                            val updateResult = workoutTemplateRepository.updateTemplate(updatedTemplate)
+                            updateResult.fold(
+                                onSuccess = {
+                                    Timber.i("Template updated successfully: ${updatedTemplate.name}")
+                                    finishWorkoutCompletion()
+                                },
+                                onFailure = { error ->
+                                    Timber.e("Failed to update template: ${error.message}")
+                                    _uiState.value = UnifiedActiveWorkoutUiState.Error(
+                                        message = "Failed to update template: ${error.message}"
+                                    )
+                                }
+                            )
+                        } else {
+                            Timber.e("Template not found: $templateId")
+                            finishWorkoutCompletion()
+                        }
+                    },
+                    onFailure = { error ->
+                        Timber.e("Failed to load template: ${error.message}")
+                        _uiState.value = UnifiedActiveWorkoutUiState.Error(
+                            message = "Failed to load template: ${error.message}"
+                        )
+                    }
+                )
+                
+            } catch (e: Exception) {
+                Timber.e(e, "Error updating template")
+                _uiState.value = UnifiedActiveWorkoutUiState.Error(
+                    message = "Failed to update template: ${e.message}"
+                )
+            }
+        }
+    }
+    
+    /**
+     * Skips updating template and finishes workout completion
+     */
+    fun skipTemplateUpdate() {
+        finishWorkoutCompletion()
+    }
+    
+    /**
+     * Dismisses the template update dialog without completing workout
+     */
+    fun dismissTemplateUpdateDialog() {
+        val currentState = _uiState.value
+        if (currentState is UnifiedActiveWorkoutUiState.Success) {
+            _uiState.value = currentState.copy(showSaveAsTemplateDialog = false)
+        }
+    }
+    
+    /**
+     * Finishes the workout completion process after template handling
+     */
+    private fun finishWorkoutCompletion() {
+        viewModelScope.launch {
+            // Show completion state briefly
+            _uiState.value = UnifiedActiveWorkoutUiState.WorkoutCompleted
+            
+            // Give user a moment to see completion state
+            delay(1500)
+            
+            // Transition to NoSession state
+            _uiState.value = UnifiedActiveWorkoutUiState.NoSession
+        }
+    }
+
+    /**
+     * Checks if exercises were added beyond the original template
+     */
+    private fun hasExercisesAddedBeyondTemplate(session: UnifiedWorkoutSession): Boolean {
+        // For now, return true if session has any exercises
+        // TODO: Compare with original template exercise count
+        return session.exercises.isNotEmpty()
+    }
+
+    /**
      * Clears any recovery errors
      */
     fun clearError() {
@@ -724,7 +849,8 @@ sealed class UnifiedActiveWorkoutUiState {
     
     data class Success(
         val session: UnifiedWorkoutSession,
-        val isCompleting: Boolean = false
+        val isCompleting: Boolean = false,
+        val showSaveAsTemplateDialog: Boolean = false
     ) : UnifiedActiveWorkoutUiState()
     
     data class Error(

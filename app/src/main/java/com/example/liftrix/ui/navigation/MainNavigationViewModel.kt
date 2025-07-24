@@ -145,6 +145,15 @@ class MainNavigationViewModel @Inject constructor(
     private fun updateState(update: MainNavigationState.() -> MainNavigationState) {
         _uiState.value = _uiState.value.update()
     }
+    
+    /**
+     * Gets the current authenticated user ID for security validation.
+     * 
+     * @return Current user ID if authenticated, null otherwise
+     */
+    suspend fun getCurrentUserId(): String? {
+        return authRepository.getCurrentUserId()
+    }
 }
 
 /**

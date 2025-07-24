@@ -61,8 +61,8 @@ fun BaseWidget(
                 }
             },
         colors = CardDefaults.cardColors(
-            containerColor = LiftrixColors.SurfaceLight,
-            contentColor = LiftrixColors.OnSurface
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
@@ -111,7 +111,7 @@ private fun WidgetHeader(
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
-            color = LiftrixColors.OnSurface,
+            color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.SemiBold
         )
         
@@ -119,7 +119,7 @@ private fun WidgetHeader(
             Text(
                 text = sub,
                 style = MaterialTheme.typography.bodySmall,
-                color = LiftrixColors.OnSurface.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
         }
     }
@@ -139,7 +139,7 @@ private fun WidgetLoadingState() {
                 .fillMaxWidth()
                 .height(60.dp)
                 .background(
-                    color = LiftrixColors.OnSurface.copy(alpha = 0.1f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
                     shape = RoundedCornerShape(8.dp)
                 )
         )
@@ -154,7 +154,7 @@ private fun WidgetLoadingState() {
                     .weight(1f)
                     .height(20.dp)
                     .background(
-                        color = LiftrixColors.OnSurface.copy(alpha = 0.1f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
                         shape = RoundedCornerShape(4.dp)
                     )
             )
@@ -164,7 +164,7 @@ private fun WidgetLoadingState() {
                     .weight(1f)
                     .height(20.dp)
                     .background(
-                        color = LiftrixColors.OnSurface.copy(alpha = 0.1f),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
                         shape = RoundedCornerShape(4.dp)
                     )
             )
@@ -188,21 +188,21 @@ private fun WidgetErrorState(
         Icon(
             imageVector = Icons.Default.ErrorOutline,
             contentDescription = "Error",
-            tint = LiftrixColors.OnSurface.copy(alpha = 0.6f),
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
             modifier = Modifier.size(32.dp)
         )
         
         Text(
             text = "Unable to load data",
             style = MaterialTheme.typography.bodyMedium,
-            color = LiftrixColors.OnSurface.copy(alpha = 0.8f),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
             textAlign = TextAlign.Center
         )
         
         Text(
             text = error,
             style = MaterialTheme.typography.bodySmall,
-            color = LiftrixColors.OnSurface.copy(alpha = 0.6f),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
             textAlign = TextAlign.Center
         )
         
@@ -252,8 +252,8 @@ fun CompactBaseWidget(
                 }
             },
         colors = CardDefaults.cardColors(
-            containerColor = LiftrixColors.SurfaceLight,
-            contentColor = LiftrixColors.OnSurface
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -266,7 +266,7 @@ fun CompactBaseWidget(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
-                color = LiftrixColors.OnSurface,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Medium
             )
             
@@ -295,7 +295,7 @@ private fun CompactLoadingState() {
             .fillMaxWidth()
             .height(40.dp)
             .background(
-                color = LiftrixColors.OnSurface.copy(alpha = 0.1f),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
                 shape = RoundedCornerShape(6.dp)
             )
     )
@@ -316,7 +316,7 @@ private fun CompactErrorState(
         Text(
             text = "Error loading",
             style = MaterialTheme.typography.bodySmall,
-            color = LiftrixColors.OnSurface.copy(alpha = 0.6f)
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
         )
         
         TextButton(

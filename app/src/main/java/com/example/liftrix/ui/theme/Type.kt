@@ -255,6 +255,9 @@ object LiftrixTypography {
  * Enhanced Typography with Athletic Branding and improved readability
  * Uses Poppins Bold for headers, Inter Medium for body, Roboto Mono Light for data
  * Optimized line heights and font weights for better accessibility
+ * 
+ * @deprecated Use LiftrixTypographySystem from Typography.kt for new components.
+ * This will be migrated to use the new semantic typography system.
  */
 val EnhancedTypography = Typography(
     // Display styles with enhanced readability using Poppins Bold

@@ -34,7 +34,7 @@ import com.example.liftrix.ui.common.FeedItemShimmer
 import com.example.liftrix.domain.model.PerformanceMetrics
 import com.example.liftrix.ui.common.PerformanceOptimizations
 import com.example.liftrix.ui.common.getWorkoutFeedScrollConfig
-import com.example.liftrix.ui.home.FeedState
+import com.example.liftrix.ui.common.state.FeedState
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**

@@ -48,13 +48,10 @@ enum class ButtonVariant {
 /**
  * Enhanced button component with athletic branding, micro-interactions, and haptic feedback.
  * 
- * Features:
- * - Brand color variants (Primary Teal, Secondary Indigo, Accent Coral)
- * - Micro-scaling animation on press (0.96f scale)
- * - Haptic feedback integration for tactile response
- * - Athletic-inspired rounded corners (16dp)
- * - Accessibility enhancements with proper touch targets
- * - Backward compatibility with existing Button usage
+ * @deprecated This legacy button system is deprecated. Use ModernActionButton hierarchy instead:
+ * - Use PrimaryActionButton for primary actions
+ * - Use SecondaryActionButton for secondary actions  
+ * - Use TertiaryActionButton for tertiary actions
  * 
  * @param onClick Callback triggered when button is clicked
  * @param modifier Modifier for styling and positioning
@@ -63,6 +60,11 @@ enum class ButtonVariant {
  * @param interactionSource MutableInteractionSource for tracking interaction states
  * @param content Button content as a composable lambda
  */
+@Deprecated(
+    message = "Use ModernActionButton hierarchy instead (PrimaryActionButton, SecondaryActionButton, TertiaryActionButton)",
+    replaceWith = ReplaceWith("PrimaryActionButton"),
+    level = DeprecationLevel.WARNING
+)
 @Composable
 fun LiftrixButton(
     onClick: () -> Unit,
@@ -140,10 +142,10 @@ fun LiftrixButton(
                 enabled = enabled,
                 shape = buttonShape,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = LiftrixColors.Accent,
-                    contentColor = LiftrixColors.OnAccent,
-                    disabledContainerColor = LiftrixColors.Accent.copy(alpha = 0.38f),
-                    disabledContentColor = LiftrixColors.OnAccent.copy(alpha = 0.38f)
+                    containerColor = LiftrixColors.TiffanyBlue,
+                    contentColor = LiftrixColors.Night,
+                    disabledContainerColor = LiftrixColors.TiffanyBlue.copy(alpha = 0.38f),
+                    disabledContentColor = LiftrixColors.Night.copy(alpha = 0.38f)
                 ),
                 interactionSource = interactionSource,
                 content = content
@@ -206,10 +208,10 @@ fun ButtonVariant.colors(): ButtonColors {
         )
         
         ButtonVariant.Accent -> ButtonDefaults.buttonColors(
-            containerColor = LiftrixColors.Accent,
-            contentColor = LiftrixColors.OnAccent,
-            disabledContainerColor = LiftrixColors.Accent.copy(alpha = 0.38f),
-            disabledContentColor = LiftrixColors.OnAccent.copy(alpha = 0.38f)
+            containerColor = LiftrixColors.TiffanyBlue,
+            contentColor = LiftrixColors.Night,
+            disabledContainerColor = LiftrixColors.TiffanyBlue.copy(alpha = 0.38f),
+            disabledContentColor = LiftrixColors.Night.copy(alpha = 0.38f)
         )
         
         ButtonVariant.Outlined -> ButtonDefaults.outlinedButtonColors(
@@ -226,13 +228,14 @@ fun ButtonVariant.colors(): ButtonColors {
 
 /**
  * Convenience function for creating a primary action button with consistent styling.
- * Equivalent to LiftrixButton with ButtonVariant.Primary.
  * 
- * @param onClick Callback triggered when button is clicked
- * @param modifier Modifier for styling and positioning
- * @param enabled Whether the button is enabled for interaction
- * @param content Button content as a composable lambda
+ * @deprecated Use PrimaryActionButton instead for unified design system compliance
  */
+@Deprecated(
+    message = "Use PrimaryActionButton instead for unified design system compliance",
+    replaceWith = ReplaceWith("PrimaryActionButton"),
+    level = DeprecationLevel.WARNING
+)
 @Composable
 fun PrimaryLiftrixButton(
     onClick: () -> Unit,
@@ -251,13 +254,14 @@ fun PrimaryLiftrixButton(
 
 /**
  * Convenience function for creating a secondary action button with consistent styling.
- * Equivalent to LiftrixButton with ButtonVariant.Secondary.
  * 
- * @param onClick Callback triggered when button is clicked
- * @param modifier Modifier for styling and positioning
- * @param enabled Whether the button is enabled for interaction
- * @param content Button content as a composable lambda
+ * @deprecated Use SecondaryActionButton instead for unified design system compliance
  */
+@Deprecated(
+    message = "Use SecondaryActionButton instead for unified design system compliance",
+    replaceWith = ReplaceWith("SecondaryActionButton"),
+    level = DeprecationLevel.WARNING
+)
 @Composable
 fun SecondaryLiftrixButton(
     onClick: () -> Unit,
@@ -276,13 +280,14 @@ fun SecondaryLiftrixButton(
 
 /**
  * Convenience function for creating an accent action button with consistent styling.
- * Equivalent to LiftrixButton with ButtonVariant.Accent.
  * 
- * @param onClick Callback triggered when button is clicked
- * @param modifier Modifier for styling and positioning
- * @param enabled Whether the button is enabled for interaction
- * @param content Button content as a composable lambda
+ * @deprecated Use TertiaryActionButton instead for unified design system compliance
  */
+@Deprecated(
+    message = "Use TertiaryActionButton instead for unified design system compliance",
+    replaceWith = ReplaceWith("TertiaryActionButton"),
+    level = DeprecationLevel.WARNING
+)
 @Composable
 fun AccentLiftrixButton(
     onClick: () -> Unit,

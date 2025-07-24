@@ -91,4 +91,8 @@
     <color name="coral_accent">@color/liftrix_accent</color>
     <color name="indigo_secondary">@color/liftrix_secondary</color>
     <color name="dark_charcoal">@color/liftrix_background_dark</color>
+    
+    <!-- Icon color aliases for drawable resources -->
+    <color name="liftrix_coral">@color/liftrix_accent</color>
+    <color name="liftrix_teal">@color/liftrix_primary</color>
 </resources>

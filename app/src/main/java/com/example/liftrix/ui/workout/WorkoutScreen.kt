@@ -17,6 +17,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -25,6 +28,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
+import com.example.liftrix.ui.workout.components.PrimaryActionButton
+import com.example.liftrix.ui.workout.components.SecondaryActionButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -34,18 +40,22 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.res.stringResource
+import com.example.liftrix.R
 import com.example.liftrix.domain.model.WorkoutTemplate
+import com.example.liftrix.ui.common.state.WorkoutScreenData
+import com.example.liftrix.ui.common.state.WorkoutUiState
 
 /**
- * Main workout screen - simplified entry point.
+ * Main workout screen - simplified entry point with unified visual design.
  * 
  * This screen provides:
  * - Quick workout start (empty workout)
- * - Template selection and activation
- * - Template creation
+ * - Creating a workout (workout routine design)
+ * - Recent workout selection and starting
  * 
  * @param onNavigateToActiveWorkout Callback for starting active workout
- * @param onNavigateToTemplateCreation Callback for template creation
+ * @param onNavigateToWorkoutCreation Callback for workout creation
  * @param modifier Modifier for styling
  * @param viewModel ViewModel for workout management
  */
@@ -53,139 +63,149 @@ import com.example.liftrix.domain.model.WorkoutTemplate
 @Composable
 fun WorkoutScreen(
     onNavigateToActiveWorkout: (templateId: String?) -> Unit,
-    onNavigateToTemplateCreation: () -> Unit,
+    onNavigateToWorkoutCreation: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: WorkoutViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val currentState = uiState
+    
+    when (currentState) {
+        is WorkoutUiState.Loading -> {
+            WorkoutLoadingScreen()
+        }
+        is WorkoutUiState.Success -> {
+            WorkoutContent(
+                screenData = currentState.data,
+                onNavigateToActiveWorkout = onNavigateToActiveWorkout,
+                onNavigateToWorkoutCreation = onNavigateToWorkoutCreation,
+                modifier = modifier
+            )
+        }
+        is WorkoutUiState.Error -> {
+            WorkoutErrorScreen(
+                error = currentState.error,
+                onRetry = { viewModel.handleEvent(WorkoutEvent.RefreshData) },
+                modifier = modifier
+            )
+        }
+        is WorkoutUiState.Empty -> {
+            WorkoutEmptyScreen(
+                onCreateWorkout = onNavigateToWorkoutCreation,
+                modifier = modifier
+            )
+        }
+    }
+}
 
-    // TopAppBar now handled by MainNavigationContainer
+@Composable
+private fun WorkoutContent(
+    screenData: com.example.liftrix.ui.common.state.WorkoutScreenData,
+    onNavigateToActiveWorkout: (templateId: String?) -> Unit,
+    onNavigateToWorkoutCreation: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        item {
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+        
+        // Quick Actions Section
+        item {
+            QuickActionsCard(
+                onStartQuickWorkout = { onNavigateToActiveWorkout(null) },
+                onCreateWorkout = onNavigateToWorkoutCreation
+            )
+        }
+        
+        // Recent Workouts Section
+        item {
+            Text(
+                text = stringResource(R.string.workflow_your_workouts),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+        }
+        
+        if (screenData.templates.isEmpty()) {
             item {
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-            
-            // Quick Actions Section
-            item {
-                QuickActionsCard(
-                    onStartQuickWorkout = { onNavigateToActiveWorkout(null) },
-                    onCreateTemplate = onNavigateToTemplateCreation
+                EmptyWorkoutsCard(
+                    onCreateWorkout = onNavigateToWorkoutCreation
                 )
             }
-            
-            // Templates Section
-            item {
-                Text(
-                    text = "Workout Templates",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(vertical = 8.dp)
+        } else {
+            items(screenData.templates) { workout ->
+                WorkoutCard(
+                    workout = workout,
+                    onStartWorkout = { onNavigateToActiveWorkout(workout.id.value) },
+                    onEditWorkout = { /* TODO: Navigate to edit */ }
                 )
-            }
-            
-            if (uiState.templates.isEmpty()) {
-                item {
-                    EmptyTemplatesCard(
-                        onCreateTemplate = onNavigateToTemplateCreation
-                    )
-                }
-            } else {
-                items(uiState.templates) { template ->
-                    TemplateCard(
-                        template = template,
-                        onActivateTemplate = { onNavigateToActiveWorkout(template.id.value) }
-                    )
-                }
-            }
-            
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
             }
         }
-}
-
-/**
- * Quick actions card for starting workouts
- */
-@Composable
-private fun QuickActionsCard(
-    onStartQuickWorkout: () -> Unit,
-    onCreateTemplate: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                text = "Quick Actions",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                FilledTonalButton(
-                    onClick = onStartQuickWorkout,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Quick Workout")
-                }
-                
-                OutlinedButton(
-                    onClick = onCreateTemplate,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Create Template")
-                }
-            }
+        
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
 
 /**
- * Empty templates state card
+ * Quick actions card for starting and creating workouts
  */
 @Composable
-private fun EmptyTemplatesCard(
-    onCreateTemplate: () -> Unit,
+private fun QuickActionsCard(
+    onStartQuickWorkout: () -> Unit,
+    onCreateWorkout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+    UnifiedWorkoutCard(
+        title = stringResource(R.string.workflow_create_workout),
+        subtitle = stringResource(R.string.create_workout_description),
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            SecondaryActionButton(
+                text = stringResource(R.string.workflow_quick_workout),
+                onClick = onStartQuickWorkout,
+                modifier = Modifier.weight(1f),
+                leadingIcon = Icons.Default.PlayArrow
+            )
+            
+            PrimaryActionButton(
+                text = stringResource(R.string.workflow_create_new_workout),
+                onClick = onCreateWorkout,
+                modifier = Modifier.weight(1f),
+                leadingIcon = Icons.Default.Assignment
+            )
+        }
+    }
+}
+
+/**
+ * Empty workouts state card
+ */
+@Composable
+private fun EmptyWorkoutsCard(
+    onCreateWorkout: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    UnifiedWorkoutCard(
+        title = "No Workouts Yet",
+        subtitle = "Create your first workout to get started",
+        modifier = modifier
     ) {
         Column(
-            modifier = Modifier.padding(24.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
@@ -198,117 +218,78 @@ private fun EmptyTemplatesCard(
             Spacer(modifier = Modifier.height(16.dp))
             
             Text(
-                text = "No Templates Yet",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium
-            )
-            
-            Text(
-                text = "Create your first workout template to save time on future workouts.",
+                text = "Create your first workout routine to save time on future sessions.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 8.dp)
+                textAlign = TextAlign.Center
             )
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            FilledTonalButton(
-                onClick = onCreateTemplate,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Create First Template")
-            }
+            PrimaryActionButton(
+                text = stringResource(R.string.workflow_create_new_workout),
+                onClick = onCreateWorkout,
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = Icons.Default.Assignment
+            )
         }
     }
 }
 
 /**
- * Template card for displaying workout templates
+ * Workout card using unified design components
  */
 @Composable
-private fun TemplateCard(
-    template: WorkoutTemplate,
-    onActivateTemplate: () -> Unit,
+private fun WorkoutCard(
+    workout: WorkoutTemplate,
+    onStartWorkout: () -> Unit,
+    onEditWorkout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    UnifiedWorkoutCard(
+        title = workout.name,
+        subtitle = if (!workout.description.isNullOrBlank()) workout.description else "${workout.exercises.size} exercises",
+        modifier = modifier,
+        actions = {
+            SecondaryActionButton(
+                text = "Edit",
+                onClick = onEditWorkout,
+                leadingIcon = Icons.Default.Edit
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            PrimaryActionButton(
+                text = "Start Workout", 
+                onClick = onStartWorkout,
+                leadingIcon = Icons.Default.PlayArrow
+            )
+        }
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
+        // Workout stats with modern styling
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = template.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                    
-                    if (!template.description.isNullOrBlank()) {
-                        Text(
-                            text = template.description!!,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
-                }
-                
-                FilledTonalButton(
-                    onClick = onActivateTemplate
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Start")
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // Template stats
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                TemplateStatItem(
-                    label = "Exercises",
-                    value = template.exercises.size.toString()
-                )
-                TemplateStatItem(
-                    label = "Sets",
-                    value = template.getTotalSets().toString()
-                )
-                TemplateStatItem(
-                    label = "Estimated Time",
-                    value = template.estimatedDurationMinutes?.let { "${it} min" } ?: "N/A"
-                )
-            }
+            WorkoutStatItem(
+                label = "Exercises",
+                value = workout.exercises.size.toString()
+            )
+            WorkoutStatItem(
+                label = "Sets",
+                value = workout.getTotalSets().toString()
+            )
+            WorkoutStatItem(
+                label = "Est. Time",
+                value = workout.estimatedDurationMinutes?.let { "${it} min" } ?: "N/A"
+            )
         }
     }
 }
 
 /**
- * Template stat item
+ * Workout stat item with updated styling
  */
 @Composable
-private fun TemplateStatItem(
+private fun WorkoutStatItem(
     label: String,
     value: String,
     modifier: Modifier = Modifier
@@ -320,12 +301,84 @@ private fun TemplateStatItem(
         Text(
             text = value,
             style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary
         )
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun WorkoutLoadingScreen() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        androidx.compose.material3.CircularProgressIndicator()
+    }
+}
+
+@Composable
+private fun WorkoutErrorScreen(
+    error: com.example.liftrix.domain.model.error.LiftrixError,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Failed to load workouts",
+            style = MaterialTheme.typography.headlineSmall
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = error.message,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        PrimaryActionButton(
+            text = "Retry",
+            onClick = onRetry,
+            leadingIcon = Icons.Default.Refresh
+        )
+    }
+}
+
+@Composable
+private fun WorkoutEmptyScreen(
+    onCreateWorkout: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "No workouts yet",
+            style = MaterialTheme.typography.headlineSmall
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Create your first workout to get started",
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        PrimaryActionButton(
+            text = "Create Workout",
+            onClick = onCreateWorkout,
+            leadingIcon = Icons.Default.Assignment
         )
     }
 }

@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.ui.theme.LiftrixAnimations
 import com.example.liftrix.ui.theme.LiftrixColors
+import com.example.liftrix.ui.theme.PrimaryGradient
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -129,7 +130,7 @@ fun AnimatedProgressRing(
 fun AnimatedProgressRingWithGradient(
     progress: Float,
     modifier: Modifier = Modifier,
-    progressBrush: Brush = LiftrixColors.BrandGradients.TealCoral,
+    progressBrush: Brush = PrimaryGradient,
     backgroundColor: Color = LiftrixColors.Primary.copy(alpha = 0.1f),
     size: Dp = 120.dp,
     strokeWidth: Dp = 8.dp,
@@ -395,7 +396,7 @@ object ProgressRingDefaults {
     ) = AnimatedProgressRingWithGradient(
         progress = progress,
         modifier = modifier,
-        progressBrush = LiftrixColors.BrandGradients.TealCoral,
+        progressBrush = PrimaryGradient,
         size = size,
         strokeWidth = 6.dp,
         animationSpec = LiftrixAnimations.standardSpring
@@ -423,7 +424,7 @@ object ProgressRingDefaults {
     ) = AnimatedProgressRing(
         progress = progress,
         modifier = modifier,
-        color = LiftrixColors.Accent,
+        color = LiftrixColors.TiffanyBlue,
         size = size,
         strokeWidth = 6.dp,
         animationSpec = LiftrixAnimations.gentleSpring

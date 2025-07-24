@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Workflow-based terminology strings -->
+    
+    <!-- Main workflow actions -->
+    <string name="workflow_create_workout">Creating a workout</string>
+    <string name="workflow_start_workout">Starting a workout</string>
+    <string name="workflow_your_workouts">Your Workouts</string>
+    <string name="workflow_create_new_workout">Create New Workout</string>
+    <string name="workflow_quick_workout">Quick Workout</string>
+    <string name="workflow_save_workout">Save Workout</string>
+    <string name="workflow_edit_workout">Edit Workout</string>
+    
+    <!-- Workout routine management -->
+    <string name="edit_workout_routine">Edit Workout Routine</string>
+    <string name="workout_routine_details">Workout Routine Details</string>
+    
+    <!-- Workflow descriptions -->
+    <string name="create_workout_description">Design your workout routine</string>
+    <string name="start_workout_description">Begin your workout session</string>
+    <string name="save_workout_description">Save this routine for future use</string>
+    
+    <!-- Empty state messages -->
+    <string name="no_workout_routines">No Workout Routines Yet</string>
+    <string name="create_first_workout_routine">Create your first workout routine to get started</string>
+    <string name="no_saved_workouts">No saved workouts yet</string>
+    
+    <!-- Auto-save prompts (without template terminology) -->
+    <string name="auto_save_workout_prompt">Save this workout routine?</string>
+    <string name="auto_save_workout_message">Would you like to save this workout routine so you can use it again?</string>
+    <string name="auto_save_confirm">Save Routine</string>
+    <string name="auto_save_decline">Don\'t Save</string>
+    
+    <!-- Navigation and actions -->
+    <string name="navigate_to_workout_creation">Create Workout</string>
+    <string name="navigate_to_workout_editing">Edit Routine</string>
+    <string name="browse_workout_routines">Browse Your Routines</string>
+    
+    <!-- Success messages -->
+    <string name="workout_routine_saved">Workout routine saved successfully</string>
+    <string name="workout_routine_updated">Workout routine updated</string>
+    <string name="workout_routine_deleted">Workout routine deleted</string>
+</resources>

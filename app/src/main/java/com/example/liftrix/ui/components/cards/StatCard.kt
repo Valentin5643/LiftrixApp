@@ -205,7 +205,7 @@ fun TrendIndicator(
         )
         is Trend.Negative -> Triple(
             Icons.Default.TrendingDown,
-            LiftrixColors.Accent,
+            LiftrixColors.TiffanyBlue,
             if (compact) "-${trend.percentage.toInt()}%" else "-${trend.percentage.toInt()}% ${trend.label}"
         )
         is Trend.Neutral -> Triple(

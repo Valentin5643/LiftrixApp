@@ -28,6 +28,7 @@ import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.ui.theme.LiftrixAnimations
 import com.example.liftrix.ui.theme.LiftrixColors
+import com.example.liftrix.ui.theme.PrimaryGradient
 import com.example.liftrix.ui.theme.LiftrixTheme
 import kotlinx.coroutines.delay
 
@@ -171,7 +172,7 @@ fun GradientProgressRingPreview() {
                 ) {
                     AnimatedProgressRingWithGradient(
                         progress = progress,
-                        progressBrush = LiftrixColors.BrandGradients.TealCoral,
+                        progressBrush = PrimaryGradient,
                         size = 120.dp,
                         strokeWidth = 10.dp
                     )
@@ -230,7 +231,7 @@ fun MultiLayerProgressRingPreview() {
                     ),
                     ProgressLayer(
                         progress = innerProgress,
-                        color = LiftrixColors.Accent,
+                        color = LiftrixColors.TiffanyBlue,
                         strokeWidth = 6.dp
                     )
                 )
@@ -444,7 +445,7 @@ fun ProgressRingDarkThemePreview() {
                 ) {
                     AnimatedProgressRingWithGradient(
                         progress = 0.75f,
-                        progressBrush = LiftrixColors.BrandGradients.TealCoral,
+                        progressBrush = PrimaryGradient,
                         size = 120.dp,
                         strokeWidth = 8.dp
                     )

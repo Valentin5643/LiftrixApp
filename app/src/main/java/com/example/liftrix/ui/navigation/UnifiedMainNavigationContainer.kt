@@ -17,6 +17,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -129,7 +130,8 @@ fun UnifiedMainNavigationContainer(
             ConditionalWorkoutFab(
                 onFabClick = {
                     showWorkoutCreationModal = true
-                }
+                },
+                currentDestination = navBackStackEntry?.destination
             )
         }
     ) { paddingValues ->
@@ -175,7 +177,7 @@ fun UnifiedMainNavigationContainer(
                                 navController.navigate("unified_active_workout?isBlankWorkout=true")
                             }
                         },
-                        onNavigateToTemplateCreation = {
+                        onNavigateToWorkoutCreation = {
                             navController.navigate("template_creation")
                         }
                     )
@@ -592,23 +594,18 @@ class UnifiedMainNavigationViewModel @javax.inject.Inject constructor(
      */
     fun addExerciseToCurrentSession(exerciseLibrary: com.example.liftrix.domain.model.ExerciseLibrary) {
         viewModelScope.launch {
-            try {
-                // Convert ExerciseLibrary to SessionExercise
-                val sessionExercise = com.example.liftrix.domain.model.SessionExercise(
-                    exerciseId = com.example.liftrix.domain.model.ExerciseId(exerciseLibrary.id),
-                    name = exerciseLibrary.name,
-                    category = exerciseLibrary.primaryMuscleGroup,
-                    primaryMuscle = exerciseLibrary.primaryMuscleGroup,
-                    equipment = exerciseLibrary.equipment,
-                    secondaryMuscles = exerciseLibrary.secondaryMuscleGroups.toSet(),
-                    sets = emptyList(),
-                    orderIndex = 0 // Will be set by session manager
-                )
-                sessionManager.addExerciseToSession(sessionExercise)
-                timber.log.Timber.i("Added exercise to current session: ${exerciseLibrary.name}")
-            } catch (e: Exception) {
-                timber.log.Timber.e(e, "Error adding exercise to session: ${exerciseLibrary.name}")
-            }
+            // Use SessionExercise.createBlank() to ensure proper validation
+            val sessionExercise = com.example.liftrix.domain.model.SessionExercise.createBlank(
+                exerciseId = com.example.liftrix.domain.model.ExerciseId(exerciseLibrary.id),
+                name = exerciseLibrary.name,
+                category = exerciseLibrary.primaryMuscleGroup,
+                primaryMuscle = exerciseLibrary.primaryMuscleGroup,
+                equipment = exerciseLibrary.equipment,
+                orderIndex = 0, // Will be set by session manager
+                initialSets = 1 // Create one default set
+            )
+            sessionManager.addExerciseToSession(sessionExercise)
+            timber.log.Timber.i("Added exercise to current session: ${exerciseLibrary.name}")
         }
     }
 }
@@ -648,7 +645,16 @@ private fun BottomNavigationBar(
                         launchSingleTop = true
                         restoreState = true
                     }
-                }
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    // Persian Green for selected states (primary)
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                    // Standard surface colors for unselected
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             )
         }
     }

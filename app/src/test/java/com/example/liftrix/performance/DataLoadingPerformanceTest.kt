@@ -70,7 +70,7 @@ class DataLoadingPerformanceTest {
             responseTime < SERVICE_RESPONSE_TARGET_MS
         )
         
-        assertTrue("Service should return success", result is LiftrixResult.Success)
+        assertTrue("Service should return success", result is Result.success)
     }
     
     @Test
@@ -94,7 +94,7 @@ class DataLoadingPerformanceTest {
             responseTime < SERVICE_RESPONSE_TARGET_MS
         )
         
-        assertTrue("Service should return success", result is LiftrixResult.Success)
+        assertTrue("Service should return success", result is Result.success)
     }
     
     @Test
@@ -117,7 +117,7 @@ class DataLoadingPerformanceTest {
             responseTime < SERVICE_RESPONSE_TARGET_MS
         )
         
-        assertTrue("Service should return success", result is LiftrixResult.Success)
+        assertTrue("Service should return success", result is Result.success)
     }
     
     @Test
@@ -171,7 +171,7 @@ class DataLoadingPerformanceTest {
             responseTime < LARGE_DATASET_TARGET_MS
         )
         
-        assertTrue("Service should handle large dataset", result is LiftrixResult.Success)
+        assertTrue("Service should handle large dataset", result is Result.success)
     }
     
     @Test

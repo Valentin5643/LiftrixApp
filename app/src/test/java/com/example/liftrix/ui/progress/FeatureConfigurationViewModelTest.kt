@@ -113,7 +113,7 @@ class FeatureConfigurationViewModelTest {
     @Test
     fun `given feature flag service success, when LoadFeatureFlags event, then loads flags successfully`() = runTest {
         // Given
-        coEvery { mockFeatureFlagService.getAllFeatureFlags() } returns LiftrixResult.Success(testFeatureFlags)
+        coEvery { mockFeatureFlagService.getAllFeatureFlags() } returns Result.success(testFeatureFlags)
         
         // When
         viewModel.handleEvent(FeatureConfigurationEvent.LoadFeatureFlags)
@@ -139,7 +139,7 @@ class FeatureConfigurationViewModelTest {
     fun `given service error, when LoadFeatureFlags event, then shows error state`() = runTest {
         // Given
         val testError = LiftrixError.NetworkError("Failed to fetch feature flags from remote config")
-        coEvery { mockFeatureFlagService.getAllFeatureFlags() } returns LiftrixResult.Error(testError)
+        coEvery { mockFeatureFlagService.getAllFeatureFlags() } returns Result.failure(testError)
         
         // When
         viewModel.handleEvent(FeatureConfigurationEvent.LoadFeatureFlags)
@@ -163,7 +163,7 @@ class FeatureConfigurationViewModelTest {
     @Test
     fun `given remote config service, when RefreshRemoteConfig event, then refreshes configuration successfully`() = runTest {
         // Given
-        coEvery { mockFeatureFlagService.refreshRemoteConfig() } returns LiftrixResult.Success(Unit)
+        coEvery { mockFeatureFlagService.refreshRemoteConfig() } returns Result.success(Unit)
         
         // When
         viewModel.handleEvent(FeatureConfigurationEvent.RefreshRemoteConfig)
@@ -186,7 +186,7 @@ class FeatureConfigurationViewModelTest {
     fun `given remote config fetch failure, when RefreshRemoteConfig event, then shows failure state`() = runTest {
         // Given
         val testError = LiftrixError.NetworkError("Remote config fetch timeout")
-        coEvery { mockFeatureFlagService.refreshRemoteConfig() } returns LiftrixResult.Error(testError)
+        coEvery { mockFeatureFlagService.refreshRemoteConfig() } returns Result.failure(testError)
         
         // When
         viewModel.handleEvent(FeatureConfigurationEvent.RefreshRemoteConfig)
@@ -212,7 +212,7 @@ class FeatureConfigurationViewModelTest {
         // Given
         val testKey = "onboarding_flow"
         val expectedVariant = "variant_b"
-        coEvery { mockFeatureFlagService.getABTestVariant(testKey) } returns LiftrixResult.Success(expectedVariant)
+        coEvery { mockFeatureFlagService.getABTestVariant(testKey) } returns Result.success(expectedVariant)
         
         // When
         viewModel.handleEvent(FeatureConfigurationEvent.GetABTestVariant(testKey))
@@ -237,7 +237,7 @@ class FeatureConfigurationViewModelTest {
         // Given
         val invalidTestKey = "non_existent_test"
         val testError = LiftrixError.ValidationError(field = invalidTestKey, violations = listOf("A/B test key not found"))
-        coEvery { mockFeatureFlagService.getABTestVariant(invalidTestKey) } returns LiftrixResult.Error(testError)
+        coEvery { mockFeatureFlagService.getABTestVariant(invalidTestKey) } returns Result.failure(testError)
         
         // When
         viewModel.handleEvent(FeatureConfigurationEvent.GetABTestVariant(invalidTestKey))
@@ -263,7 +263,7 @@ class FeatureConfigurationViewModelTest {
         // Given
         val flagKey = "analytics_enabled"
         val expectedValue = true
-        coEvery { mockFeatureFlagService.isFeatureEnabled(flagKey) } returns LiftrixResult.Success(expectedValue)
+        coEvery { mockFeatureFlagService.isFeatureEnabled(flagKey) } returns Result.success(expectedValue)
         
         // When
         viewModel.handleEvent(FeatureConfigurationEvent.CheckFeatureEnabled(flagKey))
@@ -288,7 +288,7 @@ class FeatureConfigurationViewModelTest {
         // Given
         val unknownFlagKey = "unknown_feature"
         val defaultValue = false
-        coEvery { mockFeatureFlagService.isFeatureEnabled(unknownFlagKey) } returns LiftrixResult.Success(defaultValue)
+        coEvery { mockFeatureFlagService.isFeatureEnabled(unknownFlagKey) } returns Result.success(defaultValue)
         
         // When
         viewModel.handleEvent(FeatureConfigurationEvent.CheckFeatureEnabled(unknownFlagKey))
@@ -313,9 +313,9 @@ class FeatureConfigurationViewModelTest {
     @Test
     fun `given feature flag service, when LoadAllFeatureFlags event, then loads all flags and variants`() = runTest {
         // Given
-        coEvery { mockFeatureFlagService.getAllFeatureFlags() } returns LiftrixResult.Success(testFeatureFlags)
-        coEvery { mockFeatureFlagService.getABTestVariant("onboarding_flow") } returns LiftrixResult.Success("variant_b")
-        coEvery { mockFeatureFlagService.getABTestVariant("chart_layout") } returns LiftrixResult.Success("grid_view")
+        coEvery { mockFeatureFlagService.getAllFeatureFlags() } returns Result.success(testFeatureFlags)
+        coEvery { mockFeatureFlagService.getABTestVariant("onboarding_flow") } returns Result.success("variant_b")
+        coEvery { mockFeatureFlagService.getABTestVariant("chart_layout") } returns Result.success("grid_view")
         
         // When
         viewModel.handleEvent(FeatureConfigurationEvent.LoadAllFeatureFlags)
@@ -340,8 +340,8 @@ class FeatureConfigurationViewModelTest {
     @Test
     fun `given service initialization, when LoadInitialData event, then loads essential configuration data`() = runTest {
         // Given
-        coEvery { mockFeatureFlagService.getAllFeatureFlags() } returns LiftrixResult.Success(testFeatureFlags)
-        coEvery { mockFeatureFlagService.refreshRemoteConfig() } returns LiftrixResult.Success(Unit)
+        coEvery { mockFeatureFlagService.getAllFeatureFlags() } returns Result.success(testFeatureFlags)
+        coEvery { mockFeatureFlagService.refreshRemoteConfig() } returns Result.success(Unit)
         
         // When
         viewModel.handleEvent(FeatureConfigurationEvent.LoadInitialData)
@@ -367,7 +367,7 @@ class FeatureConfigurationViewModelTest {
     @Test
     fun `given cached configuration data, when ClearCache event, then resets all data to NotAsked`() = runTest {
         // Given - load initial data
-        coEvery { mockFeatureFlagService.getAllFeatureFlags() } returns LiftrixResult.Success(testFeatureFlags)
+        coEvery { mockFeatureFlagService.getAllFeatureFlags() } returns Result.success(testFeatureFlags)
         viewModel.handleEvent(FeatureConfigurationEvent.LoadAllFeatureFlags)
         testDispatcher.scheduler.advanceUntilIdle()
         
@@ -397,7 +397,7 @@ class FeatureConfigurationViewModelTest {
             "crash_reporting" to true,
             "performance_monitoring" to true
         )
-        coEvery { mockFeatureFlagService.getAllFeatureFlags() } returns LiftrixResult.Success(analyticsFlags)
+        coEvery { mockFeatureFlagService.getAllFeatureFlags() } returns Result.success(analyticsFlags)
         
         // When
         viewModel.handleEvent(FeatureConfigurationEvent.EnableAnalytics)
@@ -428,7 +428,7 @@ class FeatureConfigurationViewModelTest {
             "performance_monitoring" to false,
             "user_behavior_tracking" to false
         )
-        coEvery { mockFeatureFlagService.getAllFeatureFlags() } returns LiftrixResult.Success(disabledAnalyticsFlags)
+        coEvery { mockFeatureFlagService.getAllFeatureFlags() } returns Result.success(disabledAnalyticsFlags)
         
         // When
         viewModel.handleEvent(FeatureConfigurationEvent.DisableAnalytics)
@@ -480,7 +480,7 @@ class FeatureConfigurationViewModelTest {
         // Given
         val flagKey = "premium_features"
         val consistentValue = true
-        coEvery { mockFeatureFlagService.isFeatureEnabled(flagKey) } returns LiftrixResult.Success(consistentValue)
+        coEvery { mockFeatureFlagService.isFeatureEnabled(flagKey) } returns Result.success(consistentValue)
         
         // When - check same flag multiple times
         viewModel.handleEvent(FeatureConfigurationEvent.CheckFeatureEnabled(flagKey))
@@ -513,7 +513,7 @@ class FeatureConfigurationViewModelTest {
         // Given
         val testKey = "workout_timer"
         val stableVariant = "enhanced"
-        coEvery { mockFeatureFlagService.getABTestVariant(testKey) } returns LiftrixResult.Success(stableVariant)
+        coEvery { mockFeatureFlagService.getABTestVariant(testKey) } returns Result.success(stableVariant)
         
         // When - get same variant multiple times
         viewModel.handleEvent(FeatureConfigurationEvent.GetABTestVariant(testKey))
@@ -541,7 +541,7 @@ class FeatureConfigurationViewModelTest {
     @Test
     fun `given remote config changes, when refreshing configuration, then updates local feature flags`() = runTest {
         // Given - initial flags
-        coEvery { mockFeatureFlagService.getAllFeatureFlags() } returns LiftrixResult.Success(testFeatureFlags)
+        coEvery { mockFeatureFlagService.getAllFeatureFlags() } returns Result.success(testFeatureFlags)
         viewModel.handleEvent(FeatureConfigurationEvent.LoadFeatureFlags)
         testDispatcher.scheduler.advanceUntilIdle()
         
@@ -551,8 +551,8 @@ class FeatureConfigurationViewModelTest {
             put("beta_charts", true) // Changed from false to true
         }
         
-        coEvery { mockFeatureFlagService.refreshRemoteConfig() } returns LiftrixResult.Success(Unit)
-        coEvery { mockFeatureFlagService.getAllFeatureFlags() } returns LiftrixResult.Success(updatedFlags)
+        coEvery { mockFeatureFlagService.refreshRemoteConfig() } returns Result.success(Unit)
+        coEvery { mockFeatureFlagService.getAllFeatureFlags() } returns Result.success(updatedFlags)
         
         // When
         viewModel.handleEvent(FeatureConfigurationEvent.RefreshRemoteConfig)
@@ -583,7 +583,7 @@ class FeatureConfigurationViewModelTest {
     fun `given network unavailable, when refreshing remote config, then shows network error with fallback`() = runTest {
         // Given
         val networkError = LiftrixError.NetworkError("No internet connection")
-        coEvery { mockFeatureFlagService.refreshRemoteConfig() } returns LiftrixResult.Error(networkError)
+        coEvery { mockFeatureFlagService.refreshRemoteConfig() } returns Result.failure(networkError)
         
         // Local fallback flags
         val fallbackFlags = mapOf(
@@ -591,7 +591,7 @@ class FeatureConfigurationViewModelTest {
             "export_enabled" to false,
             "offline_mode" to true
         )
-        coEvery { mockFeatureFlagService.getAllFeatureFlags() } returns LiftrixResult.Success(fallbackFlags)
+        coEvery { mockFeatureFlagService.getAllFeatureFlags() } returns Result.success(fallbackFlags)
         
         // When
         viewModel.handleEvent(FeatureConfigurationEvent.RefreshRemoteConfig)
@@ -622,11 +622,11 @@ class FeatureConfigurationViewModelTest {
         val abTest1 = "onboarding_flow"
         val abTest2 = "chart_layout"
         
-        coEvery { mockFeatureFlagService.isFeatureEnabled(flag1) } returns LiftrixResult.Success(true)
-        coEvery { mockFeatureFlagService.isFeatureEnabled(flag2) } returns LiftrixResult.Success(false)
-        coEvery { mockFeatureFlagService.isFeatureEnabled(flag3) } returns LiftrixResult.Success(true)
-        coEvery { mockFeatureFlagService.getABTestVariant(abTest1) } returns LiftrixResult.Success("variant_b")
-        coEvery { mockFeatureFlagService.getABTestVariant(abTest2) } returns LiftrixResult.Success("grid_view")
+        coEvery { mockFeatureFlagService.isFeatureEnabled(flag1) } returns Result.success(true)
+        coEvery { mockFeatureFlagService.isFeatureEnabled(flag2) } returns Result.success(false)
+        coEvery { mockFeatureFlagService.isFeatureEnabled(flag3) } returns Result.success(true)
+        coEvery { mockFeatureFlagService.getABTestVariant(abTest1) } returns Result.success("variant_b")
+        coEvery { mockFeatureFlagService.getABTestVariant(abTest2) } returns Result.success("grid_view")
         
         // When - trigger concurrent requests
         viewModel.handleEvent(FeatureConfigurationEvent.CheckFeatureEnabled(flag1))

@@ -7,6 +7,8 @@ import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.common.ErrorHandlingResult
 import com.example.liftrix.domain.usecase.common.RetryPolicy
 import com.example.liftrix.domain.usecase.common.BackoffStrategy
+import com.example.liftrix.ui.error.ValidationError
+import com.example.liftrix.ui.error.ValidationSeverity
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -209,10 +211,149 @@ class ErrorHandlerImpl @Inject constructor(
     }
     
     /**
-     * Generates a user-friendly error message for display in the UI.
+     * Generates a user-friendly error message for display in the UI with enhanced messaging for new error types.
      */
     override fun mapToUserMessage(error: LiftrixError): String {
-        return ErrorMapper.mapToUserMessage(error)
+        // Enhanced user messaging with context-aware responses
+        return when (error) {
+            is LiftrixError.NetworkError -> {
+                when (error.httpStatusCode) {
+                    408 -> "Connection timed out. Please check your internet and try again."
+                    429 -> "Too many requests. Please wait a moment and try again."
+                    500, 502, 503, 504 -> "Server is temporarily unavailable. Your data is saved locally."
+                    401, 403 -> "Please sign in again to continue."
+                    404 -> "The requested information could not be found."
+                    else -> "Connection issue detected. Your changes are saved locally and will sync automatically."
+                }
+            }
+            is LiftrixError.DatabaseError -> {
+                when (error.operation) {
+                    "save_workout", "save_session" -> "Unable to save changes. Your data has been preserved and we'll try again automatically."
+                    "load_workout", "load_session" -> "Unable to load workout data. Please try refreshing or contact support if this persists."
+                    "backup_restore" -> "Data recovery in progress. Please wait while we restore your information."
+                    else -> "A data issue occurred. Your information is secure and we're working to resolve this."
+                }
+            }
+            is LiftrixError.ValidationError -> {
+                when {
+                    error.violations.size == 1 -> error.violations.first()
+                    error.violations.size > 1 -> "Please fix ${error.violations.size} issues: ${error.violations.joinToString(", ")}"
+                    else -> "Please check your input and try again."
+                }
+            }
+            is LiftrixError.AuthenticationError -> {
+                when (error.errorCode) {
+                    "TOKEN_EXPIRED" -> "Your session has expired. Please sign in again."
+                    "INVALID_CREDENTIALS" -> "Invalid credentials. Please check your login information."
+                    "NO_USER_ID" -> "Please sign in to continue using the app."
+                    else -> "Authentication required. Please sign in to access your workouts."
+                }
+            }
+            is LiftrixError.BusinessLogicError -> {
+                when (error.code) {
+                    "INVALID_OPERATION" -> "This action is not allowed at this time."
+                    "CONCURRENT_MODIFICATION" -> "Someone else modified this data. Please refresh and try again."
+                    "RATE_LIMIT_EXCEEDED" -> "Please slow down and try again in a moment."
+                    else -> "Unable to complete this action. Please try again later."
+                }
+            }
+            is LiftrixError.NotFoundError -> {
+                when (error.resourceType) {
+                    "workout" -> "This workout could not be found. It may have been deleted or moved."
+                    "workout_session" -> "This workout session could not be found."
+                    "backup" -> "No backup data available for recovery."
+                    else -> "The requested information could not be found."
+                }
+            }
+            else -> ErrorMapper.mapToUserMessage(error)
+        }
+    }
+    
+    /**
+     * Enhanced validation error handling for historical data editing
+     */
+    fun handleValidationErrors(errors: List<ValidationError>): LiftrixError.ValidationError {
+        val criticalErrors = errors.filter { it.severity == ValidationSeverity.CRITICAL }
+        val regularErrors = errors.filter { it.severity == ValidationSeverity.ERROR }
+        val warnings = errors.filter { it.severity == ValidationSeverity.WARNING }
+        
+        return when {
+            criticalErrors.isNotEmpty() -> {
+                LiftrixError.ValidationError(
+                    field = "critical_data_integrity",
+                    violations = criticalErrors.map { it.message },
+                    errorMessage = "Critical data integrity issues must be resolved",
+                    isRecoverable = false
+                )
+            }
+            regularErrors.isNotEmpty() -> {
+                LiftrixError.ValidationError(
+                    field = "input_validation",
+                    violations = regularErrors.map { it.message },
+                    errorMessage = "Please fix the following issues before continuing",
+                    isRecoverable = true
+                )
+            }
+            warnings.isNotEmpty() -> {
+                LiftrixError.ValidationError(
+                    field = "input_warnings",
+                    violations = warnings.map { "${it.message} (Warning)" },
+                    errorMessage = "Please review these warnings",
+                    isRecoverable = true
+                )
+            }
+            else -> {
+                LiftrixError.ValidationError(
+                    field = "unknown",
+                    violations = emptyList(),
+                    errorMessage = "Validation completed successfully"
+                )
+            }
+        }
+    }
+    
+    /**
+     * Handles data corruption scenarios with specific guidance
+     */
+    fun handleDataCorruptionError(entityType: String, entityId: String, hasBackup: Boolean): LiftrixError.DatabaseError {
+        val message = if (hasBackup) {
+            "Data corruption detected for $entityType. Backup restoration available."
+        } else {
+            "Data corruption detected for $entityType. No backup available - data may be lost."
+        }
+        
+        return LiftrixError.DatabaseError(
+            errorMessage = message,
+            operation = "corruption_detection",
+            table = entityType,
+            isRecoverable = hasBackup,
+            analyticsContext = mapOf(
+                "entity_type" to entityType,
+                "entity_id" to entityId,
+                "backup_available" to hasBackup.toString()
+            )
+        )
+    }
+    
+    /**
+     * Creates network failure error with offline guidance
+     */
+    fun createNetworkFailureError(operation: String, canWorkOffline: Boolean): LiftrixError.NetworkError {
+        val message = if (canWorkOffline) {
+            "Network unavailable. You can continue working - changes will sync when connection is restored."
+        } else {
+            "Network connection required for this operation. Please check your connection and try again."
+        }
+        
+        return LiftrixError.NetworkError(
+            errorMessage = message,
+            isRecoverable = true,
+            retryAfter = if (canWorkOffline) null else 5000L,
+            analyticsContext = mapOf(
+                "operation" to operation,
+                "offline_capable" to canWorkOffline.toString()
+            )
+        )
     }
     
     /**

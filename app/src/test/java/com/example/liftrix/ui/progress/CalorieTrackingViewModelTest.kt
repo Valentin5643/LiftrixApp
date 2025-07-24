@@ -184,7 +184,7 @@ class CalorieTrackingViewModelTest {
     @Test
     fun `given authenticated user, when LoadSummary event, then loads calorie summary successfully`() = runTest {
         // Given
-        coEvery { mockCalorieService.getCalorieSummary(testUserId) } returns LiftrixResult.Success(testCalorieSummary)
+        coEvery { mockCalorieService.getCalorieSummary(testUserId) } returns Result.success(testCalorieSummary)
         
         // When
         viewModel.handleEvent(CalorieTrackingEvent.LoadSummary)
@@ -209,7 +209,7 @@ class CalorieTrackingViewModelTest {
     fun `given service error, when LoadSummary event, then shows error state`() = runTest {
         // Given
         val testError = LiftrixError.CalculationError("MET calculation failed")
-        coEvery { mockCalorieService.getCalorieSummary(testUserId) } returns LiftrixResult.Error(testError)
+        coEvery { mockCalorieService.getCalorieSummary(testUserId) } returns Result.failure(testError)
         
         // When
         viewModel.handleEvent(CalorieTrackingEvent.LoadSummary)
@@ -234,7 +234,7 @@ class CalorieTrackingViewModelTest {
     fun `given authenticated user, when LoadDailyCalories event, then loads daily data successfully`() = runTest {
         // Given
         val testPeriod = TimeRange.lastWeek()
-        coEvery { mockCalorieService.getDailyCalories(testUserId, testPeriod) } returns LiftrixResult.Success(testDailyCalorieData)
+        coEvery { mockCalorieService.getDailyCalories(testUserId, testPeriod) } returns Result.success(testDailyCalorieData)
         
         // When
         viewModel.handleEvent(CalorieTrackingEvent.LoadDailyCalories(testPeriod))
@@ -258,7 +258,7 @@ class CalorieTrackingViewModelTest {
     fun `given MET data unavailable, when LoadDailyCalories event, then shows calculation error`() = runTest {
         // Given
         val testError = LiftrixError.CalculationError("MET data unavailable for exercise type")
-        coEvery { mockCalorieService.getDailyCalories(testUserId, any()) } returns LiftrixResult.Error(testError)
+        coEvery { mockCalorieService.getDailyCalories(testUserId, any()) } returns Result.failure(testError)
         
         // When
         viewModel.handleEvent(CalorieTrackingEvent.LoadDailyCalories(testTimeRange))
@@ -282,7 +282,7 @@ class CalorieTrackingViewModelTest {
     @Test
     fun `given authenticated user, when LoadWeeklyTrend event, then loads trend data successfully`() = runTest {
         // Given
-        coEvery { mockCalorieService.getWeeklyTrend(testUserId) } returns LiftrixResult.Success(testWeeklyCalorieTrend)
+        coEvery { mockCalorieService.getWeeklyTrend(testUserId) } returns Result.success(testWeeklyCalorieTrend)
         
         // When
         viewModel.handleEvent(CalorieTrackingEvent.LoadWeeklyTrend)
@@ -309,7 +309,7 @@ class CalorieTrackingViewModelTest {
     fun `given authenticated user, when TimePeriodChanged event, then updates time range and reloads relevant data`() = runTest {
         // Given
         val newTimeRange = TimeRange.lastQuarter()
-        coEvery { mockCalorieService.getDailyCalories(testUserId, newTimeRange) } returns LiftrixResult.Success(testDailyCalorieData)
+        coEvery { mockCalorieService.getDailyCalories(testUserId, newTimeRange) } returns Result.success(testDailyCalorieData)
         
         // When
         viewModel.handleEvent(CalorieTrackingEvent.TimePeriodChanged(newTimeRange))
@@ -364,7 +364,7 @@ class CalorieTrackingViewModelTest {
     fun `given workout data, when CalculateWorkoutCalories event, then calculates and stores calories`() = runTest {
         // Given
         val expectedCalories = 485
-        coEvery { mockCalorieService.calculateWorkoutCalories(testWorkout) } returns LiftrixResult.Success(expectedCalories)
+        coEvery { mockCalorieService.calculateWorkoutCalories(testWorkout) } returns Result.success(expectedCalories)
         
         // When
         viewModel.handleEvent(CalorieTrackingEvent.CalculateWorkoutCalories(testWorkout))
@@ -387,7 +387,7 @@ class CalorieTrackingViewModelTest {
     fun `given workout with unknown exercises, when CalculateWorkoutCalories event, then shows calculation error`() = runTest {
         // Given
         val testError = LiftrixError.CalculationError("Unknown exercise types, cannot calculate MET values")
-        coEvery { mockCalorieService.calculateWorkoutCalories(testWorkout) } returns LiftrixResult.Error(testError)
+        coEvery { mockCalorieService.calculateWorkoutCalories(testWorkout) } returns Result.failure(testError)
         
         // When
         viewModel.handleEvent(CalorieTrackingEvent.CalculateWorkoutCalories(testWorkout))
@@ -410,9 +410,9 @@ class CalorieTrackingViewModelTest {
     @Test
     fun `given authenticated user, when RefreshAllData event, then refreshes all calorie data types`() = runTest {
         // Given
-        coEvery { mockCalorieService.getCalorieSummary(testUserId) } returns LiftrixResult.Success(testCalorieSummary)
-        coEvery { mockCalorieService.getDailyCalories(testUserId, testTimeRange) } returns LiftrixResult.Success(testDailyCalorieData)
-        coEvery { mockCalorieService.getWeeklyTrend(testUserId) } returns LiftrixResult.Success(testWeeklyCalorieTrend)
+        coEvery { mockCalorieService.getCalorieSummary(testUserId) } returns Result.success(testCalorieSummary)
+        coEvery { mockCalorieService.getDailyCalories(testUserId, testTimeRange) } returns Result.success(testDailyCalorieData)
+        coEvery { mockCalorieService.getWeeklyTrend(testUserId) } returns Result.success(testWeeklyCalorieTrend)
         
         // When
         viewModel.handleEvent(CalorieTrackingEvent.RefreshAllData)
@@ -440,8 +440,8 @@ class CalorieTrackingViewModelTest {
     @Test
     fun `given authenticated user, when LoadInitialData event, then loads summary and basic data`() = runTest {
         // Given
-        coEvery { mockCalorieService.getCalorieSummary(testUserId) } returns LiftrixResult.Success(testCalorieSummary)
-        coEvery { mockCalorieService.getDailyCalories(testUserId, testTimeRange) } returns LiftrixResult.Success(testDailyCalorieData)
+        coEvery { mockCalorieService.getCalorieSummary(testUserId) } returns Result.success(testCalorieSummary)
+        coEvery { mockCalorieService.getDailyCalories(testUserId, testTimeRange) } returns Result.success(testDailyCalorieData)
         
         // When
         viewModel.handleEvent(CalorieTrackingEvent.LoadInitialData)
@@ -468,14 +468,14 @@ class CalorieTrackingViewModelTest {
     fun `given failed calorie operations, when RetryFailedOperations event, then retries only failed operations`() = runTest {
         // Given - simulate initial failures
         val summaryError = LiftrixError.NetworkError("Network timeout")
-        coEvery { mockCalorieService.getCalorieSummary(testUserId) } returns LiftrixResult.Error(summaryError)
-        coEvery { mockCalorieService.getDailyCalories(testUserId, testTimeRange) } returns LiftrixResult.Success(testDailyCalorieData)
+        coEvery { mockCalorieService.getCalorieSummary(testUserId) } returns Result.failure(summaryError)
+        coEvery { mockCalorieService.getDailyCalories(testUserId, testTimeRange) } returns Result.success(testDailyCalorieData)
         
         viewModel.handleEvent(CalorieTrackingEvent.LoadInitialData)
         testDispatcher.scheduler.advanceUntilIdle()
         
         // Update service to succeed on retry
-        coEvery { mockCalorieService.getCalorieSummary(testUserId) } returns LiftrixResult.Success(testCalorieSummary)
+        coEvery { mockCalorieService.getCalorieSummary(testUserId) } returns Result.success(testCalorieSummary)
         
         // When
         viewModel.handleEvent(CalorieTrackingEvent.RetryFailedOperations)
@@ -500,8 +500,8 @@ class CalorieTrackingViewModelTest {
     @Test
     fun `given cached calorie data, when ClearCachedData event, then resets all data to NotAsked`() = runTest {
         // Given - load initial data
-        coEvery { mockCalorieService.getCalorieSummary(testUserId) } returns LiftrixResult.Success(testCalorieSummary)
-        coEvery { mockCalorieService.getDailyCalories(testUserId, testTimeRange) } returns LiftrixResult.Success(testDailyCalorieData)
+        coEvery { mockCalorieService.getCalorieSummary(testUserId) } returns Result.success(testCalorieSummary)
+        coEvery { mockCalorieService.getDailyCalories(testUserId, testTimeRange) } returns Result.success(testDailyCalorieData)
         
         viewModel.handleEvent(CalorieTrackingEvent.LoadInitialData)
         testDispatcher.scheduler.advanceUntilIdle()
@@ -539,7 +539,7 @@ class CalorieTrackingViewModelTest {
         }
         
         val expectedCalories = 680 // Higher due to mixed exercise types
-        coEvery { mockCalorieService.calculateWorkoutCalories(complexWorkout) } returns LiftrixResult.Success(expectedCalories)
+        coEvery { mockCalorieService.calculateWorkoutCalories(complexWorkout) } returns Result.success(expectedCalories)
         
         // When
         viewModel.handleEvent(CalorieTrackingEvent.CalculateWorkoutCalories(complexWorkout))
@@ -594,8 +594,8 @@ class CalorieTrackingViewModelTest {
         val userFlow = MutableSharedFlow<com.example.liftrix.domain.model.User?>()
         every { mockAuthRepository.currentUser } returns userFlow
         
-        coEvery { mockCalorieService.getCalorieSummary(testUserId) } returns LiftrixResult.Success(testCalorieSummary)
-        coEvery { mockCalorieService.getDailyCalories(testUserId, any()) } returns LiftrixResult.Success(testDailyCalorieData)
+        coEvery { mockCalorieService.getCalorieSummary(testUserId) } returns Result.success(testCalorieSummary)
+        coEvery { mockCalorieService.getDailyCalories(testUserId, any()) } returns Result.success(testDailyCalorieData)
         
         val authChangeViewModel = CalorieTrackingViewModel(
             calorieService = mockCalorieService,
@@ -650,9 +650,9 @@ class CalorieTrackingViewModelTest {
         val weekRange = TimeRange.lastWeek()
         val monthRange = TimeRange.lastMonth()
         
-        coEvery { mockCalorieService.getCalorieSummary(testUserId) } returns LiftrixResult.Success(testCalorieSummary)
-        coEvery { mockCalorieService.getDailyCalories(testUserId, weekRange) } returns LiftrixResult.Success(testDailyCalorieData)
-        coEvery { mockCalorieService.getDailyCalories(testUserId, monthRange) } returns LiftrixResult.Success(testDailyCalorieData)
+        coEvery { mockCalorieService.getCalorieSummary(testUserId) } returns Result.success(testCalorieSummary)
+        coEvery { mockCalorieService.getDailyCalories(testUserId, weekRange) } returns Result.success(testDailyCalorieData)
+        coEvery { mockCalorieService.getDailyCalories(testUserId, monthRange) } returns Result.success(testDailyCalorieData)
         
         // When - load data for different time ranges
         viewModel.handleEvent(CalorieTrackingEvent.LoadSummary)
@@ -686,9 +686,9 @@ class CalorieTrackingViewModelTest {
         val workout2 = mockk<com.example.liftrix.domain.model.Workout> { every { id } returns "workout-2" }
         val workout3 = mockk<com.example.liftrix.domain.model.Workout> { every { id } returns "workout-3" }
         
-        coEvery { mockCalorieService.calculateWorkoutCalories(workout1) } returns LiftrixResult.Success(400)
-        coEvery { mockCalorieService.calculateWorkoutCalories(workout2) } returns LiftrixResult.Success(550)
-        coEvery { mockCalorieService.calculateWorkoutCalories(workout3) } returns LiftrixResult.Success(320)
+        coEvery { mockCalorieService.calculateWorkoutCalories(workout1) } returns Result.success(400)
+        coEvery { mockCalorieService.calculateWorkoutCalories(workout2) } returns Result.success(550)
+        coEvery { mockCalorieService.calculateWorkoutCalories(workout3) } returns Result.success(320)
         
         // When - trigger concurrent calculations
         viewModel.handleEvent(CalorieTrackingEvent.CalculateWorkoutCalories(workout1))

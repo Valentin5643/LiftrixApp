@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.example.liftrix.ui.theme.LiftrixAnimations
 import com.example.liftrix.ui.theme.LiftrixColors
 import com.example.liftrix.ui.theme.LiftrixTheme
-import com.example.liftrix.ui.theme.LiftrixTeal
+// Removed LiftrixColors.PersianGreen import - using PersianGreen directly
 import kotlinx.coroutines.delay
 
 /**

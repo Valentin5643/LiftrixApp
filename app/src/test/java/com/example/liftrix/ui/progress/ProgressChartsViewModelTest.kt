@@ -144,9 +144,9 @@ class ProgressChartsViewModelTest {
     @Test
     fun `given authenticated user, when LoadInitialData event, then loads all chart data`() = runTest {
         // Given
-        coEvery { mockProgressDataService.getVolumeData(testUserId, any()) } returns LiftrixResult.Success(testVolumeData)
-        coEvery { mockProgressDataService.getDurationData(testUserId, any()) } returns LiftrixResult.Success(testDurationData)
-        coEvery { mockProgressDataService.getFrequencyData(testUserId, any()) } returns LiftrixResult.Success(testFrequencyData)
+        coEvery { mockProgressDataService.getVolumeData(testUserId, any()) } returns Result.success(testVolumeData)
+        coEvery { mockProgressDataService.getDurationData(testUserId, any()) } returns Result.success(testDurationData)
+        coEvery { mockProgressDataService.getFrequencyData(testUserId, any()) } returns Result.success(testFrequencyData)
         
         // When
         viewModel.handleEvent(ProgressChartsEvent.LoadInitialData)
@@ -175,9 +175,9 @@ class ProgressChartsViewModelTest {
     fun `given volume data service error, when LoadInitialData event, then volume chart shows error state`() = runTest {
         // Given
         val testError = LiftrixError.NetworkError("Network error")
-        coEvery { mockProgressDataService.getVolumeData(testUserId, any()) } returns LiftrixResult.Error(testError)
-        coEvery { mockProgressDataService.getDurationData(testUserId, any()) } returns LiftrixResult.Success(testDurationData)
-        coEvery { mockProgressDataService.getFrequencyData(testUserId, any()) } returns LiftrixResult.Success(testFrequencyData)
+        coEvery { mockProgressDataService.getVolumeData(testUserId, any()) } returns Result.failure(testError)
+        coEvery { mockProgressDataService.getDurationData(testUserId, any()) } returns Result.success(testDurationData)
+        coEvery { mockProgressDataService.getFrequencyData(testUserId, any()) } returns Result.success(testFrequencyData)
         
         // When
         viewModel.handleEvent(ProgressChartsEvent.LoadInitialData)
@@ -204,9 +204,9 @@ class ProgressChartsViewModelTest {
     fun `given authenticated user, when TimePeriodChanged event, then reloads data with new time range`() = runTest {
         // Given
         val newTimeRange = TimeRange.lastWeek()
-        coEvery { mockProgressDataService.getVolumeData(testUserId, newTimeRange) } returns LiftrixResult.Success(testVolumeData)
-        coEvery { mockProgressDataService.getDurationData(testUserId, newTimeRange) } returns LiftrixResult.Success(testDurationData)
-        coEvery { mockProgressDataService.getFrequencyData(testUserId, newTimeRange) } returns LiftrixResult.Success(testFrequencyData)
+        coEvery { mockProgressDataService.getVolumeData(testUserId, newTimeRange) } returns Result.success(testVolumeData)
+        coEvery { mockProgressDataService.getDurationData(testUserId, newTimeRange) } returns Result.success(testDurationData)
+        coEvery { mockProgressDataService.getFrequencyData(testUserId, newTimeRange) } returns Result.success(testFrequencyData)
         
         // When
         viewModel.handleEvent(ProgressChartsEvent.TimePeriodChanged(newTimeRange))
@@ -268,7 +268,7 @@ class ProgressChartsViewModelTest {
                 every { volume } returns 1500.0
             }
         )
-        coEvery { mockProgressDataService.getVolumeData(testUserId, any()) } returns LiftrixResult.Success(refreshedVolumeData)
+        coEvery { mockProgressDataService.getVolumeData(testUserId, any()) } returns Result.success(refreshedVolumeData)
         
         // When
         viewModel.handleEvent(ProgressChartsEvent.RefreshChart(ChartType.LINE)) // Assuming LINE maps to Volume
@@ -298,7 +298,7 @@ class ProgressChartsViewModelTest {
                 every { duration } returns 5400 // 90 minutes
             }
         )
-        coEvery { mockProgressDataService.getDurationData(testUserId, any()) } returns LiftrixResult.Success(refreshedDurationData)
+        coEvery { mockProgressDataService.getDurationData(testUserId, any()) } returns Result.success(refreshedDurationData)
         
         // When
         viewModel.handleEvent(ProgressChartsEvent.RefreshChart(ChartType.BAR)) // Assuming BAR maps to Duration
@@ -328,7 +328,7 @@ class ProgressChartsViewModelTest {
                 every { frequency } returns 7
             }
         )
-        coEvery { mockProgressDataService.getFrequencyData(testUserId, any()) } returns LiftrixResult.Success(refreshedFrequencyData)
+        coEvery { mockProgressDataService.getFrequencyData(testUserId, any()) } returns Result.success(refreshedFrequencyData)
         
         // When
         viewModel.handleEvent(ProgressChartsEvent.RefreshChart(ChartType.RADIAL)) // Assuming RADIAL maps to Frequency
@@ -354,9 +354,9 @@ class ProgressChartsViewModelTest {
     @Test
     fun `given authenticated user, when RefreshAll event, then refreshes all chart data`() = runTest {
         // Given
-        coEvery { mockProgressDataService.getVolumeData(testUserId, any()) } returns LiftrixResult.Success(testVolumeData)
-        coEvery { mockProgressDataService.getDurationData(testUserId, any()) } returns LiftrixResult.Success(testDurationData)
-        coEvery { mockProgressDataService.getFrequencyData(testUserId, any()) } returns LiftrixResult.Success(testFrequencyData)
+        coEvery { mockProgressDataService.getVolumeData(testUserId, any()) } returns Result.success(testVolumeData)
+        coEvery { mockProgressDataService.getDurationData(testUserId, any()) } returns Result.success(testDurationData)
+        coEvery { mockProgressDataService.getFrequencyData(testUserId, any()) } returns Result.success(testFrequencyData)
         
         // When
         viewModel.handleEvent(ProgressChartsEvent.RefreshAll)
@@ -396,7 +396,7 @@ class ProgressChartsViewModelTest {
             }
             
             // Complete the deferred to allow test to finish
-            volumeDeferred.complete(LiftrixResult.Success(testVolumeData))
+            volumeDeferred.complete(Result.success(testVolumeData))
         }
     }
 
@@ -428,9 +428,9 @@ class ProgressChartsViewModelTest {
         // Given
         val volumeError = LiftrixError.NetworkError("Volume network error")
         val durationError = LiftrixError.DatabaseError("Duration database error")
-        coEvery { mockProgressDataService.getVolumeData(testUserId, any()) } returns LiftrixResult.Error(volumeError)
-        coEvery { mockProgressDataService.getDurationData(testUserId, any()) } returns LiftrixResult.Error(durationError)
-        coEvery { mockProgressDataService.getFrequencyData(testUserId, any()) } returns LiftrixResult.Success(testFrequencyData)
+        coEvery { mockProgressDataService.getVolumeData(testUserId, any()) } returns Result.failure(volumeError)
+        coEvery { mockProgressDataService.getDurationData(testUserId, any()) } returns Result.failure(durationError)
+        coEvery { mockProgressDataService.getFrequencyData(testUserId, any()) } returns Result.success(testFrequencyData)
         
         // When
         viewModel.handleEvent(ProgressChartsEvent.LoadInitialData)
@@ -487,9 +487,9 @@ class ProgressChartsViewModelTest {
         val userFlow = MutableSharedFlow<com.example.liftrix.domain.model.User?>()
         every { mockAuthRepository.currentUser } returns userFlow
         
-        coEvery { mockProgressDataService.getVolumeData(testUserId, any()) } returns LiftrixResult.Success(testVolumeData)
-        coEvery { mockProgressDataService.getDurationData(testUserId, any()) } returns LiftrixResult.Success(testDurationData)
-        coEvery { mockProgressDataService.getFrequencyData(testUserId, any()) } returns LiftrixResult.Success(testFrequencyData)
+        coEvery { mockProgressDataService.getVolumeData(testUserId, any()) } returns Result.success(testVolumeData)
+        coEvery { mockProgressDataService.getDurationData(testUserId, any()) } returns Result.success(testDurationData)
+        coEvery { mockProgressDataService.getFrequencyData(testUserId, any()) } returns Result.success(testFrequencyData)
         
         val authChangeViewModel = ProgressChartsViewModel(
             progressDataService = mockProgressDataService,

@@ -114,7 +114,7 @@ fun FrequencyMetricCard(
             frequencyStats.completionRate >= 1f -> LiftrixColors.Primary
             frequencyStats.completionRate >= 0.8f -> LiftrixColors.Primary.copy(alpha = 0.8f)
             frequencyStats.completionRate >= 0.5f -> LiftrixColors.Secondary
-            else -> LiftrixColors.Accent.copy(alpha = 0.7f)
+            else -> LiftrixColors.TiffanyBlue.copy(alpha = 0.7f)
         },
         animationSpec = tween(durationMillis = 800),
         label = "frequency_color"
@@ -636,21 +636,21 @@ private fun getFrequencyInsights(stats: FrequencyStats): List<Pair<String, Color
             stats.completionRate >= 1f -> add("Excellent consistency!" to LiftrixColors.Primary)
             stats.completionRate >= 0.8f -> add("Great progress" to LiftrixColors.Primary)
             stats.completionRate >= 0.5f -> add("Building momentum" to LiftrixColors.Secondary)
-            else -> add("Stay consistent" to LiftrixColors.Accent)
+            else -> add("Stay consistent" to LiftrixColors.TiffanyBlue)
         }
         
         // Streak insight
         when {
             stats.currentStreak >= 7 -> add("Weekly streak!" to LiftrixColors.Primary)
             stats.currentStreak >= 3 -> add("Good rhythm" to LiftrixColors.Secondary)
-            stats.currentStreak == 0 -> add("Fresh start" to LiftrixColors.Accent)
+            stats.currentStreak == 0 -> add("Fresh start" to LiftrixColors.TiffanyBlue)
         }
         
         // Weekly average insight
         when {
             stats.weeklyAverage >= 5f -> add("High frequency" to LiftrixColors.Primary)
             stats.weeklyAverage >= 3f -> add("Balanced routine" to LiftrixColors.Secondary)
-            stats.weeklyAverage >= 1f -> add("Building habit" to LiftrixColors.Accent)
+            stats.weeklyAverage >= 1f -> add("Building habit" to LiftrixColors.TiffanyBlue)
         }
     }
 }

@@ -247,22 +247,22 @@ class MemoryUsageTest {
     
     private fun createMockProgressDataService(): ProgressDataService {
         return mockk<ProgressDataService>().apply {
-            coEvery { getVolumeData(any(), any()) } returns LiftrixResult.Success(emptyList())
-            coEvery { getProgressSummary(any()) } returns LiftrixResult.Success(
+            coEvery { getVolumeData(any(), any()) } returns Result.success(emptyList())
+            coEvery { getProgressSummary(any()) } returns Result.success(
                 mockk(relaxed = true)
             )
-            coEvery { getDurationData(any(), any()) } returns LiftrixResult.Success(emptyList())
-            coEvery { getFrequencyData(any(), any()) } returns LiftrixResult.Success(emptyList())
+            coEvery { getDurationData(any(), any()) } returns Result.success(emptyList())
+            coEvery { getFrequencyData(any(), any()) } returns Result.success(emptyList())
         }
     }
     
     private fun createMockAnalyticsService(): AnalyticsService {
         return mockk<AnalyticsService>().apply {
-            coEvery { getWidgetData(any(), any()) } returns LiftrixResult.Success(
+            coEvery { getWidgetData(any(), any()) } returns Result.success(
                 mockk(relaxed = true)
             )
-            coEvery { getAllWidgetData(any()) } returns LiftrixResult.Success(emptyMap())
-            coEvery { refreshWidgetData(any(), any()) } returns LiftrixResult.Success(Unit)
+            coEvery { getAllWidgetData(any()) } returns Result.success(emptyMap())
+            coEvery { refreshWidgetData(any(), any()) } returns Result.success(Unit)
         }
     }
     

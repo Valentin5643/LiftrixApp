@@ -114,4 +114,39 @@ interface SettingsRepository {
      * @return A Result indicating success or failure
      */
     suspend fun syncSettings(userId: String): Result<Unit>
+    
+    /**
+     * Updates the terminology preference for terminology migration.
+     * 
+     * @param userId The ID of the user whose preference to update
+     * @param preference The terminology preference (NEW or LEGACY)
+     * @return A Result indicating success or failure
+     */
+    suspend fun updateTerminologyPreference(userId: String, preference: String): Result<Unit>
+    
+    /**
+     * Updates whether the user has seen the migration explanation.
+     * 
+     * @param userId The ID of the user whose status to update
+     * @param seen Whether the explanation has been shown
+     * @return A Result indicating success or failure
+     */
+    suspend fun updateMigrationExplanationSeen(userId: String, seen: Boolean): Result<Unit>
+    
+    /**
+     * Updates whether the user has completed the terminology migration.
+     * 
+     * @param userId The ID of the user whose status to update
+     * @param completed Whether the migration is complete
+     * @return A Result indicating success or failure
+     */
+    suspend fun updateMigrationCompleted(userId: String, completed: Boolean): Result<Unit>
+    
+    /**
+     * Retrieves user settings synchronously (for migration service usage).
+     * 
+     * @param userId The ID of the user whose settings to retrieve
+     * @return UserSettings or null if no settings exist
+     */
+    suspend fun getUserSettingsSync(userId: String): UserSettings?
 }

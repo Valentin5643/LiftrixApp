@@ -28,6 +28,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import com.example.liftrix.domain.model.WorkoutId
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,6 +83,7 @@ fun UnifiedNavigationContainer(
     navController: NavHostController = rememberNavController(),
     viewModel: UnifiedNavigationViewModel = hiltViewModel()
 ) {
+    // Session management handled by viewModel
     val currentSession by viewModel.currentSession.collectAsState()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -107,7 +109,8 @@ fun UnifiedNavigationContainer(
             ConditionalWorkoutFab(
                 onFabClick = {
                     showWorkoutCreationModal = true
-                }
+                },
+                currentDestination = currentDestination
             )
         }
     ) { paddingValues ->
@@ -148,7 +151,7 @@ fun UnifiedNavigationContainer(
                         onNavigateToActiveWorkout = { templateId ->
                             navController.navigateToActiveWorkout(templateId)
                         },
-                        onNavigateToTemplateCreation = {
+                        onNavigateToWorkoutCreation = {
                             navController.navigateToTemplateCreation()
                         }
                     )
@@ -320,7 +323,7 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.Onboarding> {
                     com.example.liftrix.ui.onboarding.navigation.OnboardingNavigation(
-                        userId = "current_user", // TODO: Get actual user ID from auth state
+                        userId = "", // TODO: Get from authenticated user
                         onComplete = {
                             navController.clearBackStackAndNavigate(LiftrixRoute.Home)
                         },
@@ -414,6 +417,35 @@ fun UnifiedNavigationContainer(
                             }
                         }
                     }
+                }
+                
+                // Workout Editing Routes
+                composable<LiftrixRoute.EditWorkout> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.EditWorkout>()
+                    com.example.liftrix.ui.workout.edit.EditWorkoutScreen(
+                        workoutId = WorkoutId(route.workoutId),
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.EditSession> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.EditSession>()
+                    com.example.liftrix.ui.workout.edit.EditSessionScreen(
+                        sessionId = WorkoutId(route.sessionId),
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.CreateWorkout> {
+                    com.example.liftrix.ui.workout.create.CreateWorkoutScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
                 }
             }
             
@@ -682,23 +714,18 @@ class UnifiedNavigationViewModel @Inject constructor(
      */
     fun addExerciseToCurrentSession(exerciseLibrary: com.example.liftrix.domain.model.ExerciseLibrary) {
         viewModelScope.launch {
-            try {
-                // Convert ExerciseLibrary to SessionExercise
-                val sessionExercise = com.example.liftrix.domain.model.SessionExercise(
-                    exerciseId = com.example.liftrix.domain.model.ExerciseId(exerciseLibrary.id),
-                    name = exerciseLibrary.name,
-                    category = exerciseLibrary.primaryMuscleGroup,
-                    primaryMuscle = exerciseLibrary.primaryMuscleGroup,
-                    equipment = exerciseLibrary.equipment,
-                    secondaryMuscles = exerciseLibrary.secondaryMuscleGroups.toSet(),
-                    sets = emptyList(),
-                    orderIndex = 0 // Will be set by session manager
-                )
-                sessionManager.addExerciseToSession(sessionExercise)
-                timber.log.Timber.i("Added exercise to current session: ${exerciseLibrary.name}")
-            } catch (e: Exception) {
-                timber.log.Timber.e(e, "Error adding exercise to session: ${exerciseLibrary.name}")
-            }
+            // Use SessionExercise.createBlank() to ensure proper validation
+            val sessionExercise = com.example.liftrix.domain.model.SessionExercise.createBlank(
+                exerciseId = com.example.liftrix.domain.model.ExerciseId(exerciseLibrary.id),
+                name = exerciseLibrary.name,
+                category = exerciseLibrary.primaryMuscleGroup,
+                primaryMuscle = exerciseLibrary.primaryMuscleGroup,
+                equipment = exerciseLibrary.equipment,
+                orderIndex = 0, // Will be set by session manager
+                initialSets = 1 // Create one default set
+            )
+            sessionManager.addExerciseToSession(sessionExercise)
+            timber.log.Timber.i("Added exercise to current session: ${exerciseLibrary.name}")
         }
     }
 }

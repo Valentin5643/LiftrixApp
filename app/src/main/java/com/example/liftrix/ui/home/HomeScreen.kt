@@ -7,8 +7,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -22,10 +25,16 @@ import com.example.liftrix.domain.model.*
 import com.example.liftrix.ui.home.components.*
 import com.example.liftrix.ui.common.FeedItemShimmer
 import com.example.liftrix.ui.common.ContextualColorOverlay
+import com.example.liftrix.ui.common.state.HomeScreenData
+import com.example.liftrix.ui.common.state.UiState
+import com.example.liftrix.ui.common.state.FeedState
+import com.example.liftrix.ui.common.state.RecommendationsState
 import com.example.liftrix.ui.common.ColorContext
 import com.example.liftrix.ui.common.calculateWorkoutIntensity
-import com.example.liftrix.ui.components.cards.LiftrixCard
-import com.example.liftrix.ui.components.cards.ElevatedLiftrixCard
+import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
+import com.example.liftrix.ui.workout.components.PrimaryActionButton
+import com.example.liftrix.ui.workout.components.SecondaryActionButton
+import com.example.liftrix.ui.workout.components.TertiaryActionButton
 import com.example.liftrix.ui.components.layouts.GridSystem
 import com.example.liftrix.ui.theme.LiftrixTheme
 import eu.bambooapps.material3.pullrefresh.PullRefreshIndicator
@@ -59,55 +68,70 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     
-    val pullRefreshState = rememberPullRefreshState(
-        refreshing = uiState.isRefreshing,
-        onRefresh = { viewModel.onEvent(HomeEvent.RefreshData) }
-    )
-    
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .pullRefresh(pullRefreshState)
-    ) {
-        when {
-            uiState.shouldShowError -> {
-                ErrorState(
-                    errorMessage = uiState.errorMessage ?: "Something went wrong",
-                    onRetry = { viewModel.onEvent(HomeEvent.RefreshData) },
-                    onDismiss = { viewModel.onEvent(HomeEvent.ErrorDismissed) },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+    when (uiState) {
+        UiState.Loading -> {
+            HomeLoadingScreen(modifier = modifier)
+        }
+        is UiState.Success -> {
+            val successState = uiState as UiState.Success<HomeScreenData>
+            val screenData = successState.data
+            val pullRefreshState = rememberPullRefreshState(
+                refreshing = screenData.isRefreshing,
+                onRefresh = { viewModel.handleEvent(HomeEvent.RefreshData) }
+            )
             
-            uiState.shouldShowEmptyState -> {
-                EmptyState(
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-            
-            else -> {
-                // Enhanced home content with modern card-based layout
-                EnhancedHomeContent(
-                    workoutFeedState = uiState.workoutFeedState,
-                    recommendationsState = uiState.recommendationsState,
-                    workoutStats = uiState.workoutStats,
-                    showEndOfFeedMessage = uiState.showEndOfFeedMessage,
-                    onNavigateToWorkout = onNavigateToWorkout,
-                    onNavigateToFriends = onNavigateToFriends,
-                    onNavigateToMyWorkouts = onNavigateToMyWorkouts,
-                    onEvent = viewModel::onEvent,
-                    modifier = Modifier.fillMaxSize()
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .pullRefresh(pullRefreshState)
+            ) {
+                when {
+                    screenData.shouldShowEmptyState -> {
+                        EmptyState(
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    
+                    else -> {
+                        // Enhanced home content with modern card-based layout
+                        EnhancedHomeContent(
+                            screenData = screenData,
+                            onNavigateToWorkout = onNavigateToWorkout,
+                            onNavigateToFriends = onNavigateToFriends,
+                            onNavigateToMyWorkouts = onNavigateToMyWorkouts,
+                            onEvent = { event -> viewModel.handleEvent(event) },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+                
+                PullRefreshIndicator(
+                    refreshing = screenData.isRefreshing,
+                    state = pullRefreshState,
+                    modifier = Modifier.align(Alignment.TopCenter)
                 )
             }
         }
-        
-        PullRefreshIndicator(
-            refreshing = uiState.isRefreshing,
-            state = pullRefreshState,
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
+        is UiState.Error -> {
+            val errorState = uiState as UiState.Error<HomeScreenData>
+            HomeErrorScreen(
+                error = errorState.error,
+                onRetry = { viewModel.handleEvent(HomeEvent.RefreshData) },
+                modifier = modifier
+            )
+        }
+        is UiState.Empty -> {
+            HomeEmptyScreen(
+                onCreateWorkout = onNavigateToMyWorkouts,
+                modifier = modifier
+            )
+        }
+        else -> {
+            // Fallback for unknown states
+            HomeLoadingScreen(modifier = modifier)
+        }
     }
 }
 
@@ -116,10 +140,7 @@ fun HomeScreen(
  */
 @Composable
 private fun EnhancedHomeContent(
-    workoutFeedState: FeedState,
-    recommendationsState: RecommendationsState,
-    workoutStats: WorkoutStats?,
-    showEndOfFeedMessage: Boolean,
+    screenData: HomeScreenData,
     onNavigateToWorkout: (String) -> Unit,
     onNavigateToFriends: () -> Unit,
     onNavigateToMyWorkouts: () -> Unit,
@@ -137,22 +158,15 @@ private fun EnhancedHomeContent(
     ) {
         // Enhanced Header Section
         item {
-            ElevatedLiftrixCard(
-                modifier = Modifier.padding(horizontal = GridSystem.spacing3),
-                contentPadding = PaddingValues(GridSystem.spacing4)
+            UnifiedWorkoutCard(
+                title = "Welcome to Liftrix",
+                subtitle = "Track your fitness journey",
+                modifier = Modifier.padding(horizontal = GridSystem.spacing3)
             ) {
                 EnhancedHomeHeader(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-        }
-        
-        // Personal Stats Dashboard
-        item {
-            PersonalStatsCard(
-                workoutStats = workoutStats,
-                modifier = Modifier.padding(horizontal = GridSystem.spacing3)
-            )
         }
         
         // Discovery Section Header
@@ -167,7 +181,7 @@ private fun EnhancedHomeContent(
         // Enhanced Discovery Carousel Section
         item {
             DiscoveryCarouselSection(
-                recommendationsState = recommendationsState,
+                recommendationsState = screenData.recommendationsState,
                 onLoadMore = { onEvent(HomeEvent.LoadMoreRecommendations) },
                 onFollowUser = { userId -> onEvent(HomeEvent.FollowUser(userId)) },
                 onViewAllFriends = onNavigateToFriends,
@@ -189,7 +203,7 @@ private fun EnhancedHomeContent(
         }
         
         // Enhanced Workout Feed Items
-        when (workoutFeedState) {
+        when (screenData.workoutFeedState) {
             is FeedState.Loading -> {
                 items(5) {
                     FeedItemShimmer(
@@ -199,9 +213,9 @@ private fun EnhancedHomeContent(
             }
             
             is FeedState.Success -> {
-                if (workoutFeedState.hasData) {
+                if (screenData.workoutFeedState.hasData) {
                     items(
-                        items = workoutFeedState.workouts,
+                        items = screenData.workoutFeedState.workouts,
                         key = { feedWorkout -> feedWorkout.workout.id.value }
                     ) { feedWorkout ->
                         val workoutIntensity = calculateWorkoutIntensityFromFeedWorkout(feedWorkout)
@@ -224,7 +238,7 @@ private fun EnhancedHomeContent(
                     }
                     
                     // Loading more items
-                    if (workoutFeedState.isLoadingMore) {
+                    if (screenData.workoutFeedState.isLoadingMore) {
                         items(3) {
                             FeedItemShimmer(
                                 modifier = Modifier.padding(horizontal = GridSystem.spacing3)
@@ -233,7 +247,7 @@ private fun EnhancedHomeContent(
                     }
                     
                     // End of feed message
-                    if (showEndOfFeedMessage) {
+                    if (screenData.showEndOfFeedMessage) {
                         item {
                             FeedEndMessage(
                                 modifier = Modifier.padding(horizontal = GridSystem.spacing3)
@@ -242,7 +256,7 @@ private fun EnhancedHomeContent(
                     }
                     
                     // Load more trigger (invisible item for pagination)
-                    if (workoutFeedState.hasMore && !workoutFeedState.isLoadingMore) {
+                    if (screenData.workoutFeedState.hasMore && !screenData.workoutFeedState.isLoadingMore) {
                         item {
                             LaunchedEffect(Unit) {
                                 onEvent(HomeEvent.LoadMoreWorkouts)
@@ -261,7 +275,7 @@ private fun EnhancedHomeContent(
             is FeedState.Error -> {
                 item {
                     WorkoutFeedErrorState(
-                        message = workoutFeedState.message,
+                        message = screenData.workoutFeedState.message,
                         onRetry = { onEvent(HomeEvent.LoadMoreWorkouts) },
                         onDismiss = { onEvent(HomeEvent.FeedErrorDismissed) },
                         modifier = Modifier.padding(horizontal = GridSystem.spacing3)
@@ -333,6 +347,13 @@ private fun SectionHeader(
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Medium
                 )
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.Default.ArrowForward,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
             }
         }
     }
@@ -399,42 +420,19 @@ private fun EmptyDiscoveryState(
     onViewAllFriends: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    LiftrixCard(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        contentPadding = PaddingValues(GridSystem.spacing4)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
-        ) {
-            Text(
-                text = "No new people to discover right now",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                fontWeight = FontWeight.Medium
-            )
-            
-            Text(
-                text = "Check back later or explore your existing connections",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-            
-            Button(
+    UnifiedWorkoutCard(
+        title = "No new people to discover right now",
+        subtitle = "Check back later or explore your existing connections",
+        modifier = modifier,
+        actions = {
+            PrimaryActionButton(
+                text = "View Friends",
                 onClick = onViewAllFriends,
-                modifier = Modifier.padding(top = GridSystem.spacing1)
-            ) {
-                Text("View Friends")
-            }
+                leadingIcon = Icons.Default.People
+            )
         }
+    ) {
+        // Empty content area since title and subtitle contain the message
     }
 }
 
@@ -448,74 +446,33 @@ private fun DiscoveryErrorState(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    LiftrixCard(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer,
-            contentColor = MaterialTheme.colorScheme.onErrorContainer
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        contentPadding = PaddingValues(GridSystem.spacing3)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing1)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Error,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.size(20.dp)
-                )
-                
-                Text(
-                    text = "Unable to load recommendations",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-            
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onErrorContainer,
-                textAlign = TextAlign.Center
+    UnifiedWorkoutCard(
+        title = "Unable to load recommendations",
+        subtitle = message,
+        modifier = modifier,
+        actions = {
+            SecondaryActionButton(
+                text = "Dismiss",
+                onClick = onDismiss
             )
-            
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
-            ) {
-                OutlinedButton(
-                    onClick = onDismiss,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                ) {
-                    Text("Dismiss")
-                }
-                
-                Button(
-                    onClick = onRetry,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.onErrorContainer,
-                        contentColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(GridSystem.spacing1))
-                    Text("Retry")
-                }
-            }
+            Spacer(modifier = Modifier.width(GridSystem.spacing2))
+            PrimaryActionButton(
+                text = "Retry",
+                onClick = onRetry
+            )
+        }
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                imageVector = Icons.Default.Error,
+                contentDescription = "Error icon",
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
@@ -527,40 +484,20 @@ private fun DiscoveryErrorState(
 private fun EmptyWorkoutFeedState(
     modifier: Modifier = Modifier
 ) {
-    LiftrixCard(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        contentPadding = PaddingValues(GridSystem.spacing5)
+    UnifiedWorkoutCard(
+        title = "No workout activity yet",
+        subtitle = "Start working out or follow friends to see activity here",
+        modifier = modifier
     ) {
-        Column(
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
+            horizontalArrangement = Arrangement.Center
         ) {
             Icon(
                 imageVector = Icons.Default.FitnessCenter,
-                contentDescription = null,
+                contentDescription = "Fitness center icon",
                 modifier = Modifier.size(48.dp),
                 tint = MaterialTheme.colorScheme.primary
-            )
-            
-            Text(
-                text = "No workout activity yet",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                fontWeight = FontWeight.Bold
-            )
-            
-            Text(
-                text = "Start working out or follow friends to see activity here",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
             )
         }
     }
@@ -576,74 +513,33 @@ private fun WorkoutFeedErrorState(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    LiftrixCard(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer,
-            contentColor = MaterialTheme.colorScheme.onErrorContainer
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        contentPadding = PaddingValues(GridSystem.spacing3)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing1)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Error,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.size(20.dp)
-                )
-                
-                Text(
-                    text = "Unable to load workout feed",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-            
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onErrorContainer,
-                textAlign = TextAlign.Center
+    UnifiedWorkoutCard(
+        title = "Unable to load workout feed",
+        subtitle = message,
+        modifier = modifier,
+        actions = {
+            SecondaryActionButton(
+                text = "Dismiss",
+                onClick = onDismiss
             )
-            
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
-            ) {
-                OutlinedButton(
-                    onClick = onDismiss,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                ) {
-                    Text("Dismiss")
-                }
-                
-                Button(
-                    onClick = onRetry,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.onErrorContainer,
-                        contentColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(GridSystem.spacing1))
-                    Text("Retry")
-                }
-            }
+            Spacer(modifier = Modifier.width(GridSystem.spacing2))
+            PrimaryActionButton(
+                text = "Retry",
+                onClick = onRetry
+            )
+        }
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(
+                imageVector = Icons.Default.Error,
+                contentDescription = "Error icon",
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
@@ -655,23 +551,11 @@ private fun WorkoutFeedErrorState(
 private fun FeedEndMessage(
     modifier: Modifier = Modifier
 ) {
-    LiftrixCard(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        contentPadding = PaddingValues(GridSystem.spacing3)
+    UnifiedWorkoutCard(
+        title = "You're all caught up! 🎉",
+        modifier = modifier
     ) {
-        Text(
-            text = "You're all caught up! 🎉",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.fillMaxWidth()
-        )
+        // Empty content since title contains the message
     }
 }
 
@@ -686,23 +570,16 @@ private fun LoadingState(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        LiftrixCard(
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-            contentPadding = PaddingValues(GridSystem.spacing5)
+        UnifiedWorkoutCard(
+            title = "Loading your social feed...",
+            modifier = Modifier.padding(GridSystem.spacing5)
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
             ) {
                 CircularProgressIndicator(
                     color = MaterialTheme.colorScheme.primary
-                )
-                
-                Text(
-                    text = "Loading your social feed...",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.Medium
                 )
             }
         }
@@ -726,68 +603,32 @@ private fun ErrorState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        LiftrixCard(
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                contentColor = MaterialTheme.colorScheme.onErrorContainer
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-            contentPadding = PaddingValues(GridSystem.spacing5)
+        UnifiedWorkoutCard(
+            title = "Something went wrong",
+            subtitle = errorMessage,
+            modifier = Modifier.padding(GridSystem.spacing5),
+            actions = {
+                SecondaryActionButton(
+                    text = "Dismiss",
+                    onClick = onDismiss
+                )
+                Spacer(modifier = Modifier.width(GridSystem.spacing2))
+                PrimaryActionButton(
+                    text = "Try Again",
+                    onClick = onRetry
+                )
+            }
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Error,
-                    contentDescription = null,
+                    contentDescription = "Error icon",
                     modifier = Modifier.size(64.dp),
-                    tint = MaterialTheme.colorScheme.onErrorContainer
+                    tint = MaterialTheme.colorScheme.error
                 )
-                
-                Text(
-                    text = "Something went wrong",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.Bold
-                )
-                
-                Text(
-                    text = errorMessage,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    textAlign = TextAlign.Center
-                )
-                
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    ) {
-                        Text("Dismiss")
-                    }
-                    
-                    Button(
-                        onClick = onRetry,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.onErrorContainer,
-                            contentColor = MaterialTheme.colorScheme.errorContainer
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(GridSystem.spacing1))
-                        Text("Try Again")
-                    }
-                }
             }
         }
     }
@@ -807,34 +648,20 @@ private fun EmptyState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        LiftrixCard(
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-            contentPadding = PaddingValues(GridSystem.spacing5)
+        UnifiedWorkoutCard(
+            title = "Welcome to Liftrix!",
+            subtitle = "Start your fitness journey by creating your first workout or connecting with friends",
+            modifier = Modifier.padding(GridSystem.spacing5)
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.FitnessCenter,
-                    contentDescription = null,
+                    contentDescription = "Fitness center icon",
                     modifier = Modifier.size(80.dp),
                     tint = MaterialTheme.colorScheme.primary
-                )
-                
-                Text(
-                    text = "Welcome to Liftrix!",
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.Bold
-                )
-                
-                Text(
-                    text = "Start your fitness journey by creating your first workout or connecting with friends",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
                 )
             }
         }
@@ -855,6 +682,33 @@ private fun calculateWorkoutIntensityFromFeedWorkout(feedWorkout: FeedWorkout): 
         duration = duration,
         workoutType = com.example.liftrix.ui.common.WorkoutType.GENERAL
     )
+}
+
+@Composable
+private fun HomeLoadingScreen(modifier: Modifier = Modifier) {
+    LoadingState(modifier = modifier)
+}
+
+@Composable
+private fun HomeErrorScreen(
+    error: com.example.liftrix.domain.model.error.LiftrixError,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    ErrorState(
+        errorMessage = error.message,
+        onRetry = onRetry,
+        onDismiss = { /* Error is handled by retry */ },
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun HomeEmptyScreen(
+    onCreateWorkout: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    EmptyState(modifier = modifier)
 }
 
 @Preview(showBackground = true)

@@ -164,7 +164,7 @@ fun getWorkoutIntensityColor(intensity: Float, workoutType: WorkoutType = Workou
         
         WorkoutType.STRENGTH -> {
             when {
-                intensity < 0.3f -> LiftrixColors.Accent.copy(alpha = 0.3f) // Light coral for warm-up
+                intensity < 0.3f -> LiftrixColors.TiffanyBlue.copy(alpha = 0.3f) // Light coral for warm-up
                 intensity < 0.6f -> Color(0xFFFF7043).copy(alpha = 0.5f) // Orange for moderate strength
                 intensity < 0.8f -> Color(0xFFE53935).copy(alpha = 0.7f) // Red for high strength
                 else -> Color(0xFFB71C1C).copy(alpha = 0.9f) // Deep red for max strength
@@ -220,12 +220,7 @@ fun getWorkoutIntensityColor(intensity: Float, workoutType: WorkoutType = Workou
 fun getTimeBasedOverlay(hour: Int, customColors: TimeBasedColorScheme? = null): Color {
     require(hour in 0..23) { "Hour must be between 0 and 23" }
     
-    return customColors?.primary?.copy(alpha = 0.1f) ?: when (hour) {
-        in 6..11 -> LiftrixColors.TimeBasedColors.MorningPrimary.copy(alpha = 0.1f)
-        in 12..17 -> LiftrixColors.TimeBasedColors.AfternoonPrimary.copy(alpha = 0.1f)
-        in 18..23 -> LiftrixColors.TimeBasedColors.EveningPrimary.copy(alpha = 0.1f)
-        else -> LiftrixColors.TimeBasedColors.NightPrimary.copy(alpha = 0.1f)
-    }
+    return customColors?.primary?.copy(alpha = 0.1f) ?: LiftrixColors.PersianGreen.copy(alpha = 0.1f)
 }
 
 /**

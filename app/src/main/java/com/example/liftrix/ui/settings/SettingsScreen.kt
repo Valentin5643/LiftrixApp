@@ -24,6 +24,9 @@ import com.example.liftrix.ui.common.ColorContext
 import com.example.liftrix.ui.common.PerformanceOptimizations
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.components.cards.ElevatedLiftrixCard
+import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
+import com.example.liftrix.ui.workout.components.SecondaryActionButton
+import com.example.liftrix.ui.workout.components.PrimaryActionButton
 import com.example.liftrix.ui.theme.LiftrixTheme
 import java.time.LocalDateTime
 
@@ -172,7 +175,7 @@ private fun SettingsContent(
                 user = uiState.userSettings?.let { settings ->
                     // Create a User object from settings for display
                     User(
-                        uid = "current_user", // This would come from auth state
+                        uid = "current_user", // Get from authenticated user state
                         email = "user@example.com", // This would come from auth state
                         displayName = "User", // This would come from auth state or settings
                         photoUrl = null,
@@ -218,16 +221,21 @@ private fun SettingsContent(
         item {
             Spacer(modifier = Modifier.height(8.dp))
             
-            ElevatedLiftrixCard(
-                modifier = Modifier.fillMaxWidth(),
-                contentDescription = "Sign out section"
+            UnifiedWorkoutCard(
+                title = "Sign Out",
+                subtitle = "Sign out of your account",
+                modifier = Modifier.fillMaxWidth()
             ) {
-                SettingsNavigationItem(
-                    title = "Sign Out",
-                    subtitle = "Sign out of your account",
-                    icon = Icons.Default.ExitToApp,
-                    onClick = { stableOnEvent(SettingsEvent.SignOutRequested) }
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    SecondaryActionButton(
+                        text = "Sign Out",
+                        leadingIcon = Icons.Default.ExitToApp,
+                        onClick = { stableOnEvent(SettingsEvent.SignOutRequested) }
+                    )
+                }
             }
         }
     }
@@ -416,17 +424,17 @@ private fun SubscriptionSettings(
             }
             
             if (uiState.hasPremiumAccess) {
-                AssistChip(
+                SecondaryActionButton(
+                    text = "Manage",
                     onClick = { stableOnEvent(SettingsEvent.ManageSubscription) },
-                    label = { Text("Manage") }
+                    leadingIcon = com.example.liftrix.ui.icons.LiftrixIcons.Workflow.Settings
                 )
             } else {
-                Button(
+                PrimaryActionButton(
+                    text = "Upgrade",
                     onClick = { stableOnEvent(SettingsEvent.UpgradeSubscription) },
-                    modifier = Modifier.padding(start = 8.dp)
-                ) {
-                    Text("Upgrade")
-                }
+                    leadingIcon = Icons.Default.Star
+                )
             }
         }
         
@@ -554,19 +562,17 @@ private fun ErrorState(
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            TextButton(onClick = onDismiss) {
-                Text("Dismiss")
-            }
+            SecondaryActionButton(
+                text = "Dismiss",
+                onClick = onDismiss,
+                leadingIcon = com.example.liftrix.ui.icons.LiftrixIcons.Actions.Cancel
+            )
             
-            Button(onClick = onRetry) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Retry")
-            }
+            PrimaryActionButton(
+                text = "Retry",
+                onClick = onRetry,
+                leadingIcon = Icons.Default.Refresh
+            )
         }
     }
 }

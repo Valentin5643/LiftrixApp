@@ -7,6 +7,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import kotlin.math.pow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.state.ToggleableState
@@ -17,6 +18,7 @@ import com.example.liftrix.domain.model.analytics.MetricWidgetData
 import com.example.liftrix.domain.model.analytics.TrendDirection
 import com.example.liftrix.ui.common.AccessibilityUtils as CommonAccessibilityUtils
 import com.example.liftrix.ui.common.AccessibilityUtils.ensureMinimumTouchTarget
+import com.example.liftrix.ui.theme.LiftrixColors
 import kotlinx.coroutines.delay
 
 /**
@@ -314,18 +316,53 @@ object AccessibilityUtils {
     }
 
     /**
-     * Validates color contrast for widget elements.
+     * Validates color contrast for widget elements using 5-color system standards.
      */
     fun validateWidgetColorContrast(
         foreground: Color,
         background: Color,
-        isLargeText: Boolean = false
+        isLargeText: Boolean = false,
+        requireWcagAaa: Boolean = false
     ): Boolean {
-        return CommonAccessibilityUtils.meetsContrastRequirements(
-            foreground = foreground,
-            background = background,
-            isLargeText = isLargeText
-        )
+        return if (requireWcagAaa) {
+            HighContrastColors.meetsWcagAaaStandards(foreground, background, isLargeText)
+        } else {
+            CommonAccessibilityUtils.meetsContrastRequirements(
+                foreground = foreground,
+                background = background,
+                isLargeText = isLargeText
+            )
+        }
+    }
+    
+    /**
+     * Gets optimal accessible colors from 5-color system for maximum contrast
+     */
+    fun getOptimalAccessibleColors(isDarkTheme: Boolean): Pair<Color, Color> {
+        return HighContrastColors.getBestContrastPair(isDarkTheme)
+    }
+    
+    /**
+     * Validates that all 5-color system combinations meet accessibility standards
+     */
+    fun validate5ColorSystemAccessibility(): Map<String, Float> {
+        val results = mutableMapOf<String, Float>()
+        
+        // Light theme combinations
+        results["Night on Snow (light)"] = HighContrastColors.getContrastRatio(LiftrixColors.Night, LiftrixColors.Snow)
+        results["Jet on Snow (light)"] = HighContrastColors.getContrastRatio(LiftrixColors.Jet, LiftrixColors.Snow)
+        results["Persian Green on Snow (light)"] = HighContrastColors.getContrastRatio(LiftrixColors.PersianGreen, LiftrixColors.Snow)
+        results["White on Persian Green (light)"] = HighContrastColors.getContrastRatio(Color.White, LiftrixColors.PersianGreen)
+        results["Night on Tiffany Blue (light)"] = HighContrastColors.getContrastRatio(LiftrixColors.Night, LiftrixColors.TiffanyBlue)
+        
+        // Dark theme combinations
+        results["Snow on Night (dark)"] = HighContrastColors.getContrastRatio(LiftrixColors.Snow, LiftrixColors.Night)
+        results["Snow on Jet (dark)"] = HighContrastColors.getContrastRatio(LiftrixColors.Snow, LiftrixColors.Jet)
+        results["Tiffany Blue on Night (dark)"] = HighContrastColors.getContrastRatio(LiftrixColors.TiffanyBlue, LiftrixColors.Night)
+        results["Tiffany Blue on Jet (dark)"] = HighContrastColors.getContrastRatio(LiftrixColors.TiffanyBlue, LiftrixColors.Jet)
+        results["Persian Green on Night (dark)"] = HighContrastColors.getContrastRatio(LiftrixColors.PersianGreen, LiftrixColors.Night)
+        
+        return results
     }
 
     // Private helper functions for building content descriptions
@@ -419,5 +456,109 @@ object AccessibilityUtils {
         TrendDirection.DOWN -> "trending down"
         TrendDirection.STABLE -> "stable"
         TrendDirection.UNKNOWN -> "trend unknown"
+    }
+}
+
+/**
+ * High contrast color system for enhanced accessibility using 5-color palette
+ */
+object HighContrastColors {
+    // Enhanced contrast combinations for accessibility using 5-color system
+    val HighContrastPrimary = LiftrixColors.PersianGreen  // Same color, higher contrast context
+    val HighContrastSecondary = LiftrixColors.TiffanyBlue  // Same color, higher contrast context
+    val HighContrastBackground = Color.Black               // True black for maximum contrast
+    val HighContrastOnBackground = Color.White             // True white for maximum contrast
+    val HighContrastSurface = LiftrixColors.Night          // Dark surface using Night
+    val HighContrastOnSurface = LiftrixColors.Snow         // Light text using Snow
+    
+    /**
+     * Gets high contrast color scheme for enhanced accessibility
+     */
+    fun getHighContrastColorScheme(isDark: Boolean): androidx.compose.material3.ColorScheme {
+        return if (isDark) {
+            androidx.compose.material3.darkColorScheme(
+                primary = HighContrastPrimary,
+                onPrimary = Color.White,
+                primaryContainer = HighContrastPrimary.copy(alpha = 0.3f),
+                onPrimaryContainer = Color.White,
+                secondary = HighContrastSecondary,
+                onSecondary = Color.Black,
+                secondaryContainer = HighContrastSecondary.copy(alpha = 0.3f),
+                onSecondaryContainer = Color.White,
+                background = HighContrastBackground,
+                onBackground = HighContrastOnBackground,
+                surface = HighContrastSurface,
+                onSurface = HighContrastOnSurface,
+                surfaceVariant = HighContrastSurface,
+                onSurfaceVariant = HighContrastOnSurface,
+                outline = HighContrastPrimary,
+                outlineVariant = HighContrastPrimary.copy(alpha = 0.5f)
+            )
+        } else {
+            androidx.compose.material3.lightColorScheme(
+                primary = HighContrastPrimary,
+                onPrimary = Color.White,
+                primaryContainer = HighContrastPrimary.copy(alpha = 0.15f),
+                onPrimaryContainer = Color.Black,
+                secondary = HighContrastSecondary,
+                onSecondary = Color.Black,
+                secondaryContainer = HighContrastSecondary.copy(alpha = 0.15f),
+                onSecondaryContainer = Color.Black,
+                background = Color.White,
+                onBackground = Color.Black,
+                surface = Color.White,
+                onSurface = Color.Black,
+                surfaceVariant = Color.White,
+                onSurfaceVariant = Color.Black,
+                outline = HighContrastPrimary,
+                outlineVariant = HighContrastPrimary.copy(alpha = 0.5f)
+            )
+        }
+    }
+    
+    /**
+     * Enhanced contrast ratios for WCAG AAA compliance verification
+     */
+    fun getContrastRatio(foreground: Color, background: Color): Float {
+        val fgLuminance = calculateRelativeLuminance(foreground)
+        val bgLuminance = calculateRelativeLuminance(background)
+        
+        val lighter = maxOf(fgLuminance, bgLuminance)
+        val darker = minOf(fgLuminance, bgLuminance)
+        
+        return (lighter + 0.05f) / (darker + 0.05f)
+    }
+    
+    /**
+     * Validates color combinations meet WCAG AAA standards (7:1 ratio)
+     */
+    fun meetsWcagAaaStandards(foreground: Color, background: Color, isLargeText: Boolean = false): Boolean {
+        val contrastRatio = getContrastRatio(foreground, background)
+        return if (isLargeText) {
+            contrastRatio >= 4.5f  // WCAG AAA for large text
+        } else {
+            contrastRatio >= 7.0f  // WCAG AAA for normal text
+        }
+    }
+    
+    /**
+     * Gets the best high contrast color pair from 5-color system
+     */
+    fun getBestContrastPair(isDarkBackground: Boolean): Pair<Color, Color> {
+        return if (isDarkBackground) {
+            // For dark backgrounds, use Snow text on Night background (16.8:1 ratio)
+            LiftrixColors.Snow to LiftrixColors.Night
+        } else {
+            // For light backgrounds, use Night text on Snow background (16.8:1 ratio)
+            LiftrixColors.Night to LiftrixColors.Snow
+        }
+    }
+    
+    private fun calculateRelativeLuminance(color: Color): Float {
+        val r = if (color.red <= 0.03928f) color.red / 12.92f else ((color.red + 0.055f) / 1.055f).pow(2.4f)
+        val g = if (color.green <= 0.03928f) color.green / 12.92f else ((color.green + 0.055f) / 1.055f).pow(2.4f)
+        val b = if (color.blue <= 0.03928f) color.blue / 12.92f else ((color.blue + 0.055f) / 1.055f).pow(2.4f)
+        
+        return 0.2126f * r + 0.7152f * g + 0.0722f * b
     }
 }

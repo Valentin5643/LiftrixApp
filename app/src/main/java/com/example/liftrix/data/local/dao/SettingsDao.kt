@@ -82,6 +82,35 @@ interface SettingsDao {
     @Query("UPDATE user_settings SET weight_unit = :weightUnit, updated_at = :updatedAt WHERE user_id = :userId")
     suspend fun updateWeightUnit(userId: String, weightUnit: WeightUnit, updatedAt: java.time.Instant)
     
+    /**
+     * Updates terminology preference for a user
+     * 
+     * @param userId The user's unique identifier
+     * @param preference The new terminology preference
+     * @param updatedAt The timestamp of the update
+     */
+    @Query("UPDATE user_settings SET terminology_preference = :preference, updated_at = :updatedAt WHERE user_id = :userId")
+    suspend fun updateTerminologyPreference(userId: String, preference: String, updatedAt: java.time.Instant)
+    
+    /**
+     * Updates migration explanation seen status for a user
+     * 
+     * @param userId The user's unique identifier
+     * @param seen Whether the explanation has been shown
+     * @param updatedAt The timestamp of the update
+     */
+    @Query("UPDATE user_settings SET migration_explanation_seen = :seen, updated_at = :updatedAt WHERE user_id = :userId")
+    suspend fun updateMigrationExplanationSeen(userId: String, seen: Boolean, updatedAt: java.time.Instant)
+    
+    /**
+     * Updates migration completed status for a user
+     * 
+     * @param userId The user's unique identifier
+     * @param completed Whether the migration is complete
+     * @param updatedAt The timestamp of the update
+     */
+    @Query("UPDATE user_settings SET migration_completed = :completed, updated_at = :updatedAt WHERE user_id = :userId")
+    suspend fun updateMigrationCompleted(userId: String, completed: Boolean, updatedAt: java.time.Instant)
     
     /**
      * Deletes user settings for a specific user

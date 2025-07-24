@@ -281,6 +281,67 @@ class SettingsRepositoryImpl @Inject constructor(
         }
     }
     
+    override suspend fun getUserSettingsSync(userId: String): UserSettings? {
+        return try {
+            val roomEntity = settingsDao.getUserSettingsSync(userId)
+            roomEntity?.let { settingsMapper.toDomain(it) }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get settings synchronously for user: $userId")
+            null
+        }
+    }
+    
+    override suspend fun updateTerminologyPreference(userId: String, preference: String): Result<Unit> {
+        return try {
+            val updatedAt = Instant.now()
+            settingsDao.updateTerminologyPreference(userId, preference, updatedAt)
+            
+            // Schedule Firebase sync
+            scheduleFirebaseSync(userId)
+            
+            Timber.d("Terminology preference updated successfully: $preference for user: $userId")
+            Result.success(Unit)
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to update terminology preference for user: $userId")
+            Result.failure(e)
+        }
+    }
+    
+    override suspend fun updateMigrationExplanationSeen(userId: String, seen: Boolean): Result<Unit> {
+        return try {
+            val updatedAt = Instant.now()
+            settingsDao.updateMigrationExplanationSeen(userId, seen, updatedAt)
+            
+            // Schedule Firebase sync
+            scheduleFirebaseSync(userId)
+            
+            Timber.d("Migration explanation seen updated successfully: $seen for user: $userId")
+            Result.success(Unit)
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to update migration explanation seen for user: $userId")
+            Result.failure(e)
+        }
+    }
+    
+    override suspend fun updateMigrationCompleted(userId: String, completed: Boolean): Result<Unit> {
+        return try {
+            val updatedAt = Instant.now()
+            settingsDao.updateMigrationCompleted(userId, completed, updatedAt)
+            
+            // Schedule Firebase sync
+            scheduleFirebaseSync(userId)
+            
+            Timber.d("Migration completed updated successfully: $completed for user: $userId")
+            Result.success(Unit)
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to update migration completed for user: $userId")
+            Result.failure(e)
+        }
+    }
+    
     /**
      * Synchronizes settings to Room database.
      */

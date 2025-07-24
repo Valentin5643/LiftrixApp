@@ -137,7 +137,7 @@ class AnalyticsWidgetViewModelTest {
     @Test
     fun `given authenticated user, when LoadWidget event, then loads widget data successfully`() = runTest {
         // Given
-        coEvery { mockAnalyticsService.getWidgetData(testUserId, testWidget) } returns LiftrixResult.Success(testWidgetData)
+        coEvery { mockAnalyticsService.getWidgetData(testUserId, testWidget) } returns Result.success(testWidgetData)
         
         // When
         viewModel.handleEvent(AnalyticsWidgetEvent.LoadWidget(testWidgetId, forceRefresh = false))
@@ -162,7 +162,7 @@ class AnalyticsWidgetViewModelTest {
     fun `given widget service error, when LoadWidget event, then shows error state for specific widget`() = runTest {
         // Given
         val testError = LiftrixError.NetworkError("Failed to load widget data")
-        coEvery { mockAnalyticsService.getWidgetData(testUserId, testWidget) } returns LiftrixResult.Error(testError)
+        coEvery { mockAnalyticsService.getWidgetData(testUserId, testWidget) } returns Result.failure(testError)
         
         // When
         viewModel.handleEvent(AnalyticsWidgetEvent.LoadWidget(testWidgetId, forceRefresh = false))
@@ -185,7 +185,7 @@ class AnalyticsWidgetViewModelTest {
     @Test
     fun `given force refresh, when LoadWidget event, then reloads widget data regardless of cache`() = runTest {
         // Given
-        coEvery { mockAnalyticsService.getWidgetData(testUserId, testWidget) } returns LiftrixResult.Success(testWidgetData)
+        coEvery { mockAnalyticsService.getWidgetData(testUserId, testWidget) } returns Result.success(testWidgetData)
         
         // Load initial data
         viewModel.handleEvent(AnalyticsWidgetEvent.LoadWidget(testWidgetId, forceRefresh = false))
@@ -204,8 +204,8 @@ class AnalyticsWidgetViewModelTest {
     @Test
     fun `given widget visible, when ToggleVisibility false event, then hides widget and updates preferences`() = runTest {
         // Given
-        coEvery { mockAnalyticsService.getWidgetPreferences(testUserId) } returns LiftrixResult.Success(testWidgetPreferences)
-        coEvery { mockAnalyticsService.updateWidgetPreferences(any()) } returns LiftrixResult.Success(Unit)
+        coEvery { mockAnalyticsService.getWidgetPreferences(testUserId) } returns Result.success(testWidgetPreferences)
+        coEvery { mockAnalyticsService.updateWidgetPreferences(any()) } returns Result.success(Unit)
         
         // When
         viewModel.handleEvent(AnalyticsWidgetEvent.ToggleVisibility(testWidgetId, visible = false))
@@ -234,9 +234,9 @@ class AnalyticsWidgetViewModelTest {
             every { layoutMode } returns WidgetLayoutMode.SECTIONS
         }
         
-        coEvery { mockAnalyticsService.getWidgetPreferences(testUserId) } returns LiftrixResult.Success(hiddenPreferences)
-        coEvery { mockAnalyticsService.updateWidgetPreferences(any()) } returns LiftrixResult.Success(Unit)
-        coEvery { mockAnalyticsService.getWidgetData(testUserId, testWidget) } returns LiftrixResult.Success(testWidgetData)
+        coEvery { mockAnalyticsService.getWidgetPreferences(testUserId) } returns Result.success(hiddenPreferences)
+        coEvery { mockAnalyticsService.updateWidgetPreferences(any()) } returns Result.success(Unit)
+        coEvery { mockAnalyticsService.getWidgetData(testUserId, testWidget) } returns Result.success(testWidgetData)
         
         // When
         viewModel.handleEvent(AnalyticsWidgetEvent.ToggleVisibility(testWidgetId, visible = true))
@@ -262,8 +262,8 @@ class AnalyticsWidgetViewModelTest {
     fun `given new configuration, when UpdateConfiguration event, then updates dashboard configuration and reloads widgets`() = runTest {
         // Given
         val newConfiguration = DashboardConfiguration.Advanced
-        coEvery { mockAnalyticsService.updateWidgetPreferences(any()) } returns LiftrixResult.Success(Unit)
-        coEvery { mockAnalyticsService.getWidgetData(testUserId, any()) } returns LiftrixResult.Success(testWidgetData)
+        coEvery { mockAnalyticsService.updateWidgetPreferences(any()) } returns Result.success(Unit)
+        coEvery { mockAnalyticsService.getWidgetData(testUserId, any()) } returns Result.success(testWidgetData)
         
         // Mock widget manager to return different widgets for advanced config
         every { mockAnalyticsWidgetManager.getActiveWidgets(newConfiguration) } returns listOf(
@@ -318,8 +318,8 @@ class AnalyticsWidgetViewModelTest {
         val widgets = listOf(AnalyticsWidget.TotalVolume, AnalyticsWidget.WorkoutFrequency)
         every { mockAnalyticsWidgetManager.getActiveWidgets(any()) } returns widgets
         
-        coEvery { mockAnalyticsService.getWidgetData(testUserId, AnalyticsWidget.TotalVolume) } returns LiftrixResult.Success(testWidgetData)
-        coEvery { mockAnalyticsService.getWidgetData(testUserId, AnalyticsWidget.WorkoutFrequency) } returns LiftrixResult.Success(testWidgetData)
+        coEvery { mockAnalyticsService.getWidgetData(testUserId, AnalyticsWidget.TotalVolume) } returns Result.success(testWidgetData)
+        coEvery { mockAnalyticsService.getWidgetData(testUserId, AnalyticsWidget.WorkoutFrequency) } returns Result.success(testWidgetData)
         
         // When
         viewModel.handleEvent(AnalyticsWidgetEvent.RefreshAllWidgets(showLoadingStates = true, retryFailedWidgets = false))
@@ -348,7 +348,7 @@ class AnalyticsWidgetViewModelTest {
             configuration = testDashboardConfiguration
         )
         
-        coEvery { mockAnalyticsService.getWidgetData(testUserId, testWidget) } returns LiftrixResult.Success(testWidgetData)
+        coEvery { mockAnalyticsService.getWidgetData(testUserId, testWidget) } returns Result.success(testWidgetData)
         
         // When
         viewModel.handleEvent(AnalyticsWidgetEvent.RefreshAllWidgets(showLoadingStates = true, retryFailedWidgets = true))
@@ -364,8 +364,8 @@ class AnalyticsWidgetViewModelTest {
     fun `given widget list, when ReorderWidget event, then updates widget order and persists if requested`() = runTest {
         // Given
         val newPosition = 0
-        coEvery { mockAnalyticsService.getWidgetPreferences(testUserId) } returns LiftrixResult.Success(testWidgetPreferences)
-        coEvery { mockAnalyticsService.updateWidgetPreferences(any()) } returns LiftrixResult.Success(Unit)
+        coEvery { mockAnalyticsService.getWidgetPreferences(testUserId) } returns Result.success(testWidgetPreferences)
+        coEvery { mockAnalyticsService.updateWidgetPreferences(any()) } returns Result.success(Unit)
         
         // When
         viewModel.handleEvent(AnalyticsWidgetEvent.ReorderWidget(testWidgetId, newPosition, shouldPersist = true))
@@ -395,8 +395,8 @@ class AnalyticsWidgetViewModelTest {
             every { layoutMode } returns WidgetLayoutMode.SECTIONS
         }
         
-        coEvery { mockAnalyticsService.resetPreferences(testUserId) } returns LiftrixResult.Success(Unit)
-        coEvery { mockAnalyticsService.getWidgetPreferences(testUserId) } returns LiftrixResult.Success(defaultPreferences)
+        coEvery { mockAnalyticsService.resetPreferences(testUserId) } returns Result.success(Unit)
+        coEvery { mockAnalyticsService.getWidgetPreferences(testUserId) } returns Result.success(defaultPreferences)
         
         // When
         viewModel.handleEvent(AnalyticsWidgetEvent.ResetPreferences(confirmationRequired = false, preserveCustomizations = false))
@@ -421,7 +421,7 @@ class AnalyticsWidgetViewModelTest {
     fun `given failed widget operation, when RetryOperation event, then retries the specific operation`() = runTest {
         // Given
         val retryOperation = "load_widget"
-        coEvery { mockAnalyticsService.getWidgetData(testUserId, testWidget) } returns LiftrixResult.Success(testWidgetData)
+        coEvery { mockAnalyticsService.getWidgetData(testUserId, testWidget) } returns Result.success(testWidgetData)
         
         // When
         viewModel.handleEvent(AnalyticsWidgetEvent.RetryOperation(testWidgetId, retryOperation))
@@ -530,8 +530,8 @@ class AnalyticsWidgetViewModelTest {
             }
             
             // Complete the operations
-            widget1Deferred.complete(LiftrixResult.Success(testWidgetData))
-            widget2Deferred.complete(LiftrixResult.Success(testWidgetData))
+            widget1Deferred.complete(Result.success(testWidgetData))
+            widget2Deferred.complete(Result.success(testWidgetData))
         }
     }
 

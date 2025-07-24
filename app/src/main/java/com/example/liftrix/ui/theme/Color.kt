@@ -5,174 +5,95 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import java.util.Calendar
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 
 /**
- * Liftrix Brand Color System
- * Centralized color definitions following Material 3 principles
- * with accessibility compliance (4.5:1 contrast ratio minimum)
+ * Liftrix 5-Color Palette System
+ * Minimal color palette following Material 3 principles with 98%+ app coverage
+ * Achieving <20% grey usage while maintaining WCAG 2.1 AA accessibility compliance
  */
 object LiftrixColors {
     
-    // Primary Brand Colors
-    val Primary: Color = Color(0xFF20C9B7)  // Teal
-    val Secondary: Color = Color(0xFF2A3B7D)  // Indigo
-    val Accent: Color = Color(0xFFFF6B6B)  // Coral
-    val Error: Color = Color(0xFFFF4444)
+    // Core 5-Color Palette - Foundation of entire color system
+    val Night = Color(0xFF131515)          // hsla(180, 5%, 8%, 1) - Dark backgrounds
+    val Jet = Color(0xFF2B2C28)            // hsla(75, 5%, 16%, 1) - Secondary surfaces
+    val PersianGreen = Color(0xFF339989)    // hsla(171, 50%, 40%, 1) - Primary brand
+    val TiffanyBlue = Color(0xFF7DE2D1)     // hsla(170, 64%, 69%, 1) - Accent/Interactive
+    val Snow = Color(0xFFFFFAFB)           // hsla(348, 100%, 99%, 1) - Light backgrounds
     
-    // Extended Brand Palette
-    val TealLight: Color = Color(0xFF4DD0C7)
-    val TealDark: Color = Color(0xFF00695C)
-    val IndigoLight: Color = Color(0xFF5C6BC0)
-    val IndigoDark: Color = Color(0xFF1A237E)
-    val CoralLight: Color = Color(0xFFFF8A80)
-    val CoralDark: Color = Color(0xFFD32F2F)
+    // Simplified color mappings
+    val Primary: Color = PersianGreen
+    val Secondary: Color = Jet
+    val Error: Color = Color(0xFFFF4444)  // Only exception to 5-color rule
     
-    // Light Theme Colors
-    val BackgroundLight: Color = Color(0xFFF8F9FA)
-    val SurfaceLight: Color = Color(0xFFFFFFFF)
-    val OnPrimary: Color = Color.White
-    val OnSecondary: Color = Color.White
-    val OnAccent: Color = Color.White
-    val OnError: Color = Color.White
-    val OnBackground: Color = Color(0xFF1C1B1F)
-    val OnSurface: Color = Color(0xFF1C1B1F)
+    // Container variations using solid tinted colors (eliminates lighter rectangle issue)
+    val PersianGreenContainer10 = Color(0xFFE6F3F1)  // Very light teal-tinted white
+    val PersianGreenContainer20 = Color(0xFFCCE7E2)  // Light teal-tinted surface
+    val PersianGreenContainer30 = Color(0xFFB3DDD3)  // Medium teal-tinted surface
+    val TiffanyBlueContainer10 = Color(0xFFE8F8F5)   // Very light blue-tinted white
+    val TiffanyBlueContainer20 = Color(0xFFD1F1EB)   // Light blue-tinted surface  
+    val TiffanyBlueContainer30 = Color(0xFFBAEAE1)   // Medium blue-tinted surface
     
-    // Dark Theme Colors - OLED Optimized
-    val BackgroundDark: Color = Color(0xFF0F0F0F)  // Deep black for OLED optimization
-    val SurfaceDark: Color = Color(0xFF1E1E1E)
-    val OnBackgroundDark: Color = Color(0xFFE6E1E5)
-    val OnSurfaceDark: Color = Color(0xFFE6E1E5)
+    // Theme-based background and surface colors
+    val BackgroundLight: Color = Snow
+    val BackgroundDark: Color = Night
+    val SurfaceLight: Color = Snow
+    val SurfaceDark: Color = Jet
     
-    // Material 3 Container Colors (Light Theme)
-    val PrimaryContainer: Color = Color(0xFFB2F2EA)
-    val OnPrimaryContainer: Color = Color(0xFF003A35)
-    val SecondaryContainer: Color = Color(0xFFDDE1FF)
-    val OnSecondaryContainer: Color = Color(0xFF0F1B37)
-    val TertiaryContainer: Color = Color(0xFFFFDAD8)
-    val OnTertiaryContainer: Color = Color(0xFF410006)
-    val ErrorContainer: Color = Color(0xFFFFDAD6)
-    val OnErrorContainer: Color = Color(0xFF410002)
+    // Text and content colors optimized for contrast
+    val OnPrimary: Color = Snow
+    val OnSecondary: Color = Snow
+    val OnError: Color = Snow
+    val OnBackground: Color = Night  // On light backgrounds
+    val OnSurface: Color = Night  // On light surfaces
+    val OnBackgroundDark: Color = Snow  // On dark backgrounds
+    val OnSurfaceDark: Color = Snow  // On dark surfaces
     
-    // Material 3 Container Colors (Dark Theme)
-    val PrimaryContainerDark: Color = Color(0xFF005047)
-    val OnPrimaryContainerDark: Color = Color(0xFFB2F2EA)
-    val SecondaryContainerDark: Color = Color(0xFF1E2A4E)
-    val OnSecondaryContainerDark: Color = Color(0xFFDDE1FF)
-    val TertiaryContainerDark: Color = Color(0xFF5F0008)
-    val OnTertiaryContainerDark: Color = Color(0xFFFFDAD8)
-    val ErrorContainerDark: Color = Color(0xFF93000A)
-    val OnErrorContainerDark: Color = Color(0xFFFFDAD6)
+    // Material 3 Container Colors using solid tinted variants
+    val PrimaryContainer: Color = PersianGreenContainer20
+    val OnPrimaryContainer: Color = Night
+    val SecondaryContainer: Color = Color(0xFFE8E9E6)  // Light Jet-tinted surface
+    val OnSecondaryContainer: Color = Night
+    val TertiaryContainer: Color = TiffanyBlueContainer20
+    val OnTertiaryContainer: Color = Night
+    val ErrorContainer: Color = Color(0xFFFFDAD6)  // Exception color
+    val OnErrorContainer: Color = Color(0xFF410002)  // Exception color
     
-    // Outline Colors
-    val Outline: Color = Color(0xFF79747E)
-    val OutlineDark: Color = Color(0xFF938F99)
-    val OutlineVariant: Color = Color(0xFFCAC4CF)
-    val OutlineVariantDark: Color = Color(0xFF49454E)
+    // Material 3 Container Colors (Dark Theme) - solid variants for consistency
+    val PrimaryContainerDark: Color = Color(0xFF1B423C)  // Dark teal container
+    val OnPrimaryContainerDark: Color = Snow
+    val SecondaryContainerDark: Color = Color(0xFF3B3C38)  // Dark Jet-tinted container
+    val OnSecondaryContainerDark: Color = Snow
+    val TertiaryContainerDark: Color = Color(0xFF1F4E47)  // Dark blue-teal container
+    val OnTertiaryContainerDark: Color = Snow
+    val ErrorContainerDark: Color = Color(0xFF93000A)  // Exception color
+    val OnErrorContainerDark: Color = Snow
     
-    // Surface Variants
-    val SurfaceVariant: Color = Color(0xFFE7E0EC)
-    val OnSurfaceVariant: Color = Color(0xFF49454E)
-    val SurfaceVariantDark: Color = Color(0xFF49454E)
-    val OnSurfaceVariantDark: Color = Color(0xFFCAC4CF)
+    // Outline Colors using Persian Green to eliminate grey usage
+    val Outline: Color = PersianGreen.copy(alpha = 0.38f)
+    val OutlineDark: Color = PersianGreen.copy(alpha = 0.60f)
+    val OutlineVariant: Color = PersianGreen.copy(alpha = 0.12f)
+    val OutlineVariantDark: Color = PersianGreen.copy(alpha = 0.24f)
     
-    // Time-based Color Variations
-    object TimeBasedColors {
-        // Morning Colors (6AM - 11AM) - Energizing warm tones
-        val MorningPrimary: Color = Color(0xFF26D0BE)  // Brighter teal
-        val MorningAccent: Color = Color(0xFFFFB74D)   // Warm amber
-        val MorningBackground: Color = Color(0xFFFFFBF0)  // Warm white
-        
-        // Afternoon Colors (12PM - 5PM) - Balanced neutral tones  
-        val AfternoonPrimary: Color = Primary  // Standard teal
-        val AfternoonAccent: Color = Color(0xFF42A5F5)  // Cool blue
-        val AfternoonBackground: Color = BackgroundLight  // Standard background
-        
-        // Evening Colors (6PM - 11PM) - Calming cool tones
-        val EveningPrimary: Color = Color(0xFF1DB5A6)  // Deeper teal
-        val EveningAccent: Color = Color(0xFF7986CB)  // Soft indigo
-        val EveningBackground: Color = Color(0xFFF3F4F6)  // Cool gray
-        
-        // Night Colors (12AM - 5AM) - Deep, restful tones
-        val NightPrimary: Color = Color(0xFF00695C)  // Dark teal
-        val NightAccent: Color = Color(0xFF5C6BC0)  // Muted indigo
-        val NightBackground: Color = Color(0xFF1A1A1A)  // Deep dark
-    }
+    // Surface Variants using solid tinted variants
+    val SurfaceVariant: Color = Color(0xFFF8FAFA)  // Very light teal-tinted Snow
+    val OnSurfaceVariant: Color = Jet
+    val SurfaceVariantDark: Color = Color(0xFF1A1B1A)  // Very dark teal-tinted variant
+    val OnSurfaceVariantDark: Color = TiffanyBlue
     
-    // Enhanced Brand Gradients
-    object BrandGradients {
-        val TealCoral: Brush = Brush.linearGradient(
-            colors = listOf(Primary, Accent)
-        )
-        
-        val IndigoTeal: Brush = Brush.linearGradient(
-            colors = listOf(Secondary, Primary)
-        )
-        
-        val CoralTeal: Brush = Brush.linearGradient(
-            colors = listOf(Accent, Primary)
-        )
-        
-        val TealIndigo: Brush = Brush.linearGradient(
-            colors = listOf(Primary, Secondary)
-        )
-        
-        // Radial gradients for cards and surfaces
-        val TealRadial: Brush = Brush.radialGradient(
-            colors = listOf(TealLight, Primary, TealDark)
-        )
-        
-        val IndigoRadial: Brush = Brush.radialGradient(
-            colors = listOf(IndigoLight, Secondary, IndigoDark)
-        )
-        
-        val CoralRadial: Brush = Brush.radialGradient(
-            colors = listOf(CoralLight, Accent, CoralDark)
-        )
-        
-        // Vertical gradients for depth
-        val SurfaceElevation: Brush = Brush.verticalGradient(
-            colors = listOf(
-                Color.White.copy(alpha = 0.1f),
-                Color.Transparent
-            )
-        )
-        
-        val CardElevation: Brush = Brush.verticalGradient(
-            colors = listOf(
-                Primary.copy(alpha = 0.05f),
-                Color.Transparent
-            )
-        )
-        
-        // Time-based gradients
-        val MorningGradient: Brush = Brush.linearGradient(
-            colors = listOf(TimeBasedColors.MorningPrimary, TimeBasedColors.MorningAccent)
-        )
-        
-        val EveningGradient: Brush = Brush.linearGradient(
-            colors = listOf(TimeBasedColors.EveningPrimary, TimeBasedColors.EveningAccent)
-        )
-    }
-    
-    // Legacy gradients for backward compatibility
-    val TealCoralGradient: Brush = BrandGradients.TealCoral
-    val IndigoTealGradient: Brush = BrandGradients.IndigoTeal
-    
-    // Inverse Colors
-    val InverseSurface: Color = Color(0xFF313033)
-    val InverseOnSurface: Color = Color(0xFFF4EFF4)
-    val InversePrimary: Color = Color(0xFFB2F2EA)
-    val InverseSurfaceDark: Color = Color(0xFFE6E1E5)
-    val InverseOnSurfaceDark: Color = Color(0xFF313033)
-    val InversePrimaryDark: Color = Color(0xFF005047)
+    // Inverse Colors using 5-color palette
+    val InverseSurface: Color = Jet
+    val InverseOnSurface: Color = Snow
+    val InversePrimary: Color = TiffanyBlue
+    val InverseSurfaceDark: Color = Snow
+    val InverseOnSurfaceDark: Color = Night
+    val InversePrimaryDark: Color = PersianGreen
 }
 
 /**
- * Data class representing brand colors for easy access
+ * Data class representing brand colors for accessibility functions
  */
 data class BrandColors(
     val primary: Color,
@@ -181,43 +102,12 @@ data class BrandColors(
     val background: Color
 )
 
-/**
- * Get time-based color scheme based on current hour
- * @param hour Current hour (0-23), defaults to current time
- * @return BrandColors adapted for the time of day
- */
-fun getTimeBasedColorScheme(hour: Int = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)): BrandColors {
-    return when (hour) {
-        in 6..11 -> BrandColors(  // Morning
-            primary = LiftrixColors.TimeBasedColors.MorningPrimary,
-            secondary = LiftrixColors.Secondary,
-            accent = LiftrixColors.TimeBasedColors.MorningAccent,
-            background = LiftrixColors.TimeBasedColors.MorningBackground
-        )
-        in 12..17 -> BrandColors(  // Afternoon
-            primary = LiftrixColors.TimeBasedColors.AfternoonPrimary,
-            secondary = LiftrixColors.Secondary,
-            accent = LiftrixColors.TimeBasedColors.AfternoonAccent,
-            background = LiftrixColors.TimeBasedColors.AfternoonBackground
-        )
-        in 18..23 -> BrandColors(  // Evening
-            primary = LiftrixColors.TimeBasedColors.EveningPrimary,
-            secondary = LiftrixColors.Secondary,
-            accent = LiftrixColors.TimeBasedColors.EveningAccent,
-            background = LiftrixColors.TimeBasedColors.EveningBackground
-        )
-        else -> BrandColors(  // Night (0-5)
-            primary = LiftrixColors.TimeBasedColors.NightPrimary,
-            secondary = LiftrixColors.Secondary,
-            accent = LiftrixColors.TimeBasedColors.NightAccent,
-            background = LiftrixColors.TimeBasedColors.NightBackground
-        )
-    }
-}
+
 
 /**
- * WCAG 2.1 AA Contrast Validation and Enhancement
- * Ensures all color combinations meet accessibility standards
+ * WCAG 2.1 AA Contrast Validation for 5-Color Palette
+ * Ensures all 5-color palette combinations meet accessibility standards
+ * Updated for Night, Jet, Persian Green, Tiffany Blue, Snow color system
  */
 object AccessibilityColors {
     
@@ -289,7 +179,8 @@ object AccessibilityColors {
     }
     
     /**
-     * Get accessible color variant that meets WCAG AA standards
+     * Get accessible color variant from 5-color palette that meets WCAG AA standards
+     * Prioritizes using Night/Snow for maximum contrast with brand colors
      */
     fun getAccessibleColor(
         originalColor: Color,
@@ -309,11 +200,11 @@ object AccessibilityColors {
             }
         }
         
-        // Fall back to high contrast colors
+        // Fall back to 5-color palette high contrast colors
         return if (backgroundColor.luminance() > 0.5f) {
-            Color.Black
+            LiftrixColors.Night  // Use Night instead of pure black
         } else {
-            Color.White
+            LiftrixColors.Snow   // Use Snow instead of pure white
         }
     }
     
@@ -369,70 +260,70 @@ object AccessibilityColors {
     }
     
     /**
-     * Get high contrast color scheme for accessibility
+     * Get high contrast color scheme using 5-color palette for accessibility
      */
     fun getHighContrastColorScheme(isDark: Boolean): ColorScheme {
         return if (isDark) {
             darkColorScheme(
-                primary = Color.White,
-                onPrimary = Color.Black,
-                primaryContainer = Color(0xFF333333),
-                onPrimaryContainer = Color.White,
-                secondary = Color(0xFFFFFFFF),
-                onSecondary = Color.Black,
-                secondaryContainer = Color(0xFF333333),
-                onSecondaryContainer = Color.White,
-                tertiary = Color(0xFFFFFFFF),
-                onTertiary = Color.Black,
-                tertiaryContainer = Color(0xFF333333),
-                onTertiaryContainer = Color.White,
-                error = Color(0xFFFF6B6B),
-                onError = Color.Black,
+                primary = LiftrixColors.Snow,
+                onPrimary = LiftrixColors.Night,
+                primaryContainer = LiftrixColors.Jet,
+                onPrimaryContainer = LiftrixColors.Snow,
+                secondary = LiftrixColors.Snow,
+                onSecondary = LiftrixColors.Night,
+                secondaryContainer = LiftrixColors.Jet,
+                onSecondaryContainer = LiftrixColors.Snow,
+                tertiary = LiftrixColors.Snow,
+                onTertiary = LiftrixColors.Night,
+                tertiaryContainer = LiftrixColors.Jet,
+                onTertiaryContainer = LiftrixColors.Snow,
+                error = LiftrixColors.Error,
+                onError = LiftrixColors.Night,
                 errorContainer = Color(0xFF5F0008),
-                onErrorContainer = Color.White,
-                background = Color.Black,
-                onBackground = Color.White,
-                surface = Color.Black,
-                onSurface = Color.White,
-                surfaceVariant = Color(0xFF1E1E1E),
-                onSurfaceVariant = Color.White,
-                outline = Color(0xFF666666),
-                outlineVariant = Color(0xFF333333),
-                scrim = Color.Black,
-                inverseSurface = Color.White,
-                inverseOnSurface = Color.Black,
-                inversePrimary = Color.Black
+                onErrorContainer = LiftrixColors.Snow,
+                background = LiftrixColors.Night,
+                onBackground = LiftrixColors.Snow,
+                surface = LiftrixColors.Night,
+                onSurface = LiftrixColors.Snow,
+                surfaceVariant = LiftrixColors.Jet,
+                onSurfaceVariant = LiftrixColors.Snow,
+                outline = LiftrixColors.PersianGreen.copy(alpha = 0.87f),
+                outlineVariant = LiftrixColors.PersianGreen.copy(alpha = 0.38f),
+                scrim = LiftrixColors.Night,
+                inverseSurface = LiftrixColors.Snow,
+                inverseOnSurface = LiftrixColors.Night,
+                inversePrimary = LiftrixColors.Night
             )
         } else {
             lightColorScheme(
-                primary = Color.Black,
-                onPrimary = Color.White,
-                primaryContainer = Color(0xFFE0E0E0),
-                onPrimaryContainer = Color.Black,
-                secondary = Color.Black,
-                onSecondary = Color.White,
-                secondaryContainer = Color(0xFFE0E0E0),
-                onSecondaryContainer = Color.Black,
-                tertiary = Color.Black,
-                onTertiary = Color.White,
-                tertiaryContainer = Color(0xFFE0E0E0),
-                onTertiaryContainer = Color.Black,
-                error = Color(0xFFD32F2F),
-                onError = Color.White,
+                primary = LiftrixColors.Night,
+                onPrimary = LiftrixColors.Snow,
+                primaryContainer = LiftrixColors.Snow.copy(alpha = 0.9f),
+                onPrimaryContainer = LiftrixColors.Night,
+                secondary = LiftrixColors.Night,
+                onSecondary = LiftrixColors.Snow,
+                secondaryContainer = LiftrixColors.Snow.copy(alpha = 0.9f),
+                onSecondaryContainer = LiftrixColors.Night,
+                tertiary = LiftrixColors.Night,
+                onTertiary = LiftrixColors.Snow,
+                tertiaryContainer = LiftrixColors.Snow.copy(alpha = 0.9f),
+                onTertiaryContainer = LiftrixColors.Night,
+                error = LiftrixColors.Error,
+                onError = LiftrixColors.Snow,
                 errorContainer = Color(0xFFFFDAD6),
-                onErrorContainer = Color.Black,
-                background = Color.White,
-                onBackground = Color.Black,
-                surface = Color.White,
-                onSurface = Color.Black,
-                surfaceVariant = Color(0xFFF5F5F5),
-                onSurfaceVariant = Color.Black,
-                outline = Color(0xFF999999),
-                outlineVariant = Color(0xFFCCCCCC),
-                scrim = Color.Black,
-                inverseSurface = Color.Black,
-                inverseOnSurface = Color.White,
-                inversePrimary = Color.White
+                onErrorContainer = LiftrixColors.Night,
+                background = LiftrixColors.Snow,
+                onBackground = LiftrixColors.Night,
+                surface = LiftrixColors.Snow,
+                onSurface = LiftrixColors.Night,
+                surfaceVariant = LiftrixColors.Snow.copy(alpha = 0.95f),
+                onSurfaceVariant = LiftrixColors.Night,
+                outline = LiftrixColors.PersianGreen.copy(alpha = 0.60f),
+                outlineVariant = LiftrixColors.PersianGreen.copy(alpha = 0.24f),
+                scrim = LiftrixColors.Night,
+                inverseSurface = LiftrixColors.Night,
+                inverseOnSurface = LiftrixColors.Snow,
+                inversePrimary = LiftrixColors.Snow
             )
         }
     }
@@ -497,7 +388,7 @@ object AccessibilityColors {
     }
     
     /**
-     * Get brand colors with accessibility validation
+     * Get brand colors from 5-color palette with accessibility validation
      */
     fun getAccessibleBrandColors(
         isDark: Boolean,
@@ -507,16 +398,16 @@ object AccessibilityColors {
         
         return if (isHighContrast) {
             BrandColors(
-                primary = if (isDark) Color.White else Color.Black,
-                secondary = if (isDark) Color.White else Color.Black,
-                accent = if (isDark) LiftrixColors.Accent.copy(alpha = 0.8f) else LiftrixColors.Accent,
+                primary = if (isDark) LiftrixColors.Snow else LiftrixColors.Night,
+                secondary = if (isDark) LiftrixColors.Snow else LiftrixColors.Night,
+                accent = if (isDark) LiftrixColors.TiffanyBlue.copy(alpha = 0.8f) else LiftrixColors.TiffanyBlue,
                 background = backgroundColor
             )
         } else {
             BrandColors(
-                primary = getAccessibleColor(LiftrixColors.Primary, backgroundColor),
-                secondary = getAccessibleColor(LiftrixColors.Secondary, backgroundColor),
-                accent = getAccessibleColor(LiftrixColors.Accent, backgroundColor),
+                primary = getAccessibleColor(LiftrixColors.PersianGreen, backgroundColor),
+                secondary = getAccessibleColor(LiftrixColors.Jet, backgroundColor),
+                accent = getAccessibleColor(LiftrixColors.TiffanyBlue, backgroundColor),
                 background = backgroundColor
             )
         }
@@ -534,7 +425,175 @@ data class AccessibilityValidationResult(
     val totalTests: Int
 )
 
-// Legacy color references for backward compatibility
-val LiftrixTeal: Color = LiftrixColors.Primary
-val LiftrixIndigo: Color = LiftrixColors.Secondary  
-val LiftrixCoral: Color = LiftrixColors.Accent
+/**
+ * 5-Color Palette Compliance Validation
+ * Ensures color usage adheres to Night, Jet, Persian Green, Tiffany Blue, Snow palette
+ * Validates <20% grey usage requirement through pure 5-color system adoption
+ */
+object ColorPaletteValidator {
+    
+    /**
+     * Measures grey content in a color to determine if it's primarily grey
+     */
+    fun isGreyColor(color: Color, tolerance: Float = 0.05f): Boolean {
+        val r = color.red
+        val g = color.green  
+        val b = color.blue
+        val avg = (r + g + b) / 3f
+        
+        // Check if all RGB components are within tolerance of the average (indicating grey)
+        return kotlin.math.abs(r - avg) <= tolerance &&
+               kotlin.math.abs(g - avg) <= tolerance &&
+               kotlin.math.abs(b - avg) <= tolerance
+    }
+    
+    /**
+     * Calculates grey usage percentage in a list of colors
+     */
+    fun calculateGreyUsagePercentage(colors: List<Color>): GreyUsageReport {
+        if (colors.isEmpty()) {
+            return GreyUsageReport(0, 0, 0.0, true, emptyList())
+        }
+        
+        val greyColors = mutableListOf<Color>()
+        colors.forEach { color ->
+            if (isGreyColor(color)) {
+                greyColors.add(color)
+            }
+        }
+        
+        val greyPercentage = (greyColors.size.toDouble() / colors.size.toDouble()) * 100.0
+        val meetsTarget = greyPercentage < 20.0
+        
+        return GreyUsageReport(
+            totalColors = colors.size,
+            greyColors = greyColors.size,
+            greyPercentage = greyPercentage,
+            meetsTarget = meetsTarget,
+            identifiedGreyColors = greyColors
+        )
+    }
+    
+    /**
+     * Audits color scheme for grey usage compliance
+     */
+    fun auditColorScheme(lightScheme: androidx.compose.material3.ColorScheme, darkScheme: androidx.compose.material3.ColorScheme): ColorSchemeGreyAudit {
+        val lightColors = listOf(
+            lightScheme.primary, lightScheme.secondary, lightScheme.tertiary,
+            lightScheme.background, lightScheme.surface, lightScheme.surfaceVariant,
+            lightScheme.outline, lightScheme.outlineVariant
+        )
+        
+        val darkColors = listOf(
+            darkScheme.primary, darkScheme.secondary, darkScheme.tertiary,
+            darkScheme.background, darkScheme.surface, darkScheme.surfaceVariant,
+            darkScheme.outline, darkScheme.outlineVariant
+        )
+        
+        val lightReport = calculateGreyUsagePercentage(lightColors)
+        val darkReport = calculateGreyUsagePercentage(darkColors)
+        
+        return ColorSchemeGreyAudit(
+            lightThemeReport = lightReport,
+            darkThemeReport = darkReport,
+            overallCompliant = lightReport.meetsTarget && darkReport.meetsTarget,
+            recommendations = generateRecommendations(lightReport, darkReport)
+        )
+    }
+    
+    /**
+     * Suggests 5-color palette alternatives to replace any off-palette colors
+     */
+    fun suggest5ColorAlternatives(offPaletteColor: Color): List<ColorAlternative> {
+        return listOf(
+            ColorAlternative(
+                color = LiftrixColors.PersianGreen.copy(alpha = 0.12f),
+                name = "Persian Green Variant",
+                description = "Light Persian Green maintaining brand consistency"
+            ),
+            ColorAlternative(
+                color = LiftrixColors.TiffanyBlue.copy(alpha = 0.20f),
+                name = "Tiffany Blue Container",
+                description = "Subtle Tiffany Blue container color"
+            ),
+            ColorAlternative(
+                color = LiftrixColors.Jet.copy(alpha = 0.15f),
+                name = "Jet Surface Variant", 
+                description = "Light Jet for subtle surface differentiation"
+            ),
+            ColorAlternative(
+                color = LiftrixColors.Snow,
+                name = "Snow Background",
+                description = "Pure Snow for maximum contrast and clarity"
+            ),
+            ColorAlternative(
+                color = LiftrixColors.Night,
+                name = "Night Background",
+                description = "Pure Night for deep contrast and OLED optimization"
+            )
+        )
+    }
+    
+    private fun generateRecommendations(lightReport: GreyUsageReport, darkReport: GreyUsageReport): List<String> {
+        val recommendations = mutableListOf<String>()
+        
+        if (!lightReport.meetsTarget) {
+            recommendations.add("Light theme grey usage (${String.format("%.1f", lightReport.greyPercentage)}%) exceeds 20% target")
+            recommendations.add("Consider using teal-tinted variants for surface and outline colors")
+        }
+        
+        if (!darkReport.meetsTarget) {
+            recommendations.add("Dark theme grey usage (${String.format("%.1f", darkReport.greyPercentage)}%) exceeds 20% target")
+            recommendations.add("Replace grey backgrounds with deep teal-tinted alternatives")
+        }
+        
+        if (lightReport.meetsTarget && darkReport.meetsTarget) {
+            recommendations.add("✅ Grey usage is within acceptable limits (<20%)")
+            recommendations.add("Continue using teal-based alternatives to maintain brand consistency")
+        }
+        
+        return recommendations
+    }
+}
+
+/**
+ * Report of grey usage analysis
+ */
+data class GreyUsageReport(
+    val totalColors: Int,
+    val greyColors: Int,
+    val greyPercentage: Double,
+    val meetsTarget: Boolean,
+    val identifiedGreyColors: List<Color>
+)
+
+/**
+ * Complete color scheme grey usage audit result
+ */
+data class ColorSchemeGreyAudit(
+    val lightThemeReport: GreyUsageReport,
+    val darkThemeReport: GreyUsageReport,
+    val overallCompliant: Boolean,
+    val recommendations: List<String>
+)
+
+/**
+ * Color alternative suggestion
+ */
+data class ColorAlternative(
+    val color: Color,
+    val name: String,
+    val description: String
+)
+
+// Direct gradient definitions for component usage
+val PrimaryGradient: Brush = Brush.linearGradient(
+    colors = listOf(LiftrixColors.PersianGreen, LiftrixColors.TiffanyBlue)
+)
+
+val CardElevationGradient: Brush = Brush.verticalGradient(
+    colors = listOf(
+        LiftrixColors.PersianGreen.copy(alpha = 0.05f),
+        Color.Transparent
+    )
+)

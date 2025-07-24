@@ -128,6 +128,15 @@ fun DashboardCustomizationScreen(
                             modifier = Modifier.fillMaxSize()
                         )
                     }
+                    
+                    else -> {
+                        CustomizationErrorState(
+                            error = com.example.liftrix.domain.model.error.LiftrixError.UnknownError("Unknown UI state"),
+                            onRetry = { stableOnEvent(WidgetSettingsEvent.RetryLastAction) },
+                            onDismiss = { stableOnEvent(WidgetSettingsEvent.DismissError) },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
             }
         }

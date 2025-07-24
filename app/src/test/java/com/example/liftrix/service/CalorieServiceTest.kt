@@ -76,9 +76,9 @@ class CalorieServiceTest {
         val monthWorkouts = createMockWorkouts(10)
         
         coEvery { workoutRepository.getWorkoutsByDateRange(userId, any(), any()) } returns 
-            LiftrixResult.Success(currentWeekWorkouts) andThen
-            LiftrixResult.Success(previousWeekWorkouts) andThen
-            LiftrixResult.Success(monthWorkouts)
+            Result.success(currentWeekWorkouts) andThen
+            Result.success(previousWeekWorkouts) andThen
+            Result.success(monthWorkouts)
         
         coEvery { calorieCalculator.calculateCaloriesBurned(any(), any(), any()) } returns 250
         
@@ -106,7 +106,7 @@ class CalorieServiceTest {
         val emptyWorkouts = emptyList<Workout>()
         
         coEvery { workoutRepository.getWorkoutsByDateRange(userId, any(), any()) } returns 
-            LiftrixResult.Success(emptyWorkouts)
+            Result.success(emptyWorkouts)
         
         // When
         val result = calorieService.getCalorieSummary(userId)
@@ -152,9 +152,9 @@ class CalorieServiceTest {
         
         val workouts = createMockWorkouts(5)
         coEvery { workoutRepository.getWorkoutsByDateRange(userId, any(), any()) } returns 
-            LiftrixResult.Success(workouts)
+            Result.success(workouts)
         coEvery { calorieCalculator.calculateCaloriesBurned(any(), any(), any()) } returns 300
-        coEvery { metDataRepository.getAverageMetForCategory(any()) } returns LiftrixResult.Success(5.0f)
+        coEvery { metDataRepository.getAverageMetForCategory(any()) } returns Result.success(5.0f)
         
         // When
         val result = calorieService.getDailyCalories(userId, period)
@@ -186,9 +186,9 @@ class CalorieServiceTest {
         
         val workoutsOnSpecificDate = createMockWorkouts(2)
         coEvery { workoutRepository.getWorkoutsByDateRange(userId, any(), any()) } returns 
-            LiftrixResult.Success(workoutsOnSpecificDate)
+            Result.success(workoutsOnSpecificDate)
         coEvery { calorieCalculator.calculateCaloriesBurned(any(), any(), any()) } returns 250
-        coEvery { metDataRepository.getAverageMetForCategory(any()) } returns LiftrixResult.Success(5.0f)
+        coEvery { metDataRepository.getAverageMetForCategory(any()) } returns Result.success(5.0f)
         
         // When
         val result = calorieService.getDailyCalories(userId, period)
@@ -232,7 +232,7 @@ class CalorieServiceTest {
         val workouts = createMockWorkouts(20) // Spread across multiple weeks
         
         coEvery { workoutRepository.getWorkoutsByDateRange(userId, any(), any()) } returns 
-            LiftrixResult.Success(workouts)
+            Result.success(workouts)
         coEvery { calorieCalculator.calculateCaloriesBurned(any(), any(), any()) } returns 300
         
         // When
@@ -267,7 +267,7 @@ class CalorieServiceTest {
         }
         
         coEvery { workoutRepository.getWorkoutsByDateRange(userId, any(), any()) } returns 
-            LiftrixResult.Success(consistentWorkouts)
+            Result.success(consistentWorkouts)
         coEvery { calorieCalculator.calculateCaloriesBurned(any(), any(), any()) } returns 300
         
         // When
@@ -313,7 +313,7 @@ class CalorieServiceTest {
         val userProfile = createMockUserProfile(userId)
         val expectedCalories = 350
         
-        coEvery { userRepository.getUserProfile(userId) } returns LiftrixResult.Success(userProfile)
+        coEvery { userRepository.getUserProfile(userId) } returns Result.success(userProfile)
         coEvery { calorieCalculator.calculateCaloriesBurned(any(), any(), any()) } returns expectedCalories
         
         // When
@@ -339,7 +339,7 @@ class CalorieServiceTest {
         val userProfile = createMockUserProfile(userId)
         val expectedCalories = 300
         
-        coEvery { userRepository.getUserProfile(userId) } returns LiftrixResult.Success(userProfile)
+        coEvery { userRepository.getUserProfile(userId) } returns Result.success(userProfile)
         coEvery { calorieCalculator.calculateCaloriesBurned(any(), any(), any()) } returns expectedCalories
         
         // When
@@ -360,7 +360,7 @@ class CalorieServiceTest {
         val workout = createMockWorkout(userId, "workout1")
         val expectedCalories = 250
         
-        coEvery { userRepository.getUserProfile(userId) } returns LiftrixResult.Error(
+        coEvery { userRepository.getUserProfile(userId) } returns Result.failure(
             LiftrixError.NotFoundError("User profile not found")
         )
         coEvery { calorieCalculator.calculateCaloriesBurned(any(), any(), any()) } returns expectedCalories
@@ -384,7 +384,7 @@ class CalorieServiceTest {
         val userProfile = createMockUserProfile(userId)
         val calculatorError = RuntimeException("Calculation failed")
         
-        coEvery { userRepository.getUserProfile(userId) } returns LiftrixResult.Success(userProfile)
+        coEvery { userRepository.getUserProfile(userId) } returns Result.success(userProfile)
         coEvery { calorieCalculator.calculateCaloriesBurned(any(), any(), any()) } throws calculatorError
         
         // When
@@ -405,7 +405,7 @@ class CalorieServiceTest {
         val userProfile = createMockUserProfile(userId)
         val expectedCalories = 300
         
-        coEvery { userRepository.getUserProfile(userId) } returns LiftrixResult.Success(userProfile)
+        coEvery { userRepository.getUserProfile(userId) } returns Result.success(userProfile)
         coEvery { calorieCalculator.calculateCaloriesBurned(any(), any(), any()) } returns expectedCalories
         
         // When - Execute multiple concurrent calls

@@ -2,11 +2,9 @@ package com.example.liftrix.core.error
 
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Assertions.*
-import org.junit.jupiter.api.DisplayName
-import org.junit.jupiter.api.Nested
+import org.junit.Assert.*
+import org.junit.Before
+import org.junit.Test
 
 /**
  * Comprehensive unit tests for ErrorContextBuilder with proper mocking and validation.
@@ -18,14 +16,12 @@ class ErrorContextBuilderTest {
     
     private lateinit var builder: ErrorContextBuilder
     
-    @BeforeEach
+    @Before
     fun setup() {
         builder = ErrorContextBuilder()
     }
     
-    @Nested
-    @DisplayName("Basic Builder Operations")
-    inner class BasicBuilderOperations {
+    // Basic Builder Operations
         
         @Test
         fun `given new builder, when checking isEmpty, then returns true`() {
@@ -92,11 +88,7 @@ class ErrorContextBuilderTest {
             assertEquals(value, context[key])
             assertTrue(context.containsKey(key))
         }
-    }
-    
-    @Nested
-    @DisplayName("Method Chaining")
-    inner class MethodChaining {
+    // Method Chaining Tests
         
         @Test
         fun `given builder, when chaining multiple operations, then all operations are applied`() {
@@ -153,11 +145,7 @@ class ErrorContextBuilderTest {
             assertEquals(metadata2.second, context[metadata2.first])
             assertEquals(metadata3.second, context[metadata3.first])
         }
-    }
-    
-    @Nested
-    @DisplayName("System Context Generation")
-    inner class SystemContextGeneration {
+    // System Context Generation Tests
         
         @Test
         fun `given builder, when building context, then includes system-level context`() {
@@ -188,8 +176,11 @@ class ErrorContextBuilderTest {
             assertNotNull(timestamp)
             
             // Verify timestamp is parseable as Instant
-            assertDoesNotThrow {
+            try {
                 Instant.parse(timestamp!!)
+                // If we get here, parsing succeeded
+            } catch (e: Exception) {
+                fail("Timestamp should be parseable: ${e.message}")
             }
         }
         
@@ -221,11 +212,7 @@ class ErrorContextBuilderTest {
             assertEquals("1.0.0", context["context_builder_version"])
             assertEquals("builder_pattern", context["context_build_method"])
         }
-    }
-    
-    @Nested
-    @DisplayName("Builder State Management")
-    inner class BuilderStateManagement {
+    // Builder State Management Tests
         
         @Test
         fun `given builder with context, when copying, then creates independent copy`() {
@@ -302,11 +289,7 @@ class ErrorContextBuilderTest {
             assertTrue(hasUserId)
             assertFalse(hasSessionId)
         }
-    }
-    
-    @Nested
-    @DisplayName("Extension Functions")
-    inner class ExtensionFunctions {
+    // Extension Functions Tests
         
         @Test
         fun `given builder, when adding metadata map, then all entries are added`() {
@@ -366,11 +349,7 @@ class ErrorContextBuilderTest {
             assertEquals("session_456", context["session_id"])
             assertEquals("custom_value", context["custom_key"])
         }
-    }
-    
-    @Nested
-    @DisplayName("Companion Object Factory Methods")
-    inner class CompanionObjectFactoryMethods {
+    // Companion Object Factory Methods Tests
         
         @Test
         fun `given companion object, when creating builder, then returns new instance`() {
@@ -424,11 +403,7 @@ class ErrorContextBuilderTest {
             assertEquals(userId, context["user_id"])
             assertEquals(operation, context["operation"])
         }
-    }
-    
-    @Nested
-    @DisplayName("Edge Cases and Error Scenarios")
-    inner class EdgeCasesAndErrorScenarios {
+    // Edge Cases and Error Scenarios Tests
         
         @Test
         fun `given builder, when adding empty string values, then values are preserved`() {
@@ -508,11 +483,7 @@ class ErrorContextBuilderTest {
             assertSame(builder, result)
             assertTrue(builder.containsKey("user_id"))
         }
-    }
-    
-    @Nested
-    @DisplayName("Performance and Memory")
-    inner class PerformanceAndMemory {
+    // Performance and Memory Tests
         
         @Test
         fun `given builder, when building multiple times, then each call creates new map`() {
@@ -545,5 +516,4 @@ class ErrorContextBuilderTest {
                 assertEquals("value_$i", context["key_$i"])
             }
         }
-    }
 }

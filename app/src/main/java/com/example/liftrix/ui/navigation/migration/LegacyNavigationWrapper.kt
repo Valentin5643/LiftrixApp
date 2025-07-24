@@ -192,6 +192,9 @@ class LegacyNavigationWrapper @Inject constructor(
                 is LiftrixRoute.GuestConversion -> "Replace with: navController.navigate(LiftrixRoute.GuestConversion(...))"
                 is LiftrixRoute.AuthSignUp -> "Replace with: navController.navigate(LiftrixRoute.AuthSignUp)"
                 is LiftrixRoute.AuthSignIn -> "Replace with: navController.navigate(LiftrixRoute.AuthSignIn)"
+                is LiftrixRoute.CreateWorkout -> "Replace with: navController.navigate(LiftrixRoute.CreateWorkout)"
+                is LiftrixRoute.EditWorkout -> "Replace with: navController.navigate(LiftrixRoute.EditWorkout(workoutId))"
+                is LiftrixRoute.EditSession -> "Replace with: navController.navigate(LiftrixRoute.EditSession(sessionId))"
             }
         } else {
             null

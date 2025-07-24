@@ -268,6 +268,19 @@ object LiftrixAnimations {
         repeatMode = RepeatMode.Restart
     )
     
+    /**
+     * Skeleton loading shimmer animation - Task ANIM-001
+     * Smooth 1200ms cycle with teal accent color for skeleton loading states
+     * Optimized for natural breathing effect and 60fps performance
+     */
+    val skeletonShimmerAnimation: InfiniteRepeatableSpec<Float> = infiniteRepeatable(
+        animation = tween(
+            durationMillis = 1200, // Task specification: smooth skeleton loading
+            easing = LinearEasing
+        ),
+        repeatMode = RepeatMode.Restart
+    )
+    
     // Card and Surface Animations
     
     /**

@@ -50,6 +50,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.example.liftrix.domain.model.ExerciseSet
 import com.example.liftrix.ui.workout.create.WorkoutTemplateCreationViewModel
 import com.example.liftrix.ui.workout.creation.components.DragDropExerciseList
+import com.example.liftrix.ui.common.state.dataOrNull
 
 /**
  * Template creation screen for building workout templates without timer.
@@ -136,12 +137,13 @@ fun WorkoutTemplateScreen(
                 },
                 actions = {
                     // Save template button - always visible, disabled when conditions not met
-                    val canSave = uiState.exercises.isNotEmpty() && templateName.isNotBlank()
+                    val exercises = uiState.dataOrNull()?.exercises ?: emptyList()
+                    val canSave = exercises.isNotEmpty() && templateName.isNotBlank()
                     IconButton(
                         onClick = { 
                             if (canSave) {
                                 // Save template without timer
-                                viewModel.createTemplate(templateName, templateDescription, uiState.exercises)
+                                viewModel.createTemplate(templateName, templateDescription, exercises)
                                 onNavigateBack()
                             }
                         },
@@ -200,12 +202,13 @@ fun WorkoutTemplateScreen(
             // Exercises Section
             item {
                 // 🔥 CRITICAL DEBUG: Log template UI state and exercises
+                val exercises = uiState.dataOrNull()?.exercises ?: emptyList()
                 timber.log.Timber.d("🔥 TEMPLATE-UI-DEBUG: Rendering template exercises section")
-                timber.log.Timber.d("🔥 TEMPLATE-UI-DEBUG: uiState.exercises.size = ${uiState.exercises.size}")
-                timber.log.Timber.d("🔥 TEMPLATE-UI-DEBUG: uiState.exercises = ${uiState.exercises.map { it.name }}")
+                timber.log.Timber.d("🔥 TEMPLATE-UI-DEBUG: exercises.size = ${exercises.size}")
+                timber.log.Timber.d("🔥 TEMPLATE-UI-DEBUG: exercises = ${exercises.map { it.name }}")
                 
                 DragDropExerciseList(
-                    exercises = uiState.exercises,
+                    exercises = exercises,
                     onReorder = { fromIndex, toIndex ->
                         viewModel.reorderExercises(fromIndex, toIndex)
                     },

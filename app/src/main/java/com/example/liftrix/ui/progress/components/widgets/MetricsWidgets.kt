@@ -53,7 +53,7 @@ fun CaloriesBurnedWidget(
                 trendPercentage = widgetData.trendPercentage,
                 secondaryValue = widgetData.secondaryValue,
                 icon = Icons.Default.LocalFireDepartment,
-                primaryColor = LiftrixColors.Primary
+                primaryColor = MaterialTheme.colorScheme.primary
             )
         }
     }
@@ -86,7 +86,7 @@ fun DailyCaloriesWidget(
                 trendPercentage = widgetData.trendPercentage,
                 secondaryValue = widgetData.secondaryValue ?: "0",
                 icon = Icons.Default.TrendingUp,
-                primaryColor = LiftrixColors.Primary
+                primaryColor = MaterialTheme.colorScheme.primary
             )
         }
     }
@@ -119,7 +119,7 @@ fun WorkoutFrequencyWidget(
                 trendPercentage = widgetData.trendPercentage,
                 secondaryValue = widgetData.secondaryValue,
                 icon = Icons.Default.FitnessCenter,
-                primaryColor = LiftrixColors.Primary
+                primaryColor = MaterialTheme.colorScheme.primary
             )
         }
     }
@@ -152,7 +152,7 @@ fun TotalVolumeWidget(
                 trendPercentage = widgetData.trendPercentage,
                 secondaryValue = widgetData.secondaryValue,
                 icon = Icons.Default.Scale,
-                primaryColor = LiftrixColors.Primary
+                primaryColor = MaterialTheme.colorScheme.primary
             )
         }
     }
@@ -185,7 +185,7 @@ fun ConsistencyStreakWidget(
                 trendPercentage = widgetData.trendPercentage,
                 secondaryValue = widgetData.secondaryValue,
                 icon = Icons.Default.Whatshot,
-                primaryColor = LiftrixColors.Primary
+                primaryColor = MaterialTheme.colorScheme.primary
             )
         }
     }
@@ -218,7 +218,7 @@ fun AverageDurationWidget(
                 trendPercentage = widgetData.trendPercentage,
                 secondaryValue = widgetData.secondaryValue,
                 icon = Icons.Default.Timer,
-                primaryColor = LiftrixColors.Primary
+                primaryColor = MaterialTheme.colorScheme.primary
             )
         }
     }
@@ -251,7 +251,7 @@ fun WorkoutStreakWidget(
                 trendPercentage = widgetData.trendPercentage,
                 secondaryValue = widgetData.secondaryValue,
                 icon = Icons.Default.TrendingUp,
-                primaryColor = LiftrixColors.Primary
+                primaryColor = MaterialTheme.colorScheme.primary
             )
         }
     }
@@ -284,7 +284,7 @@ fun SetCompletionRateWidget(
                 trendPercentage = widgetData.trendPercentage,
                 secondaryValue = widgetData.secondaryValue ?: "0",
                 icon = Icons.Default.CheckCircle,
-                primaryColor = LiftrixColors.Primary
+                primaryColor = MaterialTheme.colorScheme.primary
             )
         }
     }
@@ -320,14 +320,14 @@ fun CompactMetricWidget(
                         text = "${widgetData.primaryValue} ${widgetData.unit}",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
-                        color = LiftrixColors.Primary
+                        color = MaterialTheme.colorScheme.primary
                     )
                     
                     widgetData.secondaryValue?.let { secondary ->
                         Text(
                             text = secondary,
                             style = MaterialTheme.typography.bodySmall,
-                            color = LiftrixColors.OnSurface.copy(alpha = 0.6f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
                     }
                 }
@@ -396,7 +396,7 @@ private fun MetricDisplay(
                 Text(
                     text = unit,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = LiftrixColors.OnSurface.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
             }
             
@@ -412,7 +412,7 @@ private fun MetricDisplay(
                 Text(
                     text = trend.getPercentageDescription(trendPercentage),
                     style = MaterialTheme.typography.bodySmall,
-                    color = LiftrixColors.OnSurface.copy(alpha = 0.6f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
             
@@ -420,7 +420,7 @@ private fun MetricDisplay(
                 Text(
                     text = secondary,
                     style = MaterialTheme.typography.bodySmall,
-                    color = LiftrixColors.OnSurface.copy(alpha = 0.6f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
         }
@@ -474,14 +474,14 @@ private fun MetricDisplayWithProgress(
                 Text(
                     text = "Target: $secondaryValue $unit",
                     style = MaterialTheme.typography.bodySmall,
-                    color = LiftrixColors.OnSurface.copy(alpha = 0.6f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
                 
                 Text(
                     text = "${(progress * 100).toInt()}%",
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Medium,
-                    color = LiftrixColors.OnSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
             
@@ -491,7 +491,7 @@ private fun MetricDisplayWithProgress(
                     .fillMaxWidth()
                     .height(6.dp),
                 color = primaryColor,
-                trackColor = LiftrixColors.OnSurface.copy(alpha = 0.1f)
+                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
             )
         }
     }

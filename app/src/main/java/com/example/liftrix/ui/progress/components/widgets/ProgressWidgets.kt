@@ -52,7 +52,7 @@ fun StrengthProgressWidget(
             ProgressDisplay(
                 progressData = progressData,
                 icon = Icons.Default.FitnessCenter,
-                primaryColor = LiftrixColors.Primary,
+                primaryColor = MaterialTheme.colorScheme.primary,
                 showMilestones = true
             )
         }
@@ -81,7 +81,7 @@ fun PersonalRecordsWidget(
         data?.let { progressData ->
             AchievementDisplay(
                 progressData = progressData,
-                primaryColor = Color(0xFFFF9800)
+                primaryColor = MaterialTheme.colorScheme.primary
             )
         }
     }
@@ -110,7 +110,7 @@ fun VolumeLoadProgressionWidget(
             ProgressDisplay(
                 progressData = progressData,
                 icon = Icons.Default.TrendingUp,
-                primaryColor = Color(0xFF2196F3),
+                primaryColor = MaterialTheme.colorScheme.secondary,
                 showMilestones = false
             )
         }
@@ -140,7 +140,7 @@ fun OneRMProgressionWidget(
             ProgressDisplay(
                 progressData = progressData,
                 icon = Icons.Default.Psychology,
-                primaryColor = Color(0xFF9C27B0),
+                primaryColor = MaterialTheme.colorScheme.primary,
                 showMilestones = true
             )
         }
@@ -169,7 +169,7 @@ fun GoalAchievementWidget(
         data?.let { progressData ->
             GoalProgressDisplay(
                 progressData = progressData,
-                primaryColor = Color(0xFF4CAF50)
+                primaryColor = MaterialTheme.colorScheme.secondary
             )
         }
     }
@@ -197,7 +197,7 @@ fun MonthlySummaryWidget(
         data?.let { progressData ->
             MonthlySummaryDisplay(
                 progressData = progressData,
-                primaryColor = Color(0xFF795548)
+                primaryColor = MaterialTheme.colorScheme.primary
             )
         }
     }
@@ -233,7 +233,7 @@ fun CompactProgressWidget(
                         text = "${progressData.currentValue.toInt()} ${progressData.unit}",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
-                        color = LiftrixColors.Primary
+                        color = MaterialTheme.colorScheme.primary
                     )
                     
                     Text(
@@ -246,7 +246,7 @@ fun CompactProgressWidget(
                 CircularProgressIndicator(
                     progress = progressData.progressPercentage / 100f,
                     modifier = Modifier.size(32.dp),
-                    color = LiftrixColors.Primary,
+                    color = MaterialTheme.colorScheme.primary,
                     strokeWidth = 3.dp
                 )
             }

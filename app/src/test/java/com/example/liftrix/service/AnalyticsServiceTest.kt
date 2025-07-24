@@ -68,7 +68,7 @@ class AnalyticsServiceTest {
         )
         
         every { widgetManager.shouldShowWidget(widget, hasWorkoutData, dataAge) } returns true
-        coEvery { analyticsEngine.calculateProgressMetrics(userId, any()) } returns LiftrixResult.Success(
+        coEvery { analyticsEngine.calculateProgressMetrics(userId, any()) } returns Result.success(
             mockk {
                 every { volumeMetrics } returns mockk {
                     every { totalVolume } returns mockk {
@@ -166,7 +166,7 @@ class AnalyticsServiceTest {
         val userId = "user123"
         val expectedPreferences = WidgetPreferences.createDefault(userId)
         
-        coEvery { preferencesRepository.getWidgetPreferences(userId) } returns flowOf(LiftrixResult.Success(expectedPreferences))
+        coEvery { preferencesRepository.getWidgetPreferences(userId) } returns flowOf(Result.success(expectedPreferences))
         
         // When
         val result = analyticsService.getWidgetPreferences(userId)
@@ -184,8 +184,8 @@ class AnalyticsServiceTest {
         val userId = "user123"
         val defaultPreferences = WidgetPreferences.createDefault(userId)
         
-        coEvery { preferencesRepository.getWidgetPreferences(userId) } returns flowOf(LiftrixResult.Error(LiftrixError.NotFoundError("No preferences found")))
-        coEvery { preferencesRepository.saveWidgetPreferences(any()) } returns LiftrixResult.Success(Unit)
+        coEvery { preferencesRepository.getWidgetPreferences(userId) } returns flowOf(Result.failure(LiftrixError.NotFoundError("No preferences found")))
+        coEvery { preferencesRepository.saveWidgetPreferences(any()) } returns Result.success(Unit)
         
         // When
         val result = analyticsService.getWidgetPreferences(userId)
@@ -227,7 +227,7 @@ class AnalyticsServiceTest {
         }
         
         every { widgetManager.validatePreferences(preferences) } returns validationResult
-        coEvery { preferencesRepository.saveWidgetPreferences(any()) } returns LiftrixResult.Success(Unit)
+        coEvery { preferencesRepository.saveWidgetPreferences(any()) } returns Result.success(Unit)
         
         // When
         val result = analyticsService.updateWidgetPreferences(preferences)
@@ -273,8 +273,8 @@ class AnalyticsServiceTest {
         val updatedPreferences = currentPreferences.toggleWidget(widgetId)
         
         every { widgetManager.getWidgetById(widgetId) } returns widget
-        coEvery { preferencesRepository.getWidgetPreferences(userId) } returns flowOf(LiftrixResult.Success(currentPreferences))
-        coEvery { preferencesRepository.saveWidgetPreferences(any()) } returns LiftrixResult.Success(Unit)
+        coEvery { preferencesRepository.getWidgetPreferences(userId) } returns flowOf(Result.success(currentPreferences))
+        coEvery { preferencesRepository.saveWidgetPreferences(any()) } returns Result.success(Unit)
         
         // When
         val result = analyticsService.toggleWidgetVisibility(userId, widgetId)
@@ -299,7 +299,7 @@ class AnalyticsServiceTest {
         }
         
         every { widgetManager.getWidgetById(widgetId) } returns widget
-        coEvery { preferencesRepository.getWidgetPreferences(userId) } returns flowOf(LiftrixResult.Success(currentPreferences))
+        coEvery { preferencesRepository.getWidgetPreferences(userId) } returns flowOf(Result.success(currentPreferences))
         
         // When
         val result = analyticsService.toggleWidgetVisibility(userId, widgetId)
@@ -378,7 +378,7 @@ class AnalyticsServiceTest {
         // Given
         val userId = "user123"
         
-        coEvery { preferencesRepository.resetToDefaults(userId) } returns LiftrixResult.Success(Unit)
+        coEvery { preferencesRepository.resetToDefaults(userId) } returns Result.success(Unit)
         
         // When
         val result = analyticsService.resetPreferences(userId)
@@ -413,7 +413,7 @@ class AnalyticsServiceTest {
         val userId = "user123"
         val repositoryException = RuntimeException("Database reset failed")
         
-        coEvery { preferencesRepository.resetToDefaults(userId) } returns LiftrixResult.Error(
+        coEvery { preferencesRepository.resetToDefaults(userId) } returns Result.failure(
             LiftrixError.DatabaseError("Reset operation failed")
         )
         
@@ -443,7 +443,7 @@ class AnalyticsServiceTest {
             every { widgetManager.shouldShowWidget(widget, true, 0) } returns true
         }
         
-        coEvery { analyticsEngine.calculateProgressMetrics(userId, any()) } returns LiftrixResult.Success(
+        coEvery { analyticsEngine.calculateProgressMetrics(userId, any()) } returns Result.success(
             mockk {
                 every { volumeMetrics } returns mockk {
                     every { totalVolume } returns mockk { every { kilograms } returns 1500.0 }
@@ -486,7 +486,7 @@ class AnalyticsServiceTest {
         val dataAge = 0
         
         every { widgetManager.shouldShowWidget(widget, hasWorkoutData, dataAge) } returns true
-        coEvery { analyticsEngine.calculateProgressMetrics(userId, any()) } returns LiftrixResult.Success(
+        coEvery { analyticsEngine.calculateProgressMetrics(userId, any()) } returns Result.success(
             mockk {
                 every { volumeMetrics } returns mockk {
                     every { totalVolume } returns mockk { every { kilograms } returns 1500.0 }

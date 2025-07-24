@@ -12,9 +12,17 @@ import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.usecase.SaveWorkoutUseCase
 import com.example.liftrix.domain.usecase.analytics.LogWorkoutEventUseCase
 import com.example.liftrix.domain.service.AnalyticsService
+import com.example.liftrix.analytics.UxMetricsTracker
+import com.example.liftrix.analytics.TaskCompletionTracker
+import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.domain.model.common.LiftrixResult
-import androidx.lifecycle.ViewModel
+import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.state.UiState
+import com.example.liftrix.ui.common.state.WorkoutScreenData
+import com.example.liftrix.ui.common.state.WorkoutUiState
+import com.example.liftrix.ui.common.state.dataOrNull
+import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.sync.SyncManager
 import com.example.liftrix.sync.SyncStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,11 +48,13 @@ class WorkoutViewModel @Inject constructor(
     private val saveWorkoutUseCase: SaveWorkoutUseCase,
     private val syncManager: SyncManager,
     private val logWorkoutEventUseCase: LogWorkoutEventUseCase,
-    private val analyticsService: AnalyticsService
-) : ViewModel() {
+    private val analyticsService: AnalyticsService,
+    private val uxMetricsTracker: UxMetricsTracker,
+    private val taskCompletionTracker: TaskCompletionTracker,
+    errorHandler: ErrorHandler
+) : BaseViewModel<WorkoutUiState, WorkoutEvent>(errorHandler) {
 
-    private val _uiState = MutableStateFlow(WorkoutUiState())
-    val uiState: StateFlow<WorkoutUiState> = _uiState.asStateFlow()
+    override val _uiState = MutableStateFlow<WorkoutUiState>(WorkoutUiState.Loading)
 
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
@@ -57,17 +67,38 @@ class WorkoutViewModel @Inject constructor(
     }
 
     /**
-     * Handles events from the UI following MVI pattern
+     * Handles events from the UI following BaseViewModel MVI pattern
      */
-    fun onEvent(event: WorkoutEvent) {
+    override fun handleEvent(event: WorkoutEvent) {
         when (event) {
             is WorkoutEvent.StartWorkout -> startWorkout(event.workout)
             is WorkoutEvent.CompleteWorkout -> completeWorkout(event.workout)
             is WorkoutEvent.SaveWorkout -> saveWorkout(event.workout)
-            is WorkoutEvent.ClearError -> clearError()
-            is WorkoutEvent.RefreshData -> refreshData()
+            is WorkoutEvent.NavigateToEdit -> {
+                // Navigation will be handled by the screen
+            }
+            WorkoutEvent.ClearError -> clearError()
+            WorkoutEvent.RefreshData -> refreshData()
         }
     }
+
+    /**
+     * Override to handle loading state updates
+     */
+    override fun setLoadingState() {
+        setState(WorkoutUiState.Loading)
+    }
+
+    /**
+     * Override to handle error state updates
+     */
+    override fun updateErrorState(error: com.example.liftrix.domain.model.error.LiftrixError) {
+        val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
+        setState(WorkoutUiState.Error(error, currentData))
+    }
+
+
+
 
     private fun observeAuthState() {
         viewModelScope.launch {
@@ -83,11 +114,7 @@ class WorkoutViewModel @Inject constructor(
                 } else {
                     Timber.d("User not authenticated in WorkoutViewModel")
                     // Clear workout data when user logs out
-                    _uiState.value = _uiState.value.copy(
-                        workouts = emptyList(),
-                        templates = emptyList(),
-                        isLoading = false
-                    )
+                    setState(WorkoutUiState.Success(data = WorkoutScreenData()))
                     // Clear analytics user properties
                     analyticsService.clearUserProperties()
                         .onFailure { exception ->
@@ -108,11 +135,13 @@ class WorkoutViewModel @Inject constructor(
                         workoutRepository.getAllWorkoutsForUser(user.uid),
                         syncManager.getSyncStatus()
                     ) { workouts, syncStatus ->
-                        _uiState.value = _uiState.value.copy(
-                            workouts = workouts,
-                            syncStatus = syncStatus,
-                            isLoading = false
-                        )
+                        val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
+                        setState(WorkoutUiState.Success(
+                            currentData.copy(
+                                workouts = workouts,
+                                syncStatus = syncStatus
+                            )
+                        ))
                     }.collect { /* Updates handled in combine block */ }
                 }
         }
@@ -134,16 +163,18 @@ class WorkoutViewModel @Inject constructor(
                         .collect { templatesResult ->
                             templatesResult.fold(
                                 onSuccess = { templates ->
-                                    _uiState.value = _uiState.value.copy(
-                                        templates = templates
-                                    )
+                                    val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
+                                    setState(WorkoutUiState.Success(
+                                        currentData.copy(templates = templates)
+                                    ))
                                     Timber.d("Loaded ${templates.size} templates for user ${user.uid}")
                                 },
                                 onFailure = { exception ->
                                     Timber.e(exception, "Failed to load templates for user ${user.uid}")
-                                    _uiState.value = _uiState.value.copy(
-                                        templates = emptyList()
-                                    )
+                                    val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
+                                    setState(WorkoutUiState.Success(
+                                        currentData.copy(templates = emptyList())
+                                    ))
                                 }
                             )
                         }
@@ -154,7 +185,10 @@ class WorkoutViewModel @Inject constructor(
     private fun observeSyncStatus() {
         viewModelScope.launch {
             syncManager.getSyncStatus().collect { status ->
-                _uiState.value = _uiState.value.copy(syncStatus = status)
+                val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
+                setState(WorkoutUiState.Success(
+                    currentData.copy(syncStatus = status)
+                ))
                 
                 when (status) {
                     is SyncStatus.Success -> {
@@ -162,9 +196,10 @@ class WorkoutViewModel @Inject constructor(
                     }
                     is SyncStatus.Error -> {
                         Timber.e("Sync failed: ${status.message}")
-                        _uiState.value = _uiState.value.copy(
+                        val error = com.example.liftrix.domain.model.error.LiftrixError.NetworkError(
                             errorMessage = "Sync failed: ${status.message}"
                         )
+                        setState(WorkoutUiState.Error(error, currentData))
                     }
                     else -> { /* Handle other states if needed */ }
                 }
@@ -173,83 +208,104 @@ class WorkoutViewModel @Inject constructor(
     }
 
     fun saveWorkout(workout: Workout) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isSaving = true)
-            
-            // Track previous status for analytics
-            val previousStatus = workout.status
-            
-            val result = saveWorkoutUseCase(workout)
-            
-            // Log analytics events based on workout status changes
-            if (result.isSuccess) {
-                logWorkoutEventUseCase.logWorkoutStatusChange(workout, previousStatus)
-                    .onFailure { exception ->
-                        Timber.e(exception, "Failed to log workout analytics event")
-                        // Don't fail the save operation if analytics fails
-                    }
+        executeUseCase(
+            useCase = {
+                // Track previous status for analytics
+                val previousStatus = workout.status
+                val result = saveWorkoutUseCase(workout)
+                
+                // Log analytics events based on workout status changes
+                if (result.isSuccess) {
+                    logWorkoutEventUseCase.logWorkoutStatusChange(workout, previousStatus)
+                        .onFailure { exception ->
+                            Timber.e(exception, "Failed to log workout analytics event")
+                            // Don't fail the save operation if analytics fails
+                        }
+                }
+                result
+            },
+            onSuccess = { 
+                Timber.d("Workout saved successfully: ${workout.name}")
+            },
+            onError = { error ->
+                Timber.e("Failed to save workout: ${error.message}")
             }
-            
-            _uiState.value = _uiState.value.copy(
-                isSaving = false,
-                errorMessage = if (result.isFailure) {
-                    "Failed to save workout: ${result.exceptionOrNull()?.message}"
-                } else null
-            )
-        }
+        )
     }
 
     fun syncNow() {
-        viewModelScope.launch {
-            try {
-                _uiState.value = _uiState.value.copy(isWaitingForAuth = true)
+        executeUseCase(
+            useCase = {
                 val userId = getAuthenticatedUserIdUseCase()
-                _uiState.value = _uiState.value.copy(isWaitingForAuth = false)
-                val result = workoutRepository.syncNowForUser(userId)
-                
-                if (result.isFailure) {
-                    _uiState.value = _uiState.value.copy(
-                        errorMessage = "Failed to start sync: ${result.exceptionOrNull()?.message}"
-                    )
-                }
-            } catch (exception: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isWaitingForAuth = false,
-                    errorMessage = "Cannot sync: ${exception.message}"
-                )
+                workoutRepository.syncNowForUser(userId)
+            },
+            onSuccess = {
+                Timber.d("Sync started successfully")
+            },
+            onError = { error ->
+                Timber.e("Failed to start sync: ${error.message}")
             }
-        }
+        )
     }
 
     fun getUnsyncedCount() {
-        viewModelScope.launch {
-            try {
+        executeUseCase(
+            useCase = {
                 val userId = getAuthenticatedUserIdUseCase()
-                val countResult = workoutRepository.getUnsyncedCountForUser(userId)
-                val count = countResult.getOrElse { 0 }
-                _uiState.value = _uiState.value.copy(unsyncedCount = count)
-            } catch (exception: Exception) {
-                Timber.e(exception, "Failed to get unsynced count")
-            }
-        }
+                workoutRepository.getUnsyncedCountForUser(userId)
+            },
+            onSuccess = { count ->
+                val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
+                setState(WorkoutUiState.Success(
+                    currentData.copy(unsyncedCount = count)
+                ))
+            },
+            onError = { error ->
+                Timber.e("Failed to get unsynced count: ${error.message}")
+            },
+            showLoading = false
+        )
     }
 
     fun startWorkout(workout: Workout) {
-        viewModelScope.launch {
-            val startedWorkout = workout.start()
-            saveWorkout(startedWorkout)
-        }
+        // Track workflow start for PRD metrics
+        val workflowId = "workout_start_${workout.id.value}_${System.currentTimeMillis()}"
+        uxMetricsTracker.startWorkflowTracking(workflowId)
+        uxMetricsTracker.trackInteraction(workflowId, "workout_start_button")
+        
+        // Track task completion for PRD metrics  
+        val taskId = "start_task_${workout.id.value}_${System.currentTimeMillis()}"
+        taskCompletionTracker.trackTaskStart(taskId, TaskCompletionTracker.TASK_WORKOUT_START)
+        
+        val startedWorkout = workout.start()
+        saveWorkout(startedWorkout)
+        
+        // Track successful completion
+        uxMetricsTracker.completeWorkflowTracking(workflowId, successful = true)
+        taskCompletionTracker.trackTaskCompletion(
+            taskId, 
+            TaskCompletionTracker.TASK_WORKOUT_START,
+            com.example.liftrix.analytics.TaskCompletionResult(
+                status = com.example.liftrix.analytics.CompletionStatus.SUCCESS,
+                completionTime = 1000L, // Quick action
+                errorCount = 0,
+                retryCount = 0
+            )
+        )
     }
     
     fun completeWorkout(workout: Workout) {
-        viewModelScope.launch {
-            val completedWorkout = workout.complete()
-            saveWorkout(completedWorkout)
-        }
+        val completedWorkout = workout.complete()
+        saveWorkout(completedWorkout)
     }
     
     private fun clearError() {
-        _uiState.value = _uiState.value.copy(errorMessage = null)
+        updateState { currentState ->
+            when (currentState) {
+                is WorkoutUiState.Error -> WorkoutUiState.Success(currentState.previousData ?: WorkoutScreenData())
+                else -> currentState
+            }
+        }
     }
 
     private fun refreshData() {
@@ -265,21 +321,26 @@ class WorkoutViewModel @Inject constructor(
      * Transforms workout data into structured preview format
      */
     val templatePreview: StateFlow<WorkoutTemplatePreview?> = uiState.map { state ->
-        state.workouts.firstOrNull()?.let { workout ->
-            WorkoutTemplatePreview(
-                name = workout.name,
-                description = workout.notes,
-                exerciseCount = workout.exercises.size,
-                estimatedDuration = workout.getDuration()?.toMinutes()?.toString() + "m" ?: "Unknown",
-                targetMuscleGroups = workout.exercises.map { it.libraryExercise.primaryMuscleGroup.displayName }.distinct(),
-                difficulty = when {
-                    workout.exercises.size <= 3 -> "Beginner"
-                    workout.exercises.size <= 6 -> "Intermediate" 
-                    else -> "Advanced"
-                },
-                lastUsed = null,
-                isPopular = false
-            )
+        when (state) {
+            is WorkoutUiState.Success -> {
+                state.data.workouts.firstOrNull()?.let { workout ->
+                    WorkoutTemplatePreview(
+                        name = workout.name,
+                        description = workout.notes,
+                        exerciseCount = workout.exercises.size,
+                        estimatedDuration = workout.getDuration()?.toMinutes()?.toString() + "m" ?: "Unknown",
+                        targetMuscleGroups = workout.exercises.map { it.libraryExercise.primaryMuscleGroup.displayName }.distinct(),
+                        difficulty = when {
+                            workout.exercises.size <= 3 -> "Beginner"
+                            workout.exercises.size <= 6 -> "Intermediate" 
+                            else -> "Advanced"
+                        },
+                        lastUsed = null,
+                        isPopular = false
+                    )
+                }
+            }
+            else -> null
         }
     }.stateIn(
         scope = viewModelScope,
@@ -288,16 +349,7 @@ class WorkoutViewModel @Inject constructor(
     )
 }
 
-data class WorkoutUiState(
-    val workouts: List<Workout> = emptyList(),
-    val templates: List<com.example.liftrix.domain.model.WorkoutTemplate> = emptyList(),
-    val syncStatus: SyncStatus = SyncStatus.Idle,
-    val unsyncedCount: Int = 0,
-    val isLoading: Boolean = true,
-    val isSaving: Boolean = false,
-    val errorMessage: String? = null,
-    val isWaitingForAuth: Boolean = false
-)
+// WorkoutUiState is now defined in ViewModelState.kt as a proper sealed class hierarchy
 
 /**
  * Events that can be triggered from the workout screen UI
@@ -308,6 +360,7 @@ sealed class WorkoutEvent : ViewModelEvent {
     data class StartWorkout(val workout: Workout) : WorkoutEvent()
     data class CompleteWorkout(val workout: Workout) : WorkoutEvent()
     data class SaveWorkout(val workout: Workout) : WorkoutEvent()
+    data class NavigateToEdit(val workoutId: WorkoutId) : WorkoutEvent()
     object ClearError : WorkoutEvent()
     object RefreshData : WorkoutEvent()
 }

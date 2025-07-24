@@ -38,7 +38,7 @@ object ChartThemeProvider {
             LiftrixChartTheme(
                 primaryColor = LiftrixColors.Primary,
                 secondaryColor = LiftrixColors.Secondary,
-                tertiaryColor = LiftrixColors.Accent,
+                tertiaryColor = LiftrixColors.TiffanyBlue,
                 surfaceColor = colorScheme.surface,
                 onSurfaceColor = colorScheme.onSurface,
                 outlineColor = colorScheme.outline,
@@ -146,7 +146,7 @@ object ChartThemeProvider {
         return MultiLineChartTheme(
             primaryLineColor = LiftrixColors.Primary,
             secondaryLineColor = LiftrixColors.Secondary,
-            tertiaryLineColor = LiftrixColors.Accent,
+            tertiaryLineColor = LiftrixColors.TiffanyBlue,
             strokeWidth = 2.5f,
             pointSize = 6f,
             animationDuration = 800,

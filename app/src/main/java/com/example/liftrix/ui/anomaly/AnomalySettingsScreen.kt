@@ -85,6 +85,13 @@ fun AnomalySettingsScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             }
+            else -> {
+                // Fallback case - should never reach here
+                EmptyState(
+                    onRetry = { viewModel.loadSettings() },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
     }
 }

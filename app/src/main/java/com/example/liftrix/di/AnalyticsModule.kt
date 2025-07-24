@@ -1,5 +1,10 @@
 package com.example.liftrix.di
 
+import com.example.liftrix.analytics.UxMetricsTracker
+import com.example.liftrix.analytics.TaskCompletionTracker
+import com.example.liftrix.analytics.CognitiveLoadMeasurement
+import com.example.liftrix.core.time.TimeProvider
+import com.example.liftrix.core.time.SystemTimeProvider
 import com.example.liftrix.core.analytics.ArchitectureAnalytics
 import com.example.liftrix.data.export.AnalyticsExporter
 import com.example.liftrix.data.export.CsvExporter
@@ -264,6 +269,65 @@ abstract class AnalyticsModule {
             widgetResolver: com.example.liftrix.service.WidgetResolver
         ): com.example.liftrix.ui.progress.components.AnalyticsWidgetManager {
             return com.example.liftrix.ui.progress.components.AnalyticsWidgetManager(widgetResolver)
+        }
+        
+        // UX Metrics providers for PRD success tracking
+        
+        /**
+         * Provides TimeProvider for testable time operations
+         * 
+         * @return SystemTimeProvider implementation
+         */
+        @Provides
+        @Singleton
+        fun provideTimeProvider(): TimeProvider {
+            return SystemTimeProvider()
+        }
+        
+        /**
+         * Provides UxMetricsTracker for measuring PRD success criteria
+         * 
+         * @param analyticsService Analytics service for event logging
+         * @param timeProvider Time provider for workflow timing
+         * @return Configured UxMetricsTracker instance
+         */
+        @Provides
+        @Singleton
+        fun provideUxMetricsTracker(
+            analyticsService: AnalyticsService,
+            timeProvider: TimeProvider
+        ): UxMetricsTracker {
+            return UxMetricsTracker(analyticsService, timeProvider)
+        }
+        
+        /**
+         * Provides TaskCompletionTracker for measuring task completion rates
+         * 
+         * @param analyticsService Analytics service for event logging
+         * @param timeProvider Time provider for task timing
+         * @return Configured TaskCompletionTracker instance
+         */
+        @Provides
+        @Singleton
+        fun provideTaskCompletionTracker(
+            analyticsService: AnalyticsService,
+            timeProvider: TimeProvider
+        ): TaskCompletionTracker {
+            return TaskCompletionTracker(analyticsService, timeProvider)
+        }
+        
+        /**
+         * Provides CognitiveLoadMeasurement for calculating cognitive load scores
+         * 
+         * @param analyticsService Analytics service for event logging
+         * @return Configured CognitiveLoadMeasurement instance
+         */
+        @Provides
+        @Singleton
+        fun provideCognitiveLoadMeasurement(
+            analyticsService: AnalyticsService
+        ): CognitiveLoadMeasurement {
+            return CognitiveLoadMeasurement(analyticsService)
         }
     }
 } 

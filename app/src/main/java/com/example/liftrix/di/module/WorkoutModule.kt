@@ -5,6 +5,9 @@ import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.workout.CreateWorkoutUseCase
 import com.example.liftrix.domain.usecase.workout.GetWorkoutByIdUseCase
+import com.example.liftrix.domain.usecase.workout.UpdateWorkoutSessionUseCase
+import com.example.liftrix.domain.usecase.workout.GetWorkoutSessionForEditingUseCase
+import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -85,6 +88,50 @@ abstract class WorkoutModule {
             return GetWorkoutByIdUseCase(
                 workoutRepository = workoutRepository,
                 errorHandler = errorHandler
+            )
+        }
+
+        /**
+         * Provides UpdateWorkoutSessionUseCase with proper dependency injection.
+         * 
+         * This use case handles updating completed workout sessions for historical
+         * data editing with validation, user authorization, and Firebase sync compatibility.
+         * 
+         * @param workoutRepository The workout repository dependency
+         * @param getCurrentUserIdUseCase The user authentication dependency
+         * @return Configured UpdateWorkoutSessionUseCase instance
+         */
+        @Provides
+        @Singleton
+        fun provideUpdateWorkoutSessionUseCase(
+            workoutRepository: WorkoutRepository,
+            getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+        ): UpdateWorkoutSessionUseCase {
+            return UpdateWorkoutSessionUseCase(
+                workoutRepository = workoutRepository,
+                getCurrentUserIdUseCase = getCurrentUserIdUseCase
+            )
+        }
+
+        /**
+         * Provides GetWorkoutSessionForEditingUseCase with proper dependency injection.
+         * 
+         * This use case handles loading completed workout sessions for historical editing
+         * with user authorization, data validation, and rich contextual information.
+         * 
+         * @param workoutRepository The workout repository dependency
+         * @param getCurrentUserIdUseCase The user authentication dependency
+         * @return Configured GetWorkoutSessionForEditingUseCase instance
+         */
+        @Provides
+        @Singleton
+        fun provideGetWorkoutSessionForEditingUseCase(
+            workoutRepository: WorkoutRepository,
+            getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+        ): GetWorkoutSessionForEditingUseCase {
+            return GetWorkoutSessionForEditingUseCase(
+                workoutRepository = workoutRepository,
+                getCurrentUserIdUseCase = getCurrentUserIdUseCase
             )
         }
     }

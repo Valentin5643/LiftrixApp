@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.domain.model.*
 import com.example.liftrix.ui.common.state.UiState
+import com.example.liftrix.ui.anomaly.AnomalyDashboardUiState
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.ui.components.cards.ElevatedLiftrixCard
 import java.time.format.DateTimeFormatter
@@ -81,6 +82,13 @@ fun AnomalyDashboardScreen(
             }
             
             is UiState.Empty -> {
+                EmptyState(
+                    onNavigateToSettings = onNavigateToSettings,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            else -> {
+                // Fallback case - should never reach here
                 EmptyState(
                     onNavigateToSettings = onNavigateToSettings,
                     modifier = Modifier.fillMaxSize()

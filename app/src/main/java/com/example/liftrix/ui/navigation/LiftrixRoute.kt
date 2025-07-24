@@ -24,7 +24,7 @@ sealed class LiftrixRoute {
     data object Home : LiftrixRoute()
     
     /**
-     * Workout screen - workout templates and session management
+     * Workout screen - workout routines and session management
      */
     @Serializable
     data object Workout : LiftrixRoute()
@@ -56,10 +56,10 @@ sealed class LiftrixRoute {
     data class WorkoutDetails(val workoutId: String) : LiftrixRoute()
     
     /**
-     * Exercise selection screen for adding exercises to workout or template
+     * Exercise selection screen for adding exercises to workout or routine
      * 
-     * @param templateId Optional template ID when selecting exercises for template creation
-     * @param isForTemplate Whether the selection is for template creation or active workout
+     * @param templateId Optional workout routine ID when selecting exercises for routine creation (backend compatibility)
+     * @param isForTemplate Whether the selection is for routine creation or active workout (backend compatibility)
      */
     @Serializable
     data class ExerciseSelection(
@@ -70,8 +70,8 @@ sealed class LiftrixRoute {
     /**
      * Active workout session screen
      * 
-     * @param templateId Optional template ID to start workout from template
-     * @param isBlankWorkout Whether to start a blank workout without template
+     * @param templateId Optional workout routine ID to start workout from saved routine (backend compatibility)
+     * @param isBlankWorkout Whether to start a blank workout without saved routine
      */
     @Serializable
     data class ActiveWorkout(
@@ -80,10 +80,18 @@ sealed class LiftrixRoute {
     ) : LiftrixRoute()
     
     /**
-     * Template creation screen for creating new workout templates
+     * Template creation screen for creating new workout routines
+     * @deprecated Use CreateWorkout instead for user-friendly workflow terminology
      */
+    @Deprecated("Use CreateWorkout instead", ReplaceWith("LiftrixRoute.CreateWorkout"))
     @Serializable
     data object TemplateCreation : LiftrixRoute()
+    
+    /**
+     * Workout creation screen for creating new workout routines (user-friendly "Creating a workout")
+     */
+    @Serializable
+    data object CreateWorkout : LiftrixRoute()
     
     /**
      * Exercise details screen showing specific exercise information
@@ -150,6 +158,22 @@ sealed class LiftrixRoute {
     data class CalorieHistory(
         val timePeriod: String? = null
     ) : LiftrixRoute()
+    
+    /**
+     * Edit workout routine screen for modifying saved workout routines
+     * 
+     * @param workoutId Unique identifier for the workout routine to edit
+     */
+    @Serializable
+    data class EditWorkout(val workoutId: String) : LiftrixRoute()
+    
+    /**
+     * Edit workout session screen for modifying completed workout sessions
+     * 
+     * @param sessionId Unique identifier for the workout session to edit
+     */
+    @Serializable
+    data class EditSession(val sessionId: String) : LiftrixRoute()
     
     // Guest Mode Routes
     

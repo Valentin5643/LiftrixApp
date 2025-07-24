@@ -21,12 +21,11 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
+import com.example.liftrix.ui.workout.components.TertiaryActionButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,9 +70,10 @@ fun WorkoutHistorySection(
                 fontWeight = FontWeight.SemiBold
             )
             
-            TextButton(onClick = onViewAllWorkouts) {
-                Text("View All")
-            }
+            TertiaryActionButton(
+                text = "View All",
+                onClick = onViewAllWorkouts
+            )
         }
         
         // Quick Stats Row
@@ -142,7 +142,7 @@ fun WorkoutHistorySection(
 }
 
 /**
- * Quick stat card component
+ * Quick stat card component using UnifiedWorkoutCard
  */
 @Composable
 private fun QuickStatCard(
@@ -152,53 +152,18 @@ private fun QuickStatCard(
     subtitle: String,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    UnifiedWorkoutCard(
+        title = value,
+        subtitle = if (subtitle.isNotEmpty()) "$label $subtitle" else label,
         modifier = modifier.width(120.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+        leadingIcon = icon
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(24.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-            
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-            
-            if (subtitle.isNotEmpty()) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
+        // Empty content since title and subtitle handle the display
     }
 }
 
 /**
- * Individual workout history card
+ * Individual workout history card using UnifiedWorkoutCard
  */
 @Composable
 private fun WorkoutHistoryCard(
@@ -206,21 +171,28 @@ private fun WorkoutHistoryCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        onClick = onClick,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    val subtitle = buildString {
+        append("${workout.exercises.size} exercises")
+        val completedSets = workout.getCompletedSets()
+        if (completedSets > 0) {
+            append(" • $completedSets sets")
+        }
+        workout.getDuration()?.toMinutes()?.let { duration ->
+            append(" • ${duration}min")
+        }
+    }
+    
+    UnifiedWorkoutCard(
+        title = workout.name,
+        subtitle = subtitle,
+        modifier = modifier,
+        onClick = onClick
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Status indicator
+            // Status indicator  
             Box(
                 modifier = Modifier
                     .size(12.dp)
@@ -249,31 +221,8 @@ private fun WorkoutHistoryCard(
             
             Spacer(modifier = Modifier.width(12.dp))
             
-            // Workout details
+            // Time info
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = workout.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                
-                Text(
-                    text = buildString {
-                        append("${workout.exercises.size} exercises")
-                        val completedSets = workout.getCompletedSets()
-                        if (completedSets > 0) {
-                            append(" • $completedSets sets")
-                        }
-                        workout.getDuration()?.toMinutes()?.let { duration ->
-                            append(" • ${duration}min")
-                        }
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                
                 workout.endTime?.let { endTime ->
                     val endDate = endTime.atZone(java.time.ZoneId.systemDefault()).toLocalDate()
                     val daysAgo = java.time.temporal.ChronoUnit.DAYS.between(endDate, java.time.LocalDate.now())
@@ -286,7 +235,7 @@ private fun WorkoutHistoryCard(
                     
                     Text(
                         text = timeText,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -315,47 +264,19 @@ private fun WorkoutHistoryCard(
 }
 
 /**
- * Empty state when no workout history exists
+ * Empty state when no workout history exists using UnifiedWorkoutCard
  */
 @Composable
 private fun EmptyWorkoutHistoryState(
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+    UnifiedWorkoutCard(
+        title = "No Workouts Yet",
+        subtitle = "Complete your first workout to see your history here.",
+        modifier = modifier,
+        leadingIcon = Icons.Default.FitnessCenter
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = Icons.Default.FitnessCenter,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Text(
-                text = "No Workouts Yet",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center
-            )
-            
-            Text(
-                text = "Complete your first workout to see your history here.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-        }
+        // Empty content since title and subtitle handle the message
     }
 }
 

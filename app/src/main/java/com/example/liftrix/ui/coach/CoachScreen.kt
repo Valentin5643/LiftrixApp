@@ -276,23 +276,14 @@ private fun AIFeaturePreviewCard(
                 )
                 
                 // Coming Soon indicator
-                Surface(
-                    shape = RoundedCornerShape(GridSystem.cornerRadiusSmall),
-                    color = MaterialTheme.colorScheme.tertiary,
+                Text(
+                    text = "Coming Soon",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Medium
+                    ),
+                    color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = GridSystem.spacing1)
-                ) {
-                    Text(
-                        text = "Coming Soon",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Medium
-                        ),
-                        color = MaterialTheme.colorScheme.onTertiary,
-                        modifier = Modifier.padding(
-                            horizontal = GridSystem.spacing2,
-                            vertical = GridSystem.spacing1
-                        )
-                    )
-                }
+                )
             }
         }
     }

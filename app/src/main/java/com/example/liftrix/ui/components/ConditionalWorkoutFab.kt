@@ -11,6 +11,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavDestination
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
 import com.example.liftrix.ui.components.WorkoutCreationFab
 import com.example.liftrix.ui.components.QuickWorkoutFab
@@ -26,14 +27,16 @@ import kotlinx.coroutines.SupervisorJob
 import javax.inject.Inject
 
 /**
- * 🔥 KEY FIX: Conditional FAB that hides during active workout sessions
+ * 🔥 KEY FIX: Conditional FAB that hides during active workout sessions and in settings screens
  * 
  * This component wraps workout creation FABs and automatically hides them
  * when there's an active workout session to prevent multiple sessions
- * and UI confusion.
+ * and UI confusion, or when the user is in settings screens where adding
+ * workouts doesn't make contextual sense.
  * 
  * Features:
  * - Automatic visibility based on session state
+ * - Hide when in settings screens (Settings, WidgetSettings, etc.)
  * - Smooth enter/exit animations
  * - Reusable across different screens
  * - Proper state management with Hilt injection
@@ -42,6 +45,7 @@ import javax.inject.Inject
  * @param modifier Modifier for styling and positioning
  * @param isExtended Whether to show extended FAB with text or compact with icon only
  * @param fabType Type of FAB to display (Creation or QuickWorkout)
+ * @param currentDestination Current navigation destination to determine visibility
  */
 @Composable
 fun ConditionalWorkoutFab(
@@ -49,13 +53,26 @@ fun ConditionalWorkoutFab(
     modifier: Modifier = Modifier,
     isExtended: Boolean = false,
     fabType: FabType = FabType.CREATION,
+    currentDestination: NavDestination? = null,
     viewModel: ConditionalWorkoutFabViewModel = hiltViewModel()
 ) {
     val hasActiveSession by viewModel.hasActiveSession.collectAsState()
     
-    // 🔥 KEY FIX: Hide FAB when there's an active session
+    // 🔥 KEY FIX: Hide FAB when there's an active session OR when in settings screens
+    val isInSettingsScreen = currentDestination?.route?.let { route ->
+        route.contains("Settings") || 
+        route.contains("settings") ||
+        route.contains("AnomalySettings") ||
+        route.contains("DashboardCustomization") ||
+        route.contains("dashboard_customization") ||
+        route.contains("WidgetSettings") ||
+        route.contains("widget_settings")
+    } ?: false
+    
+    val shouldHideFab = hasActiveSession || isInSettingsScreen
+    
     AnimatedVisibility(
-        visible = !hasActiveSession,
+        visible = !shouldHideFab,
         enter = fadeIn(animationSpec = tween(300)) + scaleIn(animationSpec = tween(300)),
         exit = fadeOut(animationSpec = tween(300)) + scaleOut(animationSpec = tween(300)),
         modifier = modifier

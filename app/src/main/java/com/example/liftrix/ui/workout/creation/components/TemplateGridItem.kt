@@ -39,8 +39,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.model.WorkoutTemplate
-import com.example.liftrix.ui.components.buttons.LiftrixButton
-import com.example.liftrix.ui.components.buttons.ButtonVariant
+import com.example.liftrix.ui.workout.components.PrimaryActionButton
+import com.example.liftrix.ui.workout.components.SecondaryActionButton
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.components.cards.CardSpacing
 import com.example.liftrix.ui.theme.LiftrixTheme
@@ -237,35 +237,19 @@ fun TemplateGridItem(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(CardSpacing.XS)
             ) {
-                LiftrixButton(
+                PrimaryActionButton(
+                    text = "Start",
                     onClick = onStartWorkout,
-                    variant = ButtonVariant.Primary,
-                    modifier = Modifier
-                        .weight(1f)
-                        .semantics {
-                            contentDescription = "Start workout from ${template.name}"
-                        }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Start")
-                }
+                    leadingIcon = Icons.Default.PlayArrow,
+                    modifier = Modifier.weight(1f)
+                )
                 
-                LiftrixButton(
+                SecondaryActionButton(
+                    text = "Edit",
                     onClick = onEditTemplate,
-                    variant = ButtonVariant.Secondary,
-                    modifier = Modifier
-                        .weight(1f)
-                        .semantics {
-                            contentDescription = "Edit ${template.name} template"
-                        }
-                ) {
-                    Text("Edit")
-                }
+                    leadingIcon = com.example.liftrix.ui.icons.LiftrixIcons.Workflow.Edit,
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }
@@ -335,25 +319,19 @@ fun CompactTemplateGridItem(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(CardSpacing.XS)
             ) {
-                LiftrixButton(
+                PrimaryActionButton(
+                    text = "",
                     onClick = onStartWorkout,
-                    variant = ButtonVariant.Primary,
+                    leadingIcon = Icons.Default.PlayArrow,
                     modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+                )
                 
-                LiftrixButton(
+                SecondaryActionButton(
+                    text = "Edit",
                     onClick = onEditTemplate,
-                    variant = ButtonVariant.Secondary,
+                    leadingIcon = com.example.liftrix.ui.icons.LiftrixIcons.Workflow.Edit,
                     modifier = Modifier.weight(1f)
-                ) {
-                    Text("Edit", style = MaterialTheme.typography.bodySmall)
-                }
+                )
             }
         }
     }

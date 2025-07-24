@@ -9,6 +9,10 @@ import com.example.liftrix.domain.repository.UserRepository
 import com.example.liftrix.domain.repository.WidgetPreferencesRepository
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.service.WeightMemoryService
+import com.example.liftrix.domain.repository.backup.BackupService
+import com.example.liftrix.domain.repository.sync.SyncService
+import com.example.liftrix.data.service.BackupServiceImpl
+import com.example.liftrix.data.service.SyncServiceImpl
 import com.example.liftrix.service.AnalyticsEngine
 import com.example.liftrix.service.AnalyticsService
 import com.example.liftrix.service.AnalyticsServiceImpl
@@ -67,6 +71,28 @@ abstract class ServiceModule {
     abstract fun bindWeightMemoryService(
         weightMemoryServiceImpl: WeightMemoryServiceImpl
     ): WeightMemoryService
+    
+    /**
+     * Binds BackupService interface to its implementation.
+     * 
+     * Provides backup and restoration capabilities for error recovery scenarios.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindBackupService(
+        backupServiceImpl: BackupServiceImpl
+    ): BackupService
+    
+    /**
+     * Binds SyncService interface to its implementation.
+     * 
+     * Provides sync operation queuing and retry logic for offline scenarios.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindSyncService(
+        syncServiceImpl: SyncServiceImpl
+    ): SyncService
     
     companion object {
         

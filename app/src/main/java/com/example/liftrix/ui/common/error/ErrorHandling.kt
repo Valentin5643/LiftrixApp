@@ -1,25 +1,62 @@
 package com.example.liftrix.ui.common.error
 
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import com.example.liftrix.core.error.ErrorMapper
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.ui.common.state.UiState
+import com.example.liftrix.ui.theme.LiftrixColors
 
 /**
  * Utility functions and composables for handling errors in UI components.
  * 
  * Provides integration between LiftrixError system and Compose UI components,
  * making it easy to display errors consistently throughout the application.
+ * 
+ * Updated for 5-color system with preserved red error colors (only exception to 5-color rule),
+ * Persian Green for success states, and Tiffany Blue for warning/info states.
  */
+
+/**
+ * Feedback color system for Liftrix - preserves error red colors as exception to 5-color rule
+ */
+object FeedbackColors {
+    // Error states (exception to 5-color rule)
+    val Error = Color(0xFFFF4444)                    // Preserved red
+    val ErrorContainer = Color(0xFFFFDAD6)           // Light error background
+    val ErrorContainerDark = Color(0xFF93000A)       // Dark error background
+    val OnError = Color.White                        // Text on error
+    val OnErrorContainer = Color(0xFF410002)         // Text on error container
+    
+    // Success states using Persian Green
+    val Success = LiftrixColors.PersianGreen         // #339989
+    val SuccessContainer = LiftrixColors.PersianGreen.copy(alpha = 0.1f)
+    val OnSuccess = Color.White
+    val OnSuccessContainer = LiftrixColors.Night
+    
+    // Warning/Info states using Tiffany Blue
+    val Warning = LiftrixColors.TiffanyBlue          // #7DE2D1
+    val WarningContainer = LiftrixColors.TiffanyBlue.copy(alpha = 0.1f)
+    val OnWarning = LiftrixColors.Night
+    val OnWarningContainer = LiftrixColors.Night
+}
 
 /**
  * Handles error states automatically by displaying appropriate error UI components.
@@ -106,7 +143,7 @@ fun <T> ErrorHandler(
             }
         }
         
-        is UiState.Loading -> {
+        UiState.Loading -> {
             // Loading state - content should handle this separately
             // This handler only deals with error states
         }
@@ -114,6 +151,10 @@ fun <T> ErrorHandler(
         is UiState.Empty -> {
             // Empty state - content should handle this separately
             // This handler only deals with error states
+        }
+        
+        else -> {
+            // Exhaustive catch-all for any other states
         }
     }
 }
@@ -431,10 +472,162 @@ fun <T> AutoErrorHandler(
             }
         }
         
-        is UiState.Loading,
-        is UiState.Empty -> {
-            // These states should be handled by the calling composable
+        UiState.Loading -> {
+            // Loading state should be handled by the calling composable
             // This handler focuses on error states only
+        }
+        
+        is UiState.Empty -> {
+            // Empty state should be handled by the calling composable
+            // This handler focuses on error states only
+        }
+        
+        else -> {
+            // Exhaustive catch-all for any other states
+        }
+    }
+}
+
+/**
+ * Error Message Component using preserved red colors (exception to 5-color rule)
+ */
+@Composable
+fun ErrorMessage(
+    message: String,
+    onDismiss: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            // Uses preserved error colors (exception)
+            containerColor = FeedbackColors.ErrorContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Error,
+                contentDescription = "Error",
+                tint = FeedbackColors.Error
+            )
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = FeedbackColors.OnErrorContainer,
+                modifier = Modifier.weight(1f)
+            )
+            
+            onDismiss?.let {
+                IconButton(onClick = it) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Dismiss",
+                        tint = FeedbackColors.OnErrorContainer
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Success Message Component using Persian Green
+ */
+@Composable
+fun SuccessMessage(
+    message: String,
+    onDismiss: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            // Uses Persian Green for success
+            containerColor = FeedbackColors.SuccessContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.CheckCircle,
+                contentDescription = "Success",
+                tint = FeedbackColors.Success
+            )
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = FeedbackColors.OnSuccessContainer
+            )
+            
+            onDismiss?.let {
+                Spacer(modifier = Modifier.weight(1f))
+                IconButton(onClick = it) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Dismiss",
+                        tint = FeedbackColors.OnSuccessContainer
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Warning Message Component using Tiffany Blue
+ */
+@Composable
+fun WarningMessage(
+    message: String,
+    onDismiss: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            // Uses Tiffany Blue for warnings
+            containerColor = FeedbackColors.WarningContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = "Warning",
+                tint = FeedbackColors.Warning
+            )
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = FeedbackColors.OnWarningContainer
+            )
+            
+            onDismiss?.let {
+                Spacer(modifier = Modifier.weight(1f))
+                IconButton(onClick = it) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Dismiss",
+                        tint = FeedbackColors.OnWarningContainer
+                    )
+                }
+            }
         }
     }
 }

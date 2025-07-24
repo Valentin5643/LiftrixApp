@@ -226,9 +226,9 @@ fun animateAthleticElevation(
 object ButtonGlowColors {
     val Primary = LiftrixColors.Primary
     val Secondary = LiftrixColors.Secondary
-    val Accent = LiftrixColors.Accent
+    val Accent = LiftrixColors.TiffanyBlue
     val Success = LiftrixColors.Primary
-    val Warning = LiftrixColors.Accent
+    val Warning = LiftrixColors.TiffanyBlue
     val Error = LiftrixColors.Error
 }
 

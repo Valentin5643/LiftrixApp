@@ -14,9 +14,9 @@
     <string name="action_delete">Delete</string>
     <string name="action_edit">Edit</string>
     
-    <!-- Workout templates -->
-    <string name="workout_templates_title">Workout Templates</string>
-    <string name="create_template_title">Create Template</string>
+    <!-- Workout routines -->
+    <string name="workout_routines_title">Your Workouts</string>
+    <string name="create_workout_title">Creating a workout</string>
     
     <!-- Placeholders -->
     <string name="placeholder_loading">Loading...</string>

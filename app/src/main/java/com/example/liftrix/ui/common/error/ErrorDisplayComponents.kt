@@ -513,7 +513,7 @@ private fun getErrorBackgroundColor(severity: ErrorSeverity): Color {
     return when (severity) {
         ErrorSeverity.INFO -> LiftrixTokens.ColorRoles.SecondaryContainer
         ErrorSeverity.WARNING -> LiftrixTokens.SemanticColors.Warning.copy(alpha = 0.1f)
-        ErrorSeverity.ERROR -> LiftrixTokens.ColorRoles.ErrorContainer
+        ErrorSeverity.ERROR -> MaterialTheme.colorScheme.errorContainer
     }
 }
 
@@ -525,6 +525,6 @@ private fun getErrorContentColor(severity: ErrorSeverity): Color {
     return when (severity) {
         ErrorSeverity.INFO -> LiftrixTokens.ColorRoles.OnSecondaryContainer
         ErrorSeverity.WARNING -> LiftrixTokens.SemanticColors.Warning
-        ErrorSeverity.ERROR -> LiftrixTokens.ColorRoles.OnErrorContainer
+        ErrorSeverity.ERROR -> MaterialTheme.colorScheme.onErrorContainer
     }
 }

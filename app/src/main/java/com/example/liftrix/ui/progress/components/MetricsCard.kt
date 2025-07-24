@@ -52,6 +52,7 @@ import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.components.cards.Trend
 import com.example.liftrix.ui.theme.LiftrixAnimations
 import com.example.liftrix.ui.theme.LiftrixColors
+import com.example.liftrix.ui.theme.PrimaryGradient
 import com.example.liftrix.ui.theme.LiftrixTheme
 
 /**
@@ -280,7 +281,7 @@ private fun TrendIndicator(
 ) {
     val (icon, color) = when (trend) {
         TrendDirection.UP -> Icons.Default.TrendingUp to LiftrixColors.Primary
-        TrendDirection.DOWN -> Icons.Default.TrendingDown to LiftrixColors.Accent
+        TrendDirection.DOWN -> Icons.Default.TrendingDown to LiftrixColors.TiffanyBlue
         TrendDirection.STABLE -> Icons.Default.TrendingFlat to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
         TrendDirection.UNKNOWN -> Icons.Default.TrendingFlat to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
     }
@@ -360,7 +361,7 @@ private fun ProgressIndicator(
                     .height(if (isCompact) 4.dp else 6.dp)
                     .clip(RoundedCornerShape(if (isCompact) 2.dp else 3.dp))
                     .background(
-                        brush = LiftrixColors.BrandGradients.TealCoral
+                        brush = PrimaryGradient
                     )
             )
         }

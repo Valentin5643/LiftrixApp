@@ -139,6 +139,48 @@ interface AnalyticsService {
     ): Result<Unit>
     
     /**
+     * Logs UX workflow start event for cognitive load and completion rate tracking
+     */
+    suspend fun logUxWorkflowStart(
+        workflowId: String,
+        workflowType: String,
+        userId: String
+    ): Result<Unit>
+    
+    /**
+     * Logs UX workflow interaction for metrics tracking
+     */
+    suspend fun logUxWorkflowInteraction(
+        workflowId: String,
+        interactionType: String,
+        interactionCount: Int
+    ): Result<Unit>
+    
+    /**
+     * Logs UX workflow completion with metrics for PRD success validation
+     */
+    suspend fun logUxWorkflowCompletion(
+        workflowId: String,
+        completionTimeMs: Long,
+        totalInteractions: Int,
+        successful: Boolean,
+        efficiencyScore: Double,
+        cognitiveLoadScore: Double
+    ): Result<Unit>
+    
+    /**
+     * Logs task completion rate metrics for PRD 30% improvement tracking
+     */
+    suspend fun logTaskCompletionMetrics(
+        taskId: String,
+        taskType: String,
+        completionStatus: String,
+        completionTimeMs: Long,
+        errorCount: Int,
+        retryCount: Int
+    ): Result<Unit>
+    
+    /**
      * Records a non-fatal exception for crash reporting
      */
     suspend fun recordException(

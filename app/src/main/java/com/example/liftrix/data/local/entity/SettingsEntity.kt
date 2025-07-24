@@ -32,6 +32,14 @@ data class SettingsEntity(
     @ColumnInfo(name = "weight_unit")
     val weightUnit: WeightUnit = WeightUnit.getSystemDefault(),
     
+    @ColumnInfo(name = "terminology_preference", defaultValue = "'NEW'")
+    val terminologyPreference: String = "NEW", // NEW or LEGACY
+    
+    @ColumnInfo(name = "migration_completed", defaultValue = "0")
+    val migrationCompleted: Boolean = false,
+    
+    @ColumnInfo(name = "migration_explanation_seen", defaultValue = "0")
+    val migrationExplanationSeen: Boolean = false,
     
     @ColumnInfo(name = "updated_at")
     val updatedAt: Instant = Instant.now()
@@ -48,6 +56,9 @@ data class SettingsEntity(
             darkMode = false,
             notificationsEnabled = true,
             weightUnit = WeightUnit.getSystemDefault(),
+            terminologyPreference = "NEW",
+            migrationCompleted = false,
+            migrationExplanationSeen = false,
             updatedAt = Instant.now()
         )
     }

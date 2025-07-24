@@ -32,6 +32,7 @@ import com.example.liftrix.ui.common.AccessibilityUtils.accessibilitySemantics
 import com.example.liftrix.ui.common.rememberAccessibilityState
 import com.example.liftrix.ui.theme.LiftrixAnimations
 import com.example.liftrix.ui.theme.LiftrixColors
+import com.example.liftrix.ui.theme.CardElevationGradient
 
 /**
  * Base card component for Liftrix with consistent 8pt grid spacing and 2xl border radius
@@ -111,7 +112,7 @@ fun LiftrixCard(
 fun GradientLiftrixCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
-    gradient: Brush = LiftrixColors.BrandGradients.CardElevation,
+    gradient: Brush = CardElevationGradient,
     elevation: CardElevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     shape: Shape = RoundedCornerShape(24.dp),
     enabled: Boolean = true,
