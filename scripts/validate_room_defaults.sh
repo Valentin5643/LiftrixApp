@@ -8,7 +8,14 @@ set -e
 echo "🔍 Validating Room entity default values..."
 
 # Find all Kotlin files with Room entities
-ENTITY_FILES=$(find app/src/main/java -name "*.kt" -type f | xargs grep -l "@Entity" 2>/dev/null || true)
+# Check if we're in the root directory or app directory
+if [ -d "app/src/main/java" ]; then
+    SEARCH_PATH="app/src/main/java"
+else
+    SEARCH_PATH="src/main/java"
+fi
+
+ENTITY_FILES=$(find $SEARCH_PATH -name "*.kt" -type f | xargs grep -l "@Entity" 2>/dev/null || true)
 
 if [ -z "$ENTITY_FILES" ]; then
     echo "✅ No Room entity files found to validate"

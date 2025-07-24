@@ -2,6 +2,7 @@ package com.example.liftrix.data.local.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverters
 import com.example.liftrix.data.local.converter.DateTimeConverters
@@ -12,7 +13,10 @@ import java.time.LocalDateTime
  * Room entity representing a user's fitness profile in the local database.
  * Schema matches Migration_9_to_10 user_profiles table creation with completion tracking.
  */
-@Entity(tableName = "user_profiles")
+@Entity(
+    tableName = "user_profiles",
+    indices = [Index(value = ["user_id"], unique = true)]
+)
 @TypeConverters(DateTimeConverters::class, UserProfileConverters::class)
 data class UserProfileEntity(
     @PrimaryKey
@@ -62,5 +66,40 @@ data class UserProfileEntity(
     val isSynced: Boolean = false,
 
     @ColumnInfo(name = "sync_version", defaultValue = "1")
-    val syncVersion: Long = 1L
+    val syncVersion: Long = 1L,
+
+    // Enhanced social and achievement fields added in migration 35->36
+    @ColumnInfo(name = "bio")
+    val bio: String? = null,
+
+    @ColumnInfo(name = "is_public", defaultValue = "1")
+    val isPublic: Boolean = true,
+
+    @ColumnInfo(name = "last_active_at")
+    val lastActiveAt: LocalDateTime? = null,
+
+    @ColumnInfo(name = "total_workouts", defaultValue = "0")
+    val totalWorkouts: Int = 0,
+
+    @ColumnInfo(name = "current_streak", defaultValue = "0")
+    val currentStreak: Int = 0,
+
+    @ColumnInfo(name = "longest_streak", defaultValue = "0")
+    val longestStreak: Int = 0,
+
+    @ColumnInfo(name = "member_since")
+    val memberSince: LocalDateTime = LocalDateTime.now(),
+
+    @ColumnInfo(name = "profile_completion_percentage", defaultValue = "0")
+    val profileCompletionPercentage: Int = 0,
+
+    // Profile image fields added in migration 36->37
+    @ColumnInfo(name = "profile_image_url")
+    val profileImageUrl: String? = null,
+
+    @ColumnInfo(name = "profile_image_updated_at")
+    val profileImageUpdatedAt: LocalDateTime? = null,
+
+    @ColumnInfo(name = "has_custom_profile_image", defaultValue = "0")
+    val hasCustomProfileImage: Boolean = false
 ) 

@@ -1,9 +1,14 @@
 package com.example.liftrix.di
 
+import com.example.liftrix.data.repository.ProfileImageRepositoryImpl
+import com.example.liftrix.domain.repository.ProfileImageRepository
 import com.example.liftrix.domain.repository.ProfileRepository
 import com.example.liftrix.domain.usecase.GetProfileUseCase
 import com.example.liftrix.domain.usecase.SaveProfileUseCase
 import com.example.liftrix.domain.usecase.ValidateProfileInputUseCase
+import com.example.liftrix.domain.usecase.profile.DeleteProfileImageUseCase
+import com.example.liftrix.domain.usecase.profile.UploadProfileImageUseCase
+import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -16,34 +21,46 @@ import javax.inject.Singleton
  */
 @Module
 @InstallIn(SingletonComponent::class)
-object ProfileModule {
+abstract class ProfileModule {
 
     /**
-     * Provides SaveProfileUseCase with singleton scope.
-     * Singleton scope ensures consistent validation behavior across the app.
+     * Binds ProfileImageRepositoryImpl to ProfileImageRepository interface.
      */
-    @Provides
+    @Binds
     @Singleton
-    fun provideSaveProfileUseCase(
-        profileRepository: ProfileRepository
-    ): SaveProfileUseCase = SaveProfileUseCase(profileRepository)
+    abstract fun bindProfileImageRepository(
+        profileImageRepositoryImpl: ProfileImageRepositoryImpl
+    ): ProfileImageRepository
 
-    /**
-     * Provides GetProfileUseCase with singleton scope.
-     * Singleton scope ensures consistent data access patterns.
-     */
-    @Provides
-    @Singleton
-    fun provideGetProfileUseCase(
-        profileRepository: ProfileRepository
-    ): GetProfileUseCase = GetProfileUseCase(profileRepository)
+    companion object {
+        /**
+         * Provides SaveProfileUseCase with singleton scope.
+         * Singleton scope ensures consistent validation behavior across the app.
+         */
+        @Provides
+        @Singleton
+        fun provideSaveProfileUseCase(
+            profileRepository: ProfileRepository
+        ): SaveProfileUseCase = SaveProfileUseCase(profileRepository)
 
-    /**
-     * Provides ValidateProfileInputUseCase with singleton scope.
-     * Singleton scope ensures consistent validation rules across all forms.
-     */
-    @Provides
-    @Singleton
-    fun provideValidateProfileInputUseCase(): ValidateProfileInputUseCase = 
-        ValidateProfileInputUseCase()
+        /**
+         * Provides GetProfileUseCase with singleton scope.
+         * Singleton scope ensures consistent data access patterns.
+         */
+        @Provides
+        @Singleton
+        fun provideGetProfileUseCase(
+            profileRepository: ProfileRepository
+        ): GetProfileUseCase = GetProfileUseCase(profileRepository)
+
+        /**
+         * Provides ValidateProfileInputUseCase with singleton scope.
+         * Singleton scope ensures consistent validation rules across all forms.
+         */
+        @Provides
+        @Singleton
+        fun provideValidateProfileInputUseCase(): ValidateProfileInputUseCase = 
+            ValidateProfileInputUseCase()
+
+    }
 } 

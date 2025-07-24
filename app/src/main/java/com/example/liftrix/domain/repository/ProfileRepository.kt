@@ -1,11 +1,13 @@
 package com.example.liftrix.domain.repository
 
+import com.example.liftrix.domain.model.StreakData
 import com.example.liftrix.domain.model.UserProfile
+import com.example.liftrix.domain.model.common.LiftrixResult
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Repository interface for managing user profile data.
- * Defines the contract for all profile-related operations, including local persistence and remote synchronization.
+ * Enhanced repository interface for managing user profile data.
+ * Includes social features, achievements integration, and privacy controls.
  */
 interface ProfileRepository {
     
@@ -82,4 +84,63 @@ interface ProfileRepository {
      * @return A Result indicating success or failure of the immediate sync.
      */
     suspend fun syncNow(userId: String): Result<Unit>
+
+    // Enhanced methods for social profile system
+
+    /**
+     * Gets a user profile with enhanced data for display.
+     *
+     * @param userId The ID of the user whose profile to retrieve
+     * @return LiftrixResult with enhanced UserProfile or null if not found
+     */
+    suspend fun getUserProfile(userId: String): LiftrixResult<UserProfile?>
+
+    /**
+     * Saves an enhanced user profile with social features.
+     *
+     * @param profile The enhanced UserProfile to save
+     * @return LiftrixResult indicating success or failure
+     */
+    suspend fun saveUserProfile(profile: UserProfile): LiftrixResult<Unit>
+
+    /**
+     * Updates profile completion percentage.
+     *
+     * @param userId The user ID for the profile
+     * @return LiftrixResult with calculated completion percentage
+     */
+    suspend fun updateProfileCompletion(userId: String): LiftrixResult<Int>
+
+    /**
+     * Calculates and returns streak data for a user.
+     *
+     * @param userId The user ID for calculation
+     * @return LiftrixResult with StreakData
+     */
+    suspend fun calculateStreakData(userId: String): LiftrixResult<StreakData>
+
+    /**
+     * Updates privacy settings for a user profile.
+     *
+     * @param userId The user ID to update
+     * @param isPublic Whether the profile should be public
+     * @return LiftrixResult indicating success or failure
+     */
+    suspend fun updatePrivacySettings(userId: String, isPublic: Boolean): LiftrixResult<Unit>
+
+    /**
+     * Gets public profiles for discovery features.
+     *
+     * @param limit Maximum number of profiles to return
+     * @return LiftrixResult with list of public profiles
+     */
+    suspend fun getPublicProfiles(limit: Int = 50): LiftrixResult<List<UserProfile>>
+
+    /**
+     * Gets a public profile if the user has made it public.
+     *
+     * @param userId The user ID to retrieve
+     * @return LiftrixResult with public profile or null if private/not found
+     */
+    suspend fun getPublicProfile(userId: String): LiftrixResult<UserProfile?>
 } 

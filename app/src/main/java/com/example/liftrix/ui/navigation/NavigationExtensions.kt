@@ -131,6 +131,33 @@ fun NavController.navigateToFriends() {
     navigate(LiftrixRoute.Friends)
 }
 
+// MARK: - Social Discovery Navigation
+
+/**
+ * Navigate to user search screen for discovering other users
+ */
+fun NavController.navigateToUserSearch() {
+    navigate(LiftrixRoute.UserSearch)
+}
+
+/**
+ * Navigate to public profile screen for viewing user profiles
+ * 
+ * @param userId Unique identifier for the user whose profile to display
+ */
+fun NavController.navigateToPublicProfile(userId: String) {
+    navigate(LiftrixRoute.PublicProfile(userId))
+}
+
+/**
+ * Navigate to QR code display screen for profile sharing
+ * 
+ * @param userId Optional user ID for QR code generation (defaults to current user)
+ */
+fun NavController.navigateToQRCodeDisplay(userId: String? = null) {
+    navigate(LiftrixRoute.QRCodeDisplay(userId))
+}
+
 // MARK: - Feature Navigation
 
 /**

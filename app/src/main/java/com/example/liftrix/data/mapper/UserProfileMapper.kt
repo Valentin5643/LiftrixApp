@@ -24,15 +24,27 @@ class UserProfileMapper @Inject constructor(
     fun toDomain(entity: UserProfileEntity): UserProfile {
         return UserProfile(
             userId = entity.userId,
+            displayName = entity.displayName,
+            bio = entity.bio,
             age = entity.age,
             weight = entity.weightKg?.let { Weight.fromKilograms(it) },
             availableEquipment = entity.availableEquipment?.toEquipmentList() ?: emptyList(),
             otherEquipment = null, // Note: otherEquipment not stored separately in new entity structure
             fitnessGoals = entity.goals?.toFitnessGoalList() ?: emptyList(),
             goalsPriority = null, // Note: goalsPriority not stored in new entity structure
+            isPublic = entity.isPublic,
+            lastActiveAt = entity.lastActiveAt,
+            totalWorkouts = entity.totalWorkouts,
+            currentStreak = entity.currentStreak,
+            longestStreak = entity.longestStreak,
+            memberSince = entity.memberSince,
+            profileCompletionPercentage = entity.profileCompletionPercentage,
             completedAt = entity.completedAt,
             updatedAt = entity.updatedAt,
-            profileVersion = entity.syncVersion // Using syncVersion as profileVersion
+            profileVersion = entity.syncVersion, // Using syncVersion as profileVersion
+            profileImageUrl = entity.profileImageUrl,
+            profileImageUpdatedAt = entity.profileImageUpdatedAt,
+            hasCustomProfileImage = entity.hasCustomProfileImage
         )
     }
 
@@ -96,15 +108,27 @@ class UserProfileMapper @Inject constructor(
     fun fromFirestoreDto(dto: UserProfileDto): UserProfile {
         return UserProfile(
             userId = dto.userId,
+            displayName = "User", // Default value, not available in basic UserProfileDto
+            bio = null, // Default value, not available in basic UserProfileDto
             age = dto.age,
             weight = dto.weight?.let { Weight.fromKilograms(it.value) },
             availableEquipment = dto.availableEquipment.mapNotNull { it.toEquipment() },
             otherEquipment = dto.otherEquipment,
             fitnessGoals = dto.fitnessGoals.mapNotNull { it.toFitnessGoal() },
             goalsPriority = dto.goalsPriority?.mapKeys { it.key.toFitnessGoal()!! },
+            isPublic = true, // Default value
+            lastActiveAt = null, // Default value, not available in basic UserProfileDto
+            totalWorkouts = 0, // Default value
+            currentStreak = 0, // Default value
+            longestStreak = 0, // Default value
+            memberSince = LocalDateTime.now(), // Default value
+            profileCompletionPercentage = 0, // Default value
             completedAt = dto.completedAt?.toLocalDateTime(),
             updatedAt = dto.updatedAt?.toLocalDateTime() ?: LocalDateTime.now(),
-            profileVersion = dto.profileVersion
+            profileVersion = dto.profileVersion,
+            profileImageUrl = null, // Default value
+            profileImageUpdatedAt = null, // Default value
+            hasCustomProfileImage = false // Default value
         )
     }
 

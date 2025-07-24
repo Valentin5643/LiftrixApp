@@ -1,0 +1,97 @@
+rules_version = '2';
+
+// Firebase Storage Rules for Liftrix profile image management
+// These rules implement user-scoped security for profile images with public read access
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper functions for security validation
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserId() {
+      return request.auth.uid;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && getUserId() == userId;
+    }
+    
+    function isValidImageFile() {
+      return request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+    
+    function isValidImageSize() {
+      return request.resource.size <= 1024 * 1024; // 1MB size limit
+    }
+    
+    function isValidFileName(fileName) {
+      return fileName.matches('avatar\\.(jpg|jpeg|png)');
+    }
+    
+    // Global deny rule - require explicit path matching
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+    
+    // Profile images - user-scoped storage with public read access
+    match /profile_images/{userId}/{imageId} {
+      // Public read access for social features and profile display
+      // Anyone can view profile images once uploaded
+      allow read: if true;
+      
+      // Write access - users can only manage their own profile images
+      allow write: if isOwner(userId) &&
+                     isValidImageFile() &&
+                     isValidImageSize() &&
+                     isValidFileName(imageId);
+      
+      // Delete access - users can only delete their own profile images
+      allow delete: if isOwner(userId);
+    }
+    
+    // Legacy profile images path (for migration support)
+    match /users/{userId}/profile_image.jpg {
+      // Public read access for backward compatibility
+      allow read: if true;
+      
+      // Write access restricted to owner
+      allow write: if isOwner(userId) &&
+                     isValidImageFile() &&
+                     isValidImageSize();
+      
+      // Delete access restricted to owner
+      allow delete: if isOwner(userId);
+    }
+    
+    // Temporary upload path (for staged uploads before processing)
+    match /temp_uploads/{userId}/{uploadId} {
+      // Only owner can read temporary uploads
+      allow read: if isOwner(userId);
+      
+      // Users can upload to their temporary space
+      allow write: if isOwner(userId) &&
+                     isValidImageFile() &&
+                     isValidImageSize();
+      
+      // Users can delete their temporary uploads
+      allow delete: if isOwner(userId);
+    }
+    
+    // Admin-managed content (workout thumbnails, exercise images, etc.)
+    match /content/{contentType}/{imageId} {
+      // Public read access for app content
+      allow read: if true;
+      
+      // Only authenticated admin users can manage content
+      // This would typically be done via Cloud Functions with admin SDK
+      allow write, delete: if false;
+    }
+    
+    // Test files (development/testing only - remove in production)
+    match /test/{testPath=**} {
+      allow read, write, delete: if isAuthenticated();
+    }
+  }
+}

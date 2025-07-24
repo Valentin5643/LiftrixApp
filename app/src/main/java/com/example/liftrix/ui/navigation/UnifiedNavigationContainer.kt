@@ -169,6 +169,41 @@ fun UnifiedNavigationContainer(
                     com.example.liftrix.ui.social.FriendsScreen(
                         onNavigateBack = {
                             navController.popBackStackSafely()
+                        },
+                        onNavigateToUserSearch = {
+                            navController.navigateToUserSearch()
+                        }
+                    )
+                }
+                
+                // Social Discovery Routes
+                composable<LiftrixRoute.UserSearch> {
+                    com.example.liftrix.ui.social.UserSearchScreen(
+                        onNavigateToProfile = { userId ->
+                            navController.navigateToPublicProfile(userId)
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.PublicProfile> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.PublicProfile>()
+                    com.example.liftrix.ui.social.PublicProfileScreen(
+                        userId = route.userId,
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        },
+                        onNavigateToQRCode = { userId ->
+                            navController.navigateToQRCodeDisplay(userId)
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.QRCodeDisplay> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.QRCodeDisplay>()
+                    com.example.liftrix.ui.social.QRCodeDisplayScreen(
+                        userId = route.userId ?: "", // TODO: Get current user ID if null
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
                         }
                     )
                 }

@@ -47,6 +47,30 @@ sealed class LiftrixRoute {
     @Serializable
     data object Friends : LiftrixRoute()
     
+    // Social Discovery Routes
+    
+    /**
+     * User search screen for discovering and connecting with other users
+     */
+    @Serializable
+    data object UserSearch : LiftrixRoute()
+    
+    /**
+     * Public profile display screen showing privacy-aware user information
+     * 
+     * @param userId Unique identifier for the user whose profile to display
+     */
+    @Serializable
+    data class PublicProfile(val userId: String) : LiftrixRoute()
+    
+    /**
+     * QR code display screen for profile sharing
+     * 
+     * @param userId Unique identifier for the user whose QR code to generate (defaults to current user)
+     */
+    @Serializable
+    data class QRCodeDisplay(val userId: String? = null) : LiftrixRoute()
+    
     /**
      * Workout details screen with specific workout ID
      * 
@@ -214,4 +238,12 @@ sealed class LiftrixRoute {
      */
     @Serializable
     data object AuthSignIn : LiftrixRoute()
+    
+    /**
+     * Image crop screen for profile picture editing
+     * 
+     * @param imageUri URI of the image to crop (serialized as string)
+     */
+    @Serializable
+    data class ImageCrop(val imageUri: String) : LiftrixRoute()
 }

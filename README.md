@@ -20,7 +20,8 @@ Liftrix follows **Clean Architecture** principles with modern Android developmen
 - **Offline-First Design**: Room as source of truth with Firebase synchronization
 
 ### Technology Stack
-- **UI**: Jetpack Compose with Material 3 design system
+- **UI**: Jetpack Compose with Material 3 design system and minimal 5-color palette
+- **Design System**: Streamlined color system achieving 98%+ app coverage with WCAG AA compliance
 - **Dependency Injection**: Dagger Hilt with feature-based modules
 - **Database**: Room (SQLite) with offline-first architecture
 - **Backend**: Firebase (Auth, Firestore, Analytics, Crashlytics)
@@ -53,15 +54,22 @@ docs/                        # Architecture documentation
 └── prd.md
 ```
 
-## Design System
-- **Primary Color**: Teal (#20C9B7)
-- **Secondary Color**: Indigo (#2A3B7D)  
-- **Accent Color**: Coral (#FF6B6B)
-- **Typography**: 
-  - Headlines: Poppins Bold
-  - Body: Inter Medium
-  - Data: Roboto Mono Light
-- **Dark-First**: OLED-optimized with optional light mode
+## Modern Design System
+
+Liftrix features a unified Material 3 design system with modern card-based interfaces and consistent visual hierarchy.
+
+### Visual Design
+- **Primary Color**: Liftrix Teal (#20C9B7) - modernized with reduced grey usage
+- **Secondary Color**: Indigo (#2A3B7D) for supporting actions
+- **Surface Colors**: Clean backgrounds with semantic color usage
+- **Typography**: Enhanced hierarchy with Poppins Bold headlines and Inter body text
+- **Components**: Unified card system with 12dp corners and semantic spacing
+
+### Component System
+- **UnifiedWorkoutCard**: Foundational component with consistent styling across all workout screens
+- **ModernActionButton**: Three-tier button hierarchy (Primary/Secondary/Tertiary) with 20dp pill-shaped corners
+- **LiftrixSpacing**: Semantic spacing tokens ensuring 16dp/12dp/8dp consistent layouts
+- **Animations**: 150ms press feedback with haptic response and 60fps performance targets
 
 ## Development
 
@@ -74,12 +82,22 @@ docs/                        # Architecture documentation
 
 ### Architecture Documentation
 
-Comprehensive architectural guidance is available in `/docs/architecture/`:
+Comprehensive architectural guidance is available in `/docs/`:
 
+#### Core Architecture
 - **[Architecture Decisions](docs/architecture/ARCHITECTURE_DECISIONS.md)**: ADRs documenting key architectural choices
 - **[Migration Guide](docs/architecture/MIGRATION_GUIDE.md)**: Step-by-step migration to modern patterns
 - **[Patterns & Conventions](docs/architecture/PATTERNS_AND_CONVENTIONS.md)**: Code standards and implementation patterns
 - **[Error Handling Guide](docs/architecture/ERROR_HANDLING_GUIDE.md)**: Comprehensive error management system
+
+#### UI/UX Design System
+- **[UI Redesign Guide](docs/ui-redesign-guide.md)**: Complete visual redesign overview with modern Material 3 implementation
+- **[Component Library](docs/component-library.md)**: Detailed documentation of unified components with usage examples and best practices
+
+#### Analytics Dashboard
+- **[Dashboard Architecture](docs/dashboard-architecture.md)**: Complete analytics dashboard system overview
+- **[Widget Development Guide](docs/widget-development-guide.md)**: Step-by-step guide for creating new widgets
+- **[Performance Optimization](docs/performance-optimization.md)**: Performance best practices and monitoring
 
 ### Key Patterns
 

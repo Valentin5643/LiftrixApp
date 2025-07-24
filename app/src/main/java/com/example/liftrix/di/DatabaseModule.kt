@@ -38,6 +38,8 @@ import com.example.liftrix.data.local.migration.MIGRATION_31_32
 import com.example.liftrix.data.local.migration.MIGRATION_32_33
 import com.example.liftrix.data.local.migration.MIGRATION_33_34
 import com.example.liftrix.data.local.migration.MIGRATION_34_35
+import com.example.liftrix.data.local.migration.MIGRATION_35_36
+import com.example.liftrix.data.local.migration.MIGRATION_36_37
 
 import dagger.Module
 import dagger.Provides
@@ -109,7 +111,7 @@ object DatabaseModule {
                     }
                 }
             })
-            .addMigrations(MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35)
+            .addMigrations(MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36, MIGRATION_36_37)
             // TESTING MODE: Temporarily disabled destructive migration to preserve test data
             // .fallbackToDestructiveMigration()
             // .fallbackToDestructiveMigrationOnDowngrade()

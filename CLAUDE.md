@@ -9,6 +9,7 @@ Liftrix is a fitness tracking Android app with **Clean Architecture** and **offl
 - **Data Layer**: Room database (v30) with Firebase sync, user-scoped operations
 - **UI Layer**: 100% Jetpack Compose with type-safe navigation and Material 3
 - **DI Layer**: 19 specialized Hilt modules for clean dependency management
+- **Social Layer**: User discovery with QR codes, privacy-aware profiles, connection management
 
 ### Data Flow Pattern
 ```
@@ -66,6 +67,9 @@ app/src/main/java/com/example/liftrix/
 - **Database Migrations** - 19 migration files (v11→v30)
 - **Firebase Sync Workers** - Background synchronization with conflict resolution
 - **Analytics Engine** - Performance-critical calculations with caching
+- **Analytics Dashboard System** - 25+ widgets with responsive design and multi-tier caching
+- **Widget Management System** - Complex preference handling and real-time updates
+- **Social Discovery System** - User search with privacy controls, QR code generation, connection management
 
 ### Common Debug Scenarios
 - **User Data Leakage**: Check all queries include `WHERE user_id = :userId`
@@ -172,6 +176,15 @@ app/src/main/java/com/example/liftrix/
 // ❌ Don't create custom state management patterns
 ```
 
+### Social Privacy Controls
+```kotlin
+// ✅ Always include viewer context for profile access
+userSearchRepository.getPublicProfile(profileUserId, viewerId)
+
+// ❌ Never expose profile data without privacy filtering
+userSearchRepository.getPublicProfile(profileUserId, null)
+```
+
 ## 🔍 Quick Reference
 
 ### Key Classes to Know
@@ -180,18 +193,128 @@ app/src/main/java/com/example/liftrix/
 - `BaseViewModel<S, E>` - ViewModel base class
 - `UiState<T>` - UI state management
 - `LiftrixRoute` - Type-safe navigation
+- `UnifiedWorkoutCard` - Foundational card component for workout screens
+- `ModernActionButton` - Three-tier button system (Primary/Secondary/Tertiary)
+- `LiftrixSpacing` - Semantic spacing tokens for consistent layouts
+- `AnalyticsWidget` - 25+ widget definitions with complexity-based refresh rates
+- `AnalyticsWidgetManager` - Widget configuration and personalization system
+- `ResponsiveDashboardLayout` - Adaptive layout engine for 320dp-1200dp+ screens
+- `UserSearchRepository` - Social discovery with privacy filtering and QR code generation
+- `QRCodeService` - ZXing-based QR code generation and profile sharing
 
 ### Common Patterns
 - All database operations are user-scoped
 - Navigation uses @Serializable sealed classes
 - Error handling uses LiftrixResult<T> pattern
 - UI state follows Loading/Success/Error/Empty pattern
+- UI components use UnifiedWorkoutCard for consistent card layouts
+- Button hierarchy follows Primary > Secondary > Tertiary pattern
+- Spacing uses LiftrixSpacing semantic tokens
 - Background sync uses WorkManager with retry policies
+- Social features use privacy-aware data with viewer context
+- QR codes follow deep linking pattern with web fallback
 
 ### Performance Targets
-- 60fps UI rendering
+- 60fps UI rendering with optimized animations
 - <100ms database queries
 - <5s sync operations
+- 150ms component interactions with haptic feedback
 - WCAG 2.1 AA accessibility compliance
+
+## 📚 Documentation
+
+For comprehensive guidance on Liftrix systems:
+
+### UI/UX Design System
+- **[UI Redesign Guide](docs/ui-redesign-guide.md)** - Complete visual redesign overview and implementation details
+- **[Component Library](docs/component-library.md)** - Detailed documentation of unified UI components with usage examples
+
+### Analytics Dashboard System
+- **[Dashboard Architecture](docs/dashboard-architecture.md)** - Complete system overview, data flow, and integration points
+- **[Widget Development Guide](docs/widget-development-guide.md)** - Step-by-step guide for creating new widgets with examples  
+- **[Performance Optimization](docs/performance-optimization.md)** - Performance best practices, monitoring, and 60fps targets
+
+### Social Discovery System
+- **Privacy-First Architecture**: All profile data respects user privacy settings with viewer context
+- **QR Code Integration**: ZXing-powered profile sharing with deep linking and web fallback
+- **Search Performance**: <500ms cached results, intelligent user indexing with debounced queries
+- **Connection Management**: Complete social graph with pending/accepted states and mutual discovery
+
+## 🎨 Liftrix 5-Color Design System
+
+Liftrix uses a minimal 5-color palette achieving 98%+ app coverage:
+
+### Core Colors
+- **Night** (`#131515`) - Dark primary for text and true black backgrounds
+- **Jet** (`#2B2C28`) - Dark secondary for surfaces and secondary text
+- **Persian Green** (`#339989`) - Brand primary for actions and branding
+- **Tiffany Blue** (`#7DE2D1`) - Brand secondary for highlights and selections
+- **Snow** (`#FFFAFB`) - Light primary for backgrounds and surfaces
+- **Exception**: Error states use red colors (only deviation from 5-color rule)
+
+### Usage Guidelines
+- Always use Material 3 color roles (`MaterialTheme.colorScheme.*`)
+- Persian Green for primary actions, Tiffany Blue for secondary
+- Snow/Night/Jet provide 90%+ surface coverage
+- All combinations exceed WCAG 2.1 AA accessibility standards
+- Error states are the only exception using red colors
+
+### Component Integration
+- `UnifiedWorkoutCard` uses semantic surface colors automatically
+- `ModernActionButton` follows Persian Green (primary) / Tiffany Blue (secondary) hierarchy
+- Navigation and form elements use appropriate brand color assignments
+- All components maintain accessibility compliance through semantic color roles
+
+## 🎨 UI Component Guidelines
+
+### Using the Modern Component System
+
+#### UnifiedWorkoutCard - Foundation Component
+```kotlin
+UnifiedWorkoutCard(
+    title = "Push Day Workout",
+    subtitle = "6 exercises",
+    onClick = { /* Navigate to workout */ }
+) {
+    Text("Workout content and details")
+    
+    // Actions slot - uses Persian Green/Tiffany Blue hierarchy
+    Row {
+        SecondaryActionButton("Edit", onClick = { })      // Tiffany Blue
+        PrimaryActionButton("Start", onClick = { })       // Persian Green
+    }
+}
+```
+
+#### ModernActionButton - Three-Tier System
+```kotlin
+// Primary actions (highest priority) - Persian Green
+PrimaryActionButton("Start Workout", onClick = { })
+
+// Secondary actions (medium priority) - Tiffany Blue
+SecondaryActionButton("Edit Workout", onClick = { })
+
+// Tertiary actions (lowest priority) - Persian Green with alpha
+TertiaryActionButton("Learn More", onClick = { })
+```
+
+#### LiftrixSpacing - Semantic Layout
+```kotlin
+Column(
+    verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.cardSpacing),
+    modifier = Modifier.padding(LiftrixSpacing.screenPadding)
+) {
+    UnifiedWorkoutCard(title = "Workout 1") { /* Content */ }
+    UnifiedWorkoutCard(title = "Workout 2") { /* Content */ }
+}
+```
+
+### Component Integration Rules
+- **Always use UnifiedWorkoutCard** for workout-related content layouts
+- **Follow button hierarchy** - Primary > Secondary > Tertiary with Persian Green/Tiffany Blue
+- **Use semantic spacing tokens** from LiftrixSpacing object
+- **Include accessibility** - components have built-in WCAG 2.1 AA compliance
+- **Leverage animations** - components include 150ms press feedback and haptic response
+- **Use Material 3 color roles** - Never reference colors directly, always use `MaterialTheme.colorScheme.*`
 
 This context provides the foundation for understanding Liftrix's architecture and safely extending its functionality while maintaining code quality and performance standards.

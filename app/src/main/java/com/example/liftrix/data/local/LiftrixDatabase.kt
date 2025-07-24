@@ -30,6 +30,7 @@ import com.example.liftrix.data.local.dao.WorkoutAnomalyDao
 import com.example.liftrix.data.local.dao.AnomalyDetectionSettingsDao
 import com.example.liftrix.data.local.dao.ExerciseHistoryDao
 import com.example.liftrix.data.local.dao.WidgetPreferencesDao
+import com.example.liftrix.data.local.dao.AchievementDao
 
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.data.local.entity.FolderEntity
@@ -53,6 +54,7 @@ import com.example.liftrix.data.local.entity.AnomalyDetectionSettingsEntity
 import com.example.liftrix.data.local.entity.ExerciseHistoryEntity
 import com.example.liftrix.data.local.entity.WidgetPreferenceEntity
 import com.example.liftrix.data.local.entity.DashboardConfigurationEntity
+import com.example.liftrix.data.local.entity.UserAchievementEntity
 
 
 
@@ -80,8 +82,9 @@ import com.example.liftrix.data.local.entity.DashboardConfigurationEntity
         ExerciseHistoryEntity::class,
         WidgetPreferenceEntity::class,
         DashboardConfigurationEntity::class,
+        UserAchievementEntity::class,
     ],
-    version = 35,
+    version = 37,
     exportSchema = true
 )
 @TypeConverters(
@@ -115,4 +118,5 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun anomalyDetectionSettingsDao(): AnomalyDetectionSettingsDao
     abstract fun exerciseHistoryDao(): ExerciseHistoryDao
     abstract fun widgetPreferencesDao(): WidgetPreferencesDao
+    abstract fun achievementDao(): AchievementDao
 } 

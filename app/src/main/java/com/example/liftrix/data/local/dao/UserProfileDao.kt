@@ -62,4 +62,47 @@ interface UserProfileDao {
     
     @Query("SELECT EXISTS(SELECT 1 FROM user_profiles WHERE user_id = :userId AND completed_at IS NOT NULL)")
     suspend fun hasCompletedProfile(userId: String): Boolean
+    
+    // Enhanced profile queries for social features and achievements
+    
+    @Query("SELECT * FROM user_profiles WHERE is_public = 1 ORDER BY total_workouts DESC LIMIT :limit")
+    suspend fun getPublicProfiles(limit: Int = 50): List<UserProfileEntity>
+    
+    @Query("SELECT * FROM user_profiles WHERE user_id = :userId AND is_public = 1")
+    suspend fun getPublicProfile(userId: String): UserProfileEntity?
+    
+    @Query("UPDATE user_profiles SET is_public = :isPublic WHERE user_id = :userId")
+    suspend fun updatePrivacySetting(userId: String, isPublic: Boolean): Int
+    
+    @Query("UPDATE user_profiles SET bio = :bio WHERE user_id = :userId")
+    suspend fun updateBio(userId: String, bio: String?): Int
+    
+    @Query("UPDATE user_profiles SET total_workouts = :totalWorkouts, current_streak = :currentStreak, longest_streak = :longestStreak WHERE user_id = :userId")
+    suspend fun updateWorkoutStats(userId: String, totalWorkouts: Int, currentStreak: Int, longestStreak: Int): Int
+    
+    @Query("UPDATE user_profiles SET profile_completion_percentage = :percentage WHERE user_id = :userId")
+    suspend fun updateProfileCompletion(userId: String, percentage: Int): Int
+    
+    @Query("UPDATE user_profiles SET last_active_at = :lastActiveAt WHERE user_id = :userId")
+    suspend fun updateLastActiveAt(userId: String, lastActiveAt: String): Int
+    
+    @Query("SELECT profile_completion_percentage FROM user_profiles WHERE user_id = :userId")
+    suspend fun getProfileCompletionPercentage(userId: String): Int?
+    
+    @Query("SELECT COUNT(*) FROM user_profiles WHERE profile_completion_percentage >= 80")
+    suspend fun getHighCompletionProfilesCount(): Int
+    
+    // Profile image management methods
+    
+    @Query("UPDATE user_profiles SET profile_image_url = :imageUrl, profile_image_updated_at = :updatedAt, has_custom_profile_image = :hasCustom WHERE user_id = :userId")
+    suspend fun updateProfileImage(userId: String, imageUrl: String?, updatedAt: String?, hasCustom: Boolean): Int
+    
+    @Query("SELECT profile_image_url FROM user_profiles WHERE user_id = :userId")
+    suspend fun getProfileImageUrl(userId: String): String?
+    
+    @Query("SELECT has_custom_profile_image FROM user_profiles WHERE user_id = :userId")
+    suspend fun hasCustomProfileImage(userId: String): Boolean?
+    
+    @Query("SELECT * FROM user_profiles WHERE has_custom_profile_image = 1 ORDER BY profile_image_updated_at DESC LIMIT :limit")
+    suspend fun getProfilesWithCustomImages(limit: Int = 50): List<UserProfileEntity>
 } 

@@ -190,6 +190,16 @@ dependencies {
     implementation(libs.itext7.layout)
     implementation(libs.commons.csv)
     
+    // Image processing dependencies
+    implementation(libs.coil.compose)
+    implementation(libs.androidx.exifinterface)
+    
+    // QR Code generation dependencies
+    implementation(libs.zxing.core)
+    implementation(libs.zxing.android.embedded) {
+        isTransitive = false
+    }
+    
     // Missing dependencies for KSP and ASM instrumentation
     implementation(libs.androidx.window)
     implementation(libs.androidx.window.core)

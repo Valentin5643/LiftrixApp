@@ -6,6 +6,7 @@ import com.example.liftrix.data.service.NetworkConnectivityMonitorImpl
 import com.example.liftrix.domain.service.NetworkConnectivityMonitor
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.storage.FirebaseStorage
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import dagger.Binds
@@ -35,6 +36,17 @@ abstract class NetworkModule {
                     .setPersistenceEnabled(true)
                     .setCacheSizeBytes(com.google.firebase.firestore.FirebaseFirestoreSettings.CACHE_SIZE_UNLIMITED)
                     .build()
+            }
+        }
+
+        @Provides
+        @Singleton
+        fun provideFirebaseStorage(): FirebaseStorage {
+            return FirebaseStorage.getInstance().apply {
+                // Configure maximum upload/download timeout for profile images
+                maxUploadRetryTimeMillis = 30000 // 30 seconds for uploads
+                maxDownloadRetryTimeMillis = 15000 // 15 seconds for downloads
+                maxOperationRetryTimeMillis = 45000 // 45 seconds total operation timeout
             }
         }
 

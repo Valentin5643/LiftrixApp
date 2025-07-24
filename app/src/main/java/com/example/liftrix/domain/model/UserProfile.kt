@@ -4,19 +4,33 @@ import java.time.LocalDateTime
 
 /**
  * Domain model for a user's fitness profile.
- * Contains all data collected during the onboarding flow.
+ * Enhanced with social features, achievements, and privacy controls.
  */
 data class UserProfile(
     val userId: String,
+    val displayName: String,
+    val bio: String?,
     val age: Int?,
     val weight: Weight?,
     val availableEquipment: List<Equipment>,
     val otherEquipment: String?,
     val fitnessGoals: List<FitnessGoal>,
     val goalsPriority: Map<FitnessGoal, Int>?,
+    val isPublic: Boolean = true,
+    val lastActiveAt: LocalDateTime?,
+    val totalWorkouts: Int = 0,
+    val currentStreak: Int = 0,
+    val longestStreak: Int = 0,
+    val memberSince: LocalDateTime,
+    val profileCompletionPercentage: Int = 0,
+    val achievements: List<UserAchievement> = emptyList(),
     val completedAt: LocalDateTime?,
     val updatedAt: LocalDateTime,
-    val profileVersion: Long = 1
+    val profileVersion: Long = 1,
+    // Profile image fields for visual identity
+    val profileImageUrl: String? = null,
+    val profileImageUpdatedAt: LocalDateTime? = null,
+    val hasCustomProfileImage: Boolean = false
 ) {
     init {
         require(userId.isNotBlank()) { "User ID cannot be blank" }

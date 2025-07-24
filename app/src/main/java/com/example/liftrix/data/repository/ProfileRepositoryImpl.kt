@@ -7,8 +7,11 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.mapper.UserProfileMapper
+import com.example.liftrix.domain.model.StreakData
 import com.example.liftrix.domain.model.UserProfile
+import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.repository.ProfileRepository
+import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.sync.ProfileSyncWorker
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
@@ -23,7 +26,8 @@ class ProfileRepositoryImpl @Inject constructor(
     private val userProfileDao: UserProfileDao,
     private val userProfileMapper: UserProfileMapper,
     private val firestore: FirebaseFirestore,
-    private val workManager: WorkManager
+    private val workManager: WorkManager,
+    private val workoutRepository: WorkoutRepository
 ) : ProfileRepository {
 
     override fun getProfile(userId: String): Flow<UserProfile?> {
@@ -168,5 +172,141 @@ class ProfileRepositoryImpl @Inject constructor(
             Timber.e(e, "Failed to initiate immediate profile sync for user: $userId")
             Result.failure(e)
         }
+    }
+
+    // Enhanced methods for social profile system
+
+    override suspend fun getUserProfile(userId: String): LiftrixResult<UserProfile?> {
+        return try {
+            val entity = userProfileDao.getProfileForUserSuspend(userId)
+            val profile = entity?.let { userProfileMapper.toDomain(it) }
+            Result.success(profile)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get user profile: $userId")
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun saveUserProfile(profile: UserProfile): LiftrixResult<Unit> {
+        return try {
+            require(profile.userId.isNotBlank()) { "User profile must have a valid user ID" }
+            
+            // Save to local database (offline-first)
+            val entity = userProfileMapper.toEntity(profile, isSynced = false)
+            userProfileDao.insertProfile(entity)
+            
+            // Queue sync in background
+            queueSync(profile.userId)
+            
+            Timber.d("Enhanced user profile saved successfully: ${profile.userId}")
+            Result.success(Unit)
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to save enhanced user profile: ${profile.userId}")
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun updateProfileCompletion(userId: String): LiftrixResult<Int> {
+        return try {
+            val entity = userProfileDao.getProfileForUserSuspend(userId)
+                ?: return Result.failure(IllegalStateException("Profile not found for completion update"))
+            
+            val profile = userProfileMapper.toDomain(entity)
+            
+            // Calculate completion percentage based on filled fields
+            val completionPercentage = calculateProfileCompletionPercentage(profile)
+            
+            // Update in database
+            userProfileDao.updateProfileCompletion(userId, completionPercentage)
+            
+            Timber.d("Profile completion updated for user $userId: $completionPercentage%")
+            Result.success(completionPercentage)
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to update profile completion for user: $userId")
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun calculateStreakData(userId: String): LiftrixResult<StreakData> {
+        return try {
+            // Get workout data for streak calculation
+            val workouts = workoutRepository.getAllWorkoutsForUser(userId)
+            // This would need to be implemented properly based on workout data
+            // For now, return basic data from the profile
+            val entity = userProfileDao.getProfileForUserSuspend(userId)
+            if (entity != null) {
+                val streakData = StreakData(
+                    currentStreak = entity.currentStreak,
+                    longestStreak = entity.longestStreak,
+                    totalWorkouts = entity.totalWorkouts,
+                    lastWorkoutDate = entity.lastActiveAt
+                )
+                Result.success(streakData)
+            } else {
+                Result.success(StreakData(0, 0, 0, null))
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to calculate streak data for user: $userId")
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun updatePrivacySettings(userId: String, isPublic: Boolean): LiftrixResult<Unit> {
+        return try {
+            val updateCount = userProfileDao.updatePrivacySetting(userId, isPublic)
+            if (updateCount > 0) {
+                queueSync(userId)
+                Timber.d("Privacy settings updated for user $userId: public=$isPublic")
+                Result.success(Unit)
+            } else {
+                Result.failure(IllegalStateException("Profile not found for privacy update"))
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to update privacy settings for user: $userId")
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun getPublicProfiles(limit: Int): LiftrixResult<List<UserProfile>> {
+        return try {
+            val entities = userProfileDao.getPublicProfiles(limit)
+            val profiles = entities.map { userProfileMapper.toDomain(it) }
+            Result.success(profiles)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get public profiles")
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun getPublicProfile(userId: String): LiftrixResult<UserProfile?> {
+        return try {
+            val entity = userProfileDao.getPublicProfile(userId)
+            val profile = entity?.let { userProfileMapper.toDomain(it) }
+            Result.success(profile)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get public profile for user: $userId")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Calculates profile completion percentage based on filled fields.
+     */
+    private fun calculateProfileCompletionPercentage(profile: UserProfile): Int {
+        var completedFields = 0
+        val totalFields = 8 // Adjust based on required fields
+
+        if (profile.displayName.isNotBlank()) completedFields++
+        if (profile.age != null) completedFields++
+        if (profile.weight != null) completedFields++
+        if (profile.fitnessGoals.isNotEmpty()) completedFields++
+        if (profile.availableEquipment.isNotEmpty()) completedFields++
+        if (!profile.bio.isNullOrBlank()) completedFields++
+        if (profile.goalsPriority != null) completedFields++
+        if (profile.otherEquipment != null || !profile.availableEquipment.any { it.name.contains("Other", ignoreCase = true) }) completedFields++
+
+        return ((completedFields.toFloat() / totalFields.toFloat()) * 100).toInt().coerceIn(0, 100)
     }
 } 

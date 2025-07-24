@@ -152,6 +152,95 @@ service cloud.firestore {
          friendshipId.split('_')[1] == request.auth.uid);
     }
     
+    // Social Discovery Features
+    
+    // Users public collection - public profile data for social discovery
+    match /users_public/{userId} {
+      // Anyone authenticated can read public profiles
+      allow read: if isAuthenticated();
+      
+      // Users can only write their own public profile
+      allow write: if isOwner(userId) && 
+                   validatePublicProfileData(request.resource.data);
+    }
+    
+    // User search cache - cached search results with TTL
+    match /user_search_cache/{cacheId} {
+      // Users can read their own cached search results
+      allow read: if isAuthenticated() && 
+                 resource.data.searcherId == getUserId();
+      
+      // Users can write their own search cache entries
+      allow write: if isAuthenticated() && 
+                  request.resource.data.searcherId == getUserId() &&
+                  validateSearchCacheData(request.resource.data);
+      
+      // Allow cleanup of expired cache entries
+      allow delete: if isAuthenticated() && 
+                   (resource.data.searcherId == getUserId() || 
+                    resource.data.expiresAt < request.time.toMillis());
+    }
+    
+    // QR code mappings - secure QR code to profile mappings
+    match /qr_code_mappings/{qrCodeId} {
+      // Anyone can read QR code mappings to resolve profiles
+      allow read: if isAuthenticated();
+      
+      // Users can only create QR codes for their own profile
+      allow create: if isAuthenticated() && 
+                   request.resource.data.userId == getUserId() &&
+                   validateQRCodeMappingData(request.resource.data);
+      
+      // Users can update their own QR codes (regenerate, disable)
+      allow update: if isAuthenticated() && 
+                   resource.data.userId == getUserId() &&
+                   validateQRCodeMappingData(request.resource.data);
+      
+      // Users can delete their own QR codes
+      allow delete: if isAuthenticated() && 
+                   resource.data.userId == getUserId();
+    }
+    
+    // Profile views tracking - analytics for profile interactions
+    match /profile_views/{viewId} {
+      // Users can read views of their own profile
+      allow read: if isAuthenticated() && 
+                 resource.data.profileUserId == getUserId();
+      
+      // Users can create view records when viewing others' profiles
+      allow create: if isAuthenticated() && 
+                   request.resource.data.viewerId == getUserId() &&
+                   request.resource.data.profileUserId != getUserId() &&
+                   validateProfileViewData(request.resource.data);
+      
+      // No updates or deletes allowed (append-only for analytics)
+      allow update, delete: if false;
+    }
+    
+    // Connection requests - social connection management
+    match /connection_requests/{requestId} {
+      // Users can read requests where they are sender or receiver
+      allow read: if isAuthenticated() && 
+                 (resource.data.senderId == getUserId() || 
+                  resource.data.receiverId == getUserId());
+      
+      // Users can create requests they are sending
+      allow create: if isAuthenticated() && 
+                   request.resource.data.senderId == getUserId() &&
+                   request.resource.data.senderId != request.resource.data.receiverId &&
+                   validateConnectionRequestData(request.resource.data);
+      
+      // Users can update requests they are receiving (accept/decline)
+      allow update: if isAuthenticated() && 
+                   resource.data.receiverId == getUserId() &&
+                   validateConnectionRequestUpdate(resource.data, request.resource.data);
+      
+      // Users can delete requests they sent or received
+      allow delete: if isAuthenticated() && 
+                   (resource.data.senderId == getUserId() || 
+                    resource.data.receiverId == getUserId());
+    }
+    
     // Premium features collection - subscription-based content
     match /premium_workouts/{workoutId} {
       // Premium users can read premium workout templates
@@ -373,6 +462,124 @@ service cloud.firestore {
              // Completed timestamp validation if present
              (!(data.keys().hasAny(['completedAt'])) || 
               data.completedAt is timestamp);
+    }
+    
+    // Social Features Validation Functions
+    
+    function validatePublicProfileData(data) {
+      return data.keys().hasAll(['userId', 'displayName', 'updatedAt']) &&
+             data.userId is string &&
+             data.displayName is string &&
+             data.updatedAt is timestamp &&
+             data.userId == getUserId() &&
+             data.displayName.size() >= 2 && data.displayName.size() <= 50 &&
+             // Bio validation if present
+             (!(data.keys().hasAny(['bio'])) || 
+              (data.bio is string && data.bio.size() <= 500)) &&
+             // Profile image validation if present
+             (!(data.keys().hasAny(['profileImageUrl'])) || 
+              (data.profileImageUrl is string && data.profileImageUrl.size() <= 500)) &&
+             // Fitness level validation if present
+             (!(data.keys().hasAny(['fitnessLevel'])) || 
+              data.fitnessLevel in ['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'EXPERT']) &&
+             // Privacy settings validation if present
+             (!(data.keys().hasAny(['privacySettings'])) || 
+              (data.privacySettings is map && validatePrivacySettings(data.privacySettings))) &&
+             // Equipment validation if present
+             (!(data.keys().hasAny(['availableEquipment'])) || 
+              (data.availableEquipment is list && data.availableEquipment.size() <= 20)) &&
+             // Goals validation if present
+             (!(data.keys().hasAny(['fitnessGoals'])) || 
+              (data.fitnessGoals is list && data.fitnessGoals.size() <= 10));
+    }
+    
+    function validatePrivacySettings(privacySettings) {
+      return // Profile visibility validation if present
+             (!(privacySettings.keys().hasAny(['profileVisibility'])) || 
+              privacySettings.profileVisibility in ['PUBLIC', 'FRIENDS_ONLY', 'PRIVATE']) &&
+             // Show workout stats validation if present
+             (!(privacySettings.keys().hasAny(['showWorkoutStats'])) || 
+              privacySettings.showWorkoutStats is bool) &&
+             // Show equipment validation if present
+             (!(privacySettings.keys().hasAny(['showEquipment'])) || 
+              privacySettings.showEquipment is bool) &&
+             // Show goals validation if present
+             (!(privacySettings.keys().hasAny(['showGoals'])) || 
+              privacySettings.showGoals is bool);
+    }
+    
+    function validateSearchCacheData(data) {
+      return data.keys().hasAll(['searcherId', 'searchQuery', 'results', 'createdAt', 'expiresAt']) &&
+             data.searcherId is string &&
+             data.searchQuery is string &&
+             data.results is list &&
+             data.createdAt is timestamp &&
+             data.expiresAt is number &&
+             data.searcherId == getUserId() &&
+             data.searchQuery.size() >= 2 && data.searchQuery.size() <= 100 &&
+             data.results.size() <= 50 && // Max cached results
+             data.expiresAt > request.time.toMillis(); // Must be future expiration
+    }
+    
+    function validateQRCodeMappingData(data) {
+      return data.keys().hasAll(['userId', 'qrCodeData', 'createdAt']) &&
+             data.userId is string &&
+             data.qrCodeData is string &&
+             data.createdAt is timestamp &&
+             data.userId == getUserId() &&
+             data.qrCodeData.size() >= 10 && data.qrCodeData.size() <= 500 &&
+             // Expiration validation if present
+             (!(data.keys().hasAny(['expiresAt'])) || 
+              (data.expiresAt is number && data.expiresAt > request.time.toMillis())) &&
+             // Usage count validation if present
+             (!(data.keys().hasAny(['usageCount'])) || 
+              (data.usageCount is number && data.usageCount >= 0 && data.usageCount <= 10000)) &&
+             // Active status validation if present
+             (!(data.keys().hasAny(['isActive'])) || 
+              data.isActive is bool);
+    }
+    
+    function validateProfileViewData(data) {
+      return data.keys().hasAll(['viewerId', 'profileUserId', 'viewedAt']) &&
+             data.viewerId is string &&
+             data.profileUserId is string &&
+             data.viewedAt is timestamp &&
+             data.viewerId == getUserId() &&
+             data.viewerId != data.profileUserId &&
+             // View source validation if present
+             (!(data.keys().hasAny(['viewSource'])) || 
+              data.viewSource in ['SEARCH', 'QR_CODE', 'DIRECT_LINK', 'FRIEND_LIST']) &&
+             // Metadata validation if present
+             (!(data.keys().hasAny(['metadata'])) || 
+              (data.metadata is map && data.metadata.keys().size() <= 10));
+    }
+    
+    function validateConnectionRequestData(data) {
+      return data.keys().hasAll(['senderId', 'receiverId', 'status', 'createdAt']) &&
+             data.senderId is string &&
+             data.receiverId is string &&
+             data.status == 'PENDING' &&
+             data.createdAt is timestamp &&
+             data.senderId == getUserId() &&
+             data.senderId != data.receiverId &&
+             // Message validation if present
+             (!(data.keys().hasAny(['message'])) || 
+              (data.message is string && data.message.size() <= 500)) &&
+             // Connection type validation if present
+             (!(data.keys().hasAny(['connectionType'])) || 
+              data.connectionType in ['FRIEND', 'WORKOUT_PARTNER', 'MENTOR']);
+    }
+    
+    function validateConnectionRequestUpdate(oldData, newData) {
+      return oldData.senderId == newData.senderId &&
+             oldData.receiverId == newData.receiverId &&
+             oldData.createdAt == newData.createdAt &&
+             newData.status in ['ACCEPTED', 'DECLINED', 'BLOCKED'] &&
+             newData.keys().hasAll(['updatedAt']) &&
+             newData.updatedAt is timestamp &&
+             // Response message validation if present
+             (!(newData.keys().hasAny(['responseMessage'])) || 
+              (newData.responseMessage is string && newData.responseMessage.size() <= 500));
     }
   }
 }
