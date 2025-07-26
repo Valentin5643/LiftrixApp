@@ -191,6 +191,24 @@ object ErrorMapper {
                 }
             }
             
+            is LiftrixError.PermissionError -> {
+                when {
+                    error.permission != null -> {
+                        "Permission denied: ${error.permission}. Please check your permissions and try again."
+                    }
+                    else -> "You don't have permission to perform this action."
+                }
+            }
+            
+            is LiftrixError.CacheError -> {
+                when {
+                    error.operation != null -> {
+                        "Cache ${error.operation} failed. Please try again."
+                    }
+                    else -> "Cache operation failed. Please try again."
+                }
+            }
+            
             is LiftrixError.UnknownError -> {
                 "An unexpected error occurred. Please try again or contact support if the problem persists."
             }
@@ -218,6 +236,8 @@ object ErrorMapper {
             is LiftrixError.ExportError -> "Export Error"
             is LiftrixError.FileSystemError -> "File Error"
             is LiftrixError.NotFoundError -> "Not Found"
+            is LiftrixError.PermissionError -> "Permission Denied"
+            is LiftrixError.CacheError -> "Cache Error"
             is LiftrixError.UnknownError -> "Unexpected Error"
         }
     }
@@ -247,6 +267,8 @@ object ErrorMapper {
             is LiftrixError.ExportError -> true
             is LiftrixError.FileSystemError -> true
             is LiftrixError.NotFoundError -> true
+            is LiftrixError.PermissionError -> true
+            is LiftrixError.CacheError -> true
             is LiftrixError.UnknownError -> true
         }
     }
@@ -334,6 +356,18 @@ object ErrorMapper {
                 "Go back and try again"
             )
             
+            is LiftrixError.PermissionError -> listOf(
+                "Check your permissions",
+                "Sign in again if needed",
+                "Contact your administrator"
+            )
+            
+            is LiftrixError.CacheError -> listOf(
+                "Try again",
+                "Clear app cache",
+                "Restart the app"
+            )
+            
             is LiftrixError.UnknownError -> listOf(
                 "Try the action again",
                 "Restart the app if the problem continues",
@@ -399,6 +433,10 @@ object ErrorMapper {
             
             is LiftrixError.NotFoundError -> ErrorSeverity.WARNING
             
+            is LiftrixError.PermissionError -> ErrorSeverity.ERROR
+            
+            is LiftrixError.CacheError -> ErrorSeverity.WARNING
+            
             is LiftrixError.UnknownError -> ErrorSeverity.ERROR
         }
     }
@@ -459,6 +497,10 @@ object ErrorMapper {
             }
             
             is LiftrixError.NotFoundError -> false // Resource not found typically can't be retried
+            
+            is LiftrixError.PermissionError -> false // Permission errors typically can't be retried
+            
+            is LiftrixError.CacheError -> true // Cache errors can be retried
             
             is LiftrixError.UnknownError -> true // Allow retry for unknown errors
         }
@@ -571,6 +613,14 @@ object ErrorMapper {
                     "template" -> "Go back and try selecting a different template"
                     else -> "Refresh the page and try again"
                 }
+            }
+            
+            is LiftrixError.PermissionError -> {
+                "Check your permissions or sign in again"
+            }
+            
+            is LiftrixError.CacheError -> {
+                "Try again or clear the app cache"
             }
             
             is LiftrixError.UnknownError -> {

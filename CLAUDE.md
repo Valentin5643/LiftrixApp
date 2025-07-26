@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # Liftrix Android App - Claude Development Context
 
 ## 🧠 Project Mental Model
@@ -6,9 +10,10 @@ Liftrix is a fitness tracking Android app with **Clean Architecture** and **offl
 
 ### Core System Layers
 - **Domain Layer**: Business logic with 60+ use cases, LiftrixResult<T> error handling
-- **Data Layer**: Room database (v30) with Firebase sync, user-scoped operations
+- **Data Layer**: Room database (v37) with Firebase sync, user-scoped operations
 - **UI Layer**: 100% Jetpack Compose with type-safe navigation and Material 3
 - **DI Layer**: 19 specialized Hilt modules for clean dependency management
+- **Profile Layer**: Complete profile management with achievements, images, and social features
 - **Social Layer**: User discovery with QR codes, privacy-aware profiles, connection management
 
 ### Data Flow Pattern
@@ -64,12 +69,15 @@ app/src/main/java/com/example/liftrix/
 
 ### Fragile/Complex Modules
 - **UnifiedWorkoutSessionManager** - Session state management (recently refactored)
-- **Database Migrations** - 19 migration files (v11→v30)
+- **Database Migrations** - 37 migration files with social/profile schema updates (v11→v37)
 - **Firebase Sync Workers** - Background synchronization with conflict resolution
 - **Analytics Engine** - Performance-critical calculations with caching
 - **Analytics Dashboard System** - 25+ widgets with responsive design and multi-tier caching
 - **Widget Management System** - Complex preference handling and real-time updates
+- **Profile Management System** - Complete profile workflow with achievements, images, and privacy
 - **Social Discovery System** - User search with privacy controls, QR code generation, connection management
+- **Achievement Calculation Engine** - Real-time achievement detection with streak calculations
+- **Profile Image Pipeline** - Upload, crop, cache, and sync with error recovery
 
 ### Common Debug Scenarios
 - **User Data Leakage**: Check all queries include `WHERE user_id = :userId`
@@ -199,13 +207,17 @@ userSearchRepository.getPublicProfile(profileUserId, null)
 - `AnalyticsWidget` - 25+ widget definitions with complexity-based refresh rates
 - `AnalyticsWidgetManager` - Widget configuration and personalization system
 - `ResponsiveDashboardLayout` - Adaptive layout engine for 320dp-1200dp+ screens
+- `ProfileViewModel` - Enhanced profile management with achievements and image upload
+- `UserProfile` - Complete profile model with social features and achievements
 - `UserSearchRepository` - Social discovery with privacy filtering and QR code generation
 - `QRCodeService` - ZXing-based QR code generation and profile sharing
+- `CalculateAchievementsUseCase` - Automatic achievement detection and assignment
+- `ProfileImageManager` - Profile image upload, crop, and cache management
 
 ### Common Patterns
-- All database operations are user-scoped
-- Navigation uses @Serializable sealed classes
-- Error handling uses LiftrixResult<T> pattern
+- All database operations are user-scoped with `WHERE user_id = :userId`
+- Navigation uses @Serializable sealed classes (LiftrixRoute)
+- Error handling uses LiftrixResult<T> pattern with recovery strategies
 - UI state follows Loading/Success/Error/Empty pattern
 - UI components use UnifiedWorkoutCard for consistent card layouts
 - Button hierarchy follows Primary > Secondary > Tertiary pattern
@@ -213,6 +225,10 @@ userSearchRepository.getPublicProfile(profileUserId, null)
 - Background sync uses WorkManager with retry policies
 - Social features use privacy-aware data with viewer context
 - QR codes follow deep linking pattern with web fallback
+- Profile management uses enhanced ProfileViewModel with real-time updates
+- Achievement system runs automatically after workout completion
+- Image uploads include progress tracking and error recovery
+- Privacy settings sync immediately with proper user feedback
 
 ### Performance Targets
 - 60fps UI rendering with optimized animations
@@ -234,11 +250,13 @@ For comprehensive guidance on Liftrix systems:
 - **[Widget Development Guide](docs/widget-development-guide.md)** - Step-by-step guide for creating new widgets with examples  
 - **[Performance Optimization](docs/performance-optimization.md)** - Performance best practices, monitoring, and 60fps targets
 
-### Social Discovery System
+### Social Discovery System  
 - **Privacy-First Architecture**: All profile data respects user privacy settings with viewer context
 - **QR Code Integration**: ZXing-powered profile sharing with deep linking and web fallback
 - **Search Performance**: <500ms cached results, intelligent user indexing with debounced queries
 - **Connection Management**: Complete social graph with pending/accepted states and mutual discovery
+- **Achievement System**: Automatic achievement detection with milestone tracking and badge display
+- **Profile Completion**: Smart completion percentage calculation with user guidance
 
 ## 🎨 Liftrix 5-Color Design System
 
@@ -316,5 +334,27 @@ Column(
 - **Include accessibility** - components have built-in WCAG 2.1 AA compliance
 - **Leverage animations** - components include 150ms press feedback and haptic response
 - **Use Material 3 color roles** - Never reference colors directly, always use `MaterialTheme.colorScheme.*`
+
+## 👤 Profile & Social System
+
+### Key Components
+- **ProfileScreen** - Main profile display with achievements and privacy controls
+- **ProfileEditScreen** - Form-based editing with validation
+- **ProfileViewModel** - State management with image upload and achievement integration
+- **UserSearchRepository** - Privacy-aware user search with caching
+- **QRCodeService** - Profile sharing via QR codes
+- **CalculateAchievementsUseCase** - Automatic achievement detection
+
+### Database Tables
+- **user_profiles** - Enhanced with bio, privacy, streaks (Migration 35→37)
+- **user_achievements** - Achievement tracking with display flags
+- **user_search_cache** - Search result caching for performance
+- **qr_code_mappings** - QR code to profile mapping
+
+### Critical Integration Points
+- Navigation routes need registration in UnifiedNavigationContainer
+- New entities need registration in LiftrixDatabase
+- DAOs need providers in DatabaseModule
+- Achievement system may need activation in ProfileViewModel
 
 This context provides the foundation for understanding Liftrix's architecture and safely extending its functionality while maintaining code quality and performance standards.

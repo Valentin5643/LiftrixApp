@@ -106,7 +106,10 @@ class QRCodeGenerationUseCase @Inject constructor(
             // Validate request
             if (request.qrCodeData.isBlank()) {
                 return liftrixFailure(
-                    LiftrixError.ValidationError("QR code data cannot be empty")
+                    LiftrixError.ValidationError(
+                        field = "qrCodeData",
+                        violations = listOf("QR code data cannot be empty")
+                    )
                 )
             }
             

@@ -2,6 +2,7 @@ package com.example.liftrix.ui.settings
 
 import com.example.liftrix.domain.model.SubscriptionStatus
 import com.example.liftrix.domain.model.UserSettings
+import com.example.liftrix.domain.model.UserProfile
 import com.example.liftrix.domain.model.WeightUnit
 
 /**
@@ -26,11 +27,13 @@ import com.example.liftrix.domain.model.WeightUnit
 data class SettingsState(
     val isLoading: Boolean = false,
     val userSettings: UserSettings? = null,
+    val userProfile: UserProfile? = null,
     val subscriptionStatus: SubscriptionStatus? = null,
     val error: String? = null,
     val isUpdatingSettings: Boolean = false,
     val isSigningOut: Boolean = false,
     val showLogoutDialog: Boolean = false,
+    val showImagePickerDialog: Boolean = false,
     val expandedCard: String? = null
 ) {
     /**
@@ -38,14 +41,14 @@ data class SettingsState(
      * True when loading and no data is available.
      */
     val shouldShowInitialLoading: Boolean
-        get() = isLoading && userSettings == null && subscriptionStatus == null
+        get() = isLoading && userSettings == null && userProfile == null && subscriptionStatus == null
 
     /**
      * Indicates if the screen should show error state.
      * True when there's an error and no data is available.
      */
     val shouldShowError: Boolean
-        get() = error != null && userSettings == null && subscriptionStatus == null
+        get() = error != null && userSettings == null && userProfile == null && subscriptionStatus == null
 
     /**
      * Indicates if the screen should show content.
@@ -120,6 +123,15 @@ data class SettingsState(
     )
 
     /**
+     * Creates a copy of the state with updated user profile.
+     * Ensures proper state transition when profile is updated.
+     */
+    fun withUpdatedProfile(profile: UserProfile): SettingsState = copy(
+        userProfile = profile,
+        error = null
+    )
+
+    /**
      * Creates a copy of the state with updated subscription status.
      * Ensures proper state transition when subscription is updated.
      */
@@ -153,5 +165,13 @@ data class SettingsState(
      */
     fun withExpandedCard(cardId: String?): SettingsState = copy(
         expandedCard = cardId
+    )
+
+    /**
+     * Creates a copy of the state with image picker dialog visibility.
+     * Used for showing/hiding image picker dialog.
+     */
+    fun withImagePickerDialog(show: Boolean): SettingsState = copy(
+        showImagePickerDialog = show
     )
 }

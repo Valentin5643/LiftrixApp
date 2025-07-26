@@ -50,7 +50,14 @@ val MIGRATION_35_36 = object : Migration(35, 36) {
         
         database.execSQL("""
             ALTER TABLE user_profiles 
-            ADD COLUMN member_since TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            ADD COLUMN member_since TEXT
+        """.trimIndent())
+        
+        // Update existing rows with current timestamp
+        database.execSQL("""
+            UPDATE user_profiles 
+            SET member_since = datetime('now') 
+            WHERE member_since IS NULL
         """.trimIndent())
         
         database.execSQL("""
@@ -84,8 +91,8 @@ val MIGRATION_35_36 = object : Migration(35, 36) {
                 achievement_description TEXT NOT NULL,
                 unlocked_at TEXT NOT NULL,
                 is_displayed INTEGER NOT NULL DEFAULT 1,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
                 is_synced INTEGER NOT NULL DEFAULT 0,
                 sync_version INTEGER NOT NULL DEFAULT 1,
                 FOREIGN KEY(user_id) REFERENCES user_profiles(user_id) ON DELETE CASCADE
@@ -99,7 +106,7 @@ val MIGRATION_35_36 = object : Migration(35, 36) {
                 viewer_user_id TEXT NOT NULL,
                 search_query TEXT NOT NULL,
                 search_results TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_at TEXT NOT NULL,
                 expires_at TEXT NOT NULL,
                 FOREIGN KEY(viewer_user_id) REFERENCES user_profiles(user_id) ON DELETE CASCADE
             )
@@ -110,13 +117,16 @@ val MIGRATION_35_36 = object : Migration(35, 36) {
             CREATE TABLE qr_code_mappings (
                 qr_code_id TEXT PRIMARY KEY NOT NULL,
                 user_id TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_at TEXT NOT NULL,
                 expires_at TEXT,
                 is_active INTEGER NOT NULL DEFAULT 1,
                 usage_count INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY(user_id) REFERENCES user_profiles(user_id) ON DELETE CASCADE
             )
         """.trimIndent())
+        
+        // Initialize timestamps for new tables (will be set when records are actually created)
+        // These tables start empty, so no initial UPDATE needed
         
         // Create performance indexes for social and achievement queries
         database.execSQL("""

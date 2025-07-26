@@ -298,16 +298,39 @@ class WorkoutTemplateRepositoryImpl @Inject constructor(
         
         return liftrixCatching(
             errorMapper = { throwable ->
-                LiftrixError.DatabaseError(
-                    errorMessage = "Failed to create workout template: ${template.name}",
-                    operation = "CREATE",
-                    table = "workout_templates",
-                    analyticsContext = mapOf(
-                        "template_name" to template.name,
-                        "user_id" to template.userId,
-                        "exercise_count" to template.exercises.size.toString()
-                    )
-                )
+                when {
+                    throwable.message?.contains("FOREIGN KEY constraint failed") == true -> 
+                        LiftrixError.DatabaseError(
+                            errorMessage = "Invalid folder reference - ensure the folder exists before creating template",
+                            operation = "CREATE",
+                            table = "workout_templates",
+                            analyticsContext = mapOf(
+                                "template_name" to template.name,
+                                "user_id" to template.userId,
+                                "folder_id" to template.folderId,
+                                "error_type" to "foreign_key_violation"
+                            )
+                        )
+                    throwable.message?.contains("UNIQUE constraint failed") == true ||
+                    throwable is IllegalArgumentException && throwable.message?.contains("already exists") == true ->
+                        LiftrixError.ValidationError(
+                            field = "name",
+                            violations = listOf("Template name '${template.name}' already exists for this user"),
+                            errorMessage = "Duplicate template name"
+                        )
+                    else -> 
+                        LiftrixError.DatabaseError(
+                            errorMessage = "Failed to create workout template: ${template.name}",
+                            operation = "CREATE",
+                            table = "workout_templates",
+                            analyticsContext = mapOf(
+                                "template_name" to template.name,
+                                "user_id" to template.userId,
+                                "exercise_count" to template.exercises.size.toString(),
+                                "error_message" to (throwable.message ?: "Unknown error")
+                            )
+                        )
+                }
             }
         ) {
             // Check if template name already exists

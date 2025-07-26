@@ -24,6 +24,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.ui.components.buttons.LiftrixButton
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.theme.LiftrixTheme
+import com.example.liftrix.ui.workout.components.PrimaryActionButton
 import android.content.Intent
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.Color
@@ -80,8 +81,9 @@ fun QRCodeDisplayScreen(
             }
             
             uiState.error != null -> {
+                val error = uiState.error
                 QRCodeErrorState(
-                    error = uiState.error,
+                    error = error!!,
                     onRetry = { viewModel.handleEvent(QRCodeDisplayEvent.RetryGeneration) },
                     modifier = Modifier
                         .fillMaxSize()
@@ -90,8 +92,9 @@ fun QRCodeDisplayScreen(
             }
             
             uiState.qrCodeBitmap != null -> {
+                val qrCodeBitmap = uiState.qrCodeBitmap
                 QRCodeContent(
-                    qrCodeBitmap = uiState.qrCodeBitmap,
+                    qrCodeBitmap = qrCodeBitmap!!,
                     profileUrl = uiState.profileUrl,
                     onRefreshClick = { 
                         viewModel.handleEvent(QRCodeDisplayEvent.RefreshQRCode)
@@ -486,10 +489,9 @@ private fun QRCodeErrorState(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        LiftrixButton(
+        PrimaryActionButton(
             text = "Try Again",
-            onClick = onRetry,
-            leadingIcon = Icons.Default.Refresh
+            onClick = onRetry
         )
     }
 }

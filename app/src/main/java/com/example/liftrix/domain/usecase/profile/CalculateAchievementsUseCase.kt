@@ -3,6 +3,7 @@ package com.example.liftrix.domain.usecase.profile
 import com.example.liftrix.domain.model.AchievementType
 import com.example.liftrix.domain.model.StreakData
 import com.example.liftrix.domain.model.UserAchievement
+import com.example.liftrix.domain.model.WorkoutStatus
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.repository.AchievementRepository
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
@@ -23,11 +24,11 @@ class CalculateAchievementsUseCase @Inject constructor(
     suspend operator fun invoke(userId: String): LiftrixResult<List<UserAchievement>> {
         return try {
             val existingAchievements = achievementRepository.getUserAchievements(userId).getOrElse {
-                return Result.failure(Exception("Failed to load existing achievements: ${it.message}"))
+                return LiftrixResult.failure(Exception("Failed to load existing achievements: ${it.message}"))
             }
             
             val streakData = calculateStreakData(userId).getOrElse {
-                return Result.failure(Exception("Failed to calculate streak data: ${it.message}"))
+                return LiftrixResult.failure(Exception("Failed to calculate streak data: ${it.message}"))
             }
             
             val newAchievements = mutableListOf<UserAchievement>()
@@ -47,16 +48,16 @@ class CalculateAchievementsUseCase @Inject constructor(
             // Save new achievements
             if (newAchievements.isNotEmpty()) {
                 achievementRepository.saveAchievements(newAchievements).getOrElse {
-                    return Result.failure(Exception("Failed to save achievements: ${it.message}"))
+                    return LiftrixResult.failure(Exception("Failed to save achievements: ${it.message}"))
                 }
             }
             
             // Return all achievements (existing + new)
             val allAchievements = existingAchievements + newAchievements
-            Result.success(allAchievements)
+            LiftrixResult.success(allAchievements)
             
         } catch (e: Exception) {
-            Result.failure(Exception("Failed to calculate achievements: ${e.message}"))
+            LiftrixResult.failure(Exception("Failed to calculate achievements: ${e.message}"))
         }
     }
 
@@ -64,15 +65,15 @@ class CalculateAchievementsUseCase @Inject constructor(
         return try {
             // Get the first emission from the flow
             val allWorkouts = workoutRepository.getAllWorkoutsForUser(userId).first()
-            val workouts = allWorkouts.filter { it.completedAt != null }
+            val workouts = allWorkouts.filter { it.status == WorkoutStatus.COMPLETED && it.endTime != null }
             
             if (workouts.isEmpty()) {
-                return Result.success(StreakData(0, 0, 0, null))
+                return LiftrixResult.success(StreakData(0, 0, 0, null))
             }
             
-            val sortedWorkouts = workouts.sortedByDescending { it.completedAt }
+            val sortedWorkouts = workouts.sortedByDescending { it.endTime }
             val totalWorkouts = workouts.size
-            val lastWorkoutDate = sortedWorkouts.firstOrNull()?.completedAt
+            val lastWorkoutDate = sortedWorkouts.firstOrNull()?.endTime
             
             // Calculate current streak
             var currentStreak = 0
@@ -80,7 +81,9 @@ class CalculateAchievementsUseCase @Inject constructor(
             var tempStreak = 1
             
             // Group workouts by date to handle multiple workouts per day
-            val workoutsByDate = sortedWorkouts.groupBy { it.completedAt?.toLocalDate() }
+            val workoutsByDate = sortedWorkouts.groupBy { workout -> 
+                workout.endTime?.atZone(java.time.ZoneId.systemDefault())?.toLocalDate() 
+            }
             val uniqueDates = workoutsByDate.keys.filterNotNull().sorted().reversed()
             
             if (uniqueDates.isNotEmpty()) {
@@ -119,10 +122,11 @@ class CalculateAchievementsUseCase @Inject constructor(
                 }
             }
             
-            Result.success(StreakData(currentStreak, longestStreak, totalWorkouts, lastWorkoutDate))
+            val lastWorkoutDateTime = lastWorkoutDate?.atZone(java.time.ZoneId.systemDefault())?.toLocalDateTime()
+            LiftrixResult.success(StreakData(currentStreak, longestStreak, totalWorkouts, lastWorkoutDateTime))
             
         } catch (e: Exception) {
-            Result.failure(Exception("Failed to calculate streak data: ${e.message}"))
+            LiftrixResult.failure(Exception("Failed to calculate streak data: ${e.message}"))
         }
     }
 

@@ -146,8 +146,9 @@ fun ProfileImageDisplay(
             
             loadedImage != null && !hasError -> {
                 // Display loaded image
+                val imageBitmap = loadedImage!!
                 Image(
-                    painter = BitmapPainter(loadedImage.asImageBitmap()),
+                    painter = BitmapPainter(imageBitmap.asImageBitmap()),
                     contentDescription = null, // Description handled by Box semantics
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop

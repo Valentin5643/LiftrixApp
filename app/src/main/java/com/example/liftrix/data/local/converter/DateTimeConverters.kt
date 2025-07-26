@@ -1,6 +1,7 @@
 package com.example.liftrix.data.local.converter
 
 import androidx.room.TypeConverter
+import javax.inject.Inject
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -9,7 +10,7 @@ import java.time.format.DateTimeFormatter
 /**
  * Room type converters for date and time types
  */
-class DateTimeConverters {
+class DateTimeConverters @Inject constructor() {
     
     @TypeConverter
     fun fromInstant(instant: Instant?): String? {

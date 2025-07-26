@@ -502,6 +502,8 @@ private fun getErrorIcon(error: LiftrixError): ImageVector {
         is LiftrixError.NotFoundError -> Icons.Default.ErrorOutline
         is LiftrixError.ConfigurationError -> Icons.Default.ErrorOutline
         is LiftrixError.DataRetrievalError -> Icons.Default.CloudOff
+        is LiftrixError.CacheError -> Icons.Default.Storage
+        is LiftrixError.PermissionError -> Icons.Default.Lock
     }
 }
 

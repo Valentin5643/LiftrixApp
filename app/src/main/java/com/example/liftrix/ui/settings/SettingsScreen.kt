@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.domain.model.*
 import com.example.liftrix.ui.settings.components.*
+import com.example.liftrix.ui.profile.components.ImagePickerDialog
 import com.example.liftrix.ui.common.FeedItemShimmer
 import com.example.liftrix.ui.common.ContextualColorOverlay
 import com.example.liftrix.ui.common.ColorContext
@@ -28,6 +29,7 @@ import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
 import com.example.liftrix.ui.workout.components.SecondaryActionButton
 import com.example.liftrix.ui.workout.components.PrimaryActionButton
 import com.example.liftrix.ui.theme.LiftrixTheme
+import timber.log.Timber
 import java.time.LocalDateTime
 
 /**
@@ -138,6 +140,17 @@ fun SettingsScreen(
             onDismiss = { stableOnEvent(SettingsEvent.SignOutCancelled) },
             onConfirm = { stableOnEvent(SettingsEvent.SignOutConfirmed) }
         )
+        
+        // Image Picker Dialog with stable callbacks
+        ImagePickerDialog(
+            isVisible = uiState.showImagePickerDialog,
+            onDismiss = { stableOnEvent(SettingsEvent.ImagePickerDialogDismissed) },
+            onImageSelected = { uri -> stableOnEvent(SettingsEvent.ProfileImageSelected(uri)) },
+            onError = { error ->
+                Timber.e("Image picker error in settings: $error")
+                // Could enhance this with proper error display in the future
+            }
+        )
     }
 }
 
@@ -172,13 +185,13 @@ private fun SettingsContent(
         // User Profile Card
         item {
             UserProfileCard(
-                user = uiState.userSettings?.let { settings ->
-                    // Create a User object from settings for display
+                user = uiState.userProfile?.let { profile ->
+                    // Create a User object from actual profile data
                     User(
-                        uid = "current_user", // Get from authenticated user state
-                        email = "user@example.com", // This would come from auth state
-                        displayName = "User", // This would come from auth state or settings
-                        photoUrl = null,
+                        uid = profile.userId,
+                        email = profile.userId, // Use userId as fallback for email
+                        displayName = profile.displayName,
+                        photoUrl = profile.profileImageUrl, // Use actual profile image URL
                         isAnonymous = false,
                         subscriptionTier = if (uiState.hasPremiumAccess) SubscriptionTier.PREMIUM else SubscriptionTier.FREE,
                         subscriptionStatus = SubscriptionStatus.ACTIVE,
@@ -186,9 +199,9 @@ private fun SettingsContent(
                         premiumFeaturesEnabled = uiState.hasPremiumAccess,
                         onboardingCompleted = true,
                         profileVersion = 1,
-                        createdAt = LocalDateTime.now().minusDays(30),
-                        lastSignInAt = LocalDateTime.now().minusHours(2),
-                        updatedAt = LocalDateTime.now().minusHours(2)
+                        createdAt = profile.memberSince,
+                        lastSignInAt = profile.lastActiveAt ?: profile.updatedAt,
+                        updatedAt = profile.updatedAt
                     )
                 },
                 onEditProfile = stableOnNavigateToProfile,

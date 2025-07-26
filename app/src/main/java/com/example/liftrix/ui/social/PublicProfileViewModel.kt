@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.social
 
+
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.PublicUserProfile
@@ -7,7 +8,6 @@ import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.social.GetPublicProfileUseCase
 import com.example.liftrix.domain.usecase.social.GetPublicProfileRequest
 import com.example.liftrix.ui.common.event.ViewModelEvent
-import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,7 +57,7 @@ class PublicProfileViewModel @Inject constructor(
      * Loads the public profile for the specified user
      */
     private fun loadProfile(userId: String) {
-        if (_uiState.value.profile?.userId == userId && !_uiState.value.error != null) {
+        if (_uiState.value.profile?.userId == userId && _uiState.value.error == null) {
             // Profile already loaded for this user and no error state
             return
         }
@@ -217,7 +217,7 @@ data class PublicProfileUiState(
     val isLoading: Boolean,
     val error: LiftrixError?,
     val isConnectionLoading: Boolean
-) : UiState<PublicUserProfile?>() {
+) {
     
     /**
      * Whether the profile can be displayed

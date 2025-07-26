@@ -529,12 +529,16 @@ class CalorieCalculator @Inject constructor(
     private fun createDefaultUserProfile(userId: String): UserProfile {
         return UserProfile(
             userId = userId,
+            displayName = "Default User",
+            bio = null,
             weight = Weight(DEFAULT_WEIGHT_KG.toDouble()),
             age = DEFAULT_AGE,
             availableEquipment = emptyList(),
             otherEquipment = null,
             fitnessGoals = emptyList(),
             goalsPriority = null,
+            lastActiveAt = LocalDateTime.now(),
+            memberSince = LocalDateTime.now(),
             completedAt = null,
             updatedAt = LocalDateTime.now()
         )

@@ -101,5 +101,15 @@ data class UserProfileEntity(
     val profileImageUpdatedAt: LocalDateTime? = null,
 
     @ColumnInfo(name = "has_custom_profile_image", defaultValue = "0")
-    val hasCustomProfileImage: Boolean = false
+    val hasCustomProfileImage: Boolean = false,
+
+    // Social search and tracking fields added in migration 35->36
+    @ColumnInfo(name = "search_keywords")
+    val searchKeywords: String? = null,
+
+    @ColumnInfo(name = "last_profile_view_at")
+    val lastProfileViewAt: LocalDateTime? = null,
+
+    @ColumnInfo(name = "profile_views_count", defaultValue = "0")
+    val profileViewsCount: Int = 0
 ) 

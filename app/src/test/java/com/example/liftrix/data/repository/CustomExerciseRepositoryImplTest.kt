@@ -68,7 +68,7 @@ class CustomExerciseRepositoryImplTest {
         dao = mockk()
         mapper = mockk()
         firestore = mockk(relaxed = true)
-        repository = CustomExerciseRepositoryImpl(dao, mapper, firestore)
+        repository = CustomExerciseRepositoryImpl(mockk(), dao, mapper, firestore)
     }
     
     @Test

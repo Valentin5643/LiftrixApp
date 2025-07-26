@@ -158,6 +158,31 @@ fun NavController.navigateToQRCodeDisplay(userId: String? = null) {
     navigate(LiftrixRoute.QRCodeDisplay(userId))
 }
 
+/**
+ * Navigate to profile screen - main profile display with achievements and settings
+ * 
+ * @param userId Optional user ID for viewing other users' profiles (defaults to current user)
+ */
+fun NavController.navigateToProfile(userId: String? = null) {
+    navigate(LiftrixRoute.Profile(userId))
+}
+
+/**
+ * Navigate to profile edit screen - comprehensive profile editing interface
+ */
+fun NavController.navigateToProfileEdit() {
+    navigate(LiftrixRoute.ProfileEdit)
+}
+
+/**
+ * Navigate to image crop screen for profile picture editing
+ * 
+ * @param imageUri URI of the image to crop (serialized as string)
+ */
+fun NavController.navigateToImageCrop(imageUri: String) {
+    navigate(LiftrixRoute.ImageCrop(imageUri))
+}
+
 // MARK: - Feature Navigation
 
 /**
@@ -328,6 +353,43 @@ fun NavController.navigateToActiveWorkoutAnimated(
 fun NavController.navigateToCreateWorkoutAnimated() {
     navigateAnimated(
         route = LiftrixRoute.CreateWorkout,
+        transitionType = TransitionType.MODAL
+    )
+}
+
+/**
+ * Navigate to profile screen with card transition animation
+ * Enhanced animation for profile viewing experience
+ * 
+ * @param userId Optional user ID for viewing other users' profiles
+ */
+fun NavController.navigateToProfileAnimated(userId: String? = null) {
+    navigateAnimated(
+        route = LiftrixRoute.Profile(userId),
+        transitionType = TransitionType.CARD
+    )
+}
+
+/**
+ * Navigate to profile edit screen with vertical transition
+ * Smooth upward animation for editing flow
+ */
+fun NavController.navigateToProfileEditAnimated() {
+    navigateAnimated(
+        route = LiftrixRoute.ProfileEdit,
+        transitionType = TransitionType.VERTICAL
+    )
+}
+
+/**
+ * Navigate to image crop screen with modal transition
+ * Modal-style animation for image editing workflow
+ * 
+ * @param imageUri URI of the image to crop
+ */
+fun NavController.navigateToImageCropAnimated(imageUri: String) {
+    navigateAnimated(
+        route = LiftrixRoute.ImageCrop(imageUri),
         transitionType = TransitionType.MODAL
     )
 }
@@ -534,6 +596,7 @@ fun NavController.getCurrentLiftrixRoute(): LiftrixRoute? {
         isCurrentRoute(LiftrixRoute.GuestDashboard::class) -> LiftrixRoute.GuestDashboard
         isCurrentRoute(LiftrixRoute.AuthSignUp::class) -> LiftrixRoute.AuthSignUp
         isCurrentRoute(LiftrixRoute.AuthSignIn::class) -> LiftrixRoute.AuthSignIn
-        else -> null // For parameterized routes like EditWorkout(workoutId), EditSession(sessionId), would need more complex logic
+        isCurrentRoute(LiftrixRoute.ProfileEdit::class) -> LiftrixRoute.ProfileEdit
+        else -> null // For parameterized routes like Profile(userId), EditWorkout(workoutId), EditSession(sessionId), would need more complex logic
     }
 }

@@ -52,7 +52,7 @@ class UserProfileMapper @Inject constructor(
         return UserProfileEntity(
             id = UUID.randomUUID().toString(), // Generate unique ID for entity
             userId = profile.userId,
-            displayName = "User", // Default display name, can be updated later
+            displayName = profile.displayName,
             age = profile.age,
             weightKg = profile.weight?.kilograms,
             heightCm = null, // Height not in domain model, set to null
@@ -65,7 +65,20 @@ class UserProfileMapper @Inject constructor(
             createdAt = LocalDateTime.now(), // Set current time for new entities
             updatedAt = profile.updatedAt,
             isSynced = isSynced,
-            syncVersion = profile.profileVersion
+            syncVersion = profile.profileVersion,
+            // Enhanced social and achievement fields
+            bio = profile.bio,
+            isPublic = profile.isPublic,
+            lastActiveAt = profile.lastActiveAt,
+            totalWorkouts = profile.totalWorkouts,
+            currentStreak = profile.currentStreak,
+            longestStreak = profile.longestStreak,
+            memberSince = profile.memberSince,
+            profileCompletionPercentage = profile.profileCompletionPercentage,
+            // Profile image fields - CRITICAL FIX
+            profileImageUrl = profile.profileImageUrl,
+            profileImageUpdatedAt = profile.profileImageUpdatedAt,
+            hasCustomProfileImage = profile.hasCustomProfileImage
         )
     }
 
@@ -73,7 +86,7 @@ class UserProfileMapper @Inject constructor(
         return UserProfileEntity(
             id = entityId,
             userId = profile.userId,
-            displayName = "User", // Default display name
+            displayName = profile.displayName,
             age = profile.age,
             weightKg = profile.weight?.kilograms,
             heightCm = null,
@@ -86,7 +99,20 @@ class UserProfileMapper @Inject constructor(
             createdAt = LocalDateTime.now(),
             updatedAt = profile.updatedAt,
             isSynced = isSynced,
-            syncVersion = profile.profileVersion
+            syncVersion = profile.profileVersion,
+            // Enhanced social and achievement fields
+            bio = profile.bio,
+            isPublic = profile.isPublic,
+            lastActiveAt = profile.lastActiveAt,
+            totalWorkouts = profile.totalWorkouts,
+            currentStreak = profile.currentStreak,
+            longestStreak = profile.longestStreak,
+            memberSince = profile.memberSince,
+            profileCompletionPercentage = profile.profileCompletionPercentage,
+            // Profile image fields - CRITICAL FIX
+            profileImageUrl = profile.profileImageUrl,
+            profileImageUpdatedAt = profile.profileImageUpdatedAt,
+            hasCustomProfileImage = profile.hasCustomProfileImage
         )
     }
 

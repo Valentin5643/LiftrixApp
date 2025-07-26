@@ -463,7 +463,7 @@ private fun UserSearchResultCardPreview() {
                 totalWorkouts = 45,
                 memberSince = LocalDateTime.now().minusMonths(6),
                 sharedEquipment = listOf(Equipment.BARBELL, Equipment.DUMBBELLS),
-                sharedGoals = listOf(FitnessGoal.STRENGTH, FitnessGoal.MUSCLE_GAIN),
+                sharedGoals = listOf(FitnessGoal.INCREASE_STRENGTH, FitnessGoal.BUILD_MUSCLE),
                 connectionStatus = ConnectionStatus.NONE,
                 mutualConnections = 3
             ),

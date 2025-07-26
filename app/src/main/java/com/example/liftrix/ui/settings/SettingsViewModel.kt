@@ -10,6 +10,8 @@ import com.example.liftrix.domain.usecase.settings.GetSubscriptionStatusUseCase
 import com.example.liftrix.domain.usecase.settings.GetUserSettingsUseCase
 import com.example.liftrix.domain.usecase.settings.UpdateSettingsUseCase
 import com.example.liftrix.domain.usecase.settings.UpdateWeightUnitPreferenceUseCase
+import com.example.liftrix.domain.usecase.profile.UploadProfileImageUseCase
+import com.example.liftrix.domain.usecase.GetProfileUseCase
 import com.example.liftrix.domain.model.WeightUnit
 import com.example.liftrix.ui.theme.ThemeManager
 import com.example.liftrix.ui.theme.ThemeMode
@@ -47,10 +49,12 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val getUserSettingsUseCase: GetUserSettingsUseCase,
+    private val getProfileUseCase: GetProfileUseCase,
     private val updateSettingsUseCase: UpdateSettingsUseCase,
     private val updateWeightUnitPreferenceUseCase: UpdateWeightUnitPreferenceUseCase,
     private val getSubscriptionStatusUseCase: GetSubscriptionStatusUseCase,
     private val enhancedSignOutUseCase: EnhancedSignOutUseCase,
+    private val uploadProfileImageUseCase: UploadProfileImageUseCase,
     private val authRepository: AuthRepository,
     private val analyticsService: AnalyticsService,
     @ApplicationContext private val context: Context
@@ -96,6 +100,8 @@ class SettingsViewModel @Inject constructor(
             is SettingsEvent.SignOutCancelled -> cancelSignOut()
             is SettingsEvent.ToggleCardExpansion -> toggleCardExpansion(event.cardId)
             is SettingsEvent.ProfileAvatarTapped -> handleProfileAvatarTapped()
+            is SettingsEvent.ImagePickerDialogDismissed -> dismissImagePickerDialog()
+            is SettingsEvent.ProfileImageSelected -> handleProfileImageSelected(event.imageUri)
             is SettingsEvent.ErrorDismissed -> dismissError()
             is SettingsEvent.RetryRequested -> retryLastFailedOperation()
             is SettingsEvent.UpgradeSubscription -> handleSubscriptionUpgrade()
@@ -109,7 +115,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Loads user settings and subscription status.
+     * Loads user settings, profile, and subscription status.
      * This is the primary data loading method for the settings screen.
      */
     private fun loadSettings() {
@@ -119,12 +125,13 @@ class SettingsViewModel @Inject constructor(
             updateState { copy(isLoading = true, error = null) }
             
             try {
-                // Combine settings and subscription data loading
+                // Combine settings, profile, and subscription data loading
                 combine(
                     getUserSettingsUseCase(userId),
+                    getProfileUseCase(userId).map { Result.success(it) }.catch { emit(Result.failure(it)) },
                     getSubscriptionStatusUseCase(userId)
-                ) { settingsResult, subscriptionResult ->
-                    Pair(settingsResult, subscriptionResult)
+                ) { settingsResult, profileResult, subscriptionResult ->
+                    Triple(settingsResult, profileResult, subscriptionResult)
                 }
                 .catch { exception ->
                     Timber.e(exception, "Error loading settings for user: $userId")
@@ -132,8 +139,8 @@ class SettingsViewModel @Inject constructor(
                         withError("Failed to load settings: ${exception.message}")
                     }
                 }
-                .collect { (settingsResult, subscriptionResult) ->
-                    processSettingsResults(settingsResult, subscriptionResult)
+                .collect { (settingsResult, profileResult, subscriptionResult) ->
+                    processSettingsResults(settingsResult, profileResult, subscriptionResult)
                 }
             } catch (exception: Exception) {
                 Timber.e(exception, "Exception in loadSettings")
@@ -421,7 +428,89 @@ class SettingsViewModel @Inject constructor(
      */
     private fun handleProfileAvatarTapped() {
         trackProfileAvatarTapped()
-        // Avatar upload logic will be handled by the UI layer
+        _uiState.value = _uiState.value.withImagePickerDialog(true)
+    }
+
+    /**
+     * Dismisses the image picker dialog.
+     */
+    private fun dismissImagePickerDialog() {
+        _uiState.value = _uiState.value.withImagePickerDialog(false)
+    }
+
+    /**
+     * Handles profile image selection and initiates upload.
+     */
+    private fun handleProfileImageSelected(imageUri: android.net.Uri) {
+        viewModelScope.launch {
+            try {
+                // Dismiss dialog first
+                _uiState.value = _uiState.value.withImagePickerDialog(false)
+                
+                // Get current user ID from auth
+                val currentUser = authRepository.getCurrentUser()
+                if (currentUser == null) {
+                    Timber.w("Cannot upload profile image - user not authenticated")
+                    _uiState.value = _uiState.value.withError("Please sign in to upload profile image")
+                    return@launch
+                }
+                
+                Timber.d("Starting profile image upload for user: ${currentUser.uid}")
+                
+                // Show loading state (could be enhanced with specific image upload loading state)
+                _uiState.value = _uiState.value.copy(isUpdatingSettings = true)
+                
+                // Upload image using the use case
+                val result = uploadProfileImageUseCase(
+                    userId = currentUser.uid,
+                    imageUri = imageUri,
+                    cropRect = null // No cropping for now
+                )
+                
+                if (result.isSuccess) {
+                    val imageUrl = result.getOrThrow()
+                    Timber.i("Profile image upload successful: $imageUrl")
+                    
+                    // Clear loading state
+                    _uiState.value = _uiState.value.copy(isUpdatingSettings = false)
+                    
+                    // Track successful upload
+                    analyticsService.logEvent(
+                        "profile_image_uploaded",
+                        mapOf(
+                            "source" to "settings_screen",
+                            "success" to true
+                        )
+                    )
+                    
+                } else {
+                    val error = result.exceptionOrNull()
+                    val errorMessage = error?.message ?: "Failed to upload profile image"
+                    Timber.e(error, "Profile image upload failed")
+                    
+                    _uiState.value = _uiState.value.copy(
+                        isUpdatingSettings = false,
+                        error = errorMessage
+                    )
+                    
+                    // Track failed upload
+                    analyticsService.logEvent(
+                        "profile_image_upload_failed",
+                        mapOf(
+                            "source" to "settings_screen",
+                            "error" to errorMessage
+                        )
+                    )
+                }
+                
+            } catch (e: Exception) {
+                Timber.e(e, "Unexpected error during profile image upload")
+                _uiState.value = _uiState.value.copy(
+                    isUpdatingSettings = false,
+                    error = "Unexpected error: ${e.message}"
+                )
+            }
+        }
     }
 
     /**
@@ -524,13 +613,15 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Processes the results from settings and subscription loading.
+     * Processes the results from settings, profile, and subscription loading.
      */
     private fun processSettingsResults(
         settingsResult: Result<com.example.liftrix.domain.model.UserSettings>,
+        profileResult: Result<com.example.liftrix.domain.model.UserProfile?>,
         subscriptionResult: Result<com.example.liftrix.domain.model.SubscriptionStatus>
     ) {
         val settings = settingsResult.getOrNull()
+        val profile = profileResult.getOrNull()
         val subscription = subscriptionResult.getOrNull()
         
         // Sync theme manager with user settings
@@ -540,11 +631,23 @@ class SettingsViewModel @Inject constructor(
         }
         
         val errorMessage = when {
+            settingsResult.isFailure && profileResult.isFailure && subscriptionResult.isFailure -> {
+                "Failed to load settings, profile, and subscription data"
+            }
             settingsResult.isFailure && subscriptionResult.isFailure -> {
                 "Failed to load settings and subscription data"
             }
+            settingsResult.isFailure && profileResult.isFailure -> {
+                "Failed to load settings and profile data"
+            }
+            profileResult.isFailure && subscriptionResult.isFailure -> {
+                "Failed to load profile and subscription data"
+            }
             settingsResult.isFailure -> {
                 "Failed to load settings data"
+            }
+            profileResult.isFailure -> {
+                "Failed to load profile data"
             }
             subscriptionResult.isFailure -> {
                 "Failed to load subscription data"
@@ -556,6 +659,7 @@ class SettingsViewModel @Inject constructor(
             copy(
                 isLoading = false,
                 userSettings = settings,
+                userProfile = profile,
                 subscriptionStatus = subscription,
                 error = errorMessage,
                 isUpdatingSettings = false

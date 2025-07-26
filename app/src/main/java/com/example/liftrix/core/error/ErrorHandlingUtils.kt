@@ -449,6 +449,10 @@ fun shouldRetryOperation(
         
         is LiftrixError.NotFoundError -> false // Never retry not found errors
         
+        is LiftrixError.PermissionError -> false // Never retry permission errors
+        
+        is LiftrixError.CacheError -> true // Cache operations can be retried
+        
         is LiftrixError.UnknownError -> false // Don't retry unknown errors for safety
     }
 }

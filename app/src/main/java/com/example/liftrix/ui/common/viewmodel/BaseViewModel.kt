@@ -56,7 +56,7 @@ import timber.log.Timber
  * @param E The event type that extends ViewModelEvent
  * @param errorHandler Centralized error handler for consistent error processing
  */
-abstract class BaseViewModel<S : UiState<*>, E : ViewModelEvent>(
+abstract class BaseViewModel<S, E : ViewModelEvent>(
     protected val errorHandler: ErrorHandler
 ) : ViewModel() {
 
@@ -174,6 +174,8 @@ abstract class BaseViewModel<S : UiState<*>, E : ViewModelEvent>(
                     is LiftrixError.NotFoundError -> updateErrorState(error)
                     is LiftrixError.ConfigurationError -> updateErrorState(error)
                     is LiftrixError.DataRetrievalError -> updateErrorState(error)
+                    is LiftrixError.CacheError -> updateErrorState(error)
+                    is LiftrixError.PermissionError -> updateErrorState(error)
                 }
             } catch (exception: Exception) {
                 Timber.e(exception, "Failed to handle error properly")

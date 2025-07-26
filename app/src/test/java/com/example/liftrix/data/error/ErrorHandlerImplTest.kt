@@ -121,7 +121,7 @@ class ErrorHandlerImplTest {
         // Given
         val businessError = LiftrixError.BusinessLogicError(
             code = "WORKOUT_ALREADY_STARTED",
-            context = mapOf("userId" to "123", "currentWorkoutId" to "456"),
+            analyticsContext = mapOf("userId" to "123", "currentWorkoutId" to "456"),
             isRecoverable = false
         )
         

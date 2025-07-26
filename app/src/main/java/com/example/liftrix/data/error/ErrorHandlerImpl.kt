@@ -170,6 +170,17 @@ class ErrorHandlerImpl @Inject constructor(
                     "ID: ${error.resourceId}"
                 )
             }
+            is LiftrixError.PermissionError -> {
+                Timber.tag(TAG).w(
+                    "Permission denied - Permission: ${error.permission}"
+                )
+            }
+            is LiftrixError.CacheError -> {
+                Timber.tag(TAG).d(
+                    "Cache error - Operation: ${error.operation}, " +
+                    "Key: ${error.cacheKey}"
+                )
+            }
             is LiftrixError.UnknownError -> {
                 Timber.tag(TAG).e(error.cause, "Unknown error with no specific handling")
             }
@@ -478,6 +489,8 @@ class ErrorHandlerImpl @Inject constructor(
             is LiftrixError.ExportError -> attemptCount < maxAttempts
             is LiftrixError.FileSystemError -> attemptCount < maxAttempts
             is LiftrixError.NotFoundError -> false // Not found errors are typically not recoverable by retry
+            is LiftrixError.PermissionError -> false // Permission errors are typically not recoverable by retry
+            is LiftrixError.CacheError -> attemptCount < maxAttempts // Cache errors can be retried
             is LiftrixError.UnknownError -> attemptCount < (maxAttempts - 1).coerceAtLeast(1)
         }
     }
@@ -561,6 +574,13 @@ class ErrorHandlerImpl @Inject constructor(
             is LiftrixError.NotFoundError -> {
                 analyticsContext["resource_type"] = error.resourceType ?: "unknown"
                 analyticsContext["resource_id"] = error.resourceId ?: "unknown"
+            }
+            is LiftrixError.PermissionError -> {
+                analyticsContext["permission"] = error.permission ?: "unknown"
+            }
+            is LiftrixError.CacheError -> {
+                analyticsContext["cache_operation"] = error.operation ?: "unknown"
+                analyticsContext["cache_key"] = error.cacheKey ?: "unknown"
             }
             is LiftrixError.UnknownError -> {
                 analyticsContext["unknown_error_cause"] = error.cause?.javaClass?.simpleName ?: "none"

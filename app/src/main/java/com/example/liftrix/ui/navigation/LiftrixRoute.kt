@@ -240,6 +240,20 @@ sealed class LiftrixRoute {
     data object AuthSignIn : LiftrixRoute()
     
     /**
+     * Profile screen - main profile display with achievements and settings
+     * 
+     * @param userId Optional user ID for viewing other users' profiles (defaults to current user)
+     */
+    @Serializable
+    data class Profile(val userId: String? = null) : LiftrixRoute()
+    
+    /**
+     * Profile edit screen - comprehensive profile editing interface
+     */
+    @Serializable
+    data object ProfileEdit : LiftrixRoute()
+    
+    /**
      * Image crop screen for profile picture editing
      * 
      * @param imageUri URI of the image to crop (serialized as string)

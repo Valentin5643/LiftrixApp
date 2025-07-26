@@ -348,6 +348,7 @@ class FolderRepositoryImpl @Inject constructor(
     
     /**
      * Creates a minimal UserProfileEntity for FK constraint satisfaction
+     * 🔥 EMERGENCY FIX: Updated to include all fields from migrations 35-37
      */
     private fun createMinimalUserProfile(userId: String): com.example.liftrix.data.local.entity.UserProfileEntity {
         val now = java.time.LocalDateTime.now()
@@ -367,7 +368,25 @@ class FolderRepositoryImpl @Inject constructor(
             createdAt = now,
             updatedAt = now,
             isSynced = false,
-            syncVersion = 1L
+            syncVersion = 1L,
+            
+            // 🔥 NEW FIELDS FROM MIGRATION 35-36: Social and achievement fields
+            bio = null,
+            isPublic = true, // Default to public
+            lastActiveAt = now, // Set as active now
+            totalWorkouts = 0,
+            currentStreak = 0,
+            longestStreak = 0,
+            memberSince = now,
+            profileCompletionPercentage = 0,
+            searchKeywords = null,
+            lastProfileViewAt = null,
+            profileViewsCount = 0,
+            
+            // 🔥 NEW FIELDS FROM MIGRATION 36-37: Profile image fields
+            profileImageUrl = null,
+            profileImageUpdatedAt = null,
+            hasCustomProfileImage = false
         )
     }
 }

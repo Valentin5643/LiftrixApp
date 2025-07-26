@@ -8,6 +8,7 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.UserSearchResult
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import timber.log.Timber
@@ -61,7 +62,17 @@ class UserSearchCache @Inject constructor(
         viewerId: String,
         query: String
     ): LiftrixResult<List<UserSearchResult>?> {
-        return liftrixCatching {
+        return liftrixCatching(
+            errorMapper = { exception ->
+                when (exception) {
+                    is LiftrixError -> exception
+                    else -> LiftrixError.CacheError(
+                        errorMessage = "Cache operation failed: ${exception.message}",
+                        operation = "getCachedResults"
+                    )
+                }
+            }
+        ) {
             val cacheKey = createCacheKey(viewerId, query)
             Timber.v("Getting cached results for key: $cacheKey")
             
@@ -122,7 +133,17 @@ class UserSearchCache @Inject constructor(
         query: String,
         results: List<UserSearchResult>
     ): LiftrixResult<Unit> {
-        return liftrixCatching {
+        return liftrixCatching(
+            errorMapper = { exception ->
+                when (exception) {
+                    is LiftrixError -> exception
+                    else -> LiftrixError.CacheError(
+                        errorMessage = "Cache operation failed: ${exception.message}",
+                        operation = "getCachedResults"
+                    )
+                }
+            }
+        ) {
             if (results.isEmpty()) {
                 Timber.v("Skipping cache for empty results: $query")
                 return@liftrixCatching
@@ -169,7 +190,17 @@ class UserSearchCache @Inject constructor(
      * @return LiftrixResult indicating success or failure
      */
     suspend fun clearUserCache(viewerId: String): LiftrixResult<Unit> {
-        return liftrixCatching {
+        return liftrixCatching(
+            errorMapper = { exception ->
+                when (exception) {
+                    is LiftrixError -> exception
+                    else -> LiftrixError.CacheError(
+                        errorMessage = "Cache operation failed: ${exception.message}",
+                        operation = "getCachedResults"
+                    )
+                }
+            }
+        ) {
             Timber.d("Clearing cache for user: $viewerId")
             
             // Clear memory cache entries for this user
@@ -195,7 +226,17 @@ class UserSearchCache @Inject constructor(
      * @return LiftrixResult containing cleanup statistics
      */
     suspend fun performCleanup(): LiftrixResult<CacheCleanupResult> {
-        return liftrixCatching {
+        return liftrixCatching(
+            errorMapper = { exception ->
+                when (exception) {
+                    is LiftrixError -> exception
+                    else -> LiftrixError.CacheError(
+                        errorMessage = "Cache operation failed: ${exception.message}",
+                        operation = "getCachedResults"
+                    )
+                }
+            }
+        ) {
             Timber.d("Performing cache cleanup")
             
             var memoryEntriesRemoved = 0
@@ -233,7 +274,17 @@ class UserSearchCache @Inject constructor(
      * @return LiftrixResult containing cache statistics
      */
     suspend fun getCacheStatistics(): LiftrixResult<CacheStatistics> {
-        return liftrixCatching {
+        return liftrixCatching(
+            errorMapper = { exception ->
+                when (exception) {
+                    is LiftrixError -> exception
+                    else -> LiftrixError.CacheError(
+                        errorMessage = "Cache operation failed: ${exception.message}",
+                        operation = "getCachedResults"
+                    )
+                }
+            }
+        ) {
             val memorySize = memoryCache.size
             val memoryExpiredCount = memoryCache.values.count { it.isExpired() }
             
@@ -263,7 +314,17 @@ class UserSearchCache @Inject constructor(
         viewerId: String,
         commonQueries: List<String>
     ): LiftrixResult<Unit> {
-        return liftrixCatching {
+        return liftrixCatching(
+            errorMapper = { exception ->
+                when (exception) {
+                    is LiftrixError -> exception
+                    else -> LiftrixError.CacheError(
+                        errorMessage = "Cache operation failed: ${exception.message}",
+                        operation = "getCachedResults"
+                    )
+                }
+            }
+        ) {
             Timber.d("Preloading cache for user: $viewerId (${commonQueries.size} queries)")
             
             for (query in commonQueries) {

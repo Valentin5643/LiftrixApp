@@ -16,8 +16,19 @@ kotlin {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         freeCompilerArgs.addAll(
             "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
-            "-Xjvm-default=all"
+            "-Xjvm-default=all",
+            "-Xcontext-receivers",
+            "-opt-in=kotlin.contracts.ExperimentalContracts",
+            "-opt-in=kotlin.experimental.ExperimentalTypeInference",
+            "-XXLanguage:+BreakContinueInInlineLambdas"
         )
+    }
+}
+
+// Ensure consistent JVM target across all compilation tasks
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
@@ -193,6 +204,10 @@ dependencies {
     // Image processing dependencies
     implementation(libs.coil.compose)
     implementation(libs.androidx.exifinterface)
+    
+    // Photo Picker support for reliable image selection
+    implementation("androidx.activity:activity-ktx:1.9.0")
+    implementation("androidx.fragment:fragment-ktx:1.6.2")
     
     // QR Code generation dependencies
     implementation(libs.zxing.core)

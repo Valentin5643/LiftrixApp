@@ -1,0 +1,14 @@
+{
+  "name": "liftrix-firebase-setup",
+  "version": "1.0.0",
+  "description": "Firebase setup scripts for Liftrix",
+  "main": "setup-firestore-collections.js",
+  "scripts": {
+    "setup-collections": "node setup-firestore-collections.js",
+    "setup-storage": "node setup-storage-structure.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  },
+  "private": true
+}

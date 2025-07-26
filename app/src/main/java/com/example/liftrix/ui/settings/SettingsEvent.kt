@@ -131,6 +131,20 @@ sealed class SettingsEvent {
      * Should initiate profile image upload process.
      */
     object ProfileAvatarTapped : SettingsEvent()
+
+    /**
+     * Triggered when user dismisses the image picker dialog.
+     * Hides the image picker dialog.
+     */
+    object ImagePickerDialogDismissed : SettingsEvent()
+
+    /**
+     * Triggered when user selects an image from the picker.
+     * Initiates profile image upload process.
+     * 
+     * @property imageUri URI of the selected image
+     */
+    data class ProfileImageSelected(val imageUri: android.net.Uri) : SettingsEvent()
     
     // Error handling events
     /**

@@ -3,6 +3,8 @@ package com.example.liftrix.domain.usecase.profile
 import android.graphics.Rect
 import android.net.Uri
 import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.model.common.liftrixCatching
+import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.ProfileImageRepository
 import com.example.liftrix.domain.repository.ProfileRepository
 import com.example.liftrix.service.ImageProcessingService
@@ -50,85 +52,83 @@ class UploadProfileImageUseCase @Inject constructor(
         userId: String,
         imageUri: Uri,
         cropRect: Rect? = null
-    ): LiftrixResult<String> {
-        return try {
-            Timber.i("🖼️ Starting profile image upload for user: $userId")
-            
-            // Validate inputs
-            val validationResult = validateInputs(userId, imageUri)
-            if (validationResult != null) {
-                Timber.w("Input validation failed: $validationResult")
-                return Result.failure(IllegalArgumentException(validationResult))
-            }
-            
-            // Validate image format compatibility
-            val isFormatSupported = imageProcessingService.isFormatSupported(imageUri)
-            if (!isFormatSupported) {
-                val error = "Unsupported image format. Please use JPEG, PNG, or WebP."
-                Timber.w("Image format validation failed for URI: $imageUri")
-                return Result.failure(IllegalArgumentException(error))
-            }
-            
-            // Process image (crop, resize, compress)
-            val processingResult = imageProcessingService.processProfileImage(imageUri, cropRect)
-            if (processingResult.isFailure) {
-                val error = processingResult.exceptionOrNull()
-                Timber.e(error, "Image processing failed for user: $userId")
-                return Result.failure(error ?: RuntimeException("Image processing failed"))
-            }
-            
-            val processedImage = processingResult.getOrThrow()
-            Timber.d("✅ Image processed successfully: ${processedImage.fileSizeBytes} bytes")
-            
-            // Get current profile image URL for cleanup
-            val currentImageResult = profileImageRepository.getProfileImageUrl(userId)
-            val currentImageUrl = if (currentImageResult.isSuccess) {
-                currentImageResult.getOrNull()
-            } else {
-                null // No existing image or retrieval failed
-            }
-            
-            // Upload processed image to Firebase Storage
-            val uploadResult = profileImageRepository.uploadProfileImage(userId, processedImage.imageBytes)
-            if (uploadResult.isFailure) {
-                val error = uploadResult.exceptionOrNull()
-                Timber.e(error, "Firebase Storage upload failed for user: $userId")
-                return Result.failure(error ?: RuntimeException("Image upload failed"))
-            }
-            
-            val newImageUrl = uploadResult.getOrThrow()
-            Timber.d("✅ Image uploaded to Firebase Storage: $newImageUrl")
-            
-            // Update profile with new image URL and metadata
-            val updateResult = profileImageRepository.updateProfileImageUrl(
-                userId = userId,
-                imageUrl = newImageUrl,
-                updatedAt = LocalDateTime.now(),
-                hasCustomImage = true
-            )
-            
-            if (updateResult.isFailure) {
-                val error = updateResult.exceptionOrNull()
-                Timber.e(error, "Failed to update profile image URL for user: $userId")
-                
-                // Attempt to clean up uploaded image since profile update failed
-                cleanupUploadedImage(userId, newImageUrl)
-                
-                return Result.failure(error ?: RuntimeException("Profile update failed"))
-            }
-            
-            // Clean up previous image if different from new one
-            if (currentImageUrl != null && currentImageUrl != newImageUrl) {
-                cleanupPreviousImage(userId, currentImageUrl)
-            }
-            
-            Timber.i("🎉 Profile image upload completed successfully for user: $userId")
-            Result.success(newImageUrl)
-            
-        } catch (e: Exception) {
-            Timber.e(e, "Unexpected error during profile image upload for user: $userId")
-            Result.failure(e)
+    ): LiftrixResult<String> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.NetworkError("Failed to upload profile image: ${throwable.message}")
         }
+    ) {
+        Timber.i("🖼️ Starting profile image upload for user: $userId")
+        
+        // Validate inputs
+        val validationResult = validateInputs(userId, imageUri)
+        if (validationResult != null) {
+            Timber.w("Input validation failed: $validationResult")
+            throw IllegalArgumentException(validationResult)
+        }
+        
+        // Validate image format compatibility
+        val isFormatSupported = imageProcessingService.isFormatSupported(imageUri)
+        if (!isFormatSupported) {
+            val error = "Unsupported image format. Please use JPEG, PNG, or WebP."
+            Timber.w("Image format validation failed for URI: $imageUri")
+            throw IllegalArgumentException(error)
+        }
+        
+        // Process image (crop, resize, compress)
+        val processingResult = imageProcessingService.processProfileImage(imageUri, cropRect)
+        if (processingResult.isFailure) {
+            val error = processingResult.exceptionOrNull()
+            Timber.e(error, "Image processing failed for user: $userId")
+            throw error ?: RuntimeException("Image processing failed")
+        }
+        
+        val processedImage = processingResult.getOrThrow()
+        Timber.d("✅ Image processed successfully: ${processedImage.fileSizeBytes} bytes")
+        
+        // Get current profile image URL for cleanup
+        val currentImageResult = profileImageRepository.getProfileImageUrl(userId)
+        val currentImageUrl = if (currentImageResult.isSuccess) {
+            currentImageResult.getOrNull()
+        } else {
+            null // No existing image or retrieval failed
+        }
+        
+        // Upload processed image to Firebase Storage
+        val uploadResult = profileImageRepository.uploadProfileImage(userId, processedImage.imageBytes)
+        if (uploadResult.isFailure) {
+            val error = uploadResult.exceptionOrNull()
+            Timber.e(error, "Firebase Storage upload failed for user: $userId")
+            throw error ?: RuntimeException("Image upload failed")
+        }
+        
+        val newImageUrl = uploadResult.getOrThrow()
+        Timber.d("✅ Image uploaded to Firebase Storage: $newImageUrl")
+        
+        // Update profile with new image URL and metadata
+        val updateResult = profileImageRepository.updateProfileImageUrl(
+            userId = userId,
+            imageUrl = newImageUrl,
+            updatedAt = LocalDateTime.now(),
+            hasCustomImage = true
+        )
+        
+        if (updateResult.isFailure) {
+            val error = updateResult.exceptionOrNull()
+            Timber.e(error, "Failed to update profile image URL for user: $userId")
+            
+            // Attempt to clean up uploaded image since profile update failed
+            cleanupUploadedImage(userId, newImageUrl)
+            
+            throw error ?: RuntimeException("Profile update failed")
+        }
+        
+        // Clean up previous image if different from new one
+        if (currentImageUrl != null && currentImageUrl != newImageUrl) {
+            cleanupPreviousImage(userId, currentImageUrl)
+        }
+        
+        Timber.i("🎉 Profile image upload completed successfully for user: $userId")
+        newImageUrl
     }
     
     /**

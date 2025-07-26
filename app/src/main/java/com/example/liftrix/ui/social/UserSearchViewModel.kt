@@ -253,7 +253,7 @@ data class UserSearchUiState(
     val error: LiftrixError?,
     val hasSearched: Boolean,
     val isCachedResult: Boolean
-) : UiState<List<UserSearchResult>>() {
+) {
     
     val canShowResults: Boolean
         get() = hasSearched && searchResults.isNotEmpty()

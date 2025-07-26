@@ -38,7 +38,14 @@ class QRCodeServiceImpl @Inject constructor() : QRCodeService {
     }
 
     override suspend fun generateQRCode(data: String, size: Int): LiftrixResult<Bitmap> {
-        return liftrixCatching {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.ExportError(
+                    errorMessage = "Failed to generate QR code: ${throwable.message}",
+                    operation = "generate_qr_code"
+                )
+            }
+        ) {
             Timber.d("Generating QR code: data length=${data.length}, size=$size")
             
             // Validate input parameters
@@ -58,7 +65,10 @@ class QRCodeServiceImpl @Inject constructor() : QRCodeService {
                     )
                 )
             } catch (e: WriterException) {
-                throw LiftrixError.ValidationError("Failed to encode QR code data: ${e.message}")
+                throw LiftrixError.ValidationError(
+                    field = "qr_code_data",
+                    violations = listOf("Failed to encode QR code data: ${e.message}")
+                )
             }
             
             // Convert bit matrix to bitmap
@@ -70,7 +80,14 @@ class QRCodeServiceImpl @Inject constructor() : QRCodeService {
     }
 
     override suspend fun parseQRCode(bitmap: Bitmap): LiftrixResult<String> {
-        return liftrixCatching {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.DataRetrievalError(
+                    errorMessage = "Failed to parse QR code: ${throwable.message}",
+                    operation = "parse_qr_code"
+                )
+            }
+        ) {
             Timber.d("Parsing QR code from bitmap: ${bitmap.width}x${bitmap.height}")
             
             // Convert bitmap to RGB array
@@ -95,7 +112,10 @@ class QRCodeServiceImpl @Inject constructor() : QRCodeService {
             val result = try {
                 reader.decode(binaryBitmap, hints)
             } catch (e: Exception) {
-                throw LiftrixError.ValidationError("Failed to decode QR code: ${e.message}")
+                throw LiftrixError.ValidationError(
+                    field = "qr_code_bitmap",
+                    violations = listOf("Failed to decode QR code: ${e.message}")
+                )
             }
             
             val decodedText = result.text
@@ -103,7 +123,11 @@ class QRCodeServiceImpl @Inject constructor() : QRCodeService {
             
             // Validate decoded data
             if (!validateQRCodeData(decodedText)) {
-                throw LiftrixError.ValidationError("Invalid QR code data format")
+                throw LiftrixError.ValidationError(
+                field = "qrCodeData",
+                violations = listOf("Invalid QR code data format"),
+                errorMessage = "Invalid QR code data format"
+            )
             }
             
             decodedText
@@ -122,7 +146,16 @@ class QRCodeServiceImpl @Inject constructor() : QRCodeService {
     }
 
     override suspend fun generateProfileQRCode(profileUrl: String, size: Int): LiftrixResult<Bitmap> {
-        return liftrixCatching {
+        return liftrixCatching(
+            errorMapper = { exception ->
+                when (exception) {
+                    is LiftrixError -> exception
+                    else -> LiftrixError.UnknownError(
+                        errorMessage = "QR code generation failed: ${exception.message}"
+                    )
+                }
+            }
+        ) {
             Timber.d("Generating profile QR code: url=$profileUrl, size=$size")
             
             // Generate base QR code
@@ -146,15 +179,27 @@ class QRCodeServiceImpl @Inject constructor() : QRCodeService {
      */
     private fun validateQRCodeParameters(data: String, size: Int) {
         if (data.isBlank()) {
-            throw LiftrixError.ValidationError("QR code data cannot be empty")
+            throw LiftrixError.ValidationError(
+                field = "data",
+                violations = listOf("QR code data cannot be empty"),
+                errorMessage = "QR code data cannot be empty"
+            )
         }
         
         if (data.length > 2000) {
-            throw LiftrixError.ValidationError("QR code data too long (max 2000 characters)")
+            throw LiftrixError.ValidationError(
+                field = "data",
+                violations = listOf("QR code data too long (max 2000 characters)"),
+                errorMessage = "QR code data too long (max 2000 characters)"
+            )
         }
         
         if (size < MIN_QR_SIZE || size > MAX_QR_SIZE) {
-            throw LiftrixError.ValidationError("QR code size must be between $MIN_QR_SIZE and $MAX_QR_SIZE pixels")
+            throw LiftrixError.ValidationError(
+                field = "size",
+                violations = listOf("QR code size must be between $MIN_QR_SIZE and $MAX_QR_SIZE pixels"),
+                errorMessage = "QR code size must be between $MIN_QR_SIZE and $MAX_QR_SIZE pixels"
+            )
         }
     }
 

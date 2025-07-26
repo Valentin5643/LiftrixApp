@@ -96,6 +96,16 @@ class CreateWorkoutTemplateUseCase @Inject constructor(
                 throw RuntimeException("Failed to create default folder: ${defaultFolderResult.exceptionOrNull()?.message}")
             }
             
+            // Get the actual folder to ensure it exists and use its ID
+            val defaultFolder = defaultFolderResult.getOrThrow()
+            val actualFolderId = if (folderId == "uncategorized_$userId") {
+                defaultFolder.id
+            } else {
+                folderId
+            }
+            
+            timber.log.Timber.d("Creating template '${name}' for user $userId in folder $actualFolderId")
+            
             // Calculate estimated duration if not provided
             val finalEstimatedDuration = estimatedDurationMinutes ?: run {
                 val tempTemplate = WorkoutTemplate(
@@ -108,7 +118,7 @@ class CreateWorkoutTemplateUseCase @Inject constructor(
                     },
                     estimatedDurationMinutes = null,
                     difficultyLevel = difficultyLevel,
-                    folderId = folderId,
+                    folderId = actualFolderId.toString(),
                     usageCount = 0,
                     lastUsedAt = null,
                     createdAt = Instant.now(),
@@ -128,7 +138,7 @@ class CreateWorkoutTemplateUseCase @Inject constructor(
                 },
                 estimatedDurationMinutes = finalEstimatedDuration,
                 difficultyLevel = difficultyLevel,
-                folderId = folderId,
+                folderId = actualFolderId.toString(),
                 usageCount = 0,
                 lastUsedAt = null,
                 createdAt = Instant.now(),

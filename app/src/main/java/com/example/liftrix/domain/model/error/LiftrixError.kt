@@ -161,6 +161,31 @@ sealed class LiftrixError(
     ) : LiftrixError(errorMessage, isRecoverable, retryAfter, analyticsContext)
     
     /**
+     * Permission and authorization failures.
+     * Typically not recoverable unless permissions are granted.
+     */
+    data class PermissionError(
+        val errorMessage: String = "Permission denied",
+        override val isRecoverable: Boolean = false,
+        override val retryAfter: Long? = null,
+        override val analyticsContext: Map<String, String> = emptyMap(),
+        val permission: String? = null
+    ) : LiftrixError(errorMessage, isRecoverable, retryAfter, analyticsContext)
+    
+    /**
+     * Cache operation and data caching errors.
+     * May be recoverable depending on the specific cache issue.
+     */
+    data class CacheError(
+        val errorMessage: String = "Cache operation failed",
+        override val isRecoverable: Boolean = true,
+        override val retryAfter: Long? = 2000L, // 2 seconds retry for cache operations
+        override val analyticsContext: Map<String, String> = emptyMap(),
+        val operation: String? = null,
+        val cacheKey: String? = null
+    ) : LiftrixError(errorMessage, isRecoverable, retryAfter, analyticsContext)
+    
+    /**
      * Unknown or unexpected errors that don't fit other categories.
      * Marked as non-recoverable by default for safety.
      */
@@ -193,6 +218,8 @@ fun LiftrixError.withAnalyticsContext(additionalContext: Map<String, String>): L
         is LiftrixError.ExportError -> copy(analyticsContext = mergedContext)
         is LiftrixError.FileSystemError -> copy(analyticsContext = mergedContext)
         is LiftrixError.NotFoundError -> copy(analyticsContext = mergedContext)
+        is LiftrixError.PermissionError -> copy(analyticsContext = mergedContext)
+        is LiftrixError.CacheError -> copy(analyticsContext = mergedContext)
         is LiftrixError.UnknownError -> copy(analyticsContext = mergedContext)
     }
 }
@@ -213,6 +240,8 @@ fun LiftrixError.withRetryAfter(retryAfterMs: Long): LiftrixError {
         is LiftrixError.ExportError -> copy(retryAfter = retryAfterMs)
         is LiftrixError.FileSystemError -> copy(retryAfter = retryAfterMs)
         is LiftrixError.NotFoundError -> copy(retryAfter = retryAfterMs)
+        is LiftrixError.PermissionError -> copy(retryAfter = retryAfterMs)
+        is LiftrixError.CacheError -> copy(retryAfter = retryAfterMs)
         is LiftrixError.UnknownError -> copy(retryAfter = retryAfterMs)
     }
 }

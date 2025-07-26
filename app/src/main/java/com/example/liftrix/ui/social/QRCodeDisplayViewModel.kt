@@ -11,7 +11,6 @@ import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.social.QRCodeGenerationUseCase
 import com.example.liftrix.domain.usecase.social.QRCodeGenerationRequest
 import com.example.liftrix.ui.common.event.ViewModelEvent
-import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -270,7 +269,7 @@ data class QRCodeDisplayUiState(
     val isLoading: Boolean,
     val error: LiftrixError?,
     val currentUserId: String?
-) : UiState<Bitmap?>() {
+) {
     
     /**
      * Whether QR code can be displayed

@@ -17,8 +17,13 @@ import com.example.liftrix.sync.SettingsSyncWorker
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.time.Instant
 import javax.inject.Inject
@@ -42,6 +47,9 @@ class SettingsRepositoryImpl @Inject constructor(
     private val dataStore: DataStore<Preferences>,
     private val workManager: WorkManager
 ) : SettingsRepository {
+    
+    // Separate coroutine scope for async sync operations to prevent circular dependencies
+    private val syncScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
     companion object {
         // DataStore preference keys
@@ -68,14 +76,14 @@ class SettingsRepositoryImpl @Inject constructor(
             
             when {
                 dataStoreSettings != null -> {
-                    // DataStore has data, use it and sync to Room if needed
-                    syncToRoom(dataStoreSettings)
+                    // DataStore has data, use it and schedule async sync to Room if needed
+                    scheduleAsyncSyncToRoom(dataStoreSettings)
                     dataStoreSettings
                 }
                 roomEntity != null -> {
-                    // DataStore is empty, use Room data and sync to DataStore
+                    // DataStore is empty, use Room data and schedule async sync to DataStore
                     val domainSettings = settingsMapper.toDomain(roomEntity)
-                    syncToDataStore(domainSettings)
+                    scheduleAsyncSyncToDataStore(domainSettings)
                     domainSettings
                 }
                 else -> {
@@ -83,7 +91,7 @@ class SettingsRepositoryImpl @Inject constructor(
                     null
                 }
             }
-        }
+        }.distinctUntilChanged() // Prevent duplicate emissions
     }
     
     override suspend fun updateDarkMode(userId: String, enabled: Boolean): Result<Unit> {
@@ -339,6 +347,43 @@ class SettingsRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Failed to update migration completed for user: $userId")
             Result.failure(e)
+        }
+    }
+    
+    /**
+     * Schedules async sync to Room database to prevent circular dependencies.
+     * Uses separate coroutine scope to avoid triggering Flow emission.
+     */
+    private fun scheduleAsyncSyncToRoom(settings: UserSettings) {
+        syncScope.launch {
+            try {
+                val entity = settingsMapper.toEntity(settings)
+                settingsDao.insertSettings(entity)
+                Timber.v("Settings synced to Room asynchronously for user: ${settings.userId}")
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to async sync settings to Room")
+            }
+        }
+    }
+    
+    /**
+     * Schedules async sync to DataStore to prevent circular dependencies.
+     * Uses separate coroutine scope to avoid triggering Flow emission.
+     */
+    private fun scheduleAsyncSyncToDataStore(settings: UserSettings) {
+        syncScope.launch {
+            try {
+                dataStore.edit { preferences ->
+                    preferences[DARK_MODE_KEY] = settings.darkMode
+                    preferences[NOTIFICATIONS_ENABLED_KEY] = settings.notificationsEnabled
+                    preferences[WEIGHT_UNIT_KEY] = settings.weightUnit.symbol
+                    preferences[USER_ID_KEY] = settings.userId
+                    preferences[UPDATED_AT_KEY] = settings.updatedAt.toString()
+                }
+                Timber.v("Settings synced to DataStore asynchronously for user: ${settings.userId}")
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to async sync settings to DataStore")
+            }
         }
     }
     

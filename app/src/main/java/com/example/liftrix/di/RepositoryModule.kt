@@ -13,6 +13,8 @@ import com.example.liftrix.data.repository.AnomalyDetectionRepositoryImpl
 import com.example.liftrix.data.repository.MetDataRepositoryImpl
 import com.example.liftrix.data.repository.WidgetPreferencesRepositoryImpl
 import com.example.liftrix.data.repository.UserRepositoryImpl
+import com.example.liftrix.data.repository.UserSearchRepositoryImpl
+import com.example.liftrix.data.repository.AchievementRepositoryImpl
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.CustomExerciseRepository
 import com.example.liftrix.domain.repository.ProfileRepository
@@ -26,6 +28,8 @@ import com.example.liftrix.domain.repository.AnomalyDetectionRepository
 import com.example.liftrix.domain.repository.MetDataRepository
 import com.example.liftrix.domain.repository.WidgetPreferencesRepository
 import com.example.liftrix.domain.repository.UserRepository
+import com.example.liftrix.domain.repository.UserSearchRepository
+import com.example.liftrix.domain.repository.AchievementRepository
 import com.example.liftrix.core.cache.CacheManager
 import dagger.Binds
 import dagger.Module
@@ -122,6 +126,18 @@ abstract class RepositoryModule {
     abstract fun bindUserRepository(
         userRepositoryImpl: UserRepositoryImpl
     ): UserRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindUserSearchRepository(
+        userSearchRepositoryImpl: UserSearchRepositoryImpl
+    ): UserSearchRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAchievementRepository(
+        achievementRepositoryImpl: AchievementRepositoryImpl
+    ): AchievementRepository
 
     companion object {
         

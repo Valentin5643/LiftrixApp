@@ -206,7 +206,11 @@ class ProfileImageCache @Inject constructor(
                     }
                 }
                 
-                Timber.d("✅ Cache maintenance completed, final size: ${currentSize / 1024 / 1024}MB")
+                // Recalculate final size
+                val finalSize = diskCacheDir.listFiles()?.let { files ->
+                    files.sumOf { it.length() }
+                } ?: 0L
+                Timber.d("✅ Cache maintenance completed, final size: ${finalSize / 1024 / 1024}MB")
                 
             } catch (e: Exception) {
                 Timber.e(e, "Failed to perform cache maintenance")

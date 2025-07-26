@@ -31,6 +31,8 @@ import com.example.liftrix.data.local.dao.AnomalyDetectionSettingsDao
 import com.example.liftrix.data.local.dao.ExerciseHistoryDao
 import com.example.liftrix.data.local.dao.WidgetPreferencesDao
 import com.example.liftrix.data.local.dao.AchievementDao
+import com.example.liftrix.data.local.dao.UserSearchCacheDao
+import com.example.liftrix.data.local.dao.QRCodeMappingDao
 
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.data.local.entity.FolderEntity
@@ -55,6 +57,8 @@ import com.example.liftrix.data.local.entity.ExerciseHistoryEntity
 import com.example.liftrix.data.local.entity.WidgetPreferenceEntity
 import com.example.liftrix.data.local.entity.DashboardConfigurationEntity
 import com.example.liftrix.data.local.entity.UserAchievementEntity
+import com.example.liftrix.data.local.entity.UserSearchCacheEntity
+import com.example.liftrix.data.local.entity.QRCodeMappingEntity
 
 
 
@@ -83,6 +87,8 @@ import com.example.liftrix.data.local.entity.UserAchievementEntity
         WidgetPreferenceEntity::class,
         DashboardConfigurationEntity::class,
         UserAchievementEntity::class,
+        UserSearchCacheEntity::class,
+        QRCodeMappingEntity::class,
     ],
     version = 37,
     exportSchema = true
@@ -119,4 +125,6 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun exerciseHistoryDao(): ExerciseHistoryDao
     abstract fun widgetPreferencesDao(): WidgetPreferencesDao
     abstract fun achievementDao(): AchievementDao
+    abstract fun userSearchCacheDao(): UserSearchCacheDao
+    abstract fun qrCodeMappingDao(): QRCodeMappingDao
 } 

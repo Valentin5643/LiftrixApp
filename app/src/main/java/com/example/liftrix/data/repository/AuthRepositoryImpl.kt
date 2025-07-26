@@ -16,6 +16,8 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -27,6 +29,8 @@ class AuthRepositoryImpl @Inject constructor(
 ) : AuthRepository {
 
     override val currentUser: Flow<User?> = callbackFlow {
+        var hasEmitted = false
+        
         val authStateListener = FirebaseAuth.AuthStateListener { auth ->
             try {
                 val firebaseUser = auth.currentUser
@@ -40,15 +44,32 @@ class AuthRepositoryImpl @Inject constructor(
                     }
                 }
                 trySend(user)
+                hasEmitted = true
+                Timber.d("Auth state emitted: ${if (user != null) "User(${user.uid})" else "null"}")
             } catch (exception: Exception) {
                 Timber.e(exception, "Error creating User from Firebase user in auth state listener")
-                // Don't send anything on error to prevent crash loops
+                // Send null on error to prevent infinite loading, but only if we haven't emitted yet
+                if (!hasEmitted) {
+                    trySend(null)
+                    hasEmitted = true
+                }
             }
         }
         
         firebaseAuth.addAuthStateListener(authStateListener)
         
+        // Add timeout mechanism - emit null after 10 seconds if no auth state received
+        val timeoutJob = launch {
+            delay(10_000) // 10 second timeout
+            if (!hasEmitted) {
+                Timber.w("Auth state timeout reached - emitting null to prevent infinite loading")
+                trySend(null)
+                hasEmitted = true
+            }
+        }
+        
         awaitClose {
+            timeoutJob.cancel()
             firebaseAuth.removeAuthStateListener(authStateListener)
         }
     }

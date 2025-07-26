@@ -149,6 +149,13 @@ class ArchitectureAnalytics @Inject constructor(
                             error.resourceType?.let { put("resource_type", it) }
                             error.resourceId?.let { put("resource_id", it) }
                         }
+                        is LiftrixError.PermissionError -> {
+                            error.permission?.let { put("permission", it) }
+                        }
+                        is LiftrixError.CacheError -> {
+                            error.operation?.let { put("cache_operation", it) }
+                            error.cacheKey?.let { put("cache_key", it) }
+                        }
                         is LiftrixError.UnknownError -> {
                             put("unknown_error_category", "unhandled")
                         }

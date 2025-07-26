@@ -2,6 +2,9 @@ package com.example.liftrix.data.repository
 
 import com.example.liftrix.data.local.converter.DateTimeConverters
 import com.example.liftrix.data.local.dao.UserProfileDao
+import com.example.liftrix.data.local.entity.UserProfileEntity
+import com.example.liftrix.domain.model.Equipment
+import com.example.liftrix.domain.model.FitnessGoal
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -135,8 +138,29 @@ class ProfileImageRepositoryImpl @Inject constructor(
         )
         
         if (updatedRows == 0) {
-            Timber.w("⚠️ No profile found to update for user: $userId")
-            throw IllegalStateException("Profile not found for user: $userId")
+            Timber.w("⚠️ No profile found to update for user: $userId - attempting to create basic profile")
+            
+            // Attempt to create a basic profile if it doesn't exist
+            try {
+                createBasicProfileForUser(userId)
+                
+                // Retry the profile image update after creating the profile
+                val retryUpdatedRows = userProfileDao.updateProfileImage(
+                    userId = userId,
+                    imageUrl = imageUrl,
+                    updatedAt = updatedAtString,
+                    hasCustom = hasCustomImage
+                )
+                
+                if (retryUpdatedRows == 0) {
+                    throw IllegalStateException("Profile creation failed for user: $userId")
+                }
+                
+                Timber.i("✅ Profile auto-created and image URL updated for user: $userId")
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to create basic profile for user: $userId")
+                throw IllegalStateException("Profile not found for user: $userId and auto-creation failed", e)
+            }
         }
         
         Timber.d("✅ Profile image URL updated successfully: $updatedRows row(s) affected")
@@ -154,6 +178,58 @@ class ProfileImageRepositoryImpl @Inject constructor(
         
         Timber.d("📷 Custom profile image status: $hasCustom")
         hasCustom
+    }
+    
+    /**
+     * Creates a basic profile for a user when one doesn't exist.
+     * This is a fallback mechanism to ensure profile image operations can proceed.
+     */
+    private suspend fun createBasicProfileForUser(userId: String) {
+        Timber.d("🏗️ Creating basic profile for user: $userId")
+        
+        val currentUser = firebaseAuth.currentUser
+        val displayName = currentUser?.displayName ?: "User"
+        val now = LocalDateTime.now()
+        val nowString = dateTimeConverters.fromLocalDateTime(now)
+        
+        // Create basic profile entity with minimal required fields
+        val basicProfile = UserProfileEntity(
+            id = userId, // Use userId as the primary key
+            userId = userId,
+            displayName = displayName,
+            age = null,
+            weightKg = null,
+            heightCm = null,
+            fitnessLevel = null,
+            goals = null,
+            availableEquipment = null,
+            workoutFrequency = null,
+            preferredWorkoutDuration = null,
+            completedAt = null,
+            createdAt = now,
+            updatedAt = now,
+            isSynced = false,
+            syncVersion = System.currentTimeMillis(),
+            bio = null,
+            isPublic = true,
+            lastActiveAt = now,
+            totalWorkouts = 0,
+            currentStreak = 0,
+            longestStreak = 0,
+            memberSince = now,
+            profileCompletionPercentage = 25, // Basic profile is 25% complete
+            profileImageUrl = null,
+            profileImageUpdatedAt = null,
+            hasCustomProfileImage = false,
+            searchKeywords = null,
+            lastProfileViewAt = null,
+            profileViewsCount = 0
+        )
+        
+        // Insert the basic profile
+        userProfileDao.insertProfile(basicProfile)
+        
+        Timber.i("✅ Basic profile created successfully for user: $userId")
     }
     
     /**

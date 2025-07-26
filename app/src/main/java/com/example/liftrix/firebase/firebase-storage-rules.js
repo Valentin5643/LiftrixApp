@@ -1,0 +1,162 @@
+// Firebase Storage Security Rules for Liftrix Profile System
+// This file contains the security rules for Firebase Storage that need to be deployed
+// 
+// To deploy these rules:
+// 1. Copy the content below
+// 2. Go to Firebase Console -> Storage -> Rules
+// 3. Paste the rules and publish
+//
+// Last updated: 2025-07-25
+// Compatible with: Liftrix Profile System v1.0
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper functions for validation
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    function isValidImageFile() {
+      return request.resource.contentType.matches('image/.*') &&
+             request.resource.size < 10 * 1024 * 1024; // 10MB limit
+    }
+    
+    function isValidImageFormat() {
+      return request.resource.contentType.matches('image/(jpeg|jpg|png|webp)');
+    }
+    
+    // Profile images - users can upload/update their own, anyone can read public profiles
+    match /profile_images/{userId}/{fileName} {
+      allow read: if isAuthenticated() && 
+                     (isOwner(userId) || 
+                      isPublicProfile(userId));
+                      
+      allow write: if isAuthenticated() && 
+                      isOwner(userId) && 
+                      isValidImageFile() && 
+                      isValidImageFormat();
+      
+      allow delete: if isAuthenticated() && 
+                       isOwner(userId);
+    }
+    
+    // Profile image thumbnails - generated server-side, readable for public profiles
+    match /profile_images/{userId}/thumbnails/{thumbnailName} {
+      allow read: if isAuthenticated() && 
+                     (isOwner(userId) || 
+                      isPublicProfile(userId));
+      
+      // Thumbnails are generated server-side only
+      allow write, delete: if false;
+    }
+    
+    // Temporary upload folder for image processing
+    match /temp_uploads/{userId}/{fileName} {
+      allow read, write: if isAuthenticated() && 
+                           isOwner(userId) && 
+                           isValidImageFile() && 
+                           isValidImageFormat();
+      
+      allow delete: if isAuthenticated() && 
+                       isOwner(userId);
+    }
+    
+    // QR code images - generated server-side, readable by authenticated users
+    match /qr_codes/{userId}/{qrFileName} {
+      allow read: if isAuthenticated();
+      
+      // QR codes are generated server-side only
+      allow write, delete: if false;
+    }
+    
+    // Workout images (for future workout photo features)
+    match /workout_images/{userId}/{workoutId}/{fileName} {
+      allow read, write: if isAuthenticated() && 
+                           isOwner(userId) && 
+                           isValidImageFile() && 
+                           isValidImageFormat();
+      
+      allow delete: if isAuthenticated() && 
+                       isOwner(userId);
+    }
+    
+    // Default deny all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+  
+  // Helper function to check if a user's profile is public
+  // Note: This requires a Firestore lookup, which has performance implications
+  function isPublicProfile(userId) {
+    return firestore.get(/databases/(default)/documents/users_public/$(userId)).data.isPublic == true;
+  }
+}
+
+/* 
+DEPLOYMENT INSTRUCTIONS:
+
+1. Firebase Console Setup:
+   - Go to https://console.firebase.google.com
+   - Select your Liftrix project
+   - Navigate to Storage -> Rules
+
+2. Copy and paste the above rules into the Firebase Console
+
+3. Configure CORS for web access (if needed):
+   Create a cors.json file with:
+   [
+     {
+       "origin": ["https://your-app-domain.com"],
+       "method": ["GET", "POST", "PUT", "DELETE"],
+       "maxAgeSeconds": 3600
+     }
+   ]
+   
+   Then run: gsutil cors set cors.json gs://your-bucket-name
+
+4. Test the rules using Firebase Console simulator:
+   - Test profile image uploads for authenticated users
+   - Test read access for public vs private profiles
+   - Verify file size and format restrictions
+
+5. Storage Structure Created:
+   /profile_images/{userId}/
+     - profile.jpg (main profile image)
+     - profile_cropped.jpg (cropped version)
+     /thumbnails/
+       - profile_thumb_150x150.jpg
+       - profile_thumb_50x50.jpg
+   
+   /temp_uploads/{userId}/
+     - {timestamp}_{filename} (temporary files during processing)
+   
+   /qr_codes/{userId}/
+     - profile_qr.png (generated QR code for profile sharing)
+   
+   /workout_images/{userId}/{workoutId}/
+     - {filename} (future workout photos)
+
+6. Performance Optimization:
+   - Enable Firebase Storage caching headers
+   - Configure CDN for image delivery
+   - Set up automatic image optimization/compression
+
+7. Security Considerations:
+   - Profile images are readable by anyone if profile is public
+   - File size limit is 10MB per image
+   - Only JPEG, JPG, PNG, and WebP formats allowed
+   - Users can only upload to their own folders
+   - Server-side thumbnails and QR codes are read-only
+
+8. Monitoring:
+   - Set up Firebase Storage usage alerts
+   - Monitor for unusual upload patterns
+   - Track storage costs and optimize accordingly
+*/

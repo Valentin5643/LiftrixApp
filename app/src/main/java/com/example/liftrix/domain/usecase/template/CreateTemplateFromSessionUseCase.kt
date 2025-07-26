@@ -215,11 +215,11 @@ class CreateTemplateFromSessionUseCase @Inject constructor(
                 ExerciseCategory.CHEST, ExerciseCategory.BACK, ExerciseCategory.LEGS -> 3 // Compound movements
                 ExerciseCategory.CORE, ExerciseCategory.CARDIO -> 1 // Easier exercises
                 else -> 2 // Isolation movements
-            }
+            }.toInt()
         }
         
         val volumeScore = exercises.sumOf { exercise: TemplateExercise ->
-            (exercise.targetSets ?: 3) * (exercise.targetReps?.count ?: 10)
+            ((exercise.targetSets ?: 3) * (exercise.targetReps?.count ?: 10)).toInt()
         }
         
         val totalExercises = exercises.size

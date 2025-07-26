@@ -8,6 +8,7 @@ import androidx.room.Query
 import androidx.room.Update
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import kotlinx.coroutines.flow.Flow
+import java.time.LocalDateTime
 
 @Dao
 interface UserProfileDao {
@@ -105,4 +106,14 @@ interface UserProfileDao {
     
     @Query("SELECT * FROM user_profiles WHERE has_custom_profile_image = 1 ORDER BY profile_image_updated_at DESC LIMIT :limit")
     suspend fun getProfilesWithCustomImages(limit: Int = 50): List<UserProfileEntity>
+    
+    // Social and search features
+    
+    // For now, store keywords in bio field as a temporary solution
+    @Query("UPDATE user_profiles SET bio = :keywords WHERE user_id = :userId")
+    suspend fun updateSearchKeywords(userId: String, keywords: String): Int
+    
+    // For now, update last_active_at for profile view tracking  
+    @Query("UPDATE user_profiles SET last_active_at = :viewedAt WHERE user_id = :userId")
+    suspend fun updateProfileView(userId: String, viewedAt: LocalDateTime): Int
 } 

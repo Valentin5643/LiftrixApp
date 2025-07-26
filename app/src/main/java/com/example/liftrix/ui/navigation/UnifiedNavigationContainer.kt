@@ -169,9 +169,6 @@ fun UnifiedNavigationContainer(
                     com.example.liftrix.ui.social.FriendsScreen(
                         onNavigateBack = {
                             navController.popBackStackSafely()
-                        },
-                        onNavigateToUserSearch = {
-                            navController.navigateToUserSearch()
                         }
                     )
                 }
@@ -311,7 +308,7 @@ fun UnifiedNavigationContainer(
                             navController.popBackStackSafely()
                         },
                         onNavigateToProfile = {
-                            // TODO: Navigate to profile screen when implemented
+                            navController.navigateToProfile()
                         },
                         onNavigateToAuth = {
                             // TODO: Navigate to authentication screen
@@ -478,6 +475,47 @@ fun UnifiedNavigationContainer(
                 composable<LiftrixRoute.CreateWorkout> {
                     com.example.liftrix.ui.workout.create.CreateWorkoutScreen(
                         onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+                
+                // Profile Management Routes
+                composable<LiftrixRoute.Profile> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.Profile>()
+                    com.example.liftrix.ui.profile.ProfileScreen(
+                        onNavigateToEdit = { 
+                            navController.navigateToProfileEdit() 
+                        },
+                        onNavigateToImageCrop = { uri -> 
+                            navController.navigateToImageCrop(uri) 
+                        },
+                        onNavigateToSettings = { 
+                            navController.navigateToSettings() 
+                        }
+                    )
+                }
+
+                composable<LiftrixRoute.ProfileEdit> {
+                    com.example.liftrix.ui.profile.ProfileEditScreen(
+                        onNavigateBack = { 
+                            navController.popBackStackSafely() 
+                        },
+                        onNavigateToImageCrop = { uri -> 
+                            navController.navigateToImageCrop(uri) 
+                        }
+                    )
+                }
+
+                composable<LiftrixRoute.ImageCrop> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.ImageCrop>()
+                    com.example.liftrix.ui.profile.ImageCropScreen(
+                        imageUri = android.net.Uri.parse(route.imageUri),
+                        onNavigateBack = { 
+                            navController.popBackStackSafely() 
+                        },
+                        onCropConfirmed = { cropRect -> 
+                            // Handle cropped image and navigate back
                             navController.popBackStackSafely()
                         }
                     )
@@ -796,7 +834,10 @@ private fun NavigationAwareTopAppBar(
         "WorkoutDetails" to "Workout Details",
         "ExerciseDetails" to "Exercise Details",
         "AnomalyDashboard" to "Anomaly Detection",
-        "AnomalySettings" to "Detection Settings"
+        "AnomalySettings" to "Detection Settings",
+        "Profile" to "Profile",
+        "ProfileEdit" to "Edit Profile",
+        "ImageCrop" to "Crop Image"
     )
     
     // Check if current route is a main tab (should show global top bar)

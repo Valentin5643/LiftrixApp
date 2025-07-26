@@ -195,6 +195,12 @@ class LegacyNavigationWrapper @Inject constructor(
                 is LiftrixRoute.CreateWorkout -> "Replace with: navController.navigate(LiftrixRoute.CreateWorkout)"
                 is LiftrixRoute.EditWorkout -> "Replace with: navController.navigate(LiftrixRoute.EditWorkout(workoutId))"
                 is LiftrixRoute.EditSession -> "Replace with: navController.navigate(LiftrixRoute.EditSession(sessionId))"
+                is LiftrixRoute.ImageCrop -> "Replace with: navController.navigate(LiftrixRoute.ImageCrop(imageUri))"
+                is LiftrixRoute.PublicProfile -> "Replace with: navController.navigate(LiftrixRoute.PublicProfile(userId))"
+                is LiftrixRoute.QRCodeDisplay -> "Replace with: navController.navigate(LiftrixRoute.QRCodeDisplay(userId))"
+                is LiftrixRoute.Profile -> "Replace with: navController.navigate(LiftrixRoute.Profile(userId))"
+                LiftrixRoute.ProfileEdit -> "Replace with: navController.navigate(LiftrixRoute.ProfileEdit)"
+                LiftrixRoute.UserSearch -> "Replace with: navController.navigate(LiftrixRoute.UserSearch)"
             }
         } else {
             null

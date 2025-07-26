@@ -386,17 +386,24 @@ private fun convertCropRectToImageCoordinates(
     val imageAspectRatio = imageSize.width.toFloat() / imageSize.height.toFloat()
     val containerAspectRatio = containerSize.width.toFloat() / containerSize.height.toFloat()
     
-    val (scaledWidth, scaledHeight, imageLeft, imageTop) = if (imageAspectRatio > containerAspectRatio) {
+    data class ImageFitResult(val scaledWidth: Int, val scaledHeight: Int, val imageLeft: Int, val imageTop: Int)
+    
+    val imageFit = if (imageAspectRatio > containerAspectRatio) {
         // Image is wider, fit by height
         val scaledWidth = (containerSize.height * imageAspectRatio).toInt()
         val imageLeft = (containerSize.width - scaledWidth) / 2
-        scaledWidth to containerSize.height to imageLeft to 0
+        ImageFitResult(scaledWidth, containerSize.height, imageLeft, 0)
     } else {
         // Image is taller or equal, fit by width
         val scaledHeight = (containerSize.width / imageAspectRatio).toInt()
         val imageTop = (containerSize.height - scaledHeight) / 2
-        containerSize.width to scaledHeight to 0 to imageTop
+        ImageFitResult(containerSize.width, scaledHeight, 0, imageTop)
     }
+    
+    val scaledWidth = imageFit.scaledWidth
+    val scaledHeight = imageFit.scaledHeight
+    val imageLeft = imageFit.imageLeft
+    val imageTop = imageFit.imageTop
     
     // Convert crop coordinates relative to the scaled image
     val cropRelativeLeft = cropRect.left - imageLeft

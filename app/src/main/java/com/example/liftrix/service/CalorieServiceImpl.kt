@@ -368,12 +368,16 @@ class CalorieServiceImpl @Inject constructor(
         // Create a default profile for calorie calculations when user profile is not available
         return UserProfile(
             userId = userId,
+            displayName = "User", // Default display name
+            bio = null, // No bio by default
             weight = com.example.liftrix.domain.model.Weight(70.0), // 70kg default
             age = 30, // 30 years default
             availableEquipment = emptyList(),
             otherEquipment = null,
             fitnessGoals = emptyList(),
             goalsPriority = null,
+            lastActiveAt = java.time.LocalDateTime.now(), // Set as current time
+            memberSince = java.time.LocalDateTime.now(), // Set as current time
             completedAt = null,
             updatedAt = java.time.LocalDateTime.now()
         )

@@ -71,8 +71,9 @@ fun UserSearchScreen(
         ) {
             when {
                 uiState.error != null -> {
+                    val error = uiState.error
                     ErrorState(
-                        error = uiState.error,
+                        error = error!!,
                         onRetry = { viewModel.handleEvent(UserSearchEvent.RetrySearch) },
                         modifier = Modifier.fillMaxSize()
                     )

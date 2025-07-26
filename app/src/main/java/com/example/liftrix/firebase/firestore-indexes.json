@@ -1,0 +1,274 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "users_public",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isPublic",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "displayName",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "users_public",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isPublic",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lastActiveAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "user_search_cache",
+      "queryScope": "COLLECTION", 
+      "fields": [
+        {
+          "fieldPath": "isPublic",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "displayName",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lastActiveAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "user_search_cache",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isPublic",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchTokens",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "lastActiveAt", 
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "qr_codes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "expiresAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "qr_codes", 
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "expiresAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "user_achievements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "achievementType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "unlockedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "user_achievements",
+      "queryScope": "COLLECTION", 
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isDisplayed",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "unlockedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "connections",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "fromUserId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "connections",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "toUserId", 
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "profile_images",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "users_public",
+      "fieldPath": "displayName",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING", 
+          "queryScope": "COLLECTION"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "user_search_cache",
+      "fieldPath": "searchTokens",
+      "indexes": [
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION" 
+        }
+      ]
+    },
+    {
+      "collectionGroup": "user_achievements",
+      "fieldPath": "achievementType",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        }
+      ]
+    }
+  ]
+}
+
+/* 
+DEPLOYMENT INSTRUCTIONS:
+
+This file contains the Firestore indexes required for optimal query performance
+in the Liftrix profile system.
+
+MANUAL DEPLOYMENT (Firebase Console):
+1. Go to Firebase Console -> Firestore Database -> Indexes
+2. Create each composite index manually using the field combinations above
+3. Wait for index creation to complete (can take several minutes)
+
+AUTOMATED DEPLOYMENT (Firebase CLI):
+1. Install Firebase CLI: npm install -g firebase-tools
+2. Initialize Firebase in your project: firebase init firestore
+3. Replace the content of firestore.indexes.json with the content above  
+4. Deploy indexes: firebase deploy --only firestore:indexes
+
+INDEX USAGE BY FEATURE:
+
+User Search:
+- users_public: isPublic + displayName (alphabetical search)
+- users_public: isPublic + lastActiveAt (recent activity search)
+- user_search_cache: isPublic + searchTokens + lastActiveAt (tokenized search)
+
+Profile System:
+- user_achievements: userId + achievementType + unlockedAt (achievement filtering)
+- user_achievements: userId + isDisplayed + unlockedAt (displayed achievements)
+- profile_images: userId + updatedAt (recent profile images)
+
+QR Code System:
+- qr_codes: userId + expiresAt (user's active QR codes)
+- qr_codes: expiresAt + createdAt (cleanup expired codes)
+
+Social Features (Future):
+- connections: fromUserId + status + createdAt (outgoing connections)
+- connections: toUserId + status + createdAt (incoming connections)
+
+PERFORMANCE NOTES:
+- Indexes enable sub-100ms query performance for profile operations
+- Search queries use cached data to minimize Firestore reads
+- Achievement queries are optimized for real-time updates
+- Connection queries support pagination for large friend lists
+
+COST OPTIMIZATION:
+- Use single-field indexes where possible to reduce storage costs
+- Monitor query patterns and remove unused indexes
+- Consider query design to minimize index requirements
+- Use collection group queries sparingly due to higher costs
+
+MONITORING:
+- Set up Firebase Console alerts for slow queries
+- Monitor index usage statistics
+- Track query costs and optimize frequently-used queries
+- Review and update indexes based on usage patterns
+*/

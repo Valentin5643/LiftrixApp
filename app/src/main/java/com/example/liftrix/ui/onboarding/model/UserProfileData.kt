@@ -14,6 +14,10 @@ import java.time.LocalDateTime
 data class UserProfileData(
     val userId: String,
     
+    // Profile information
+    val displayName: String = "",
+    val bio: String = "",
+    
     // Age input state
     val ageInput: String = "",
     val ageError: String? = null,
@@ -124,12 +128,16 @@ data class UserProfileData(
         
         return UserProfile(
             userId = userId,
+            displayName = displayName.takeIf { it.isNotBlank() } ?: "",
+            bio = bio.takeIf { it.isNotBlank() },
             age = getValidatedAge(),
             weight = getValidatedWeight(),
             availableEquipment = selectedEquipment.toList(),
             otherEquipment = getValidatedOtherEquipment(),
             fitnessGoals = selectedGoals.toList(),
             goalsPriority = goalsPriority.takeIf { it.isNotEmpty() },
+            lastActiveAt = LocalDateTime.now(),
+            memberSince = LocalDateTime.now(),
             completedAt = LocalDateTime.now(),
             updatedAt = LocalDateTime.now()
         )

@@ -294,6 +294,8 @@ fun <T> AutoErrorSnackbar(
                 is LiftrixError.UnknownError -> false
                 is LiftrixError.ConfigurationError -> true
                 is LiftrixError.DataRetrievalError -> true
+                is LiftrixError.CacheError -> true
+                is LiftrixError.PermissionError -> false
             }
             
             if (shouldShow) {
@@ -365,6 +367,8 @@ fun shouldShowAsDialog(error: LiftrixError): Boolean {
         is LiftrixError.NotFoundError -> true
         is LiftrixError.ConfigurationError -> true
         is LiftrixError.DataRetrievalError -> false
+        is LiftrixError.CacheError -> false
+        is LiftrixError.PermissionError -> true
     }
 }
 
@@ -380,6 +384,8 @@ fun shouldShowAsSnackbar(error: LiftrixError): Boolean {
         is LiftrixError.ValidationError -> true
         is LiftrixError.DatabaseError -> true
         is LiftrixError.AuthenticationError -> false
+        is LiftrixError.CacheError -> true
+        is LiftrixError.PermissionError -> false
         is LiftrixError.BusinessLogicError -> false
         is LiftrixError.CalculationError -> true
         is LiftrixError.ExportError -> true

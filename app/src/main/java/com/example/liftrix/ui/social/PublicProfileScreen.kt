@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.social
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -34,6 +35,7 @@ import com.example.liftrix.domain.model.social.PublicWorkoutStats
 import com.example.liftrix.ui.components.buttons.LiftrixButton
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.theme.LiftrixTheme
+import com.example.liftrix.ui.workout.components.PrimaryActionButton
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -80,8 +82,9 @@ fun PublicProfileScreen(
             }
             
             uiState.error != null -> {
+                val error = uiState.error!!
                 ErrorProfileState(
-                    error = uiState.error,
+                    error = error,
                     onRetry = { viewModel.handleEvent(PublicProfileEvent.RetryLoad) },
                     modifier = Modifier
                         .fillMaxSize()
@@ -90,8 +93,9 @@ fun PublicProfileScreen(
             }
             
             uiState.profile != null -> {
+                val profile = uiState.profile!!
                 ProfileContent(
-                    profile = uiState.profile,
+                    profile = profile,
                     onConnectClick = { 
                         viewModel.handleEvent(PublicProfileEvent.ToggleConnection)
                     },
@@ -370,11 +374,17 @@ private fun ConnectionActions(
         when (connectionStatus) {
             ConnectionStatus.NONE -> {
                 LiftrixButton(
-                    text = "Connect",
                     onClick = onConnectClick,
-                    leadingIcon = Icons.Default.PersonAdd,
                     modifier = Modifier.weight(1f)
-                )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PersonAdd,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Connect")
+                }
                 
                 OutlinedButton(
                     onClick = onMessageClick,
@@ -420,11 +430,17 @@ private fun ConnectionActions(
             
             ConnectionStatus.PENDING_RECEIVED -> {
                 LiftrixButton(
-                    text = "Accept",
                     onClick = onConnectClick,
-                    leadingIcon = Icons.Default.Check,
                     modifier = Modifier.weight(1f)
-                )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Accept")
+                }
                 
                 OutlinedButton(
                     onClick = { /* Handle decline */ },
@@ -442,11 +458,17 @@ private fun ConnectionActions(
             
             ConnectionStatus.CONNECTED -> {
                 LiftrixButton(
-                    text = "Message",
                     onClick = onMessageClick,
-                    leadingIcon = Icons.Default.Message,
                     modifier = Modifier.weight(1f)
-                )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Message,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Message")
+                }
                 
                 OutlinedButton(
                     onClick = { /* Handle view workouts */ },
@@ -745,7 +767,7 @@ private fun WorkoutStatsSection(
                 StatsItem(
                     label = "Current Streak",
                     value = "${stats.currentStreak} days",
-                    icon = Icons.Default.LocalFire
+                    icon = Icons.Default.Whatshot
                 )
                 
                 StatsItem(
@@ -962,10 +984,9 @@ private fun ErrorProfileState(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        LiftrixButton(
+        PrimaryActionButton(
             text = "Try Again",
-            onClick = onRetry,
-            leadingIcon = Icons.Default.Refresh
+            onClick = onRetry
         )
     }
 }
