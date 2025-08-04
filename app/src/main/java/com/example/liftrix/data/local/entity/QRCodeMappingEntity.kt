@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.ForeignKey
 import androidx.room.TypeConverters
+import androidx.room.Index
 import com.example.liftrix.data.local.converter.DateTimeConverters
 
 /**
@@ -22,6 +23,9 @@ import com.example.liftrix.data.local.converter.DateTimeConverters
             childColumns = ["user_id"],
             onDelete = ForeignKey.CASCADE
         )
+    ],
+    indices = [
+        Index(value = ["user_id"]) // Index for foreign key
     ]
 )
 @TypeConverters(DateTimeConverters::class)

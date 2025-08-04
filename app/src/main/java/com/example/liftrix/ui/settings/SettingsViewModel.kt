@@ -25,6 +25,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.withTimeout
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -60,17 +62,46 @@ class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(SettingsState())
+    private val _uiState = MutableStateFlow(SettingsState(isLoading = true))
     val uiState: StateFlow<SettingsState> = _uiState.asStateFlow()
 
     private var currentUserId: String? = null
     private var lastFailedEvent: SettingsEvent? = null
+    private var loadSettingsJob: kotlinx.coroutines.Job? = null
+    private var lastLoadedUserId: String? = null
     
     // Theme manager for immediate theme updates
     private val themeManager: ThemeManager by lazy { ThemeManager.getInstance(context) }
 
     init {
+        // Start authentication observation immediately
         observeAuthenticationState()
+        
+        // Also check authentication immediately as backup
+        viewModelScope.launch {
+            // Add a small delay to let Firebase Auth initialize
+            kotlinx.coroutines.delay(100)
+            
+            val currentUser = authRepository.getCurrentUser()
+            if (currentUser != null) {
+                if (currentUserId == null) { // Only set if not already set by Flow
+                    currentUserId = currentUser.uid
+                    loadSettings()
+                }
+            } else {
+                // Give the Flow more time, but set a hard timeout
+                kotlinx.coroutines.delay(3000) // Wait 3 more seconds
+                if (currentUserId == null) {
+                    updateState { 
+                        copy(
+                            isLoading = false,
+                            error = "Authentication timeout. Please try restarting the app or signing in again."
+                        )
+                    }
+                }
+            }
+        }
+        
         trackSettingsScreenViewed()
     }
 
@@ -117,46 +148,72 @@ class SettingsViewModel @Inject constructor(
     /**
      * Loads user settings, profile, and subscription status.
      * This is the primary data loading method for the settings screen.
+     * Implements job deduplication and cancellation handling.
      */
     private fun loadSettings() {
         val userId = currentUserId ?: return
         
-        viewModelScope.launch {
+        // Skip if already loading for the same user
+        if (loadSettingsJob?.isActive == true && lastLoadedUserId == userId) {
+            return
+        }
+        
+        // Cancel any existing loadSettings job to prevent race conditions
+        loadSettingsJob?.cancel()
+        lastLoadedUserId = userId
+        
+        loadSettingsJob = viewModelScope.launch {
             updateState { copy(isLoading = true, error = null) }
             
             try {
-                // Combine settings, profile, and subscription data loading
-                combine(
-                    getUserSettingsUseCase(userId),
-                    getProfileUseCase(userId).map { Result.success(it) }.catch { emit(Result.failure(it)) },
-                    getSubscriptionStatusUseCase(userId)
-                ) { settingsResult, profileResult, subscriptionResult ->
-                    Triple(settingsResult, profileResult, subscriptionResult)
-                }
-                .catch { exception ->
-                    Timber.e(exception, "Error loading settings for user: $userId")
-                    updateState { 
-                        withError("Failed to load settings: ${exception.message}")
+                // Add timeout to prevent infinite hanging
+                kotlinx.coroutines.withTimeout(10_000) { // 10 second timeout
+                    // Use supervisorScope to prevent cascade failures
+                    kotlinx.coroutines.supervisorScope {
+                        // Combine settings, profile, and subscription data loading
+                        combine(
+                            getUserSettingsUseCase(userId),
+                            getProfileUseCase(userId).map { Result.success(it) }.catch { emit(Result.failure(it)) },
+                            getSubscriptionStatusUseCase(userId)
+                        ) { settingsResult, profileResult, subscriptionResult ->
+                            Triple(settingsResult, profileResult, subscriptionResult)
+                        }
+                        .catch { exception ->
+                            when (exception) {
+                                is kotlinx.coroutines.CancellationException -> {
+                                    throw exception // Re-throw cancellation to respect cooperative cancellation
+                                }
+                                else -> {
+                                    updateState { 
+                                        withError("Failed to load settings: ${exception.message}")
+                                    }
+                                }
+                            }
+                        }
+                        .collect { (settingsResult, profileResult, subscriptionResult) ->
+                            processSettingsResults(settingsResult, profileResult, subscriptionResult)
+                        }
                     }
                 }
-                .collect { (settingsResult, profileResult, subscriptionResult) ->
-                    processSettingsResults(settingsResult, profileResult, subscriptionResult)
-                }
+            } catch (exception: kotlinx.coroutines.TimeoutCancellationException) {
+                // Provide default settings to prevent infinite loading
+                provideDefaultSettings()
+            } catch (exception: kotlinx.coroutines.CancellationException) {
+                // Don't update error state for cancellation - it's expected behavior
             } catch (exception: Exception) {
-                Timber.e(exception, "Exception in loadSettings")
-                updateState { 
-                    withError("Failed to load settings")
-                }
+                // Provide default settings as fallback
+                provideDefaultSettings()
             }
         }
     }
 
     /**
      * Refreshes settings data from remote sources.
+     * Uses the same robust loading mechanism as loadSettings().
      */
     private fun refreshSettings() {
         trackSettingsRefreshed()
-        loadSettings()
+        loadSettings() // Uses the same job deduplication and cancellation handling
     }
 
     /**
@@ -471,7 +528,7 @@ class SettingsViewModel @Inject constructor(
                     val imageUrl = result.getOrThrow()
                     Timber.i("Profile image upload successful: $imageUrl")
                     
-                    // Clear loading state
+                    // Clear loading state  
                     _uiState.value = _uiState.value.copy(isUpdatingSettings = false)
                     
                     // Track successful upload
@@ -522,12 +579,16 @@ class SettingsViewModel @Inject constructor(
 
     /**
      * Retries the last failed operation.
+     * If no specific failed event, retries settings loading.
      */
     private fun retryLastFailedOperation() {
         lastFailedEvent?.let { event ->
             Timber.d("Retrying last failed operation: $event")
             onEvent(event)
             lastFailedEvent = null
+        } ?: run {
+            Timber.d("No specific failed event, retrying settings load")
+            loadSettings()
         }
     }
 
@@ -605,7 +666,13 @@ class SettingsViewModel @Inject constructor(
                         loadSettings()
                     } else {
                         updateState { 
-                            SettingsState(error = "User not authenticated")
+                            copy(
+                                isLoading = false,
+                                error = "User not authenticated",
+                                userSettings = null,
+                                userProfile = null,
+                                subscriptionStatus = null
+                            )
                         }
                     }
                 }
@@ -614,6 +681,7 @@ class SettingsViewModel @Inject constructor(
 
     /**
      * Processes the results from settings, profile, and subscription loading.
+     * Implements graceful degradation - shows content even if some data fails to load.
      */
     private fun processSettingsResults(
         settingsResult: Result<com.example.liftrix.domain.model.UserSettings>,
@@ -630,48 +698,74 @@ class SettingsViewModel @Inject constructor(
             themeManager.switchTheme(themeMode)
         }
         
+        // Prioritize showing content over error state
+        // Only show error if critical data (settings) is missing
         val errorMessage = when {
-            settingsResult.isFailure && profileResult.isFailure && subscriptionResult.isFailure -> {
-                "Failed to load settings, profile, and subscription data"
-            }
-            settingsResult.isFailure && subscriptionResult.isFailure -> {
-                "Failed to load settings and subscription data"
-            }
-            settingsResult.isFailure && profileResult.isFailure -> {
-                "Failed to load settings and profile data"
+            settingsResult.isFailure -> {
+                // Settings are critical - show error if they fail
+                "Failed to load user settings. Some features may not work correctly."
             }
             profileResult.isFailure && subscriptionResult.isFailure -> {
-                "Failed to load profile and subscription data"
-            }
-            settingsResult.isFailure -> {
-                "Failed to load settings data"
+                // Profile and subscription are non-critical
+                "Some profile and subscription information couldn't be loaded."
             }
             profileResult.isFailure -> {
-                "Failed to load profile data"
+                "Profile information couldn't be loaded."
             }
             subscriptionResult.isFailure -> {
-                "Failed to load subscription data"
+                "Subscription information couldn't be loaded."
             }
             else -> null
         }
         
+        // Always update state to exit loading, even with partial data
+        val newState = _uiState.value.copy(
+            isLoading = false,
+            userSettings = settings,
+            userProfile = profile,
+            subscriptionStatus = subscription,
+            error = if (settings == null) errorMessage else null, // Only show error if critical data missing
+            isUpdatingSettings = false
+        )
+        
+        _uiState.value = newState
+    }
+    
+    /**
+     * Provides default settings as a fallback when data loading fails.
+     * This prevents the UI from being stuck in loading state.
+     */
+    private fun provideDefaultSettings() {
+        val defaultSettings = com.example.liftrix.domain.model.UserSettings(
+            userId = currentUserId ?: "unknown",
+            darkMode = false,
+            notificationsEnabled = true,
+            weightUnit = com.example.liftrix.domain.model.WeightUnit.getSystemDefault()
+        )
+        
         updateState {
             copy(
                 isLoading = false,
-                userSettings = settings,
-                userProfile = profile,
-                subscriptionStatus = subscription,
-                error = errorMessage,
+                userSettings = defaultSettings,
+                userProfile = null, // Keep profile null if it couldn't be loaded
+                subscriptionStatus = com.example.liftrix.domain.model.SubscriptionStatus.default(),
+                error = "Using default settings due to loading issues. Please check your connection.",
                 isUpdatingSettings = false
             )
         }
     }
 
     /**
-     * Updates the UI state safely.
+     * Updates the UI state safely with diff-checking to prevent unnecessary emissions.
      */
     private fun updateState(update: SettingsState.() -> SettingsState) {
-        _uiState.value = _uiState.value.update()
+        val currentState = _uiState.value
+        val newState = currentState.update()
+        
+        // Only update if state actually changed
+        if (currentState != newState) {
+            _uiState.value = newState
+        }
     }
 
     // Analytics tracking methods
@@ -858,5 +952,12 @@ class SettingsViewModel @Inject constructor(
      */
     suspend fun getCurrentUserId(): String? {
         return authRepository.getCurrentUserId()
+    }
+    
+    override fun onCleared() {
+        super.onCleared()
+        // Cancel any ongoing loadSettings job to prevent leaks
+        loadSettingsJob?.cancel()
+        loadSettingsJob = null
     }
 }

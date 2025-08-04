@@ -38,17 +38,19 @@ data class SettingsState(
 ) {
     /**
      * Indicates if the screen should show initial loading state.
-     * True when loading and no data is available.
+     * True when loading and no critical data is available.
+     * Note: Profile can be null for new users, so we don't require it.
      */
     val shouldShowInitialLoading: Boolean
-        get() = isLoading && userSettings == null && userProfile == null && subscriptionStatus == null
+        get() = isLoading && userSettings == null && subscriptionStatus == null
 
     /**
      * Indicates if the screen should show error state.
-     * True when there's an error and no data is available.
+     * True when there's an error and no critical data is available.
+     * Note: Profile can be null for new users, so we don't require it.
      */
     val shouldShowError: Boolean
-        get() = error != null && userSettings == null && userProfile == null && subscriptionStatus == null
+        get() = error != null && userSettings == null && subscriptionStatus == null
 
     /**
      * Indicates if the screen should show content.

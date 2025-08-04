@@ -51,6 +51,14 @@ class SettingsRepositoryImpl @Inject constructor(
     // Separate coroutine scope for async sync operations to prevent circular dependencies
     private val syncScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
+    // Track last synced state to prevent redundant operations
+    @Volatile
+    private var lastSyncedToRoom: UserSettings? = null
+    @Volatile
+    private var lastSyncedToDataStore: UserSettings? = null
+    @Volatile
+    private var lastSyncLogTime: Long = 0L
+    
     companion object {
         // DataStore preference keys
         private val DARK_MODE_KEY = booleanPreferencesKey("dark_mode")
@@ -77,13 +85,13 @@ class SettingsRepositoryImpl @Inject constructor(
             when {
                 dataStoreSettings != null -> {
                     // DataStore has data, use it and schedule async sync to Room if needed
-                    scheduleAsyncSyncToRoom(dataStoreSettings)
+                    scheduleAsyncSyncToRoom(dataStoreSettings, roomEntity)
                     dataStoreSettings
                 }
                 roomEntity != null -> {
                     // DataStore is empty, use Room data and schedule async sync to DataStore
                     val domainSettings = settingsMapper.toDomain(roomEntity)
-                    scheduleAsyncSyncToDataStore(domainSettings)
+                    scheduleAsyncSyncToDataStore(domainSettings, null)
                     domainSettings
                 }
                 else -> {
@@ -353,13 +361,35 @@ class SettingsRepositoryImpl @Inject constructor(
     /**
      * Schedules async sync to Room database to prevent circular dependencies.
      * Uses separate coroutine scope to avoid triggering Flow emission.
+     * Only syncs if data has actually changed to prevent redundant operations.
      */
-    private fun scheduleAsyncSyncToRoom(settings: UserSettings) {
+    private fun scheduleAsyncSyncToRoom(settings: UserSettings, currentRoomEntity: com.example.liftrix.data.local.entity.SettingsEntity?) {
+        // Skip sync if data hasn't changed
+        if (lastSyncedToRoom == settings) {
+            return
+        }
+        
+        // Check if Room already has the same data
+        if (currentRoomEntity != null) {
+            val currentRoomSettings = settingsMapper.toDomain(currentRoomEntity)
+            if (currentRoomSettings == settings) {
+                lastSyncedToRoom = settings
+                return
+            }
+        }
+        
         syncScope.launch {
             try {
                 val entity = settingsMapper.toEntity(settings)
                 settingsDao.insertSettings(entity)
-                Timber.v("Settings synced to Room asynchronously for user: ${settings.userId}")
+                lastSyncedToRoom = settings
+                
+                // Throttled debug logging (max once per 30 seconds)
+                val currentTime = System.currentTimeMillis()
+                if (currentTime - lastSyncLogTime > 30_000) {
+                    Timber.d("Settings synced to Room for user: ${settings.userId}")
+                    lastSyncLogTime = currentTime
+                }
             } catch (e: Exception) {
                 Timber.e(e, "Failed to async sync settings to Room")
             }
@@ -369,8 +399,20 @@ class SettingsRepositoryImpl @Inject constructor(
     /**
      * Schedules async sync to DataStore to prevent circular dependencies.
      * Uses separate coroutine scope to avoid triggering Flow emission.
+     * Only syncs if data has actually changed to prevent redundant operations.
      */
-    private fun scheduleAsyncSyncToDataStore(settings: UserSettings) {
+    private fun scheduleAsyncSyncToDataStore(settings: UserSettings, currentDataStoreSettings: UserSettings?) {
+        // Skip sync if data hasn't changed
+        if (lastSyncedToDataStore == settings) {
+            return
+        }
+        
+        // Check if DataStore already has the same data
+        if (currentDataStoreSettings == settings) {
+            lastSyncedToDataStore = settings
+            return
+        }
+        
         syncScope.launch {
             try {
                 dataStore.edit { preferences ->
@@ -380,7 +422,14 @@ class SettingsRepositoryImpl @Inject constructor(
                     preferences[USER_ID_KEY] = settings.userId
                     preferences[UPDATED_AT_KEY] = settings.updatedAt.toString()
                 }
-                Timber.v("Settings synced to DataStore asynchronously for user: ${settings.userId}")
+                lastSyncedToDataStore = settings
+                
+                // Throttled debug logging (max once per 30 seconds)
+                val currentTime = System.currentTimeMillis()
+                if (currentTime - lastSyncLogTime > 30_000) {
+                    Timber.d("Settings synced to DataStore for user: ${settings.userId}")
+                    lastSyncLogTime = currentTime
+                }
             } catch (e: Exception) {
                 Timber.e(e, "Failed to async sync settings to DataStore")
             }

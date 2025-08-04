@@ -27,7 +27,6 @@ class GetProfileUseCase @Inject constructor(
                 throw IllegalArgumentException("User ID cannot be blank")
             }
 
-            Timber.d("Getting profile for user: $userId")
             profileRepository.getProfile(userId)
         } catch (e: Exception) {
             Timber.e(e, "Exception while getting profile for user: $userId")
@@ -78,9 +77,7 @@ class GetProfileUseCase @Inject constructor(
                 return false
             }
 
-            val hasProfile = profileRepository.hasProfile(userId)
-            Timber.d("Profile exists for user $userId: $hasProfile")
-            hasProfile
+            profileRepository.hasProfile(userId)
         } catch (e: Exception) {
             Timber.e(e, "Exception while checking profile existence for user: $userId")
             false
@@ -100,9 +97,7 @@ class GetProfileUseCase @Inject constructor(
                 return false
             }
 
-            val isComplete = profileRepository.hasCompletedProfile(userId)
-            Timber.d("Profile completion status for user $userId: $isComplete")
-            isComplete
+            profileRepository.hasCompletedProfile(userId)
         } catch (e: Exception) {
             Timber.e(e, "Exception while checking profile completion for user: $userId")
             false

@@ -257,7 +257,7 @@ private fun SearchResultItem(
             modifier = Modifier.weight(1f)
         ) {
             Text(
-                text = user.displayName ?: "Unknown User",
+                text = user.displayName ?: "User",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium
             )

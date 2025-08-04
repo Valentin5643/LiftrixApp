@@ -101,10 +101,35 @@ app/src/main/java/com/example/liftrix/
 - **Proper lifecycle management** with ViewModels and StateFlow
 
 ### Database Rules
-- **NEVER mutate schemas directly** - Always create migration files
+- **Use Hybrid Migration Strategy** - AutoMigration for simple changes, manual migrations for complex ones
 - **User scoping mandatory** - All entities must have userId field
 - **Repository pattern** - Abstract all queries through repository interfaces
 - **Sync metadata required** - Include is_synced and sync_version fields
+
+## 🔄 Room Migration Strategy
+
+**Hybrid Approach**: Use AutoMigration for simple changes, manual migrations for complex ones.
+
+### When to Use AutoMigration vs Manual Migration
+
+**✅ AutoMigration** (no migration file needed):
+- Adding columns to tables
+- Adding new tables  
+- Creating indexes
+
+**❌ Manual Migration** (create migration file):
+- Removing/renaming columns or tables
+- Data transformations with business logic
+- Complex constraint changes
+
+### Example: Adding a Column
+```kotlin
+// Just add to entity - AutoMigration handles it automatically
+@Entity(tableName = "user_profiles")
+data class UserProfileEntity(
+    val bio: String? = null // ← No migration file needed
+)
+```
 
 ### UI/UX Rules
 - **Components < 200 lines** - Small, testable, layout-independent

@@ -107,6 +107,12 @@ interface UserProfileDao {
     @Query("SELECT * FROM user_profiles WHERE has_custom_profile_image = 1 ORDER BY profile_image_updated_at DESC LIMIT :limit")
     suspend fun getProfilesWithCustomImages(limit: Int = 50): List<UserProfileEntity>
     
+    // WAL checkpointing removed - will be handled at database level
+    
+    // Debug method to get all profiles for verification
+    @Query("SELECT * FROM user_profiles ORDER BY updated_at DESC")
+    suspend fun getAllProfiles(): List<UserProfileEntity>
+    
     // Social and search features
     
     // For now, store keywords in bio field as a temporary solution

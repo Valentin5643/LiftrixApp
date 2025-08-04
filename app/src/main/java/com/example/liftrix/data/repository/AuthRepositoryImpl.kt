@@ -58,9 +58,9 @@ class AuthRepositoryImpl @Inject constructor(
         
         firebaseAuth.addAuthStateListener(authStateListener)
         
-        // Add timeout mechanism - emit null after 10 seconds if no auth state received
+        // Add timeout mechanism - emit null after 15 seconds if no auth state received (increased for cold starts)
         val timeoutJob = launch {
-            delay(10_000) // 10 second timeout
+            delay(15_000) // 15 second timeout - increased to handle cold starts better
             if (!hasEmitted) {
                 Timber.w("Auth state timeout reached - emitting null to prevent infinite loading")
                 trySend(null)

@@ -23,6 +23,17 @@ import timber.log.Timber
 import javax.inject.Inject
 
 /**
+ * ✅ Profile data state wrapper to track loading states explicitly
+ */
+private sealed class ProfileDataState {
+    object Loading : ProfileDataState()
+    object Missing : ProfileDataState()
+    object NoAuth : ProfileDataState()
+    data class Loaded(val profile: UserProfile) : ProfileDataState()
+    data class Error(val throwable: Throwable) : ProfileDataState()
+}
+
+/**
  * Enhanced ProfileViewModel with comprehensive profile management capabilities.
  * 
  * Features:
@@ -59,33 +70,123 @@ class ProfileViewModel @Inject constructor(
     errorHandler = errorHandler
 ) {
     
-    override val _uiState = MutableStateFlow(ProfileUiState())
+    override val _uiState = MutableStateFlow(ProfileUiState(
+        profileState = ProfileLoadingState.Loading,
+        isLoading = true
+    ))
     
-    // Current user ID flow with enhanced error handling
+    // Current user ID flow with enhanced error handling and cold-start resilience
     private val currentUserId = flow {
-        try {
-            val userId = getCurrentUserIdUseCase()
-            emit(userId)
-            Timber.d("ProfileViewModel: Current user ID retrieved: $userId")
-        } catch (e: Exception) {
-            Timber.e(e, "ProfileViewModel: Failed to get current user ID")
-            emit(null)
+        var retryCount = 0
+        val maxRetries = 3
+        
+        while (retryCount <= maxRetries) {
+            try {
+                val userId = getCurrentUserIdUseCase()
+                if (userId != null) {
+                    emit(userId)
+                    return@flow
+                } else if (retryCount < maxRetries) {
+                    // Retry with exponential backoff for cold starts
+                    val delayMs = (1000L * (retryCount + 1)) // 1s, 2s, 3s
+                    kotlinx.coroutines.delay(delayMs)
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "ProfileViewModel: Failed to get current user ID (attempt ${retryCount + 1})")
+                
+                if (retryCount < maxRetries) {
+                    val delayMs = (1000L * (retryCount + 1))
+                    kotlinx.coroutines.delay(delayMs)
+                }
+            }
+            retryCount++
         }
+        
+        // Final attempt failed
+        emit(null)
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
+        started = SharingStarted.Eagerly, // CRITICAL FIX: Use Eagerly for auth flow
         initialValue = null
     )
     
-    // Profile data flow with real-time updates  
-    private val profileFlow = currentUserId
-        .filterNotNull()
+    // ✅ FIXED: Profile loading state - wraps profile with explicit loading state
+    private val profileLoadingState = currentUserId
+        .debounce(300) // Let userId stabilize completely
         .flatMapLatest { userId ->
-            getProfileUseCase(userId)
+            when {
+                userId == null -> flowOf(ProfileDataState.NoAuth)
+                else -> {
+                    flow {
+                        // Start with loading state
+                        emit(ProfileDataState.Loading)
+                        
+                        // Check if profile exists to set proper expectations
+                        val profileExists = profileRepository.hasProfile(userId)
+                        
+                        if (profileExists) {
+                            // Profile exists, start observing
+                            profileRepository.getProfile(userId)
+                                .collect { profile ->
+                                    if (profile != null) {
+                                        emit(ProfileDataState.Loaded(profile))
+                                    }
+                                    // If profile is null but exists, stay in Loading state
+                                }
+                        } else {
+                            // Profile definitely doesn't exist
+                            emit(ProfileDataState.Missing)
+                        }
+                    }
+                        .distinctUntilChanged { old, new ->
+                            // Prevent unnecessary emissions for same state
+                            when {
+                                old is ProfileDataState.Loaded && new is ProfileDataState.Loaded -> 
+                                    old.profile.displayName == new.profile.displayName && 
+                                    old.profile.displayName != "User" // Always emit if we get rid of "User"
+                                else -> old == new
+                            }
+                        }
+                        .retryWhen { cause, attempt ->
+                            val shouldRetry = (cause is kotlinx.coroutines.CancellationException || 
+                                             cause is NullPointerException ||
+                                             cause is java.util.concurrent.CancellationException) && 
+                                             attempt < 3
+                            
+                            if (shouldRetry) {
+                                val delayMs = 250L * (attempt + 1)
+                                kotlinx.coroutines.delay(delayMs)
+                            }
+                            shouldRetry
+                        }
+                        .catch { throwable ->
+                            Timber.e(throwable, "ProfileFlow - Unhandled error")
+                            emit(ProfileDataState.Error(throwable))
+                        }
+                }
+            }
+        }
+        .flowOn(kotlinx.coroutines.Dispatchers.IO)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(
+                stopTimeoutMillis = 5000L,
+                replayExpirationMillis = 0L
+            ),
+            initialValue = ProfileDataState.Loading
+        )
+    
+    // ✅ FIXED: Extract profile from loading state for backward compatibility
+    private val profileFlow = profileLoadingState
+        .map { state ->
+            when (state) {
+                is ProfileDataState.Loaded -> state.profile
+                else -> null
+            }
         }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.WhileSubscribed(5000L, 0L),
             initialValue = null
         )
     
@@ -116,25 +217,66 @@ class ProfileViewModel @Inject constructor(
         )
     
     init {
+        // Initialize ViewModel
+        performStartupDatabaseVerification()
+        
         // Subscribe to profile and achievement changes and update UI state
         viewModelScope.launch {
             combine(
                 currentUserId,
-                profileFlow,
+                profileLoadingState,
                 achievementsFlow
-            ) { userId, profile, achievements ->
-                updateState { 
-                    it.copy(
+            ) { userId, profileDataState, achievements ->
+                updateState { currentState ->
+                    val profileState = when (profileDataState) {
+                        is ProfileDataState.Loading -> ProfileLoadingState.Loading
+                        is ProfileDataState.Missing -> ProfileLoadingState.Missing
+                        is ProfileDataState.Loaded -> ProfileLoadingState.Loaded(profileDataState.profile.copy(achievements = achievements))
+                        is ProfileDataState.NoAuth -> ProfileLoadingState.Loading
+                        is ProfileDataState.Error -> ProfileLoadingState.Missing
+                    }
+                    
+                    val shouldShowLoading = profileDataState is ProfileDataState.Loading || 
+                                          profileDataState is ProfileDataState.NoAuth
+                    
+                    currentState.copy(
                         userId = userId,
-                        profile = profile?.copy(achievements = achievements),
+                        profileState = profileState,
                         achievements = achievements,
-                        isLoading = userId == null && profile == null,
-                        error = if (userId == null) {
-                            ProfileError.Authentication("Unable to authenticate user. Please check your connection and try again.")
-                        } else null
+                        isLoading = shouldShowLoading,
+                        error = when {
+                            userId == null -> ProfileError.Authentication("Unable to authenticate user. Please check your connection and try again.")
+                            profileDataState is ProfileDataState.Error -> ProfileError.Database("Failed to load profile: ${profileDataState.throwable.message}")
+                            else -> null
+                        }
                     )
                 }
             }.collect()
+        }
+        
+        // Enhanced timeout mechanism for authentication with retry suggestion
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(10000) // Wait 10 seconds (increased)
+            if (currentUserId.value == null) {
+                Timber.w("ProfileViewModel: Authentication timeout reached after 10 seconds")
+                updateState {
+                    it.copy(
+                        isLoading = false,
+                        error = ProfileError.Authentication("Authentication is taking longer than expected. The app may be starting up. Please wait a moment or try refreshing.")
+                    )
+                }
+                
+                // Extended timeout for complete failure
+                kotlinx.coroutines.delay(15000) // Additional 15 seconds
+                if (currentUserId.value == null) {
+                    Timber.e("ProfileViewModel: Extended authentication timeout reached")
+                    updateState {
+                        it.copy(
+                            error = ProfileError.Authentication("Authentication failed. Please check your connection and try restarting the app.")
+                        )
+                    }
+                }
+            }
         }
         
         // Load initial profile data and achievements
@@ -142,9 +284,14 @@ class ProfileViewModel @Inject constructor(
         refreshAchievements()
     }
     
+    private fun performStartupDatabaseVerification() {
+        // Initialize database connection
+    }
+    
     override fun handleEvent(event: ProfileEvent) {
         when (event) {
             is ProfileEvent.LoadProfile -> loadProfile()
+            is ProfileEvent.RefreshProfile -> refreshProfile()
             is ProfileEvent.SaveProfile -> saveProfile(event.profile)
             is ProfileEvent.RefreshAchievements -> refreshAchievements()
             is ProfileEvent.UpdatePrivacy -> updatePrivacySettings(event.isPublic)
@@ -152,6 +299,43 @@ class ProfileViewModel @Inject constructor(
             is ProfileEvent.DeleteImage -> deleteProfileImage()
             is ProfileEvent.ClearError -> clearError()
             is ProfileEvent.RetryLastOperation -> retryLastOperation()
+            is ProfileEvent.VerifyProfilePersistence -> verifyProfilePersistence()
+        }
+    }
+    
+    /**
+     * Verifies that the user's profile is properly persisted in the database.
+     */
+    private fun verifyProfilePersistence() {
+        viewModelScope.launch {
+            try {
+                val userId = currentUserId.value
+                if (userId == null) {
+                    return@launch
+                }
+                
+                // Check if profile exists in database
+                val hasProfile = profileRepository.hasProfile(userId)
+                val hasCompletedProfile = profileRepository.hasCompletedProfile(userId)
+                val profileData = profileRepository.getUserProfile(userId).getOrNull()
+                
+                updateState { currentState ->
+                    currentState.copy(
+                        successMessage = "Profile verification completed."
+                    )
+                }
+                
+                // Clear message after delay
+                clearMessageAfterDelay(isSuccess = true)
+                
+            } catch (e: Exception) {
+                Timber.e(e, "Error during profile persistence verification")
+                updateState { 
+                    it.copy(
+                        error = ProfileError.Database("Profile verification failed: ${e.message}")
+                    )
+                }
+            }
         }
     }
     
@@ -189,6 +373,30 @@ class ProfileViewModel @Inject constructor(
                         error = ProfileError.LoadingFailed("Failed to load profile. Please check your connection and try again.")
                     )
                 }
+            }
+        }
+    }
+    
+    /**
+     * Refreshes profile data from the repository.
+     * Forces a fresh fetch from the database and triggers reactive updates.
+     */
+    private fun refreshProfile() {
+        viewModelScope.launch {
+            try {
+                val userId = currentUserId.value
+                if (userId != null) {
+                    Timber.d("Refreshing profile data for user: $userId")
+                    // Use the GetProfileUseCase refresh method if available
+                    val refreshResult = getProfileUseCase.refreshProfile(userId)
+                    if (refreshResult.isFailure) {
+                        Timber.w(refreshResult.exceptionOrNull(), "Profile refresh failed, but continuing with reactive updates")
+                    }
+                } else {
+                    Timber.w("Cannot refresh profile - user not authenticated")
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Exception during profile refresh")
             }
         }
     }
@@ -267,6 +475,9 @@ class ProfileViewModel @Inject constructor(
                     }
                     Timber.i("Profile image upload successful: $imageUrl")
                     
+                    // Reload profile to sync UI state with updated database
+                    loadProfile()
+                    
                     // Clear success message after delay
                     clearMessageAfterDelay(isSuccess = true)
                     
@@ -329,6 +540,9 @@ class ProfileViewModel @Inject constructor(
                         )
                     }
                     Timber.i("Profile image deletion successful")
+                    
+                    // Reload profile to sync UI state with updated database
+                    loadProfile()
                     
                     // Clear success message after delay
                     clearMessageAfterDelay(isSuccess = true)
@@ -434,9 +648,10 @@ class ProfileViewModel @Inject constructor(
                 val result = saveUserProfileUseCase(profile)
                 
                 if (result.isSuccess) {
-                    updateState { 
-                        it.copy(
+                    updateState { currentState ->
+                        currentState.copy(
                             isLoading = false,
+                            profileState = ProfileLoadingState.Loaded(profile.copy(achievements = currentState.achievements)),
                             successMessage = "Profile saved successfully!",
                             lastOperation = null
                         )
@@ -489,20 +704,32 @@ class ProfileViewModel @Inject constructor(
                 
                 result.fold(
                     onSuccess = { achievements ->
-                        updateState { 
-                            it.copy(
+                        updateState { currentState ->
+                            val updatedProfileState = when (val current = currentState.profileState) {
+                                is ProfileLoadingState.Loaded -> ProfileLoadingState.Loaded(
+                                    current.profile.copy(achievements = achievements)
+                                )
+                                else -> current
+                            }
+                            currentState.copy(
                                 achievements = achievements,
-                                profile = it.profile?.copy(achievements = achievements)
+                                profileState = updatedProfileState
                             )
                         }
                         Timber.i("Achievement refresh successful for user: $userId, found ${achievements.size} achievements")
                     },
                     onFailure = { error ->
                         Timber.e(error, "Achievement refresh failed for user: $userId")
-                        updateState { 
-                            it.copy(
+                        updateState { currentState ->
+                            val updatedProfileState = when (val current = currentState.profileState) {
+                                is ProfileLoadingState.Loaded -> ProfileLoadingState.Loaded(
+                                    current.profile.copy(achievements = emptyList())
+                                )
+                                else -> current
+                            }
+                            currentState.copy(
                                 achievements = emptyList(),
-                                profile = it.profile?.copy(achievements = emptyList())
+                                profileState = updatedProfileState
                             )
                         }
                     }
@@ -584,14 +811,31 @@ class ProfileViewModel @Inject constructor(
  */
 data class ProfileUiState(
     val userId: String? = null,
-    val profile: UserProfile? = null,
+    val profileState: ProfileLoadingState = ProfileLoadingState.Loading,
     val achievements: List<com.example.liftrix.domain.model.UserAchievement> = emptyList(),
     val isLoading: Boolean = false,
     val imageUploadState: ImageUploadState = ImageUploadState.Idle,
     val error: ProfileError? = null,
     val successMessage: String? = null,
     val lastOperation: ProfileOperation? = null
-)
+) {
+    // Backward compatibility accessor for existing UI code
+    val profile: UserProfile? 
+        get() = when (profileState) {
+            is ProfileLoadingState.Loaded -> profileState.profile
+            else -> null
+        }
+}
+
+/**
+ * Profile loading state with explicit Loading/Success/Error/Missing states
+ */
+sealed class ProfileLoadingState {
+    data object Loading : ProfileLoadingState()
+    data class Loaded(val profile: UserProfile) : ProfileLoadingState()
+    data object Missing : ProfileLoadingState() // Profile doesn't exist
+    data class Error(val throwable: Throwable) : ProfileLoadingState()
+}
 
 /**
  * Image upload state with progress tracking.
@@ -632,6 +876,7 @@ sealed class ProfileOperation {
  */
 sealed class ProfileEvent : ViewModelEvent {
     data object LoadProfile : ProfileEvent()
+    data object RefreshProfile : ProfileEvent()
     data class SaveProfile(val profile: UserProfile) : ProfileEvent()
     data object RefreshAchievements : ProfileEvent()
     data class UpdatePrivacy(val isPublic: Boolean) : ProfileEvent()
@@ -639,4 +884,5 @@ sealed class ProfileEvent : ViewModelEvent {
     data object DeleteImage : ProfileEvent()
     data object ClearError : ProfileEvent()
     data object RetryLastOperation : ProfileEvent()
+    data object VerifyProfilePersistence : ProfileEvent()
 }

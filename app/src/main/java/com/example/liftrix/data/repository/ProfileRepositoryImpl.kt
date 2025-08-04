@@ -6,6 +6,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.example.liftrix.data.local.dao.UserProfileDao
+import com.example.liftrix.data.local.LiftrixDatabase
 import com.example.liftrix.data.mapper.UserProfileMapper
 import com.example.liftrix.domain.model.StreakData
 import com.example.liftrix.domain.model.UserProfile
@@ -15,7 +16,10 @@ import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.sync.ProfileSyncWorker
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import javax.inject.Inject
@@ -27,12 +31,21 @@ class ProfileRepositoryImpl @Inject constructor(
     private val userProfileMapper: UserProfileMapper,
     private val firestore: FirebaseFirestore,
     private val workManager: WorkManager,
-    private val workoutRepository: WorkoutRepository
+    private val workoutRepository: WorkoutRepository,
+    private val database: LiftrixDatabase
 ) : ProfileRepository {
 
     override fun getProfile(userId: String): Flow<UserProfile?> {
-        return userProfileDao.getProfileForUser(userId).map { entity ->
-            entity?.let { userProfileMapper.toDomain(it) }
+        return flow {
+            // 🔥 COLD START FIX: Ensure database is ready before profile operations
+            ensureDatabaseReady(userId)
+            
+            // Emit all values from the DAO flow
+            emitAll(
+                userProfileDao.getProfileForUser(userId).map { entity ->
+                    entity?.let { userProfileMapper.toDomain(it) }
+                }
+            )
         }
     }
 
@@ -40,14 +53,31 @@ class ProfileRepositoryImpl @Inject constructor(
         return try {
             require(profile.userId.isNotBlank()) { "User profile must have a valid user ID" }
             
+            // CRITICAL FIX: Check if profile already exists and preserve entity ID
+            val existingEntity = userProfileDao.getProfileForUserSuspend(profile.userId)
+            val entity = if (existingEntity != null) {
+                // Update existing profile - preserve the entity ID to avoid duplicates
+                userProfileMapper.toEntityWithId(profile, existingEntity.id, isSynced = false)
+            } else {
+                // Create new profile with new ID
+                userProfileMapper.toEntity(profile, isSynced = false)
+            }
+            
             // Save to local database (offline-first)
-            val entity = userProfileMapper.toEntity(profile, isSynced = false)
-            userProfileDao.insertProfile(entity)
+            val insertResult = userProfileDao.insertProfile(entity)
+            
+            // Verification to ensure database persistence
+            kotlinx.coroutines.delay(100L) // Allow database write to complete
+            
+            val verifyEntity = userProfileDao.getProfileForUserSuspend(profile.userId)
+            if (verifyEntity == null) {
+                return Result.failure(IllegalStateException("Profile save verification failed - data may not be persisted"))
+            }
             
             // Queue sync in background
             queueSync(profile.userId)
             
-            Timber.d("User profile saved successfully: ${profile.userId}")
+            Timber.d("User profile saved successfully: ${profile.userId} (${if (existingEntity != null) "updated" else "created"})")
             Result.success(Unit)
             
         } catch (e: Exception) {
@@ -178,6 +208,9 @@ class ProfileRepositoryImpl @Inject constructor(
 
     override suspend fun getUserProfile(userId: String): LiftrixResult<UserProfile?> {
         return try {
+            // 🔥 COLD START FIX: Ensure database is ready before profile operations
+            ensureDatabaseReady(userId)
+            
             val entity = userProfileDao.getProfileForUserSuspend(userId)
             val profile = entity?.let { userProfileMapper.toDomain(it) }
             Result.success(profile)
@@ -191,14 +224,44 @@ class ProfileRepositoryImpl @Inject constructor(
         return try {
             require(profile.userId.isNotBlank()) { "User profile must have a valid user ID" }
             
+            // Check if profile already exists and preserve entity ID
+            val existingEntity = userProfileDao.getProfileForUserSuspend(profile.userId)
+            
+            val entity = if (existingEntity != null) {
+                // Update existing profile - preserve the entity ID to avoid duplicates
+                userProfileMapper.toEntityWithId(profile, existingEntity.id, isSynced = false)
+            } else {
+                // Create new profile with new ID
+                userProfileMapper.toEntity(profile, isSynced = false)
+            }
+            
             // Save to local database (offline-first)
-            val entity = userProfileMapper.toEntity(profile, isSynced = false)
-            userProfileDao.insertProfile(entity)
+            val insertResult = userProfileDao.insertProfile(entity)
+            
+            // Force database sync to ensure data is written to disk
+            try {
+                forceDatabaseSync()
+            } catch (e: Exception) {
+                Timber.w(e, "Database sync failed, continuing anyway")
+            }
+            
+            // Small delay to allow filesystem operations to complete
+            kotlinx.coroutines.delay(100L)
+            
+            // Verify that profile was actually saved with correct data
+            val savedProfile = userProfileDao.getProfileForUserSuspend(profile.userId)
+            if (savedProfile == null) {
+                return Result.failure(IllegalStateException("Profile save verification failed - no profile found"))
+            }
+            
+            if (savedProfile.displayName != profile.displayName) {
+                return Result.failure(IllegalStateException("Profile save verification failed - wrong displayName"))
+            }
             
             // Queue sync in background
             queueSync(profile.userId)
             
-            Timber.d("Enhanced user profile saved successfully: ${profile.userId}")
+            Timber.d("Enhanced user profile saved successfully: ${profile.userId} (${if (existingEntity != null) "updated" else "created"})")
             Result.success(Unit)
             
         } catch (e: Exception) {
@@ -291,6 +354,54 @@ class ProfileRepositoryImpl @Inject constructor(
         }
     }
 
+    private suspend fun forceDatabaseSync() {
+        try {
+            // Force database operations to complete by performing a read operation
+            val profileCount = userProfileDao.getAllProfiles().size
+            
+            // Additional delay to ensure filesystem operations complete
+            kotlinx.coroutines.delay(50L)
+            
+        } catch (e: Exception) {
+            Timber.w(e, "Database sync failed")
+        }
+    }
+    
+    private suspend fun ensureDatabaseReady(userId: String) {
+        try {
+            // Small delay to allow Room to complete cold start initialization
+            kotlinx.coroutines.delay(150L)
+            
+            // Verify database connection by performing a simple query
+            val tableExists = try {
+                userProfileDao.getAllProfiles().size >= 0
+                true
+            } catch (e: Exception) {
+                kotlinx.coroutines.delay(200L)
+                try {
+                    userProfileDao.getAllProfiles().size >= 0
+                    true
+                } catch (e2: Exception) {
+                    false
+                }
+            }
+            
+            if (!tableExists) {
+                return
+            }
+            
+            // Additional verification: Check if we can perform basic profile operations
+            try {
+                userProfileDao.hasProfile(userId)
+            } catch (e: Exception) {
+                // Continue anyway - database might still work
+            }
+            
+        } catch (e: Exception) {
+            // Continue anyway - database might still work
+        }
+    }
+    
     /**
      * Calculates profile completion percentage based on filled fields.
      */

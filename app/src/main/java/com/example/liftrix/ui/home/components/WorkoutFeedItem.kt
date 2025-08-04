@@ -103,13 +103,13 @@ private fun FriendWorkoutHeader(
         // Profile image with enhanced styling
         ProfileImage(
             imageUrl = user.photoUrl,
-            displayName = user.displayName ?: "Unknown User",
+            displayName = user.displayName ?: "User",
             size = 40.dp
         )
         
         // User name with enhanced typography
         Text(
-            text = user.displayName ?: "Unknown User",
+            text = user.displayName ?: "User",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.primary,

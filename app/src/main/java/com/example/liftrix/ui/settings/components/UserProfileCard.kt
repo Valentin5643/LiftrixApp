@@ -1,27 +1,20 @@
 package com.example.liftrix.ui.settings.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.SubscriptionTier
 import com.example.liftrix.domain.model.SubscriptionStatus
 import com.example.liftrix.ui.components.cards.LiftrixCard
+import com.example.liftrix.ui.profile.components.ProfileImageDisplay
 import com.example.liftrix.ui.theme.LiftrixTheme
 import java.time.LocalDateTime
 
@@ -57,10 +50,13 @@ fun UserProfileCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            CircularAvatar(
-                user = user,
-                onAvatarClick = onAvatarClick,
-                modifier = Modifier.size(60.dp)
+            ProfileImageDisplay(
+                imageUrl = user?.photoUrl,
+                displayName = user?.displayName,
+                userId = user?.uid,
+                size = 60.dp,
+                onClick = onAvatarClick,
+                modifier = Modifier
             )
             
             Column(
@@ -68,7 +64,7 @@ fun UserProfileCard(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = user?.displayName ?: "Loading...",
+                    text = user?.displayName ?: "Welcome to Liftrix",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -92,67 +88,6 @@ fun UserProfileCard(
     }
 }
 
-/**
- * Circular avatar component with user initials fallback and click handling.
- * 
- * Features:
- * - 60x60dp circular avatar following Material3 design
- * - User initials extracted from displayName with fallback
- * - Person icon fallback for missing/invalid displayName
- * - Clickable for profile image upload functionality
- * - Proper accessibility support
- * - Loading state handling
- * 
- * @param user The user data for avatar display
- * @param onAvatarClick Callback invoked when avatar is clicked
- * @param modifier Modifier for styling the component
- */
-@Composable
-private fun CircularAvatar(
-    user: User?,
-    onAvatarClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val initials = user?.displayName
-        ?.trim()
-        ?.split(' ')
-        ?.take(2)
-        ?.mapNotNull { it.firstOrNull()?.uppercaseChar() }
-        ?.joinToString("")
-        ?.ifEmpty { "?" }
-        ?: "?"
-    
-    Box(
-        modifier = modifier
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primaryContainer)
-            .clickable(
-                role = androidx.compose.ui.semantics.Role.Button,
-                onClickLabel = "Change profile picture"
-            ) { onAvatarClick() }
-            .semantics {
-                contentDescription = "Profile picture, tap to change"
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        if (initials == "?" || user == null) {
-            Icon(
-                imageVector = Icons.Default.Person,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.size(30.dp)
-            )
-        } else {
-            Text(
-                text = initials,
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
 
 @Preview(showBackground = true)
 @Composable

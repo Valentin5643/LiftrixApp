@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 37,
-    "identityHash": "7aaedef1220914f37ef54dbe664cd765",
+    "identityHash": "ebb80613ef8c04430a0705343f53c3f2",
     "entities": [
       {
         "tableName": "workouts",
@@ -47,22 +47,26 @@
           {
             "fieldPath": "startTime",
             "columnName": "start_time",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "endTime",
             "columnName": "end_time",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "notes",
             "columnName": "notes",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "templateId",
             "columnName": "template_id",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "createdAt",
@@ -109,7 +113,8 @@
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `idx_workout_analytics` ON `${TABLE_NAME}` (`user_id`, `date`, `status`)"
           }
-        ]
+        ],
+        "foreignKeys": []
       },
       {
         "tableName": "user_profiles",
@@ -136,47 +141,56 @@
           {
             "fieldPath": "age",
             "columnName": "age",
-            "affinity": "INTEGER"
+            "affinity": "INTEGER",
+            "notNull": false
           },
           {
             "fieldPath": "weightKg",
             "columnName": "weight_kg",
-            "affinity": "REAL"
+            "affinity": "REAL",
+            "notNull": false
           },
           {
             "fieldPath": "heightCm",
             "columnName": "height_cm",
-            "affinity": "REAL"
+            "affinity": "REAL",
+            "notNull": false
           },
           {
             "fieldPath": "fitnessLevel",
             "columnName": "fitness_level",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "goals",
             "columnName": "goals",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "availableEquipment",
             "columnName": "available_equipment",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "workoutFrequency",
             "columnName": "workout_frequency",
-            "affinity": "INTEGER"
+            "affinity": "INTEGER",
+            "notNull": false
           },
           {
             "fieldPath": "preferredWorkoutDuration",
             "columnName": "preferred_workout_duration",
-            "affinity": "INTEGER"
+            "affinity": "INTEGER",
+            "notNull": false
           },
           {
             "fieldPath": "completedAt",
             "columnName": "completed_at",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "createdAt",
@@ -207,7 +221,8 @@
           {
             "fieldPath": "bio",
             "columnName": "bio",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "isPublic",
@@ -219,7 +234,8 @@
           {
             "fieldPath": "lastActiveAt",
             "columnName": "last_active_at",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "totalWorkouts",
@@ -258,12 +274,14 @@
           {
             "fieldPath": "profileImageUrl",
             "columnName": "profile_image_url",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "profileImageUpdatedAt",
             "columnName": "profile_image_updated_at",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "hasCustomProfileImage",
@@ -275,12 +293,14 @@
           {
             "fieldPath": "searchKeywords",
             "columnName": "search_keywords",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "lastProfileViewAt",
             "columnName": "last_profile_view_at",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "profileViewsCount",
@@ -306,7 +326,8 @@
             "orders": [],
             "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_user_profiles_user_id` ON `${TABLE_NAME}` (`user_id`)"
           }
-        ]
+        ],
+        "foreignKeys": []
       },
       {
         "tableName": "custom_exercises",
@@ -345,17 +366,20 @@
           {
             "fieldPath": "secondaryMuscleGroups",
             "columnName": "secondary_muscle_groups",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "difficulty",
             "columnName": "difficulty",
-            "affinity": "INTEGER"
+            "affinity": "INTEGER",
+            "notNull": false
           },
           {
             "fieldPath": "notes",
             "columnName": "notes",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "createdAt",
@@ -428,7 +452,8 @@
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_custom_exercises_equipment` ON `${TABLE_NAME}` (`equipment`)"
           }
-        ]
+        ],
+        "foreignKeys": []
       },
       {
         "tableName": "workout_templates",
@@ -455,7 +480,8 @@
           {
             "fieldPath": "description",
             "columnName": "description",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "templateExercisesJson",
@@ -466,12 +492,14 @@
           {
             "fieldPath": "estimatedDurationMinutes",
             "columnName": "estimated_duration_minutes",
-            "affinity": "INTEGER"
+            "affinity": "INTEGER",
+            "notNull": false
           },
           {
             "fieldPath": "difficultyLevel",
             "columnName": "difficulty_level",
-            "affinity": "INTEGER"
+            "affinity": "INTEGER",
+            "notNull": false
           },
           {
             "fieldPath": "folderId",
@@ -489,7 +517,8 @@
           {
             "fieldPath": "lastUsedAt",
             "columnName": "last_used_at",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "createdAt",
@@ -626,7 +655,8 @@
           {
             "fieldPath": "instructions",
             "columnName": "instructions",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "isCompound",
@@ -684,7 +714,8 @@
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_exercise_library_movement_pattern` ON `${TABLE_NAME}` (`movement_pattern`)"
           }
-        ]
+        ],
+        "foreignKeys": []
       },
       {
         "tableName": "exercises",
@@ -717,42 +748,50 @@
           {
             "fieldPath": "targetSets",
             "columnName": "target_sets",
-            "affinity": "INTEGER"
+            "affinity": "INTEGER",
+            "notNull": false
           },
           {
             "fieldPath": "targetReps",
             "columnName": "target_reps",
-            "affinity": "INTEGER"
+            "affinity": "INTEGER",
+            "notNull": false
           },
           {
             "fieldPath": "targetWeightKg",
             "columnName": "target_weight_kg",
-            "affinity": "REAL"
+            "affinity": "REAL",
+            "notNull": false
           },
           {
             "fieldPath": "targetTimeSeconds",
             "columnName": "target_time_seconds",
-            "affinity": "INTEGER"
+            "affinity": "INTEGER",
+            "notNull": false
           },
           {
             "fieldPath": "targetDistanceMeters",
             "columnName": "target_distance_meters",
-            "affinity": "REAL"
+            "affinity": "REAL",
+            "notNull": false
           },
           {
             "fieldPath": "notes",
             "columnName": "notes",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "lastUsedWeightKg",
             "columnName": "last_used_weight_kg",
-            "affinity": "REAL"
+            "affinity": "REAL",
+            "notNull": false
           },
           {
             "fieldPath": "weightMemoryUpdatedAt",
             "columnName": "weight_memory_updated_at",
-            "affinity": "INTEGER"
+            "affinity": "INTEGER",
+            "notNull": false
           },
           {
             "fieldPath": "createdAt",
@@ -841,37 +880,44 @@
           {
             "fieldPath": "reps",
             "columnName": "reps",
-            "affinity": "INTEGER"
+            "affinity": "INTEGER",
+            "notNull": false
           },
           {
             "fieldPath": "weightKg",
             "columnName": "weight_kg",
-            "affinity": "REAL"
+            "affinity": "REAL",
+            "notNull": false
           },
           {
             "fieldPath": "timeSeconds",
             "columnName": "time_seconds",
-            "affinity": "INTEGER"
+            "affinity": "INTEGER",
+            "notNull": false
           },
           {
             "fieldPath": "distanceMeters",
             "columnName": "distance_meters",
-            "affinity": "REAL"
+            "affinity": "REAL",
+            "notNull": false
           },
           {
             "fieldPath": "rpe",
             "columnName": "rpe",
-            "affinity": "INTEGER"
+            "affinity": "INTEGER",
+            "notNull": false
           },
           {
             "fieldPath": "notes",
             "columnName": "notes",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "completedAt",
             "columnName": "completed_at",
-            "affinity": "INTEGER"
+            "affinity": "INTEGER",
+            "notNull": false
           }
         ],
         "primaryKey": {
@@ -965,7 +1011,9 @@
             "user_id",
             "exercise_library_id"
           ]
-        }
+        },
+        "indices": [],
+        "foreignKeys": []
       },
       {
         "tableName": "exercise_usage_history",
@@ -1016,7 +1064,8 @@
           {
             "fieldPath": "workoutId",
             "columnName": "workout_id",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           }
         ],
         "primaryKey": {
@@ -1176,7 +1225,8 @@
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_friends_created_at` ON `${TABLE_NAME}` (`created_at`)"
           }
-        ]
+        ],
+        "foreignKeys": []
       },
       {
         "tableName": "user_privacy_settings",
@@ -1218,7 +1268,9 @@
           "columnNames": [
             "user_id"
           ]
-        }
+        },
+        "indices": [],
+        "foreignKeys": []
       },
       {
         "tableName": "folders",
@@ -1387,7 +1439,9 @@
           "columnNames": [
             "user_id"
           ]
-        }
+        },
+        "indices": [],
+        "foreignKeys": []
       },
       {
         "tableName": "user_subscriptions",
@@ -1420,12 +1474,14 @@
           {
             "fieldPath": "productId",
             "columnName": "product_id",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "subscriptionId",
             "columnName": "subscription_id",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "startedAt",
@@ -1436,17 +1492,20 @@
           {
             "fieldPath": "expiresAt",
             "columnName": "expires_at",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "cancelledAt",
             "columnName": "cancelled_at",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "trialEndsAt",
             "columnName": "trial_ends_at",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "autoRenew",
@@ -1457,7 +1516,8 @@
           {
             "fieldPath": "priceCents",
             "columnName": "price_cents",
-            "affinity": "INTEGER"
+            "affinity": "INTEGER",
+            "notNull": false
           },
           {
             "fieldPath": "currency",
@@ -1498,6 +1558,7 @@
             "user_id"
           ]
         },
+        "indices": [],
         "foreignKeys": [
           {
             "table": "user_profiles",
@@ -1552,7 +1613,9 @@
           "columnNames": [
             "id"
           ]
-        }
+        },
+        "indices": [],
+        "foreignKeys": []
       },
       {
         "tableName": "met_data",
@@ -1591,7 +1654,8 @@
           {
             "fieldPath": "equipmentType",
             "columnName": "equipment_type",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "description",
@@ -1647,7 +1711,8 @@
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_met_data_exercise_type_exercise_category` ON `${TABLE_NAME}` (`exercise_type`, `exercise_category`)"
           }
-        ]
+        ],
+        "foreignKeys": []
       },
       {
         "tableName": "guest_sessions",
@@ -1680,7 +1745,8 @@
           {
             "fieldPath": "lastNudgeShown",
             "columnName": "last_nudge_shown",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "nudgeCount",
@@ -1753,7 +1819,8 @@
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_guest_sessions_last_activity_at` ON `${TABLE_NAME}` (`last_activity_at`)"
           }
-        ]
+        ],
+        "foreignKeys": []
       },
       {
         "tableName": "workout_anomalies",
@@ -1810,12 +1877,14 @@
           {
             "fieldPath": "previousValueType",
             "columnName": "previous_value_type",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "previousValueData",
             "columnName": "previous_value_data",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "confidenceScore",
@@ -1832,22 +1901,26 @@
           {
             "fieldPath": "resolvedAt",
             "columnName": "resolved_at",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "userAction",
             "columnName": "user_action",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "correctedValueType",
             "columnName": "corrected_value_type",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "correctedValueData",
             "columnName": "corrected_value_data",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           }
         ],
         "primaryKey": {
@@ -1911,7 +1984,8 @@
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_workout_anomalies_anomaly_type` ON `${TABLE_NAME}` (`anomaly_type`)"
           }
-        ]
+        ],
+        "foreignKeys": []
       },
       {
         "tableName": "anomaly_detection_settings",
@@ -2006,7 +2080,8 @@
             "orders": [],
             "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_anomaly_detection_settings_user_id` ON `${TABLE_NAME}` (`user_id`)"
           }
-        ]
+        ],
+        "foreignKeys": []
       },
       {
         "tableName": "exercise_history",
@@ -2051,7 +2126,8 @@
           {
             "fieldPath": "lastPerformed",
             "columnName": "last_performed",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "averageWeight",
@@ -2116,7 +2192,8 @@
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_exercise_history_last_performed` ON `${TABLE_NAME}` (`last_performed`)"
           }
-        ]
+        ],
+        "foreignKeys": []
       },
       {
         "tableName": "widget_preferences",
@@ -2194,7 +2271,9 @@
             "user_id",
             "widget_type"
           ]
-        }
+        },
+        "indices": [],
+        "foreignKeys": []
       },
       {
         "tableName": "dashboard_configurations",
@@ -2287,7 +2366,9 @@
           "columnNames": [
             "user_id"
           ]
-        }
+        },
+        "indices": [],
+        "foreignKeys": []
       },
       {
         "tableName": "user_achievements",
@@ -2441,6 +2522,17 @@
             "id"
           ]
         },
+        "indices": [
+          {
+            "name": "index_user_search_cache_viewer_user_id",
+            "unique": false,
+            "columnNames": [
+              "viewer_user_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_user_search_cache_viewer_user_id` ON `${TABLE_NAME}` (`viewer_user_id`)"
+          }
+        ],
         "foreignKeys": [
           {
             "table": "user_profiles",
@@ -2480,7 +2572,8 @@
           {
             "fieldPath": "expiresAt",
             "columnName": "expires_at",
-            "affinity": "TEXT"
+            "affinity": "TEXT",
+            "notNull": false
           },
           {
             "fieldPath": "isActive",
@@ -2501,6 +2594,17 @@
             "qr_code_id"
           ]
         },
+        "indices": [
+          {
+            "name": "index_qr_code_mappings_user_id",
+            "unique": false,
+            "columnNames": [
+              "user_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_qr_code_mappings_user_id` ON `${TABLE_NAME}` (`user_id`)"
+          }
+        ],
         "foreignKeys": [
           {
             "table": "user_profiles",
@@ -2516,9 +2620,10 @@
         ]
       }
     ],
+    "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '7aaedef1220914f37ef54dbe664cd765')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ebb80613ef8c04430a0705343f53c3f2')"
     ]
   }
 }

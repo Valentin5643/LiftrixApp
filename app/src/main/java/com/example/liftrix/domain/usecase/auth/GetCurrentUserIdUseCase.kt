@@ -12,22 +12,33 @@ class GetCurrentUserIdUseCase @Inject constructor(
 ) {
     
     /**
-     * Gets the current authenticated user's ID with timeout protection
+     * Gets the current authenticated user's ID with enhanced cold-start handling
      * 
      * @return The user ID if authenticated, null otherwise
      */
     suspend operator fun invoke(): String? {
         return try {
-            // Add timeout to prevent infinite waiting
-            kotlinx.coroutines.withTimeout(15_000) { // 15 second timeout
-                val user = authRepository.currentUser.first()
-                timber.log.Timber.d("GetCurrentUserIdUseCase: Retrieved user ID: ${user?.uid}")
+            // First try direct Firebase Auth check for immediate response
+            val directUserId = authRepository.getCurrentUserId()
+            if (directUserId != null) {
+                timber.log.Timber.d("GetCurrentUserIdUseCase: Direct Firebase Auth returned: $directUserId")
+                return directUserId
+            }
+            
+            timber.log.Timber.d("GetCurrentUserIdUseCase: Direct check returned null, trying reactive flow...")
+            
+            // If direct check fails, wait for auth state flow with extended timeout for cold starts
+            kotlinx.coroutines.withTimeout(20_000) { // Increased to 20 second timeout for cold starts
+                val user = authRepository.currentUser.first { it != null } // Wait for non-null user
+                timber.log.Timber.d("GetCurrentUserIdUseCase: Flow retrieved user ID: ${user?.uid}")
                 user?.uid
             }
         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-            timber.log.Timber.w("GetCurrentUserIdUseCase: Timeout waiting for auth state - falling back to direct check")
-            // Fallback to direct Firebase Auth check
-            authRepository.getCurrentUserId()
+            timber.log.Timber.w("GetCurrentUserIdUseCase: Timeout waiting for auth state - final fallback")
+            // Final fallback to direct Firebase Auth check
+            val fallbackUserId = authRepository.getCurrentUserId()
+            timber.log.Timber.d("GetCurrentUserIdUseCase: Fallback returned: $fallbackUserId")
+            fallbackUserId
         } catch (e: Exception) {
             timber.log.Timber.e(e, "GetCurrentUserIdUseCase: Error getting current user ID")
             null

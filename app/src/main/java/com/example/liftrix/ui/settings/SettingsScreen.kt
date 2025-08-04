@@ -69,6 +69,7 @@ fun SettingsScreen(
     ) {
         val uiState by viewModel.uiState.collectAsState()
         
+        
         // Stable callbacks to prevent unnecessary recompositions
         val stableOnEvent = remember(viewModel) { viewModel::onEvent }
         val stableOnNavigateBack = remember(onNavigateBack) { onNavigateBack }
@@ -129,6 +130,10 @@ fun SettingsScreen(
                             onNavigateToWidgetSettings = stableOnNavigateToWidgetSettings,
                             modifier = Modifier.fillMaxSize()
                         )
+                    }
+                    
+                    else -> {
+                        LoadingState(modifier = Modifier.fillMaxSize())
                     }
                 }
             }
