@@ -24,10 +24,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import com.example.liftrix.domain.model.WorkoutId
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -56,11 +58,11 @@ import com.example.liftrix.ui.social.SocialEvent
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
 import com.example.liftrix.ui.components.ConditionalWorkoutFab
 import com.example.liftrix.ui.components.WorkoutCreationModal
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.launch
 
 /**
  * Unified Navigation Container with Type-Safe Routes
@@ -153,6 +155,9 @@ fun UnifiedNavigationContainer(
                         },
                         onNavigateToWorkoutCreation = {
                             navController.navigateToTemplateCreation()
+                        },
+                        onNavigateToFolderManagement = {
+                            navController.navigateToFolderManagement()
                         }
                     )
                 }
@@ -197,12 +202,33 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.QRCodeDisplay> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.QRCodeDisplay>()
-                    com.example.liftrix.ui.social.QRCodeDisplayScreen(
-                        userId = route.userId ?: "", // TODO: Get current user ID if null
-                        onNavigateBack = {
-                            navController.popBackStackSafely()
+                    val coroutineScope = rememberCoroutineScope()
+                    
+                    // Secure authentication check - redirect to auth if no valid user
+                    LaunchedEffect(route.userId) {
+                        if (route.userId == null) {
+                            coroutineScope.launch {
+                                val currentUserId = viewModel.getCurrentUserId()
+                                if (currentUserId == null) {
+                                    // User not authenticated - redirect to sign in
+                                    navController.navigateAndReplace(LiftrixRoute.AuthSignIn)
+                                    return@launch
+                                }
+                                // If we have a valid user ID, navigate to QR code with the user ID
+                                navController.navigateAndReplace(LiftrixRoute.QRCodeDisplay(currentUserId))
+                            }
                         }
-                    )
+                    }
+                    
+                    // Only render screen if we have a valid userId
+                    route.userId?.let { userId ->
+                        com.example.liftrix.ui.social.QRCodeDisplayScreen(
+                            userId = userId,
+                            onNavigateBack = {
+                                navController.popBackStackSafely()
+                            }
+                        )
+                    }
                 }
                 
                 composable<LiftrixRoute.WorkoutDetails> { backStackEntry ->
@@ -480,6 +506,74 @@ fun UnifiedNavigationContainer(
                     )
                 }
                 
+                // Folder Management Routes
+                composable<LiftrixRoute.FolderManagement> {
+                    com.example.liftrix.ui.folder.screen.FolderManagementScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        },
+                        onCreateFolder = {
+                            navController.navigateToCreateFolder()
+                        },
+                        onEditFolder = { folderId ->
+                            navController.navigateToEditFolder(folderId)
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.CreateFolder> {
+                    // TODO: Implement CreateFolderScreen
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Create Folder Screen")
+                            Button(
+                                onClick = { navController.popBackStackSafely() }
+                            ) {
+                                Text("Back")
+                            }
+                        }
+                    }
+                }
+                
+                composable<LiftrixRoute.EditFolder> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.EditFolder>()
+                    // TODO: Implement EditFolderScreen
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Edit Folder Screen")
+                            Text("Folder ID: ${route.folderId}")
+                            Button(
+                                onClick = { navController.popBackStackSafely() }
+                            ) {
+                                Text("Back")
+                            }
+                        }
+                    }
+                }
+                
+                composable<LiftrixRoute.FolderSelection> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.FolderSelection>()
+                    com.example.liftrix.ui.folder.screen.FolderSelectionScreen(
+                        templateId = route.templateId,
+                        onFolderSelected = { folderId ->
+                            // TODO: Handle folder selection result - navigate back with result
+                            navController.popBackStackSafely()
+                        },
+                        onCreateFolderRequest = {
+                            navController.navigateToCreateFolder()
+                        },
+                        onCancel = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+                
                 // Profile Management Routes
                 composable<LiftrixRoute.Profile> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.Profile>()
@@ -690,7 +784,8 @@ private data class BottomNavItem(
  */
 @HiltViewModel
 class UnifiedNavigationViewModel @Inject constructor(
-    private val sessionManager: UnifiedWorkoutSessionManager
+    private val sessionManager: UnifiedWorkoutSessionManager,
+    private val getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 ) : ViewModel() {
     
     // Direct access to current session
@@ -801,6 +896,19 @@ class UnifiedNavigationViewModel @Inject constructor(
             timber.log.Timber.i("Added exercise to current session: ${exerciseLibrary.name}")
         }
     }
+    
+    /**
+     * Gets the current authenticated user ID securely
+     * @return Current user ID or null if not authenticated
+     */
+    suspend fun getCurrentUserId(): String? {
+        return try {
+            getCurrentUserIdUseCase()
+        } catch (e: Exception) {
+            timber.log.Timber.e(e, "Error getting current user ID")
+            null
+        }
+    }
 }
 
 /**
@@ -837,7 +945,11 @@ private fun NavigationAwareTopAppBar(
         "AnomalySettings" to "Detection Settings",
         "Profile" to "Profile",
         "ProfileEdit" to "Edit Profile",
-        "ImageCrop" to "Crop Image"
+        "ImageCrop" to "Crop Image",
+        "FolderManagement" to "Manage Folders",
+        "CreateFolder" to "Create Folder",
+        "EditFolder" to "Edit Folder",
+        "FolderSelection" to "Select Folder"
     )
     
     // Check if current route is a main tab (should show global top bar)

@@ -373,6 +373,122 @@ fun TextSkeleton(
 }
 
 /**
+ * Folder Card Skeleton
+ * 
+ * Skeleton loading placeholder for folder selection cards.
+ * Matches UnifiedWorkoutCard layout with folder-specific content patterns.
+ * 
+ * @param modifier Modifier for customizing the skeleton's layout and behavior
+ */
+@Composable
+fun FolderCardSkeleton(
+    modifier: Modifier = Modifier
+) {
+    val shimmerColors = listOf(
+        MaterialTheme.colorScheme.surfaceVariant,
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), // Teal accent
+        MaterialTheme.colorScheme.surfaceVariant
+    )
+    
+    val transition = rememberInfiniteTransition(label = "folderCardShimmer")
+    val translateAnimation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "folderShimmerTranslate"
+    )
+    
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp), // Match UnifiedWorkoutCard specification
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(
+                horizontal = LiftrixSpacing.cardPadding, // 12dp
+                vertical = LiftrixSpacing.cardPadding
+            )
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            ) {
+                // Folder icon skeleton
+                Box(
+                    modifier = Modifier
+                        .size(24.dp) // Match LiftrixIcon size
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(
+                            brush = Brush.linearGradient(
+                                colors = shimmerColors,
+                                start = Offset(translateAnimation - 200f, 0f),
+                                end = Offset(translateAnimation, 0f)
+                            )
+                        )
+                )
+                
+                Spacer(modifier = Modifier.width(LiftrixSpacing.elementSpacing))
+                
+                // Folder name skeleton
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.6f)
+                        .height(24.dp) // Title large approximate height
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(
+                            brush = Brush.linearGradient(
+                                colors = shimmerColors,
+                                start = Offset(translateAnimation - 200f, 0f),
+                                end = Offset(translateAnimation, 0f)
+                            )
+                        )
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(4.dp))
+            
+            // Template count skeleton
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.4f)
+                    .height(16.dp) // Body medium approximate height
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(
+                        brush = Brush.linearGradient(
+                            colors = shimmerColors,
+                            start = Offset(translateAnimation - 200f, 0f),
+                            end = Offset(translateAnimation, 0f)
+                        )
+                    )
+            )
+            
+            Spacer(modifier = Modifier.height(LiftrixSpacing.elementSpacing))
+            
+            // Folder description skeleton (optional)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.8f)
+                    .height(14.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(
+                        brush = Brush.linearGradient(
+                            colors = shimmerColors,
+                            start = Offset(translateAnimation - 200f, 0f),
+                            end = Offset(translateAnimation, 0f)
+                        )
+                    )
+            )
+        }
+    }
+}
+
+/**
  * Preview functions for development and testing
  */
 @OptIn(ExperimentalMaterial3Api::class)
