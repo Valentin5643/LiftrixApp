@@ -6,9 +6,6 @@ import com.example.liftrix.analytics.CognitiveLoadMeasurement
 import com.example.liftrix.core.time.TimeProvider
 import com.example.liftrix.core.time.SystemTimeProvider
 import com.example.liftrix.core.analytics.ArchitectureAnalytics
-import com.example.liftrix.data.export.AnalyticsExporter
-import com.example.liftrix.data.export.CsvExporter
-import com.example.liftrix.data.export.PdfExporter
 import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.service.AnalyticsServiceImpl
 import com.example.liftrix.domain.service.AnalyticsService
@@ -219,43 +216,6 @@ abstract class AnalyticsModule {
             )
         }
 
-        /**
-         * Provides PdfExporter with proper dependency injection
-         * 
-         * @return Configured PdfExporter instance
-         */
-        @Provides
-        @Singleton
-        fun providePdfExporter(): PdfExporter {
-            return PdfExporter()
-        }
-
-        /**
-         * Provides CsvExporter with proper dependency injection
-         * 
-         * @return Configured CsvExporter instance
-         */
-        @Provides
-        @Singleton
-        fun provideCsvExporter(): CsvExporter {
-            return CsvExporter()
-        }
-
-        /**
-         * Provides AnalyticsExporter with proper dependency injection
-         * 
-         * @param pdfExporter PDF export functionality
-         * @param csvExporter CSV export functionality
-         * @return Configured AnalyticsExporter instance
-         */
-        @Provides
-        @Singleton
-        fun provideAnalyticsExporter(
-            pdfExporter: PdfExporter,
-            csvExporter: CsvExporter
-        ): AnalyticsExporter {
-            return AnalyticsExporter(pdfExporter, csvExporter)
-        }
 
         /**
          * Provides AnalyticsWidgetManager with proper dependency injection

@@ -1,7 +1,6 @@
 package com.example.liftrix.di
 
 import androidx.work.WorkManager
-import com.example.liftrix.data.export.AnalyticsExporter
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SettingsRepository
 import com.example.liftrix.domain.repository.SubscriptionRepository
@@ -13,7 +12,6 @@ import com.example.liftrix.service.FeatureFlagService
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.analytics.CalculateWorkoutMetricsUseCase
 import com.example.liftrix.domain.usecase.analytics.CalorieAnalyticsUseCase
-import com.example.liftrix.domain.usecase.analytics.ExportAnalyticsUseCase
 import com.example.liftrix.domain.usecase.analytics.GenerateVolumeCalendarUseCase
 import com.example.liftrix.domain.usecase.analytics.GetWidgetPreferencesUseCase
 import com.example.liftrix.domain.usecase.analytics.MigrateWidgetPreferencesUseCase
@@ -176,21 +174,6 @@ object UseCaseModule {
         return UpdateProgressDashboardUseCase(analyticsEngine, errorHandler)
     }
 
-    /**
-     * Provides ExportAnalyticsUseCase with proper dependency injection.
-     * 
-     * @param analyticsEngine The analytics engine dependency
-     * @param analyticsExporter The analytics exporter dependency
-     * @return Configured ExportAnalyticsUseCase instance
-     */
-    @Provides
-    @Singleton
-    fun provideExportAnalyticsUseCase(
-        analyticsEngine: AnalyticsEngine,
-        analyticsExporter: AnalyticsExporter
-    ): ExportAnalyticsUseCase {
-        return ExportAnalyticsUseCase(analyticsEngine, analyticsExporter)
-    }
 
     /**
      * Provides CalorieAnalyticsUseCase with proper dependency injection.
