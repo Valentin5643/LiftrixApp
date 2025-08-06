@@ -41,7 +41,7 @@ class ProfileSyncWorker @AssistedInject constructor(
                         .build()
                 )
 
-            val unsyncedProfiles = userProfileDao.getUnsyncedProfiles()
+            val unsyncedProfiles = userProfileDao.getUnsyncedProfiles(currentUserId)
             
             if (unsyncedProfiles.isEmpty()) {
                 Timber.d("No unsynced user profiles found")

@@ -21,17 +21,14 @@ import com.example.liftrix.ui.common.state.RecommendationsState
 import com.example.liftrix.ui.common.state.dataOrNull
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import com.example.liftrix.ui.common.event.ViewModelEvent
-import com.example.liftrix.ui.components.cards.Trend
+import com.example.liftrix.domain.model.TrendData
+import com.example.liftrix.domain.model.IconData
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import timber.log.Timber
 import javax.inject.Inject
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FitnessCenter
-import androidx.compose.material.icons.filled.TrendingUp
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.LocalFireDepartment
 
 /**
  * ViewModel for home screen state management and data loading.
@@ -93,6 +90,9 @@ class HomeViewModel @Inject constructor(
             }
             is HomeEvent.UnfollowUser -> {
                 unfollowUser(event.userId)
+            }
+            is HomeEvent.RefreshFeed -> {
+                loadFeedWorkouts()
             }
             is HomeEvent.ErrorDismissed -> {
                 clearError()
@@ -823,19 +823,31 @@ class HomeViewModel @Inject constructor(
      * Enhanced UI card data for new card components integration
      * Transforms existing workout data into StatCard and ActivityCard format
      */
+    private val workoutStatsFlow: StateFlow<WorkoutStats> = currentUserIdFlow
+        .filter { it.isNotEmpty() }
+        .flatMapLatest { userId ->
+            flow {
+                try {
+                    val result = workoutRepository.getWorkoutStats(userId)
+                    emit(result.getOrElse { WorkoutStats.EMPTY })
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to load workout stats")
+                    emit(WorkoutStats.EMPTY)
+                }
+            }
+        }
+        .flowOn(Dispatchers.IO)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = WorkoutStats.EMPTY
+        )
+
     val cardData: StateFlow<List<CardData>> = combine(
         currentUserIdFlow,
-        uiState.map { it.dataOrNull()?.recentWorkouts ?: emptyList() }
-    ) { userId, recentWorkouts ->
-        val stats = if (userId.isNotEmpty()) {
-            try {
-                workoutRepository.getWorkoutStats(userId).getOrElse { WorkoutStats.EMPTY }
-            } catch (e: Exception) {
-                WorkoutStats.EMPTY
-            }
-        } else {
-            WorkoutStats.EMPTY
-        }
+        uiState.map { it.dataOrNull()?.recentWorkouts ?: emptyList() },
+        workoutStatsFlow
+    ) { userId, recentWorkouts, stats ->
         
         buildList {
             // Total workouts card
@@ -844,8 +856,8 @@ class HomeViewModel @Inject constructor(
                     title = "Total Workouts",
                     value = "${stats.totalWorkouts}",
                     subtitle = "Completed",
-                    trend = if (stats.totalWorkouts > 0) Trend.Positive(5.0f, "progress") else Trend.Neutral("starting"),
-                    icon = Icons.Default.TrendingUp,
+                    trend = if (stats.totalWorkouts > 0) TrendData.Positive(5.0f, "progress") else TrendData.Neutral("starting"),
+                    icon = IconData.TrendingUp,
                     contentDescription = "Total completed workouts"
                 )
             )
@@ -856,7 +868,7 @@ class HomeViewModel @Inject constructor(
                     CardData.Activity(
                         title = "Recent Workout",
                         subtitle = recentWorkout.name ?: "Unnamed workout",
-                        icon = Icons.Default.FitnessCenter,
+                        icon = IconData.FitnessCenter,
                         trailing = "Today",
                         contentDescription = "Most recent workout details"
                     )
@@ -865,7 +877,7 @@ class HomeViewModel @Inject constructor(
                 CardData.Activity(
                     title = "Recent Workout", 
                     subtitle = "No recent workouts",
-                    icon = Icons.Default.FitnessCenter,
+                    icon = IconData.FitnessCenter,
                     showChevron = false,
                     contentDescription = "No recent workout data"
                 )
@@ -877,8 +889,8 @@ class HomeViewModel @Inject constructor(
                     title = "Current Streak",
                     value = "${stats.currentStreak}",
                     subtitle = stats.getStreakDescription(),
-                    trend = if (stats.hasSignificantStreak()) Trend.Positive(10.0f, "strong") else null,
-                    icon = Icons.Default.LocalFireDepartment,
+                    trend = if (stats.hasSignificantStreak()) TrendData.Positive(10.0f, "strong") else null,
+                    icon = IconData.LocalFireDepartment,
                     contentDescription = "Current workout streak"
                 )
             )
@@ -889,7 +901,7 @@ class HomeViewModel @Inject constructor(
                     title = "Avg Duration", 
                     value = stats.getFormattedAverageDuration(),
                     subtitle = "Per workout",
-                    icon = Icons.Default.Schedule,
+                    icon = IconData.Schedule,
                     contentDescription = "Average workout duration"
                 )
             )
@@ -917,26 +929,7 @@ class HomeViewModel @Inject constructor(
  * Supports both legacy events and new social feed interactions
  * following the MVI pattern for reactive state management.
  */
-sealed class HomeEvent : com.example.liftrix.ui.common.event.ViewModelEvent {
-    // Data loading events
-    object RefreshData : HomeEvent()
-    object LoadMoreWorkouts : HomeEvent()
-    object LoadMoreRecommendations : HomeEvent()
-    
-    // Workout interaction events
-    data class WorkoutOpened(val workout: Workout) : HomeEvent()
-    data class FeedWorkoutOpened(val feedWorkout: FeedWorkout) : HomeEvent()
-    
-    // Social interaction events  
-    data class FollowUser(val userId: String) : HomeEvent()
-    data class UnfollowUser(val userId: String) : HomeEvent()
-    
+// HomeEvent moved to separate file: ui/home/HomeEvent.kt
 
-    
-    // Error handling events
-    object ErrorDismissed : HomeEvent()
-    object FeedErrorDismissed : HomeEvent()
-    object RecommendationsErrorDismissed : HomeEvent()
-}
 
  

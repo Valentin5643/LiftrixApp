@@ -5,7 +5,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.service.PreferencesService
-import com.example.liftrix.ui.progress.components.WidgetLayoutMode
+import com.example.liftrix.domain.model.analytics.WidgetLayoutMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber

@@ -214,7 +214,7 @@ fun AuthScreen(
                             viewModel.handleEvent(AuthEvent.GoogleSignIn)
                             try {
                                 val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                                    .requestIdToken(context.getString(R.string.default_web_client_id))
+                                    .requestIdToken(com.example.liftrix.BuildConfig.GOOGLE_CLIENT_ID)
                                     .requestEmail()
                                     .requestProfile()
                                     .build()

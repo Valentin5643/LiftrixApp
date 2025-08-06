@@ -160,14 +160,17 @@ fun SQLException.toLiftrixError(context: Map<String, String> = emptyMap()): Lift
         else -> true // Other SQL errors might be transient
     }
     
+    val operation = context["operation"] ?: "unknown"
+    // Separate analytics context from domain operation to avoid conflicts
+    val analyticsContextData = context.filterNot { it.key == "operation" } + mapOf(
+        "sql_error_code" to sqlErrorCode.toString(),
+        "sql_state" to (this.sqlState ?: "unknown"),
+        "database_error_type" to "sql_exception",
+        "exception_type" to "SQLException"
+    )
     val errorContext = createErrorContext(
         operation = "database_operation",
-        additionalContext = context + mapOf(
-            "sql_error_code" to sqlErrorCode.toString(),
-            "sql_state" to (this.sqlState ?: "unknown"),
-            "database_error_type" to "sql_exception",
-            "exception_type" to "SQLException"
-        )
+        additionalContext = analyticsContextData
     )
     
     return LiftrixError.DatabaseError(
@@ -175,7 +178,7 @@ fun SQLException.toLiftrixError(context: Map<String, String> = emptyMap()): Lift
         isRecoverable = isRecoverable,
         retryAfter = if (isRecoverable) 1000L else null,
         analyticsContext = errorContext,
-        operation = context["operation"] ?: "unknown",
+        operation = operation,
         table = context["table"],
         sqlErrorCode = sqlErrorCode
     )
@@ -307,13 +310,16 @@ fun SecurityException.toLiftrixError(context: Map<String, String> = emptyMap()):
  * ```
  */
 fun FileNotFoundException.toLiftrixError(context: Map<String, String> = emptyMap()): LiftrixError.FileSystemError {
+    val operation = context["operation"] ?: "READ"
+    // Separate analytics context from domain operation to avoid conflicts
+    val analyticsContextData = context.filterNot { it.key == "operation" } + mapOf(
+        "file_error_type" to "file_not_found",
+        "file_path" to (this.message ?: "unknown"),
+        "exception_type" to "FileNotFoundException"
+    )
     val errorContext = createErrorContext(
         operation = "file_system",
-        additionalContext = context + mapOf(
-            "file_error_type" to "file_not_found",
-            "file_path" to (this.message ?: "unknown"),
-            "exception_type" to "FileNotFoundException"
-        )
+        additionalContext = analyticsContextData
     )
     
     return LiftrixError.FileSystemError(
@@ -321,7 +327,7 @@ fun FileNotFoundException.toLiftrixError(context: Map<String, String> = emptyMap
         isRecoverable = false,
         retryAfter = null,
         analyticsContext = errorContext,
-        operation = context["operation"] ?: "READ",
+        operation = operation,
         filePath = this.message
     )
 }
@@ -343,13 +349,16 @@ fun FileNotFoundException.toLiftrixError(context: Map<String, String> = emptyMap
  * ```
  */
 fun ArithmeticException.toLiftrixError(context: Map<String, String> = emptyMap()): LiftrixError.CalculationError {
+    val operation = context["operation"] ?: "unknown"
+    // Separate analytics context from domain operation to avoid conflicts
+    val analyticsContextData = context.filterNot { it.key == "operation" } + mapOf(
+        "calculation_error_type" to "arithmetic_error",
+        "arithmetic_operation" to (this.message ?: "unknown"),
+        "exception_type" to "ArithmeticException"
+    )
     val errorContext = createErrorContext(
         operation = "calculation",
-        additionalContext = context + mapOf(
-            "calculation_error_type" to "arithmetic_error",
-            "arithmetic_operation" to (this.message ?: "unknown"),
-            "exception_type" to "ArithmeticException"
-        )
+        additionalContext = analyticsContextData
     )
     
     return LiftrixError.CalculationError(
@@ -357,7 +366,7 @@ fun ArithmeticException.toLiftrixError(context: Map<String, String> = emptyMap()
         isRecoverable = true,
         retryAfter = 1000L, // 1 second retry for calculation errors
         analyticsContext = errorContext,
-        operation = context["operation"] ?: "unknown"
+        operation = operation
     )
 }
 

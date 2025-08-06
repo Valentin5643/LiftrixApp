@@ -1,0 +1,3 @@
+@echo off
+echo Running RecommendationCacheIntegrationTest...
+call gradlew test --tests "*RecommendationCacheIntegrationTest" --continue 2>&1

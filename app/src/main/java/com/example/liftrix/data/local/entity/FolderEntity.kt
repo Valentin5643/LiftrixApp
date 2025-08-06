@@ -23,7 +23,7 @@ import java.time.Instant
     foreignKeys = [
         ForeignKey(
             entity = UserProfileEntity::class,
-            parentColumns = ["id"],
+            parentColumns = ["user_id"],
             childColumns = ["user_id"],
             onDelete = ForeignKey.CASCADE
         )

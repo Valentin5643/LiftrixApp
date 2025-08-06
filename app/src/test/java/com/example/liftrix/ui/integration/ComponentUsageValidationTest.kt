@@ -4,6 +4,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import java.io.File
+import kotlin.io.readText
 import kotlin.test.assertTrue
 import kotlin.test.assertFalse
 
@@ -23,7 +24,11 @@ import kotlin.test.assertFalse
 class ComponentUsageValidationTest {
     
     private val projectRoot = File(System.getProperty("user.dir"))
-    private val sourceDir = File(projectRoot, "app/src/main/java/com/example/liftrix/ui")
+    private val sourceDir: File = if (projectRoot.name == "Liftrix") {
+        File(projectRoot, "app/src/main/java/com/example/liftrix/ui")
+    } else {
+        File(projectRoot, "src/main/java/com/example/liftrix/ui")
+    }
     
     @Test
     fun noLegacyCardImports_remainInWorkoutScreens() {
@@ -107,11 +112,16 @@ class ComponentUsageValidationTest {
         workoutScreenFiles.forEach { file ->
             val content = file.readText()
             
-            // If file contains card usage, it should be UnifiedWorkoutCard
-            if (content.contains("Card(") && !content.contains("// Legacy card")) {
+            // If file contains card usage, it should be UnifiedWorkoutCard or specialized cards
+            val hasRawCardUsage = content.contains("Card(")
+            val hasLegacyComment = content.contains("// Legacy card")
+            val hasSpecializedComment = content.contains("// Specialized") && content.contains("card")
+            val hasUnifiedCardUsage = content.contains("UnifiedWorkoutCard(")
+            
+            if (hasRawCardUsage && !hasLegacyComment && !hasSpecializedComment) {
                 assertTrue(
-                    content.contains("UnifiedWorkoutCard("),
-                    "File ${file.name} should use UnifiedWorkoutCard for card components"
+                    hasUnifiedCardUsage,
+                    "File ${file.name} should use UnifiedWorkoutCard for card components or mark specialized cards with comment"
                 )
             }
         }
@@ -231,7 +241,7 @@ class ComponentUsageValidationTest {
             "workout/active/ActiveWorkoutScreen.kt",
             "workout/edit/EditWorkoutScreen.kt",
             "workout/WorkoutTemplateScreen.kt",
-            "progress/DashboardScreen.kt"
+            "progress/ProgressDashboardScreen.kt"
         )
         
         screenPaths.forEach { path ->

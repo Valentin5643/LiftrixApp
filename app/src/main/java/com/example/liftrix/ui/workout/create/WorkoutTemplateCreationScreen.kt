@@ -164,6 +164,7 @@ fun WorkoutTemplateCreationScreen(
                 )
             }
             
+            
             // Exercises List Section with drag-and-drop
             val exercises = uiState.dataOrNull()?.exercises ?: emptyList()
             timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: Rendering exercise items with ${exercises.size} exercises")
@@ -186,7 +187,7 @@ fun WorkoutTemplateCreationScreen(
             if (exercises.isNotEmpty()) {
                 itemsIndexed(
                     items = exercises,
-                    key = { _, exercise -> exercise.exerciseId.value }
+                    key = { index, exercise -> exercise.instanceId }
                 ) { index, exercise ->
                     ExerciseListItem(
                         exercise = exercise,
@@ -279,6 +280,7 @@ fun WorkoutTemplateCreationScreen(
 }
 
 
+
 /**
  * Card for basic template information (name and description)
  */
@@ -341,19 +343,12 @@ private fun ExerciseListItem(
     modifier: Modifier = Modifier
 ) {
     // Track individual sets instead of just a target number
-    var setInputs by remember { 
+    // Use instanceId as key to ensure each exercise instance has its own unique state
+    var setInputs by remember(exercise.instanceId) { 
+        timber.log.Timber.d("🔥 EXERCISE-LIST-ITEM-DEBUG: Initializing setInputs for ${exercise.name} with instanceId ${exercise.instanceId}")
         mutableStateOf(
-            if (exercise.targetSets != null && exercise.targetSets!! > 0) {
-                List(exercise.targetSets!!) { index ->
-                    SetInput(
-                        setNumber = index + 1,
-                        weight = exercise.targetWeight?.kilograms?.toString() ?: "",
-                        reps = exercise.targetReps?.count?.toString() ?: ""
-                    )
-                }
-            } else {
-                listOf(SetInput(setNumber = 1, weight = "", reps = ""))
-            }
+            // Always start with 1 set for new exercises, ignore targetSets to prevent jumping
+            listOf(SetInput(setNumber = 1, weight = "", reps = ""))
         )
     }
     
@@ -400,7 +395,8 @@ private fun ExerciseListItem(
                         setInputs = setInputs.toMutableList().apply {
                             set(index, updatedSet)
                         }
-                        updateExerciseFromSets(exercise, setInputs, onUpdate)
+                        // TODO: Temporarily disabled to debug the issue
+                        // updateExerciseFromSets(exercise, setInputs, onUpdate)
                     },
                     onRemoveSet = if (setInputs.size > 1) {
                         {
@@ -409,7 +405,8 @@ private fun ExerciseListItem(
                                 // Renumber remaining sets
                                 forEachIndexed { i, set -> set(i, this[i].copy(setNumber = i + 1)) }
                             }
-                            updateExerciseFromSets(exercise, setInputs, onUpdate)
+                            // TODO: Temporarily disabled to debug the issue
+                            // updateExerciseFromSets(exercise, setInputs, onUpdate)
                         }
                     } else null
                 )
@@ -424,12 +421,14 @@ private fun ExerciseListItem(
             // Add set button
             OutlinedButton(
                 onClick = { 
-                    setInputs = setInputs + SetInput(
+                    val newSetInputs = setInputs + SetInput(
                         setNumber = setInputs.size + 1,
                         weight = setInputs.lastOrNull()?.weight ?: "",
                         reps = setInputs.lastOrNull()?.reps ?: ""
                     )
-                    updateExerciseFromSets(exercise, setInputs, onUpdate)
+                    setInputs = newSetInputs
+                    // TODO: Temporarily disabled to debug the issue
+                    // updateExerciseFromSets(exercise, newSetInputs, onUpdate)
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -534,7 +533,8 @@ private fun updateExerciseFromSets(
     val updatedExercise = exercise.copy(
         targetSets = setInputs.size,
         targetReps = firstSet?.reps?.toIntOrNull()?.let { com.example.liftrix.domain.model.Reps(it) },
-        targetWeight = firstSet?.weight?.toDoubleOrNull()?.let { com.example.liftrix.domain.model.Weight.fromKilograms(it) }
+        targetWeight = firstSet?.weight?.toDoubleOrNull()?.let { com.example.liftrix.domain.model.Weight.fromKilograms(it) },
+        instanceId = exercise.instanceId // Preserve instanceId
     )
     onUpdate(updatedExercise)
 }

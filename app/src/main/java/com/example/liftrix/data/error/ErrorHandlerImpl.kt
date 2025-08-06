@@ -7,8 +7,8 @@ import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.common.ErrorHandlingResult
 import com.example.liftrix.domain.usecase.common.RetryPolicy
 import com.example.liftrix.domain.usecase.common.BackoffStrategy
-import com.example.liftrix.ui.error.ValidationError
-import com.example.liftrix.ui.error.ValidationSeverity
+import com.example.liftrix.domain.model.validation.ValidationError
+import com.example.liftrix.domain.model.validation.ValidationSeverity
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -206,6 +206,7 @@ class ErrorHandlerImpl @Inject constructor(
             
             if (result.isFailure) {
                 Timber.tag(TAG).w("Failed to record exception in analytics: ${result.exceptionOrNull()}")
+                throw result.exceptionOrNull() ?: RuntimeException("Analytics recording failed")
             }
             
             // Set custom keys for enhanced error context
@@ -255,7 +256,6 @@ class ErrorHandlerImpl @Inject constructor(
             is LiftrixError.AuthenticationError -> {
                 when (error.errorCode) {
                     "TOKEN_EXPIRED" -> "Your session has expired. Please sign in again."
-                    "INVALID_CREDENTIALS" -> "Invalid credentials. Please check your login information."
                     "NO_USER_ID" -> "Please sign in to continue using the app."
                     else -> "Authentication required. Please sign in to access your workouts."
                 }
@@ -265,6 +265,7 @@ class ErrorHandlerImpl @Inject constructor(
                     "INVALID_OPERATION" -> "This action is not allowed at this time."
                     "CONCURRENT_MODIFICATION" -> "Someone else modified this data. Please refresh and try again."
                     "RATE_LIMIT_EXCEEDED" -> "Please slow down and try again in a moment."
+                    "PREMIUM_FEATURE_REQUIRED" -> "This feature requires a premium subscription. Upgrade to continue."
                     else -> "Unable to complete this action. Please try again later."
                 }
             }
@@ -414,8 +415,16 @@ class ErrorHandlerImpl @Inject constructor(
                 )
             }
             is LiftrixError.DatabaseError -> {
+                // Don't retry duplicate key errors and other non-retryable SQL errors
+                val shouldRetry = when (error.sqlErrorCode) {
+                    1062 -> false // Duplicate entry
+                    1451 -> false // Foreign key constraint fails
+                    1452 -> false // Foreign key constraint fails
+                    else -> true
+                }
+                
                 RetryPolicy(
-                    shouldRetry = true,
+                    shouldRetry = shouldRetry && currentAttempt < maxAttempts,
                     retryAfterMs = baseDelay,
                     maxAttempts = maxAttempts,
                     backoffStrategy = BackoffStrategy.LINEAR,

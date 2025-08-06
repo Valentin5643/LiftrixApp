@@ -10,6 +10,7 @@ import com.example.liftrix.domain.model.Folder
 import com.example.liftrix.domain.model.FolderId
 import com.example.liftrix.domain.repository.FolderRepository
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import timber.log.Timber
 import java.time.Instant
@@ -298,11 +299,24 @@ class FolderRepositoryImpl @Inject constructor(
                 return Result.success(domain)
             }
 
+            // 🔥 FIX: Check for duplicate folder name before attempting insert
+            val folderNameExists = folderDao.doesFolderNameExist(userId, "Uncategorized")
+            if (folderNameExists) {
+                Timber.d("🔥 FOLDER-EXISTS: Default folder already exists for user $userId, fetching existing folder")
+                // Find the existing folder by name and return it
+                val folders = folderDao.getFoldersByUserId(userId).first()
+                val existingByName = folders.find { it.name == "Uncategorized" }
+                if (existingByName != null) {
+                    val domain = folderMapper.toDomain(existingByName)
+                    return Result.success(domain)
+                }
+            }
+
             // Use database transaction for atomic folder + user profile creation
             val result = database.withTransaction {
                 // Ensure UserProfileEntity exists before creating folder
                 val userProfile = userProfileDao.getProfileForUserSuspend(userId)
-                val profileId = if (userProfile == null) {
+                if (userProfile == null) {
                     // Create minimal UserProfileEntity for FK constraint within transaction
                     val minimalProfile = createMinimalUserProfile(userId)
                     val insertResult = userProfileDao.insertProfile(minimalProfile)
@@ -310,23 +324,21 @@ class FolderRepositoryImpl @Inject constructor(
                         throw RuntimeException("Failed to create user profile for FK constraint")
                     }
                     Timber.d("Created minimal user profile for user $userId")
-                    minimalProfile.id
-                } else {
-                    userProfile.id
                 }
 
                 // Create default folder with Firebase UID (domain model)
                 val defaultFolder = Folder.createDefault(userId) // Use Firebase UID for domain model
-                val entity = folderMapper.toNewEntity(defaultFolder).copy(
-                    userId = profileId // Override with profile ID for FK constraint
-                )
+                val entity = folderMapper.toNewEntity(defaultFolder)
+                // 🔥 FIX: Don't override userId - entity mapping should already use correct Firebase UID
+                
+                Timber.d("🔥 FOLDER-CREATE-DEBUG: Creating folder entity with userId=${entity.userId} for Firebase UID=$userId")
                 val insertResult = folderDao.insertFolder(entity)
 
                 if (insertResult <= 0) {
                     throw RuntimeException("Failed to create default folder - insert returned $insertResult")
                 }
                 
-                Timber.d("Created default folder for user $userId within transaction")
+                Timber.d("✅ Successfully created default folder for user $userId (insertResult=$insertResult)")
                 defaultFolder
             }
             
@@ -338,10 +350,13 @@ class FolderRepositoryImpl @Inject constructor(
                     "User profile not found. Please complete your profile setup before creating templates."
                 e.message?.contains("UNIQUE constraint failed", ignoreCase = true) == true ->
                     "Default folder already exists for this user."
+                e.message?.contains("OnConflictStrategy.ABORT", ignoreCase = true) == true ->
+                    "Folder creation conflict - folder may already exist."
                 else -> "Failed to create default folder: ${e.message}"
             }
             
-            Timber.e(e, "Failed to get or create default folder for user $userId - $errorMessage")
+            Timber.e(e, "🔥 FOLDER-ERROR: Failed to get or create default folder for user $userId")
+            Timber.e("🔥 FOLDER-ERROR-DETAILS: Exception type=${e.javaClass.simpleName}, message='${e.message}'")
             Result.failure(RuntimeException(errorMessage, e))
         }
     }

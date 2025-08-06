@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.Card
+import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
 import com.example.liftrix.ui.workout.components.PrimaryActionButton
 import com.example.liftrix.ui.workout.components.SecondaryActionButton
 import com.example.liftrix.ui.workout.components.TertiaryActionButton
@@ -69,7 +70,6 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.state.AsyncData
 import com.example.liftrix.domain.repository.ProgressSummary
-import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.components.layouts.GridSystem
 import com.example.liftrix.ui.progress.components.ProgressSummaryCards
 import com.example.liftrix.ui.progress.components.TimePeriodSelector
@@ -662,9 +662,11 @@ private fun ErrorStateContent(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        LiftrixCard(
+        UnifiedWorkoutCard(
+            title = "Error Loading Progress",
+            subtitle = error,
             modifier = Modifier.padding(GridSystem.screenPadding),
-            contentDescription = "Error loading progress data"
+            onClick = { /* No click action for error card */ }
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -676,17 +678,8 @@ private fun ErrorStateContent(
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(GridSystem.iconXLarge)
                 )
-                Text(
-                    text = "Error Loading Progress",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = error,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
+                
+                // Actions are now in the card's action slot
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
                 ) {

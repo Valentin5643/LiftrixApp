@@ -19,7 +19,8 @@ data class TemplateExercise(
     val notes: String? = null,
     val orderIndex: Int,
     val isCustomExercise: Boolean = false,
-    val customExerciseId: CustomExerciseId? = null
+    val customExerciseId: CustomExerciseId? = null,
+    val instanceId: String = java.util.UUID.randomUUID().toString()
 ) {
     init {
         require(name.isNotBlank()) { "Exercise name cannot be blank" }

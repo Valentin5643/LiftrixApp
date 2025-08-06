@@ -12,6 +12,7 @@ import com.example.liftrix.ui.common.state.AsyncData
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import com.example.liftrix.ui.progress.components.WidgetLayoutMode
+import com.example.liftrix.ui.progress.components.toDomainWidgetLayoutMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -229,7 +230,7 @@ class UserPreferencesViewModel @Inject constructor(
                 .withLoading("updateLayoutMode", true)
             
             executeUseCase(
-                useCase = { preferencesService.updateLayoutMode(userId, mode) },
+                useCase = { preferencesService.updateLayoutMode(userId, mode.toDomainWidgetLayoutMode()) },
                 onSuccess = {
                     _internalState.value = _internalState.value
                         .withLoading("updateLayoutMode", false)

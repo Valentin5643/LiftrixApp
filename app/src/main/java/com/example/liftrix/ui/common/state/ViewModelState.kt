@@ -3,6 +3,7 @@ package com.example.liftrix.ui.common.state
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.model.WorkoutTemplatePreview
+import com.example.liftrix.domain.model.Folder
 import com.example.liftrix.sync.SyncStatus
 
 /**
@@ -31,6 +32,7 @@ import com.example.liftrix.sync.SyncStatus
  * 
  * @property workouts List of user's workouts
  * @property templates List of workout templates available to the user
+ * @property folders List of folders for organizing templates
  * @property syncStatus Current synchronization status with remote services
  * @property unsyncedCount Number of unsynced workouts pending upload
  * @property templatePreview Enhanced template preview for workout creation flow
@@ -38,6 +40,8 @@ import com.example.liftrix.sync.SyncStatus
 data class WorkoutScreenData(
     val workouts: List<Workout> = emptyList(),
     val templates: List<WorkoutTemplate> = emptyList(),
+    val folders: List<Folder> = emptyList(),
+    val selectedFolderId: String? = null, // 🔥 NEW: Track selected folder for filtering
     val syncStatus: SyncStatus = SyncStatus.Idle,
     val unsyncedCount: Int = 0,
     val templatePreview: WorkoutTemplatePreview? = null
@@ -243,7 +247,10 @@ data class WorkoutTemplateCreationData(
     val exerciseSearchQuery: String = "",
     val selectedExercise: com.example.liftrix.domain.usecase.exercise.SearchableExercise? = null,
     val isExerciseSelectorExpanded: Boolean = false,
-    val template: com.example.liftrix.domain.model.WorkoutTemplate? = null
+    val template: com.example.liftrix.domain.model.WorkoutTemplate? = null,
+    val availableFolders: List<com.example.liftrix.domain.model.Folder> = emptyList(),
+    val selectedFolderId: com.example.liftrix.domain.model.FolderId? = null,
+    val defaultFolderId: com.example.liftrix.domain.model.FolderId? = null
 ) {
     /**
      * Indicates whether the template has exercises
@@ -258,12 +265,46 @@ data class WorkoutTemplateCreationData(
         get() = exercises.size
     
     /**
+     * Gets the selected folder or null if none selected
+     */
+    val selectedFolder: com.example.liftrix.domain.model.Folder?
+        get() = selectedFolderId?.let { folderId ->
+            availableFolders.firstOrNull { it.id == folderId }
+        }
+    
+    /**
+     * Gets the default folder or null if not available
+     */
+    val defaultFolder: com.example.liftrix.domain.model.Folder?
+        get() = defaultFolderId?.let { folderId ->
+            availableFolders.firstOrNull { it.id == folderId }
+        }
+    
+    /**
+     * Gets the folder that will be used for template creation (selected or default)
+     */
+    val effectiveFolderId: com.example.liftrix.domain.model.FolderId?
+        get() = selectedFolderId ?: defaultFolderId
+    
+    /**
+     * Gets the display name of the selected folder or a default message
+     */
+    val folderDisplayName: String
+        get() = when {
+            selectedFolder != null -> selectedFolder!!.name.value
+            defaultFolder != null -> defaultFolder!!.name.value
+            else -> "Select Folder"
+        }
+    
+    /**
      * Indicates whether the template creation is valid
+     * 🔥 FIXED: Allow creation with just name and folder (exercises can be added later)
      */
     fun isValidForCreation(name: String): Boolean {
         return name.isNotBlank() && 
                name.length <= 50 && // Reasonable template name limit
-               hasExercises
+               effectiveFolderId != null // Only require name and folder
+        // Note: exercises check removed - users can create empty templates and add exercises later
     }
 }
 

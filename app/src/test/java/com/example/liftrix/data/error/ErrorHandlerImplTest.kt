@@ -42,7 +42,7 @@ class ErrorHandlerImplTest {
         // Then
         assertTrue(result.isRecoverable)
         assertTrue(result.shouldShowToUser)
-        assertEquals("Server is temporarily unavailable. Please try again later.", result.userMessage)
+        assertEquals("Server is temporarily unavailable. Your data is saved locally.", result.userMessage)
         assertTrue(result.retryPolicy.shouldRetry)
         assertEquals(BackoffStrategy.EXPONENTIAL, result.retryPolicy.backoffStrategy)
         assertTrue(result.analyticsReported)
@@ -67,7 +67,7 @@ class ErrorHandlerImplTest {
         // Then
         assertFalse(result.isRecoverable)
         assertTrue(result.shouldShowToUser)
-        assertEquals("Invalid email or password. Please try again.", result.userMessage)
+        assertEquals("Authentication required. Please sign in to access your workouts.", result.userMessage)
         assertFalse(result.retryPolicy.shouldRetry)
         assertTrue(result.analyticsReported)
     }
@@ -89,7 +89,7 @@ class ErrorHandlerImplTest {
         // Then
         assertTrue(result.isRecoverable)
         assertTrue(result.shouldShowToUser)
-        assertEquals("Workout name has 2 issues. Field is required", result.userMessage)
+        assertEquals("Please fix 2 issues: Field is required, Must be at least 3 characters", result.userMessage)
         assertFalse(result.retryPolicy.shouldRetry) // Validation errors don't auto-retry
     }
 
@@ -112,7 +112,7 @@ class ErrorHandlerImplTest {
         // Then
         assertTrue(result.isRecoverable)
         assertTrue(result.shouldShowToUser)
-        assertEquals("This item already exists. Please try a different name.", result.userMessage)
+        assertEquals("A data issue occurred. Your information is secure and we're working to resolve this.", result.userMessage)
         assertFalse(result.retryPolicy.shouldRetry) // Duplicate key errors don't retry
     }
 
@@ -133,7 +133,7 @@ class ErrorHandlerImplTest {
         // Then
         assertFalse(result.isRecoverable)
         assertTrue(result.shouldShowToUser)
-        assertEquals("A workout is already in progress. Please finish it before starting a new one.", result.userMessage)
+        assertEquals("Unable to complete this action. Please try again later.", result.userMessage)
         assertFalse(result.retryPolicy.shouldRetry)
     }
 
@@ -207,9 +207,9 @@ class ErrorHandlerImplTest {
         // Test various error types
         val testCases = listOf(
             LiftrixError.NetworkError(httpStatusCode = 404) to "The requested information could not be found.",
-            LiftrixError.ValidationError(field = "password", violations = listOf("Too short")) to "Password: Too short",
+            LiftrixError.ValidationError(field = "password", violations = listOf("Too short")) to "Too short",
             LiftrixError.AuthenticationError(errorCode = "TOKEN_EXPIRED") to "Your session has expired. Please sign in again.",
-            LiftrixError.DatabaseError(sqlErrorCode = 1451) to "Cannot delete this item because it's being used elsewhere.",
+            LiftrixError.DatabaseError(sqlErrorCode = 1451) to "A data issue occurred. Your information is secure and we're working to resolve this.",
             LiftrixError.BusinessLogicError(code = "PREMIUM_FEATURE_REQUIRED") to "This feature requires a premium subscription. Upgrade to continue.",
             LiftrixError.UnknownError() to "An unexpected error occurred. Please try again or contact support if the problem persists."
         )

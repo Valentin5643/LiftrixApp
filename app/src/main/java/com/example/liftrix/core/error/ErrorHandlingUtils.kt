@@ -349,7 +349,7 @@ private fun createUnknownError(
     context: Map<String, String>
 ): LiftrixError.UnknownError {
     return LiftrixError.UnknownError(
-        errorMessage = "Unexpected error in $operation: ${exception.message ?: "No message"}",
+        errorMessage = "Unexpected error in $operation: ${exception.message}",
         isRecoverable = false,
         retryAfter = null,
         analyticsContext = context + mapOf(

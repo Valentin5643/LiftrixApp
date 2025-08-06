@@ -43,6 +43,7 @@ import com.example.liftrix.data.local.migration.MIGRATION_33_34
 import com.example.liftrix.data.local.migration.MIGRATION_34_35
 import com.example.liftrix.data.local.migration.MIGRATION_35_36
 import com.example.liftrix.data.local.migration.MIGRATION_36_37
+import com.example.liftrix.data.local.migration.MIGRATION_37_38
 
 import dagger.Module
 import dagger.Provides
@@ -54,6 +55,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.asExecutor
+import kotlinx.coroutines.runBlocking
 import timber.log.Timber
 import javax.inject.Singleton
 
@@ -78,19 +80,68 @@ object DatabaseModule {
         )
             .setTransactionExecutor(Dispatchers.IO.asExecutor())
             .setQueryExecutor(Dispatchers.IO.asExecutor())
-            .addMigrations(MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36, MIGRATION_36_37)
+            .addMigrations(MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36, MIGRATION_36_37, MIGRATION_37_38)
             // ✅ PERSISTENCE FIX: Removed destructive migration to preserve user data
             // Only allow destructive migration on downgrade to handle edge cases
             .fallbackToDestructiveMigrationOnDowngrade()
+            // 🛡️ CORRUPTION HANDLING: In debug builds, allow destructive migration for corruption recovery
+            .apply {
+                if (BuildConfig.DEBUG) {
+                    fallbackToDestructiveMigration()
+                }
+            }
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING) // WAL mode for better data persistence
+            // 🛡️ DATABASE LIFECYCLE: Add callback for database lifecycle events
+            .addCallback(object : RoomDatabase.Callback() {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    super.onCreate(db)
+                    Timber.d("Database created successfully")
+                }
+                
+                override fun onOpen(db: SupportSQLiteDatabase) {
+                    super.onOpen(db)
+                    Timber.d("Database opened successfully")
+                }
+                
+                override fun onDestructiveMigration(db: SupportSQLiteDatabase) {
+                    super.onDestructiveMigration(db)
+                    Timber.w("Destructive migration occurred - data may have been lost")
+                }
+            })
             .build()
             
-        // Pre-warm the database to establish stable connection and complete any migrations
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        scope.launch {
+        // CRITICAL: Initialize database synchronously to prevent early access issues
+        runBlocking(Dispatchers.IO) {
             try {
-                // Force database initialization
-                database.openHelper.readableDatabase.version
+                Timber.d("Starting database initialization...")
+                
+                // 🔍 MIGRATION VALIDATION: Check database integrity before proceeding
+                val dbVersion = try {
+                    database.openHelper.readableDatabase.version
+                } catch (e: Exception) {
+                    Timber.e(e, "Database version check failed - possible corruption")
+                    // In development, attempt recovery by clearing corrupted database
+                    if (BuildConfig.DEBUG) {
+                        try {
+                            val dbFile = File(context.getDatabasePath("liftrix_database").absolutePath)
+                            if (dbFile.exists()) {
+                                dbFile.delete()
+                                Timber.w("Cleared corrupted database file for recovery")
+                                // Retry database initialization after clearing
+                                database.openHelper.readableDatabase.version
+                            } else {
+                                throw e
+                            }
+                        } catch (recoveryException: Exception) {
+                            Timber.e(recoveryException, "Database recovery failed")
+                            throw recoveryException
+                        }
+                    } else {
+                        throw e
+                    }
+                }
+                
+                Timber.d("Database version: $dbVersion - initialization successful")
                 
                 // Populate exercise library if needed
                 exerciseLibrarySeedData.populateExerciseLibraryIfNeeded(database)
@@ -98,8 +149,11 @@ object DatabaseModule {
                 // Populate MET data if needed
                 metDataSeedService.populateMetDataIfNeeded(database)
                 
+                Timber.d("Database initialization completed successfully")
+                
             } catch (e: Exception) {
-                // Database initialization failed - continue anyway
+                Timber.e(e, "Database initialization failed - repositories may experience connection errors")
+                // Continue anyway to avoid blocking app startup completely
             }
         }
             

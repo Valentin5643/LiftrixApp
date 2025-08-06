@@ -43,6 +43,7 @@ import com.example.liftrix.domain.model.Reps
 import com.example.liftrix.ui.common.pressInteraction
 import com.example.liftrix.ui.theme.LiftrixTheme
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /**
  * Draggable exercise list component for workout template creation.
@@ -155,7 +156,7 @@ fun DragDropExerciseList(
                 ) {
                     itemsIndexed(
                         items = exercises,
-                        key = { _, exercise -> exercise.exerciseId.value }
+                        key = { index, exercise -> exercise.instanceId }
                     ) { index, exercise ->
                         DraggableExerciseItem(
                             exercise = exercise,
@@ -187,19 +188,13 @@ private fun DraggableExerciseItem(
     modifier: Modifier = Modifier
 ) {
     // Track individual sets for this exercise
-    var setInputs by remember { 
+    // Use instanceId as key to ensure each exercise instance has its own unique state
+    var setInputs by remember(exercise.instanceId) { 
+        Timber.d("🔥 DRAG-DROP-DEBUG: Initializing setInputs for exercise ${exercise.name} with instanceId ${exercise.instanceId}")
+        Timber.d("🔥 DRAG-DROP-DEBUG: Exercise targetSets: ${exercise.targetSets}")
         mutableStateOf(
-            if (exercise.targetSets != null && exercise.targetSets!! > 0) {
-                List(exercise.targetSets!!) { setIndex ->
-                    SetInput(
-                        setNumber = setIndex + 1,
-                        weight = exercise.targetWeight?.kilograms?.toString() ?: "",
-                        reps = exercise.targetReps?.count?.toString() ?: ""
-                    )
-                }
-            } else {
-                listOf(SetInput(setNumber = 1, weight = "", reps = ""))
-            }
+            // Always start with 1 set for new exercises, ignore targetSets to prevent jumping
+            listOf(SetInput(setNumber = 1, weight = "", reps = ""))
         )
     }
     
@@ -258,7 +253,8 @@ private fun DraggableExerciseItem(
                         setInputs = setInputs.toMutableList().apply {
                             set(setIndex, updatedSet)
                         }
-                        updateExerciseFromSets(exercise, setInputs, onUpdate)
+                        // TODO: Temporarily disabled to debug the issue
+                        // updateExerciseFromSets(exercise, setInputs, onUpdate)
                     },
                     onRemoveSet = if (setInputs.size > 1) {
                         {
@@ -267,7 +263,8 @@ private fun DraggableExerciseItem(
                                 // Renumber remaining sets
                                 forEachIndexed { i, set -> set(i, this[i].copy(setNumber = i + 1)) }
                             }
-                            updateExerciseFromSets(exercise, setInputs, onUpdate)
+                            // TODO: Temporarily disabled to debug the issue
+                            // updateExerciseFromSets(exercise, setInputs, onUpdate)
                         }
                     } else null
                 )
@@ -282,12 +279,14 @@ private fun DraggableExerciseItem(
             // Add set button
             OutlinedButton(
                 onClick = { 
-                    setInputs = setInputs + SetInput(
+                    val newSetInputs = setInputs + SetInput(
                         setNumber = setInputs.size + 1,
                         weight = setInputs.lastOrNull()?.weight ?: "",
                         reps = setInputs.lastOrNull()?.reps ?: ""
                     )
-                    updateExerciseFromSets(exercise, setInputs, onUpdate)
+                    setInputs = newSetInputs
+                    // TODO: Temporarily disabled to debug the issue
+                    // updateExerciseFromSets(exercise, newSetInputs, onUpdate)
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {

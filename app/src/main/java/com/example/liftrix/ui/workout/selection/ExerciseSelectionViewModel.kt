@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import javax.inject.Inject
 import timber.log.Timber
 
@@ -175,24 +176,49 @@ class ExerciseSelectionViewModel @Inject constructor(
     
     
     /**
-     * Load recent exercises - placeholder implementation
+     * Load recent exercises with retry mechanism
      * In a real app, this would come from exercise usage history
      */
     private fun loadRecentExercises() {
         viewModelScope.launch {
-            try {
-                Timber.d("ExerciseSelectionViewModel: Loading recent exercises...")
-                // Get a sample of exercises for recent list
-                val allExercises = searchExercisesUseCase.search("", Equipment.entries.toSet()).first()
-                val recentExercises = allExercises.take(5)
-                Timber.d("ExerciseSelectionViewModel: Loaded ${recentExercises.size} recent exercises from ${allExercises.size} total")
-                _uiState.update { currentState ->
-                    currentState.copy(recentExercises = recentExercises)
-                }
-            } catch (e: Exception) {
-                Timber.e(e, "ExerciseSelectionViewModel: Failed to load recent exercises")
-                _uiState.update { currentState ->
-                    currentState.copy(error = "Failed to load recent exercises: ${e.message ?: "Unknown error"}")
+            var retryCount = 0
+            val maxRetries = 3
+            var delayMs = 500L
+            
+            while (retryCount <= maxRetries) {
+                try {
+                    Timber.d("ExerciseSelectionViewModel: Loading recent exercises (attempt ${retryCount + 1}/$maxRetries)...")
+                    
+                    // Get a sample of exercises for recent list
+                    val allExercises = searchExercisesUseCase.search("", Equipment.entries.toSet()).first()
+                    val recentExercises = allExercises.take(5)
+                    
+                    Timber.d("ExerciseSelectionViewModel: Loaded ${recentExercises.size} recent exercises from ${allExercises.size} total")
+                    
+                    _uiState.update { currentState ->
+                        currentState.copy(recentExercises = recentExercises)
+                    }
+                    
+                    // Success - break out of retry loop
+                    break
+                    
+                } catch (e: Exception) {
+                    Timber.w(e, "ExerciseSelectionViewModel: Failed to load recent exercises (attempt ${retryCount + 1}/$maxRetries): ${e.message}")
+                    
+                    if (retryCount >= maxRetries) {
+                        // Final attempt failed
+                        Timber.e(e, "ExerciseSelectionViewModel: All retry attempts failed for recent exercises")
+                        _uiState.update { currentState ->
+                            currentState.copy(error = "Failed to load recent exercises: ${e.message ?: "Unknown error"}")
+                        }
+                        break
+                    } else {
+                        // Wait before retrying
+                        Timber.d("ExerciseSelectionViewModel: Waiting ${delayMs}ms before retry...")
+                        delay(delayMs)
+                        retryCount++
+                        delayMs = (delayMs * 1.5).toLong().coerceAtMost(2000L)
+                    }
                 }
             }
         }

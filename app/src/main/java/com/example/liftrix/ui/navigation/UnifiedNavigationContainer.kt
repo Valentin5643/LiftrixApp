@@ -155,9 +155,6 @@ fun UnifiedNavigationContainer(
                         },
                         onNavigateToWorkoutCreation = {
                             navController.navigateToTemplateCreation()
-                        },
-                        onNavigateToFolderManagement = {
-                            navController.navigateToFolderManagement()
                         }
                     )
                 }
@@ -506,73 +503,6 @@ fun UnifiedNavigationContainer(
                     )
                 }
                 
-                // Folder Management Routes
-                composable<LiftrixRoute.FolderManagement> {
-                    com.example.liftrix.ui.folder.screen.FolderManagementScreen(
-                        onNavigateBack = {
-                            navController.popBackStackSafely()
-                        },
-                        onCreateFolder = {
-                            navController.navigateToCreateFolder()
-                        },
-                        onEditFolder = { folderId ->
-                            navController.navigateToEditFolder(folderId)
-                        }
-                    )
-                }
-                
-                composable<LiftrixRoute.CreateFolder> {
-                    // TODO: Implement CreateFolderScreen
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Create Folder Screen")
-                            Button(
-                                onClick = { navController.popBackStackSafely() }
-                            ) {
-                                Text("Back")
-                            }
-                        }
-                    }
-                }
-                
-                composable<LiftrixRoute.EditFolder> { backStackEntry ->
-                    val route = backStackEntry.toRoute<LiftrixRoute.EditFolder>()
-                    // TODO: Implement EditFolderScreen
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Edit Folder Screen")
-                            Text("Folder ID: ${route.folderId}")
-                            Button(
-                                onClick = { navController.popBackStackSafely() }
-                            ) {
-                                Text("Back")
-                            }
-                        }
-                    }
-                }
-                
-                composable<LiftrixRoute.FolderSelection> { backStackEntry ->
-                    val route = backStackEntry.toRoute<LiftrixRoute.FolderSelection>()
-                    com.example.liftrix.ui.folder.screen.FolderSelectionScreen(
-                        templateId = route.templateId,
-                        onFolderSelected = { folderId ->
-                            // TODO: Handle folder selection result - navigate back with result
-                            navController.popBackStackSafely()
-                        },
-                        onCreateFolderRequest = {
-                            navController.navigateToCreateFolder()
-                        },
-                        onCancel = {
-                            navController.popBackStackSafely()
-                        }
-                    )
-                }
                 
                 // Profile Management Routes
                 composable<LiftrixRoute.Profile> { backStackEntry ->

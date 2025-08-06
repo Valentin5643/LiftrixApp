@@ -62,6 +62,7 @@ class NavigationMigrationHelper @Inject constructor() {
             // Exercise selection routes
             route == "exercise_selection" -> LiftrixRoute.ExerciseSelection()
             route == "exercise_selection_for_template" -> LiftrixRoute.ExerciseSelection(isForTemplate = true)
+            route.startsWith("exercise_selection") -> parseExerciseSelectionRoute(route)
             
             // Parameterized routes - extract parameters from URL-style strings
             route.startsWith("unified_active_workout") -> parseActiveWorkoutRoute(route)
@@ -218,6 +219,16 @@ class NavigationMigrationHelper @Inject constructor() {
             "workout_main" -> LiftrixRoute.Workout
             else -> null
         }
+    }
+    
+    private fun parseExerciseSelectionRoute(route: String): LiftrixRoute.ExerciseSelection {
+        val templateId = extractParameter(route, "templateId")
+        val isForTemplate = extractBooleanParameter(route, "isForTemplate") ?: false
+        
+        return LiftrixRoute.ExerciseSelection(
+            templateId = templateId?.takeIf { it.isNotBlank() && it != "null" },
+            isForTemplate = isForTemplate
+        )
     }
     
     private fun extractParameter(route: String, paramName: String): String? {

@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -28,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.IconButton
 import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
 import com.example.liftrix.ui.workout.components.PrimaryActionButton
 import com.example.liftrix.ui.workout.components.SecondaryActionButton
@@ -35,16 +37,29 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.stringResource
 import com.example.liftrix.R
 import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.ui.common.state.WorkoutScreenData
 import com.example.liftrix.ui.common.state.WorkoutUiState
+import com.example.liftrix.domain.model.Folder
+import com.example.liftrix.domain.usecase.folder.GetFoldersUseCase
+import com.example.liftrix.domain.usecase.folder.CreateFolderUseCase
+import kotlinx.coroutines.flow.firstOrNull
+import com.example.liftrix.ui.workout.components.InlineFolderSection
+import com.example.liftrix.ui.workout.components.CreateFolderDialog
+import com.example.liftrix.ui.workout.components.FolderEditDialog
+import com.example.liftrix.ui.workout.components.QuickCreateFolderButton
 
 /**
  * Main workout screen - simplified entry point with unified visual design.
@@ -53,6 +68,7 @@ import com.example.liftrix.ui.common.state.WorkoutUiState
  * - Quick workout start (empty workout)
  * - Creating a workout (workout routine design)
  * - Recent workout selection and starting
+ * - Folder organization and filtering
  * 
  * @param onNavigateToActiveWorkout Callback for starting active workout
  * @param onNavigateToWorkoutCreation Callback for workout creation
@@ -79,6 +95,10 @@ fun WorkoutScreen(
                 screenData = currentState.data,
                 onNavigateToActiveWorkout = onNavigateToActiveWorkout,
                 onNavigateToWorkoutCreation = onNavigateToWorkoutCreation,
+                onCreateFolder = { folderName -> 
+                    viewModel.handleEvent(WorkoutEvent.CreateFolder(folderName))
+                },
+                viewModel = viewModel,
                 modifier = modifier
             )
         }
@@ -103,8 +123,18 @@ private fun WorkoutContent(
     screenData: com.example.liftrix.ui.common.state.WorkoutScreenData,
     onNavigateToActiveWorkout: (templateId: String?) -> Unit,
     onNavigateToWorkoutCreation: () -> Unit,
+    onCreateFolder: (String) -> Unit,
+    viewModel: WorkoutViewModel,
     modifier: Modifier = Modifier
 ) {
+    // State for folder expansion and creation
+    var expandedFolders by remember { mutableStateOf(setOf<String>()) }
+    var showCreateFolderDialog by remember { mutableStateOf(false) }
+    var showEditFolderDialog by remember { mutableStateOf(false) }
+    var selectedFolderForEdit by remember { mutableStateOf<Folder?>(null) }
+    
+    // Drop zone tracking
+    val folderPositions = remember { mutableMapOf<String, androidx.compose.ui.geometry.Rect>() }
 
     LazyColumn(
         modifier = modifier
@@ -124,29 +154,76 @@ private fun WorkoutContent(
             )
         }
         
-        // Recent Workouts Section
+        // Recent Workouts Section with Inline Folder Management
         item {
-            Text(
-                text = stringResource(R.string.workflow_your_workouts),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(vertical = 8.dp)
+            InlineFolderSectionHeader(
+                title = stringResource(R.string.workflow_your_workouts),
+                onCreateFolder = { showCreateFolderDialog = true }
             )
         }
         
-        if (screenData.templates.isEmpty()) {
+        // Always show folders, regardless of template count
+        // Use real folders from screenData and group templates accordingly
+        val foldersWithWorkouts = screenData.folders.map { folder ->
+            val workoutsInFolder = screenData.templates.filter { template ->
+                template.folderId == folder.id.value
+            }
+            folder.updateTemplateCount(workoutsInFolder.size) to workoutsInFolder
+        }
+        
+        if (foldersWithWorkouts.isEmpty() && screenData.templates.isEmpty()) {
+            // Only show empty state if there are truly no folders AND no templates
             item {
                 EmptyWorkoutsCard(
                     onCreateWorkout = onNavigateToWorkoutCreation
                 )
             }
         } else {
-            items(screenData.templates) { workout ->
-                WorkoutCard(
-                    workout = workout,
-                    onStartWorkout = { onNavigateToActiveWorkout(workout.id.value) },
-                    onEditWorkout = { /* TODO: Navigate to edit */ }
-                )
+            // Show folders (empty or not) and any templates
+            foldersWithWorkouts.forEach { (folder, workouts) ->
+                item(key = "folder_${folder.id.value}") {
+                    InlineFolderSection(
+                        folder = folder,
+                        workouts = workouts,
+                        isExpanded = expandedFolders.contains(folder.id.value),
+                        onToggleExpanded = { toggledFolderId ->
+                            expandedFolders = if (expandedFolders.contains(toggledFolderId)) {
+                                expandedFolders - toggledFolderId
+                            } else {
+                                expandedFolders + toggledFolderId
+                            }
+                        },
+                        onStartWorkout = { workout -> 
+                            onNavigateToActiveWorkout(workout.id.value) 
+                        },
+                        onEditWorkout = { /* TODO: Navigate to edit */ },
+                        onEditFolder = { folderId ->
+                            selectedFolderForEdit = screenData.folders.find { it.id.value == folderId }
+                            showEditFolderDialog = true
+                        },
+                        onMoveWorkout = { workout, dropPosition ->
+                            // Find which folder the workout was dropped on based on coordinates
+                            var targetFolderId: String? = null
+                            
+                            for ((folderId, folderRect) in folderPositions) {
+                                if (folderRect.contains(dropPosition)) {
+                                    targetFolderId = folderId
+                                    break
+                                }
+                            }
+                            
+                            // Only move if dropped on a different folder
+                            if (targetFolderId != null && workout.folderId != targetFolderId) {
+                                viewModel.handleEvent(
+                                    WorkoutEvent.MoveWorkout(workout, targetFolderId)
+                                )
+                            }
+                        },
+                        onFolderPositionChanged = { folderId, rect ->
+                            folderPositions[folderId] = rect
+                        }
+                    )
+                }
             }
         }
         
@@ -154,7 +231,74 @@ private fun WorkoutContent(
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
+    
+    // Create Folder Dialog
+    CreateFolderDialog(
+        show = showCreateFolderDialog,
+        onDismiss = { showCreateFolderDialog = false },
+        onCreateFolder = { folderName ->
+            onCreateFolder(folderName)
+        }
+    )
+    
+    // Folder Edit Dialog
+    FolderEditDialog(
+        show = showEditFolderDialog,
+        folder = selectedFolderForEdit,
+        onDismiss = { 
+            showEditFolderDialog = false 
+            selectedFolderForEdit = null
+        },
+        onDeleteFolder = { folder ->
+            viewModel.handleEvent(WorkoutEvent.DeleteFolder(folder))
+            showEditFolderDialog = false
+            selectedFolderForEdit = null
+        },
+        onRenameFolder = { folder, newName ->
+            viewModel.handleEvent(WorkoutEvent.RenameFolder(folder, newName))
+            showEditFolderDialog = false
+            selectedFolderForEdit = null
+        },
+        onAddWorkoutToFolder = { folder ->
+            // Navigate to workout creation with pre-selected folder
+            onNavigateToWorkoutCreation()
+            showEditFolderDialog = false
+            selectedFolderForEdit = null
+        },
+        onReorderFolder = { folder, moveUp ->
+            // TODO: Handle folder reordering via ViewModel
+        }
+    )
 }
+
+/**
+ * Inline folder section header with create folder access
+ */
+@Composable
+private fun InlineFolderSectionHeader(
+    title: String,
+    onCreateFolder: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold
+        )
+        
+        QuickCreateFolderButton(
+            onClick = onCreateFolder
+        )
+    }
+}
+
 
 /**
  * Quick actions card for starting and creating workouts
@@ -236,54 +380,6 @@ private fun EmptyWorkoutsCard(
     }
 }
 
-/**
- * Workout card using unified design components
- */
-@Composable
-private fun WorkoutCard(
-    workout: WorkoutTemplate,
-    onStartWorkout: () -> Unit,
-    onEditWorkout: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    UnifiedWorkoutCard(
-        title = workout.name,
-        subtitle = if (!workout.description.isNullOrBlank()) workout.description else "${workout.exercises.size} exercises",
-        modifier = modifier,
-        actions = {
-            SecondaryActionButton(
-                text = "Edit",
-                onClick = onEditWorkout,
-                leadingIcon = Icons.Default.Edit
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            PrimaryActionButton(
-                text = "Start Workout", 
-                onClick = onStartWorkout,
-                leadingIcon = Icons.Default.PlayArrow
-            )
-        }
-    ) {
-        // Workout stats with modern styling
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            WorkoutStatItem(
-                label = "Exercises",
-                value = workout.exercises.size.toString()
-            )
-            WorkoutStatItem(
-                label = "Sets",
-                value = workout.getTotalSets().toString()
-            )
-            WorkoutStatItem(
-                label = "Est. Time",
-                value = workout.estimatedDurationMinutes?.let { "${it} min" } ?: "N/A"
-            )
-        }
-    }
-}
 
 /**
  * Workout stat item with updated styling

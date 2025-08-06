@@ -10,6 +10,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingFlat
 import androidx.compose.material.icons.filled.TrendingUp
@@ -30,14 +34,37 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.ui.theme.LiftrixTheme
 import com.example.liftrix.ui.theme.LiftrixColors
+import com.example.liftrix.domain.model.TrendData
+import com.example.liftrix.domain.model.IconData
 
 /**
- * Trend data for StatCard
+ * UI layer trend data for StatCard - maps from domain TrendData
  */
 sealed class Trend {
     data class Positive(val percentage: Float, val label: String = "increase") : Trend()
     data class Negative(val percentage: Float, val label: String = "decrease") : Trend()
     data class Neutral(val label: String = "no change") : Trend()
+}
+
+/**
+ * Maps domain TrendData to UI Trend
+ */
+fun TrendData.toUiTrend(): Trend = when (this) {
+    is TrendData.Positive -> Trend.Positive(percentage, label)
+    is TrendData.Negative -> Trend.Negative(percentage, label)
+    is TrendData.Neutral -> Trend.Neutral(label)
+}
+
+/**
+ * Maps domain IconData to UI ImageVector
+ */
+fun IconData.toImageVector(): ImageVector = when (this) {
+    IconData.FitnessCenter -> Icons.Filled.FitnessCenter
+    IconData.TrendingUp -> Icons.Filled.TrendingUp
+    IconData.Schedule -> Icons.Filled.Schedule
+    IconData.LocalFireDepartment -> Icons.Filled.LocalFireDepartment
+    IconData.ChevronRight -> Icons.Filled.ChevronRight
+    is IconData.Custom -> Icons.Filled.FitnessCenter // Default fallback
 }
 
 /**
@@ -131,6 +158,32 @@ fun StatCard(
             }
         }
     }
+}
+
+/**
+ * Domain-compatible StatCard that maps domain types to UI types
+ */
+@Composable
+fun StatCard(
+    title: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    trend: TrendData? = null,
+    icon: IconData? = null,
+    onClick: (() -> Unit)? = null,
+    contentDescription: String? = null
+) {
+    StatCard(
+        title = title,
+        value = value,
+        modifier = modifier,
+        subtitle = subtitle,
+        trend = trend?.toUiTrend(),
+        icon = icon?.toImageVector(),
+        onClick = onClick,
+        contentDescription = contentDescription
+    )
 }
 
 /**

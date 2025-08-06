@@ -155,12 +155,13 @@ class ErrorContextBuilder {
                 put("error_handler", "ErrorContextBuilder")
             }
             
-            // Add context validation
-            put("context_size", size.toString())
-            
             // Add builder-specific metadata
             put("context_builder_version", "1.0.0")
             put("context_build_method", "builder_pattern")
+            
+            // Add context validation (must be last to get accurate size)
+            // Note: Add 1 to size because putting this entry will increase the size by 1
+            put("context_size", (size + 1).toString())
         }
     }
     

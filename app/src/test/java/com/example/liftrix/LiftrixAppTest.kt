@@ -15,7 +15,7 @@ import org.robolectric.annotation.Config
  * Tests notification channel creation and application initialization.
  */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [Build.VERSION_CODES.O])
+@Config(sdk = [Build.VERSION_CODES.O], application = LiftrixApp::class)
 class LiftrixAppTest {
 
     @Test
@@ -35,7 +35,7 @@ class LiftrixAppTest {
     }
     
     @Test
-    @Config(sdk = [Build.VERSION_CODES.N])
+    @Config(sdk = [Build.VERSION_CODES.N], application = LiftrixApp::class)
     fun `onCreate should not create channels on pre-O Android versions`() {
         // Arrange
         val context = ApplicationProvider.getApplicationContext<LiftrixApp>()

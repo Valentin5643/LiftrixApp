@@ -3,6 +3,7 @@ package com.example.liftrix
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.os.Build
 import com.example.liftrix.BuildConfig
 import com.example.liftrix.domain.repository.WidgetPreferencesRepository
 import dagger.hilt.android.HiltAndroidApp
@@ -71,19 +72,23 @@ class LiftrixApp : Application() {
      * Only creates channels on Android O+ where they are required.
      */
     private fun createNotificationChannels() {
-        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
-        val workoutTimerChannel = NotificationChannel(
-            WORKOUT_TIMER_CHANNEL_ID,
-            "Workout Timer",
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Persistent notification for workout and rest timers"
-            setShowBadge(false)
+            val workoutTimerChannel = NotificationChannel(
+                WORKOUT_TIMER_CHANNEL_ID,
+                "Workout Timer",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Persistent notification for workout and rest timers"
+                setShowBadge(false)
+            }
+
+            notificationManager.createNotificationChannel(workoutTimerChannel)
+            Timber.d("Notification channels created")
+        } else {
+            Timber.d("Notification channels not created (Android version < O)")
         }
-
-        notificationManager.createNotificationChannel(workoutTimerChannel)
-        Timber.d("Notification channels created")
     }
     
     /**

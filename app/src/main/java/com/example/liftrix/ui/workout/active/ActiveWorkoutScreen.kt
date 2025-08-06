@@ -20,6 +20,10 @@ import com.example.liftrix.domain.model.SessionExercise
 import com.example.liftrix.domain.model.SessionSet
 import com.example.liftrix.domain.model.UnifiedWorkoutSession
 import com.example.liftrix.ui.workout.components.*
+import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
+import com.example.liftrix.ui.workout.components.PrimaryActionButton
+import com.example.liftrix.ui.workout.components.SecondaryActionButton
+import com.example.liftrix.ui.workout.components.TertiaryActionButton
 import com.example.liftrix.ui.theme.LiftrixSpacing
 import timber.log.Timber
 

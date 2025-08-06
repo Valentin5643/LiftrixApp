@@ -106,7 +106,7 @@ class CreateWorkoutWithExercisesUseCase @Inject constructor(
         lastUsedWeight: Weight?
     ): List<ExerciseSet> {
         val numberOfSets = exerciseRequest.targetSets ?: 3 // Default to 3 sets
-        val defaultReps = exerciseRequest.targetReps?.let { Reps(it) }
+        val defaultReps = exerciseRequest.targetReps?.let { Reps(it) } ?: Reps(10) // Default to 10 reps if none specified
         val defaultWeight = exerciseRequest.targetWeight ?: lastUsedWeight
         
         return (1..numberOfSets).map { setNumber ->

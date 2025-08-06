@@ -1,11 +1,30 @@
 package com.example.liftrix.domain.model
 
-import androidx.compose.ui.graphics.vector.ImageVector
-import com.example.liftrix.ui.components.cards.Trend
+
+/**
+ * Domain abstraction for trends in statistics
+ */
+sealed class TrendData {
+    data class Positive(val percentage: Float, val label: String = "increase") : TrendData()
+    data class Negative(val percentage: Float, val label: String = "decrease") : TrendData()
+    data class Neutral(val label: String = "no change") : TrendData()
+}
+
+/**
+ * Domain abstraction for icons - UI layer maps to actual ImageVector
+ */
+sealed class IconData {
+    object FitnessCenter : IconData()
+    object TrendingUp : IconData()
+    object Schedule : IconData()
+    object LocalFireDepartment : IconData()
+    object ChevronRight : IconData()
+    data class Custom(val identifier: String) : IconData()
+}
 
 /**
  * Sealed class representing different types of card data for enhanced UI components
- * Supports StatCard and ActivityCard integration with existing ViewModels
+ * Pure domain model without UI dependencies - UI layer maps these to concrete UI types
  */
 sealed class CardData {
     
@@ -16,8 +35,8 @@ sealed class CardData {
         val title: String,
         val value: String,
         val subtitle: String? = null,
-        val trend: Trend? = null,
-        val icon: ImageVector? = null,
+        val trend: TrendData? = null,
+        val icon: IconData? = null,
         val contentDescription: String? = null
     ) : CardData()
     
@@ -27,7 +46,7 @@ sealed class CardData {
     data class Activity(
         val title: String,
         val subtitle: String,
-        val icon: ImageVector,
+        val icon: IconData,
         val trailing: String? = null,
         val showChevron: Boolean = true,
         val contentDescription: String? = null

@@ -75,17 +75,17 @@ class UserProfileDaoQueryTest {
         assert(profileSuspend!!.userId == "test_user_1") { "Retrieved profile should match" }
 
         // Test Sync Queries
-        val unsyncedProfiles = userProfileDao.getUnsyncedProfiles()
+        val unsyncedProfiles = userProfileDao.getUnsyncedProfiles("test_user_1")
         assert(unsyncedProfiles.isNotEmpty()) { "Should have unsynced profiles" }
 
-        val unsyncedCount = userProfileDao.getUnsyncedProfilesCount()
+        val unsyncedCount = userProfileDao.getUnsyncedProfilesCount("test_user_1")
         assert(unsyncedCount > 0) { "Should have positive unsynced count" }
 
         // Test Completion Queries (these were causing the compilation errors)
-        val incompleteProfiles = userProfileDao.getIncompleteProfiles()
+        val incompleteProfiles = userProfileDao.getIncompleteProfiles("test_user_1")
         assert(incompleteProfiles.isNotEmpty()) { "Should have incomplete profiles" }
 
-        val completedProfiles = userProfileDao.getCompletedProfiles()
+        val completedProfiles = userProfileDao.getCompletedProfiles("test_user_1")
         assert(completedProfiles.isEmpty()) { "Should have no completed profiles initially" }
 
         val hasProfile = userProfileDao.hasProfile("test_user_1")
@@ -112,10 +112,10 @@ class UserProfileDaoQueryTest {
         val hasCompletedProfileAfter = userProfileDao.hasCompletedProfile("test_user_1")
         assert(hasCompletedProfileAfter) { "Should have completed profile after marking" }
 
-        val completedProfilesAfter = userProfileDao.getCompletedProfiles()
+        val completedProfilesAfter = userProfileDao.getCompletedProfiles("test_user_1")
         assert(completedProfilesAfter.isNotEmpty()) { "Should have completed profiles after marking" }
 
-        val incompleteProfilesAfter = userProfileDao.getIncompleteProfiles()
+        val incompleteProfilesAfter = userProfileDao.getIncompleteProfiles("test_user_1")
         assert(incompleteProfilesAfter.isEmpty()) { "Should have no incomplete profiles after marking" }
 
         // Test Delete Operations
@@ -204,16 +204,16 @@ class UserProfileDaoQueryTest {
         assert(deleteNonExistentResult == 0) { "Delete non-existent should affect 0 rows" }
 
         // Test empty states
-        val emptyUnsyncedProfiles = userProfileDao.getUnsyncedProfiles()
+        val emptyUnsyncedProfiles = userProfileDao.getUnsyncedProfiles("non_existent_user")
         assert(emptyUnsyncedProfiles.isEmpty()) { "Should have no unsynced profiles in empty database" }
 
-        val emptyUnsyncedCount = userProfileDao.getUnsyncedProfilesCount()
+        val emptyUnsyncedCount = userProfileDao.getUnsyncedProfilesCount("non_existent_user")
         assert(emptyUnsyncedCount == 0) { "Should have 0 unsynced count in empty database" }
 
-        val emptyCompletedProfiles = userProfileDao.getCompletedProfiles()
+        val emptyCompletedProfiles = userProfileDao.getCompletedProfiles("non_existent_user")
         assert(emptyCompletedProfiles.isEmpty()) { "Should have no completed profiles in empty database" }
 
-        val emptyIncompleteProfiles = userProfileDao.getIncompleteProfiles()
+        val emptyIncompleteProfiles = userProfileDao.getIncompleteProfiles("non_existent_user")
         assert(emptyIncompleteProfiles.isEmpty()) { "Should have no incomplete profiles in empty database" }
     }
 } 

@@ -7,6 +7,7 @@ import com.example.liftrix.data.mapper.ExerciseLibraryMapper
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.ExerciseLibrary
+import com.example.liftrix.domain.model.error.LiftrixError
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -16,6 +17,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class ExerciseLibraryRepositoryImplTest {
@@ -130,7 +132,8 @@ class ExerciseLibraryRepositoryImplTest {
         
         // Then
         assertTrue(result.isSuccess)
-        val exercises = result.getOrNull()!!
+        val exercises = result.getOrNull()
+        assertNotNull(exercises)
         assertEquals(1, exercises.size)
         assertEquals("Bench Press", exercises[0].name)
         assertEquals(Equipment.BARBELL, exercises[0].equipment)
@@ -147,7 +150,8 @@ class ExerciseLibraryRepositoryImplTest {
         
         // Then
         assertTrue(result.isSuccess)
-        val exercises = result.getOrNull()!!
+        val exercises = result.getOrNull()
+        assertNotNull(exercises)
         assertEquals(2, exercises.size) // Bench Press and Push-ups
         assertTrue(exercises.all { 
             it.primaryMuscleGroup == ExerciseCategory.CHEST || 
@@ -167,7 +171,8 @@ class ExerciseLibraryRepositoryImplTest {
         
         // Then
         assertTrue(result.isSuccess)
-        val exercises = result.getOrNull()!!
+        val exercises = result.getOrNull()
+        assertNotNull(exercises)
         assertEquals(1, exercises.size)
         assertEquals("Push-ups", exercises[0].name)
     }
@@ -182,7 +187,8 @@ class ExerciseLibraryRepositoryImplTest {
         
         // Then
         assertTrue(result.isSuccess)
-        val exercises = result.getOrNull()!!
+        val exercises = result.getOrNull()
+        assertNotNull(exercises)
         assertEquals(1, exercises.size)
         assertEquals("Dumbbell Curl", exercises[0].name)
     }
@@ -198,7 +204,8 @@ class ExerciseLibraryRepositoryImplTest {
         
         // Then
         assertTrue(result.isSuccess)
-        val exercises = result.getOrNull()!!
+        val exercises = result.getOrNull()
+        assertNotNull(exercises)
         assertEquals(2, exercises.size) // Bench Press and Dumbbell Curl
         assertTrue(exercises.all { it.equipment in equipment })
     }
@@ -217,7 +224,8 @@ class ExerciseLibraryRepositoryImplTest {
         
         // Then
         assertTrue(result.isSuccess)
-        val exercises = result.getOrNull()!!
+        val exercises = result.getOrNull()
+        assertNotNull(exercises)
         assertEquals(2, exercises.size)
         assertEquals("Dumbbell Curl", exercises[0].name) // Most recent first
         assertEquals("Bench Press", exercises[1].name)
@@ -238,7 +246,8 @@ class ExerciseLibraryRepositoryImplTest {
         
         // Then
         assertTrue(result.isSuccess)
-        val exercises = result.getOrNull()!!
+        val exercises = result.getOrNull()
+        assertNotNull(exercises)
         assertTrue(exercises.isEmpty())
     }
 
@@ -256,7 +265,8 @@ class ExerciseLibraryRepositoryImplTest {
         
         // Then
         assertTrue(result.isSuccess)
-        val exercises = result.getOrNull()!!
+        val exercises = result.getOrNull()
+        assertNotNull(exercises)
         assertEquals(1, exercises.size) // Only valid exercise returned
         assertEquals("Bench Press", exercises[0].name)
     }
@@ -272,7 +282,7 @@ class ExerciseLibraryRepositoryImplTest {
         
         // Then
         assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is RuntimeException)
+        assertTrue(result.exceptionOrNull() is LiftrixError.DatabaseError)
     }
 
     @Test
@@ -286,6 +296,6 @@ class ExerciseLibraryRepositoryImplTest {
         
         // Then
         assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is RuntimeException)
+        assertTrue(result.exceptionOrNull() is LiftrixError.DatabaseError)
     }
 } 

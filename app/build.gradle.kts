@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.PathSensitivity
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -68,6 +70,9 @@ android {
             // Firebase Performance Monitoring configuration
             manifestPlaceholders["firebase_performance_logcat_enabled"] = false
             manifestPlaceholders["firebase_performance_collection_enabled"] = true
+            
+            // Secure OAuth configuration from properties
+            buildConfigField("String", "GOOGLE_CLIENT_ID", "\"${project.findProperty("GOOGLE_CLIENT_ID_RELEASE") ?: ""}\"")
         }
         
         debug {
@@ -85,6 +90,9 @@ android {
             manifestPlaceholders["firebase_performance_collection_enabled"] = false
             
             versionNameSuffix = "-DEBUG"
+            
+            // Secure OAuth configuration from properties
+            buildConfigField("String", "GOOGLE_CLIENT_ID", "\"${project.findProperty("GOOGLE_CLIENT_ID_DEBUG") ?: "734273269747-ojaksa5nhir6re5sqskn7qlbflec2f94.apps.googleusercontent.com"}\"")
         }
     }
     compileOptions {
@@ -259,20 +267,127 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
 }
 
-// Room Query Validation Task
-tasks.register<Exec>("validateRoomQueries") {
+// Room Query Validation Task - Configuration Cache Compatible
+abstract class ValidateRoomQueriesTask : DefaultTask() {
+    
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val sourceDirectory: DirectoryProperty
+    
+    @get:Internal
+    abstract val projectDirectory: DirectoryProperty
+    
+    @TaskAction
+    fun validateRoomQueries() {
+        println("🔍 Validating Room entity default values...")
+        
+        val sourceDir = sourceDirectory.get().asFile
+        var violationsFound = false
+        
+        if (!sourceDir.exists()) {
+            println("✅ No source directory found to validate")
+            return
+        }
+        
+        // Find all Kotlin files with @Entity annotation
+        val entityFiles = sourceDir.walkTopDown()
+            .filter { it.isFile && it.extension == "kt" }
+            .filter { file ->
+                file.readText().contains("@Entity")
+            }
+            .toList()
+        
+        if (entityFiles.isEmpty()) {
+            println("✅ No Room entity files found to validate")
+            return
+        }
+        
+        println("📁 Checking ${entityFiles.size} entity files for violations...")
+        
+        val projectDir = projectDirectory.get().asFile
+        
+        entityFiles.forEach { file ->
+            println("   Checking: ${file.relativeTo(projectDir)}")
+            val content = file.readText()
+            val lines = content.lines()
+            
+            // Check for specific invalid Room default values that would cause compilation issues
+            val invalidPatterns = mapOf(
+                """defaultValue\s*=\s*["']undefined["']""" to "undefined literal",
+                """defaultValue\s*=\s*["']null["']""" to "null literal", 
+                """defaultValue\s*=\s*""\s*""" to "empty string",
+                """defaultValue\s*=\s*''\s*""" to "empty string"
+            )
+            
+            invalidPatterns.forEach { (pattern, description) ->
+                val matches = lines.withIndex().filter { (_, line) ->
+                    line.contains(Regex(pattern))
+                }
+                if (matches.isNotEmpty()) {
+                    println("❌ VIOLATION: Found $description in defaultValue in ${file.relativeTo(projectDir)}")
+                    matches.forEach { (index, line) ->
+                        println("   Line ${index + 1}: ${line.trim()}")
+                    }
+                    violationsFound = true
+                }
+            }
+            
+            // Validate and report on valid Room default patterns
+            val defaultValueLines = lines.withIndex().filter { (_, line) ->
+                line.contains("@ColumnInfo") && line.contains("defaultValue")
+            }
+            
+            if (defaultValueLines.isNotEmpty()) {
+                println("   Found ${defaultValueLines.size} defaultValue annotations:")
+                defaultValueLines.forEach { (index, line) ->
+                    when {
+                        line.contains(Regex("""defaultValue\s*=\s*"[0-9]+"""")) ->
+                            println("   ✅ Line ${index + 1}: Valid numeric default")
+                        line.contains(Regex("""defaultValue\s*=\s*"CURRENT_TIMESTAMP"""")) ->
+                            println("   ✅ Line ${index + 1}: Valid timestamp default")
+                        line.contains(Regex("""defaultValue\s*=\s*"'[A-Z_]+.*'"""")) ->
+                            println("   ✅ Line ${index + 1}: Valid string enum default")
+                        else -> {
+                            // For any other patterns, show as informational
+                            println("   ℹ️ Line ${index + 1}: Other valid pattern")
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Summary
+        if (violationsFound) {
+            println()
+            println("❌ VALIDATION FAILED: Found Room entity violations!")
+            println()
+            println("🔧 FIX GUIDE:")
+            println("   1. Remove defaultValue = \"undefined\" from @ColumnInfo annotations")
+            println("   2. Use proper Room defaults like:")
+            println("      - defaultValue = \"0\" for numeric fields")
+            println("      - defaultValue = \"1\" or \"0\" for boolean fields")
+            println("      - defaultValue = \"CURRENT_TIMESTAMP\" for timestamp fields")
+            println("   3. For nullable fields, omit defaultValue entirely")
+            println("   4. Ensure entity schema matches migration table creation")
+            println()
+            throw GradleException("Room entity validation failed!")
+        } else {
+            println()
+            println("✅ VALIDATION PASSED: No Room entity violations found!")
+            println("🎉 All Room entities have proper default values")
+            println()
+        }
+    }
+}
+
+tasks.register<ValidateRoomQueriesTask>("validateRoomQueries") {
     group = "verification"
     description = "Validates Room entity default values and DAO queries"
     
     dependsOn("compileDebugKotlin")
     
-    // Use Exec task type for configuration cache compatibility
-    commandLine("bash", "../scripts/validate_room_defaults.sh")
-    workingDir = projectDir
-    
-    doLast {
-        println("✅ Room query validation completed successfully")
-    }
+    sourceDirectory.set(layout.projectDirectory.dir("src/main/java"))
+    projectDirectory.set(layout.projectDirectory)
 }
 
 // Make Room validation run before tests (using correct task names)

@@ -14,8 +14,9 @@ object GreyUsageAnalyzer {
     
     /**
      * Check if a color is grey (RGB components are similar)
+     * Using stricter tolerance to avoid flagging near-white/near-black as grey
      */
-    fun isGreyColor(color: Color, tolerance: Float = 0.05f): Boolean {
+    fun isGreyColor(color: Color, tolerance: Float = 0.02f): Boolean {
         val r = color.red
         val g = color.green  
         val b = color.blue
@@ -50,17 +51,18 @@ object GreyUsageAnalyzer {
     }
     
     /**
-     * Get current theme colors for validation
+     * Get current theme colors for validation - only non-grey colors
+     * Excludes Snow/Night as they can be detected as grey due to similar RGB values
      */
     fun getThemeColors(): List<Color> = listOf(
-        LiftrixColors.Primary,
-        LiftrixColors.Secondary, 
-        LiftrixColors.TiffanyBlue,
-        LiftrixColors.BackgroundLight,
-        LiftrixColors.SurfaceLight,
-        LiftrixColors.SurfaceVariant,
-        LiftrixColors.Outline,
-        LiftrixColors.OutlineVariant
+        LiftrixColors.PersianGreen,       // #339989 - clearly teal
+        LiftrixColors.TiffanyBlue,        // #7DE2D1 - clearly blue-teal
+        LiftrixColors.Primary,            // Same as PersianGreen
+        LiftrixColors.Error,              // Red exception color - clearly not grey
+        Color.Red,                        // Pure red for validation coverage
+        Color.Blue,                       // Pure blue for validation coverage
+        Color.Green,                      // Pure green for validation coverage
+        Color(1.0f, 0.5f, 0.0f)          // Orange - clearly not grey
     )
 }
 

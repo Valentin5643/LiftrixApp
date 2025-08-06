@@ -19,17 +19,17 @@ interface UserProfileDao {
     @Query("SELECT * FROM user_profiles WHERE user_id = :userId")
     suspend fun getProfileForUserSuspend(userId: String): UserProfileEntity?
     
-    @Query("SELECT * FROM user_profiles WHERE is_synced = 0")
-    suspend fun getUnsyncedProfiles(): List<UserProfileEntity>
+    @Query("SELECT * FROM user_profiles WHERE user_id = :userId AND is_synced = 0")
+    suspend fun getUnsyncedProfiles(userId: String): List<UserProfileEntity>
     
-    @Query("SELECT COUNT(*) FROM user_profiles WHERE is_synced = 0")
-    suspend fun getUnsyncedProfilesCount(): Int
+    @Query("SELECT COUNT(*) FROM user_profiles WHERE user_id = :userId AND is_synced = 0")
+    suspend fun getUnsyncedProfilesCount(userId: String): Int
     
-    @Query("SELECT * FROM user_profiles WHERE completed_at IS NOT NULL")
-    suspend fun getCompletedProfiles(): List<UserProfileEntity>
+    @Query("SELECT * FROM user_profiles WHERE user_id = :userId AND completed_at IS NOT NULL")
+    suspend fun getCompletedProfiles(userId: String): List<UserProfileEntity>
     
-    @Query("SELECT * FROM user_profiles WHERE completed_at IS NULL")
-    suspend fun getIncompleteProfiles(): List<UserProfileEntity>
+    @Query("SELECT * FROM user_profiles WHERE user_id = :userId AND completed_at IS NULL")
+    suspend fun getIncompleteProfiles(userId: String): List<UserProfileEntity>
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertProfile(profile: UserProfileEntity): Long
@@ -90,8 +90,8 @@ interface UserProfileDao {
     @Query("SELECT profile_completion_percentage FROM user_profiles WHERE user_id = :userId")
     suspend fun getProfileCompletionPercentage(userId: String): Int?
     
-    @Query("SELECT COUNT(*) FROM user_profiles WHERE profile_completion_percentage >= 80")
-    suspend fun getHighCompletionProfilesCount(): Int
+    @Query("SELECT COUNT(*) FROM user_profiles WHERE user_id = :userId AND profile_completion_percentage >= 80")
+    suspend fun getHighCompletionProfilesCount(userId: String): Int
     
     // Profile image management methods
     

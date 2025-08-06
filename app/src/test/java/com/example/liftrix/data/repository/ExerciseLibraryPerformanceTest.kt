@@ -172,7 +172,7 @@ class ExerciseLibraryPerformanceTest {
         val maxAllowedTime = 150L // Recent exercises should be very fast
         
         // Setup recent exercises mock
-        coEvery { usageHistoryDao.getRecentExercises(userId, limit) } returns emptyList()
+        coEvery { usageHistoryDao.getRecentExerciseIds(userId, limit) } returns emptyList()
         
         // When - Measure recent exercises performance
         val recentTime = measureTimeMillis {

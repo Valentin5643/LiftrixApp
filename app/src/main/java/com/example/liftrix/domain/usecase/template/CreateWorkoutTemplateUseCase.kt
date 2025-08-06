@@ -58,55 +58,87 @@ class CreateWorkoutTemplateUseCase @Inject constructor(
     ): LiftrixResult<WorkoutTemplate> {
         return liftrixCatching(
             errorMapper = { throwable ->
+                timber.log.Timber.e(throwable, "🔥 CREATE-TEMPLATE: Error occurred during template creation")
+                timber.log.Timber.e("🔥 CREATE-TEMPLATE: Error type: ${throwable::class.simpleName}")
+                timber.log.Timber.e("🔥 CREATE-TEMPLATE: Error message: ${throwable.message}")
+                
                 when (throwable) {
-                    is IllegalArgumentException -> LiftrixError.ValidationError(
-                        field = when {
-                            throwable.message?.contains("User ID") == true -> "userId"
-                            throwable.message?.contains("Template name") == true -> "name"
-                            throwable.message?.contains("exercises") == true -> "exercises"
-                            throwable.message?.contains("Difficulty level") == true -> "difficultyLevel"
-                            else -> "input"
-                        },
-                        violations = listOf(throwable.message ?: "Invalid input parameters")
-                    )
+                    is IllegalArgumentException -> {
+                        timber.log.Timber.e("🔥 CREATE-TEMPLATE: Validation error - ${throwable.message}")
+                        LiftrixError.ValidationError(
+                            field = when {
+                                throwable.message?.contains("User ID") == true -> "userId"
+                                throwable.message?.contains("Template name") == true -> "name"
+                                throwable.message?.contains("exercises") == true -> "exercises"
+                                throwable.message?.contains("Difficulty level") == true -> "difficultyLevel"
+                                else -> "input"
+                            },
+                            violations = listOf(throwable.message ?: "Invalid input parameters")
+                        )
+                    }
                     is RuntimeException -> when {
-                        throwable.message?.contains("Failed to create default folder") == true -> 
+                        throwable.message?.contains("Failed to create default folder") == true -> {
+                            timber.log.Timber.e("🔥 CREATE-TEMPLATE: Default folder creation failed")
                             LiftrixError.DatabaseError(
                                 errorMessage = "Failed to create default folder",
                                 operation = "getOrCreateDefaultFolder"
                             )
-                        else -> LiftrixError.BusinessLogicError(
-                            code = "TEMPLATE_CREATION_FAILED",
-                            analyticsContext = mapOf("userId" to userId, "templateName" to name),
-                            errorMessage = throwable.message ?: "Failed to create workout template",
+                        }
+                        else -> {
+                            timber.log.Timber.e("🔥 CREATE-TEMPLATE: Runtime error - ${throwable.message}")
+                            LiftrixError.BusinessLogicError(
+                                code = "TEMPLATE_CREATION_FAILED",
+                                analyticsContext = mapOf("userId" to userId, "templateName" to name),
+                                errorMessage = throwable.message ?: "Failed to create workout template",
+                            )
+                        }
+                    }
+                    else -> {
+                        timber.log.Timber.e("🔥 CREATE-TEMPLATE: Database error - ${throwable.message}")
+                        LiftrixError.DatabaseError(
+                            errorMessage = "Failed to create workout template",
+                            operation = "createTemplate"
                         )
                     }
-                    else -> LiftrixError.DatabaseError(
-                        errorMessage = "Failed to create workout template",
-                        operation = "createTemplate"
-                    )
                 }
             }
         ) {
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: Starting template creation")
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: userId='$userId'")
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: name='$name'")
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: folderId='$folderId'")
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: exercises.size=${exercises.size}")
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: description='$description'")
+            
             validateInput(userId, name, exercises, difficultyLevel)
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: Input validation passed")
             
             // Ensure default folder exists before creating template
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: Getting or creating default folder for user $userId")
             val defaultFolderResult = folderRepository.getOrCreateDefaultFolder(userId)
             if (defaultFolderResult.isFailure) {
-                throw RuntimeException("Failed to create default folder: ${defaultFolderResult.exceptionOrNull()?.message}")
+                val error = defaultFolderResult.exceptionOrNull()?.message
+                timber.log.Timber.e("🔥 CREATE-TEMPLATE: Default folder creation failed: $error")
+                throw RuntimeException("Failed to create default folder: $error")
             }
             
             // Get the actual folder to ensure it exists and use its ID
             val defaultFolder = defaultFolderResult.getOrThrow()
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: Default folder created/found: ${defaultFolder?.id?.value}")
+            
             val actualFolderId = if (folderId == "uncategorized_$userId") {
                 defaultFolder.id
             } else {
-                folderId
+                com.example.liftrix.domain.model.FolderId(folderId)
             }
             
-            timber.log.Timber.d("Creating template '${name}' for user $userId in folder $actualFolderId")
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: Creating template '$name' for user $userId in folder ${actualFolderId.value}")
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: Final folder ID to use: ${actualFolderId.value}")
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: actualFolderId object: $actualFolderId")
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: actualFolderId.value: ${actualFolderId.value}")
             
             // Calculate estimated duration if not provided
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: Calculating estimated duration")
             val finalEstimatedDuration = estimatedDurationMinutes ?: run {
                 val tempTemplate = WorkoutTemplate(
                     id = WorkoutTemplateId.generate(),
@@ -118,7 +150,7 @@ class CreateWorkoutTemplateUseCase @Inject constructor(
                     },
                     estimatedDurationMinutes = null,
                     difficultyLevel = difficultyLevel,
-                    folderId = actualFolderId.toString(),
+                    folderId = actualFolderId.value,
                     usageCount = 0,
                     lastUsedAt = null,
                     createdAt = Instant.now(),
@@ -127,7 +159,9 @@ class CreateWorkoutTemplateUseCase @Inject constructor(
                 
                 estimateWorkoutDurationUseCase.estimateDurationMinutes(tempTemplate)
             }
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: Final estimated duration: $finalEstimatedDuration minutes")
             
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: Creating final template object")
             val template = WorkoutTemplate(
                 id = WorkoutTemplateId.generate(),
                 userId = userId,
@@ -138,14 +172,35 @@ class CreateWorkoutTemplateUseCase @Inject constructor(
                 },
                 estimatedDurationMinutes = finalEstimatedDuration,
                 difficultyLevel = difficultyLevel,
-                folderId = actualFolderId.toString(),
+                folderId = actualFolderId.value,
                 usageCount = 0,
                 lastUsedAt = null,
                 createdAt = Instant.now(),
                 updatedAt = Instant.now()
             )
             
-            templateRepository.createTemplate(template).getOrThrow()
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: Template object created - ID: ${template.id.value}")
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: Template name: '${template.name}'")
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: Template folderId: '${template.folderId}'")
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: Template exercises count: ${template.exercises.size}")
+            
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: Calling repository.createTemplate()")
+            val repositoryResult = templateRepository.createTemplate(template)
+            
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: Repository call completed")
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: Repository result success: ${repositoryResult.isSuccess}")
+            
+            if (repositoryResult.isFailure) {
+                val error = repositoryResult.exceptionOrNull()
+                timber.log.Timber.e("🔥 CREATE-TEMPLATE: Repository returned failure: ${error?.message}")
+                timber.log.Timber.e("🔥 CREATE-TEMPLATE: Repository error type: ${error?.javaClass?.simpleName}")
+                throw error ?: RuntimeException("Repository createTemplate failed with unknown error")
+            }
+            
+            val createdTemplate = repositoryResult.getOrThrow()
+            timber.log.Timber.d("🔥 CREATE-TEMPLATE: Template created successfully - Final ID: ${createdTemplate.id.value}")
+            
+            createdTemplate
         }
     }
     

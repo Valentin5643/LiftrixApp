@@ -6,6 +6,9 @@ import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
 import com.example.liftrix.domain.usecase.auth.GetAuthenticatedUserIdUseCase
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.template.GetTemplatesUseCase
+import com.example.liftrix.domain.usecase.template.GetTemplatesRequest
+import com.example.liftrix.domain.usecase.template.TemplateSortBy
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +22,7 @@ import javax.inject.Inject
 
 /**
  * UI state for WorkoutTemplatesDashboard
+ * 🔥 ENHANCED: Added folder filtering support
  */
 sealed class WorkoutTemplatesDashboardUiState {
     object WaitingForAuth : WorkoutTemplatesDashboardUiState()
@@ -26,20 +30,23 @@ sealed class WorkoutTemplatesDashboardUiState {
     data class Success(
         val templates: List<WorkoutTemplate> = emptyList(),
         val filteredTemplates: List<WorkoutTemplate> = emptyList(),
-        val searchQuery: String = ""
+        val searchQuery: String = "",
+        val selectedFolderId: String? = null, // 🔥 NEW: Track selected folder
+        val isShowingFolderContents: Boolean = false // 🔥 NEW: Track folder view mode
     ) : WorkoutTemplatesDashboardUiState()
     data class Error(val message: String) : WorkoutTemplatesDashboardUiState()
 }
 
 /**
  * ViewModel for the Workout Templates Dashboard.
- * Simple ViewModel for folder-based navigation without template management.
+ * 🔥 ENHANCED: Now supports folder-based template filtering using optimized database queries.
  */
 @HiltViewModel
 class WorkoutTemplatesDashboardViewModel @Inject constructor(
     private val getAuthenticatedUserIdUseCase: GetAuthenticatedUserIdUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
-    private val workoutTemplateRepository: WorkoutTemplateRepository
+    private val workoutTemplateRepository: WorkoutTemplateRepository,
+    private val getTemplatesUseCase: GetTemplatesUseCase // 🔥 NEW: Use optimized template queries
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<WorkoutTemplatesDashboardUiState>(
@@ -68,7 +75,9 @@ class WorkoutTemplatesDashboardViewModel @Inject constructor(
                         val templates = result.getOrElse { emptyList() }
                         _uiState.value = WorkoutTemplatesDashboardUiState.Success(
                             templates = templates,
-                            filteredTemplates = templates
+                            filteredTemplates = templates,
+                            selectedFolderId = null, // 🔥 FIXED: Initialize folder fields
+                            isShowingFolderContents = false
                         )
                         Timber.d("Successfully loaded ${templates.size} templates for user $userId")
                     } else {
@@ -83,6 +92,55 @@ class WorkoutTemplatesDashboardViewModel @Inject constructor(
                 Timber.e(exception, "Error in loadTemplatesWhenAuthenticated")
             }
         }
+    }
+
+    /**
+     * 🔥 NEW: Load templates for a specific folder using optimized database query
+     */
+    fun loadTemplatesForFolder(folderId: String) {
+        viewModelScope.launch {
+            try {
+                Timber.d("🔥 FOLDER-DASHBOARD: Loading templates for folder: $folderId")
+                _uiState.value = WorkoutTemplatesDashboardUiState.Loading
+                
+                val userId = getAuthenticatedUserIdUseCase()
+                val request = GetTemplatesRequest(
+                    userId = userId,
+                    folderId = folderId,
+                    sortBy = TemplateSortBy.RECENT
+                )
+                
+                getTemplatesUseCase(request).collect { result ->
+                    if (result.isSuccess) {
+                        val templatesResult = result.getOrThrow()
+                        val templates = templatesResult.templates
+                        
+                        _uiState.value = WorkoutTemplatesDashboardUiState.Success(
+                            templates = templates,
+                            filteredTemplates = templates,
+                            selectedFolderId = folderId,
+                            isShowingFolderContents = true
+                        )
+                        Timber.d("🔥 FOLDER-DASHBOARD: Successfully loaded ${templates.size} templates for folder $folderId")
+                    } else {
+                        val errorMessage = result.exceptionOrNull()?.message ?: "Failed to load folder templates"
+                        _uiState.value = WorkoutTemplatesDashboardUiState.Error(errorMessage)
+                        Timber.e("Failed to load templates for folder $folderId: $errorMessage")
+                    }
+                }
+            } catch (exception: Exception) {
+                val errorMessage = "Error loading folder templates: ${exception.message}"
+                _uiState.value = WorkoutTemplatesDashboardUiState.Error(errorMessage)
+                Timber.e(exception, "Error in loadTemplatesForFolder")
+            }
+        }
+    }
+    
+    /**
+     * 🔥 NEW: Return to showing all templates (exit folder view)
+     */
+    fun showAllTemplates() {
+        loadTemplatesWhenAuthenticated()
     }
 
     /**

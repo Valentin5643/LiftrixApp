@@ -256,6 +256,9 @@ fun NavController.navigateToAnomalySettings() {
     navigate(LiftrixRoute.AnomalySettings)
 }
 
+// MARK: - Folder Management Navigation
+
+
 /**
  * Navigate to guest mode selection screen
  */

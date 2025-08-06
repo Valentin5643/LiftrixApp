@@ -100,11 +100,18 @@ class GetTemplatesUseCase @Inject constructor(
      * Performs the template retrieval based on validated request parameters.
      */
     private fun performTemplateRetrieval(request: GetTemplatesRequest): Flow<LiftrixResult<GetTemplatesResult>> {
-        return when (request.sortBy) {
-            TemplateSortBy.RECENT -> getRecentTemplates(request)
-            TemplateSortBy.MOST_USED -> getMostUsedTemplates(request)
-            TemplateSortBy.ALPHABETICAL -> getAllTemplatesAlphabetical(request)
-            TemplateSortBy.DIFFICULTY -> getTemplatesByDifficulty(request)
+        // 🔥 OPTIMIZATION: Use database-level folder filtering when folderId is provided
+        return if (!request.folderId.isNullOrBlank()) {
+            // Use optimized folder-specific query
+            getTemplatesByFolder(request)
+        } else {
+            // Use existing sorting logic when no folder filter
+            when (request.sortBy) {
+                TemplateSortBy.RECENT -> getRecentTemplates(request)
+                TemplateSortBy.MOST_USED -> getMostUsedTemplates(request)
+                TemplateSortBy.ALPHABETICAL -> getAllTemplatesAlphabetical(request)
+                TemplateSortBy.DIFFICULTY -> getTemplatesByDifficulty(request)
+            }
         }.map { templatesResult ->
             templatesResult.map { templates ->
                 val filteredTemplates = applyFilters(templates, request)
@@ -142,8 +149,10 @@ class GetTemplatesUseCase @Inject constructor(
             // If filters are applied, get all templates and filter them
             templateRepository.getAllTemplatesForUser(request.userId)
         } else {
-            // If no filters, use optimized recent templates query
-            templateRepository.getRecentlyUsedTemplates(request.userId, request.limit)
+            // 🔥 CHANGED: Use getAllTemplatesForUser to include newly created templates
+            // getRecentlyUsedTemplates excludes templates with usageCount=0 or lastUsedAt=null
+            timber.log.Timber.d("🔥 RECENT-TEMPLATES: Loading all templates for user ${request.userId} (including new ones)")
+            templateRepository.getAllTemplatesForUser(request.userId)
         }
     }
     
@@ -186,7 +195,29 @@ class GetTemplatesUseCase @Inject constructor(
     }
     
     /**
+     * 🔥 NEW: Retrieves templates filtered by folder using optimized database query.
+     * This avoids loading all templates into memory and filtering them afterwards.
+     */
+    private fun getTemplatesByFolder(request: GetTemplatesRequest): Flow<LiftrixResult<List<WorkoutTemplate>>> {
+        timber.log.Timber.d("🔥 FOLDER-QUERY: Using database-level folder filtering for folderId: ${request.folderId}")
+        
+        return templateRepository.getTemplatesByFolder(request.userId, request.folderId!!)
+            .map { result ->
+                result.map { templates ->
+                    // Apply sorting to folder-specific templates
+                    when (request.sortBy) {
+                        TemplateSortBy.RECENT -> templates.sortedByDescending { it.lastUsedAt ?: it.createdAt }
+                        TemplateSortBy.MOST_USED -> templates.sortedByDescending { it.usageCount }
+                        TemplateSortBy.ALPHABETICAL -> templates.sortedBy { it.name.lowercase() }
+                        TemplateSortBy.DIFFICULTY -> templates.sortedBy { it.difficultyLevel ?: 0 }
+                    }
+                }
+            }
+    }
+    
+    /**
      * Applies additional filters to the template list.
+     * 🔥 OPTIMIZATION: Folder filtering now handled at database level, not in-memory.
      */
     private fun applyFilters(templates: List<WorkoutTemplate>, request: GetTemplatesRequest): List<WorkoutTemplate> {
         var filteredTemplates = templates
@@ -200,12 +231,8 @@ class GetTemplatesUseCase @Inject constructor(
             }
         }
         
-        // Apply folder filter
-        if (!request.folderId.isNullOrBlank()) {
-            filteredTemplates = filteredTemplates.filter { template ->
-                template.folderId == request.folderId
-            }
-        }
+        // 🔥 REMOVED: Folder filter now handled at database level in getTemplatesByFolder()
+        // This eliminates the need to load all templates and filter in memory
         
         // Apply difficulty filter (if not already applied by repository)
         if (request.difficultyLevel != null && request.sortBy != TemplateSortBy.DIFFICULTY) {

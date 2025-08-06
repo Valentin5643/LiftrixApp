@@ -8,6 +8,7 @@ import com.example.liftrix.data.local.LiftrixDatabase
 import com.example.liftrix.data.local.dao.SubscriptionDao
 import com.example.liftrix.data.local.entity.SubscriptionEntity
 import com.example.liftrix.data.local.entity.SubscriptionTier as DataSubscriptionTier
+import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.data.mapper.SubscriptionMapper
 import com.example.liftrix.domain.model.Subscription
 import com.example.liftrix.domain.model.SubscriptionProvider
@@ -57,7 +58,7 @@ class SubscriptionRepositoryIntegrationTest {
     private val testSubscriptionId = "sub_123456789"
     
     @Before
-    fun setup() {
+    fun setup() = runTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         
         // Create in-memory Room database
@@ -75,6 +76,84 @@ class SubscriptionRepositoryIntegrationTest {
             subscriptionMapper = subscriptionMapper,
             billingRepository = billingRepository
         )
+        
+        // Create required user profiles to satisfy foreign key constraints
+        setupUserProfiles()
+    }
+    
+    private suspend fun setupUserProfiles() {
+        val userProfileDao = database.userProfileDao()
+        
+        // Create UserProfileEntity for testUserId
+        val userProfile1 = UserProfileEntity(
+            id = testUserId,
+            userId = testUserId,
+            displayName = "Test User 1",
+            age = 25,
+            weightKg = 70.0,
+            heightCm = 175.0,
+            fitnessLevel = "intermediate",
+            goals = "build_muscle",
+            availableEquipment = "gym",
+            workoutFrequency = 4,
+            preferredWorkoutDuration = 60,
+            completedAt = java.time.LocalDateTime.now(),
+            createdAt = java.time.LocalDateTime.now(),
+            updatedAt = java.time.LocalDateTime.now(),
+            isSynced = false,
+            syncVersion = 1L,
+            bio = "Test user for subscription tests",
+            isPublic = false,
+            lastActiveAt = java.time.LocalDateTime.now(),
+            totalWorkouts = 0,
+            currentStreak = 0,
+            longestStreak = 0,
+            memberSince = java.time.LocalDateTime.now(),
+            profileCompletionPercentage = 85,
+            profileImageUrl = null,
+            profileImageUpdatedAt = null,
+            hasCustomProfileImage = false,
+            searchKeywords = "test user fitness",
+            lastProfileViewAt = null,
+            profileViewsCount = 0
+        )
+        
+        // Create UserProfileEntity for testUserId2  
+        val userProfile2 = UserProfileEntity(
+            id = testUserId2,
+            userId = testUserId2,
+            displayName = "Test User 2",
+            age = 30,
+            weightKg = 75.0,
+            heightCm = 180.0,
+            fitnessLevel = "advanced",
+            goals = "strength",
+            availableEquipment = "home",
+            workoutFrequency = 5,
+            preferredWorkoutDuration = 45,
+            completedAt = java.time.LocalDateTime.now(),
+            createdAt = java.time.LocalDateTime.now(),
+            updatedAt = java.time.LocalDateTime.now(),
+            isSynced = false,
+            syncVersion = 1L,
+            bio = "Test user 2 for subscription tests",
+            isPublic = true,
+            lastActiveAt = java.time.LocalDateTime.now(),
+            totalWorkouts = 0,
+            currentStreak = 0,
+            longestStreak = 0,
+            memberSince = java.time.LocalDateTime.now(),
+            profileCompletionPercentage = 90,
+            profileImageUrl = null,
+            profileImageUpdatedAt = null,
+            hasCustomProfileImage = false,
+            searchKeywords = "test user strength fitness",
+            lastProfileViewAt = null,
+            profileViewsCount = 0
+        )
+        
+        userProfileDao.insertProfile(userProfile1)
+        userProfileDao.insertProfile(userProfile2)
     }
     
     @After

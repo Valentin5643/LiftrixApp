@@ -68,7 +68,11 @@ class CustomExerciseRepositoryImplTest {
         dao = mockk()
         mapper = mockk()
         firestore = mockk(relaxed = true)
-        repository = CustomExerciseRepositoryImpl(mockk(), dao, mapper, firestore)
+        
+        // Use a simple relaxed mock for the database - this handles all Room methods
+        val database = mockk<com.example.liftrix.data.local.LiftrixDatabase>(relaxed = true)
+        
+        repository = CustomExerciseRepositoryImpl(database, dao, mapper, firestore)
     }
     
     @Test

@@ -163,18 +163,18 @@ class ProfileRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getUnsyncedCount(): Int {
+    override suspend fun getUnsyncedCount(userId: String): Int {
         return try {
-            userProfileDao.getUnsyncedProfilesCount()
+            userProfileDao.getUnsyncedProfilesCount(userId)
         } catch (e: Exception) {
-            Timber.e(e, "Failed to get unsynced profile count")
+            Timber.e(e, "Failed to get unsynced profile count for user: $userId")
             0
         }
     }
 
     override suspend fun queueSync(userId: String): Result<Unit> {
         return try {
-            val unsyncedCount = userProfileDao.getUnsyncedProfilesCount()
+            val unsyncedCount = userProfileDao.getUnsyncedProfilesCount(userId)
             if (unsyncedCount > 0) {
                 val syncRequest = OneTimeWorkRequestBuilder<ProfileSyncWorker>()
                     .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
@@ -191,7 +191,7 @@ class ProfileRepositoryImpl @Inject constructor(
 
     override suspend fun syncNow(userId: String): Result<Unit> {
         return try {
-            val unsyncedCount = userProfileDao.getUnsyncedProfilesCount()
+            val unsyncedCount = userProfileDao.getUnsyncedProfilesCount(userId)
             if (unsyncedCount > 0) {
                 val syncRequest = OneTimeWorkRequestBuilder<ProfileSyncWorker>().build()
                 workManager.enqueueUniqueWork("${ProfileSyncWorker.WORK_NAME}_immediate_$userId", ExistingWorkPolicy.REPLACE, syncRequest)

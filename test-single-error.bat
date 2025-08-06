@@ -1,0 +1,3 @@
+@echo off
+echo Running single ErrorMappingExtensionsTest test...
+call gradlew test --tests "*ErrorMappingExtensionsTest.given*SocketTimeoutException*" --continue 2>&1

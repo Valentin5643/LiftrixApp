@@ -3,7 +3,7 @@ package com.example.liftrix.service
 import com.example.liftrix.domain.model.analytics.WidgetPreferences
 import com.example.liftrix.domain.model.analytics.UserLevel
 import com.example.liftrix.domain.model.common.LiftrixResult
-import com.example.liftrix.ui.progress.components.WidgetLayoutMode
+import com.example.liftrix.domain.model.analytics.WidgetLayoutMode
 
 /**
  * Service interface for managing user preferences with widget layout and visibility management.

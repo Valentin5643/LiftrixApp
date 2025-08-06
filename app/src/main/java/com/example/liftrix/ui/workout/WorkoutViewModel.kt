@@ -10,7 +10,14 @@ import com.example.liftrix.domain.repository.WorkoutTemplateRepository
 import com.example.liftrix.domain.usecase.auth.GetAuthenticatedUserIdUseCase
 import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.usecase.SaveWorkoutUseCase
+import com.example.liftrix.domain.usecase.folder.CreateFolderUseCase
+import com.example.liftrix.domain.usecase.folder.DeleteFolderUseCase
+import com.example.liftrix.domain.usecase.folder.GetFoldersUseCase
+import com.example.liftrix.domain.usecase.folder.MoveFolderUseCase
 import com.example.liftrix.domain.usecase.analytics.LogWorkoutEventUseCase
+import com.example.liftrix.domain.usecase.template.GetTemplatesUseCase
+import com.example.liftrix.domain.usecase.template.GetTemplatesRequest
+import com.example.liftrix.domain.usecase.template.TemplateSortBy
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.analytics.UxMetricsTracker
 import com.example.liftrix.analytics.TaskCompletionTracker
@@ -32,6 +39,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -46,6 +54,12 @@ class WorkoutViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val getAuthenticatedUserIdUseCase: GetAuthenticatedUserIdUseCase,
     private val saveWorkoutUseCase: SaveWorkoutUseCase,
+    private val createFolderUseCase: CreateFolderUseCase,
+    private val deleteFolderUseCase: DeleteFolderUseCase,
+    private val getFoldersUseCase: GetFoldersUseCase,
+    private val moveFolderUseCase: MoveFolderUseCase,
+    private val getTemplatesUseCase: GetTemplatesUseCase, // 🔥 NEW: Optimized template queries
+    private val moveWorkoutToFolderUseCase: com.example.liftrix.domain.usecase.template.MoveWorkoutToFolderUseCase,
     private val syncManager: SyncManager,
     private val logWorkoutEventUseCase: LogWorkoutEventUseCase,
     private val analyticsService: AnalyticsService,
@@ -63,6 +77,7 @@ class WorkoutViewModel @Inject constructor(
         observeAuthState()
         observeWorkouts()
         observeTemplates()
+        observeFolders()
         observeSyncStatus()
     }
 
@@ -77,6 +92,11 @@ class WorkoutViewModel @Inject constructor(
             is WorkoutEvent.NavigateToEdit -> {
                 // Navigation will be handled by the screen
             }
+            is WorkoutEvent.CreateFolder -> createFolder(event.folderName)
+            is WorkoutEvent.DeleteFolder -> deleteFolder(event.folder)
+            is WorkoutEvent.RenameFolder -> renameFolder(event.folder, event.newName)
+            is WorkoutEvent.SelectFolder -> selectFolder(event.folderId) // 🔥 NEW: Handle folder selection
+            is WorkoutEvent.MoveWorkout -> moveWorkoutToFolder(event.workoutTemplate, event.targetFolderId)
             WorkoutEvent.ClearError -> clearError()
             WorkoutEvent.RefreshData -> refreshData()
         }
@@ -147,6 +167,11 @@ class WorkoutViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 🔥 FIXED: Combined templates and folders observation to prevent race conditions
+     * This ensures both templates and folders are loaded together, preventing UI rendering issues
+     * where templates can't find their matching folders or vice versa.
+     */
     private fun observeTemplates() {
         viewModelScope.launch {
             // Only observe templates when user is authenticated
@@ -159,27 +184,96 @@ class WorkoutViewModel @Inject constructor(
                             Timber.e(exception, "Failed to create default folder for user ${user.uid}")
                         }
                     
-                    workoutTemplateRepository.getAllTemplatesForUser(user.uid)
-                        .collect { templatesResult ->
-                            templatesResult.fold(
-                                onSuccess = { templates ->
-                                    val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
+                    // 🔥 CRITICAL FIX: Combine folders and templates loading to prevent race conditions
+                    combine(
+                        getFoldersUseCase(GetFoldersUseCase.GetFoldersInput(user.uid)),
+                        getTemplatesUseCase(GetTemplatesRequest(
+                            userId = user.uid,
+                            folderId = null, // Load all templates initially
+                            sortBy = TemplateSortBy.RECENT,
+                            limit = 50
+                        ))
+                    ) { foldersResult, templatesResult ->
+                        Pair(foldersResult, templatesResult)
+                    }.collect { (foldersResult, templatesResult) ->
+                        // Process both results together
+                        val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
+                        
+                        when {
+                            foldersResult.isSuccess && templatesResult.isSuccess -> {
+                                val folders = foldersResult.getOrThrow()
+                                val templatesData = templatesResult.getOrThrow()
+                                val templates = templatesData.templates
+                                
+                                Timber.d("🔥 COMBINED-LOADING: Successfully loaded ${folders.size} folders and ${templates.size} templates")
+                                folders.forEach { folder ->
+                                    Timber.d("🔥 COMBINED-LOADING: - Folder: id=${folder.id.value}, name='${folder.name.value}'")
+                                }
+                                templates.forEach { template ->
+                                    Timber.d("🔥 COMBINED-LOADING: - Template: id=${template.id.value}, name='${template.name}', folderId='${template.folderId}'")
+                                }
+                                
+                                // Check template-folder matching
+                                templates.forEach { template ->
+                                    val matchingFolder = folders.find { it.id.value == template.folderId }
+                                    if (matchingFolder == null) {
+                                        Timber.e("🔥 COMBINED-LOADING: ❌ Template '${template.name}' has folderId '${template.folderId}' but NO MATCHING FOLDER!")
+                                    } else {
+                                        Timber.d("🔥 COMBINED-LOADING: ✅ Template '${template.name}' matches folder '${matchingFolder.name.value}'")
+                                    }
+                                }
+                                
+                                setState(WorkoutUiState.Success(
+                                    currentData.copy(
+                                        folders = folders,
+                                        templates = templates,
+                                        selectedFolderId = null // Reset folder selection when loading all
+                                    )
+                                ))
+                                
+                                Timber.d("🔥 COMBINED-LOADING: UI state updated with ${folders.size} folders and ${templates.size} templates")
+                            }
+                            foldersResult.isFailure -> {
+                                Timber.e("🔥 COMBINED-LOADING: Failed to load folders: ${foldersResult.exceptionOrNull()?.message}")
+                                // Try to load templates only if folders fail
+                                if (templatesResult.isSuccess) {
+                                    val templates = templatesResult.getOrThrow().templates
                                     setState(WorkoutUiState.Success(
-                                        currentData.copy(templates = templates)
-                                    ))
-                                    Timber.d("Loaded ${templates.size} templates for user ${user.uid}")
-                                },
-                                onFailure = { exception ->
-                                    Timber.e(exception, "Failed to load templates for user ${user.uid}")
-                                    val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
-                                    setState(WorkoutUiState.Success(
-                                        currentData.copy(templates = emptyList())
+                                        currentData.copy(
+                                            templates = templates,
+                                            folders = emptyList() // Clear folders on failure
+                                        )
                                     ))
                                 }
-                            )
+                            }
+                            templatesResult.isFailure -> {
+                                Timber.e("🔥 COMBINED-LOADING: Failed to load templates: ${templatesResult.exceptionOrNull()?.message}")
+                                // Load folders only if templates fail
+                                if (foldersResult.isSuccess) {
+                                    val folders = foldersResult.getOrThrow()
+                                    setState(WorkoutUiState.Success(
+                                        currentData.copy(
+                                            folders = folders,
+                                            templates = emptyList() // Clear templates on failure
+                                        )
+                                    ))
+                                }
+                            }
                         }
+                    }
                 }
         }
+    }
+
+    /**
+     * 🔥 SIMPLIFIED: observeFolders() is now handled in observeTemplates() via combine()
+     * This prevents race conditions between folder and template loading.
+     * Left as a stub for any folder-specific operations if needed in the future.
+     */
+    private fun observeFolders() {
+        // 🔥 REMOVED: Folder observation is now combined with template observation
+        // This prevents race conditions where templates load before folders or vice versa
+        Timber.d("🔥 FOLDERS-OBSERVER: Using combined loading - individual folder observation disabled")
     }
 
     private fun observeSyncStatus() {
@@ -311,8 +405,210 @@ class WorkoutViewModel @Inject constructor(
     private fun refreshData() {
         // Refresh all data by re-observing
         observeWorkouts()
-        observeTemplates()
+        observeTemplates() // 🔥 This now triggers combined folders + templates loading
+        // observeFolders() - No longer needed, handled in observeTemplates()
         observeSyncStatus()
+        
+        Timber.d("🔥 REFRESH: Triggered refresh of all data including combined loading")
+    }
+
+    /**
+     * 🔥 NEW: Select a folder to filter templates (null = show all templates)
+     */
+    fun selectFolder(folderId: String?) {
+        viewModelScope.launch {
+            try {
+                val userId = getAuthenticatedUserIdUseCase()
+                Timber.d("🔥 WORKOUT-VIEW: Selecting folder: $folderId")
+                
+                loadTemplatesForUser(userId, selectedFolderId = folderId)
+            } catch (exception: Exception) {
+                Timber.e(exception, "Failed to select folder: $folderId")
+            }
+        }
+    }
+    
+    /**
+     * 🔥 UPDATED: Load templates with folder filtering - now works with combined loading approach
+     * This method is used when users explicitly select a folder to filter templates
+     */
+    private fun loadTemplatesForUser(userId: String, selectedFolderId: String?) {
+        viewModelScope.launch {
+            try {
+                val request = GetTemplatesRequest(
+                    userId = userId,
+                    folderId = selectedFolderId, // 🔥 KEY: Folder filtering at database level
+                    sortBy = TemplateSortBy.RECENT,
+                    limit = 50
+                )
+                
+                Timber.d("🔥 FOLDER-FILTER: Loading templates with request: userId=$userId, folderId=$selectedFolderId")
+                
+                getTemplatesUseCase(request).collect { result ->
+                    result.fold(
+                        onSuccess = { templatesResult ->
+                            val templates = templatesResult.templates
+                            val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
+                            
+                            Timber.d("🔥 FOLDER-FILTER: Loaded ${templates.size} templates for ${selectedFolderId ?: "all folders"}")
+                            
+                            setState(WorkoutUiState.Success(
+                                currentData.copy(
+                                    templates = templates,
+                                    selectedFolderId = selectedFolderId
+                                    // 🔥 PRESERVE: Keep existing folders when filtering templates
+                                )
+                            ))
+                        },
+                        onFailure = { exception ->
+                            Timber.e(exception, "Failed to load filtered templates for user $userId, folder: $selectedFolderId")
+                            val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
+                            setState(WorkoutUiState.Success(
+                                currentData.copy(
+                                    templates = emptyList(),
+                                    selectedFolderId = selectedFolderId
+                                )
+                            ))
+                        }
+                    )
+                }
+            } catch (exception: Exception) {
+                Timber.e(exception, "Error in loadTemplatesForUser folder filtering")
+            }
+        }
+    }
+
+    /**
+     * Refreshes folder state by directly querying the repository
+     */
+    private fun refreshFolderState() {
+        viewModelScope.launch {
+            try {
+                val userId = getAuthenticatedUserIdUseCase()
+                
+                // Direct repository access to avoid use case Flow complications
+                folderRepository.getAllFoldersForUser(userId)
+                    .first() // Get just the first emission
+                    .let { folders ->
+                        val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
+                        setState(WorkoutUiState.Success(
+                            currentData.copy(folders = folders)
+                        ))
+                    }
+            } catch (e: Exception) {
+                Timber.e(e, "Exception in refreshFolderState")
+            }
+        }
+    }
+
+    fun createFolder(folderName: String) {
+        executeUseCase(
+            useCase = {
+                val userId = getAuthenticatedUserIdUseCase()
+                
+                if (userId.isBlank()) {
+                    throw IllegalStateException("User not authenticated - cannot create folder")
+                }
+                
+                val input = CreateFolderUseCase.CreateFolderInput(
+                    userId = userId,
+                    name = folderName
+                )
+                
+                createFolderUseCase(input)
+            },
+            onSuccess = { folder ->
+                Timber.d("🔥 FOLDER-CREATED: New folder created: ${folder.name.value} (${folder.id.value})")
+                
+                // 🔥 TRIGGER: Refresh the combined loading to include the new folder
+                // This ensures the new folder appears alongside existing templates
+                refreshData()
+                
+                Timber.d("🔥 FOLDER-CREATED: Triggered refresh of combined loading")
+            },
+            onError = { error ->
+                Timber.e("Failed to create folder: ${error.message}")
+            }
+        )
+    }
+
+    fun moveWorkoutToFolder(workoutTemplate: com.example.liftrix.domain.model.WorkoutTemplate, targetFolderId: String) {
+        executeUseCase(
+            useCase = {
+                moveWorkoutToFolderUseCase(workoutTemplate, targetFolderId)
+            },
+            onSuccess = { updatedTemplate ->
+                Timber.d("🔥 WORKOUT-MOVED: Workout '${updatedTemplate.name}' moved to folder '$targetFolderId'")
+                
+                // Refresh the data to show the workout in its new folder
+                refreshData()
+                
+                Timber.d("🔥 WORKOUT-MOVED: Triggered refresh of combined loading")
+            },
+            onError = { error ->
+                Timber.e("Failed to move workout to folder: ${error.message}")
+            }
+        )
+    }
+
+    fun deleteFolder(folder: com.example.liftrix.domain.model.Folder) {
+        executeUseCase(
+            useCase = {
+                val userId = getAuthenticatedUserIdUseCase()
+                
+                if (userId.isBlank()) {
+                    throw IllegalStateException("User not authenticated - cannot delete folder")
+                }
+                
+                val input = DeleteFolderUseCase.DeleteFolderInput(
+                    userId = userId,
+                    folderId = folder.id
+                )
+                
+                deleteFolderUseCase(input)
+            },
+            onSuccess = {
+                Timber.d("🔥 FOLDER-DELETED: Folder '${folder.name.value}' deleted successfully")
+                
+                // Refresh the data to remove the deleted folder and show relocated templates
+                refreshData()
+                
+                Timber.d("🔥 FOLDER-DELETED: Triggered refresh of combined loading")
+            },
+            onError = { error ->
+                Timber.e("Failed to delete folder '${folder.name.value}': ${error.message}")
+            }
+        )
+    }
+
+    fun renameFolder(folder: com.example.liftrix.domain.model.Folder, newName: String) {
+        executeUseCase(
+            useCase = {
+                val userId = getAuthenticatedUserIdUseCase()
+                
+                if (userId.isBlank()) {
+                    throw IllegalStateException("User not authenticated - cannot rename folder")
+                }
+                
+                // Create updated folder with new name
+                val updatedFolder = folder.copy(
+                    name = com.example.liftrix.domain.model.FolderName(newName.trim())
+                )
+                
+                folderRepository.updateFolder(updatedFolder)
+            },
+            onSuccess = {
+                Timber.d("🔥 FOLDER-RENAMED: Folder '${folder.name.value}' renamed to '$newName'")
+                
+                // Refresh the data to show the updated folder name
+                refreshData()
+                
+                Timber.d("🔥 FOLDER-RENAMED: Triggered refresh of combined loading")
+            },
+            onError = { error ->
+                Timber.e("Failed to rename folder '${folder.name.value}' to '$newName': ${error.message}")
+            }
+        )
     }
 
     
@@ -361,6 +657,11 @@ sealed class WorkoutEvent : ViewModelEvent {
     data class CompleteWorkout(val workout: Workout) : WorkoutEvent()
     data class SaveWorkout(val workout: Workout) : WorkoutEvent()
     data class NavigateToEdit(val workoutId: WorkoutId) : WorkoutEvent()
+    data class CreateFolder(val folderName: String) : WorkoutEvent()
+    data class DeleteFolder(val folder: com.example.liftrix.domain.model.Folder) : WorkoutEvent()
+    data class RenameFolder(val folder: com.example.liftrix.domain.model.Folder, val newName: String) : WorkoutEvent()
+    data class SelectFolder(val folderId: String?) : WorkoutEvent() // 🔥 NEW: Folder selection
+    data class MoveWorkout(val workoutTemplate: com.example.liftrix.domain.model.WorkoutTemplate, val targetFolderId: String) : WorkoutEvent()
     object ClearError : WorkoutEvent()
     object RefreshData : WorkoutEvent()
 }

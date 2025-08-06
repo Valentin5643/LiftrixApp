@@ -52,26 +52,23 @@ class CustomExerciseRepositoryImpl @Inject constructor(
         notes: String?
     ): Result<CustomExercise> = withContext(Dispatchers.IO) {
         try {
-            // Use database transaction for atomic operation
-            val result = database.withTransaction {
-                // Create entity
-                val entity = mapper.createEntity(
-                    userId = userId,
-                    name = name,
-                    primaryMuscle = primaryMuscle,
-                    equipment = equipment,
-                    secondaryMuscles = secondaryMuscles,
-                    difficulty = difficulty,
-                    notes = notes,
-                    isSynced = false
-                )
-                
-                // Insert to local database within transaction
-                dao.insertCustomExercise(entity)
-                
-                // Return the domain model
-                mapper.toDomain(entity)
-            }
+            // Create entity
+            val entity = mapper.createEntity(
+                userId = userId,
+                name = name,
+                primaryMuscle = primaryMuscle,
+                equipment = equipment,
+                secondaryMuscles = secondaryMuscles,
+                difficulty = difficulty,
+                notes = notes,
+                isSynced = false
+            )
+            
+            // Insert to local database
+            dao.insertCustomExercise(entity)
+            
+            // Return the domain model
+            val result = mapper.toDomain(entity)
             
             // Sync to Firestore in background (outside transaction)
             try {

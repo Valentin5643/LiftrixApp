@@ -7,7 +7,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.WidgetPreferencesRepository
 import com.example.liftrix.domain.repository.AuthRepository
-import com.example.liftrix.ui.progress.components.WidgetLayoutMode
+import com.example.liftrix.domain.model.analytics.WidgetLayoutMode
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

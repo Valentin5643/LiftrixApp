@@ -1,35 +1,22 @@
 package com.example.liftrix.ui.progress.components
 
+import com.example.liftrix.domain.model.analytics.WidgetLayoutMode as DomainWidgetLayoutMode
+import com.example.liftrix.domain.model.analytics.UserLevel
+
 /**
  * UI layer enum for widget layout modes in the Progress Dashboard.
  * 
- * This enum provides UI-specific layout options that are mapped to domain layer
- * DashboardLayoutMode values. It serves as the boundary between UI concerns and
+ * This enum provides UI-specific presentation logic and maps to domain layer
+ * WidgetLayoutMode. It serves as the boundary between UI concerns and
  * domain logic, allowing for UI-specific optimizations and terminology.
  * 
- * Layout Modes:
- * - GRID: Traditional grid layout with equal-sized widgets
- * - STAGGERED: Staggered grid layout with varying widget heights
- * - LIST: Vertical list layout optimized for scrolling
- * - SECTIONS: Organized sections with collapsible categories
- * 
- * Usage:
- * ```kotlin
- * @Composable
- * fun LayoutModeSelector(
- *     currentMode: WidgetLayoutMode,
- *     onModeChanged: (WidgetLayoutMode) -> Unit
- * ) {
- *     WidgetLayoutMode.values().forEach { mode ->
- *         RadioButton(
- *             selected = currentMode == mode,
- *             onClick = { onModeChanged(mode) }
- *         )
- *         Text(text = mode.displayName)
- *     }
- * }
- * ```
+ * @deprecated Use domain.model.analytics.WidgetLayoutMode for business logic.
+ * This UI version exists for backward compatibility and UI-specific functionality.
  */
+@Deprecated(
+    message = "Use domain WidgetLayoutMode for business logic",
+    replaceWith = ReplaceWith("com.example.liftrix.domain.model.analytics.WidgetLayoutMode")
+)
 enum class WidgetLayoutMode(
     val displayName: String,
     val description: String,
@@ -124,10 +111,30 @@ enum class WidgetLayoutMode(
          * @param userLevel the user's experience level
          * @return list of available layout modes
          */
-        fun getAvailableForUserLevel(userLevel: com.example.liftrix.domain.model.analytics.UserLevel): List<WidgetLayoutMode> = when (userLevel) {
-            com.example.liftrix.domain.model.analytics.UserLevel.BEGINNER -> listOf(SECTIONS, LIST)
-            com.example.liftrix.domain.model.analytics.UserLevel.INTERMEDIATE -> listOf(SECTIONS, LIST, GRID)
-            com.example.liftrix.domain.model.analytics.UserLevel.ADVANCED -> values().toList()
+        fun getAvailableForUserLevel(userLevel: UserLevel): List<WidgetLayoutMode> = when (userLevel) {
+            UserLevel.BEGINNER -> listOf(SECTIONS, LIST)
+            UserLevel.INTERMEDIATE -> listOf(SECTIONS, LIST, GRID)
+            UserLevel.ADVANCED -> values().toList()
         }
     }
+}
+
+/**
+ * Maps domain WidgetLayoutMode to UI WidgetLayoutMode
+ */
+fun DomainWidgetLayoutMode.toUiWidgetLayoutMode(): WidgetLayoutMode = when (this) {
+    DomainWidgetLayoutMode.GRID -> WidgetLayoutMode.GRID
+    DomainWidgetLayoutMode.STAGGERED -> WidgetLayoutMode.STAGGERED
+    DomainWidgetLayoutMode.LIST -> WidgetLayoutMode.LIST
+    DomainWidgetLayoutMode.SECTIONS -> WidgetLayoutMode.SECTIONS
+}
+
+/**
+ * Maps UI WidgetLayoutMode to domain WidgetLayoutMode
+ */
+fun WidgetLayoutMode.toDomainWidgetLayoutMode(): DomainWidgetLayoutMode = when (this) {
+    WidgetLayoutMode.GRID -> DomainWidgetLayoutMode.GRID
+    WidgetLayoutMode.STAGGERED -> DomainWidgetLayoutMode.STAGGERED
+    WidgetLayoutMode.LIST -> DomainWidgetLayoutMode.LIST
+    WidgetLayoutMode.SECTIONS -> DomainWidgetLayoutMode.SECTIONS
 }

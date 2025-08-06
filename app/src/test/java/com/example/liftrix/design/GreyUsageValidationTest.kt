@@ -1,6 +1,7 @@
 package com.example.liftrix.design
 
 import androidx.compose.ui.graphics.Color
+import com.example.liftrix.ui.theme.LiftrixColors
 import org.junit.Test
 import org.junit.Assert.*
 
@@ -38,7 +39,8 @@ class GreyUsageValidationTest {
         val colors = listOf(
             Color(0.5f, 0.5f, 0.5f), // 1 grey out of 10 = 10%
             Color.Red, Color.Green, Color.Blue, Color.Yellow,
-            Color.Cyan, Color.Magenta, Color.White, Color.Black
+            Color.Cyan, Color.Magenta, LiftrixColors.PersianGreen, 
+            LiftrixColors.TiffanyBlue, Color(1.0f, 0.5f, 0.0f)  // Orange - clearly non-grey
         )
         val result = GreyUsageAnalyzer.validateGreyUsage(colors)
         assertTrue("Should pass with 10% grey usage", result.isValid)
@@ -51,7 +53,8 @@ class GreyUsageValidationTest {
             Color(0.5f, 0.5f, 0.5f), // 3 greys out of 10 = 30%
             Color(0.3f, 0.3f, 0.3f),
             Color(0.7f, 0.7f, 0.7f),
-            Color.Red, Color.Green, Color.Blue, Color.Yellow
+            Color.Red, Color.Green, Color.Blue, Color.Yellow,
+            Color.Cyan, Color.Magenta, Color(1.0f, 0.5f, 0.0f)  // Orange - clearly non-grey
         )
         val result = GreyUsageAnalyzer.validateGreyUsage(colors)
         assertFalse("Should fail with 30% grey usage", result.isValid) 

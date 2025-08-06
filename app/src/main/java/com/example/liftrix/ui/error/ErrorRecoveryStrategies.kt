@@ -1,5 +1,8 @@
 package com.example.liftrix.ui.error
 
+import com.example.liftrix.domain.model.validation.ValidationError as DomainValidationError
+import com.example.liftrix.domain.model.validation.ValidationSeverity as DomainValidationSeverity
+
 import com.example.liftrix.domain.model.UnifiedWorkoutSession
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.model.MuscleGroup
@@ -357,8 +360,15 @@ class ErrorRecoveryStrategies @Inject constructor(
 }
 
 /**
- * Validation error for historical data editing operations.
+ * UI layer validation error for backward compatibility.
+ * 
+ * @deprecated Use domain.model.validation.ValidationError for business logic.
+ * This UI version exists for backward compatibility and UI-specific functionality.
  */
+@Deprecated(
+    message = "Use domain ValidationError for business logic",
+    replaceWith = ReplaceWith("com.example.liftrix.domain.model.validation.ValidationError")
+)
 data class ValidationError(
     val field: String,
     val message: String,
@@ -366,10 +376,52 @@ data class ValidationError(
 )
 
 /**
- * Severity levels for validation errors.
+ * UI layer validation severity for backward compatibility.
+ * 
+ * @deprecated Use domain.model.validation.ValidationSeverity for business logic.
  */
+@Deprecated(
+    message = "Use domain ValidationSeverity for business logic",
+    replaceWith = ReplaceWith("com.example.liftrix.domain.model.validation.ValidationSeverity")
+)
 enum class ValidationSeverity {
     WARNING,  // Non-blocking, informational
     ERROR,    // Blocking, must be fixed
     CRITICAL  // System integrity issue
+}
+
+/**
+ * Maps domain ValidationError to UI ValidationError
+ */
+fun DomainValidationError.toUiValidationError(): ValidationError = ValidationError(
+    field = field,
+    message = message,
+    severity = severity.toUiValidationSeverity()
+)
+
+/**
+ * Maps UI ValidationError to domain ValidationError
+ */
+fun ValidationError.toDomainValidationError(): DomainValidationError = DomainValidationError(
+    field = field,
+    message = message,
+    severity = severity.toDomainValidationSeverity()
+)
+
+/**
+ * Maps domain ValidationSeverity to UI ValidationSeverity
+ */
+fun DomainValidationSeverity.toUiValidationSeverity(): ValidationSeverity = when (this) {
+    DomainValidationSeverity.WARNING -> ValidationSeverity.WARNING
+    DomainValidationSeverity.ERROR -> ValidationSeverity.ERROR
+    DomainValidationSeverity.CRITICAL -> ValidationSeverity.CRITICAL
+}
+
+/**
+ * Maps UI ValidationSeverity to domain ValidationSeverity
+ */
+fun ValidationSeverity.toDomainValidationSeverity(): DomainValidationSeverity = when (this) {
+    ValidationSeverity.WARNING -> DomainValidationSeverity.WARNING
+    ValidationSeverity.ERROR -> DomainValidationSeverity.ERROR
+    ValidationSeverity.CRITICAL -> DomainValidationSeverity.CRITICAL
 }

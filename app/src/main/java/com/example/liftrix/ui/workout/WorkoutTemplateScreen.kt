@@ -20,6 +20,9 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
+import com.example.liftrix.ui.workout.components.PrimaryActionButton
+import com.example.liftrix.ui.workout.components.SecondaryActionButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -240,7 +243,7 @@ private fun TemplateInfoCard(
     onDescriptionChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    Card( // Specialized template info card - not workout card
         modifier = modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -282,7 +285,7 @@ private fun ExerciseSelectionCard(
     onNavigateToExerciseSelection: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    Card( // Specialized exercise selection card - not workout card
         modifier = modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(

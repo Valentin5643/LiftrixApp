@@ -1,6 +1,7 @@
 package com.example.liftrix.data.repository
 
 import com.example.liftrix.data.local.dao.WorkoutTemplateDao
+import com.example.liftrix.data.local.LiftrixDatabase
 import com.example.liftrix.data.mapper.WorkoutTemplateMapper
 import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.model.WorkoutTemplateId
@@ -10,8 +11,10 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.delay
 import timber.log.Timber
 import java.time.Instant
 import javax.inject.Inject
@@ -24,6 +27,8 @@ class WorkoutTemplateRepositoryImpl @Inject constructor(
 ) : WorkoutTemplateRepository {
 
     override fun getAllTemplatesForUser(userId: String): Flow<LiftrixResult<List<WorkoutTemplate>>> {
+        Timber.d("🔥 REPO-ALL-TEMPLATES: Getting all templates for user: $userId")
+        
         // Validate user ID early to prevent queries with blank userId
         if (userId.isBlank()) {
             return flowOf(
@@ -37,36 +42,75 @@ class WorkoutTemplateRepositoryImpl @Inject constructor(
             )
         }
         
-        return workoutTemplateDao.getAllTemplatesForUser(userId)
-            .map { entities ->
+        return flow {
+            var retryCount = 0
+            val maxRetries = 3
+            var delayMs = 500L
+            
+            while (retryCount <= maxRetries) {
                 try {
-                    val templates = workoutTemplateMapper.toDomainList(entities)
-                    LiftrixResult.success(templates)
+                    Timber.d("Attempting to load templates for user $userId (attempt ${retryCount + 1})")
+                    
+                    // Collect templates from DAO flow
+                    workoutTemplateDao.getAllTemplatesForUser(userId).collect { entities ->
+                        try {
+                            Timber.d("🔥 REPO-ALL-TEMPLATES: DAO returned ${entities.size} entities for user $userId")
+                            entities.forEach { entity ->
+                                Timber.d("🔥 REPO-ALL-TEMPLATES: - Entity: id=${entity.id}, name='${entity.name}', folderId='${entity.folderId}', userId='${entity.userId}'")
+                            }
+                            
+                            val templates = workoutTemplateMapper.toDomainList(entities)
+                            Timber.d("🔥 REPO-ALL-TEMPLATES: Mapped to ${templates.size} domain templates")
+                            emit(LiftrixResult.success(templates))
+                        } catch (mappingThrowable: Throwable) {
+                            Timber.e(mappingThrowable, "Failed to map template entities for user: $userId")
+                            emit(
+                                LiftrixResult.failure(
+                                    LiftrixError.DatabaseError(
+                                        errorMessage = "Failed to retrieve templates for user",
+                                        operation = "READ",
+                                        table = "workout_templates",
+                                        analyticsContext = mapOf("user_id" to userId)
+                                    )
+                                )
+                            )
+                        }
+                    }
+                    
+                    // If we get here, the operation succeeded
+                    break
+                    
                 } catch (throwable: Throwable) {
-                    Timber.e(throwable, "Failed to map template entities to domain models for user: $userId")
-                    LiftrixResult.failure(
-                        LiftrixError.DatabaseError(
-                            errorMessage = "Failed to retrieve templates for user",
-                            operation = "READ",
-                            table = "workout_templates",
-                            analyticsContext = mapOf("user_id" to userId)
+                    Timber.w(throwable, "Database access failed for templates (attempt ${retryCount + 1}/$maxRetries): ${throwable.message}")
+                    
+                    if (retryCount >= maxRetries) {
+                        // Final attempt failed - emit error
+                        Timber.e(throwable, "All retry attempts failed for user templates: $userId")
+                        emit(
+                            LiftrixResult.failure(
+                                LiftrixError.DatabaseError(
+                                    errorMessage = "Database connection error while retrieving templates",
+                                    operation = "READ",
+                                    table = "workout_templates",
+                                    analyticsContext = mapOf(
+                                        "user_id" to userId,
+                                        "retry_count" to retryCount.toString(),
+                                        "error_message" to (throwable.message ?: "Unknown error")
+                                    )
+                                )
+                            )
                         )
-                    )
+                        break
+                    } else {
+                        // Wait before retrying
+                        Timber.d("Waiting ${delayMs}ms before retry...")
+                        delay(delayMs)
+                        retryCount++
+                        delayMs = (delayMs * 1.5).toLong().coerceAtMost(2000L) // Exponential backoff
+                    }
                 }
             }
-            .catch { throwable ->
-                Timber.e(throwable, "Database flow error for user templates: $userId")
-                emit(
-                    LiftrixResult.failure(
-                        LiftrixError.DatabaseError(
-                            errorMessage = "Database connection error while retrieving templates",
-                            operation = "READ",
-                            table = "workout_templates",
-                            analyticsContext = mapOf("user_id" to userId)
-                        )
-                    )
-                )
-            }
+        }
     }
 
     override suspend fun getTemplateById(templateId: WorkoutTemplateId, userId: String): LiftrixResult<WorkoutTemplate?> {
@@ -285,8 +329,16 @@ class WorkoutTemplateRepositoryImpl @Inject constructor(
     }
 
     override suspend fun createTemplate(template: WorkoutTemplate): LiftrixResult<WorkoutTemplate> {
+        Timber.d("🔥 REPO-CREATE: Starting template creation in repository")
+        Timber.d("🔥 REPO-CREATE: Template ID: ${template.id.value}")
+        Timber.d("🔥 REPO-CREATE: Template name: '${template.name}'")
+        Timber.d("🔥 REPO-CREATE: User ID: '${template.userId}'")
+        Timber.d("🔥 REPO-CREATE: Folder ID: '${template.folderId}'")
+        Timber.d("🔥 REPO-CREATE: Exercises count: ${template.exercises.size}")
+        
         // Validate user ID
         if (template.userId.isBlank()) {
+            Timber.e("🔥 REPO-CREATE: User ID validation failed - blank userId")
             return LiftrixResult.failure(
                 LiftrixError.ValidationError(
                     field = "userId",
@@ -296,10 +348,17 @@ class WorkoutTemplateRepositoryImpl @Inject constructor(
             )
         }
         
+        Timber.d("🔥 REPO-CREATE: User ID validation passed")
+        
         return liftrixCatching(
             errorMapper = { throwable ->
+                Timber.e(throwable, "🔥 REPO-CREATE: Error in repository createTemplate")
+                Timber.e("🔥 REPO-CREATE: Error type: ${throwable::class.simpleName}")
+                Timber.e("🔥 REPO-CREATE: Error message: ${throwable.message}")
+                
                 when {
-                    throwable.message?.contains("FOREIGN KEY constraint failed") == true -> 
+                    throwable.message?.contains("FOREIGN KEY constraint failed") == true -> {
+                        Timber.e("🔥 REPO-CREATE: Foreign key constraint failed - folder doesn't exist")
                         LiftrixError.DatabaseError(
                             errorMessage = "Invalid folder reference - ensure the folder exists before creating template",
                             operation = "CREATE",
@@ -311,14 +370,18 @@ class WorkoutTemplateRepositoryImpl @Inject constructor(
                                 "error_type" to "foreign_key_violation"
                             )
                         )
+                    }
                     throwable.message?.contains("UNIQUE constraint failed") == true ||
-                    throwable is IllegalArgumentException && throwable.message?.contains("already exists") == true ->
+                    throwable is IllegalArgumentException && throwable.message?.contains("already exists") == true -> {
+                        Timber.e("🔥 REPO-CREATE: Duplicate template name")
                         LiftrixError.ValidationError(
                             field = "name",
                             violations = listOf("Template name '${template.name}' already exists for this user"),
                             errorMessage = "Duplicate template name"
                         )
-                    else -> 
+                    }
+                    else -> {
+                        Timber.e("🔥 REPO-CREATE: Generic database error")
                         LiftrixError.DatabaseError(
                             errorMessage = "Failed to create workout template: ${template.name}",
                             operation = "CREATE",
@@ -330,22 +393,34 @@ class WorkoutTemplateRepositoryImpl @Inject constructor(
                                 "error_message" to (throwable.message ?: "Unknown error")
                             )
                         )
+                    }
                 }
             }
         ) {
             // Check if template name already exists
+            Timber.d("🔥 REPO-CREATE: Checking if template name exists")
             val nameExists = workoutTemplateDao.doesTemplateNameExist(template.userId, template.name)
             if (nameExists) {
+                Timber.e("🔥 REPO-CREATE: Template name '${template.name}' already exists for user ${template.userId}")
                 throw IllegalArgumentException("Template name '${template.name}' already exists")
             }
+            Timber.d("🔥 REPO-CREATE: Template name is unique, proceeding")
 
+            Timber.d("🔥 REPO-CREATE: Converting template to entity")
             val entity = workoutTemplateMapper.toEntity(template, isSynced = false)
+            Timber.d("🔥 REPO-CREATE: Entity created, calling DAO insertTemplate")
+            
             val insertResult = workoutTemplateDao.insertTemplate(entity)
+            Timber.d("🔥 REPO-CREATE: DAO insertTemplate returned: $insertResult")
             
             if (insertResult > 0) {
-                Timber.d("Created template: ${template.name} for user ${template.userId}")
-                template.copy(id = WorkoutTemplateId(insertResult.toString()))
+                Timber.d("🔥 REPO-CREATE: Template inserted successfully with ID: $insertResult")
+                Timber.d("🔥 REPO-CREATE: Created template: ${template.name} for user ${template.userId}")
+                val finalTemplate = template.copy(id = WorkoutTemplateId(insertResult.toString()))
+                Timber.d("🔥 REPO-CREATE: Returning final template with ID: ${finalTemplate.id.value}")
+                finalTemplate
             } else {
+                Timber.e("🔥 REPO-CREATE: Insert operation returned invalid ID: $insertResult")
                 throw RuntimeException("Template insert operation returned invalid ID: $insertResult")
             }
         }

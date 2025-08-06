@@ -63,11 +63,12 @@ interface ProfileRepository {
     suspend fun hasCompletedProfile(userId: String): Boolean
     
     /**
-     * Gets the number of unsynchronized profiles.
+     * Gets the number of unsynchronized profiles for a specific user.
      *
-     * @return The count of unsynced profiles.
+     * @param userId The ID of the user to check for unsynced profiles.
+     * @return The count of unsynced profiles for the user.
      */
-    suspend fun getUnsyncedCount(): Int
+    suspend fun getUnsyncedCount(userId: String): Int
     
     /**
      * Queues a background sync for the user's profile.

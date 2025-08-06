@@ -223,14 +223,12 @@ class BackwardCompatibilityTest {
         every { runBlocking { mockSearchExercisesUseCase.invoke(any()) } } returns 
             Result.success(mockk<SearchExercisesResult>(relaxed = true))
         
-        // Then should work without modification - wrap in runTest for suspend functions
-        runTest {
-            val workoutResult = mockCreateWorkoutUseCase.invoke(mockk(relaxed = true))
-            val searchResult = mockSearchExercisesUseCase.invoke(SearchExercisesRequest(query = "test"))
-            
-            assertTrue("Workout creation should succeed", workoutResult.isSuccess)
-            assertTrue("Exercise search should succeed", searchResult.isSuccess)
-        }
+        // Then should work without modification - removed nested runTest
+        val workoutResult = mockCreateWorkoutUseCase.invoke(mockk(relaxed = true))
+        val searchResult = mockSearchExercisesUseCase.invoke(SearchExercisesRequest(query = "test"))
+        
+        assertTrue("Workout creation should succeed", workoutResult.isSuccess)
+        assertTrue("Exercise search should succeed", searchResult.isSuccess)
     }
     
     /**
@@ -243,13 +241,11 @@ class BackwardCompatibilityTest {
         every { runBlocking { mockCreateWorkoutUseCase.invoke(any()) } } returns 
             Result.success(mockk(relaxed = true))
         
-        runTest {
-            val result = mockCreateWorkoutUseCase.invoke(mockk(relaxed = true))
-            
-            // Then should be compatible with existing Result handling
-            assertTrue("Result should be compatible with existing patterns", result.isSuccess)
-            assertNotNull("Result should contain data", result.getOrNull())
-        }
+        // Then should be compatible with existing Result handling - removed nested runTest
+        val result = mockCreateWorkoutUseCase.invoke(mockk(relaxed = true))
+        
+        assertTrue("Result should be compatible with existing patterns", result.isSuccess)
+        assertNotNull("Result should contain data", result.getOrNull())
     }
     
     // MARK: - Error Handling Compatibility Tests

@@ -213,7 +213,7 @@ class RecommendationCacheIntegrationTest {
     @Test
     fun `getCachedRecommendations returns valid cached recommendations`() = runTest {
         // Given - Create fresh recommendations (cached 1 hour ago)
-        val recentTimestamp = System.currentTimeMillis() - (60 * 60 * 1000L) // 1 hour ago
+        val recentTimestamp = System.currentTimeMillis() - (30 * 60 * 1000L) // 30 minutes ago
         val freshRecommendations = validRecommendations.map { 
             it.copy(cachedAt = recentTimestamp) 
         }
@@ -399,7 +399,7 @@ class RecommendationCacheIntegrationTest {
         recommendationCache.cacheRecommendations(testUserId, recommendations)
         
         // Step 2: Setup retrieval mocks (simulate fresh cache)
-        val recentTimestamp = currentTime - (30 * 60 * 1000L) // 30 minutes ago
+        val recentTimestamp = currentTime - (15 * 60 * 1000L) // 15 minutes ago
         val cachedRecommendations = recommendations.map { 
             it.copy(cachedAt = recentTimestamp) 
         }
