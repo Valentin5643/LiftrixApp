@@ -198,9 +198,10 @@ fun NavController.navigateToTemplateCreation() {
  * @param transitionType Animation transition type for screen change
  */
 fun NavController.navigateToCreateWorkout(
+    folderId: String? = null,
     transitionType: TransitionType = TransitionType.MODAL
 ) {
-    navigate(LiftrixRoute.CreateWorkout)
+    navigate(LiftrixRoute.CreateWorkout(folderId = folderId))
 }
 
 /**
@@ -353,9 +354,9 @@ fun NavController.navigateToActiveWorkoutAnimated(
  * Navigate to create workout with modal transition
  * Bottom-up modal animation for creation flow
  */
-fun NavController.navigateToCreateWorkoutAnimated() {
+fun NavController.navigateToCreateWorkoutAnimated(folderId: String? = null) {
     navigateAnimated(
-        route = LiftrixRoute.CreateWorkout,
+        route = LiftrixRoute.CreateWorkout(folderId = folderId),
         transitionType = TransitionType.MODAL
     )
 }
@@ -588,8 +589,8 @@ fun NavController.getCurrentLiftrixRoute(): LiftrixRoute? {
         isCurrentRoute(LiftrixRoute.Progress::class) -> LiftrixRoute.Progress
         isCurrentRoute(LiftrixRoute.Coach::class) -> LiftrixRoute.Coach
         isCurrentRoute(LiftrixRoute.Friends::class) -> LiftrixRoute.Friends
-        isCurrentRoute(LiftrixRoute.TemplateCreation::class) -> LiftrixRoute.TemplateCreation
-        isCurrentRoute(LiftrixRoute.CreateWorkout::class) -> LiftrixRoute.CreateWorkout
+        isCurrentRoute(LiftrixRoute.TemplateCreation::class) -> LiftrixRoute.TemplateCreation()
+        isCurrentRoute(LiftrixRoute.CreateWorkout::class) -> LiftrixRoute.CreateWorkout()
         isCurrentRoute(LiftrixRoute.Settings::class) -> LiftrixRoute.Settings
         isCurrentRoute(LiftrixRoute.Onboarding::class) -> LiftrixRoute.Onboarding
         isCurrentRoute(LiftrixRoute.DashboardCustomization::class) -> LiftrixRoute.DashboardCustomization
@@ -601,5 +602,5 @@ fun NavController.getCurrentLiftrixRoute(): LiftrixRoute? {
         isCurrentRoute(LiftrixRoute.AuthSignIn::class) -> LiftrixRoute.AuthSignIn
         isCurrentRoute(LiftrixRoute.ProfileEdit::class) -> LiftrixRoute.ProfileEdit
         else -> null // For parameterized routes like Profile(userId), EditWorkout(workoutId), EditSession(sessionId), would need more complex logic
-    }
+    } as LiftrixRoute?
 }

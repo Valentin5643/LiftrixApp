@@ -106,16 +106,24 @@ sealed class LiftrixRoute {
     /**
      * Template creation screen for creating new workout routines
      * @deprecated Use CreateWorkout instead for user-friendly workflow terminology
+     * 
+     * @param folderId Optional folder ID to create the template in. If null, uses default folder.
      */
     @Deprecated("Use CreateWorkout instead", ReplaceWith("LiftrixRoute.CreateWorkout"))
     @Serializable
-    data object TemplateCreation : LiftrixRoute()
+    data class TemplateCreation(
+        val folderId: String? = null
+    ) : LiftrixRoute()
     
     /**
      * Workout creation screen for creating new workout routines (user-friendly "Creating a workout")
+     * 
+     * @param folderId Optional folder ID to create the workout in. If null, uses default folder.
      */
     @Serializable
-    data object CreateWorkout : LiftrixRoute()
+    data class CreateWorkout(
+        val folderId: String? = null
+    ) : LiftrixRoute()
     
     /**
      * Exercise details screen showing specific exercise information

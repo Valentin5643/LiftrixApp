@@ -25,6 +25,7 @@ import com.example.liftrix.domain.usecase.analytics.GetWidgetDataUseCase
 import com.example.liftrix.domain.usecase.analytics.CalculateCaloriesUseCase
 import com.example.liftrix.domain.usecase.settings.UpdateUserPreferencesUseCase
 import com.example.liftrix.domain.usecase.settings.EvaluateFeatureFlagUseCase
+import com.example.liftrix.domain.usecase.folder.ReorderFoldersUseCase
 import com.example.liftrix.domain.usecase.settings.EnhancedSignOutUseCase
 import com.example.liftrix.domain.usecase.settings.GetSubscriptionStatusUseCase
 import com.example.liftrix.domain.usecase.settings.GetUserSettingsUseCase
@@ -362,5 +363,18 @@ object UseCaseModule {
         return EvaluateFeatureFlagUseCase(featureFlagService)
     }
 
+    /**
+     * Provides ReorderFoldersUseCase with proper dependency injection.
+     * 
+     * This use case handles in-memory folder reordering functionality
+     * without requiring database migration.
+     * 
+     * @return Configured ReorderFoldersUseCase instance
+     */
+    @Provides
+    @Singleton
+    fun provideReorderFoldersUseCase(): ReorderFoldersUseCase {
+        return ReorderFoldersUseCase()
+    }
 
 }

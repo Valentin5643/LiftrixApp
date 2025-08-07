@@ -35,6 +35,7 @@ import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
 import com.example.liftrix.ui.workout.components.PrimaryActionButton
 import com.example.liftrix.ui.workout.components.SecondaryActionButton
 import com.example.liftrix.ui.workout.components.SaveAsTemplateDialog
+import com.example.liftrix.ui.workout.components.SaveQuickWorkoutAsTemplateDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -338,6 +339,23 @@ fun UnifiedActiveWorkoutScreen(
                         },
                         onDismiss = {
                             viewModel.dismissTemplateUpdateDialog()
+                        }
+                    )
+                }
+                
+                // Show Quick workout save dialog when needed
+                if (successState.showSaveQuickWorkoutDialog) {
+                    SaveQuickWorkoutAsTemplateDialog(
+                        show = true,
+                        defaultTemplateName = "${successState.session.name} Template",
+                        onSaveAsTemplate = { templateName ->
+                            viewModel.saveQuickWorkoutAsTemplate(templateName)
+                        },
+                        onSkip = {
+                            viewModel.skipSaveQuickWorkoutAsTemplate()
+                        },
+                        onDismiss = {
+                            viewModel.dismissSaveQuickWorkoutDialog()
                         }
                     )
                 }

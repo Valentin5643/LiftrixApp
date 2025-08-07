@@ -16,12 +16,9 @@ import java.time.Instant
 @Entity(
     tableName = "workout_templates",
     foreignKeys = [
-        ForeignKey(
-            entity = FolderEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["folder_id"],
-            onDelete = ForeignKey.CASCADE
-        )
+        // 🔥 REMOVED CASCADE DELETE constraint for folder_id to fix template deletion issue
+        // Templates can now exist with NULL folder_id and will be handled by business logic
+        // The migration (38→39) handles the database schema change
     ],
     indices = [
         Index(value = ["user_id"], name = "index_workout_templates_user_id"),
@@ -55,7 +52,7 @@ data class WorkoutTemplateEntity(
     val difficultyLevel: Int?, // 1-10 scale
     
     @ColumnInfo(name = "folder_id")
-    val folderId: String,
+    val folderId: String?, // 🔥 NULLABLE: Templates can exist without folder (moved to default by business logic)
     
     @ColumnInfo(name = "usage_count", defaultValue = "0")
     val usageCount: Int = 0,

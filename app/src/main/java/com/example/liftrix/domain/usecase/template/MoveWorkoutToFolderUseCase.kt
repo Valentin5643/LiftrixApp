@@ -58,9 +58,19 @@ class MoveWorkoutToFolderUseCase @Inject constructor(
             }
             
             // Validate that target folder exists and belongs to the user
-            // Note: Using the flow-based method which returns Flow<Folder?>
-            // For now, we'll skip the folder validation and trust the UI to pass valid folder IDs
-            // TODO: Add proper folder validation using suspending method
+            val targetFolder = folderRepository.getFolderById(FolderId(targetFolderId))
+            if (targetFolder == null) {
+                Timber.w("Target folder not found: $targetFolderId")
+                throw IllegalArgumentException("Target folder does not exist")
+            }
+            
+            // Validate folder belongs to the same user as the workout template
+            if (targetFolder.userId != workoutTemplate.userId) {
+                Timber.w("Folder user mismatch - Folder User: ${targetFolder.userId}, Workout User: ${workoutTemplate.userId}")
+                throw IllegalArgumentException("Cannot move workout to folder belonging to different user")
+            }
+            
+            Timber.d("Target folder validation passed: '${targetFolder.name.value}' owned by user '${targetFolder.userId}'")
             
             // Update the workout template with new folder ID
             val updatedTemplate = workoutTemplate.copy(

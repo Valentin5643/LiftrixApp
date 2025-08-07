@@ -13,7 +13,7 @@ data class WorkoutTemplate(
     val exercises: List<TemplateExercise>,
     val estimatedDurationMinutes: Int? = null,
     val difficultyLevel: Int? = null,
-    val folderId: String,
+    val folderId: String?, // 🔥 NULLABLE: Templates can exist without folder (handled by business logic)
     val usageCount: Int = 0,
     val lastUsedAt: Instant? = null,
     val createdAt: Instant,
@@ -47,7 +47,7 @@ data class WorkoutTemplate(
             }
         }
         
-        require(folderId.isNotBlank()) { "Folder ID cannot be blank" }
+        // 🔥 REMOVED: folderId can now be null (templates without folders handled by business logic)
         
         require(usageCount >= 0) { "Usage count cannot be negative: $usageCount" }
         
@@ -75,7 +75,7 @@ data class WorkoutTemplate(
         fun create(
             userId: String,
             name: String,
-            folderId: String,
+            folderId: String?,
             description: String? = null,
             exercises: List<TemplateExercise> = emptyList(),
             estimatedDurationMinutes: Int? = null,

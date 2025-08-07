@@ -151,10 +151,14 @@ fun UnifiedNavigationContainer(
                 composable<LiftrixRoute.Workout> {
                     WorkoutScreen(
                         onNavigateToActiveWorkout = { templateId ->
-                            navController.navigateToActiveWorkout(templateId)
+                            navController.navigateToActiveWorkout(
+                                templateId = templateId, 
+                                isBlankWorkout = templateId == null
+                            )
                         },
-                        onNavigateToWorkoutCreation = {
-                            navController.navigateToTemplateCreation()
+                        onNavigateToWorkoutCreation = { folderId ->
+                            // Direct navigation to template creation (not modal)
+                            navController.navigate(LiftrixRoute.TemplateCreation(folderId))
                         }
                     )
                 }
@@ -295,6 +299,7 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.TemplateCreation> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.TemplateCreation>()
                     com.example.liftrix.ui.workout.create.WorkoutTemplateCreationScreen(
                         onNavigateBack = {
                             navController.popBackStackSafely()
@@ -302,6 +307,7 @@ fun UnifiedNavigationContainer(
                         onNavigateToExerciseSelection = {
                             navController.navigateToExerciseSelection(isForTemplate = true)
                         },
+                        initialFolderId = route.folderId,
                         savedStateHandle = backStackEntry.savedStateHandle
                     )
                 }
@@ -495,10 +501,20 @@ fun UnifiedNavigationContainer(
                     )
                 }
                 
-                composable<LiftrixRoute.CreateWorkout> {
+                composable<LiftrixRoute.CreateWorkout> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.CreateWorkout>()
                     com.example.liftrix.ui.workout.create.CreateWorkoutScreen(
+                        initialFolderId = route.folderId,
                         onNavigateBack = {
                             navController.popBackStackSafely()
+                        },
+                        onStartFromTemplate = {
+                            // Navigate to workout templates selection screen
+                            navController.navigateToWorkout()
+                        },
+                        onStartBlankWorkout = {
+                            // Navigate to simple template creation with folder support
+                            navController.navigate(LiftrixRoute.TemplateCreation())
                         }
                     )
                 }

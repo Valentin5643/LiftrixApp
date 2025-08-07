@@ -594,7 +594,7 @@ class WorkoutRepositoryImpl @Inject constructor(
                 )
             }
         ) {
-            Timber.d("🔥 FEED-WORKOUTS-DEBUG: Getting feed workouts for user: $userId, limit: $limit")
+            Timber.d("🔥 FEED-WORKOUTS-DEBUG: Getting feed workouts (legacy method) for user: $userId, limit: $limit")
             
             // Get personal completed workouts from database
             val workoutEntities = workoutDao.getRecentCompletedWorkouts(userId, limit)
@@ -618,6 +618,59 @@ class WorkoutRepositoryImpl @Inject constructor(
             Timber.d("🔥 FEED-WORKOUTS-DEBUG: Successfully mapped ${feedWorkouts.size} feed workouts")
             feedWorkouts
         }
+    }
+
+    override fun getFeedWorkoutsReactive(userId: String, limit: Int): Flow<LiftrixResult<List<FeedWorkout>>> {
+        Timber.d("🔥 FEED-WORKOUTS-DEBUG: Setting up reactive feed workouts for user: $userId, limit: $limit")
+        
+        return workoutDao.getRecentCompletedWorkouts(userId, limit)
+            .map { entities ->
+                try {
+                    Timber.d("🔥 FEED-WORKOUTS-DEBUG: Received ${entities.size} completed workout entities from reactive flow")
+                    entities.forEachIndexed { index, entity ->
+                        Timber.d("🔥 FEED-WORKOUTS-DEBUG: Entity[$index] - id: ${entity.id}, name: ${entity.name}, status: ${entity.status}")
+                    }
+                    
+                    // Map entities to FeedWorkout domain models
+                    val feedWorkouts = entities.map { entity ->
+                        val workout = workoutMapper.toDomain(entity)
+                        FeedWorkout.forPersonalWorkout(workout)
+                    }
+                    
+                    Timber.d("🔥 FEED-WORKOUTS-DEBUG: Successfully mapped ${feedWorkouts.size} feed workouts")
+                    LiftrixResult.success(feedWorkouts)
+                } catch (throwable: Throwable) {
+                    Timber.e(throwable, "🔥 FEED-WORKOUTS-DEBUG: Error mapping workout entities to feed workouts")
+                    LiftrixResult.failure(
+                        LiftrixError.DatabaseError(
+                            errorMessage = "Failed to map feed workouts",
+                            operation = "READ",
+                            table = "workouts",
+                            analyticsContext = mapOf(
+                                "user_id" to userId,
+                                "limit" to limit.toString(),
+                                "entity_count" to entities.size.toString()
+                            )
+                        )
+                    )
+                }
+            }
+            .catch { throwable ->
+                Timber.e(throwable, "🔥 FEED-WORKOUTS-DEBUG: Database flow error for feed workouts")
+                emit(
+                    LiftrixResult.failure(
+                        LiftrixError.DatabaseError(
+                            errorMessage = "Database connection error while retrieving feed workouts",
+                            operation = "READ",
+                            table = "workouts",
+                            analyticsContext = mapOf(
+                                "user_id" to userId,
+                                "limit" to limit.toString()
+                            )
+                        )
+                    )
+                )
+            }
     }
 
     override suspend fun getWorkoutStats(userId: String): LiftrixResult<WorkoutStats> {

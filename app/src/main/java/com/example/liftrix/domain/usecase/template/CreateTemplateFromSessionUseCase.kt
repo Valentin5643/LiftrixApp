@@ -12,6 +12,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -35,7 +36,8 @@ import javax.inject.Singleton
 @Singleton
 class CreateTemplateFromSessionUseCase @Inject constructor(
     private val templateRepository: WorkoutTemplateRepository,
-    private val errorHandler: ErrorHandler
+    private val errorHandler: ErrorHandler,
+    private val folderRepository: FolderRepository // 🔥 ADDED: For safe default folder creation
 ) {
     
     /**
@@ -71,10 +73,14 @@ class CreateTemplateFromSessionUseCase @Inject constructor(
         ) {
             validateInput(session, templateName)
             
+            // 🔥 CRITICAL FIX: Ensure default folder exists before creating template
+            val defaultFolder = folderRepository.getOrCreateDefaultFolder(session.userId).getOrThrow()
+            
             val template = convertSessionToTemplate(
                 session = session,
                 templateName = templateName.trim(),
-                templateDescription = templateDescription?.trim()?.takeIf { it.isNotBlank() }
+                templateDescription = templateDescription?.trim()?.takeIf { it.isNotBlank() },
+                defaultFolderId = defaultFolder.id.value // 🔥 FIXED: Use actual folder ID instead of hardcoded pattern
             )
             
             templateRepository.createTemplate(template).getOrThrow()
@@ -98,7 +104,8 @@ class CreateTemplateFromSessionUseCase @Inject constructor(
     private fun convertSessionToTemplate(
         session: UnifiedWorkoutSession,
         templateName: String,
-        templateDescription: String?
+        templateDescription: String?,
+        defaultFolderId: String // 🔥 ADDED: Use actual default folder ID
     ): WorkoutTemplate {
         
         // Convert session exercises to template exercises
@@ -130,7 +137,7 @@ class CreateTemplateFromSessionUseCase @Inject constructor(
             // Estimate workout characteristics
             estimatedDurationMinutes = estimateWorkoutDuration(templateExercises),
             difficultyLevel = estimateDifficultyLevel(templateExercises),
-            folderId = "uncategorized_${session.userId}",
+            folderId = defaultFolderId, // 🔥 FIXED: Use actual default folder ID instead of hardcoded pattern
             
             // Template metadata
             usageCount = 0,

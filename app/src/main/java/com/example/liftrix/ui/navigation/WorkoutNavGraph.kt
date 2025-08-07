@@ -78,8 +78,12 @@ fun NavGraphBuilder.workoutGraph(
                         navController.navigate(WorkoutDestinations.BLANK_WORKOUT_SESSION)
                     }
                 },
-                onNavigateToWorkoutCreation = {
-                    navController.navigate(WorkoutDestinations.CREATE_TEMPLATE)
+                onNavigateToWorkoutCreation = { folderId ->
+                    if (folderId != null) {
+                        navController.navigate("${WorkoutDestinations.CREATE_TEMPLATE}?folderId=$folderId")
+                    } else {
+                        navController.navigate(WorkoutDestinations.CREATE_TEMPLATE)
+                    }
                 }
             )
         }

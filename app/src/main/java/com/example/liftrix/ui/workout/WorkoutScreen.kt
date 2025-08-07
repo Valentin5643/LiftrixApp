@@ -57,6 +57,7 @@ import com.example.liftrix.domain.usecase.folder.GetFoldersUseCase
 import com.example.liftrix.domain.usecase.folder.CreateFolderUseCase
 import kotlinx.coroutines.flow.firstOrNull
 import com.example.liftrix.ui.workout.components.InlineFolderSection
+import timber.log.Timber
 import com.example.liftrix.ui.workout.components.CreateFolderDialog
 import com.example.liftrix.ui.workout.components.FolderEditDialog
 import com.example.liftrix.ui.workout.components.QuickCreateFolderButton
@@ -79,7 +80,7 @@ import com.example.liftrix.ui.workout.components.QuickCreateFolderButton
 @Composable
 fun WorkoutScreen(
     onNavigateToActiveWorkout: (templateId: String?) -> Unit,
-    onNavigateToWorkoutCreation: () -> Unit,
+    onNavigateToWorkoutCreation: (folderId: String?) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: WorkoutViewModel = hiltViewModel()
 ) {
@@ -111,7 +112,7 @@ fun WorkoutScreen(
         }
         is WorkoutUiState.Empty -> {
             WorkoutEmptyScreen(
-                onCreateWorkout = onNavigateToWorkoutCreation,
+                onCreateWorkout = { onNavigateToWorkoutCreation(null) },
                 modifier = modifier
             )
         }
@@ -122,7 +123,7 @@ fun WorkoutScreen(
 private fun WorkoutContent(
     screenData: com.example.liftrix.ui.common.state.WorkoutScreenData,
     onNavigateToActiveWorkout: (templateId: String?) -> Unit,
-    onNavigateToWorkoutCreation: () -> Unit,
+    onNavigateToWorkoutCreation: (folderId: String?) -> Unit,
     onCreateFolder: (String) -> Unit,
     viewModel: WorkoutViewModel,
     modifier: Modifier = Modifier
@@ -150,7 +151,7 @@ private fun WorkoutContent(
         item {
             QuickActionsCard(
                 onStartQuickWorkout = { onNavigateToActiveWorkout(null) },
-                onCreateWorkout = onNavigateToWorkoutCreation
+                onCreateWorkout = { onNavigateToWorkoutCreation(null) }
             )
         }
         
@@ -175,7 +176,7 @@ private fun WorkoutContent(
             // Only show empty state if there are truly no folders AND no templates
             item {
                 EmptyWorkoutsCard(
-                    onCreateWorkout = onNavigateToWorkoutCreation
+                    onCreateWorkout = { onNavigateToWorkoutCreation(null) }
                 )
             }
         } else {
@@ -197,6 +198,9 @@ private fun WorkoutContent(
                             onNavigateToActiveWorkout(workout.id.value) 
                         },
                         onEditWorkout = { /* TODO: Navigate to edit */ },
+                        onCreateWorkout = { folderId ->
+                            onNavigateToWorkoutCreation(folderId)
+                        },
                         onEditFolder = { folderId ->
                             selectedFolderForEdit = screenData.folders.find { it.id.value == folderId }
                             showEditFolderDialog = true
@@ -236,7 +240,7 @@ private fun WorkoutContent(
     CreateFolderDialog(
         show = showCreateFolderDialog,
         onDismiss = { showCreateFolderDialog = false },
-        onCreateFolder = { folderName ->
+        onCreateFolder = { folderName: String ->
             onCreateFolder(folderName)
         }
     )
@@ -261,12 +265,32 @@ private fun WorkoutContent(
         },
         onAddWorkoutToFolder = { folder ->
             // Navigate to workout creation with pre-selected folder
-            onNavigateToWorkoutCreation()
+            onNavigateToWorkoutCreation(folder.id.value)
             showEditFolderDialog = false
             selectedFolderForEdit = null
         },
         onReorderFolder = { folder, moveUp ->
-            // TODO: Handle folder reordering via ViewModel
+            // ✅ SIMPLIFIED: ViewModel now handles timing safety
+            val currentFolders = screenData.folders
+            val currentIndex = currentFolders.indexOfFirst { it.id == folder.id }
+            
+            if (currentIndex != -1) {
+                val newIndex = if (moveUp) {
+                    (currentIndex - 1).coerceAtLeast(0)
+                } else {
+                    (currentIndex + 1).coerceAtMost(currentFolders.size - 1)
+                }
+                
+                if (newIndex != currentIndex) {
+                    val mutableFolders = currentFolders.toMutableList()
+                    val folderToMove = mutableFolders.removeAt(currentIndex)
+                    mutableFolders.add(newIndex, folderToMove)
+                    
+                    val reorderedIds = mutableFolders.map { it.id }
+                    Timber.d("FOLDER-DEBUG: UI TRIGGER - ✅ Requesting reorder of folder '${folder.name}' from index $currentIndex to $newIndex")
+                    viewModel.handleEvent(WorkoutEvent.ReorderFolders(reorderedIds))
+                }
+            }
         }
     )
 }
@@ -306,7 +330,7 @@ private fun InlineFolderSectionHeader(
 @Composable
 private fun QuickActionsCard(
     onStartQuickWorkout: () -> Unit,
-    onCreateWorkout: () -> Unit,
+    onCreateWorkout: (folderId: String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     UnifiedWorkoutCard(
@@ -327,7 +351,7 @@ private fun QuickActionsCard(
             
             PrimaryActionButton(
                 text = stringResource(R.string.workflow_create_new_workout),
-                onClick = onCreateWorkout,
+                onClick = { onCreateWorkout(null) },
                 modifier = Modifier.weight(1f),
                 leadingIcon = Icons.Default.Assignment
             )
@@ -340,7 +364,7 @@ private fun QuickActionsCard(
  */
 @Composable
 private fun EmptyWorkoutsCard(
-    onCreateWorkout: () -> Unit,
+    onCreateWorkout: (folderId: String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     UnifiedWorkoutCard(
@@ -372,7 +396,7 @@ private fun EmptyWorkoutsCard(
             
             PrimaryActionButton(
                 text = stringResource(R.string.workflow_create_new_workout),
-                onClick = onCreateWorkout,
+                onClick = { onCreateWorkout(null) },
                 modifier = Modifier.fillMaxWidth(),
                 leadingIcon = Icons.Default.Assignment
             )
@@ -451,7 +475,7 @@ private fun WorkoutErrorScreen(
 
 @Composable
 private fun WorkoutEmptyScreen(
-    onCreateWorkout: () -> Unit,
+    onCreateWorkout: (folderId: String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -473,7 +497,7 @@ private fun WorkoutEmptyScreen(
         Spacer(modifier = Modifier.height(16.dp))
         PrimaryActionButton(
             text = "Create Workout",
-            onClick = onCreateWorkout,
+            onClick = { onCreateWorkout(null) },
             leadingIcon = Icons.Default.Assignment
         )
     }

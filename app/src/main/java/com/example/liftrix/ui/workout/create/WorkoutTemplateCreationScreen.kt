@@ -70,6 +70,7 @@ fun WorkoutTemplateCreationScreen(
     onNavigateBack: () -> Unit,
     onNavigateToExerciseSelection: () -> Unit = {},
     editTemplateId: String? = null,
+    initialFolderId: String? = null,
     modifier: Modifier = Modifier,
     viewModel: WorkoutTemplateCreationViewModel = hiltViewModel(),
     savedStateHandle: androidx.lifecycle.SavedStateHandle? = null
@@ -122,6 +123,13 @@ fun WorkoutTemplateCreationScreen(
         }
     }
     
+    // Handle initial folder ID for folder-aware template creation
+    LaunchedEffect(initialFolderId) {
+        if (initialFolderId != null) {
+            viewModel.selectFolder(com.example.liftrix.domain.model.FolderId(initialFolderId))
+        }
+    }
+    
     // Handle selected exercise from navigation
     val selectedExercise = savedStateHandle?.get<com.example.liftrix.domain.model.ExerciseLibrary>("selected_exercise")
     
@@ -164,7 +172,6 @@ fun WorkoutTemplateCreationScreen(
                 )
             }
             
-            
             // Exercises List Section with drag-and-drop
             val exercises = uiState.dataOrNull()?.exercises ?: emptyList()
             timber.log.Timber.d("🔥 TEMPLATE-SCREEN-DEBUG: Rendering exercise items with ${exercises.size} exercises")
@@ -187,7 +194,7 @@ fun WorkoutTemplateCreationScreen(
             if (exercises.isNotEmpty()) {
                 itemsIndexed(
                     items = exercises,
-                    key = { index, exercise -> exercise.instanceId }
+                    key = { _, exercise -> exercise.exerciseId.value }
                 ) { index, exercise ->
                     ExerciseListItem(
                         exercise = exercise,
@@ -280,7 +287,6 @@ fun WorkoutTemplateCreationScreen(
 }
 
 
-
 /**
  * Card for basic template information (name and description)
  */
@@ -343,12 +349,19 @@ private fun ExerciseListItem(
     modifier: Modifier = Modifier
 ) {
     // Track individual sets instead of just a target number
-    // Use instanceId as key to ensure each exercise instance has its own unique state
-    var setInputs by remember(exercise.instanceId) { 
-        timber.log.Timber.d("🔥 EXERCISE-LIST-ITEM-DEBUG: Initializing setInputs for ${exercise.name} with instanceId ${exercise.instanceId}")
+    var setInputs by remember { 
         mutableStateOf(
-            // Always start with 1 set for new exercises, ignore targetSets to prevent jumping
-            listOf(SetInput(setNumber = 1, weight = "", reps = ""))
+            if (exercise.targetSets != null && exercise.targetSets!! > 0) {
+                List(exercise.targetSets!!) { index ->
+                    SetInput(
+                        setNumber = index + 1,
+                        weight = exercise.targetWeight?.kilograms?.toString() ?: "",
+                        reps = exercise.targetReps?.count?.toString() ?: ""
+                    )
+                }
+            } else {
+                listOf(SetInput(setNumber = 1, weight = "", reps = ""))
+            }
         )
     }
     
@@ -395,8 +408,7 @@ private fun ExerciseListItem(
                         setInputs = setInputs.toMutableList().apply {
                             set(index, updatedSet)
                         }
-                        // TODO: Temporarily disabled to debug the issue
-                        // updateExerciseFromSets(exercise, setInputs, onUpdate)
+                        updateExerciseFromSets(exercise, setInputs, onUpdate)
                     },
                     onRemoveSet = if (setInputs.size > 1) {
                         {
@@ -405,8 +417,7 @@ private fun ExerciseListItem(
                                 // Renumber remaining sets
                                 forEachIndexed { i, set -> set(i, this[i].copy(setNumber = i + 1)) }
                             }
-                            // TODO: Temporarily disabled to debug the issue
-                            // updateExerciseFromSets(exercise, setInputs, onUpdate)
+                            updateExerciseFromSets(exercise, setInputs, onUpdate)
                         }
                     } else null
                 )
@@ -421,14 +432,12 @@ private fun ExerciseListItem(
             // Add set button
             OutlinedButton(
                 onClick = { 
-                    val newSetInputs = setInputs + SetInput(
+                    setInputs = setInputs + SetInput(
                         setNumber = setInputs.size + 1,
                         weight = setInputs.lastOrNull()?.weight ?: "",
                         reps = setInputs.lastOrNull()?.reps ?: ""
                     )
-                    setInputs = newSetInputs
-                    // TODO: Temporarily disabled to debug the issue
-                    // updateExerciseFromSets(exercise, newSetInputs, onUpdate)
+                    updateExerciseFromSets(exercise, setInputs, onUpdate)
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -533,8 +542,7 @@ private fun updateExerciseFromSets(
     val updatedExercise = exercise.copy(
         targetSets = setInputs.size,
         targetReps = firstSet?.reps?.toIntOrNull()?.let { com.example.liftrix.domain.model.Reps(it) },
-        targetWeight = firstSet?.weight?.toDoubleOrNull()?.let { com.example.liftrix.domain.model.Weight.fromKilograms(it) },
-        instanceId = exercise.instanceId // Preserve instanceId
+        targetWeight = firstSet?.weight?.toDoubleOrNull()?.let { com.example.liftrix.domain.model.Weight.fromKilograms(it) }
     )
     onUpdate(updatedExercise)
 }

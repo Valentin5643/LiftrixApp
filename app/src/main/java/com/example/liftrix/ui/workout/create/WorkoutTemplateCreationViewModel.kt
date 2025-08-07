@@ -582,7 +582,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
             onSuccess = { template ->
                 // 🔥 STATE SYNC FIX: Update selectedFolderId to match where workout was created
                 val currentData = _uiState.value.dataOrNull() ?: WorkoutTemplateCreationData()
-                val createdFolderId = com.example.liftrix.domain.model.FolderId(template.folderId)
+                val createdFolderId = template.folderId?.let { com.example.liftrix.domain.model.FolderId(it) }
                 
                 Timber.d("🔥 SUCCESS-DEBUG: Template created successfully: ${template.name}")
                 Timber.d("🔥 SUCCESS-DEBUG: Template assigned to folder: ${template.folderId}")
@@ -1160,7 +1160,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                                 selectedExercise = null,
                                 isExerciseSelectorExpanded = false,
                                 availableFolders = currentData?.availableFolders ?: emptyList(),
-                                selectedFolderId = com.example.liftrix.domain.model.FolderId(template.folderId),
+                                selectedFolderId = template.folderId?.let { com.example.liftrix.domain.model.FolderId(it) },
                                 defaultFolderId = currentData?.defaultFolderId
                             )
                         ))

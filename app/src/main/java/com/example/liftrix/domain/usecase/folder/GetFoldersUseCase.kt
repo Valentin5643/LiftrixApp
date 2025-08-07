@@ -22,7 +22,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class GetFoldersUseCase @Inject constructor(
-    private val folderRepository: FolderRepository
+    private val folderRepository: FolderRepository,
+    private val reorderFoldersUseCase: ReorderFoldersUseCase
 ) {
     
     /**
@@ -37,23 +38,37 @@ class GetFoldersUseCase @Inject constructor(
             
             folderRepository.getAllFoldersForUser(input.userId)
                 .map { folders ->
-                    // Ensure default folder exists
-                    if (folders.isEmpty() || folders.none { it.id.value.startsWith("uncategorized_") }) {
-                        // Create default folder if it doesn't exist
+                    timber.log.Timber.d("🔥 GET-FOLDERS: Raw folders from DAO: ${folders.size} folders")
+                    folders.forEach { folder ->
+                        timber.log.Timber.d("🔥 GET-FOLDERS: - Folder: id=${folder.id.value}, name='${folder.name.value}', isDefault=${folder.isDefault()}")
+                    }
+                    
+                    // Always ensure default folder is included
+                    val hasUncategorized = folders.any { it.id.value.startsWith("uncategorized_") }
+                    
+                    if (!hasUncategorized) {
+                        timber.log.Timber.w("🔥 GET-FOLDERS: Uncategorized folder missing from DAO results, creating/fetching it")
+                        // Create or get default folder
                         val defaultFolderResult = folderRepository.getOrCreateDefaultFolder(input.userId)
                         when {
                             defaultFolderResult.isSuccess -> {
-                                // Re-fetch folders after creating default
-                                Result.success(folders + defaultFolderResult.getOrThrow())
+                                val defaultFolder = defaultFolderResult.getOrThrow()
+                                val allFolders = listOf(defaultFolder) + folders
+                                timber.log.Timber.d("🔥 GET-FOLDERS: Added missing uncategorized folder, total: ${allFolders.size}")
+                                
+                                // Apply stored folder order
+                                val orderedFolders = reorderFoldersUseCase.applyStoredOrder(input.userId, allFolders)
+                                Result.success(orderedFolders)
                             }
                             else -> Result.failure(
                                 defaultFolderResult.exceptionOrNull() ?: RuntimeException("Failed to create default folder")
                             )
                         }
                     } else {
-                        Result.success(folders.sortedWith(compareBy<Folder> { 
-                            !it.id.value.startsWith("uncategorized_") 
-                        }.thenBy { it.name.value }))
+                        timber.log.Timber.d("🔥 GET-FOLDERS: Uncategorized folder found in results")
+                        // Apply stored folder order or default sorting
+                        val orderedFolders = reorderFoldersUseCase.applyStoredOrder(input.userId, folders)
+                        Result.success(orderedFolders)
                     }
                 }
                 .catch { exception ->

@@ -234,40 +234,63 @@ abstract class BaseViewModel<S, E : ViewModelEvent>(
         onError: ((LiftrixError) -> Unit)? = null,
         showLoading: Boolean = true
     ) {
+        Timber.d("FOLDER-DEBUG: === BASE VIEWMODEL EXECUTE USE CASE START ===")
+        
         viewModelScope.launch {
             try {
+                Timber.d("FOLDER-DEBUG: BVM Step 1 - Setting loading state (showLoading: $showLoading)")
                 if (showLoading) {
                     setLoadingState()
                 }
 
+                Timber.d("FOLDER-DEBUG: BVM Step 2 - Executing use case")
                 val startTime = System.currentTimeMillis()
                 val result = useCase()
                 val executionTime = System.currentTimeMillis() - startTime
+                Timber.d("FOLDER-DEBUG: BVM Step 2 Result - Use case completed in ${executionTime}ms")
 
+                Timber.d("FOLDER-DEBUG: BVM Step 3 - Processing result")
                 result.fold(
                     onSuccess = { data ->
+                        Timber.d("FOLDER-DEBUG: BVM SUCCESS - Use case returned success data")
                         logUseCaseSuccess(executionTime)
                         onSuccess?.invoke(data)
+                        Timber.d("FOLDER-DEBUG: BVM SUCCESS - onSuccess callback invoked")
                     },
                     onFailure = { throwable ->
+                        Timber.e("FOLDER-DEBUG: BVM ERROR - Use case returned failure")
+                        Timber.e("FOLDER-DEBUG: BVM ERROR - Throwable type: ${throwable.javaClass.simpleName}")
+                        Timber.e("FOLDER-DEBUG: BVM ERROR - Throwable message: ${throwable.message}")
+                        Timber.e("FOLDER-DEBUG: BVM ERROR - Full throwable: $throwable")
+                        
                         val liftrixError = if (throwable is LiftrixError) {
+                            Timber.d("FOLDER-DEBUG: BVM ERROR - Converting throwable to LiftrixError (already LiftrixError)")
                             throwable
                         } else {
+                            Timber.d("FOLDER-DEBUG: BVM ERROR - Converting throwable to LiftrixError (wrapping generic throwable)")
                             LiftrixError.UnknownError(
-                                errorMessage = "Use case execution failed",
+                                errorMessage = "Use case execution failed: ${throwable.message ?: "Unknown error"}",
                             )
                         }
                         
+                        Timber.e("FOLDER-DEBUG: BVM ERROR - Final LiftrixError: $liftrixError")
                         logUseCaseError(liftrixError, executionTime)
                         handleError(liftrixError)
                         onError?.invoke(liftrixError)
+                        Timber.e("FOLDER-DEBUG: BVM ERROR - onError callback invoked")
                     }
                 )
             } catch (exception: Exception) {
+                Timber.e("FOLDER-DEBUG: === BASE VIEWMODEL EXECUTE USE CASE EXCEPTION ===")
+                Timber.e("FOLDER-DEBUG: BVM EXCEPTION - Type: ${exception.javaClass.simpleName}")
+                Timber.e("FOLDER-DEBUG: BVM EXCEPTION - Message: ${exception.message}")
+                Timber.e("FOLDER-DEBUG: BVM EXCEPTION - Cause: ${exception.cause?.message}")
+                Timber.e("FOLDER-DEBUG: BVM EXCEPTION - Stack trace: ${exception.stackTraceToString()}")
+                
                 val error = LiftrixError.UnknownError(
-                    errorMessage = "Unexpected error during use case execution",
+                    errorMessage = "Unexpected error during use case execution: ${exception.message}",
                 )
-                Timber.e(exception, "Unexpected error in executeUseCase")
+                Timber.e(exception, "FOLDER-DEBUG: BVM EXCEPTION - Creating UnknownError wrapper")
                 handleError(error)
                 onError?.invoke(error)
             }

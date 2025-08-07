@@ -19,7 +19,22 @@ class DateTimeConverters @Inject constructor() {
     
     @TypeConverter
     fun toInstant(instantString: String?): Instant? {
-        return instantString?.let { Instant.parse(it) }
+        return instantString?.let { timeString ->
+            try {
+                // Try parsing as ISO format first
+                Instant.parse(timeString)
+            } catch (e: Exception) {
+                try {
+                    // Fallback: Try parsing as epoch milliseconds
+                    val epochMillis = timeString.toLong()
+                    Instant.ofEpochMilli(epochMillis)
+                } catch (e2: Exception) {
+                    // If both fail, log error and return null
+                    timber.log.Timber.e("🔥 DATETIME-CONVERTER: Failed to parse timestamp '$timeString': ${e.message}, fallback failed: ${e2.message}")
+                    null
+                }
+            }
+        }
     }
     
     @TypeConverter

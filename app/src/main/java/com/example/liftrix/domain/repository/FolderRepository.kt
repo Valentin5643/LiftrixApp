@@ -30,6 +30,16 @@ interface FolderRepository {
      * @return Flow of folder or null if not found
      */
     fun getFolderById(folderId: FolderId, userId: String): Flow<Folder?>
+
+    /**
+     * 🔥 NEW: Direct suspend function to get folder by ID without Flow complications
+     * This prevents Flow abortion issues when used with .first()
+     * 
+     * @param folderId The folder ID to retrieve
+     * @param userId The user ID to ensure user-scoped access
+     * @return Result containing folder or null if not found, or error
+     */
+    suspend fun getFolderByIdDirect(folderId: FolderId, userId: String): Result<Folder?>
     
     /**
      * Create a new folder

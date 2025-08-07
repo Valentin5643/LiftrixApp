@@ -177,8 +177,12 @@ fun UnifiedMainNavigationContainer(
                                 navController.navigate("unified_active_workout?isBlankWorkout=true")
                             }
                         },
-                        onNavigateToWorkoutCreation = {
-                            navController.navigate("template_creation")
+                        onNavigateToWorkoutCreation = { folderId ->
+                            if (folderId != null) {
+                                navController.navigate("template_creation?folderId=$folderId")
+                            } else {
+                                navController.navigate("template_creation")
+                            }
                         }
                     )
                 }

@@ -47,8 +47,23 @@ class FolderRepositoryImpl @Inject constructor(
                 emit(folder)
             } catch (e: Exception) {
                 Timber.e(e, "Failed to get folder by ID: ${folderId.value}")
-                emit(null)
+                throw e // Re-throw instead of emitting null to prevent Flow abortion
             }
+        }
+    }
+
+    /**
+     * 🔥 NEW: Direct suspend function to get folder by ID without Flow complications
+     * This prevents Flow abortion issues when used with .first()
+     */
+    override suspend fun getFolderByIdDirect(folderId: FolderId, userId: String): Result<Folder?> {
+        return try {
+            val entity = folderDao.getFolderById(folderId.value, userId)
+            val folder = entity?.let { folderMapper.toDomain(it) }
+            Result.success(folder)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get folder by ID: ${folderId.value}")
+            Result.failure(e)
         }
     }
 
@@ -118,7 +133,7 @@ class FolderRepositoryImpl @Inject constructor(
             val existingFolder = folderDao.getFolderById(folderId.value, userId)
             if (existingFolder == null) {
                 return Result.failure(
-                    IllegalArgumentException("Folder not found or not owned by user")
+                    IllegalArgumentException("Folder not found or not owned by user: ${folderId.value}")
                 )
             }
 
@@ -129,18 +144,14 @@ class FolderRepositoryImpl @Inject constructor(
                 )
             }
 
-            // Note: Template reassignment will be handled by database foreign key constraints
-            // or in a future implementation. For now, we'll delete the folder and let the
-            // migration handle template reassignment to avoid breaking existing functionality.
-
             // Delete the folder
             val deleteResult = folderDao.deleteFolder(folderId.value, userId)
 
             if (deleteResult > 0) {
-                Timber.d("Deleted folder: ${folderId.value}")
+                Timber.d("Successfully deleted folder: ${folderId.value}")
                 Result.success(Unit)
             } else {
-                Result.failure(RuntimeException("Failed to delete folder from database"))
+                Result.failure(RuntimeException("Failed to delete folder from database - no rows affected"))
             }
         } catch (e: Exception) {
             Timber.e(e, "Failed to delete folder: ${folderId.value}")
@@ -170,7 +181,7 @@ class FolderRepositoryImpl @Inject constructor(
                 )
             }
 
-            val oldFolderId = template.folderId
+            val oldFolderId = template.folderId ?: "null" // Handle null folder ID
             val newFolderId = targetFolderId.value
 
             // Skip if template is already in target folder
@@ -178,10 +189,25 @@ class FolderRepositoryImpl @Inject constructor(
                 return Result.success(Unit)
             }
 
-            // For now, return success without implementing the move logic
-            // This will be implemented when the WorkoutTemplateDao has the required methods
-            Timber.d("Template move requested from $oldFolderId to $newFolderId - implementation pending")
-            Result.success(Unit)
+            // 🔥 IMPLEMENTATION: Use WorkoutTemplateDao to move template between folders
+            val updateResult = workoutTemplateDao.updateFolderId(templateId, newFolderId, userId)
+            
+            if (updateResult > 0) {
+                // Update folder template counts
+                database.withTransaction {
+                    // Decrement old folder count (only if it's not null)
+                    if (oldFolderId != newFolderId && oldFolderId != "null") {
+                        folderDao.decrementTemplateCount(oldFolderId, System.currentTimeMillis())
+                    }
+                    // Always increment new folder count
+                    folderDao.incrementTemplateCount(newFolderId, System.currentTimeMillis())
+                }
+                
+                Timber.d("Successfully moved template $templateId from $oldFolderId to $newFolderId")
+                Result.success(Unit)
+            } else {
+                Result.failure(RuntimeException("Failed to update template folder - no rows affected"))
+            }
         } catch (e: Exception) {
             Timber.e(e, "Failed to move template $templateId to folder ${targetFolderId.value}")
             Result.failure(e)

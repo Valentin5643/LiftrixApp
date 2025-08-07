@@ -210,6 +210,18 @@ interface WorkoutRepository {
     suspend fun getFeedWorkouts(userId: String, limit: Int = 10): LiftrixResult<List<FeedWorkout>>
     
     /**
+     * Get feed workouts for display as reactive Flow.
+     * 
+     * Returns a Flow of completed workouts formatted for display in the social feed.
+     * The Flow automatically updates when new workouts are completed.
+     * 
+     * @param userId The user ID for data scoping
+     * @param limit Maximum number of feed workouts to return
+     * @return Flow of LiftrixResult with list of feed workouts
+     */
+    fun getFeedWorkoutsReactive(userId: String, limit: Int = 10): Flow<LiftrixResult<List<FeedWorkout>>>
+    
+    /**
      * Get workout statistics for a user (legacy method for compatibility).
      * 
      * @param userId The user ID for data scoping

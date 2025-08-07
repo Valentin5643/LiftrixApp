@@ -83,6 +83,7 @@ fun LazyItemScope.InlineFolderSection(
     isExpanded: Boolean,
     onToggleExpanded: (String) -> Unit,
     onCreateFolder: () -> Unit = {},
+    onCreateWorkout: (String) -> Unit = {}, // Added: Create workout in specific folder
     onEditFolder: (String) -> Unit = {},
     onStartWorkout: (WorkoutTemplate) -> Unit,
     onEditWorkout: (WorkoutTemplate) -> Unit,
@@ -127,7 +128,7 @@ fun LazyItemScope.InlineFolderSection(
             ) {
                 if (workouts.isEmpty() && !folder.isDefault()) {
                     EmptyFolderContent(
-                        onCreateWorkout = onCreateFolder
+                        onCreateWorkout = { onCreateWorkout(folder.id.value) }
                     )
                 } else {
                     workouts.forEach { workout ->
@@ -487,7 +488,7 @@ private fun EmptyFolderContent(
  * Follows Liftrix design system with proper validation and accessibility.
  */
 @Composable
-fun CreateFolderDialog(
+fun CreateFolderDialog_OLD(
     show: Boolean,
     onDismiss: () -> Unit,
     onCreateFolder: (String) -> Unit,
@@ -613,7 +614,7 @@ fun CreateFolderDialog(
  * Positioned at the bottom of the folder list for easy access.
  */
 @Composable
-fun QuickCreateFolderButton(
+fun QuickCreateFolderButton_OLD(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -846,7 +847,7 @@ private fun FolderEditMainMenu(
         )
         
         // Add workout to folder
-        FolderEditActionButton(
+        FolderEditActionButton_OLD(
             icon = Icons.Filled.Assignment,
             title = "Add New Workout",
             description = "Create a new workout routine in this folder",
@@ -854,7 +855,7 @@ private fun FolderEditMainMenu(
         )
         
         // Rename folder
-        FolderEditActionButton(
+        FolderEditActionButton_OLD(
             icon = Icons.Filled.Edit,
             title = "Rename Folder",
             description = "Change the folder name",
@@ -862,7 +863,7 @@ private fun FolderEditMainMenu(
         )
         
         // Reorder folder
-        FolderEditActionButton(
+        FolderEditActionButton_OLD(
             icon = Icons.Filled.ArrowUpward,
             title = "Reorder Folder",
             description = "Move folder up or down in the list",
@@ -874,7 +875,7 @@ private fun FolderEditMainMenu(
             Spacer(modifier = Modifier.height(8.dp))
             HorizontalDivider()
             
-            FolderEditActionButton(
+            FolderEditActionButton_OLD(
                 icon = Icons.Filled.Delete,
                 title = "Delete Folder",
                 description = "Remove this folder and its contents",
@@ -889,7 +890,7 @@ private fun FolderEditMainMenu(
  * Action button for folder edit menu
  */
 @Composable
-private fun FolderEditActionButton(
+private fun FolderEditActionButton_OLD(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     description: String,

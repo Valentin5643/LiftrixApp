@@ -366,7 +366,7 @@ class WorkoutTemplateRepositoryImpl @Inject constructor(
                             analyticsContext = mapOf(
                                 "template_name" to template.name,
                                 "user_id" to template.userId,
-                                "folder_id" to template.folderId,
+                                "folder_id" to (template.folderId ?: "null"),
                                 "error_type" to "foreign_key_violation"
                             )
                         )

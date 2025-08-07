@@ -50,7 +50,7 @@ class CreateWorkoutTemplateUseCase @Inject constructor(
     suspend operator fun invoke(
         userId: String,
         name: String,
-        folderId: String = "uncategorized_$userId",
+        folderId: String? = null, // 🔥 FIXED: Use null to indicate default folder should be used
         description: String? = null,
         exercises: List<TemplateExercise> = emptyList(),
         estimatedDurationMinutes: Int? = null,
@@ -126,7 +126,8 @@ class CreateWorkoutTemplateUseCase @Inject constructor(
             val defaultFolder = defaultFolderResult.getOrThrow()
             timber.log.Timber.d("🔥 CREATE-TEMPLATE: Default folder created/found: ${defaultFolder?.id?.value}")
             
-            val actualFolderId = if (folderId == "uncategorized_$userId") {
+            val actualFolderId = if (folderId == null) {
+                // 🔥 FIXED: Use actual default folder ID instead of hardcoded pattern
                 defaultFolder.id
             } else {
                 com.example.liftrix.domain.model.FolderId(folderId)

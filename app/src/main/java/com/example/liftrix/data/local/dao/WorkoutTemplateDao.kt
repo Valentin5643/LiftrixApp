@@ -142,4 +142,22 @@ interface WorkoutTemplateDao {
         ORDER BY usage_count DESC
     """)
     fun getTemplatesByDifficulty(userId: String, difficultyLevel: Int): Flow<List<WorkoutTemplateEntity>>
+    
+    /**
+     * Update the folder ID for a specific workout template (user-scoped)
+     */
+    @Query("UPDATE workout_templates SET folder_id = :folderId WHERE id = :templateId AND user_id = :userId")
+    suspend fun updateFolderId(templateId: String, folderId: String, userId: String): Int
+    
+    /**
+     * Move a template between folders (user-scoped)
+     */
+    @Query("UPDATE workout_templates SET folder_id = :newFolderId WHERE id = :templateId AND folder_id = :oldFolderId AND user_id = :userId")
+    suspend fun moveBetweenFolders(templateId: String, oldFolderId: String, newFolderId: String, userId: String): Int
+    
+    /**
+     * Get the count of templates in a specific folder (user-scoped)
+     */
+    @Query("SELECT COUNT(*) FROM workout_templates WHERE folder_id = :folderId AND user_id = :userId")
+    suspend fun getFolderTemplateCount(folderId: String, userId: String): Int
 } 

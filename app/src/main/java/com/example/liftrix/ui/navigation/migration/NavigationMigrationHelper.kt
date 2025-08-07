@@ -57,7 +57,7 @@ class NavigationMigrationHelper @Inject constructor() {
             route == "onboarding" -> LiftrixRoute.Onboarding
             
             // Template creation
-            route == "template_creation" -> LiftrixRoute.TemplateCreation
+            route == "template_creation" -> LiftrixRoute.TemplateCreation()
             
             // Exercise selection routes
             route == "exercise_selection" -> LiftrixRoute.ExerciseSelection()
