@@ -5,6 +5,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import javax.inject.Inject
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.DashboardConfiguration
@@ -24,6 +26,16 @@ import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.progress.components.AnalyticsWidgetManager
 import timber.log.Timber
+
+/**
+ * Navigation callbacks for detail screen navigation from AnalyticsWidgetViewModel.
+ */
+data class NavigationCallbacks(
+    val onNavigateToVolumeDetail: () -> Unit = {},
+    val onNavigateToOneRmDetail: () -> Unit = {},
+    val onNavigateToMuscleGroupDetail: () -> Unit = {},
+    val onNavigateToFrequencyDetail: () -> Unit = {}
+)
 
 /**
  * ViewModel for analytics widget management following the MVI pattern.
@@ -111,11 +123,23 @@ class AnalyticsWidgetViewModel @Inject constructor(
      * Implements exponential backoff and maximum retry limits.
      */
     private val retryAttempts = mutableMapOf<String, Int>()
+    
+    /**
+     * Navigation callbacks for detail screen navigation.
+     * Set by the UI component to enable navigation from ViewModel.
+     */
+    private var navigationCallbacks: NavigationCallbacks? = null
 
     /**
      * Maximum number of retry attempts for failed operations.
      */
     private val maxRetryAttempts = 3
+    
+    /**
+     * Concurrency limiter for widget loading to prevent overwhelming the database.
+     * Limits concurrent widget data loading to 4 operations to maintain performance.
+     */
+    private val widgetLoadingSemaphore = Semaphore(permits = 4)
 
     init {
         initializeWidgets()
@@ -144,6 +168,10 @@ class AnalyticsWidgetViewModel @Inject constructor(
             is AnalyticsWidgetEvent.WidgetClicked -> handleWidgetClick(event.widget)
             is AnalyticsWidgetEvent.ForceAllWidgets -> forceAdvancedUserLevel()
             AnalyticsWidgetEvent.NavigateToDashboardCustomization -> handleNavigateToDashboardCustomization()
+            AnalyticsWidgetEvent.NavigateToVolumeDetail -> handleNavigateToVolumeDetail()
+            AnalyticsWidgetEvent.NavigateToOneRmDetail -> handleNavigateToOneRmDetail()
+            AnalyticsWidgetEvent.NavigateToMuscleGroupDetail -> handleNavigateToMuscleGroupDetail()
+            AnalyticsWidgetEvent.NavigateToFrequencyDetail -> handleNavigateToFrequencyDetail()
             is AnalyticsWidgetEvent.WidgetReordered -> handleWidgetReordered(event.fromIndex, event.toIndex)
         }
     }
@@ -477,15 +505,23 @@ class AnalyticsWidgetViewModel @Inject constructor(
                     visibleWidgets
                 }
 
-                // Load all widgets concurrently
+                // Load all widgets with concurrency limits
                 val jobs = widgetsToRefresh.map { widgetId ->
                     launch {
-                        loadWidgetData(widgetId, forceRefresh = true)
+                        widgetLoadingSemaphore.withPermit {
+                            loadWidgetData(widgetId, forceRefresh = true)
+                        }
                     }
                 }
 
                 // Wait for all jobs to complete
                 jobs.forEach { it.join() }
+                
+                // Periodic cleanup of retry tracking to prevent memory leaks
+                if (retryAttempts.size > 20) {
+                    retryAttempts.clear()
+                    Timber.d("Cleaned up retry attempts map to prevent memory growth")
+                }
 
                 updateState { currentState ->
                     when (currentState) {
@@ -819,13 +855,8 @@ class AnalyticsWidgetViewModel @Inject constructor(
      * Initializes available widgets based on feature flags and user permissions.
      */
     private fun initializeWidgets() {
-        val defaultWidgets = listOf(
-            AnalyticsWidget.TotalVolume,
-            AnalyticsWidget.WorkoutFrequency,
-            AnalyticsWidget.StrengthProgress,
-            AnalyticsWidget.PersonalRecords,
-            AnalyticsWidget.VolumeTrends
-        )
+        // Show all available widgets per SPEC requirement (FR-001)
+        val defaultWidgets = AnalyticsWidget.getAllWidgets()
 
         availableWidgets.value = defaultWidgets
         
@@ -1068,14 +1099,63 @@ class AnalyticsWidgetViewModel @Inject constructor(
     /**
      * Handles widget click events.
      * 
+     * Maps widget types to appropriate detail screen navigation based on widget category and type.
+     * 
+     * Navigation mapping:
+     * - Volume widgets (TotalVolume, VolumeChart, VolumeTrends) → VolumeAnalysisDetail
+     * - 1RM/Strength widgets (OneRMProgression, StrengthProgress, PersonalRecords) → OneRmDetail
+     * - Muscle group widgets (MuscleGroupDistribution) → MuscleGroupDetail  
+     * - Frequency widgets (WorkoutFrequency, FrequencyChart) → WorkoutFrequencyDetail
+     * 
      * @param widget The clicked widget
      */
     private fun handleWidgetClick(widget: com.example.liftrix.domain.model.analytics.AnalyticsWidget) {
         val widgetId = widget.id
         trackInteraction(widgetId, "click", emptyMap())
         
-        // Additional click handling logic can be added here
-        Timber.d("Widget clicked: $widgetId")
+        // Map widget to appropriate detail screen navigation
+        val navigationEvent = when (widget) {
+            // Volume-related widgets → Volume Analysis Detail
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.TotalVolume,
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeChart,
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeTrends,
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeCalendar,
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeLoadProgression -> {
+                AnalyticsWidgetEvent.NavigateToVolumeDetail
+            }
+            
+            // 1RM and Strength widgets → One RM Detail
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.OneRMProgression,
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.StrengthProgress,
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.PersonalRecords -> {
+                AnalyticsWidgetEvent.NavigateToOneRmDetail
+            }
+            
+            // Muscle group widgets → Muscle Group Detail
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.MuscleGroupDistribution -> {
+                AnalyticsWidgetEvent.NavigateToMuscleGroupDetail
+            }
+            
+            // Frequency widgets → Workout Frequency Detail
+            // TODO: Enable when WorkoutFrequencyDetailScreen is implemented
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutFrequency,
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.FrequencyChart -> {
+                // Temporarily disabled until WorkoutFrequencyDetailScreen is implemented
+                Timber.w("Frequency detail navigation disabled - screen not implemented")
+                null
+            }
+            
+            // For other widgets, no specific navigation (just log interaction)
+            else -> null
+        }
+        
+        // Trigger navigation if a mapping exists
+        navigationEvent?.let { event ->
+            Timber.d("Navigating to detail screen for widget: $widgetId")
+            handleEvent(event)
+        } ?: run {
+            Timber.d("Widget clicked without specific detail navigation: $widgetId")
+        }
     }
     
     /**
@@ -1084,6 +1164,51 @@ class AnalyticsWidgetViewModel @Inject constructor(
     private fun handleNavigateToDashboardCustomization() {
         Timber.d("Navigating to dashboard customization")
         // Navigation logic will be handled by the parent composable
+    }
+    
+    /**
+     * Sets navigation callbacks for detail screen navigation.
+     * Should be called from the UI layer to connect ViewModel to navigation.
+     */
+    fun setNavigationCallbacks(callbacks: NavigationCallbacks) {
+        this.navigationCallbacks = callbacks
+        Timber.d("Navigation callbacks set for AnalyticsWidgetViewModel")
+    }
+    
+    /**
+     * Handles navigation to volume analysis detail screen.
+     */
+    private fun handleNavigateToVolumeDetail() {
+        Timber.d("Navigating to volume analysis detail screen")
+        navigationCallbacks?.onNavigateToVolumeDetail?.invoke()
+            ?: Timber.w("Navigation callbacks not set - cannot navigate to volume detail")
+    }
+    
+    /**
+     * Handles navigation to one rep max detail screen.
+     */
+    private fun handleNavigateToOneRmDetail() {
+        Timber.d("Navigating to one rep max detail screen")
+        navigationCallbacks?.onNavigateToOneRmDetail?.invoke()
+            ?: Timber.w("Navigation callbacks not set - cannot navigate to one RM detail")
+    }
+    
+    /**
+     * Handles navigation to muscle group detail screen.
+     */
+    private fun handleNavigateToMuscleGroupDetail() {
+        Timber.d("Navigating to muscle group detail screen")
+        navigationCallbacks?.onNavigateToMuscleGroupDetail?.invoke()
+            ?: Timber.w("Navigation callbacks not set - cannot navigate to muscle group detail")
+    }
+    
+    /**
+     * Handles navigation to workout frequency detail screen.
+     */
+    private fun handleNavigateToFrequencyDetail() {
+        Timber.d("Navigating to workout frequency detail screen")
+        navigationCallbacks?.onNavigateToFrequencyDetail?.invoke()
+            ?: Timber.w("Navigation callbacks not set - cannot navigate to frequency detail")
     }
     
     /**

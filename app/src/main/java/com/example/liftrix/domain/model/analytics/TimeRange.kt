@@ -99,6 +99,17 @@ data class TimeRange(
         }
         
         /**
+         * Creates a TimeRange for the last six months
+         */
+        fun lastSixMonths(): TimeRange {
+            val calendar = Calendar.getInstance()
+            val endDate = calendar.time
+            calendar.add(Calendar.MONTH, -6)
+            val startDate = calendar.time
+            return TimeRange(startDate, endDate, TimeRangeType.SIX_MONTHS)
+        }
+        
+        /**
          * Creates a TimeRange for the last year
          */
         fun lastYear(): TimeRange {
@@ -107,6 +118,16 @@ data class TimeRange(
             calendar.add(Calendar.YEAR, -1)
             val startDate = calendar.time
             return TimeRange(startDate, endDate, TimeRangeType.YEAR)
+        }
+        
+        /**
+         * Creates a TimeRange for all time (from epoch to now)
+         */
+        fun allTime(): TimeRange {
+            val calendar = Calendar.getInstance()
+            val endDate = calendar.time
+            val startDate = Date(0L) // Epoch time
+            return TimeRange(startDate, endDate, TimeRangeType.ALL_TIME)
         }
     }
 }

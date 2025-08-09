@@ -140,6 +140,14 @@ sealed class FeatureConfigurationEvent : ViewModelEvent {
      * the showOnboarding flag to false.
      */
     object DismissOnboarding : FeatureConfigurationEvent()
+    
+    /**
+     * Event triggered to dismiss the analytics migration notification.
+     * 
+     * This event marks the analytics migration notification as dismissed and updates
+     * the showMigrationNotification flag to false.
+     */
+    object DismissMigrationNotification : FeatureConfigurationEvent()
 }
 
 /**
@@ -161,7 +169,8 @@ fun FeatureConfigurationEvent.requiresDataLoading(): Boolean = when (this) {
     is FeatureConfigurationEvent.ClearCache,
     is FeatureConfigurationEvent.EnableAnalytics,
     is FeatureConfigurationEvent.DisableAnalytics,
-    is FeatureConfigurationEvent.DismissOnboarding -> false
+    is FeatureConfigurationEvent.DismissOnboarding,
+    is FeatureConfigurationEvent.DismissMigrationNotification -> false
 }
 
 /**
@@ -179,7 +188,8 @@ fun FeatureConfigurationEvent.affectsAllComponents(): Boolean = when (this) {
     is FeatureConfigurationEvent.CheckFeatureEnabled,
     is FeatureConfigurationEvent.EnableAnalytics,
     is FeatureConfigurationEvent.DisableAnalytics,
-    is FeatureConfigurationEvent.DismissOnboarding -> false
+    is FeatureConfigurationEvent.DismissOnboarding,
+    is FeatureConfigurationEvent.DismissMigrationNotification -> false
 }
 
 /**
@@ -219,7 +229,8 @@ fun FeatureConfigurationEvent.requiresNetworkAccess(): Boolean = when (this) {
     is FeatureConfigurationEvent.ClearCache,
     is FeatureConfigurationEvent.EnableAnalytics,
     is FeatureConfigurationEvent.DisableAnalytics,
-    is FeatureConfigurationEvent.DismissOnboarding -> false
+    is FeatureConfigurationEvent.DismissOnboarding,
+    is FeatureConfigurationEvent.DismissMigrationNotification -> false
 }
 
 /**
@@ -237,5 +248,6 @@ fun FeatureConfigurationEvent.modifiesState(): Boolean = when (this) {
     is FeatureConfigurationEvent.ClearCache,
     is FeatureConfigurationEvent.EnableAnalytics,
     is FeatureConfigurationEvent.DisableAnalytics,
-    is FeatureConfigurationEvent.DismissOnboarding -> true
+    is FeatureConfigurationEvent.DismissOnboarding,
+    is FeatureConfigurationEvent.DismissMigrationNotification -> true
 }

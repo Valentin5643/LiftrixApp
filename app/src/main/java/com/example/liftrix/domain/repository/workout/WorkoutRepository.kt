@@ -7,7 +7,10 @@ import com.example.liftrix.domain.model.WorkoutSummary
 import com.example.liftrix.domain.model.FeedWorkout
 import com.example.liftrix.domain.model.common.LiftrixResult
 import kotlinx.coroutines.flow.Flow
-import java.time.LocalDate
+import kotlinx.datetime.LocalDate
+
+// Type alias for ExercisePerformanceData from CalculateExerciseRankingUseCase
+typealias ExercisePerformanceData = com.example.liftrix.domain.usecase.analytics.ExercisePerformanceData
 
 /**
  * Repository interface for core workout operations following single responsibility principle.
@@ -58,6 +61,20 @@ interface WorkoutRepository {
      * @return Flow of LiftrixResult with workouts on the specified date
      */
     fun getWorkoutsByDate(date: LocalDate, userId: String): Flow<LiftrixResult<List<Workout>>>
+    
+    /**
+     * Get exercise performance data for analytics calculations.
+     * 
+     * @param userId The user ID for data scoping
+     * @param startDate Start date for data collection
+     * @param endDate End date for data collection
+     * @return LiftrixResult with list of exercise performance data
+     */
+    suspend fun getExercisePerformanceData(
+        userId: String,
+        startDate: LocalDate,
+        endDate: LocalDate
+    ): LiftrixResult<List<ExercisePerformanceData>>
     
     /**
      * Update an existing workout.

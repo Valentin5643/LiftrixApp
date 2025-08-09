@@ -276,31 +276,18 @@ fun WidgetPreviewThumbnail(
         AnalyticsWidget.TotalVolume -> Icons.Default.FitnessCenter
         AnalyticsWidget.VolumeCalendar -> Icons.Default.CalendarMonth
         AnalyticsWidget.StrengthProgress -> Icons.Default.TrendingUp
-        AnalyticsWidget.ConsistencyStreak -> Icons.Default.LocalFireDepartment
         AnalyticsWidget.VolumeChart -> Icons.Default.BarChart
-        AnalyticsWidget.DurationChart -> Icons.Default.Timeline
         AnalyticsWidget.FrequencyChart -> Icons.Default.Analytics
         AnalyticsWidget.WorkoutStreak -> Icons.Default.LocalFireDepartment
         AnalyticsWidget.PersonalRecords -> Icons.Default.EmojiEvents
         AnalyticsWidget.VolumeTrends -> Icons.Default.Analytics
         AnalyticsWidget.RecoveryMetrics -> Icons.Default.Healing
-        AnalyticsWidget.PerformanceAnalysis -> Icons.Default.Assessment
-        AnalyticsWidget.CaloriesBurned -> Icons.Default.LocalFireDepartment
-        AnalyticsWidget.DailyCalories -> Icons.Default.Today
-        AnalyticsWidget.WeeklyCalorieTrend -> Icons.Default.DateRange
         AnalyticsWidget.AverageDuration -> Icons.Default.Timer
         AnalyticsWidget.VolumeLoadProgression -> Icons.Default.ShowChart
         AnalyticsWidget.ProgressChart -> Icons.Default.BarChart
         AnalyticsWidget.OneRMProgression -> Icons.Default.Equalizer
-        AnalyticsWidget.WeeklyTrends -> Icons.Default.Analytics
         AnalyticsWidget.MuscleGroupDistribution -> Icons.Default.Category
-        AnalyticsWidget.RecoveryPatterns -> Icons.Default.Healing
-        AnalyticsWidget.TrainingIntensity -> Icons.Default.FitnessCenter
-        AnalyticsWidget.ExerciseVariety -> Icons.Default.Category
-        AnalyticsWidget.TimeOfDayAnalysis -> Icons.Default.Schedule
-        AnalyticsWidget.SetCompletionRate -> Icons.Default.CheckCircle
         AnalyticsWidget.MonthlySummary -> Icons.Default.DateRange
-        AnalyticsWidget.GoalAchievement -> Icons.Default.EmojiEvents
     }
     
     Surface(
@@ -346,14 +333,14 @@ private fun WidgetToggleCardPreview() {
             )
             
             WidgetToggleCard(
-                widget = AnalyticsWidget.PerformanceAnalysis,
+                widget = AnalyticsWidget.MonthlySummary,
                 isEnabled = false,
                 onToggle = { },
                 onReorder = { }
             )
             
             WidgetToggleCard(
-                widget = AnalyticsWidget.CaloriesBurned,
+                widget = AnalyticsWidget.AverageDuration,
                 isEnabled = true,
                 isLoading = true,
                 onToggle = { }
@@ -382,7 +369,7 @@ private fun WidgetPreviewThumbnailPreview() {
                 size = WidgetDisplaySize.STANDARD
             )
             WidgetPreviewThumbnail(
-                widget = AnalyticsWidget.PerformanceAnalysis,
+                widget = AnalyticsWidget.MonthlySummary,
                 size = WidgetDisplaySize.EXPANDED
             )
         }

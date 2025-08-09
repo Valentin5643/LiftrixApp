@@ -221,7 +221,7 @@ sealed class SyncStrategy {
             triggerRealTimeSync(userId, setOf(
                 AnalyticsWidget.StrengthProgress,
                 AnalyticsWidget.OneRMProgression,
-                AnalyticsWidget.PerformanceAnalysis
+                AnalyticsWidget.MonthlySummary
             ))
             
             Timber.d("SyncStrategy: Personal record update processed successfully")

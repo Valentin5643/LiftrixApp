@@ -356,4 +356,8 @@ Column(
 - DAOs need providers in DatabaseModule
 - Achievement system may need activation in ProfileViewModel
 
-This context provides the foundation for understanding Liftrix's architecture and safely extending its functionality while maintaining code quality and performance standards.
+This context provides the foundation for understanding Liftrix's architecture and safely extending its functionality while maintaining code quality and performance standards.[byterover-mcp]
+
+# important 
+always use byterover-retrive-knowledge tool to get the related context before any tasks 
+always use byterover-store-knowledge to store all the critical informations after sucessful tasks

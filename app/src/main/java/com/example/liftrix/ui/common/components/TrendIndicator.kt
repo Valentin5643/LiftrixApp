@@ -67,7 +67,7 @@ fun TrendIndicator(
             Text(
                 text = formatPercentageChange(percentageChange),
                 color = color,
-                fontSize = if (isCompact) 10.sp else 12.sp,
+                fontSize = 14.sp,  // Updated to meet 14sp minimum requirement
                 fontWeight = FontWeight.Medium,
                 style = MaterialTheme.typography.labelMedium
             )

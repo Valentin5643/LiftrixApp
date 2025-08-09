@@ -48,7 +48,7 @@ class AnalyticsABTestManager @Inject constructor(
             val widgets = listOf(
                 AnalyticsWidgetRefs.TotalVolume,
                 AnalyticsWidgetRefs.WorkoutFrequency,
-                AnalyticsWidgetRefs.ConsistencyStreak,
+                AnalyticsWidgetRefs.WorkoutStreak,
                 AnalyticsWidgetRefs.ProgressChart
             )
             val maxWidgets = 4
@@ -59,9 +59,9 @@ class AnalyticsABTestManager @Inject constructor(
                 AnalyticsWidgetRefs.TotalVolume,
                 AnalyticsWidgetRefs.WorkoutFrequency,
                 AnalyticsWidgetRefs.ProgressChart,
-                AnalyticsWidgetRefs.ConsistencyStreak,
+                AnalyticsWidgetRefs.WorkoutStreak,
                 AnalyticsWidgetRefs.VolumeCalendar,
-                AnalyticsWidgetRefs.WeeklyTrends
+                AnalyticsWidgetRefs.VolumeTrends
             )
             val maxWidgets = 6
         }
@@ -71,13 +71,13 @@ class AnalyticsABTestManager @Inject constructor(
                 AnalyticsWidgetRefs.TotalVolume,
                 AnalyticsWidgetRefs.WorkoutFrequency,
                 AnalyticsWidgetRefs.ProgressChart,
-                AnalyticsWidgetRefs.ConsistencyStreak,
+                AnalyticsWidgetRefs.WorkoutStreak,
                 AnalyticsWidgetRefs.VolumeCalendar,
                 AnalyticsWidgetRefs.MuscleGroupDistribution,
                 AnalyticsWidgetRefs.OneRMProgression,
                 AnalyticsWidgetRefs.VolumeLoadProgression,
-                AnalyticsWidgetRefs.RecoveryPatterns,
-                AnalyticsWidgetRefs.WeeklyTrends
+                AnalyticsWidgetRefs.RecoveryMetrics,
+                AnalyticsWidgetRefs.VolumeTrends
             )
             val maxWidgets = 10
         }
@@ -121,13 +121,19 @@ class AnalyticsABTestManager @Inject constructor(
         val TotalVolume = com.example.liftrix.domain.model.analytics.AnalyticsWidget.TotalVolume
         val WorkoutFrequency = com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutFrequency
         val ProgressChart = com.example.liftrix.domain.model.analytics.AnalyticsWidget.ProgressChart
-        val ConsistencyStreak = com.example.liftrix.domain.model.analytics.AnalyticsWidget.ConsistencyStreak
+        val WorkoutStreak = com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutStreak
         val VolumeCalendar = com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeCalendar
         val MuscleGroupDistribution = com.example.liftrix.domain.model.analytics.AnalyticsWidget.MuscleGroupDistribution
         val OneRMProgression = com.example.liftrix.domain.model.analytics.AnalyticsWidget.OneRMProgression
         val VolumeLoadProgression = com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeLoadProgression
-        val RecoveryPatterns = com.example.liftrix.domain.model.analytics.AnalyticsWidget.RecoveryPatterns
-        val WeeklyTrends = com.example.liftrix.domain.model.analytics.AnalyticsWidget.WeeklyTrends
+        val RecoveryMetrics = com.example.liftrix.domain.model.analytics.AnalyticsWidget.RecoveryMetrics
+        val VolumeTrends = com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeTrends
+        val AverageDuration = com.example.liftrix.domain.model.analytics.AnalyticsWidget.AverageDuration
+        val VolumeChart = com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeChart
+        val FrequencyChart = com.example.liftrix.domain.model.analytics.AnalyticsWidget.FrequencyChart
+        val StrengthProgress = com.example.liftrix.domain.model.analytics.AnalyticsWidget.StrengthProgress
+        val PersonalRecords = com.example.liftrix.domain.model.analytics.AnalyticsWidget.PersonalRecords
+        val MonthlySummary = com.example.liftrix.domain.model.analytics.AnalyticsWidget.MonthlySummary
     }
     
     /**

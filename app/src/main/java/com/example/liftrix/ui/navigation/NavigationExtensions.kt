@@ -257,6 +257,43 @@ fun NavController.navigateToAnomalySettings() {
     navigate(LiftrixRoute.AnomalySettings)
 }
 
+// MARK: - Analytics Detail Navigation
+
+/**
+ * Navigate to volume analysis detail screen
+ */
+fun NavController.navigateToVolumeAnalysisDetail() {
+    navigate(LiftrixRoute.VolumeAnalysisDetail)
+}
+
+/**
+ * Navigate to one rep max detail screen
+ */
+fun NavController.navigateToOneRmDetail() {
+    navigate(LiftrixRoute.OneRmDetail)
+}
+
+/**
+ * Navigate to muscle group detail screen
+ */
+fun NavController.navigateToMuscleGroupDetail() {
+    navigate(LiftrixRoute.MuscleGroupDetail)
+}
+
+/**
+ * Navigate to workout frequency detail screen
+ */
+fun NavController.navigateToWorkoutFrequencyDetail() {
+    navigate(LiftrixRoute.WorkoutFrequencyDetail)
+}
+
+/**
+ * Navigate to exercise ranking detail screen
+ */
+fun NavController.navigateToExerciseRankingDetail() {
+    navigate(LiftrixRoute.ExerciseRankingDetail)
+}
+
 // MARK: - Folder Management Navigation
 
 

@@ -296,7 +296,7 @@ private fun WidgetPreviewArea(
                 )
             }
             
-            AnalyticsWidget.ConsistencyStreak -> {
+            AnalyticsWidget.WorkoutStreak -> {
                 MetricPreview(
                     title = "Streak",
                     value = "12",
@@ -314,25 +314,9 @@ private fun WidgetPreviewArea(
                 )
             }
             
-            AnalyticsWidget.CaloriesBurned -> {
-                MetricPreview(
-                    title = "Calories",
-                    value = "2,450",
-                    subtitle = "burned today",
-                    icon = Icons.Default.LocalFireDepartment,
-                    trend = "85% of goal"
-                )
-            }
+            // CaloriesBurned widget removed - using AverageDuration instead
             
-            AnalyticsWidget.DailyCalories -> {
-                MetricPreview(
-                    title = "Today",
-                    value = "850",
-                    subtitle = "calories burned",
-                    icon = Icons.Default.Today,
-                    trend = "vs 720 yesterday"
-                )
-            }
+            // DailyCalories widget removed
             
             AnalyticsWidget.VolumeCalendar -> {
                 CalendarPreview()
@@ -547,7 +531,7 @@ private fun WidgetPreviewCardPreview() {
             )
             
             WidgetPreviewCard(
-                widget = AnalyticsWidget.CaloriesBurned,
+                widget = AnalyticsWidget.WorkoutStreak,
                 currentSize = WidgetDisplaySize.COMPACT,
                 isSelected = true,
                 onSizeChange = { }

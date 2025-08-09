@@ -150,6 +150,7 @@ class UserPreferencesViewModel @Inject constructor(
             is UserPreferencesEvent.SaveChanges -> saveChanges()
             is UserPreferencesEvent.DiscardChanges -> discardChanges()
             is UserPreferencesEvent.DismissError -> dismissError()
+            is UserPreferencesEvent.MarkMigrationNoticeSeen -> markWidgetMigrationNoticeShown()
         }
     }
     
@@ -684,6 +685,30 @@ class UserPreferencesViewModel @Inject constructor(
                 Timber.e(exception, "Failed to handle coordinator event: ${event::class.simpleName}")
             }
         }
+    }
+    
+    /**
+     * Marks the widget migration notice as shown by the user.
+     * This updates the user's preferences to prevent showing the notice again.
+     */
+    fun markWidgetMigrationNoticeShown() {
+        val userId = _currentUser.value?.uid ?: return
+        
+        executeUseCase(
+            useCase = { 
+                preferencesService.getUserPreferences(userId).fold(
+                    onSuccess = { preferences ->
+                        val updatedPreferences = preferences.markMigrationNoticeSeen()
+                        preferencesService.saveWidgetPreferences(updatedPreferences)
+                    },
+                    onFailure = { error -> LiftrixResult.failure(error) }
+                )
+            },
+            onSuccess = {
+                loadPreferences()
+                Timber.d("Migration notice marked as shown for user: $userId")
+            }
+        )
     }
     
     /**

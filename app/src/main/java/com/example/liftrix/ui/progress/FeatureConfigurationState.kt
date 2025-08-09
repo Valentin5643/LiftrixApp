@@ -62,8 +62,9 @@ data class FeatureConfigurationState(
     val userId: String? = null,
     val lastRefreshTimestamp: Long = 0L,
     val exportEnabled: Boolean = false,
-    val showOnboarding: Boolean = true,
-    val analyticsEnabled: Boolean = true
+    val showOnboarding: Boolean = false, // DISABLED: Test user doesn't want analytics popups
+    val analyticsEnabled: Boolean = true,
+    val showMigrationNotification: Boolean = false
 )
 
 /**
@@ -220,7 +221,8 @@ fun createUnauthenticatedFeatureConfigurationState(): FeatureConfigurationState 
         abTestVariants = AsyncData.NotAsked,
         remoteConfigStatus = AsyncData.NotAsked,
         userId = null,
-        lastRefreshTimestamp = 0L
+        lastRefreshTimestamp = 0L,
+        showMigrationNotification = false // DISABLED: Test user doesn't want analytics popups
     )
 
 /**

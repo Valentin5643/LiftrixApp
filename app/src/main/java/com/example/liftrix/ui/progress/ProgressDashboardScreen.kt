@@ -1,6 +1,12 @@
 package com.example.liftrix.ui.progress
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,6 +48,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -72,11 +80,15 @@ import com.example.liftrix.ui.common.state.AsyncData
 import com.example.liftrix.domain.repository.ProgressSummary
 import com.example.liftrix.ui.components.layouts.GridSystem
 import com.example.liftrix.ui.progress.components.ProgressSummaryCards
-import com.example.liftrix.ui.progress.components.TimePeriodSelector
+import com.example.liftrix.ui.progress.components.GlobalTimeRangeSelector
 import com.example.liftrix.ui.progress.components.VolumeCalendarWidget
 import com.example.liftrix.ui.progress.components.WorkoutDurationChart
 import com.example.liftrix.ui.progress.components.WorkoutFrequencyHeatmap
 import com.example.liftrix.ui.progress.components.WorkoutVolumeChart
+import com.example.liftrix.ui.progress.components.charts.ModernVolumeChart
+import com.example.liftrix.domain.model.Weight
+import com.example.liftrix.domain.model.analytics.VolumeDataPoint as AnalyticsVolumeDataPoint
+import com.example.liftrix.domain.repository.VolumeDataPoint as RepositoryVolumeDataPoint
 import com.example.liftrix.domain.model.WeightUnit
 import com.example.liftrix.core.formatting.WeightFormatter
 import com.example.liftrix.ui.progress.components.WidgetContainer
@@ -101,6 +113,7 @@ import com.example.liftrix.domain.usecase.analytics.CalorieAnalyticsUseCase
 import com.example.liftrix.ui.common.validation.ViewModelValidator
 import com.example.liftrix.core.extensions.collectAsOptimizedState
 import timber.log.Timber
+import com.example.liftrix.ui.progress.NavigationCallbacks
 
 /**
  * Maps domain DashboardLayoutMode to UI DashboardLayoutMode
@@ -150,7 +163,11 @@ fun ProgressDashboardScreen(
     summaryViewModel: ProgressSummaryViewModel = hiltViewModel(),
     calorieViewModel: CalorieTrackingViewModel = hiltViewModel(),
     featuresViewModel: FeatureConfigurationViewModel = hiltViewModel(),
-    coordinator: ProgressDashboardCoordinator = hiltViewModel()
+    coordinator: ProgressDashboardCoordinator = hiltViewModel(),
+    onNavigateToVolumeDetail: () -> Unit = {},
+    onNavigateToOneRmDetail: () -> Unit = {},
+    onNavigateToMuscleGroupDetail: () -> Unit = {},
+    onNavigateToFrequencyDetail: () -> Unit = {}
 ) {
     // Validate ViewModels for debugging (only in debug builds)
     LaunchedEffect(Unit) {
@@ -185,6 +202,18 @@ fun ProgressDashboardScreen(
         }
     }
 
+    // Set up navigation callbacks for AnalyticsWidgetViewModel
+    LaunchedEffect(onNavigateToVolumeDetail, onNavigateToOneRmDetail, onNavigateToMuscleGroupDetail, onNavigateToFrequencyDetail) {
+        widgetViewModel.setNavigationCallbacks(
+            NavigationCallbacks(
+                onNavigateToVolumeDetail = onNavigateToVolumeDetail,
+                onNavigateToOneRmDetail = onNavigateToOneRmDetail,
+                onNavigateToMuscleGroupDetail = onNavigateToMuscleGroupDetail,
+                onNavigateToFrequencyDetail = onNavigateToFrequencyDetail
+            )
+        )
+    }
+    
     // Connect Coordinator events to ViewModels
     LaunchedEffect(coordinator) {
         coordinator.coordinatorEvents.collect { event ->
@@ -264,6 +293,18 @@ private fun ProgressDashboardContent(
     
     // Debug panel state
     var showDebugPanel by remember { mutableStateOf(false) }
+    
+    // Migration notification state
+    var showMigrationNotification by remember { mutableStateOf(false) }
+    
+    // Check if migration notification should be shown
+    LaunchedEffect(rawPreferencesState) {
+        if (rawPreferencesState is UiState.Success) {
+            val preferencesState = rawPreferencesState.data
+            val widgetPreferences = preferencesState.getPreferences()
+            showMigrationNotification = widgetPreferences?.hasSeenWidgetMigrationNotice == false
+        }
+    }
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -374,21 +415,46 @@ private fun ProgressDashboardContent(
 
         // Time period selector with modern styling
         item {
-            TimePeriodSelector(
-                selectedPeriod = chartsState.currentTimeRange,
-                onPeriodSelected = { onChartsEvent(ProgressChartsEvent.TimePeriodChanged(it)) }
+            GlobalTimeRangeSelector(
+                selectedTimeRange = chartsState.currentTimeRange.type,
+                onTimeRangeChange = { newTimeRangeType ->
+                    val newTimeRange = when (newTimeRangeType) {
+                        com.example.liftrix.domain.model.analytics.TimeRangeType.WEEK -> com.example.liftrix.domain.model.analytics.TimeRange.lastWeek()
+                        com.example.liftrix.domain.model.analytics.TimeRangeType.MONTH -> com.example.liftrix.domain.model.analytics.TimeRange.lastMonth()
+                        com.example.liftrix.domain.model.analytics.TimeRangeType.QUARTER -> com.example.liftrix.domain.model.analytics.TimeRange.lastQuarter()
+                        com.example.liftrix.domain.model.analytics.TimeRangeType.THREE_MONTHS -> com.example.liftrix.domain.model.analytics.TimeRange.lastQuarter() // Use quarter for 3 months
+                        com.example.liftrix.domain.model.analytics.TimeRangeType.SIX_MONTHS -> com.example.liftrix.domain.model.analytics.TimeRange.lastSixMonths()
+                        com.example.liftrix.domain.model.analytics.TimeRangeType.YEAR -> com.example.liftrix.domain.model.analytics.TimeRange.lastYear()
+                        com.example.liftrix.domain.model.analytics.TimeRangeType.ALL_TIME -> com.example.liftrix.domain.model.analytics.TimeRange.allTime()
+                    }
+                    onChartsEvent(ProgressChartsEvent.TimePeriodChanged(newTimeRange))
+                },
+                modifier = Modifier.fillMaxWidth()
             )
         }
 
-        // Analytics onboarding (feature flag controlled)
-        if (featuresState.showOnboarding && featuresState.analyticsEnabled) {
-            item {
-                AnalyticsOnboardingCard(
-                    onDismiss = { onFeaturesEvent(FeatureConfigurationEvent.DismissOnboarding) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
+        // DISABLED: Analytics onboarding and migration notifications
+        // Test user requested removal of all "Analytics improvement" popups
+        // 
+        // if (featuresState.showOnboarding && featuresState.analyticsEnabled) {
+        //     item {
+        //         AnalyticsOnboardingCard(
+        //             onDismiss = { onFeaturesEvent(FeatureConfigurationEvent.DismissOnboarding) },
+        //             modifier = Modifier.fillMaxWidth()
+        //         )
+        //     }
+        // }
+        // 
+        // if (featuresState.showMigrationNotification && featuresState.analyticsEnabled) {
+        //     item {
+        //         AnalyticsMigrationNotificationCard(
+        //             onDismiss = { onFeaturesEvent(FeatureConfigurationEvent.DismissMigrationNotification) },
+        //             modifier = Modifier
+        //                 .fillMaxWidth()
+        //                 .animateContentSize(animationSpec = tween(300))
+        //         )
+        //     }
+        // }
 
         // Enhanced summary stats with modern card design
         item {
@@ -428,6 +494,40 @@ private fun ProgressDashboardContent(
             Spacer(modifier = Modifier.height(GridSystem.spacing3))
         }
     }
+    
+    // DISABLED: Migration notification dialog  
+    // Test user requested removal of all "Analytics improvement" popups
+    //
+    // if (showMigrationNotification) {
+    //     AlertDialog(
+    //         onDismissRequest = {
+    //             showMigrationNotification = false
+    //             onPreferencesEvent(UserPreferencesEvent.MarkMigrationNoticeSeen)
+    //         },
+    //         title = {
+    //             Text(
+    //                 text = "📊 Analytics Improvements",
+    //                 style = MaterialTheme.typography.headlineSmall
+    //             )
+    //         },
+    //         text = {
+    //             Text(
+    //                 text = "We've streamlined your dashboard to focus on strength training metrics for better performance and clarity. Some older analytics widgets have been removed to improve your experience.",
+    //                 style = MaterialTheme.typography.bodyMedium
+    //             )
+    //         },
+    //         confirmButton = {
+    //             TextButton(
+    //                 onClick = {
+    //                     showMigrationNotification = false
+    //                     onPreferencesEvent(UserPreferencesEvent.MarkMigrationNoticeSeen)
+    //                 }
+    //             ) {
+    //                 Text("Got it")
+    //             }
+    //         }
+    //     )
+    // }
 }
 
 /**
@@ -715,13 +815,29 @@ private fun ChartsSection(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
     ) {
-        // Volume chart - always show chart with data or zero values
-        WorkoutVolumeChart(
-            data = (chartsState.volumeChart as? AsyncData.Success)?.data ?: emptyList(),
-            isLoading = chartsState.volumeChart is AsyncData.Loading,
-            weightUnit = weightUnit,
-            weightFormatter = weightFormatter,
-            modifier = Modifier.fillMaxWidth()
+        // Volume chart - Modern chart with bezier curves and gradients
+        val volumeChartData = (chartsState.volumeChart as? AsyncData.Success)?.data ?: emptyList()
+        
+        // Convert repository VolumeDataPoint to analytics VolumeDataPoint for ModernVolumeChart
+        val modernVolumeData = volumeChartData.map { repositoryPoint ->
+            AnalyticsVolumeDataPoint(
+                date = repositoryPoint.date,
+                volume = Weight.fromKilograms(repositoryPoint.totalVolume.toDouble()),
+                workoutCount = 1, // Repository data doesn't have workout count, default to 1
+                exerciseCount = repositoryPoint.exerciseCount
+            )
+        }
+        
+        ModernVolumeChart(
+            data = modernVolumeData,
+            timeRange = chartsState.currentTimeRange.type,
+            modifier = Modifier.fillMaxWidth(),
+            onDataPointSelected = { dataPoint ->
+                // Optional: Handle data point selection for navigation to detail view
+                Timber.d("Volume data point selected: ${dataPoint.date} - ${dataPoint.volume}")
+            },
+            showPersonalRecords = true,
+            animationDuration = 300
         )
         
         // Duration chart - always show chart with data or zero values
@@ -786,6 +902,11 @@ private fun ResponsiveWidgetsSection(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // Filter out deprecated widgets for modern focused experience
+        val filteredWidgets = widgetState.activeWidgets.filterNot { widget ->
+            widget.isDeprecated
+        }
+        
         // Widget customization button (only for Intermediate/Advanced users)
         val userLevel = widgetState.preferences?.userLevel ?: UserLevel.BEGINNER
         if (userLevel != UserLevel.BEGINNER) {
@@ -798,7 +919,7 @@ private fun ResponsiveWidgetsSection(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val configurableCount = widgetState.activeWidgets.count { 
+                    val configurableCount = filteredWidgets.count { 
                         it.priority != WidgetPriority.FIXED_BEGINNER 
                     }
                     Text(
@@ -822,13 +943,15 @@ private fun ResponsiveWidgetsSection(
         
         // Debug widget visibility conditions
         Timber.d("=== UI DEBUG: activeWidgets.size = ${widgetState.activeWidgets.size}")
+        Timber.d("=== UI DEBUG: filteredWidgets.size = ${filteredWidgets.size}")
         Timber.d("=== UI DEBUG: configuration = ${widgetState.configuration?.javaClass?.simpleName ?: "null"}")
         Timber.d("=== UI DEBUG: activeWidgets = ${widgetState.activeWidgets.map { it.displayName }}")
+        Timber.d("=== UI DEBUG: filteredWidgets = ${filteredWidgets.map { it.displayName }}")
         
-        // Only show widgets if we have configuration and widgets available
-        if (widgetState.activeWidgets.isNotEmpty() && widgetState.configuration != null) {
+        // Only show widgets if we have configuration and non-deprecated widgets available
+        if (filteredWidgets.isNotEmpty() && widgetState.configuration != null) {
             ResponsiveDashboardLayout(
-                widgets = widgetState.activeWidgets,
+                widgets = filteredWidgets,
                 configuration = widgetState.configuration,
                 layoutMode = run {
                     val userPreference = mapDomainLayoutModeToUI(widgetState.preferences?.dashboardLayout)
@@ -836,11 +959,11 @@ private fun ResponsiveWidgetsSection(
                     Timber.d("🔍 DEBUG LAYOUT: dashboardLayout=${widgetState.preferences?.dashboardLayout}")
                     Timber.d("🔍 DEBUG LAYOUT: userPreference=$userPreference")
                     Timber.d("🔍 DEBUG LAYOUT: screenWidth=${windowSizeClass.widthDp.value.toInt()}")
-                    Timber.d("🔍 DEBUG LAYOUT: widgetCount=${widgetState.activeWidgets.size}")
+                    Timber.d("🔍 DEBUG LAYOUT: widgetCount=${filteredWidgets.size}")
                     
                     val result = DashboardLayoutMode.getOptimalMode(
                         screenWidthDp = windowSizeClass.widthDp.value.toInt(),
-                        widgetCount = widgetState.activeWidgets.size,
+                        widgetCount = filteredWidgets.size,
                         userPreference = userPreference
                     )
                     
@@ -1274,6 +1397,58 @@ private fun AnalyticsOnboardingCard(
             ) {
                 SecondaryActionButton(
                     text = "Got it!",
+                    onClick = onDismiss
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Analytics migration notification card component with smooth entrance animation
+ */
+@Composable
+private fun AnalyticsMigrationNotificationCard(
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val animationProgress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        animationProgress.animateTo(1f, animationSpec = tween(300))
+    }
+    
+    Card(
+        modifier = modifier
+            .graphicsLayer(
+                alpha = animationProgress.value,
+                translationY = (1 - animationProgress.value) * 50.dp.value
+            ),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = "📊 Analytics Improvements",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "We've focused your analytics experience on strength training insights. Enjoy modern charts, improved performance, and a cleaner dashboard tailored for serious lifters.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                SecondaryActionButton(
+                    text = "Understood",
                     onClick = onDismiss
                 )
             }

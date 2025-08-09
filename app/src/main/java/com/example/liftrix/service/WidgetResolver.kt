@@ -49,69 +49,56 @@ class WidgetResolver @Inject constructor() {
         // Legacy camelCase names → correct IDs
         "workoutFrequency" to AnalyticsWidget.WorkoutFrequency.id,
         "totalVolume" to AnalyticsWidget.TotalVolume.id,
-        "consistencyStreak" to AnalyticsWidget.ConsistencyStreak.id,
-        "caloriesBurned" to AnalyticsWidget.CaloriesBurned.id,
         "averageDuration" to AnalyticsWidget.AverageDuration.id,
-        "dailyCalories" to AnalyticsWidget.DailyCalories.id,
         "progressChart" to AnalyticsWidget.ProgressChart.id,
         "volumeLoadProgression" to AnalyticsWidget.VolumeLoadProgression.id,
         "oneRMProgression" to AnalyticsWidget.OneRMProgression.id,
-        "weeklyCalorieTrend" to AnalyticsWidget.WeeklyCalorieTrend.id,
         "volumeChart" to AnalyticsWidget.VolumeChart.id,
-        "durationChart" to AnalyticsWidget.DurationChart.id,
         "frequencyChart" to AnalyticsWidget.FrequencyChart.id,
-        "volumeCalendar" to AnalyticsWidget.VolumeCalendar.id,
+        "volumeCalendar" to AnalyticsWidget.FrequencyChart.id,
         "strengthProgress" to AnalyticsWidget.StrengthProgress.id,
         "personalRecords" to AnalyticsWidget.PersonalRecords.id,
         "workoutStreak" to AnalyticsWidget.WorkoutStreak.id,
         "volumeTrends" to AnalyticsWidget.VolumeTrends.id,
         "recoveryMetrics" to AnalyticsWidget.RecoveryMetrics.id,
-        "performanceAnalysis" to AnalyticsWidget.PerformanceAnalysis.id,
-        "weeklyTrends" to AnalyticsWidget.WeeklyTrends.id,
         "muscleGroupDistribution" to AnalyticsWidget.MuscleGroupDistribution.id,
-        "recoveryPatterns" to AnalyticsWidget.RecoveryPatterns.id,
-        "trainingIntensity" to AnalyticsWidget.TrainingIntensity.id,
-        "exerciseVariety" to AnalyticsWidget.ExerciseVariety.id,
-        "timeOfDayAnalysis" to AnalyticsWidget.TimeOfDayAnalysis.id,
-        "setCompletionRate" to AnalyticsWidget.SetCompletionRate.id,
         "monthlySummary" to AnalyticsWidget.MonthlySummary.id,
-        "goalAchievement" to AnalyticsWidget.GoalAchievement.id,
         
         // Incorrect names used in forceAdvancedUserLevel() → correct IDs
         "WorkoutFrequency" to AnalyticsWidget.WorkoutFrequency.id,
         "TotalVolume" to AnalyticsWidget.TotalVolume.id,
         "AverageDuration" to AnalyticsWidget.AverageDuration.id,
-        "ConsistencyStreak" to AnalyticsWidget.ConsistencyStreak.id,
         "VolumeLoadProgression" to AnalyticsWidget.VolumeLoadProgression.id,
         "OneRMProgression" to AnalyticsWidget.OneRMProgression.id,
         "ProgressChart" to AnalyticsWidget.ProgressChart.id,
         "WorkoutStreak" to AnalyticsWidget.WorkoutStreak.id,
-        "DailyCalories" to AnalyticsWidget.DailyCalories.id,
-        "VolumeCalendar" to AnalyticsWidget.VolumeCalendar.id,
+        "VolumeCalendar" to AnalyticsWidget.FrequencyChart.id,
         "StrengthProgress" to AnalyticsWidget.StrengthProgress.id,
         "VolumeChart" to AnalyticsWidget.VolumeChart.id,
-        "DurationChart" to AnalyticsWidget.DurationChart.id,
         "FrequencyChart" to AnalyticsWidget.FrequencyChart.id,
         "PersonalRecords" to AnalyticsWidget.PersonalRecords.id,
-        "WeeklyCalorieTrend" to AnalyticsWidget.WeeklyCalorieTrend.id,
         "MuscleGroupDistribution" to AnalyticsWidget.MuscleGroupDistribution.id,
         "VolumeTrends" to AnalyticsWidget.VolumeTrends.id,
         "RecoveryMetrics" to AnalyticsWidget.RecoveryMetrics.id,
-        "PerformanceAnalysis" to AnalyticsWidget.PerformanceAnalysis.id,
-        "WeeklyTrends" to AnalyticsWidget.WeeklyTrends.id,
-        "RecoveryPatterns" to AnalyticsWidget.RecoveryPatterns.id,
+        "MonthlySummary" to AnalyticsWidget.MonthlySummary.id,
         
         // Display name variations → correct IDs
         "Workout Frequency" to AnalyticsWidget.WorkoutFrequency.id,
         "Total Volume" to AnalyticsWidget.TotalVolume.id,
-        "Consistency Streak" to AnalyticsWidget.ConsistencyStreak.id,
-        "Calories Burned" to AnalyticsWidget.CaloriesBurned.id,
         "Average Duration" to AnalyticsWidget.AverageDuration.id,
-        "Today's Calories" to AnalyticsWidget.DailyCalories.id,
         "Progress Chart" to AnalyticsWidget.ProgressChart.id,
         "Volume Progression" to AnalyticsWidget.VolumeLoadProgression.id,
         "1RM Progression" to AnalyticsWidget.OneRMProgression.id,
-        "Weekly Calorie Trend" to AnalyticsWidget.WeeklyCalorieTrend.id
+        "Volume Chart" to AnalyticsWidget.VolumeChart.id,
+        "Frequency Chart" to AnalyticsWidget.FrequencyChart.id,
+        "Workout Streak" to AnalyticsWidget.WorkoutStreak.id,
+        "Volume Calendar" to AnalyticsWidget.FrequencyChart.id,
+        "Strength Progress" to AnalyticsWidget.StrengthProgress.id,
+        "Personal Records" to AnalyticsWidget.PersonalRecords.id,
+        "Volume Trends" to AnalyticsWidget.VolumeTrends.id,
+        "Recovery Metrics" to AnalyticsWidget.RecoveryMetrics.id,
+        "Muscle Group Distribution" to AnalyticsWidget.MuscleGroupDistribution.id,
+        "Monthly Summary" to AnalyticsWidget.MonthlySummary.id
     )
     
     /**
@@ -158,7 +145,7 @@ class WidgetResolver @Inject constructor() {
      * @return List of widgets appropriate for the user level
      */
     fun resolveStandardWidgets(userLevel: UserLevel): List<AnalyticsWidget> {
-        val allWidgets = AnalyticsWidget.getAllWidgets()
+        val allWidgets = AnalyticsWidget.getActiveWidgets()
         
         val selectedWidgets = when (userLevel) {
             UserLevel.BEGINNER -> {
@@ -218,7 +205,7 @@ class WidgetResolver @Inject constructor() {
             return resolveStandardWidgets(userLevel)
         }
         
-        val allWidgets = AnalyticsWidget.getAllWidgets()
+        val allWidgets = AnalyticsWidget.getActiveWidgets()
         val availableWidgetIds = allWidgets.map { it.id }.toSet()
         
         // Get user-selected widgets, applying migration mapping and filtering out invalid ones
@@ -425,7 +412,7 @@ class WidgetResolver @Inject constructor() {
      * @return All widgets available for the user level
      */
     fun getAvailableWidgets(userLevel: UserLevel): List<AnalyticsWidget> {
-        val allWidgets = AnalyticsWidget.getAllWidgets()
+        val allWidgets = AnalyticsWidget.getActiveWidgets()
         return validateWidgetSelection(allWidgets, userLevel)
             .sortedBy { it.getLayoutPriority() }
     }
@@ -549,7 +536,7 @@ class WidgetResolver @Inject constructor() {
             return resolveStandardWidgets(userLevel)
         }
         
-        val allWidgets = AnalyticsWidget.getAllWidgets()
+        val allWidgets = AnalyticsWidget.getActiveWidgets()
         val availableWidgetIds = allWidgets.map { it.id }.toSet()
         
         // Resolve widget names to AnalyticsWidget objects using migration mapping

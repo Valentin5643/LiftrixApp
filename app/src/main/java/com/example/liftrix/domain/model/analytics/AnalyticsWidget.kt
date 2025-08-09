@@ -5,14 +5,14 @@ import kotlinx.serialization.Serializable
 /**
  * Comprehensive analytics widget system for dynamic dashboard customization
  * 
- * Provides type-safe widget definitions with 25+ analytics widgets across 4 categories.
+ * Provides type-safe widget definitions with exactly 15 analytics widgets across 4 categories.
  * Uses sealed class approach for extensibility while maintaining enum-like exhaustiveness.
  * Each widget includes complexity-based refresh rates, category organization, and metadata
  * for optimal dashboard performance and user experience.
  * 
  * Features:
  * - Type-safe widget identification with unique IDs
- * - Complexity-based refresh rate optimization
+ * - Complexity-based refresh rate optimization  
  * - Category-based dashboard organization
  * - Metadata for UI customization and performance tuning
  * - Extensible architecture for future widget additions
@@ -25,7 +25,8 @@ sealed class AnalyticsWidget(
     val category: WidgetCategory,
     val complexity: WidgetComplexity,
     val defaultEnabled: Boolean = true,
-    val priority: WidgetPriority = WidgetPriority.STANDARD
+    val priority: WidgetPriority = WidgetPriority.STANDARD,
+    val isDeprecated: Boolean = false
 ) {
     /**
      * Basic workout frequency tracking widget
@@ -83,19 +84,6 @@ sealed class AnalyticsWidget(
         priority = WidgetPriority.STANDARD
     )
     
-    /**
-     * Consistency streak widget
-     * Shows current and longest workout streaks
-     */
-    @Serializable
-    data object ConsistencyStreak : AnalyticsWidget(
-        id = "consistency_streak",
-        displayName = "Consistency Streak",
-        description = "Monitor your workout consistency streaks",
-        category = WidgetCategory.METRICS,
-        complexity = WidgetComplexity.SIMPLE,
-        priority = WidgetPriority.FIXED_BEGINNER
-    )
     
     /**
      * Volume chart widget
@@ -109,19 +97,6 @@ sealed class AnalyticsWidget(
         category = WidgetCategory.CHARTS,
         complexity = WidgetComplexity.MODERATE,
         priority = WidgetPriority.STANDARD
-    )
-    
-    /**
-     * Duration chart widget
-     * Visual chart displaying workout duration trends
-     */
-    @Serializable
-    data object DurationChart : AnalyticsWidget(
-        id = "duration_chart",
-        displayName = "Duration Chart",
-        description = "Visual chart showing workout duration trends",
-        category = WidgetCategory.CHARTS,
-        complexity = WidgetComplexity.MODERATE
     )
     
     /**
@@ -191,61 +166,6 @@ sealed class AnalyticsWidget(
         priority = WidgetPriority.ADVANCED
     )
     
-    /**
-     * Performance analysis widget
-     * Comprehensive performance analytics with detailed insights
-     */
-    @Serializable
-    data object PerformanceAnalysis : AnalyticsWidget(
-        id = "performance_analysis",
-        displayName = "Performance Analysis",
-        description = "Detailed performance insights and recommendations",
-        category = WidgetCategory.ANALYTICS,
-        complexity = WidgetComplexity.COMPLEX,
-        priority = WidgetPriority.ADVANCED
-    )
-    
-    /**
-     * Calories burned widget
-     * Shows daily calories burned from workouts with trend visualization
-     */
-    @Serializable
-    data object CaloriesBurned : AnalyticsWidget(
-        id = "calories_burned",
-        displayName = "Calories Burned",
-        description = "Track daily calories burned from your workouts",
-        category = WidgetCategory.METRICS,
-        complexity = WidgetComplexity.SIMPLE,
-        priority = WidgetPriority.FIXED_BEGINNER
-    )
-    
-    /**
-     * Daily calories widget
-     * Displays today's calorie burn with goal comparison
-     */
-    @Serializable
-    data object DailyCalories : AnalyticsWidget(
-        id = "daily_calories",
-        displayName = "Today's Calories",
-        description = "View calories burned today compared to your goals",
-        category = WidgetCategory.METRICS,
-        complexity = WidgetComplexity.SIMPLE,
-        priority = WidgetPriority.ESSENTIAL
-    )
-    
-    /**
-     * Weekly calorie trend widget
-     * Weekly calorie burn trends with pattern analysis
-     */
-    @Serializable
-    data object WeeklyCalorieTrend : AnalyticsWidget(
-        id = "weekly_calorie_trend",
-        displayName = "Weekly Calorie Trend",
-        description = "Analyze your weekly calorie burn patterns and trends",
-        category = WidgetCategory.CHARTS,
-        complexity = WidgetComplexity.MODERATE
-    )
-    
     
     /**
      * Average duration widget
@@ -301,19 +221,6 @@ sealed class AnalyticsWidget(
     )
     
     /**
-     * Weekly trends analysis widget
-     * Advanced weekly trend analysis with pattern recognition
-     */
-    @Serializable
-    data object WeeklyTrends : AnalyticsWidget(
-        id = "weekly_trends",
-        displayName = "Weekly Trends",
-        description = "Analyze weekly workout trends and patterns",
-        category = WidgetCategory.ANALYTICS,
-        complexity = WidgetComplexity.COMPLEX
-    )
-    
-    /**
      * Muscle group distribution widget
      * Shows distribution of training across muscle groups
      */
@@ -324,73 +231,6 @@ sealed class AnalyticsWidget(
         description = "View training distribution across muscle groups",
         category = WidgetCategory.ANALYTICS,
         complexity = WidgetComplexity.MODERATE
-    )
-    
-    /**
-     * Recovery patterns widget
-     * Tracks recovery patterns and recommendations
-     */
-    @Serializable
-    data object RecoveryPatterns : AnalyticsWidget(
-        id = "recovery_patterns",
-        displayName = "Recovery Patterns",
-        description = "Monitor recovery patterns and recommendations",
-        category = WidgetCategory.ANALYTICS,
-        complexity = WidgetComplexity.COMPLEX
-    )
-    
-    // Additional widgets to reach 25+ target
-    
-    /**
-     * Training intensity widget
-     * Monitors workout intensity levels and RPE trends
-     */
-    @Serializable
-    data object TrainingIntensity : AnalyticsWidget(
-        id = "training_intensity",
-        displayName = "Training Intensity",
-        description = "Monitor workout intensity levels and RPE trends",
-        category = WidgetCategory.METRICS,
-        complexity = WidgetComplexity.MODERATE
-    )
-    
-    /**
-     * Exercise variety widget
-     * Tracks exercise diversity and movement patterns
-     */
-    @Serializable
-    data object ExerciseVariety : AnalyticsWidget(
-        id = "exercise_variety",
-        displayName = "Exercise Variety",
-        description = "Track exercise diversity and movement patterns",
-        category = WidgetCategory.ANALYTICS,
-        complexity = WidgetComplexity.MODERATE
-    )
-    
-    /**
-     * Time of day analysis widget
-     * Analyzes optimal workout timing based on performance
-     */
-    @Serializable
-    data object TimeOfDayAnalysis : AnalyticsWidget(
-        id = "time_of_day_analysis",
-        displayName = "Optimal Timing",
-        description = "Analyze optimal workout timing based on performance",
-        category = WidgetCategory.ANALYTICS,
-        complexity = WidgetComplexity.COMPLEX
-    )
-    
-    /**
-     * Set completion rate widget
-     * Tracks completion rates across different exercises
-     */
-    @Serializable
-    data object SetCompletionRate : AnalyticsWidget(
-        id = "set_completion_rate",
-        displayName = "Set Completion Rate",
-        description = "Track completion rates across different exercises",
-        category = WidgetCategory.METRICS,
-        complexity = WidgetComplexity.SIMPLE
     )
     
     /**
@@ -407,54 +247,28 @@ sealed class AnalyticsWidget(
     )
     
     /**
-     * Goal achievement widget
-     * Tracks progress toward user-defined fitness goals
-     */
-    @Serializable
-    data object GoalAchievement : AnalyticsWidget(
-        id = "goal_achievement",
-        displayName = "Goal Achievement",
-        description = "Track progress toward user-defined fitness goals",
-        category = WidgetCategory.PROGRESS,
-        complexity = WidgetComplexity.MODERATE
-    )
-    
-    /**
      * Gets the widget priority for layout ordering (lower = higher priority)
      */
     fun getLayoutPriority(): Int = when (this) {
         WorkoutFrequency -> 1
         TotalVolume -> 2
-        ConsistencyStreak -> 3
-        CaloriesBurned -> 1
-        DailyCalories -> 2
-        AverageDuration -> 4
-        SetCompletionRate -> 3
         WorkoutStreak -> 3
+        AverageDuration -> 4
         
         VolumeChart -> 5
-        DurationChart -> 6
-        FrequencyChart -> 7
-        VolumeCalendar -> 5
-        ProgressChart -> 5
-        WeeklyCalorieTrend -> 6
+        FrequencyChart -> 6
+        VolumeCalendar -> 7
+        ProgressChart -> 8
         
-        StrengthProgress -> 4
-        PersonalRecords -> 4
-        VolumeLoadProgression -> 6
-        OneRMProgression -> 7
-        GoalAchievement -> 5
-        MonthlySummary -> 8
+        StrengthProgress -> 9
+        PersonalRecords -> 10
+        VolumeLoadProgression -> 11
+        OneRMProgression -> 12
+        MonthlySummary -> 13
         
-        VolumeTrends -> 8
-        RecoveryMetrics -> 9
-        PerformanceAnalysis -> 10
-        WeeklyTrends -> 8
-        MuscleGroupDistribution -> 9
-        RecoveryPatterns -> 10
-        TrainingIntensity -> 7
-        ExerciseVariety -> 8
-        TimeOfDayAnalysis -> 10
+        VolumeTrends -> 14
+        RecoveryMetrics -> 15
+        MuscleGroupDistribution -> 16
     }
     
     /**
@@ -505,25 +319,21 @@ sealed class AnalyticsWidget(
     
     companion object {
         /**
-         * All available analytics widgets
+         * All available analytics widgets - exactly 15 widgets per specification
          */
         fun getAllWidgets(): List<AnalyticsWidget> = listOf(
-            // METRICS Category (6 widgets)
-            WorkoutFrequency, TotalVolume, ConsistencyStreak, CaloriesBurned, 
-            DailyCalories, AverageDuration, WorkoutStreak, SetCompletionRate,
+            // METRICS Category (4 widgets)
+            WorkoutFrequency, TotalVolume, WorkoutStreak, AverageDuration,
             
-            // CHARTS Category (5 widgets)
-            VolumeChart, DurationChart, FrequencyChart, VolumeCalendar, 
-            ProgressChart, WeeklyCalorieTrend,
+            // CHARTS Category (4 widgets)
+            VolumeChart, FrequencyChart, VolumeCalendar, ProgressChart,
             
-            // PROGRESS Category (4 widgets)
+            // PROGRESS Category (5 widgets)
             StrengthProgress, PersonalRecords, VolumeLoadProgression, 
-            OneRMProgression, GoalAchievement, MonthlySummary,
+            OneRMProgression, MonthlySummary,
             
-            // ANALYTICS Category (6 widgets)
-            VolumeTrends, RecoveryMetrics, PerformanceAnalysis, WeeklyTrends,
-            MuscleGroupDistribution, RecoveryPatterns, TrainingIntensity,
-            ExerciseVariety, TimeOfDayAnalysis
+            // ANALYTICS Category (3 widgets)
+            VolumeTrends, RecoveryMetrics, MuscleGroupDistribution
         )
         
         /**
@@ -581,63 +391,36 @@ sealed class AnalyticsWidget(
                 // PascalCase legacy IDs to canonical snake_case
                 "WorkoutFrequency" to "workout_frequency",
                 "TotalVolume" to "total_volume",
-                "CaloriesBurned" to "calories_burned",
-                "ConsistencyStreak" to "consistency_streak",
                 "ProgressChart" to "progress_chart",
                 "VolumeCalendar" to "volume_calendar",
                 "StrengthProgress" to "strength_progress",
                 "PersonalRecords" to "personal_records",
                 "VolumeTrends" to "volume_trends",
                 "RecoveryMetrics" to "recovery_metrics",
-                "PerformanceAnalysis" to "performance_analysis",
-                "DailyCalories" to "daily_calories",
-                "WeeklyCalorieTrend" to "weekly_calorie_trend",
                 "AverageDuration" to "average_duration",
                 "VolumeLoadProgression" to "volume_load_progression",
                 "OneRMProgression" to "one_rm_progression",
-                "WeeklyTrends" to "weekly_trends",
                 "MuscleGroupDistribution" to "muscle_group_distribution",
-                "RecoveryPatterns" to "recovery_patterns",
-                "TrainingIntensity" to "training_intensity",
-                "ExerciseVariety" to "exercise_variety",
-                "TimeOfDayAnalysis" to "time_of_day_analysis",
-                "SetCompletionRate" to "set_completion_rate",
                 "MonthlySummary" to "monthly_summary",
-                "GoalAchievement" to "goal_achievement",
                 "VolumeChart" to "volume_chart",
-                "DurationChart" to "duration_chart",
                 "FrequencyChart" to "frequency_chart",
                 "WorkoutStreak" to "workout_streak",
                 
                 // Display name mappings
                 "Workout Frequency" to "workout_frequency",
                 "Total Volume" to "total_volume",
-                "Calories Burned" to "calories_burned",
-                "Consistency Streak" to "consistency_streak",
                 "Progress Chart" to "progress_chart",
                 "Volume Calendar" to "volume_calendar",
                 "Strength Progress" to "strength_progress",
                 "Personal Records" to "personal_records",
                 "Volume Trends" to "volume_trends",
                 "Recovery Metrics" to "recovery_metrics",
-                "Performance Analysis" to "performance_analysis",
-                "Today's Calories" to "daily_calories",
-                "Daily Calories" to "daily_calories",
-                "Weekly Calorie Trend" to "weekly_calorie_trend",
                 "Average Duration" to "average_duration",
                 "Volume Progression" to "volume_load_progression",
                 "1RM Progression" to "one_rm_progression",
-                "Weekly Trends" to "weekly_trends",
                 "Muscle Group Distribution" to "muscle_group_distribution",
-                "Recovery Patterns" to "recovery_patterns",
-                "Training Intensity" to "training_intensity",
-                "Exercise Variety" to "exercise_variety",
-                "Optimal Timing" to "time_of_day_analysis",
-                "Set Completion Rate" to "set_completion_rate",
                 "Monthly Summary" to "monthly_summary",
-                "Goal Achievement" to "goal_achievement",
                 "Volume Chart" to "volume_chart",
-                "Duration Chart" to "duration_chart",
                 "Frequency Chart" to "frequency_chart",
                 "Workout Streak" to "workout_streak"
             )
@@ -679,6 +462,35 @@ sealed class AnalyticsWidget(
                     SelectionValidationResult.TOO_MANY_COMPLEX_WIDGETS
                 else -> SelectionValidationResult.VALID
             }
+        }
+        
+        /**
+         * Deprecated widget IDs that have been removed from the system.
+         * 
+         * These widgets were removed during the analytics system modernization
+         * to focus on strength-based metrics and reduce complexity.
+         */
+        val DEPRECATED_WIDGET_IDS: Set<String> = setOf(
+            "calories_burned",           // Deprecated in favor of external nutrition apps
+            "daily_calories",            // Deprecated - insufficient value for strength focus
+            "weekly_calorie_trend",      // Deprecated - advanced feature with low usage
+            "consistency_streak",        // Deprecated - subjective metric removed
+            "duration_chart",            // Deprecated - merged into other metrics
+            "set_completion_rate",       // Deprecated - complex visualization with low usage
+            "exercise_variety",          // Deprecated - replaced by monthly_summary
+            "training_intensity",        // Deprecated - merged into workout_streak
+            "goal_achievement",          // Deprecated - replaced by muscle_group_distribution
+            "weekly_trends",             // Deprecated - advanced metric with low adoption
+            "time_of_day_analysis",      // Deprecated - advanced feature with low usage
+            "recovery_patterns",         // Deprecated - advanced metric with low adoption
+            "performance_analysis"       // Deprecated - advanced metric with low adoption
+        )
+
+        /**
+         * Gets only active widgets - all 15 widgets are active (no deprecated ones)
+         */
+        fun getActiveWidgets(): List<AnalyticsWidget> {
+            return getAllWidgets().filterNot { it.isDeprecated }
         }
         
         /**

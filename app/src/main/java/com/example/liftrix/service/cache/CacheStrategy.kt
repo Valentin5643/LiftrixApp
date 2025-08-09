@@ -167,8 +167,7 @@ sealed class CacheStrategy {
          */
         private fun isRealTimeWidget(widget: AnalyticsWidget): Boolean {
             return when (widget) {
-                AnalyticsWidget.CaloriesBurned,
-                AnalyticsWidget.DailyCalories,
+                AnalyticsWidget.AverageDuration,
                 AnalyticsWidget.TotalVolume -> true
                 else -> false
             }
@@ -180,7 +179,7 @@ sealed class CacheStrategy {
         private fun isUserFacingWidget(widget: AnalyticsWidget): Boolean {
             return when (widget) {
                 AnalyticsWidget.WorkoutFrequency,
-                AnalyticsWidget.ConsistencyStreak,
+                AnalyticsWidget.WorkoutStreak,
                 AnalyticsWidget.StrengthProgress,
                 AnalyticsWidget.AverageDuration -> true
                 else -> false
@@ -193,8 +192,7 @@ sealed class CacheStrategy {
         private fun isVolatileWidget(widget: AnalyticsWidget): Boolean {
             return when (widget) {
                 AnalyticsWidget.VolumeTrends,
-                AnalyticsWidget.WeeklyTrends,
-                AnalyticsWidget.PerformanceAnalysis -> true
+                AnalyticsWidget.MonthlySummary -> true
                 else -> false
             }
         }

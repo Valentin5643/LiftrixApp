@@ -42,6 +42,12 @@ data class DashboardConfigurationEntity(
     @ColumnInfo(name = "animate_transitions", defaultValue = "1")
     val animateTransitions: Boolean = true,
 
+    @ColumnInfo(name = "use_modern_charts", defaultValue = "1")
+    val useModernCharts: Boolean = true,
+
+    @ColumnInfo(name = "has_seen_widget_migration_notice", defaultValue = "0")
+    val hasSeenWidgetMigrationNotice: Boolean = false,
+
     @ColumnInfo(name = "created_at")
     val createdAt: LocalDateTime,
 

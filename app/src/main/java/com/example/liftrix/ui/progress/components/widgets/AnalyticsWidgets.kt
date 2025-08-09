@@ -19,7 +19,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.model.analytics.*
+import com.example.liftrix.ui.progress.components.charts.MuscleGroupPieChart
+import com.example.liftrix.ui.progress.components.charts.MuscleGroup
 import com.example.liftrix.ui.theme.LiftrixColors
+import timber.log.Timber
 
 /**
  * Analytics category widgets for complex insights and recommendations.
@@ -509,7 +512,7 @@ private fun PerformanceDisplay(
 }
 
 /**
- * Muscle group distribution display
+ * Muscle group distribution display - Modern pie chart implementation
  */
 @Composable
 private fun MuscleGroupDisplay(
@@ -520,17 +523,44 @@ private fun MuscleGroupDisplay(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Muscle group bars
-        val muscleGroups = analyticsData.metrics.entries.take(5)
+        // Convert analytics data to MuscleGroup map for pie chart
+        val muscleGroupData = analyticsData.metrics.entries.take(6)
+            .mapNotNull { entry ->
+                val (muscleGroupName, percentage) = entry
+                val percentageFloat = percentage.toFloatOrNull() ?: return@mapNotNull null
+                
+                // Map muscle group name to MuscleGroup enum
+                val muscleGroup = mapStringToMuscleGroup(muscleGroupName)
+                muscleGroup?.let { it to percentageFloat }
+            }
+            .toMap()
         
-        muscleGroups.forEachIndexed { index, entry ->
-            val (muscleGroup, percentage) = entry
-            key(index) {
-                MuscleGroupBar(
-                    label = muscleGroup.replace("_", " ").replaceFirstChar { it.uppercase() },
-                    percentage = percentage.toFloatOrNull() ?: 0f,
-                    primaryColor = primaryColor
-                )
+        if (muscleGroupData.isNotEmpty()) {
+            // Modern pie chart for muscle group distribution
+            MuscleGroupPieChart(
+                data = muscleGroupData,
+                onSliceClick = { muscleGroup ->
+                    // Handle muscle group slice selection for future navigation
+                    Timber.d("Selected muscle group: ${muscleGroup.displayName}")
+                },
+                showPercentages = true,
+                showLegend = true,
+                animationDuration = 400,
+                modifier = Modifier.height(200.dp)
+            )
+        } else {
+            // Fallback to bars if data conversion fails
+            val muscleGroups = analyticsData.metrics.entries.take(5)
+            
+            muscleGroups.forEachIndexed { index, entry ->
+                val (muscleGroup, percentage) = entry
+                key(index) {
+                    MuscleGroupBar(
+                        label = muscleGroup.replace("_", " ").replaceFirstChar { it.uppercase() },
+                        percentage = percentage.toFloatOrNull() ?: 0f,
+                        primaryColor = primaryColor
+                    )
+                }
             }
         }
         
@@ -562,6 +592,28 @@ private fun MuscleGroupDisplay(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Maps string muscle group names to MuscleGroup enum (UI chart version)
+ */
+private fun mapStringToMuscleGroup(muscleGroupName: String): MuscleGroup? {
+    return when (muscleGroupName.lowercase().replace("_", "").replace(" ", "")) {
+        "chest" -> MuscleGroup.CHEST
+        "back" -> MuscleGroup.BACK
+        "shoulders" -> MuscleGroup.SHOULDERS
+        "biceps", "triceps", "forearms", "arms" -> MuscleGroup.ARMS
+        "abs", "abdominals", "core" -> MuscleGroup.CORE
+        "glutes", "quadriceps", "quads", "hamstrings", "calves", "legs" -> MuscleGroup.LEGS
+        "traps", "trapezius" -> MuscleGroup.BACK // Map traps to back
+        "lats", "latissimus" -> MuscleGroup.BACK // Map lats to back
+        "delts", "deltoids" -> MuscleGroup.SHOULDERS // Alias for shoulders
+        "cardio", "cardiovascular" -> MuscleGroup.CARDIO
+        else -> {
+            Timber.w("Unknown muscle group: $muscleGroupName")
+            null
         }
     }
 }

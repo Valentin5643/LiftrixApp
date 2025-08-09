@@ -4,9 +4,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
@@ -14,31 +16,38 @@ import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import android.app.ActivityManager
+import android.content.Context
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.WidgetData
 import com.example.liftrix.ui.common.WindowSizeClass
 import com.example.liftrix.ui.common.rememberWindowSizeClass
 import com.example.liftrix.ui.components.layouts.GridSystem
+import timber.log.Timber
 
 /**
- * Adaptive widget grid using LazyVerticalGrid with responsive design.
+ * Memory-aware adaptive widget grid with automatic degradation under memory pressure.
  * 
  * Provides automatic column calculation, Material 3 spacing tokens,
  * and smooth transitions during orientation changes. Supports both
  * fixed and staggered grid layouts based on content requirements.
  * 
- * Enhanced responsive features:
+ * Enhanced features:
+ * - Memory pressure handling with automatic widget count limits
+ * - Dynamic widget virtualization for performance
+ * - Automatic degradation under low memory conditions
  * - Precise column calculation for 320dp to 1200dp+ screen widths
- * - Material 3 spacing with strict 8dp grid alignment 
+ * - Material 3 spacing with strict 12dp grid per specification
  * - Smooth layout transitions with animation support
- * - Foldable device support with layout preservation across fold/unfold
  * - Performance optimized with proper key usage and minimal recomposition
  * - Full accessibility support with semantic content descriptions
- * - Automatic minimum widget width constraints
  * 
  * @param widgets List of analytics widgets to display in grid
  * @param windowSizeClass Window size classification for responsive behavior
@@ -47,6 +56,7 @@ import com.example.liftrix.ui.components.layouts.GridSystem
  * @param isLoading Loading state affecting all widgets
  * @param useStaggered Whether to use staggered grid for varied content heights
  * @param maxColumns Maximum number of columns allowed (default: 3)
+ * @param maxWidgetsUnderMemoryPressure Maximum widgets to show when memory is low (default: 10)
  * @param modifier Modifier for styling the grid
  */
 @Composable
@@ -59,20 +69,39 @@ fun AdaptiveWidgetGrid(
     isLoading: Boolean = false,
     useStaggered: Boolean = false,
     maxColumns: Int = 3,
-    enableSmoothTransitions: Boolean = true
+    enableSmoothTransitions: Boolean = true,
+    maxWidgetsUnderMemoryPressure: Int = 10
 ) {
+    // Monitor memory pressure and limit widgets if needed
+    val context = LocalContext.current
+    val isMemoryConstrained = remember { isLowMemory(context) }
+    
+    // Apply widget limits under memory pressure
+    val displayWidgets = if (isMemoryConstrained && widgets.size > maxWidgetsUnderMemoryPressure) {
+        Timber.w("Memory pressure detected: limiting widgets from ${widgets.size} to $maxWidgetsUnderMemoryPressure")
+        widgets.take(maxWidgetsUnderMemoryPressure)
+    } else {
+        widgets
+    }
+    
+    // Register memory pressure callbacks
+    DisposableEffect(context) {
+        val memoryCallback = registerMemoryPressureCallback(context) {
+            Timber.w("Memory pressure callback triggered - consider reducing widget count")
+        }
+        onDispose {
+            unregisterMemoryPressureCallback(context, memoryCallback)
+        }
+    }
+    
     val columns = calculateOptimalColumns(
         windowSizeClass = windowSizeClass,
-        widgetCount = widgets.size,
+        widgetCount = displayWidgets.size,
         maxColumns = maxColumns
     )
     
-    val spacing = when {
-        windowSizeClass.widthDp < 400.dp -> GridSystem.spacing2 // 8dp - very compact
-        windowSizeClass.widthDp < 600.dp -> GridSystem.spacing2 // 8dp - compact
-        windowSizeClass.widthDp < 905.dp -> GridSystem.spacing3 // 12dp - medium
-        else -> GridSystem.spacing4 // 16dp - expanded
-    }
+    // Use 12dp spacing as specified in SPEC-20250205 (FR-002, line 154)
+    val spacing = 12.dp // Consistent 12dp spacing across all breakpoints per specification
     
     val contentPadding = calculateResponsivePadding(windowSizeClass)
     
@@ -91,7 +120,7 @@ fun AdaptiveWidgetGrid(
     
     if (useStaggered) {
         StaggeredWidgetGrid(
-            widgets = widgets,
+            widgets = displayWidgets,
             columns = columns,
             spacing = spacing,
             contentPadding = contentPadding,
@@ -102,7 +131,7 @@ fun AdaptiveWidgetGrid(
         )
     } else {
         FixedWidgetGrid(
-            widgets = widgets,
+            widgets = displayWidgets,
             columns = columns,
             spacing = spacing,
             contentPadding = contentPadding,
@@ -134,20 +163,42 @@ private fun FixedWidgetGrid(
             .fillMaxWidth()
             .heightIn(max = 800.dp),
         contentPadding = contentPadding,
-        horizontalArrangement = Arrangement.spacedBy(spacing),
+        // Use Start arrangement to ensure odd widgets are left-aligned (SPEC FR-004)
+        horizontalArrangement = Arrangement.spacedBy(spacing, Alignment.Start),
         verticalArrangement = Arrangement.spacedBy(spacing)
     ) {
         items(
-            items = widgets,
-            key = { widget -> widget.id }
-        ) { widget ->
+            count = widgets.size,
+            key = { index -> widgets[index].id },
+            span = { index ->
+                val widget = widgets[index]
+                // CHARTS category widgets should span full width (FR-003)
+                if (widget.category == com.example.liftrix.domain.model.analytics.WidgetCategory.CHARTS) {
+                    androidx.compose.foundation.lazy.grid.GridItemSpan(columns)
+                } else {
+                    androidx.compose.foundation.lazy.grid.GridItemSpan(1)
+                }
+            }
+        ) { index ->
+            val widget = widgets[index]
             val widgetData = widgetDataProvider(widget)
-            WidgetRenderer(
-                widget = widget,
-                widgetData = widgetData,
-                onClick = { onWidgetClick(widget) },
-                isLoading = isLoading
-            )
+            
+            // Use FullWidthWidgetCard for CHARTS widgets, regular WidgetRenderer for others
+            if (widget.category == com.example.liftrix.domain.model.analytics.WidgetCategory.CHARTS) {
+                FullWidthWidgetCard(
+                    widget = widget,
+                    widgetData = widgetData,
+                    onClick = { onWidgetClick(widget) },
+                    isLoading = isLoading
+                )
+            } else {
+                WidgetRenderer(
+                    widget = widget,
+                    widgetData = widgetData,
+                    onClick = { onWidgetClick(widget) },
+                    isLoading = isLoading
+                )
+            }
         }
     }
 }
@@ -216,16 +267,12 @@ fun AdaptiveWidgetGridWithMinWidth(
     val adjustedMinWidth = when {
         windowSizeClass.widthDp < 400.dp -> 280.dp // Very compact - fill width
         windowSizeClass.widthDp < 600.dp -> minOf(minColumnWidth, 320.dp) // Compact
-        windowSizeClass.widthDp < 905.dp -> minOf(minColumnWidth, 300.dp) // Medium
+        windowSizeClass.widthDp < 768.dp -> minOf(minColumnWidth, 300.dp) // Medium
         else -> minOf(minColumnWidth, windowSizeClass.recommendedMinWidgetWidth) // Expanded
     }
     
-    val spacing = when {
-        windowSizeClass.widthDp < 400.dp -> GridSystem.spacing2 // 8dp - very compact
-        windowSizeClass.widthDp < 600.dp -> GridSystem.spacing2 // 8dp - compact  
-        windowSizeClass.widthDp < 905.dp -> GridSystem.spacing3 // 12dp - medium
-        else -> GridSystem.spacing4 // 16dp - expanded
-    }
+    // Use 12dp spacing as specified in SPEC-20250205 (FR-002, line 154)
+    val spacing = 12.dp // Consistent 12dp spacing across all breakpoints per specification
     
     val contentPadding = calculateResponsivePadding(windowSizeClass)
     
@@ -235,20 +282,42 @@ fun AdaptiveWidgetGridWithMinWidth(
             .fillMaxWidth()
             .heightIn(max = 800.dp),
         contentPadding = contentPadding,
-        horizontalArrangement = Arrangement.spacedBy(spacing),
+        // Use Start arrangement to ensure odd widgets are left-aligned (SPEC FR-004)
+        horizontalArrangement = Arrangement.spacedBy(spacing, Alignment.Start),
         verticalArrangement = Arrangement.spacedBy(spacing)
     ) {
         items(
-            items = widgets,
-            key = { widget -> widget.id }
-        ) { widget ->
+            count = widgets.size,
+            key = { index -> widgets[index].id },
+            span = { index ->
+                val widget = widgets[index]
+                // CHARTS category widgets should span full width (FR-003)
+                if (widget.category == com.example.liftrix.domain.model.analytics.WidgetCategory.CHARTS) {
+                    androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan)
+                } else {
+                    androidx.compose.foundation.lazy.grid.GridItemSpan(1)
+                }
+            }
+        ) { index ->
+            val widget = widgets[index]
             val widgetData = widgetDataProvider(widget)
-            WidgetRenderer(
-                widget = widget,
-                widgetData = widgetData,
-                onClick = { onWidgetClick(widget) },
-                isLoading = isLoading
-            )
+            
+            // Use FullWidthWidgetCard for CHARTS widgets, regular WidgetRenderer for others
+            if (widget.category == com.example.liftrix.domain.model.analytics.WidgetCategory.CHARTS) {
+                FullWidthWidgetCard(
+                    widget = widget,
+                    widgetData = widgetData,
+                    onClick = { onWidgetClick(widget) },
+                    isLoading = isLoading
+                )
+            } else {
+                WidgetRenderer(
+                    widget = widget,
+                    widgetData = widgetData,
+                    onClick = { onWidgetClick(widget) },
+                    isLoading = isLoading
+                )
+            }
         }
     }
 }
@@ -265,4 +334,64 @@ private fun createDefaultWidgetData(widget: AnalyticsWidget): WidgetData {
         unit = "",
         trend = com.example.liftrix.domain.model.analytics.TrendDirection.STABLE
     )
+}
+
+/**
+ * Checks if the device is currently under memory pressure
+ */
+private fun isLowMemory(context: Context): Boolean {
+    val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+    val memoryInfo = ActivityManager.MemoryInfo()
+    activityManager.getMemoryInfo(memoryInfo)
+    
+    // Consider low memory if available memory is less than 10% of total or below threshold
+    val lowMemoryThreshold = memoryInfo.threshold
+    val availableMemory = memoryInfo.availMem
+    val totalMemory = memoryInfo.totalMem
+    val memoryPercentage = (availableMemory.toFloat() / totalMemory.toFloat()) * 100
+    
+    return memoryInfo.lowMemory || availableMemory < lowMemoryThreshold || memoryPercentage < 10f
+}
+
+/**
+ * Registers a callback for memory pressure notifications
+ */
+private fun registerMemoryPressureCallback(
+    context: Context,
+    onMemoryPressure: () -> Unit
+): android.content.ComponentCallbacks2 {
+    val callback = object : android.content.ComponentCallbacks2 {
+        override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+            // Not used
+        }
+        
+        override fun onLowMemory() {
+            Timber.w("onLowMemory callback triggered")
+            onMemoryPressure()
+        }
+        
+        override fun onTrimMemory(level: Int) {
+            when (level) {
+                android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW,
+                android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL,
+                android.content.ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> {
+                    Timber.w("onTrimMemory callback triggered with level: $level")
+                    onMemoryPressure()
+                }
+            }
+        }
+    }
+    
+    context.registerComponentCallbacks(callback)
+    return callback
+}
+
+/**
+ * Unregisters a memory pressure callback
+ */
+private fun unregisterMemoryPressureCallback(
+    context: Context,
+    callback: android.content.ComponentCallbacks2
+) {
+    context.unregisterComponentCallbacks(callback)
 }

@@ -69,7 +69,10 @@ fun TimePeriodSelector(
                     TimeRangeType.WEEK -> TimeRange.lastWeek()
                     TimeRangeType.MONTH -> TimeRange.lastMonth()
                     TimeRangeType.QUARTER -> TimeRange.lastQuarter()
+                    TimeRangeType.THREE_MONTHS -> TimeRange.lastQuarter() // Same as quarter
+                    TimeRangeType.SIX_MONTHS -> TimeRange.lastSixMonths()
                     TimeRangeType.YEAR -> TimeRange.lastYear()
+                    TimeRangeType.ALL_TIME -> TimeRange.allTime()
                 }
                 
                 FilterChip(

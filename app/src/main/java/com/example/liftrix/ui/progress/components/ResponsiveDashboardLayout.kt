@@ -1,12 +1,23 @@
 package com.example.liftrix.ui.progress.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Dashboard
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
@@ -54,8 +65,19 @@ fun ResponsiveDashboardLayout(
     isLoading: Boolean = false,
     enableDragAndDrop: Boolean = layoutMode == DashboardLayoutMode.CUSTOM,
     enableSmoothTransitions: Boolean = true,
-    windowSizeClass: WindowSizeClass = rememberWindowSizeClass()
+    windowSizeClass: WindowSizeClass = rememberWindowSizeClass(),
+    emptyStateMessage: String = "No widgets to display",
+    onAddWidgets: (() -> Unit)? = null
 ) {
+    // Handle empty state
+    if (widgets.isEmpty() && !isLoading) {
+        IntegratedEmptyState(
+            message = emptyStateMessage,
+            onAddWidgets = onAddWidgets,
+            modifier = modifier
+        )
+        return
+    }
     if (enableSmoothTransitions) {
         // Use animated layout switcher for smooth transitions
         AnimatedLayoutSwitcher(
@@ -150,37 +172,37 @@ fun ResponsiveDashboardLayout(
 }
 
 /**
- * Calculates optimal column count with consistent mobile-first approach
+ * Calculates optimal column count with optimized mobile-first approach
  * 
- * Simplified column calculation for seamless mobile experience:
- * - Mobile (< 600dp): 1 column (2x1 layout - one widget per row)
- * - Tablet (600dp-904dp): 2 columns for optimal tablet experience
- * - Desktop (≥ 905dp): 3 columns for large displays
+ * Enhanced column calculation for better mobile experience:
+ * - Mobile (< 600dp): 2 columns for compact widget layout
+ * - Tablet (600dp-904dp): 3 columns for optimal tablet experience
+ * - Desktop (≥ 905dp): 4 columns for large displays
  * 
  * @param windowSizeClass Current window size classification
  * @param widgetCount Number of widgets to display (not used for consistent experience)
- * @param maxColumns Maximum allowed columns (default: 3)
+ * @param maxColumns Maximum allowed columns (default: 4)
  * @param force2x1Mobile Force 2x1 layout (one per row) for mobile screens
  * @return Optimal number of columns for the layout
  */
 fun calculateOptimalColumns(
     windowSizeClass: WindowSizeClass,
     widgetCount: Int,
-    maxColumns: Int = 3,
-    force2x1Mobile: Boolean = true
+    maxColumns: Int = 4,
+    force2x1Mobile: Boolean = false
 ): Int {
     return when {
         windowSizeClass.widthDp < 600.dp -> {
-            // Mobile: 1 column for 2x1 layout (one widget per row)
-            1
-        }
-        windowSizeClass.widthDp < 905.dp -> {
-            // Tablet: 2 columns for optimal readability
+            // Mobile: 2 columns for optimized widget layout
             2
         }
+        windowSizeClass.widthDp < 768.dp -> {
+            // Tablet: 3 columns for optimal readability
+            3
+        }
         else -> {
-            // Desktop: 3 columns maximum
-            minOf(3, maxColumns)
+            // Desktop: 4 columns maximum
+            minOf(4, maxColumns)
         }
     }
 }
@@ -202,18 +224,9 @@ fun calculateResponsiveSpacing(
     windowSizeClass: WindowSizeClass,
     useCompactSpacing: Boolean = false
 ): Arrangement.HorizontalOrVertical {
-    val spacing = when {
-        windowSizeClass.widthDp < 400.dp -> GridSystem.spacing2 // 8dp - very compact
-        windowSizeClass.widthDp < 600.dp -> {
-            if (useCompactSpacing) GridSystem.spacing2 else GridSystem.spacing2 // 8dp - compact
-        }
-        windowSizeClass.widthDp < 905.dp -> {
-            if (useCompactSpacing) GridSystem.spacing2 else GridSystem.spacing3 // 8dp/12dp - medium
-        }
-        else -> {
-            if (useCompactSpacing) GridSystem.spacing3 else GridSystem.spacing4 // 12dp/16dp - expanded
-        }
-    }
+    // Use 12dp spacing as specified in SPEC-20250205 (FR-002, line 154)
+    // Maintain consistent 12dp spacing across all breakpoints per specification
+    val spacing = 12.dp
     
     return Arrangement.spacedBy(spacing)
 }
@@ -238,12 +251,12 @@ fun calculateResponsivePadding(
     val basePadding = when {
         windowSizeClass.widthDp < 400.dp -> 12.dp // Very compact
         windowSizeClass.widthDp < 600.dp -> GridSystem.screenPadding // 16dp - compact
-        windowSizeClass.widthDp < 905.dp -> 20.dp // Medium
+        windowSizeClass.widthDp < 768.dp -> 20.dp // Medium
         else -> GridSystem.spacing5 // 24dp - expanded
     }
     
     // Add extra padding for screen edges on larger displays
-    val horizontalPadding = if (useScreenEdgePadding && windowSizeClass.widthDp > 905.dp) {
+    val horizontalPadding = if (useScreenEdgePadding && windowSizeClass.widthDp > 768.dp) {
         basePadding + 8.dp
     } else {
         basePadding
@@ -267,4 +280,49 @@ private fun createDefaultWidgetData(widget: AnalyticsWidget): WidgetData {
         unit = "",
         trend = com.example.liftrix.domain.model.analytics.TrendDirection.STABLE
     )
+}
+
+/**
+ * Integrated empty state component for ResponsiveDashboardLayout
+ * Provides consistent empty state experience across all layout modes
+ */
+@Composable
+private fun IntegratedEmptyState(
+    message: String,
+    onAddWidgets: (() -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(32.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Dashboard,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            )
+            
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            onAddWidgets?.let { action ->
+                Button(
+                    onClick = action,
+                    modifier = Modifier.padding(top = 8.dp)
+                ) {
+                    Text("Add Widgets")
+                }
+            }
+        }
+    }
 }

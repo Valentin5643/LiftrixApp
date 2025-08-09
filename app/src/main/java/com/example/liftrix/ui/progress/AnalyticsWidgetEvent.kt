@@ -334,6 +334,62 @@ sealed class AnalyticsWidgetEvent : ViewModelEvent {
      * ```
      */
     data object NavigateToDashboardCustomization : AnalyticsWidgetEvent()
+    
+    /**
+     * Event for navigating to volume analysis detail screen.
+     * 
+     * Triggers navigation to the comprehensive volume analytics screen
+     * showing detailed volume charts, progression trends, and statistics.
+     * 
+     * Example:
+     * ```kotlin
+     * // Navigate to volume detail screen
+     * AnalyticsWidgetEvent.NavigateToVolumeDetail
+     * ```
+     */
+    data object NavigateToVolumeDetail : AnalyticsWidgetEvent()
+    
+    /**
+     * Event for navigating to one rep max detail screen.
+     * 
+     * Triggers navigation to the strength progression analytics screen
+     * showing 1RM progression, strength metrics, and personal records.
+     * 
+     * Example:
+     * ```kotlin
+     * // Navigate to 1RM detail screen
+     * AnalyticsWidgetEvent.NavigateToOneRmDetail
+     * ```
+     */
+    data object NavigateToOneRmDetail : AnalyticsWidgetEvent()
+    
+    /**
+     * Event for navigating to muscle group detail screen.
+     * 
+     * Triggers navigation to the muscle group distribution analytics screen
+     * showing muscle group balance, training frequency, and recommendations.
+     * 
+     * Example:
+     * ```kotlin
+     * // Navigate to muscle group detail screen
+     * AnalyticsWidgetEvent.NavigateToMuscleGroupDetail
+     * ```
+     */
+    data object NavigateToMuscleGroupDetail : AnalyticsWidgetEvent()
+    
+    /**
+     * Event for navigating to workout frequency detail screen.
+     * 
+     * Triggers navigation to the workout frequency analytics screen
+     * showing training consistency, frequency patterns, and goal progress.
+     * 
+     * Example:
+     * ```kotlin
+     * // Navigate to frequency detail screen
+     * AnalyticsWidgetEvent.NavigateToFrequencyDetail
+     * ```
+     */
+    data object NavigateToFrequencyDetail : AnalyticsWidgetEvent()
 }
 
 /**

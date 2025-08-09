@@ -266,6 +266,20 @@ sealed class UserPreferencesEvent : ViewModelEvent {
      * - May trigger retry logic
      */
     object DismissError : UserPreferencesEvent()
+    
+    /**
+     * Mark widget migration notice as seen by the user.
+     * 
+     * This event is triggered when the user acknowledges the widget migration
+     * notification dialog. It updates the user's preferences to prevent showing
+     * the notice again in future sessions.
+     * 
+     * Effects:
+     * - Updates hasSeenWidgetMigrationNotice to true
+     * - Saves preferences to persist the change
+     * - Dismisses migration notification UI
+     */
+    object MarkMigrationNoticeSeen : UserPreferencesEvent()
 }
 
 /**
@@ -361,4 +375,5 @@ fun UserPreferencesEvent.getOperationName(): String = when (this) {
     is UserPreferencesEvent.SaveChanges -> "save_changes"
     is UserPreferencesEvent.DiscardChanges -> "discard_changes"
     is UserPreferencesEvent.DismissError -> "dismiss_error"
+    is UserPreferencesEvent.MarkMigrationNoticeSeen -> "mark_migration_notice_seen"
 }

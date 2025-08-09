@@ -111,11 +111,23 @@ abstract class AnalyticsModule {
         }
 
         /**
+         * Provides PerformanceBenchmark for analytics performance tracking
+         * 
+         * @return Configured PerformanceBenchmark instance
+         */
+        @Provides
+        @Singleton
+        fun providePerformanceBenchmark(): com.example.liftrix.service.PerformanceBenchmark {
+            return com.example.liftrix.service.PerformanceBenchmark()
+        }
+
+        /**
          * Provides AnalyticsEngine with proper dependency injection
          * 
          * @param workoutDao The workout DAO for data access
          * @param calorieCalculator The calorie calculator for MET-based calculations
          * @param progressStatsRepository The progress stats repository for analytics data
+         * @param performanceBenchmark The performance benchmark for tracking
          * @return Configured AnalyticsEngine instance
          */
         @Provides
@@ -123,12 +135,14 @@ abstract class AnalyticsModule {
         fun provideAnalyticsEngine(
             workoutDao: WorkoutDao,
             calorieCalculator: CalorieCalculator,
-            progressStatsRepository: com.example.liftrix.domain.repository.ProgressStatsRepository
+            progressStatsRepository: com.example.liftrix.domain.repository.ProgressStatsRepository,
+            performanceBenchmark: com.example.liftrix.service.PerformanceBenchmark
         ): AnalyticsEngine {
             return AnalyticsEngine(
                 workoutDao = workoutDao,
                 calorieCalculator = calorieCalculator,
-                progressStatsRepository = progressStatsRepository
+                progressStatsRepository = progressStatsRepository,
+                performanceBenchmark = performanceBenchmark
             )
         }
 

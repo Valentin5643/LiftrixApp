@@ -141,4 +141,12 @@ interface PreferencesService {
      * @return LiftrixResult indicating success or failure
      */
     suspend fun toggleSection(userId: String, sectionName: String): LiftrixResult<Unit>
+    
+    /**
+     * Saves complete widget preferences for a user.
+     * 
+     * @param preferences The complete widget preferences to save
+     * @return LiftrixResult indicating success or failure
+     */
+    suspend fun saveWidgetPreferences(preferences: WidgetPreferences): LiftrixResult<Unit>
 }

@@ -12,6 +12,7 @@ import com.example.liftrix.domain.usecase.common.ErrorHandler
 import kotlinx.coroutines.flow.first
 import java.time.Instant
 import java.time.LocalDate
+import kotlinx.datetime.LocalDate as KotlinxLocalDate
 import javax.inject.Inject
 
 /**
@@ -137,7 +138,7 @@ class CreateWorkoutUseCase @Inject constructor(
         
         // Check for duplicate workout name on the same date
         val workoutsByDateResult = try {
-            workoutRepository.getWorkoutsByDate(request.date, request.userId)
+            workoutRepository.getWorkoutsByDate(request.date.toKotlinxLocalDate(), request.userId)
                 .first() // Get the first emission from the Flow
         } catch (e: Exception) {
             return liftrixFailure(
@@ -217,3 +218,10 @@ data class CreateWorkoutRequest(
     val notes: String? = null,
     val templateId: WorkoutId? = null
 )
+
+/**
+ * Extension function to convert java.time.LocalDate to kotlinx.datetime.LocalDate
+ */
+private fun LocalDate.toKotlinxLocalDate(): KotlinxLocalDate {
+    return KotlinxLocalDate(this.year, this.monthValue, this.dayOfMonth)
+}

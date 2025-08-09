@@ -313,7 +313,7 @@ private fun PlacementPreviewWidget(
                     Text(
                         text = widget.displayName,
                         style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 10.sp,
+                            fontSize = 14.sp,  // Updated to meet 14sp minimum requirement
                             fontWeight = if (isPreviewTarget) FontWeight.Bold else FontWeight.Normal
                         ),
                         color = MaterialTheme.colorScheme.onSurface,

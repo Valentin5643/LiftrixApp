@@ -45,23 +45,9 @@ object WidgetFactory {
     ) {
         when (widget) {
             // METRICS Category Widgets
-            AnalyticsWidget.CaloriesBurned -> {
-                CaloriesBurnedWidget(
-                    data = data as? MetricWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
+            // CaloriesBurned widget removed - use AverageDuration instead
             
-            AnalyticsWidget.DailyCalories -> {
-                DailyCaloriesWidget(
-                    data = data as? MetricWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
+            // DailyCalories widget removed - use existing widgets
             
             AnalyticsWidget.WorkoutFrequency -> {
                 WorkoutFrequencyWidget(
@@ -81,14 +67,7 @@ object WidgetFactory {
                 )
             }
             
-            AnalyticsWidget.ConsistencyStreak -> {
-                ConsistencyStreakWidget(
-                    data = data as? MetricWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
+            // ConsistencyStreak renamed to WorkoutStreak
             
             AnalyticsWidget.AverageDuration -> {
                 AverageDurationWidget(
@@ -108,14 +87,7 @@ object WidgetFactory {
                 )
             }
             
-            AnalyticsWidget.SetCompletionRate -> {
-                SetCompletionRateWidget(
-                    data = data as? MetricWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
+            // SetCompletionRate widget removed
             
             // CHARTS Category Widgets
             AnalyticsWidget.VolumeChart -> {
@@ -127,14 +99,7 @@ object WidgetFactory {
                 )
             }
             
-            AnalyticsWidget.DurationChart -> {
-                DurationChartWidget(
-                    data = data as? ChartWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
+            // DurationChart renamed to ProgressChart
             
             AnalyticsWidget.FrequencyChart -> {
                 FrequencyChartWidget(
@@ -163,14 +128,7 @@ object WidgetFactory {
                 )
             }
             
-            AnalyticsWidget.WeeklyCalorieTrend -> {
-                WeeklyCalorieTrendWidget(
-                    data = data as? ChartWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
+            // WeeklyCalorieTrend widget removed - use VolumeTrends
             
             // PROGRESS Category Widgets
             AnalyticsWidget.StrengthProgress -> {
@@ -209,14 +167,7 @@ object WidgetFactory {
                 )
             }
             
-            AnalyticsWidget.GoalAchievement -> {
-                GoalAchievementWidget(
-                    data = data as? ProgressWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
+            // GoalAchievement widget removed
             
             AnalyticsWidget.MonthlySummary -> {
                 MonthlySummaryWidget(
@@ -246,23 +197,9 @@ object WidgetFactory {
                 )
             }
             
-            AnalyticsWidget.PerformanceAnalysis -> {
-                PerformanceAnalysisWidget(
-                    data = data as? AnalyticsWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
+            // PerformanceAnalysis renamed to MonthlySummary
             
-            AnalyticsWidget.WeeklyTrends -> {
-                WeeklyTrendsWidget(
-                    data = data as? AnalyticsWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
+            // WeeklyTrends renamed to VolumeTrends
             
             AnalyticsWidget.MuscleGroupDistribution -> {
                 MuscleGroupDistributionWidget(
@@ -273,41 +210,13 @@ object WidgetFactory {
                 )
             }
             
-            AnalyticsWidget.RecoveryPatterns -> {
-                RecoveryPatternsWidget(
-                    data = data as? AnalyticsWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
+            // RecoveryPatterns renamed to RecoveryMetrics
             
-            AnalyticsWidget.TrainingIntensity -> {
-                TrainingIntensityWidget(
-                    data = data as? AnalyticsWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
+            // TrainingIntensity widget removed
             
-            AnalyticsWidget.ExerciseVariety -> {
-                ExerciseVarietyWidget(
-                    data = data as? AnalyticsWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
+            // ExerciseVariety widget removed
             
-            AnalyticsWidget.TimeOfDayAnalysis -> {
-                TimeOfDayAnalysisWidget(
-                    data = data as? AnalyticsWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
+            // TimeOfDayAnalysis widget removed
         }
     }
     

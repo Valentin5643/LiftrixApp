@@ -268,4 +268,36 @@ sealed class LiftrixRoute {
      */
     @Serializable
     data class ImageCrop(val imageUri: String) : LiftrixRoute()
+    
+    // Analytics Detail Screen Routes
+    
+    /**
+     * Volume analysis detail screen showing comprehensive volume analytics
+     */
+    @Serializable
+    data object VolumeAnalysisDetail : LiftrixRoute()
+    
+    /**
+     * One rep max detail screen showing strength progression analytics
+     */
+    @Serializable
+    data object OneRmDetail : LiftrixRoute()
+    
+    /**
+     * Muscle group detail screen showing muscle group distribution analytics
+     */
+    @Serializable
+    data object MuscleGroupDetail : LiftrixRoute()
+    
+    /**
+     * Workout frequency detail screen showing frequency and consistency analytics
+     */
+    @Serializable
+    data object WorkoutFrequencyDetail : LiftrixRoute()
+    
+    /**
+     * Exercise ranking detail screen showing exercise performance rankings
+     */
+    @Serializable
+    data object ExerciseRankingDetail : LiftrixRoute()
 }

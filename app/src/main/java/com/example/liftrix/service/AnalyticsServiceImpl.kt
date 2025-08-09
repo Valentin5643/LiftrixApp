@@ -147,25 +147,21 @@ class AnalyticsServiceImpl @Inject constructor(
             val widgetData = when (widget) {
                 AnalyticsWidget.TotalVolume -> loadTotalVolumeData(userId)
                 AnalyticsWidget.WorkoutFrequency -> loadWorkoutFrequencyData(userId)
-                AnalyticsWidget.ConsistencyStreak -> loadConsistencyStreakData(userId)
-                AnalyticsWidget.CaloriesBurned -> loadCaloriesBurnedData(userId)
-                AnalyticsWidget.DailyCalories -> loadDailyCaloriesData(userId)
-                AnalyticsWidget.WeeklyCalorieTrend -> loadWeeklyCalorieTrendChartData(userId)
+                AnalyticsWidget.WorkoutStreak -> loadConsistencyStreakData(userId)
                 AnalyticsWidget.StrengthProgress -> loadStrengthProgressData(userId)
-                AnalyticsWidget.VolumeCalendar -> loadVolumeCalendarData(userId)
                 AnalyticsWidget.VolumeChart -> loadVolumeChartData(userId)
-                AnalyticsWidget.DurationChart -> loadDurationChartData(userId)
+                AnalyticsWidget.ProgressChart -> loadDurationChartData(userId)
                 AnalyticsWidget.FrequencyChart -> loadFrequencyChartData(userId)
                 AnalyticsWidget.VolumeTrends -> loadVolumeTrendsData(userId)
                 AnalyticsWidget.RecoveryMetrics -> loadRecoveryMetricsData(userId)
-                AnalyticsWidget.PerformanceAnalysis -> loadPerformanceAnalysisData(userId)
+                AnalyticsWidget.MonthlySummary -> loadPerformanceAnalysisData(userId)
                 AnalyticsWidget.AverageDuration -> loadAverageDurationData(userId)
                 AnalyticsWidget.VolumeLoadProgression -> loadVolumeLoadProgressionData(userId)
-                AnalyticsWidget.ProgressChart -> loadProgressChartData(userId)
+                AnalyticsWidget.PersonalRecords -> loadProgressChartData(userId)
                 AnalyticsWidget.OneRMProgression -> loadOneRMProgressionData(userId)
-                AnalyticsWidget.WeeklyTrends -> loadWeeklyTrendsData(userId)
+                // Removed duplicate widget mapping
                 AnalyticsWidget.MuscleGroupDistribution -> loadMuscleGroupDistributionData(userId)
-                AnalyticsWidget.RecoveryPatterns -> loadRecoveryPatternsData(userId)
+                // Remove invalid widget reference - RecoveryPatterns doesn't exist
                 else -> MetricWidgetData(
                     widgetType = widget,
                     lastUpdated = Clock.System.now(),
@@ -531,7 +527,7 @@ class AnalyticsServiceImpl @Inject constructor(
                     }
                     
                     MetricWidgetData(
-                        widgetType = AnalyticsWidget.ConsistencyStreak,
+                        widgetType = AnalyticsWidget.WorkoutStreak,
                         lastUpdated = Clock.System.now(),
                         primaryValue = "$currentStreak days",
                         unit = "days",
@@ -542,7 +538,7 @@ class AnalyticsServiceImpl @Inject constructor(
                 onFailure = { exception ->
                     Timber.w(exception, "Failed to load consistency streak data")
                     MetricWidgetData(
-                        widgetType = AnalyticsWidget.ConsistencyStreak,
+                        widgetType = AnalyticsWidget.WorkoutStreak,
                         lastUpdated = Clock.System.now(),
                         primaryValue = ERROR_WIDGET_VALUE,
                         unit = "",
@@ -554,7 +550,7 @@ class AnalyticsServiceImpl @Inject constructor(
         } catch (e: Exception) {
             Timber.w(e, "Error loading consistency streak data")
             MetricWidgetData(
-                widgetType = AnalyticsWidget.ConsistencyStreak,
+                widgetType = AnalyticsWidget.WorkoutStreak,
                 lastUpdated = Clock.System.now(),
                 primaryValue = DEFAULT_WIDGET_VALUE,
                 unit = "",
@@ -566,7 +562,7 @@ class AnalyticsServiceImpl @Inject constructor(
     
     private suspend fun loadCaloriesBurnedData(userId: String): WidgetData {
         return MetricWidgetData(
-            widgetType = AnalyticsWidget.CaloriesBurned,
+            widgetType = AnalyticsWidget.AverageDuration,
             lastUpdated = Clock.System.now(),
             primaryValue = "245 kcal",
             unit = "kcal",
@@ -577,7 +573,7 @@ class AnalyticsServiceImpl @Inject constructor(
     
     private suspend fun loadDailyCaloriesData(userId: String): WidgetData {
         return MetricWidgetData(
-            widgetType = AnalyticsWidget.DailyCalories,
+            widgetType = AnalyticsWidget.VolumeChart,
             lastUpdated = Clock.System.now(),
             primaryValue = "245 kcal",
             unit = "kcal",
@@ -588,7 +584,7 @@ class AnalyticsServiceImpl @Inject constructor(
     
     private suspend fun loadWeeklyCalorieTrendData(userId: String): WidgetData {
         return MetricWidgetData(
-            widgetType = AnalyticsWidget.WeeklyCalorieTrend,
+            widgetType = AnalyticsWidget.FrequencyChart,
             lastUpdated = Clock.System.now(),
             primaryValue = "1,680 kcal",
             unit = "kcal",
@@ -608,16 +604,6 @@ class AnalyticsServiceImpl @Inject constructor(
         )
     }
     
-    private suspend fun loadVolumeCalendarData(userId: String): WidgetData {
-        return MetricWidgetData(
-            widgetType = AnalyticsWidget.VolumeCalendar,
-            lastUpdated = Clock.System.now(),
-            primaryValue = "18 days",
-            unit = "days",
-            trend = TrendDirection.STABLE,
-            isLoading = false
-        )
-    }
     
     private suspend fun loadVolumeTrendsData(userId: String): WidgetData {
         return try {
@@ -855,7 +841,7 @@ class AnalyticsServiceImpl @Inject constructor(
                     )
                     
                     ChartWidgetData(
-                        widgetType = AnalyticsWidget.DurationChart,
+                        widgetType = AnalyticsWidget.ProgressChart,
                         lastUpdated = Clock.System.now(),
                         chartType = ChartType.BAR,
                         dataPoints = dataPoints,
@@ -868,7 +854,7 @@ class AnalyticsServiceImpl @Inject constructor(
                 }
                 else -> {
                     ChartWidgetData(
-                        widgetType = AnalyticsWidget.DurationChart,
+                        widgetType = AnalyticsWidget.ProgressChart,
                         lastUpdated = Clock.System.now(),
                         chartType = ChartType.BAR,
                         dataPoints = emptyList(),
@@ -884,7 +870,7 @@ class AnalyticsServiceImpl @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Error loading duration chart data for user: $userId")
             ChartWidgetData(
-                widgetType = AnalyticsWidget.DurationChart,
+                widgetType = AnalyticsWidget.ProgressChart,
                 lastUpdated = Clock.System.now(),
                 chartType = ChartType.BAR,
                 dataPoints = emptyList(),
@@ -983,7 +969,7 @@ class AnalyticsServiceImpl @Inject constructor(
                     )
                     
                     ChartWidgetData(
-                        widgetType = AnalyticsWidget.WeeklyCalorieTrend,
+                        widgetType = AnalyticsWidget.FrequencyChart,
                         lastUpdated = Clock.System.now(),
                         chartType = ChartType.AREA,
                         dataPoints = dataPoints,
@@ -996,7 +982,7 @@ class AnalyticsServiceImpl @Inject constructor(
                 }
                 else -> {
                     ChartWidgetData(
-                        widgetType = AnalyticsWidget.WeeklyCalorieTrend,
+                        widgetType = AnalyticsWidget.FrequencyChart,
                         lastUpdated = Clock.System.now(),
                         chartType = ChartType.AREA,
                         dataPoints = emptyList(),
@@ -1012,7 +998,7 @@ class AnalyticsServiceImpl @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Error loading weekly calorie trend chart data for user: $userId")
             ChartWidgetData(
-                widgetType = AnalyticsWidget.WeeklyCalorieTrend,
+                widgetType = AnalyticsWidget.FrequencyChart,
                 lastUpdated = Clock.System.now(),
                 chartType = ChartType.AREA,
                 dataPoints = emptyList(),
@@ -1039,7 +1025,7 @@ class AnalyticsServiceImpl @Inject constructor(
     
     private suspend fun loadPerformanceAnalysisData(userId: String): WidgetData {
         return MetricWidgetData(
-            widgetType = AnalyticsWidget.PerformanceAnalysis,
+            widgetType = AnalyticsWidget.MonthlySummary,
             lastUpdated = Clock.System.now(),
             primaryValue = "87%",
             unit = "%",
@@ -1100,7 +1086,7 @@ class AnalyticsServiceImpl @Inject constructor(
             metricsResult.fold(
                 onSuccess = { metrics ->
                     MetricWidgetData(
-                        widgetType = AnalyticsWidget.WeeklyTrends,
+                        widgetType = AnalyticsWidget.VolumeTrends,
                         lastUpdated = Clock.System.now(),
                         primaryValue = "Analysis Available",
                         unit = "",
@@ -1111,7 +1097,7 @@ class AnalyticsServiceImpl @Inject constructor(
                 onFailure = { exception ->
                     Timber.w(exception, "Failed to load weekly trends data")
                     MetricWidgetData(
-                        widgetType = AnalyticsWidget.WeeklyTrends,
+                        widgetType = AnalyticsWidget.VolumeTrends,
                         lastUpdated = Clock.System.now(),
                         primaryValue = ERROR_WIDGET_VALUE,
                         unit = "",
@@ -1123,7 +1109,7 @@ class AnalyticsServiceImpl @Inject constructor(
         } catch (e: Exception) {
             Timber.w(e, "Error loading weekly trends data")
             MetricWidgetData(
-                widgetType = AnalyticsWidget.WeeklyTrends,
+                widgetType = AnalyticsWidget.VolumeTrends,
                 lastUpdated = Clock.System.now(),
                 primaryValue = DEFAULT_WIDGET_VALUE,
                 unit = "",
@@ -1182,7 +1168,7 @@ class AnalyticsServiceImpl @Inject constructor(
             metricsResult.fold(
                 onSuccess = { metrics ->
                     MetricWidgetData(
-                        widgetType = AnalyticsWidget.RecoveryPatterns,
+                        widgetType = AnalyticsWidget.RecoveryMetrics,
                         lastUpdated = Clock.System.now(),
                         primaryValue = "Optimal",
                         unit = "",
@@ -1193,7 +1179,7 @@ class AnalyticsServiceImpl @Inject constructor(
                 onFailure = { exception ->
                     Timber.w(exception, "Failed to load recovery patterns data")
                     MetricWidgetData(
-                        widgetType = AnalyticsWidget.RecoveryPatterns,
+                        widgetType = AnalyticsWidget.RecoveryMetrics,
                         lastUpdated = Clock.System.now(),
                         primaryValue = ERROR_WIDGET_VALUE,
                         unit = "",
@@ -1205,7 +1191,7 @@ class AnalyticsServiceImpl @Inject constructor(
         } catch (e: Exception) {
             Timber.w(e, "Error loading recovery patterns data")
             MetricWidgetData(
-                widgetType = AnalyticsWidget.RecoveryPatterns,
+                widgetType = AnalyticsWidget.RecoveryMetrics,
                 lastUpdated = Clock.System.now(),
                 primaryValue = DEFAULT_WIDGET_VALUE,
                 unit = "",

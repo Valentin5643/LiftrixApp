@@ -126,7 +126,7 @@ class AnalyticsWidgetManager @Inject constructor(
         usageHistory: WidgetUsageHistory = WidgetUsageHistory()
     ): List<AnalyticsWidget> {
         // Base recommendation on usage patterns
-        val frequentlyUsed = usageHistory.getMostUsedWidgets(limit = 6)
+        val frequentlyUsed = usageHistory.getMostUsedWidgets(limit = AnalyticsWidget.getTotalCount())
         val essentialWidgets = getWidgetsByPriority(WidgetPriority.ESSENTIAL)
         
         // Combine frequently used with essential, ensuring essentials are included
@@ -134,7 +134,7 @@ class AnalyticsWidgetManager @Inject constructor(
         recommended.addAll(essentialWidgets)
         recommended.addAll(frequentlyUsed)
         
-        return recommended.toList().take(8) // Maximum 8 widgets for optimal UX
+        return recommended.toList() // Show all available widgets per SPEC requirement
     }
     
     /**
@@ -173,7 +173,7 @@ class AnalyticsWidgetManager @Inject constructor(
         return listOf(
             AnalyticsWidget.TotalVolume,
             AnalyticsWidget.WorkoutFrequency,
-            AnalyticsWidget.ConsistencyStreak
+            AnalyticsWidget.WorkoutStreak
         )
     }
     

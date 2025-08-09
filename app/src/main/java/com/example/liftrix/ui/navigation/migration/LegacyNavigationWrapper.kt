@@ -182,6 +182,7 @@ class LegacyNavigationWrapper @Inject constructor(
                 is LiftrixRoute.ExerciseSelection -> "Replace with: navController.navigate(LiftrixRoute.ExerciseSelection(...))"
                 is LiftrixRoute.ActiveWorkout -> "Replace with: navController.navigate(LiftrixRoute.ActiveWorkout(...))"
                 is LiftrixRoute.ExerciseDetails -> "Replace with: navController.navigate(LiftrixRoute.ExerciseDetails(exerciseId))"
+                is LiftrixRoute.ExerciseRankingDetail -> "Replace with: navController.navigate(LiftrixRoute.ExerciseRankingDetail)"
                 is LiftrixRoute.AnomalyDashboard -> "Replace with: navController.navigate(LiftrixRoute.AnomalyDashboard)"
                 is LiftrixRoute.AnomalySettings -> "Replace with: navController.navigate(LiftrixRoute.AnomalySettings)"
                 is LiftrixRoute.CalorieAnalytics -> "Replace with: navController.navigate(LiftrixRoute.CalorieAnalytics)"
@@ -201,6 +202,10 @@ class LegacyNavigationWrapper @Inject constructor(
                 is LiftrixRoute.Profile -> "Replace with: navController.navigate(LiftrixRoute.Profile(userId))"
                 LiftrixRoute.ProfileEdit -> "Replace with: navController.navigate(LiftrixRoute.ProfileEdit)"
                 LiftrixRoute.UserSearch -> "Replace with: navController.navigate(LiftrixRoute.UserSearch)"
+                LiftrixRoute.VolumeAnalysisDetail -> "Replace with: navController.navigate(LiftrixRoute.VolumeAnalysisDetail)"
+                LiftrixRoute.OneRmDetail -> "Replace with: navController.navigate(LiftrixRoute.OneRmDetail)"
+                LiftrixRoute.MuscleGroupDetail -> "Replace with: navController.navigate(LiftrixRoute.MuscleGroupDetail)"
+                LiftrixRoute.WorkoutFrequencyDetail -> "Replace with: navController.navigate(LiftrixRoute.WorkoutFrequencyDetail)"
             }
         } else {
             null

@@ -1,5 +1,7 @@
 package com.example.liftrix.ui.progress.components
 
+import com.example.liftrix.domain.model.analytics.DateRange
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -267,16 +269,6 @@ data class VolumeDataPoint(
     val workoutCount: Int = 1
 )
 
-/**
- * Date range for chart display
- */
-data class DateRange(
-    val start: LocalDate,
-    val end: LocalDate
-) {
-    fun contains(date: LocalDate): Boolean = date >= start && date <= end
-    fun dayCount(): Int = (end.toJavaLocalDate().toEpochDay() - start.toJavaLocalDate().toEpochDay()).toInt() + 1
-}
 
 private fun DrawScope.drawVolumeLineChart(
     data: List<Float>,

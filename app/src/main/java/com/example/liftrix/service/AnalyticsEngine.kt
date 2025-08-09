@@ -48,14 +48,17 @@ import kotlin.time.Duration.Companion.minutes
 class AnalyticsEngine @Inject constructor(
     private val workoutDao: com.example.liftrix.data.local.dao.WorkoutDao,
     private val calorieCalculator: com.example.liftrix.domain.model.analytics.CalorieCalculator,
-    private val progressStatsRepository: com.example.liftrix.domain.repository.ProgressStatsRepository
+    private val progressStatsRepository: com.example.liftrix.domain.repository.ProgressStatsRepository,
+    private val performanceBenchmark: PerformanceBenchmark
 ) {
     
     companion object {
         private const val MAX_CALCULATION_TIME_MS = 5000L // 5 second timeout
+        private const val MEMORY_PRESSURE_THRESHOLD = 0.8f // Clear cache when 80% memory used
+        private const val CACHE_REDUCTION_FACTOR = 0.5f // Reduce cache to 50% when under pressure
     }
     
-    // Memoization caches for expensive calculations
+    // Memoization caches for expensive calculations with memory pressure handling
     private val progressMetricsCache = MemoizationCache<String, ProgressMetrics>(
         maxSize = 50,
         defaultTtl = 10.minutes
@@ -70,6 +73,52 @@ class AnalyticsEngine @Inject constructor(
         maxSize = 30,
         defaultTtl = 15.minutes
     )
+    
+    /**
+     * Monitors memory pressure and reduces cache sizes when memory is constrained
+     */
+    private suspend fun handleMemoryPressure() {
+        val runtime = Runtime.getRuntime()
+        val usedMemory = runtime.totalMemory() - runtime.freeMemory()
+        val maxMemory = runtime.maxMemory()
+        val memoryUsageRatio = usedMemory.toFloat() / maxMemory.toFloat()
+        
+        if (memoryUsageRatio > MEMORY_PRESSURE_THRESHOLD) {
+            Timber.w("Memory pressure detected: ${(memoryUsageRatio * 100).toInt()}% used. Clearing expired cache entries.")
+            
+            // Clean up expired entries instead of trimming
+            progressMetricsCache.cleanupExpired()
+            workoutMetricsCache.cleanupExpired()
+            volumeCalendarCache.cleanupExpired()
+            
+            // If still too much memory, clear caches
+            if (memoryUsageRatio > 0.9f) {
+                progressMetricsCache.clear()
+                workoutMetricsCache.clear()
+                volumeCalendarCache.clear()
+                Timber.w("Critical memory pressure. All caches cleared.")
+            }
+            
+            // Force garbage collection
+            System.gc()
+            
+            val progressSize = progressMetricsCache.size()
+            val workoutSize = workoutMetricsCache.size()
+            val calendarSize = volumeCalendarCache.size()
+            Timber.d("Cache cleanup completed. Progress: $progressSize, Workout: $workoutSize, Calendar: $calendarSize")
+        }
+    }
+    
+    /**
+     * Clears all analytics caches to free memory
+     */
+    suspend fun clearAllCaches() {
+        Timber.d("Clearing all analytics caches")
+        progressMetricsCache.clear()
+        workoutMetricsCache.clear()
+        volumeCalendarCache.clear()
+        System.gc()
+    }
     
     /**
      * Calculates comprehensive progress metrics for a user within a time range
@@ -102,6 +151,9 @@ class AnalyticsEngine @Inject constructor(
                 )
             }
             
+            // Check memory pressure before expensive calculation
+            handleMemoryPressure()
+            
             // Use memoization for expensive calculation
             val cacheKey = createCacheKey("progress_metrics", userId, timeRange.toString())
             val metrics = progressMetricsCache.memoize(cacheKey, ttl = 10.minutes) {
@@ -109,19 +161,28 @@ class AnalyticsEngine @Inject constructor(
                 val startTime = System.currentTimeMillis()
                 
                 // Calculate metrics based on time range duration
-                val result = when {
-                    timeRange.getDurationInDays() <= 7 -> calculateWeeklyMetrics(userId, timeRange)
-                    timeRange.getDurationInDays() <= 30 -> calculateMonthlyMetrics(userId, timeRange)
-                    timeRange.getDurationInDays() <= 90 -> calculateQuarterlyMetrics(userId, timeRange)
-                    else -> calculateYearlyMetrics(userId, timeRange)
+                // Benchmark the calculation for performance tracking
+                val result = performanceBenchmark.measureWidgetCalculation("progress_metrics") {
+                    when {
+                        timeRange.getDurationInDays() <= 7 -> calculateWeeklyMetrics(userId, timeRange)
+                        timeRange.getDurationInDays() <= 30 -> calculateMonthlyMetrics(userId, timeRange)
+                        timeRange.getDurationInDays() <= 90 -> calculateQuarterlyMetrics(userId, timeRange)
+                        else -> calculateYearlyMetrics(userId, timeRange)
+                    }
                 }
                 
                 val executionTime = System.currentTimeMillis() - startTime
                 Timber.d("Analytics calculation completed in ${executionTime}ms")
                 
-                // Check execution time performance
+                // Check execution time performance and log to benchmark
                 if (executionTime > MAX_CALCULATION_TIME_MS) {
                     Timber.w("Analytics calculation took ${executionTime}ms, exceeding target of ${MAX_CALCULATION_TIME_MS}ms")
+                }
+                
+                // Log performance verification periodically
+                if (System.currentTimeMillis() % 10 == 0L) {
+                    val report = performanceBenchmark.generatePerformanceReport()
+                    Timber.d("Performance Report:\n$report")
                 }
                 
                 result
@@ -258,6 +319,9 @@ class AnalyticsEngine @Inject constructor(
      */
     suspend fun calculateWorkoutMetrics(workoutId: com.example.liftrix.domain.model.WorkoutId): LiftrixResult<com.example.liftrix.domain.model.analytics.WorkoutMetrics> = withContext(Dispatchers.IO) {
         return@withContext try {
+            // Check memory pressure before expensive calculation
+            handleMemoryPressure()
+            
             // Use memoization for expensive workout calculations
             val cacheKey = createCacheKey("workout_metrics", workoutId.value)
             val metrics = workoutMetricsCache.memoize(cacheKey, ttl = 30.minutes) {

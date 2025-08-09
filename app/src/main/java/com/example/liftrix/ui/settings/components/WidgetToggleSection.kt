@@ -399,7 +399,7 @@ private fun WidgetToggleSectionPreview() {
         val sampleWidgets = listOf(
             AnalyticsWidget.TotalVolume,
             AnalyticsWidget.WorkoutFrequency,
-            AnalyticsWidget.ConsistencyStreak
+            AnalyticsWidget.WorkoutStreak
         )
         
         val samplePreferences = WidgetPreferences(

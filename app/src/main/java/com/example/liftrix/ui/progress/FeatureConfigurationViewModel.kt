@@ -131,6 +131,9 @@ class FeatureConfigurationViewModel @Inject constructor(
                     is FeatureConfigurationEvent.DismissOnboarding -> {
                         dismissOnboarding()
                     }
+                    is FeatureConfigurationEvent.DismissMigrationNotification -> {
+                        dismissMigrationNotification()
+                    }
                 }
             } catch (exception: Exception) {
                 handleError(
@@ -508,6 +511,35 @@ class FeatureConfigurationViewModel @Inject constructor(
                 )
                 updateErrorState(error)
                 Timber.e(exception, "Failed to dismiss onboarding")
+            }
+        }
+    }
+    
+    /**
+     * Dismisses the migration notification.
+     */
+    private fun dismissMigrationNotification() {
+        viewModelScope.launch {
+            try {
+                updateState { currentState ->
+                    when (currentState) {
+                        is UiState.Success -> {
+                            val updatedData = currentState.data.copy(
+                                showMigrationNotification = false
+                            )
+                            UiState.Success(updatedData)
+                        }
+                        else -> currentState
+                    }
+                }
+                Timber.d("Migration notification dismissed")
+            } catch (exception: Exception) {
+                val error = LiftrixError.UnknownError(
+                    errorMessage = "Failed to dismiss migration notification",
+                    analyticsContext = mapOf("operation" to "dismissMigrationNotification")
+                )
+                updateErrorState(error)
+                Timber.e(exception, "Failed to dismiss migration notification")
             }
         }
     }

@@ -536,7 +536,7 @@ internal fun WidgetRenderer(
             )
         }
         
-        AnalyticsWidget.ConsistencyStreak -> {
+        AnalyticsWidget.WorkoutStreak -> {
             val basicData = widgetData as? BasicWidgetData
             val metricData = basicData?.let { basic ->
                 com.example.liftrix.domain.model.analytics.MetricWidgetData(
@@ -552,7 +552,7 @@ internal fun WidgetRenderer(
                     comparisonPeriod = basic.secondaryValue ?: ""
                 )
             }
-            ConsistencyStreakWidget(
+            WorkoutStreakWidget(
                 data = metricData,
                 onRefresh = {},
                 onClick = onClick,
@@ -560,75 +560,11 @@ internal fun WidgetRenderer(
             )
         }
         
-        AnalyticsWidget.CaloriesBurned -> {
-            val basicData = widgetData as? BasicWidgetData
-            val metricData = basicData?.let { basic ->
-                com.example.liftrix.domain.model.analytics.MetricWidgetData(
-                    widgetType = widget,
-                    lastUpdated = basic.lastUpdated,
-                    isLoading = isLoading,
-                    error = null,
-                    primaryValue = basic.primaryValue,
-                    unit = "cal",
-                    secondaryValue = basic.secondaryValue ?: "",
-                    trend = basic.trend ?: TrendDirection.STABLE,
-                    trendPercentage = 0f,
-                    comparisonPeriod = basic.secondaryValue ?: ""
-                )
-            }
-            CaloriesBurnedWidget(
-                data = metricData,
-                onRefresh = {},
-                onClick = onClick,
-                modifier = modifier
-            )
-        }
+        // CaloriesBurned widget removed - using AverageDuration instead
         
-        AnalyticsWidget.DailyCalories -> {
-            val basicData = widgetData as? BasicWidgetData
-            val metricData = basicData?.let { basic ->
-                com.example.liftrix.domain.model.analytics.MetricWidgetData(
-                    widgetType = widget,
-                    lastUpdated = basic.lastUpdated,
-                    isLoading = isLoading,
-                    error = null,
-                    primaryValue = basic.primaryValue,
-                    unit = "cal",
-                    secondaryValue = "400", // Daily goal
-                    trend = basic.trend ?: TrendDirection.STABLE,
-                    trendPercentage = 0f,
-                    comparisonPeriod = basic.secondaryValue ?: ""
-                )
-            }
-            DailyCaloriesWidget(
-                data = metricData,
-                onRefresh = {},
-                onClick = onClick,
-                modifier = modifier
-            )
-        }
+        // DailyCalories widget removed - using existing widgets
         
-        AnalyticsWidget.WeeklyCalorieTrend -> {
-            val basicData = widgetData as? BasicWidgetData
-            // Create simple chart data for weekly trend
-            val sampleChartData = ChartData(
-                dataPoints = listOf(
-                    ChartDataPoint(kotlinx.datetime.LocalDate(2024, 1, 1), 1200f),
-                    ChartDataPoint(kotlinx.datetime.LocalDate(2024, 1, 2), 1450f),
-                    ChartDataPoint(kotlinx.datetime.LocalDate(2024, 1, 3), 1380f),
-                    ChartDataPoint(kotlinx.datetime.LocalDate(2024, 1, 4), 1520f)
-                ),
-                title = "Weekly Calorie Trend",
-                valueUnit = "cal",
-                chartType = ChartType.LINE
-            )
-            ProgressChart(
-                data = sampleChartData,
-                isLoading = isLoading,
-                onClick = onClick,
-                modifier = modifier
-            )
-        }
+        // WeeklyCalorieTrend widget removed - use VolumeTrends instead
         
         AnalyticsWidget.ProgressChart,
         AnalyticsWidget.OneRMProgression,
@@ -688,7 +624,7 @@ private fun createSampleWidgetData(widget: AnalyticsWidget): WidgetData {
             unit = "sessions",
             trend = TrendDirection.STABLE
         )
-        AnalyticsWidget.ConsistencyStreak -> BasicWidgetData(
+        AnalyticsWidget.WorkoutStreak -> BasicWidgetData(
             widgetType = widget,
             lastUpdated = kotlinx.datetime.Clock.System.now(),
             primaryValue = "12 days",
@@ -704,30 +640,9 @@ private fun createSampleWidgetData(widget: AnalyticsWidget): WidgetData {
             unit = "min",
             trend = TrendDirection.STABLE
         )
-        AnalyticsWidget.CaloriesBurned -> BasicWidgetData(
-            widgetType = widget,
-            lastUpdated = kotlinx.datetime.Clock.System.now(),
-            primaryValue = "347 cal",
-            secondaryValue = "Today",
-            unit = "cal",
-            trend = TrendDirection.UP
-        )
-        AnalyticsWidget.DailyCalories -> BasicWidgetData(
-            widgetType = widget,
-            lastUpdated = kotlinx.datetime.Clock.System.now(),
-            primaryValue = "347 cal",
-            secondaryValue = "of 400 goal",
-            unit = "cal",
-            trend = TrendDirection.UP
-        )
-        AnalyticsWidget.WeeklyCalorieTrend -> BasicWidgetData(
-            widgetType = widget,
-            lastUpdated = kotlinx.datetime.Clock.System.now(),
-            primaryValue = "1,520 cal",
-            secondaryValue = "This week",
-            unit = "cal",
-            trend = TrendDirection.UP
-        )
+        // CaloriesBurned removed - use AverageDuration sample data
+        // DailyCalories removed - using existing widget data
+        // WeeklyCalorieTrend removed - use VolumeTrends instead
         else -> BasicWidgetData(
             widgetType = widget,
             lastUpdated = kotlinx.datetime.Clock.System.now(),
@@ -764,10 +679,8 @@ private fun WidgetContainerPreview() {
             widgets = listOf(
                 AnalyticsWidget.WorkoutFrequency,
                 AnalyticsWidget.TotalVolume, 
-                AnalyticsWidget.ConsistencyStreak,
-                AnalyticsWidget.CaloriesBurned,
+                AnalyticsWidget.WorkoutStreak,
                 AnalyticsWidget.AverageDuration,
-                AnalyticsWidget.DailyCalories,
                 AnalyticsWidget.ProgressChart
             ),
             configuration = DashboardConfiguration.Intermediate,

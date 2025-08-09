@@ -293,4 +293,24 @@ class PreferencesServiceImpl @Inject constructor(
             WidgetLayoutMode.SECTIONS -> DashboardLayoutMode.SECTIONS
         }
     }
+    
+    override suspend fun saveWidgetPreferences(preferences: WidgetPreferences): LiftrixResult<Unit> = 
+        withContext(dispatcher) {
+            runCatching {
+                preferencesRepository.saveWidgetPreferences(preferences)
+                    .getOrThrow()
+            }.fold(
+                onSuccess = { Result.success(Unit) },
+                onFailure = { throwable ->
+                    Result.failure(LiftrixError.BusinessLogicError(
+                        code = "save_preferences",
+                        errorMessage = "Failed to save widget preferences: ${throwable.message}",
+                        analyticsContext = mapOf(
+                            "userId" to preferences.userId,
+                            "operation" to "saveWidgetPreferences"
+                        )
+                    ))
+                }
+            )
+        }
 }

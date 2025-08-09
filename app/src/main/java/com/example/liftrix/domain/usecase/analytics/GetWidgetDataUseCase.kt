@@ -95,7 +95,7 @@ class GetWidgetDataUseCase @Inject constructor(
                         "chartData" to listOf(2000, 2200, 2400, 2600, 2500)
                     )
                 }
-                AnalyticsWidget.DurationChart -> {
+                AnalyticsWidget.ProgressChart -> {
                     mapOf(
                         "averageDuration" to 65,
                         "totalTime" to 325,
@@ -119,7 +119,7 @@ class GetWidgetDataUseCase @Inject constructor(
                         "topExercises" to listOf("Bench Press", "Squat", "Deadlift")
                     )
                 }
-                AnalyticsWidget.CaloriesBurned -> {
+                AnalyticsWidget.AverageDuration -> {
                     mapOf(
                         "dailyCalories" to 420,
                         "weeklyTotal" to 1680,

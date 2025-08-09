@@ -90,7 +90,7 @@ import com.example.liftrix.data.local.entity.QRCodeMappingEntity
         UserSearchCacheEntity::class,
         QRCodeMappingEntity::class,
     ],
-    version = 39,
+    version = 42,
     exportSchema = true
 )
 @TypeConverters(

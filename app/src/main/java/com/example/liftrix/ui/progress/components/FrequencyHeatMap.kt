@@ -216,7 +216,7 @@ private fun DayLabelsRow() {
                     text = day.take(1),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    fontSize = 10.sp
+                    fontSize = 14.sp  // Updated to meet 14sp minimum requirement
                 )
             }
         }

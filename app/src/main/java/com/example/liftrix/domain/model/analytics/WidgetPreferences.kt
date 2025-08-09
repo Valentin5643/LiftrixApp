@@ -32,6 +32,7 @@ data class WidgetPreferences(
     val widgetSizes: Map<String, WidgetDisplaySize> = emptyMap(),
     val enableAutoRefresh: Boolean = true,
     val refreshIntervalMinutes: Int = 5,
+    val hasSeenWidgetMigrationNotice: Boolean = false,
     val lastModified: Instant = Clock.System.now()
 ) {
     
@@ -75,8 +76,8 @@ data class WidgetPreferences(
             return setOf(
                 AnalyticsWidget.TotalVolume.id,
                 AnalyticsWidget.WorkoutFrequency.id,
-                AnalyticsWidget.ConsistencyStreak.id,
-                AnalyticsWidget.CaloriesBurned.id
+                AnalyticsWidget.WorkoutStreak.id,
+                AnalyticsWidget.AverageDuration.id
             )
         }
         
@@ -87,8 +88,8 @@ data class WidgetPreferences(
             return listOf(
                 AnalyticsWidget.TotalVolume.id,
                 AnalyticsWidget.WorkoutFrequency.id,
-                AnalyticsWidget.ConsistencyStreak.id,
-                AnalyticsWidget.CaloriesBurned.id
+                AnalyticsWidget.WorkoutStreak.id,
+                AnalyticsWidget.AverageDuration.id
             )
         }
         
@@ -366,6 +367,18 @@ data class WidgetPreferences(
         return copy(
             enableAutoRefresh = enabled,
             refreshIntervalMinutes = intervalMinutes,
+            lastModified = Clock.System.now()
+        )
+    }
+    
+    /**
+     * Marks the widget migration notice as seen by the user.
+     * 
+     * @return Updated WidgetPreferences with migration notice marked as seen
+     */
+    fun markMigrationNoticeSeen(): WidgetPreferences {
+        return copy(
+            hasSeenWidgetMigrationNotice = true,
             lastModified = Clock.System.now()
         )
     }

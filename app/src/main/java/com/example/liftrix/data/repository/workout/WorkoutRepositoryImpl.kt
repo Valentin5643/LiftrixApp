@@ -12,6 +12,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.ExercisePerformanceData
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
@@ -21,6 +22,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import kotlinx.datetime.LocalDate as KotlinxLocalDate
 import java.time.LocalDate
 import java.time.Duration
 import javax.inject.Inject
@@ -155,7 +157,7 @@ class WorkoutRepositoryImpl @Inject constructor(
             }
     }
 
-    override fun getWorkoutsByDate(date: LocalDate, userId: String): Flow<LiftrixResult<List<Workout>>> {
+    override fun getWorkoutsByDate(date: KotlinxLocalDate, userId: String): Flow<LiftrixResult<List<Workout>>> {
         return workoutDao.getWorkoutsByDateForUser(date.toString(), userId)
             .map { entities ->
                 try {
@@ -766,5 +768,32 @@ class WorkoutRepositoryImpl @Inject constructor(
         }
         
         return streak
+    }
+    
+    override suspend fun getExercisePerformanceData(
+        userId: String,
+        startDate: KotlinxLocalDate,
+        endDate: KotlinxLocalDate
+    ): LiftrixResult<List<ExercisePerformanceData>> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.DatabaseError(
+                    errorMessage = "Failed to get exercise performance data",
+                    operation = "READ",
+                    table = "workouts",
+                    analyticsContext = mapOf(
+                        "user_id" to userId,
+                        "start_date" to startDate.toString(),
+                        "end_date" to endDate.toString()
+                    )
+                )
+            }
+        ) {
+            // Placeholder implementation
+            // In a real implementation, this would query the database for exercise data
+            // and aggregate it by exercise across the specified date range
+            Timber.d("Getting exercise performance data for user $userId from $startDate to $endDate")
+            emptyList<ExercisePerformanceData>()
+        }
     }
 }

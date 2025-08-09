@@ -164,7 +164,20 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.Progress> {
-                    ProgressDashboardScreen()
+                    ProgressDashboardScreen(
+                        onNavigateToVolumeDetail = {
+                            navController.navigate(LiftrixRoute.VolumeAnalysisDetail)
+                        },
+                        onNavigateToOneRmDetail = {
+                            navController.navigate(LiftrixRoute.OneRmDetail)
+                        },
+                        onNavigateToMuscleGroupDetail = {
+                            navController.navigate(LiftrixRoute.MuscleGroupDetail)
+                        },
+                        onNavigateToFrequencyDetail = {
+                            navController.navigate(LiftrixRoute.WorkoutFrequencyDetail)
+                        }
+                    )
                 }
                 
                 composable<LiftrixRoute.Coach> {
@@ -560,6 +573,65 @@ fun UnifiedNavigationContainer(
                         }
                     )
                 }
+                
+                // Analytics Detail Screen Routes
+                composable<LiftrixRoute.VolumeAnalysisDetail> {
+                    com.example.liftrix.ui.progress.detail.VolumeAnalysisDetailScreen(
+                        navController = navController,
+                        groupBy = com.example.liftrix.domain.model.analytics.VolumeGrouping.BY_WEEK,
+                        timeRange = com.example.liftrix.domain.model.analytics.TimeRangeType.MONTH
+                    )
+                }
+                
+                composable<LiftrixRoute.OneRmDetail> {
+                    com.example.liftrix.ui.progress.detail.OneRmProgressionDetailScreen(
+                        navController = navController,
+                        exerciseIds = null, // Default to all exercises
+                        timeRange = com.example.liftrix.domain.model.analytics.TimeRangeType.MONTH
+                    )
+                }
+                
+                composable<LiftrixRoute.MuscleGroupDetail> {
+                    com.example.liftrix.ui.progress.detail.MuscleGroupDetailScreen(
+                        navController = navController,
+                        muscleGroup = null, // Default to all muscle groups
+                        timeRange = com.example.liftrix.domain.model.analytics.TimeRangeType.MONTH
+                    )
+                }
+                
+                composable<LiftrixRoute.ExerciseRankingDetail> {
+                    com.example.liftrix.ui.progress.detail.ExerciseRankingDetailScreen(
+                        navController = navController,
+                        sortBy = com.example.liftrix.domain.model.analytics.RankingMetric.PERFORMANCE_SCORE,
+                        limit = 20
+                    )
+                }
+                
+                composable<LiftrixRoute.WorkoutFrequencyDetail> {
+                    // TODO: Implement WorkoutFrequencyDetailScreen
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column {
+                            Text(
+                                text = "Workout Frequency Detail Screen",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Coming Soon",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Button(
+                                onClick = { navController.popBackStackSafely() },
+                                modifier = Modifier.padding(top = 16.dp)
+                            ) {
+                                Text("Back")
+                            }
+                        }
+                    }
+                }
             }
             
             // Persistent live session bar - only show if session exists and not on active workout screen
@@ -895,7 +967,11 @@ private fun NavigationAwareTopAppBar(
         "FolderManagement" to "Manage Folders",
         "CreateFolder" to "Create Folder",
         "EditFolder" to "Edit Folder",
-        "FolderSelection" to "Select Folder"
+        "FolderSelection" to "Select Folder",
+        "VolumeAnalysisDetail" to "Volume Analysis",
+        "OneRmDetail" to "1RM Progression", 
+        "MuscleGroupDetail" to "Muscle Groups",
+        "WorkoutFrequencyDetail" to "Workout Frequency"
     )
     
     // Check if current route is a main tab (should show global top bar)

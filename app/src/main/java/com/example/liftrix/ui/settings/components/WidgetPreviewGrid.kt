@@ -387,31 +387,31 @@ private fun AnalyticsWidget.getPreviewIcon(): ImageVector {
         AnalyticsWidget.TotalVolume -> Icons.Default.FitnessCenter
         AnalyticsWidget.VolumeCalendar -> Icons.Default.CalendarMonth
         AnalyticsWidget.StrengthProgress -> Icons.Default.TrendingUp
-        AnalyticsWidget.ConsistencyStreak -> Icons.Default.LocalFireDepartment
+        // ConsistencyStreak renamed to WorkoutStreak
         AnalyticsWidget.VolumeChart -> Icons.Default.BarChart
-        AnalyticsWidget.DurationChart -> Icons.Default.Timeline
+        // DurationChart renamed to ProgressChart
         AnalyticsWidget.FrequencyChart -> Icons.Default.Analytics
         AnalyticsWidget.WorkoutStreak -> Icons.Default.LocalFireDepartment
         AnalyticsWidget.PersonalRecords -> Icons.Default.EmojiEvents
         AnalyticsWidget.VolumeTrends -> Icons.Default.Analytics
         AnalyticsWidget.RecoveryMetrics -> Icons.Default.Healing
-        AnalyticsWidget.PerformanceAnalysis -> Icons.Default.Assessment
-        AnalyticsWidget.CaloriesBurned -> Icons.Default.LocalFireDepartment
-        AnalyticsWidget.DailyCalories -> Icons.Default.Today
-        AnalyticsWidget.WeeklyCalorieTrend -> Icons.Default.DateRange
+        // PerformanceAnalysis renamed to MonthlySummary
+        // CaloriesBurned widget removed
+        // DailyCalories widget removed
+        // WeeklyCalorieTrend widget removed
         AnalyticsWidget.AverageDuration -> Icons.Default.Timer
         AnalyticsWidget.VolumeLoadProgression -> Icons.Default.ShowChart
         AnalyticsWidget.ProgressChart -> Icons.Default.BarChart
         AnalyticsWidget.OneRMProgression -> Icons.Default.Equalizer
-        AnalyticsWidget.WeeklyTrends -> Icons.Default.Analytics
+        // WeeklyTrends renamed to VolumeTrends
         AnalyticsWidget.MuscleGroupDistribution -> Icons.Default.Category
-        AnalyticsWidget.RecoveryPatterns -> Icons.Default.Healing
-        AnalyticsWidget.TrainingIntensity -> Icons.Default.Speed
-        AnalyticsWidget.ExerciseVariety -> Icons.Default.Diversity1
-        AnalyticsWidget.TimeOfDayAnalysis -> Icons.Default.Schedule
-        AnalyticsWidget.SetCompletionRate -> Icons.Default.CheckCircle
+        // RecoveryPatterns renamed to RecoveryMetrics
+        // TrainingIntensity widget removed
+        // ExerciseVariety widget removed
+        // TimeOfDayAnalysis widget removed
+        // SetCompletionRate widget removed
         AnalyticsWidget.MonthlySummary -> Icons.Default.CalendarViewMonth
-        AnalyticsWidget.GoalAchievement -> Icons.Default.Flag
+        // GoalAchievement widget removed
     }
 }
 
@@ -424,31 +424,31 @@ private fun generatePreviewData(widget: AnalyticsWidget): String {
         AnalyticsWidget.TotalVolume -> "12.5K lbs"
         AnalyticsWidget.VolumeCalendar -> "Jan 2025"
         AnalyticsWidget.StrengthProgress -> "+8.2%"
-        AnalyticsWidget.ConsistencyStreak -> "12 days"
+        // ConsistencyStreak renamed to WorkoutStreak
         AnalyticsWidget.VolumeChart -> "Trending ↗"
-        AnalyticsWidget.DurationChart -> "45 min avg"
+        // DurationChart renamed to ProgressChart
         AnalyticsWidget.FrequencyChart -> "Weekly view"
         AnalyticsWidget.WorkoutStreak -> "7 days"
         AnalyticsWidget.PersonalRecords -> "3 new PRs"
         AnalyticsWidget.VolumeTrends -> "↗ +15%"
         AnalyticsWidget.RecoveryMetrics -> "Good"
-        AnalyticsWidget.PerformanceAnalysis -> "Excellent"
-        AnalyticsWidget.CaloriesBurned -> "2,450 cal"
-        AnalyticsWidget.DailyCalories -> "850 today"
-        AnalyticsWidget.WeeklyCalorieTrend -> "↗ +12%"
+        // PerformanceAnalysis renamed to MonthlySummary
+        // CaloriesBurned widget removed
+        // DailyCalories widget removed
+        // WeeklyCalorieTrend widget removed
         AnalyticsWidget.AverageDuration -> "42 min"
         AnalyticsWidget.VolumeLoadProgression -> "Progressive"
         AnalyticsWidget.ProgressChart -> "All-time"
         AnalyticsWidget.OneRMProgression -> "225 lbs"
-        AnalyticsWidget.WeeklyTrends -> "This week"
+        // WeeklyTrends renamed to VolumeTrends
         AnalyticsWidget.MuscleGroupDistribution -> "Balanced"
-        AnalyticsWidget.RecoveryPatterns -> "Optimal"
-        AnalyticsWidget.TrainingIntensity -> "7.5 RPE"
-        AnalyticsWidget.ExerciseVariety -> "High"
-        AnalyticsWidget.TimeOfDayAnalysis -> "Morning"
-        AnalyticsWidget.SetCompletionRate -> "94%"
+        // RecoveryPatterns renamed to RecoveryMetrics
+        // TrainingIntensity widget removed
+        // ExerciseVariety widget removed
+        // TimeOfDayAnalysis widget removed
+        // SetCompletionRate widget removed
         AnalyticsWidget.MonthlySummary -> "Jan recap"
-        AnalyticsWidget.GoalAchievement -> "85%"
+        // GoalAchievement widget removed
     }
 }
 
@@ -462,8 +462,8 @@ private fun WidgetPreviewGridPreview() {
         val sampleWidgets = listOf(
             AnalyticsWidget.TotalVolume,
             AnalyticsWidget.WorkoutFrequency,
-            AnalyticsWidget.ConsistencyStreak,
-            AnalyticsWidget.CaloriesBurned,
+            AnalyticsWidget.WorkoutStreak,
+            AnalyticsWidget.AverageDuration,
             AnalyticsWidget.StrengthProgress,
             AnalyticsWidget.VolumeChart
         )
