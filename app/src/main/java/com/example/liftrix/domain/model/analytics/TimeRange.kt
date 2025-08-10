@@ -66,17 +66,6 @@ data class TimeRange(
     
     companion object {
         /**
-         * Creates a TimeRange for the last week
-         */
-        fun lastWeek(): TimeRange {
-            val calendar = Calendar.getInstance()
-            val endDate = calendar.time
-            calendar.add(Calendar.DAY_OF_YEAR, -7)
-            val startDate = calendar.time
-            return TimeRange(startDate, endDate, TimeRangeType.WEEK)
-        }
-        
-        /**
          * Creates a TimeRange for the last month
          */
         fun lastMonth(): TimeRange {
@@ -88,17 +77,6 @@ data class TimeRange(
         }
         
         /**
-         * Creates a TimeRange for the last quarter
-         */
-        fun lastQuarter(): TimeRange {
-            val calendar = Calendar.getInstance()
-            val endDate = calendar.time
-            calendar.add(Calendar.MONTH, -3)
-            val startDate = calendar.time
-            return TimeRange(startDate, endDate, TimeRangeType.QUARTER)
-        }
-        
-        /**
          * Creates a TimeRange for the last six months
          */
         fun lastSixMonths(): TimeRange {
@@ -107,17 +85,6 @@ data class TimeRange(
             calendar.add(Calendar.MONTH, -6)
             val startDate = calendar.time
             return TimeRange(startDate, endDate, TimeRangeType.SIX_MONTHS)
-        }
-        
-        /**
-         * Creates a TimeRange for the last year
-         */
-        fun lastYear(): TimeRange {
-            val calendar = Calendar.getInstance()
-            val endDate = calendar.time
-            calendar.add(Calendar.YEAR, -1)
-            val startDate = calendar.time
-            return TimeRange(startDate, endDate, TimeRangeType.YEAR)
         }
         
         /**

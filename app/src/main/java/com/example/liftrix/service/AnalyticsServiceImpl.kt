@@ -420,7 +420,7 @@ class AnalyticsServiceImpl @Inject constructor(
     private suspend fun loadTotalVolumeData(userId: String): WidgetData {
         return try {
             // Get recent volume data from analytics engine
-            val timeRange = com.example.liftrix.domain.model.analytics.TimeRange.lastWeek()
+            val timeRange = com.example.liftrix.domain.model.analytics.TimeRange.lastMonth()
             val metricsResult = analyticsEngine.calculateProgressMetrics(userId, timeRange)
             
             metricsResult.fold(
@@ -464,7 +464,7 @@ class AnalyticsServiceImpl @Inject constructor(
     
     private suspend fun loadWorkoutFrequencyData(userId: String): WidgetData {
         return try {
-            val timeRange = com.example.liftrix.domain.model.analytics.TimeRange.lastWeek()
+            val timeRange = com.example.liftrix.domain.model.analytics.TimeRange.lastMonth()
             val metricsResult = analyticsEngine.calculateProgressMetrics(userId, timeRange)
             
             metricsResult.fold(
@@ -1080,7 +1080,7 @@ class AnalyticsServiceImpl @Inject constructor(
     
     private suspend fun loadWeeklyTrendsData(userId: String): WidgetData {
         return try {
-            val timeRange = com.example.liftrix.domain.model.analytics.TimeRange.lastWeek()
+            val timeRange = com.example.liftrix.domain.model.analytics.TimeRange.lastMonth()
             val metricsResult = analyticsEngine.calculateProgressMetrics(userId, timeRange)
             
             metricsResult.fold(
@@ -1121,7 +1121,7 @@ class AnalyticsServiceImpl @Inject constructor(
     
     private suspend fun loadMuscleGroupDistributionData(userId: String): WidgetData {
         return try {
-            val timeRange = com.example.liftrix.domain.model.analytics.TimeRange.lastWeek()
+            val timeRange = com.example.liftrix.domain.model.analytics.TimeRange.lastMonth()
             val metricsResult = analyticsEngine.calculateProgressMetrics(userId, timeRange)
             
             metricsResult.fold(
@@ -1162,7 +1162,7 @@ class AnalyticsServiceImpl @Inject constructor(
     
     private suspend fun loadRecoveryPatternsData(userId: String): WidgetData {
         return try {
-            val timeRange = com.example.liftrix.domain.model.analytics.TimeRange.lastWeek()
+            val timeRange = com.example.liftrix.domain.model.analytics.TimeRange.lastMonth()
             val metricsResult = analyticsEngine.calculateProgressMetrics(userId, timeRange)
             
             metricsResult.fold(
@@ -1207,7 +1207,7 @@ class AnalyticsServiceImpl @Inject constructor(
     
     private suspend fun checkUserHasWorkoutData(userId: String): Boolean {
         return try {
-            val timeRange = com.example.liftrix.domain.model.analytics.TimeRange.lastWeek()
+            val timeRange = com.example.liftrix.domain.model.analytics.TimeRange.lastMonth()
             val metricsResult = analyticsEngine.calculateProgressMetrics(userId, timeRange)
             
             metricsResult.fold(

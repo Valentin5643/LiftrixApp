@@ -289,9 +289,9 @@ fun rememberTimeRangeState(
  */
 fun suggestOptimalTimeRange(dataPointCount: Int): TimeRangeType {
     return when {
-        dataPointCount < 30 -> TimeRangeType.MONTH
-        dataPointCount < 90 -> TimeRangeType.QUARTER
-        else -> TimeRangeType.YEAR
+        dataPointCount < 90 -> TimeRangeType.MONTH
+        dataPointCount < 270 -> TimeRangeType.SIX_MONTHS
+        else -> TimeRangeType.ALL_TIME
     }
 }
 
@@ -313,7 +313,7 @@ private fun GlobalTimeRangeSelectorPreview() {
             
             // Compact selector
             CompactTimeRangeSelector(
-                selectedTimeRange = TimeRangeType.WEEK,
+                selectedTimeRange = TimeRangeType.MONTH,
                 onTimeRangeChange = { },
                 maxItems = 3
             )

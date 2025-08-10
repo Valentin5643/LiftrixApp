@@ -251,12 +251,8 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
     ): VolumeAnalysisData {
         val now = Clock.System.now()
         val daysBack = when (timeRange) {
-            TimeRangeType.WEEK -> 7
             TimeRangeType.MONTH -> 30
-            TimeRangeType.QUARTER -> 90
-            TimeRangeType.THREE_MONTHS -> 90
             TimeRangeType.SIX_MONTHS -> 180
-            TimeRangeType.YEAR -> 365
             TimeRangeType.ALL_TIME -> 365 * 2 // 2 years for all-time data
         }
 

@@ -136,8 +136,8 @@ fun rememberWindowSizeClass(): WindowSizeClass {
         val heightDp = configuration.screenHeightDp.dp
         
         val widthSizeClass = when {
-            Breakpoints.isCompact(widthDp) -> WindowWidthSizeClass.COMPACT
-            Breakpoints.isMedium(widthDp) -> WindowWidthSizeClass.MEDIUM
+            com.example.liftrix.ui.components.layouts.Breakpoints.isCompact(widthDp) -> WindowWidthSizeClass.COMPACT
+            com.example.liftrix.ui.components.layouts.Breakpoints.isMedium(widthDp) -> WindowWidthSizeClass.MEDIUM
             else -> WindowWidthSizeClass.EXPANDED
         }
         

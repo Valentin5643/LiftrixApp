@@ -17,6 +17,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 import kotlinx.datetime.toJavaLocalDate
+import timber.log.Timber
 import java.time.format.DateTimeFormatter
 
 /**
@@ -155,15 +156,26 @@ suspend fun WorkoutDao.getWorkoutsInDateRangeWithMetrics(
     startDate: LocalDate,
     endDate: LocalDate
 ): Map<LocalDate, WorkoutDayMetrics> {
-    val workouts = getWorkoutsInDateRangeForUser(
-        userId = userId,
-        startDate = startDate.toDateString(),
-        endDate = endDate.toDateString()
-    )
+    val workouts = try {
+        kotlinx.coroutines.withTimeout(5000) { // 5 second timeout for database call
+            getWorkoutsInDateRangeForUser(
+                userId = userId,
+                startDate = startDate.toDateString(),
+                endDate = endDate.toDateString()
+            )
+        }
+    } catch (timeout: kotlinx.coroutines.TimeoutCancellationException) {
+        Timber.e("Database query timed out after 5s for user: $userId, dates: ${startDate.toDateString()} to ${endDate.toDateString()}")
+        throw RuntimeException("Database query timed out after 5 seconds. Check database performance and indexes.")
+    }
     
-    if (workouts.isEmpty()) return emptyMap()
+    if (workouts.isEmpty()) {
+        return emptyMap()
+    }
     
-    return workouts.calculateDailyMetrics()
+    val dailyMetrics = workouts.calculateDailyMetrics()
+    
+    return dailyMetrics
 }
 
 /**

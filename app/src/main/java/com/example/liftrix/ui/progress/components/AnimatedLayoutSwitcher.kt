@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.DashboardConfiguration
 import com.example.liftrix.domain.model.analytics.WidgetData
+import com.example.liftrix.domain.model.analytics.DashboardLayoutMode
 import com.example.liftrix.ui.common.WindowSizeClass
 
 /**

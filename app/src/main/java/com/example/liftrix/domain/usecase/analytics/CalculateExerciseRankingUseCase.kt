@@ -56,12 +56,8 @@ class CalculateExerciseRankingUseCase @Inject constructor(
             // Calculate date range
             val endDate = now.toLocalDateTime(timeZone).date
             val startDate = when (request.timeRange) {
-                TimeRangeType.WEEK -> endDate.minus(DatePeriod(days = 7))
                 TimeRangeType.MONTH -> endDate.minus(DatePeriod(days = 30))
-                TimeRangeType.QUARTER -> endDate.minus(DatePeriod(days = 90))
-                TimeRangeType.THREE_MONTHS -> endDate.minus(DatePeriod(days = 90))
                 TimeRangeType.SIX_MONTHS -> endDate.minus(DatePeriod(days = 180))
-                TimeRangeType.YEAR -> endDate.minus(DatePeriod(days = 365))
                 TimeRangeType.ALL_TIME -> LocalDate.fromEpochDays(0) // Start from epoch for all-time data
             }
             
@@ -401,7 +397,7 @@ class CalculateExerciseRankingUseCase @Inject constructor(
 data class ExerciseRankingRequest(
     val metric: RankingMetric,
     val limit: Int = 20,
-    val timeRange: TimeRangeType = TimeRangeType.QUARTER
+    val timeRange: TimeRangeType = TimeRangeType.SIX_MONTHS
 )
 
 /**

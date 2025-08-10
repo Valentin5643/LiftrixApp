@@ -430,7 +430,102 @@ enum class DashboardLayoutMode(val displayName: String, val description: String)
     GRID("Grid", "Traditional grid layout with equal-sized widgets"),
     SECTIONS("Sections", "Organized sections with collapsible categories"),
     LIST("List", "Vertical list layout optimized for scrolling"),
-    CUSTOM("Custom", "User-defined custom layout configuration")
+    CUSTOM("Custom", "User-defined custom layout configuration");
+    
+    /**
+     * Indicates if this layout mode supports responsive column changes
+     */
+    val isResponsive: Boolean
+        get() = when (this) {
+            GRID, SECTIONS -> true
+            LIST, CUSTOM -> false
+        }
+    
+    /**
+     * Maximum recommended widgets for this layout mode
+     */
+    val maxRecommendedWidgets: Int
+        get() = when (this) {
+            GRID -> 12
+            SECTIONS -> 25
+            LIST -> 8
+            CUSTOM -> 20
+        }
+    
+    companion object {
+        /**
+         * Default layout mode for new dashboards
+         */
+        val DEFAULT = SECTIONS
+        
+        /**
+         * Recommended layout mode based on widget count
+         */
+        fun getRecommendedMode(widgetCount: Int): DashboardLayoutMode {
+            return when {
+                widgetCount <= 6 -> GRID
+                widgetCount <= 12 -> SECTIONS
+                widgetCount <= 25 -> SECTIONS
+                else -> CUSTOM
+            }
+        }
+        
+        /**
+         * Get layout mode optimized for screen width and user preferences
+         */
+        fun getOptimalMode(
+            screenWidthDp: Int, 
+            widgetCount: Int, 
+            userPreference: DashboardLayoutMode? = null
+        ): DashboardLayoutMode {
+            // Always honor user preference, especially CUSTOM mode
+            userPreference?.let { preference ->
+                return preference
+            }
+            
+            // Only apply automatic optimization when no user preference is set
+            return when {
+                screenWidthDp < 400 -> LIST // Phone portrait
+                screenWidthDp < 600 && widgetCount <= 8 -> GRID // Phone landscape
+                widgetCount <= 12 -> GRID // Tablet with moderate widgets
+                else -> SECTIONS // Tablet with many widgets
+            }
+        }
+        
+        /**
+         * Get layout mode optimized for widget categories (FR-003 requirement)
+         */
+        fun getOptimalModeForWidgets(
+            widgets: List<AnalyticsWidget>,
+            screenWidthDp: Int,
+            userPreference: DashboardLayoutMode? = null
+        ): DashboardLayoutMode {
+            // Always honor user preference first
+            userPreference?.let { preference ->
+                return preference
+            }
+            
+            // Count CHARTS category widgets
+            val chartWidgetCount = widgets.count { widget ->
+                widget.category == WidgetCategory.CHARTS
+            }
+            val totalWidgets = widgets.size
+            
+            // Prefer LIST mode for chart-heavy dashboards (FR-003)
+            val chartRatio = if (totalWidgets > 0) chartWidgetCount.toFloat() / totalWidgets else 0f
+            
+            return when {
+                // If >60% charts or screen is narrow, prefer LIST for better chart visibility
+                chartRatio > 0.6f || screenWidthDp < 400 -> LIST
+                // For moderate chart presence, use SECTIONS for organized grouping
+                chartRatio > 0.3f -> SECTIONS
+                // Default optimization for non-chart-heavy dashboards
+                screenWidthDp < 600 && totalWidgets <= 8 -> GRID
+                totalWidgets <= 12 -> GRID
+                else -> SECTIONS
+            }
+        }
+    }
 }
 
 /**

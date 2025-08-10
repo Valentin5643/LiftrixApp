@@ -157,10 +157,9 @@ data class CalorieTrackingState(
      */
     fun getTimeRangeDisplayText(): String {
         return when {
-            currentTimeRange == TimeRange.lastWeek() -> "Last Week"
             currentTimeRange == TimeRange.lastMonth() -> "Last Month"
-            currentTimeRange == TimeRange.lastQuarter() -> "Last Quarter"
-            currentTimeRange == TimeRange.lastYear() -> "Last Year"
+            currentTimeRange == TimeRange.lastSixMonths() -> "Last 6 Months"
+            currentTimeRange == TimeRange.allTime() -> "All Time"
             else -> "Custom Range"
         }
     }

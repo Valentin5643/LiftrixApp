@@ -73,6 +73,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import com.example.liftrix.ui.common.state.UiState
@@ -94,9 +95,8 @@ import com.example.liftrix.core.formatting.WeightFormatter
 import com.example.liftrix.ui.progress.components.WidgetContainer
 import com.example.liftrix.ui.progress.components.WidgetLayoutMode
 import com.example.liftrix.ui.progress.components.ResponsiveDashboardLayout
-import com.example.liftrix.ui.progress.components.DashboardLayoutMode
+import com.example.liftrix.domain.model.analytics.DashboardLayoutMode
 import com.example.liftrix.ui.common.rememberWindowSizeClass
-import com.example.liftrix.ui.progress.components.CaloriesBurnedCard
 import com.example.liftrix.ui.progress.components.DailyCaloriesCard
 import com.example.liftrix.ui.progress.components.WeeklyCalorieTrendCard
 import com.example.liftrix.ui.export.ExportBottomSheet
@@ -183,24 +183,18 @@ fun ProgressDashboardScreen(
         validationResult.logResult()
     }
 
-    // Optimized StateFlow collection with performance monitoring
-    val chartsState by chartsViewModel.uiState.collectAsOptimizedState()
-    val widgetState by widgetViewModel.uiState.collectAsOptimizedState() 
-    val preferencesState by preferencesViewModel.uiState.collectAsOptimizedState()
-    val summaryState by summaryViewModel.uiState.collectAsOptimizedState()
-    val calorieState by calorieViewModel.uiState.collectAsOptimizedState()
-    val featuresState by featuresViewModel.uiState.collectAsOptimizedState()
-    val coordinatorState by coordinator.uiState.collectAsOptimizedState()
+    val chartsState by chartsViewModel.uiState.collectAsStateWithLifecycle()
+    val widgetState by widgetViewModel.uiState.collectAsStateWithLifecycle() 
+    val preferencesState by preferencesViewModel.uiState.collectAsStateWithLifecycle()
+    val summaryState by summaryViewModel.uiState.collectAsStateWithLifecycle()
+    val calorieState by calorieViewModel.uiState.collectAsStateWithLifecycle()
+    val featuresState by featuresViewModel.uiState.collectAsStateWithLifecycle()
+    val coordinatorState by coordinator.uiState.collectAsStateWithLifecycle()
     
     
-    // Add timeout handling for stuck loading states
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(20000) // 20 second timeout
-        if (chartsState is UiState.Loading || widgetState is UiState.Loading || calorieState is UiState.Loading) {
-            Timber.w("Analytics modules timeout - forcing refresh")
-            coordinator.handleEvent(CoordinatorEvent.RefreshAllData)
-        }
-    }
+    
+    // REMOVED: Screen-level timeout monitoring - now handled properly in ViewModel
+    // The ViewModel now monitors timeout from actual fetch start, not screen init
 
     // Set up navigation callbacks for AnalyticsWidgetViewModel
     LaunchedEffect(onNavigateToVolumeDetail, onNavigateToOneRmDetail, onNavigateToMuscleGroupDetail, onNavigateToFrequencyDetail) {
@@ -215,7 +209,8 @@ fun ProgressDashboardScreen(
     }
     
     // Connect Coordinator events to ViewModels
-    LaunchedEffect(coordinator) {
+    // RACE CONDITION FIX: Use Unit as key to prevent LaunchedEffect re-triggering on recomposition
+    LaunchedEffect(Unit) {
         coordinator.coordinatorEvents.collect { event ->
             // Forward coordinator events to all ViewModels that handle them
             chartsViewModel.handleCoordinatorEvent(event)
@@ -228,9 +223,16 @@ fun ProgressDashboardScreen(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        // Extract data from UiState wrappers, using default states for loading/error cases
+        val extractedChartsState = when (val currentChartsState = chartsState) {
+            is UiState.Success -> currentChartsState.data
+            is UiState.Loading -> ProgressChartsState()
+            is UiState.Error -> ProgressChartsState()
+            null -> ProgressChartsState()
+            else -> ProgressChartsState()
+        }
+        
         ProgressDashboardContent(
-            chartsState = (chartsState as? UiState.Success)?.data ?: ProgressChartsState(),
+            chartsState = extractedChartsState,
             widgetState = (widgetState as? UiState.Success)?.data ?: AnalyticsWidgetState(),
             preferencesState = (preferencesState as? UiState.Success)?.data ?: UserPreferencesState(),
             summaryState = (summaryState as? UiState.Success)?.data ?: ProgressSummaryState(),
@@ -308,11 +310,11 @@ private fun ProgressDashboardContent(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = GridSystem.screenPadding),
-        verticalArrangement = Arrangement.spacedBy(GridSystem.gapMedium)
+            .padding(horizontal = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp) // Tighter spacing (FR-005)
     ) {
         item {
-            Spacer(modifier = Modifier.height(GridSystem.spacing2))
+            Spacer(modifier = Modifier.height(8.dp))
         }
 
         // Modern screen header with enhanced typography and export functionality
@@ -320,7 +322,7 @@ private fun ProgressDashboardContent(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = GridSystem.spacing2),
+                    .padding(bottom = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -419,12 +421,8 @@ private fun ProgressDashboardContent(
                 selectedTimeRange = chartsState.currentTimeRange.type,
                 onTimeRangeChange = { newTimeRangeType ->
                     val newTimeRange = when (newTimeRangeType) {
-                        com.example.liftrix.domain.model.analytics.TimeRangeType.WEEK -> com.example.liftrix.domain.model.analytics.TimeRange.lastWeek()
                         com.example.liftrix.domain.model.analytics.TimeRangeType.MONTH -> com.example.liftrix.domain.model.analytics.TimeRange.lastMonth()
-                        com.example.liftrix.domain.model.analytics.TimeRangeType.QUARTER -> com.example.liftrix.domain.model.analytics.TimeRange.lastQuarter()
-                        com.example.liftrix.domain.model.analytics.TimeRangeType.THREE_MONTHS -> com.example.liftrix.domain.model.analytics.TimeRange.lastQuarter() // Use quarter for 3 months
                         com.example.liftrix.domain.model.analytics.TimeRangeType.SIX_MONTHS -> com.example.liftrix.domain.model.analytics.TimeRange.lastSixMonths()
-                        com.example.liftrix.domain.model.analytics.TimeRangeType.YEAR -> com.example.liftrix.domain.model.analytics.TimeRange.lastYear()
                         com.example.liftrix.domain.model.analytics.TimeRangeType.ALL_TIME -> com.example.liftrix.domain.model.analytics.TimeRange.allTime()
                     }
                     onChartsEvent(ProgressChartsEvent.TimePeriodChanged(newTimeRange))
@@ -479,7 +477,7 @@ private fun ProgressDashboardContent(
             }
         }
 
-        // Charts section
+        // Charts section with enhanced debugging
         item {
             ChartsSection(
                 chartsState = chartsState,
@@ -491,7 +489,7 @@ private fun ProgressDashboardContent(
         }
 
         item {
-            Spacer(modifier = Modifier.height(GridSystem.spacing3))
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
     
@@ -531,7 +529,7 @@ private fun ProgressDashboardContent(
 }
 
 /**
- * Reusable container for chart sections
+ * Enhanced chart container matching mock design with improved visual hierarchy
  */
 @Composable
 private fun ChartContainer(
@@ -539,71 +537,55 @@ private fun ChartContainer(
     icon: ImageVector,
     isLoading: Boolean,
     hasData: Boolean,
+    isWaitingForAuth: Boolean = false,
     onRefresh: () -> Unit,
     content: @Composable () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(20.dp)
         ) {
-            // Chart header
+            // Chart header with enhanced styling
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold
+                )
                 
-                IconButton(
-                    onClick = onRefresh,
-                    enabled = !isLoading
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Refresh $title",
-                        tint = if (isLoading) {
-                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
+                if (!hasData && !isLoading) {
+                    Text(
+                        text = "No data available",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Chart content
+            // Chart content with better spacing
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(200.dp),
+                    .height(220.dp),
                 contentAlignment = Alignment.Center
             ) {
                 when {
                     isLoading -> {
-                        LoadingChartPlaceholder()
+                        LoadingChartPlaceholder(isWaitingForAuth = isWaitingForAuth)
                     }
                     hasData -> {
                         content()
@@ -618,10 +600,12 @@ private fun ChartContainer(
 }
 
 /**
- * Loading state for charts
+ * Loading state for charts with authentication awareness
  */
 @Composable
-private fun LoadingChartPlaceholder() {
+private fun LoadingChartPlaceholder(
+    isWaitingForAuth: Boolean = false
+) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -632,7 +616,11 @@ private fun LoadingChartPlaceholder() {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Loading chart data...",
+            text = if (isWaitingForAuth) {
+                "Waiting for user authentication..."
+            } else {
+                "Loading chart data..."
+            },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -750,7 +738,7 @@ private fun LoadingStateContent() {
 }
 
 /**
- * Modern error state content with enhanced visual design
+ * Modern error state content with enhanced visual design matching mock
  */
 @Composable
 private fun ErrorStateContent(
@@ -762,26 +750,44 @@ private fun ErrorStateContent(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        UnifiedWorkoutCard(
-            title = "Error Loading Progress",
-            subtitle = error,
-            modifier = Modifier.padding(GridSystem.screenPadding),
-            onClick = { /* No click action for error card */ }
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.padding(24.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Error,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(GridSystem.iconXLarge)
+                    modifier = Modifier.size(48.dp)
                 )
                 
-                // Actions are now in the card's action slot
+                Text(
+                    text = "Error Loading Progress",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    fontWeight = FontWeight.SemiBold
+                )
+                
+                Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    textAlign = TextAlign.Center
+                )
+                
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     PrimaryActionButton(
                         text = "Retry",
@@ -811,48 +817,203 @@ private fun ChartsSection(
     weightFormatter: WeightFormatter,
     modifier: Modifier = Modifier
 ) {
+    // Extract chartsState to local variable to enable smart cast throughout function
+    val currentChartsState = chartsState
+    
+
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Volume chart - Modern chart with bezier curves and gradients
-        val volumeChartData = (chartsState.volumeChart as? AsyncData.Success)?.data ?: emptyList()
-        
-        // Convert repository VolumeDataPoint to analytics VolumeDataPoint for ModernVolumeChart
-        val modernVolumeData = volumeChartData.map { repositoryPoint ->
-            AnalyticsVolumeDataPoint(
-                date = repositoryPoint.date,
-                volume = Weight.fromKilograms(repositoryPoint.totalVolume.toDouble()),
-                workoutCount = 1, // Repository data doesn't have workout count, default to 1
-                exerciseCount = repositoryPoint.exerciseCount
-            )
+        // Volume chart - Modern chart with bezier curves and gradients  
+        val volumeChartData = when (val volumeChart = currentChartsState.volumeChart) {
+            is AsyncData.Success -> volumeChart.data
+            is AsyncData.Loading -> emptyList()
+            is AsyncData.Failure -> emptyList()
+            is AsyncData.NotAsked -> emptyList()
         }
         
-        ModernVolumeChart(
-            data = modernVolumeData,
-            timeRange = chartsState.currentTimeRange.type,
-            modifier = Modifier.fillMaxWidth(),
-            onDataPointSelected = { dataPoint ->
-                // Optional: Handle data point selection for navigation to detail view
-                Timber.d("Volume data point selected: ${dataPoint.date} - ${dataPoint.volume}")
-            },
-            showPersonalRecords = true,
-            animationDuration = 300
-        )
         
-        // Duration chart - always show chart with data or zero values
-        WorkoutDurationChart(
-            data = (chartsState.durationChart as? AsyncData.Success)?.data ?: emptyList(),
-            isLoading = chartsState.durationChart is AsyncData.Loading,
-            modifier = Modifier.fillMaxWidth()
-        )
+        // STABILITY FIX: Add userId null guard to prevent rendering when userId is unstable
+        if (currentChartsState.userId == null) {
+            // Show "Please log in" state, not loading
+            ChartContainer(
+                title = "Workout Volume", 
+                icon = Icons.Default.ShowChart,
+                isLoading = false,
+                hasData = false,
+                isWaitingForAuth = true,
+                onRefresh = { /* Handle refresh */ }
+            ) {
+                // Show login required message instead of infinite loading
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth().padding(16.dp)
+                ) {
+                    Text(
+                        text = "Please log in to view charts",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+            }
+        } else {
+            // Check if we're waiting for authentication before loading volume data
+            val isVolumeWaitingForAuth = currentChartsState.isWaitingForAuth() && currentChartsState.volumeChart is AsyncData.NotAsked
+            val isVolumeLoading = currentChartsState.volumeChart is AsyncData.Loading
+            
+            
+            if (isVolumeWaitingForAuth) {
+            // Show authentication-aware loading state for volume chart
+            ChartContainer(
+                title = "Workout Volume", 
+                icon = Icons.Default.ShowChart,
+                isLoading = true,
+                hasData = false,
+                isWaitingForAuth = true,
+                onRefresh = { /* Handle refresh */ }
+            ) { /* Empty content when waiting for auth */ }
+        } else if (isVolumeLoading) {
+            // Show loading state for volume chart
+            ChartContainer(
+                title = "Workout Volume", 
+                icon = Icons.Default.ShowChart,
+                isLoading = true,
+                hasData = false,
+                isWaitingForAuth = false,
+                onRefresh = { /* Handle refresh */ }
+            ) { /* Empty content while loading */ }
+        } else {
+            // Convert repository VolumeDataPoint to analytics VolumeDataPoint for ModernVolumeChart
+            val modernVolumeData = volumeChartData.map { repositoryPoint ->
+                AnalyticsVolumeDataPoint(
+                    date = repositoryPoint.date,
+                    volume = Weight.fromKilograms(repositoryPoint.totalVolume.toDouble()),
+                    workoutCount = 1, // Repository data doesn't have workout count, default to 1
+                    exerciseCount = repositoryPoint.exerciseCount
+                )
+            }
+            
+            ModernVolumeChart(
+                data = modernVolumeData,
+                timeRange = currentChartsState.currentTimeRange.type,
+                modifier = Modifier.fillMaxWidth(),
+                onDataPointSelected = { dataPoint ->
+                    // Optional: Handle data point selection for navigation to detail view
+                    Timber.d("Volume data point selected: ${dataPoint.date} - ${dataPoint.volume}")
+                },
+                showPersonalRecords = true,
+                animationDuration = 300
+            )
+        }
+        } // End userId null guard for volume chart
         
-        // Frequency chart - always show chart with data or zero values
-        WorkoutFrequencyHeatmap(
-            data = (chartsState.frequencyChart as? AsyncData.Success)?.data ?: emptyList(),
-            isLoading = chartsState.frequencyChart is AsyncData.Loading,
-            modifier = Modifier.fillMaxWidth()
-        )
+        // Duration chart - PROGRESSIVE loading: show individual chart state
+        // STABILITY FIX: Add userId null guard for duration chart
+        if (currentChartsState.userId == null) {
+            // Show "Please log in" state, not loading
+            ChartContainer(
+                title = "Workout Duration", 
+                icon = Icons.Default.Timer,
+                isLoading = false,
+                hasData = false,
+                isWaitingForAuth = true,
+                onRefresh = { /* Handle refresh */ }
+            ) {
+                // Show login required message instead of infinite loading
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth().padding(16.dp)
+                ) {
+                    Text(
+                        text = "Please log in to view charts",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+            }
+        } else {
+            val durationChartData = (currentChartsState.durationChart as? AsyncData.Success)?.data ?: emptyList()
+            val isDurationLoading = currentChartsState.durationChart is AsyncData.Loading
+            
+            // Check if we're waiting for authentication before loading data
+            val isDurationWaitingForAuth = currentChartsState.isWaitingForAuth() && currentChartsState.durationChart is AsyncData.NotAsked
+            
+            
+            // Show authentication-aware loading state
+            if (isDurationWaitingForAuth) {
+                ChartContainer(
+                    title = "Workout Duration", 
+                    icon = Icons.Default.Timer,
+                    isLoading = true,
+                    hasData = false,
+                    isWaitingForAuth = true,
+                    onRefresh = { /* Handle refresh */ }
+                ) { /* Empty content when waiting for auth */ }
+            } else {
+                // PROGRESSIVE LOADING: Always show chart, let individual components handle their own loading states
+                WorkoutDurationChart(
+                    data = durationChartData,
+                    isLoading = isDurationLoading,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+        
+        // Frequency chart - PROGRESSIVE loading: show individual chart state  
+        // STABILITY FIX: Add userId null guard for frequency chart
+        if (currentChartsState.userId == null) {
+            // Show "Please log in" state, not loading
+            ChartContainer(
+                title = "Workout Frequency", 
+                icon = Icons.Default.TableChart,
+                isLoading = false,
+                hasData = false,
+                isWaitingForAuth = true,
+                onRefresh = { /* Handle refresh */ }
+            ) {
+                // Show login required message instead of infinite loading
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth().padding(16.dp)
+                ) {
+                    Text(
+                        text = "Please log in to view charts",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+            }
+        } else {
+            val frequencyChartData = (currentChartsState.frequencyChart as? AsyncData.Success)?.data ?: emptyList()
+            val isFrequencyLoading = currentChartsState.frequencyChart is AsyncData.Loading
+            
+            // Check if we're waiting for authentication before loading data
+            val isFrequencyWaitingForAuth = currentChartsState.isWaitingForAuth() && currentChartsState.frequencyChart is AsyncData.NotAsked
+            
+            
+            // Show authentication-aware loading state
+            if (isFrequencyWaitingForAuth) {
+                ChartContainer(
+                    title = "Workout Frequency", 
+                    icon = Icons.Default.TableChart,
+                    isLoading = true,
+                    hasData = false,
+                    isWaitingForAuth = true,
+                    onRefresh = { /* Handle refresh */ }
+                ) { /* Empty content when waiting for auth */ }
+            } else {
+                // PROGRESSIVE LOADING: Always show chart, let individual components handle their own loading states
+                WorkoutFrequencyHeatmap(
+                    data = frequencyChartData,
+                    isLoading = isFrequencyLoading,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
         
         // Note: Charts now always show with zero values instead of empty states
     }
@@ -1136,14 +1297,7 @@ private fun CalorieSection(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
                     ) {
-                        CaloriesBurnedCard(
-                            caloriesBurned = domainSummary.averageDailyCalories,
-                            subtitle = "Daily Average",
-                            trend = calculateCalorieTrend(domainSummary),
-                            isLoading = calorieState.calorieSummary is AsyncData.Loading,
-                            onClick = { onEvent(CalorieTrackingEvent.NavigateToCalorieHistory) },
-                            modifier = Modifier.weight(1f)
-                        )
+
                         
                         WeeklyCalorieTrendCard(
                             weeklyCalories = getWeeklyCaloriesList(domainSummary),
@@ -1165,15 +1319,30 @@ private fun CalorieSection(
 }
 
 /**
- * Helper function to create default widget data
+ * Helper function to create default widget data - Clean zero-state display (FR-004)
  */
 private fun createDefaultWidgetData(widget: com.example.liftrix.domain.model.analytics.AnalyticsWidget): WidgetData {
+    // Clean zero-state display with appropriate units per FR-004
+    val (defaultValue, defaultUnit) = when (widget) {
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.TotalVolume -> "0" to "kg"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutStreak -> "0" to "days"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.AverageDuration -> "0" to "min"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutFrequency -> "0" to "workouts"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.StrengthProgress -> "0" to "kg"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.PersonalRecords -> "0" to "records"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.OneRMProgression -> "0" to "kg"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.MuscleGroupDistribution -> "0" to "%"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeLoadProgression -> "0" to "kg"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.RecoveryMetrics -> "0" to "h"
+        else -> "0" to ""
+    }
+    
     return MetricWidgetData(
         widgetType = widget,
         lastUpdated = kotlinx.datetime.Clock.System.now(),
-        primaryValue = "0",
-        secondaryValue = "Start working out to see data",
-        unit = "",
+        primaryValue = defaultValue,
+        secondaryValue = null, // Remove repetitive messaging
+        unit = defaultUnit,
         trend = com.example.liftrix.domain.model.analytics.TrendDirection.STABLE
     )
 }

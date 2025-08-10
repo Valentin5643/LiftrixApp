@@ -11,6 +11,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.model.MuscleGroup
 import com.example.liftrix.ui.progress.detail.MuscleGroupDetailViewModel
+import com.example.liftrix.ui.progress.components.charts.MuscleGroupPieChart
+import com.example.liftrix.ui.progress.components.charts.MuscleGroup as ChartMuscleGroup
 
 /**
  * Muscle Group Distribution Chart
@@ -45,20 +47,22 @@ fun MuscleGroupDistributionChart(
         Spacer(modifier = Modifier.height(16.dp))
         
         if (data.isNotEmpty()) {
-            // Convert to the format expected by the pie chart
-            val chartData = data.associate { distribution ->
-                distribution.muscleGroup to distribution.totalVolume
+            // Convert data to the format expected by MuscleGroupPieChart
+            val pieChartData = data.associate { distribution ->
+                mapDomainToChartMuscleGroup(distribution.muscleGroup) to distribution.percentage
             }
             
-            // Use the existing pie chart component
-            // TODO: This is a placeholder - need to create or adapt the actual pie chart component
-            // to work with the MuscleGroupDetailViewModel data structure
-            MuscleGroupPieChartPlaceholder(
-                data = data,
-                selectedMuscleGroup = selectedMuscleGroup,
-                onSliceClick = onSliceClick,
-                showPercentages = showPercentages,
-                showLegend = showLegend
+            // Use the actual MuscleGroupPieChart component
+            MuscleGroupPieChart(
+                data = pieChartData,
+                onSliceClick = { chartMuscleGroup ->
+                    val domainMuscleGroup = mapChartToDomainMuscleGroup(chartMuscleGroup)
+                    onSliceClick?.invoke(domainMuscleGroup)
+                },
+                showLegend = showLegend,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
             )
         } else {
             EmptyChartState()
@@ -66,57 +70,6 @@ fun MuscleGroupDistributionChart(
     }
 }
 
-/**
- * Placeholder for the actual pie chart implementation
- * TODO: Replace with actual interactive pie chart component
- */
-@Composable
-private fun MuscleGroupPieChartPlaceholder(
-    data: List<MuscleGroupDetailViewModel.MuscleGroupDistribution>,
-    selectedMuscleGroup: MuscleGroup?,
-    onSliceClick: (MuscleGroup) -> Unit,
-    showPercentages: Boolean,
-    showLegend: Boolean
-) {
-    Column {
-        // Pie chart placeholder
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(200.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "🥧 Interactive Pie Chart",
-                style = MaterialTheme.typography.headlineSmall
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // Legend
-        if (showLegend) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = "Muscle Groups",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Medium
-                )
-                
-                data.sortedByDescending { it.percentage }.forEach { distribution ->
-                    MuscleGroupLegendItem(
-                        distribution = distribution,
-                        isSelected = distribution.muscleGroup == selectedMuscleGroup,
-                        onClick = { onSliceClick(distribution.muscleGroup) },
-                        showPercentages = showPercentages
-                    )
-                }
-            }
-        }
-    }
-}
 
 /**
  * Individual legend item for muscle group distribution
@@ -209,5 +162,37 @@ private fun EmptyChartState() {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+/**
+ * Map domain MuscleGroup to chart MuscleGroup
+ */
+private fun mapDomainToChartMuscleGroup(domainMuscleGroup: MuscleGroup): ChartMuscleGroup {
+    return when (domainMuscleGroup) {
+        MuscleGroup.CHEST -> ChartMuscleGroup.CHEST
+        MuscleGroup.BACK -> ChartMuscleGroup.BACK
+        MuscleGroup.SHOULDERS -> ChartMuscleGroup.SHOULDERS
+        MuscleGroup.TRICEPS, MuscleGroup.BICEPS, MuscleGroup.FOREARMS -> ChartMuscleGroup.ARMS
+        MuscleGroup.QUADRICEPS, MuscleGroup.HAMSTRINGS, MuscleGroup.GLUTES, MuscleGroup.CALVES -> ChartMuscleGroup.LEGS
+        MuscleGroup.CORE, MuscleGroup.LOWER_BACK -> ChartMuscleGroup.CORE
+        MuscleGroup.CARDIO -> ChartMuscleGroup.CARDIO
+        else -> ChartMuscleGroup.OTHER
+    }
+}
+
+/**
+ * Map chart MuscleGroup back to domain MuscleGroup (for primary mapping)
+ */
+private fun mapChartToDomainMuscleGroup(chartMuscleGroup: ChartMuscleGroup): MuscleGroup {
+    return when (chartMuscleGroup) {
+        ChartMuscleGroup.CHEST -> MuscleGroup.CHEST
+        ChartMuscleGroup.BACK -> MuscleGroup.BACK
+        ChartMuscleGroup.SHOULDERS -> MuscleGroup.SHOULDERS
+        ChartMuscleGroup.ARMS -> MuscleGroup.BICEPS // Use biceps as primary arm muscle
+        ChartMuscleGroup.LEGS -> MuscleGroup.QUADRICEPS // Use quads as primary leg muscle
+        ChartMuscleGroup.CORE -> MuscleGroup.CORE // Use core as primary core muscle
+        ChartMuscleGroup.CARDIO -> MuscleGroup.CARDIO
+        ChartMuscleGroup.OTHER -> MuscleGroup.FULL_BODY // Use full body as fallback
     }
 }

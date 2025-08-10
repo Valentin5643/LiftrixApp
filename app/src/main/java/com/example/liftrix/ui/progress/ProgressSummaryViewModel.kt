@@ -475,13 +475,10 @@ class ProgressSummaryViewModel @Inject constructor(
      * This addresses the missing methods in TimeRange companion object.
      */
     private fun PredefinedTimeRange.toTimeRange(): TimeRange = when (this) {
-        PredefinedTimeRange.LAST_WEEK -> TimeRange.lastWeek()
         PredefinedTimeRange.LAST_MONTH -> TimeRange.lastMonth()
-        PredefinedTimeRange.LAST_QUARTER -> TimeRange.lastQuarter()
-        PredefinedTimeRange.LAST_YEAR -> TimeRange.lastYear()
+        PredefinedTimeRange.LAST_SIX_MONTHS -> TimeRange.lastSixMonths()
         PredefinedTimeRange.THIS_MONTH -> createThisMonth()
-        PredefinedTimeRange.THIS_YEAR -> createThisYear()
-        PredefinedTimeRange.ALL_TIME -> createAllTime()
+        PredefinedTimeRange.ALL_TIME -> TimeRange.allTime()
     }
 
     /**

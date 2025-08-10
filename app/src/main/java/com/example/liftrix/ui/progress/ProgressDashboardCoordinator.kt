@@ -72,6 +72,11 @@ class ProgressDashboardCoordinator @Inject constructor(
     private val coordinatorState = MutableStateFlow(CoordinatorState())
 
     /**
+     * RACE CONDITION FIX: Track last time period to prevent duplicate events
+     */
+    private var lastTimePeriod: com.example.liftrix.domain.model.analytics.TimeRange? = null
+
+    /**
      * SharedFlow for broadcasting events to other ViewModels.
      * 
      * This flow allows other ViewModels to observe coordination events
@@ -97,6 +102,8 @@ class ProgressDashboardCoordinator @Inject constructor(
      * Initializes the coordinator by setting up reactive streams and starting monitoring.
      */
     private fun initializeCoordinator() {
+        Timber.d("🔍 AUTH-DEBUG: Coordinator initializing - starting auth monitoring")
+        
         // Start monitoring auth state changes
         observeAuthenticationState()
         
@@ -125,10 +132,13 @@ class ProgressDashboardCoordinator @Inject constructor(
         // Add initialization timeout safety
         viewModelScope.launch {
             kotlinx.coroutines.delay(5000) // 5 second delay
-            if (coordinatorState.value.currentUser is com.example.liftrix.ui.common.state.AsyncData.NotAsked) {
-                Timber.w("Coordinator initialization timeout - forcing auth check")
+            
+            val currentUserState = coordinatorState.value.currentUser
+            
+            if (currentUserState is com.example.liftrix.ui.common.state.AsyncData.NotAsked) {
                 // Force auth state check
                 val currentUser = authRepository.getCurrentUser()
+                
                 if (currentUser != null) {
                     _coordinatorEvents.tryEmit(CoordinatorEvent.UserAuthChanged(currentUser.uid))
                 }
@@ -164,8 +174,6 @@ class ProgressDashboardCoordinator @Inject constructor(
                     _coordinatorEvents.tryEmit(CoordinatorEvent.UserAuthChanged(user?.uid))
                     
                     updateUiState()
-                    
-                    Timber.d("Authentication state updated: ${user?.uid}")
                 }
         }
     }
@@ -493,6 +501,16 @@ class ProgressDashboardCoordinator @Inject constructor(
      * Handles time period change events and coordinates ViewModels to update accordingly.
      */
     private suspend fun handleTimePeriodChanged(event: CoordinatorEvent.TimePeriodChanged) {
+        // RACE CONDITION FIX: Prevent duplicate TimePeriodChanged events
+        val currentTimeRange = event.timeRange
+        if (lastTimePeriod != null && 
+            lastTimePeriod!!.startDate == currentTimeRange.startDate &&
+            lastTimePeriod!!.endDate == currentTimeRange.endDate) {
+            return
+        }
+        
+        lastTimePeriod = currentTimeRange
+        
         // Broadcast time period change to all ViewModels
         _coordinatorEvents.emit(event)
         

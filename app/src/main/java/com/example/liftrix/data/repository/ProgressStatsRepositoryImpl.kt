@@ -53,6 +53,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         startDate: LocalDate,
         endDate: LocalDate
     ): Flow<List<VolumeDataPoint>> = flow {
+        Timber.d("🔍 REPO-DEBUG: getWorkoutVolumeData() Flow starting for userId=$userId")
         val timeRange = TimeRange(
             java.util.Date.from(java.time.LocalDate.of(startDate.year, startDate.monthNumber, startDate.dayOfMonth).atStartOfDay(ZoneId.systemDefault()).toInstant()),
             java.util.Date.from(java.time.LocalDate.of(endDate.year, endDate.monthNumber, endDate.dayOfMonth).atStartOfDay(ZoneId.systemDefault()).toInstant())
@@ -60,19 +61,23 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         val cacheKey = com.example.liftrix.core.cache.CacheKeyUtils.createVolumeKey(userId, timeRange)
         
         // Check cache first
+        Timber.d("🔍 REPO-DEBUG: Checking repository cache for key=$cacheKey")
         val cachedEntry = cacheManager.get<List<VolumeDataPoint>>(cacheKey)
         if (cachedEntry != null && cachedEntry.isValid()) {
+            Timber.d("🔍 REPO-DEBUG: Repository cache HIT, emitting cached data")
             emit(cachedEntry.data)
             return@flow
         }
         
         // Cache miss - compute data
+        Timber.d("🔍 REPO-DEBUG: Repository cache MISS, calling DAO.getWorkoutsInDateRangeWithMetrics()")
         val dailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(
             userId, startDate, endDate
         )
+        Timber.d("🔍 REPO-DEBUG: DAO call completed, got ${dailyMetrics.size} metrics")
         
         val volumeData = dailyMetrics.toVolumeDataPoints()
-        
+        Timber.d("🔍 REPO-DEBUG: Converted to ${volumeData.size} VolumeDataPoints")
         
         // Cache the result for 1 hour
         cacheManager.put(cacheKey, volumeData, kotlin.time.Duration.parse("1h"))
@@ -80,7 +85,9 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         // Trigger sync event for volume data changes
         triggerSyncIfSignificantChange(userId, "volume_data", volumeData.size)
         
+        Timber.d("🔍 REPO-DEBUG: About to emit ${volumeData.size} VolumeDataPoints")
         emit(volumeData)
+        Timber.d("🔍 REPO-DEBUG: emit() completed successfully")
     }.catch { e ->
         Timber.e(e, "Failed to get workout volume data for user: $userId")
         emit(emptyList())
@@ -444,7 +451,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
             // Invalidate relevant cache entries
             val volumeCacheKey = com.example.liftrix.core.cache.CacheKeyUtils.createVolumeKey(
                 userId, 
-                TimeRange.lastWeek()
+                TimeRange.lastMonth()
             )
             cacheManager.invalidate(volumeCacheKey)
             

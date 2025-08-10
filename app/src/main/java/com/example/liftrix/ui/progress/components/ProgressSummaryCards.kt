@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.progress.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -93,17 +95,18 @@ fun ProgressSummaryCards(
                 // Primary stat card with animated progress ring
                 PrimaryStatCard(summaryData = summaryData)
                 
-                // Grid of compact stat cards
+                // Grid of metric cards (2x2) matching mock design
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
                     modifier = Modifier.height(200.dp),
-                    horizontalArrangement = Arrangement.spacedBy(GridSystem.gapMedium),
-                    verticalArrangement = Arrangement.spacedBy(GridSystem.gapMedium)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(getCompactStats(summaryData, weightUnit, weightFormatter)) { stat ->
-                        CompactStatCard(
+                    items(getMockCompactStats(summaryData, weightUnit, weightFormatter)) { stat ->
+                        MockMetricCard(
                             title = stat.title,
                             value = stat.value,
+                            subtitle = stat.subtitle,
                             trend = stat.trend,
                             onClick = { /* Handle stat click */ }
                         )
@@ -115,86 +118,116 @@ fun ProgressSummaryCards(
 }
 
 /**
- * Primary stat card with animated progress ring and enhanced visual hierarchy
+ * Primary stat card with animated progress ring matching mock design
  */
 @Composable
 private fun PrimaryStatCard(summaryData: ProgressSummary) {
     val workoutProgress = calculateWorkoutProgress(summaryData.totalWorkouts)
     val streakProgress = calculateStreakProgress(summaryData.currentStreak, summaryData.longestStreak)
     
-    LiftrixCard(
+    Card(
         modifier = Modifier.fillMaxWidth(),
-        contentDescription = "Primary workout statistics with progress visualization"
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.padding(20.dp)
         ) {
-            // Progress visualization
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
+            // Header matching mock style
+            Text(
+                text = "Progress Summary",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold
+            )
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                // Large circular progress indicator (matching mock)
                 Box(
                     contentAlignment = Alignment.Center
                 ) {
                     AnimatedProgressRing(
                         progress = workoutProgress,
-                        size = 80.dp,
-                        strokeWidth = 6.dp,
-                        color = LiftrixColors.Primary
+                        size = 100.dp,
+                        strokeWidth = 8.dp,
+                        color = MaterialTheme.colorScheme.primary
                     )
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
                             text = "${summaryData.totalWorkouts}",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.headlineLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
                             text = "workouts",
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-            }
-            
-            // Statistics column
-            Column(
-                modifier = Modifier.weight(1f).padding(start = GridSystem.spacing4),
-                verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
-            ) {
-                StatRow(
-                    icon = Icons.Default.LocalFireDepartment,
-                    label = "Current Streak",
-                    value = "${summaryData.currentStreak} days",
-                    progress = streakProgress
-                )
                 
-                StatRow(
-                    icon = Icons.Default.AccessTime,
-                    label = "Avg Duration",
-                    value = "${summaryData.averageDuration} min",
-                    progress = calculateDurationProgress(summaryData.averageDuration)
-                )
-                
-                StatRow(
-                    icon = Icons.Default.EmojiEvents,
-                    label = "Weekly Average",
-                    value = String.format("%.1f", summaryData.averageWorkoutsPerWeek),
-                    progress = summaryData.averageWorkoutsPerWeek / 7f
-                )
+                // Statistics column (matching mock layout)
+                Column(
+                    modifier = Modifier.weight(1f).padding(start = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    StatRowMock(
+                        label = "Current streak",
+                        value = "${summaryData.currentStreak} days"
+                    )
+                    
+                    StatRowMock(
+                        label = "Avg Duration",
+                        value = "${summaryData.averageDuration} min"
+                    )
+                    
+                    StatRowMock(
+                        label = "Weekly Average",
+                        value = String.format("%.1f", summaryData.averageWorkoutsPerWeek)
+                    )
+                }
             }
         }
     }
 }
 
 /**
- * Individual stat row with icon and mini progress indicator
+ * Stat row matching mock design - simplified without progress rings
+ */
+@Composable
+private fun StatRowMock(
+    label: String,
+    value: String
+) {
+    Column {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+/**
+ * Individual stat row with icon and mini progress indicator (legacy)
  */
 @Composable
 private fun StatRow(
@@ -278,7 +311,48 @@ private fun LoadingState() {
 }
 
 /**
- * Generate compact stat items for grid display
+ * Generate compact stat items matching mock design
+ */
+private fun getMockCompactStats(
+    summaryData: ProgressSummary,
+    weightUnit: com.example.liftrix.domain.model.WeightUnit,
+    weightFormatter: com.example.liftrix.core.formatting.WeightFormatter
+): List<MockCompactStatItem> {
+    // Convert total volume from kg to user's preferred unit
+    val totalVolumeInKg = summaryData.totalVolume.toDouble()
+    val totalVolumeInUserUnit = weightUnit.convertFromKilograms(totalVolumeInKg)
+    val formattedVolume = "${(totalVolumeInUserUnit / 1000).toInt()}K kg"
+    
+    return listOf(
+        MockCompactStatItem(
+            title = "Total Volume",
+            value = formattedVolume,
+            subtitle = "7 workouts",
+            trend = "+12%"
+        ),
+        MockCompactStatItem(
+            title = "Active Time",
+            value = "${(summaryData.totalActiveTime / 60).toInt()}h",
+            subtitle = "per workout",
+            trend = "+8%"
+        ),
+        MockCompactStatItem(
+            title = "Best Streak",
+            value = "${summaryData.longestStreak} days",
+            subtitle = "personal best",
+            trend = "+0%"
+        ),
+        MockCompactStatItem(
+            title = "Consistency",
+            value = "${((summaryData.averageWorkoutsPerWeek / 7f) * 100).toInt()}%",
+            subtitle = "weekly average",
+            trend = "+15%"
+        )
+    )
+}
+
+/**
+ * Generate compact stat items for grid display (legacy)
  */
 private fun getCompactStats(
     summaryData: ProgressSummary,
@@ -319,7 +393,17 @@ private fun getCompactStats(
 }
 
 /**
- * Data class for compact stat items
+ * Data class for mock compact stat items
+ */
+private data class MockCompactStatItem(
+    val title: String,
+    val value: String,
+    val subtitle: String,
+    val trend: String
+)
+
+/**
+ * Data class for compact stat items (legacy)
  */
 private data class CompactStatItem(
     val title: String,
@@ -342,6 +426,68 @@ private fun calculateStreakProgress(currentStreak: Int, longestStreak: Int): Flo
         min(currentStreak.toFloat() / longestStreak.toFloat(), 1f)
     } else {
         0f
+    }
+}
+
+/**
+ * Mock metric card matching the design in reference images
+ */
+@Composable
+private fun MockMetricCard(
+    title: String,
+    value: String,
+    subtitle: String,
+    trend: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Medium
+            )
+            
+            Text(
+                text = value,
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold
+            )
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                
+                Text(
+                    text = trend,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
     }
 }
 

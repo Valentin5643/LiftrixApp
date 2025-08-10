@@ -33,12 +33,8 @@ object TimeRangeAdapter {
      */
     fun toDomainTimeRange(uiTimeRange: TimeRangeType): DomainTimeRange {
         return when (uiTimeRange) {
-            TimeRangeType.WEEK -> DomainTimeRange.lastWeek()
             TimeRangeType.MONTH -> DomainTimeRange.lastMonth()
-            TimeRangeType.QUARTER -> DomainTimeRange.lastQuarter()
-            TimeRangeType.THREE_MONTHS -> DomainTimeRange.lastQuarter()
             TimeRangeType.SIX_MONTHS -> DomainTimeRange.lastSixMonths()
-            TimeRangeType.YEAR -> DomainTimeRange.lastYear()
             TimeRangeType.ALL_TIME -> DomainTimeRange.allTime()
         }
     }
@@ -375,12 +371,8 @@ object TimeRangeOptimizations {
      */
     fun getOptimalBatchSize(timeRange: TimeRangeType): Int {
         return when (timeRange) {
-            TimeRangeType.WEEK -> 50
             TimeRangeType.MONTH -> 100
-            TimeRangeType.QUARTER -> 200
-            TimeRangeType.THREE_MONTHS -> 200
             TimeRangeType.SIX_MONTHS -> 350
-            TimeRangeType.YEAR -> 500
             TimeRangeType.ALL_TIME -> 1000
         }
     }

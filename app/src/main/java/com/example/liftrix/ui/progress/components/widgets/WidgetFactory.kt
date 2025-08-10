@@ -299,7 +299,7 @@ object WidgetFactory {
     }
     
     /**
-     * Creates loading data for a widget type
+     * Creates loading data for a widget type - Clean zero-state display (FR-004)
      */
     fun createLoadingData(widget: AnalyticsWidget): WidgetData {
         return when (widget.category) {
@@ -311,7 +311,7 @@ object WidgetFactory {
                 currentValue = 0f,
                 targetValue = 1f,
                 progressPercentage = 0f,
-                unit = "",
+                unit = getCleanUnitForWidget(widget),
                 milestones = emptyList(),
                 isLoading = true
             )
@@ -325,6 +325,27 @@ object WidgetFactory {
                 timeRange = "",
                 isLoading = true
             )
+        }
+    }
+    
+    /**
+     * Gets clean unit for widget - consistent with FR-004 clean zero-state display
+     */
+    private fun getCleanUnitForWidget(widget: AnalyticsWidget): String {
+        return when (widget) {
+            AnalyticsWidget.TotalVolume -> "kg"
+            AnalyticsWidget.WorkoutStreak -> "days"
+            AnalyticsWidget.AverageDuration -> "min"
+            AnalyticsWidget.WorkoutFrequency -> "workouts"
+            AnalyticsWidget.StrengthProgress -> "kg"
+            AnalyticsWidget.PersonalRecords -> "records"
+            AnalyticsWidget.OneRMProgression -> "kg"
+            AnalyticsWidget.MuscleGroupDistribution -> "%"
+            AnalyticsWidget.VolumeLoadProgression -> "kg"
+            AnalyticsWidget.RecoveryMetrics -> "h"
+            AnalyticsWidget.VolumeTrends -> "kg"
+            AnalyticsWidget.MonthlySummary -> ""
+            else -> ""
         }
     }
     

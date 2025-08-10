@@ -72,12 +72,13 @@ app/src/main/java/com/example/liftrix/
 - **Database Migrations** - 37 migration files with social/profile schema updates (v11→v37)
 - **Firebase Sync Workers** - Background synchronization with conflict resolution
 - **Analytics Engine** - Performance-critical calculations with caching
-- **Analytics Dashboard System** - 25+ widgets with responsive design and multi-tier caching
+- **Progress Dashboard System** - 15 strength-focused widgets with 2-column mobile grid and interactive detail views
 - **Widget Management System** - Complex preference handling and real-time updates
 - **Profile Management System** - Complete profile workflow with achievements, images, and privacy
 - **Social Discovery System** - User search with privacy controls, QR code generation, connection management
 - **Achievement Calculation Engine** - Real-time achievement detection with streak calculations
 - **Profile Image Pipeline** - Upload, crop, cache, and sync with error recovery
+- **Chart Modernization System** - Interactive charts with bezier curves, gradients, and tap interactions
 
 ### Common Debug Scenarios
 - **User Data Leakage**: Check all queries include `WHERE user_id = :userId`
@@ -192,6 +193,26 @@ userSearchRepository.getPublicProfile(profileUserId, viewerId)
 userSearchRepository.getPublicProfile(profileUserId, null)
 ```
 
+### Progress Dashboard Navigation
+```kotlin
+// ✅ Use type-safe navigation with @Serializable data classes
+navController.navigate(OneRmProgressionDetail(exerciseIds = listOf("1", "2"), timeRange = TimeRange.SIX_MONTHS))
+
+// ❌ Don't use string-based navigation for detail views
+navController.navigate("oneRmDetail/1,2/SIX_MONTHS")
+```
+
+### Chart Performance Optimization
+```kotlin
+// ✅ Use remember() for expensive chart calculations
+val chartData = remember(rawData, timeRange) {
+    processChartData(rawData, timeRange)
+}
+
+// ❌ Don't recalculate chart data on every recomposition
+val chartData = processChartData(rawData, timeRange)
+```
+
 ## 🔍 Quick Reference
 
 ### Key Classes to Know
@@ -203,9 +224,14 @@ userSearchRepository.getPublicProfile(profileUserId, null)
 - `UnifiedWorkoutCard` - Foundational card component for workout screens
 - `ModernActionButton` - Three-tier button system (Primary/Secondary/Tertiary)
 - `LiftrixSpacing` - Semantic spacing tokens for consistent layouts
-- `AnalyticsWidget` - 25+ widget definitions with complexity-based refresh rates
-- `AnalyticsWidgetManager` - Widget configuration and personalization system
-- `ResponsiveDashboardLayout` - Adaptive layout engine for 320dp-1200dp+ screens
+- `ProgressDashboardScreen` - Main Progress tab with 2-column mobile grid layout
+- `ResponsiveDashboardLayout` - Adaptive grid layout (2-col mobile, 3-col tablet, 4-col desktop)
+- `AdaptiveWidgetGrid` - LazyVerticalGrid with dynamic column calculation and card spanning
+- `AnalyticsDetailScreen` - Reusable template for detail views with consistent scaffolding
+- `OneRmProgressionDetailScreen` - Interactive 1RM detail view with filtering and time ranges
+- `MuscleGroupDetailScreen` - Muscle group analysis with distribution charts and balance recommendations
+- `ModernVolumeChart` - Enhanced chart with bezier curves, gradients, and PR markers
+- `GlobalTimeRangeSelector` - Synchronized time selector affecting all charts simultaneously
 - `ProfileViewModel` - Enhanced profile management with achievements and image upload
 - `UserProfile` - Complete profile model with social features and achievements
 - `UserSearchRepository` - Social discovery with privacy filtering and QR code generation
@@ -228,6 +254,11 @@ userSearchRepository.getPublicProfile(profileUserId, null)
 - Achievement system runs automatically after workout completion
 - Image uploads include progress tracking and error recovery
 - Privacy settings sync immediately with proper user feedback
+- Progress dashboard uses 15 strength-focused widgets with deprecated widgets filtered out
+- Grid layout adapts based on screen width: 2-col (<600dp), 3-col (600-767dp), 4-col (768dp+)
+- Detail views use type-safe @Serializable navigation with parameter passing
+- Charts implement bezier curves, gradient fills, and tap interactions with haptic feedback
+- Time range changes synchronize across all charts with 300ms transitions
 
 ### Performance Targets
 - 60fps UI rendering with optimized animations
@@ -244,10 +275,13 @@ For comprehensive guidance on Liftrix systems:
 - **[UI Redesign Guide](docs/ui-redesign-guide.md)** - Complete visual redesign overview and implementation details
 - **[Component Library](docs/component-library.md)** - Detailed documentation of unified UI components with usage examples
 
-### Analytics Dashboard System
-- **[Dashboard Architecture](docs/dashboard-architecture.md)** - Complete system overview, data flow, and integration points
-- **[Widget Development Guide](docs/widget-development-guide.md)** - Step-by-step guide for creating new widgets with examples  
-- **[Performance Optimization](docs/performance-optimization.md)** - Performance best practices, monitoring, and 60fps targets
+### Progress Dashboard System
+- **Grid-Based Layout**: 2-column mobile layout with responsive breakpoints (2/3/4 columns)
+- **15 Strength-Focused Widgets**: Curated widget set with deprecated calorie/duration widgets filtered out
+- **Interactive Detail Views**: 4 detail screens (1RM Progression, Volume Analysis, Muscle Groups, Exercise Rankings)
+- **Type-Safe Navigation**: @Serializable routes with parameter passing (OneRmProgressionDetail, VolumeAnalysisDetail, etc.)
+- **Modern Chart System**: Bezier curves, gradient fills, interactive markers, and synchronized time selectors
+- **Performance Optimized**: <500ms detail screen loading, 60fps chart interactions, <100ms layout calculations
 
 ### Social Discovery System  
 - **Privacy-First Architecture**: All profile data respects user privacy settings with viewer context
@@ -333,6 +367,15 @@ Column(
 - **Include accessibility** - components have built-in WCAG 2.1 AA compliance
 - **Leverage animations** - components include 150ms press feedback and haptic response
 - **Use Material 3 color roles** - Never reference colors directly, always use `MaterialTheme.colorScheme.*`
+
+### Progress Dashboard Integration Rules
+- **Use AdaptiveWidgetGrid** for responsive grid layouts with automatic column calculation
+- **Extend AnalyticsDetailScreen** for consistent detail view scaffolding and navigation
+- **Filter deprecated widgets** using `DEPRECATED_WIDGET_IDS` list (removes 13 calorie/duration widgets)
+- **Implement bezier curves** in charts using `cubicTo()` with proper control point calculations
+- **Add gradient fills** under chart lines using `Brush.verticalGradient()` with Persian Green/Tiffany Blue
+- **Support full-width cards** using `GridItemSpan(columns)` for complex visualizations
+- **Use TimeRange synchronization** across all charts with `GlobalTimeRangeSelector`
 
 ## 👤 Profile & Social System
 

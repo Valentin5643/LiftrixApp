@@ -384,7 +384,7 @@ class CalorieServiceImpl @Inject constructor(
     }
     
     private fun getCurrentWeekRange(): TimeRange {
-        return TimeRange.lastWeek()
+        return TimeRange.lastMonth()
     }
     
     private fun getPreviousWeekRange(): TimeRange {

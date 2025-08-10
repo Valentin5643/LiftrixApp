@@ -56,26 +56,28 @@ class ProgressDataServiceImpl @Inject constructor(
             errorMapper = { throwable ->
                 Timber.e(throwable, "$TAG: Failed to get volume data for user: $userId")
                 LiftrixError.DatabaseError(
-                    errorMessage = "Failed to retrieve volume data",
+                    errorMessage = "Failed to retrieve volume data: ${throwable.message}",
                     operation = "getVolumeData",
                     analyticsContext = mapOf(
                         "userId" to userId,
-                        "timeRange" to timeRange.toString()
+                        "timeRange" to timeRange.toString(),
+                        "error_type" to (throwable::class.simpleName ?: "Unknown")
                     )
                 )
             }
         ) {
+            Timber.d("🔍 SERVICE-DEBUG: getVolumeData() starting for userId=$userId")
             val cacheKey = CacheKeyUtils.createVolumeKey(userId, timeRange)
             
             // Check cache first
+            Timber.d("🔍 SERVICE-DEBUG: Checking cache for key=$cacheKey")
             val cachedEntry = cacheManager.get<List<VolumeDataPoint>>(cacheKey)
             if (cachedEntry != null && cachedEntry.isValid()) {
-                Timber.d("$TAG: Cache hit for volume data - user: $userId, timeRange: $timeRange")
+                Timber.d("🔍 SERVICE-DEBUG: Cache HIT, returning cached data")
                 return@liftrixCatching cachedEntry.data
             }
             
-            Timber.d("$TAG: Cache miss for volume data - fetching from repository")
-            
+            Timber.d("🔍 SERVICE-DEBUG: Cache MISS, fetching from repository")
             val startDate = kotlinx.datetime.LocalDate.fromEpochDays(
                 (timeRange.startDate.time / (24 * 60 * 60 * 1000)).toInt()
             )
@@ -83,14 +85,19 @@ class ProgressDataServiceImpl @Inject constructor(
                 (timeRange.endDate.time / (24 * 60 * 60 * 1000)).toInt()
             )
             
-            val data = kotlinx.coroutines.withTimeout(15000) { // 15 second timeout
-                progressStatsRepository.getWorkoutVolumeData(userId, startDate, endDate).first()
+            Timber.d("🔍 SERVICE-DEBUG: Calling repository.getWorkoutVolumeData() with startDate=$startDate, endDate=$endDate")
+            val data = kotlinx.coroutines.withTimeout(8000) {
+                Timber.d("🔍 SERVICE-DEBUG: About to call .first() on Flow")
+                val result = progressStatsRepository.getWorkoutVolumeData(userId, startDate, endDate).first()
+                Timber.d("🔍 SERVICE-DEBUG: .first() completed, got ${result.size} data points")
+                result
             }
             
-            
             // Cache the result with 15-minute TTL
+            Timber.d("🔍 SERVICE-DEBUG: Caching result with ${data.size} data points")
             cacheManager.put(cacheKey, data, ttl = 15.minutes)
             
+            Timber.d("🔍 SERVICE-DEBUG: getVolumeData() returning ${data.size} data points")
             data
         }
     }
@@ -103,11 +110,12 @@ class ProgressDataServiceImpl @Inject constructor(
             errorMapper = { throwable ->
                 Timber.e(throwable, "$TAG: Failed to get duration data for user: $userId")
                 LiftrixError.DatabaseError(
-                    errorMessage = "Failed to retrieve duration data",
+                    errorMessage = "Failed to retrieve duration data: ${throwable.message}",
                     operation = "getDurationData",
                     analyticsContext = mapOf(
                         "userId" to userId,
-                        "timeRange" to timeRange.toString()
+                        "timeRange" to timeRange.toString(),
+                        "error_type" to (throwable::class.simpleName ?: "Unknown")
                     )
                 )
             }
@@ -117,11 +125,8 @@ class ProgressDataServiceImpl @Inject constructor(
             // Check cache first
             val cachedEntry = cacheManager.get<List<DurationDataPoint>>(cacheKey)
             if (cachedEntry != null && cachedEntry.isValid()) {
-                Timber.d("$TAG: Cache hit for duration data - user: $userId, timeRange: $timeRange")
                 return@liftrixCatching cachedEntry.data
             }
-            
-            Timber.d("$TAG: Cache miss for duration data - fetching from repository")
             
             val startDate = kotlinx.datetime.LocalDate.fromEpochDays(
                 (timeRange.startDate.time / (24 * 60 * 60 * 1000)).toInt()
@@ -130,7 +135,7 @@ class ProgressDataServiceImpl @Inject constructor(
                 (timeRange.endDate.time / (24 * 60 * 60 * 1000)).toInt()
             )
             
-            val data = kotlinx.coroutines.withTimeout(15000) { // 15 second timeout
+            val data = kotlinx.coroutines.withTimeout(8000) {
                 progressStatsRepository.getWorkoutDurationData(userId, startDate, endDate).first()
             }
             
@@ -149,11 +154,12 @@ class ProgressDataServiceImpl @Inject constructor(
             errorMapper = { throwable ->
                 Timber.e(throwable, "$TAG: Failed to get frequency data for user: $userId")
                 LiftrixError.DatabaseError(
-                    errorMessage = "Failed to retrieve frequency data",
+                    errorMessage = "Failed to retrieve frequency data: ${throwable.message}",
                     operation = "getFrequencyData",
                     analyticsContext = mapOf(
                         "userId" to userId,
-                        "timeRange" to timeRange.toString()
+                        "timeRange" to timeRange.toString(),
+                        "error_type" to (throwable::class.simpleName ?: "Unknown")
                     )
                 )
             }
@@ -163,11 +169,8 @@ class ProgressDataServiceImpl @Inject constructor(
             // Check cache first
             val cachedEntry = cacheManager.get<List<FrequencyDataPoint>>(cacheKey)
             if (cachedEntry != null && cachedEntry.isValid()) {
-                Timber.d("$TAG: Cache hit for frequency data - user: $userId, timeRange: $timeRange")
                 return@liftrixCatching cachedEntry.data
             }
-            
-            Timber.d("$TAG: Cache miss for frequency data - fetching from repository")
             
             val startDate = kotlinx.datetime.LocalDate.fromEpochDays(
                 (timeRange.startDate.time / (24 * 60 * 60 * 1000)).toInt()
@@ -176,7 +179,7 @@ class ProgressDataServiceImpl @Inject constructor(
                 (timeRange.endDate.time / (24 * 60 * 60 * 1000)).toInt()
             )
             
-            val data = kotlinx.coroutines.withTimeout(15000) { // 15 second timeout
+            val data = kotlinx.coroutines.withTimeout(8000) {
                 progressStatsRepository.getWorkoutFrequencyData(userId, startDate, endDate).first()
             }
             

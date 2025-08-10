@@ -469,12 +469,8 @@ class MuscleGroupDetailViewModel @Inject constructor(
      */
     private fun createMockWeeklyComparison(timeRange: TimeRangeType, colors: List<androidx.compose.ui.graphics.Color>): List<WeeklyComparison> {
         val numberOfWeeks = when (timeRange) {
-            TimeRangeType.WEEK -> 1
             TimeRangeType.MONTH -> 4
-            TimeRangeType.QUARTER -> 12
-            TimeRangeType.THREE_MONTHS -> 12
             TimeRangeType.SIX_MONTHS -> 24
-            TimeRangeType.YEAR -> 52
             TimeRangeType.ALL_TIME -> 104 // 2 years worth of weeks for all-time display
         }.coerceAtMost(12) // Limit to 12 weeks for display
 

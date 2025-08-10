@@ -114,6 +114,22 @@ fun ProgressChartsState.areAllChartsNotAsked(): Boolean =
 fun ProgressChartsState.hasValidUser(): Boolean = userId != null
 
 /**
+ * Checks if we're waiting for user authentication before we can load charts.
+ * 
+ * @return true if no userId and charts haven't started loading, false otherwise
+ */
+fun ProgressChartsState.isWaitingForAuth(): Boolean = 
+    userId == null && areAllChartsNotAsked()
+
+/**
+ * Checks if we're actively loading chart data (user is authenticated).
+ * 
+ * @return true if user is authenticated and charts are loading, false otherwise
+ */
+fun ProgressChartsState.isLoadingChartData(): Boolean = 
+    userId != null && isAnyChartLoading()
+
+/**
  * Gets the display name for the current time range.
  * 
  * @return String representation of the current time range

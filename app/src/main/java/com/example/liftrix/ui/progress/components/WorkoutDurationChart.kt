@@ -43,12 +43,16 @@ import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.repository.DurationDataPoint
 // Chart implementation using Compose Canvas
 import androidx.compose.foundation.Canvas
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.LocalDensity
 import com.example.liftrix.ui.common.analytics.ChartThemeProvider
 import com.example.liftrix.ui.theme.LiftrixColors
+import kotlinx.coroutines.delay
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.minus
 import kotlinx.datetime.Clock
@@ -73,6 +77,26 @@ fun WorkoutDurationChart(
     isLoading: Boolean,
     modifier: Modifier = Modifier
 ) {
+    // DEBUG: Log component loading state
+    LaunchedEffect(isLoading, data.size) {
+        timber.log.Timber.d("🔍 DURATION-COMPONENT-DEBUG: isLoading=$isLoading, data.size=${data.size}")
+    }
+    
+    // FLASH FIX: Only show loading for genuine delays, not brief flashes
+    var showLoading by remember { mutableStateOf(false) }
+    LaunchedEffect(isLoading) {
+        timber.log.Timber.d("🔍 DURATION-COMPONENT-DEBUG: LaunchedEffect triggered - isLoading=$isLoading")
+        if (isLoading) {
+            // Delay showing loading to prevent flashes for quick loads
+            delay(300) 
+            showLoading = isLoading // Only show if still loading after 300ms
+            timber.log.Timber.d("🔍 DURATION-COMPONENT-DEBUG: After delay - showLoading=$showLoading")
+        } else {
+            showLoading = false // Hide loading immediately when done
+            timber.log.Timber.d("🔍 DURATION-COMPONENT-DEBUG: Set showLoading=false immediately")
+        }
+    }
+    
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -90,8 +114,18 @@ fun WorkoutDurationChart(
                 modifier = Modifier.padding(bottom = 12.dp)
             )
             
+            // DEBUG: Log which rendering path we're taking
+            LaunchedEffect(showLoading, data.size) {
+                when {
+                    showLoading -> timber.log.Timber.d("🔍 DURATION-COMPONENT-DEBUG: Rendering LOADING state (showLoading=true)")
+                    data.isEmpty() -> timber.log.Timber.d("🔍 DURATION-COMPONENT-DEBUG: Rendering EMPTY state (data.isEmpty()=true)")
+                    else -> timber.log.Timber.d("🔍 DURATION-COMPONENT-DEBUG: Rendering CHART with ${data.size} data points")
+                }
+            }
+            
             when {
-                isLoading -> {
+                showLoading -> {
+                    timber.log.Timber.d("🔍 DURATION-COMPONENT-DEBUG: EXECUTING loading branch")
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -102,6 +136,7 @@ fun WorkoutDurationChart(
                     }
                 }
                 data.isEmpty() -> {
+                    timber.log.Timber.d("🔍 DURATION-COMPONENT-DEBUG: EXECUTING empty data branch")
                     // Show zero-value chart instead of empty state
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -127,6 +162,7 @@ fun WorkoutDurationChart(
                     }
                 }
                 else -> {
+                    timber.log.Timber.d("🔍 DURATION-COMPONENT-DEBUG: EXECUTING chart rendering branch with ${data.size} data points")
                     // Modern layout: Chart + Metrics side by side
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -215,8 +251,8 @@ private fun DurationBarChart(
         val minValue = data.minOfOrNull { it.durationMinutes } ?: 0
         val range = maxValue - minValue
         if (range == 0) {
-            // For zero values, show small bars at the bottom
-            data.map { 0.1f }
+            // SINGLE DATA POINT FIX: For single points or zero range, show meaningful bars
+            data.map { if (it.durationMinutes > 0) 0.6f else 0.1f }
         } else {
             data.map { (it.durationMinutes - minValue).toFloat() / range.toFloat() }
         }

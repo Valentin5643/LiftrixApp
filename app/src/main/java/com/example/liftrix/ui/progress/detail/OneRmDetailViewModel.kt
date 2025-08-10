@@ -45,7 +45,7 @@ class OneRmDetailViewModel @Inject constructor(
     private val _selectedExerciseIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedExerciseIds = _selectedExerciseIds
     
-    private val _timeRange = MutableStateFlow(TimeRangeType.QUARTER)
+    private val _timeRange = MutableStateFlow(TimeRangeType.SIX_MONTHS)
     val timeRange = _timeRange
     
     private val _showEstimated = MutableStateFlow(true)
@@ -310,12 +310,8 @@ class OneRmDetailViewModel @Inject constructor(
      */
     private fun createMockData(exerciseIds: List<String>?, timeRange: TimeRangeType): com.example.liftrix.domain.model.common.LiftrixResult<OneRmProgressionData> {
         val startDate = when (timeRange) {
-            TimeRangeType.WEEK -> Clock.System.todayIn(TimeZone.currentSystemDefault()).minus(DatePeriod(days = 7))
             TimeRangeType.MONTH -> Clock.System.todayIn(TimeZone.currentSystemDefault()).minus(DatePeriod(days = 30))
-            TimeRangeType.QUARTER -> Clock.System.todayIn(TimeZone.currentSystemDefault()).minus(DatePeriod(days = 90))
-            TimeRangeType.THREE_MONTHS -> Clock.System.todayIn(TimeZone.currentSystemDefault()).minus(DatePeriod(days = 90))
             TimeRangeType.SIX_MONTHS -> Clock.System.todayIn(TimeZone.currentSystemDefault()).minus(DatePeriod(days = 180))
-            TimeRangeType.YEAR -> Clock.System.todayIn(TimeZone.currentSystemDefault()).minus(DatePeriod(days = 365))
             TimeRangeType.ALL_TIME -> LocalDate.fromEpochDays(0) // Start from epoch for all-time data
         }
         

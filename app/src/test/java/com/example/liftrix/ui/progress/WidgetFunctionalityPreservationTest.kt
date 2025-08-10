@@ -70,10 +70,9 @@ class WidgetFunctionalityPreservationTest {
         
         // Test TimeRangeType values are accessible
         val timeRanges = TimeRangeType.entries
-        assertTrue("TimeRangeType should include WEEK", timeRanges.contains(TimeRangeType.WEEK))
         assertTrue("TimeRangeType should include MONTH", timeRanges.contains(TimeRangeType.MONTH))
-        assertTrue("TimeRangeType should include QUARTER", timeRanges.contains(TimeRangeType.QUARTER))
-        assertTrue("TimeRangeType should include YEAR", timeRanges.contains(TimeRangeType.YEAR))
+        assertTrue("TimeRangeType should include SIX_MONTHS", timeRanges.contains(TimeRangeType.SIX_MONTHS))
+        assertTrue("TimeRangeType should include ALL_TIME", timeRanges.contains(TimeRangeType.ALL_TIME))
         
         // Test VolumeGrouping values are accessible
         val volumeGroupings = VolumeGrouping.entries

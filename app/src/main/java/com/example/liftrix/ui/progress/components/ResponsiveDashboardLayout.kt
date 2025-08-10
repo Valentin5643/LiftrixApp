@@ -26,6 +26,7 @@ import com.example.liftrix.domain.model.analytics.WidgetData
 import com.example.liftrix.ui.common.WindowSizeClass
 import com.example.liftrix.ui.common.rememberWindowSizeClass
 import com.example.liftrix.ui.components.layouts.GridSystem
+import com.example.liftrix.domain.model.analytics.DashboardLayoutMode
 
 /**
  * Responsive dashboard layout engine that adapts to different screen sizes.
@@ -63,12 +64,25 @@ fun ResponsiveDashboardLayout(
     onWidgetReorder: (from: Int, to: Int) -> Unit = { _, _ -> },
     widgetDataProvider: (AnalyticsWidget) -> WidgetData = { createDefaultWidgetData(it) },
     isLoading: Boolean = false,
-    enableDragAndDrop: Boolean = layoutMode == DashboardLayoutMode.CUSTOM,
+    enableDragAndDrop: Boolean = false,
     enableSmoothTransitions: Boolean = true,
     windowSizeClass: WindowSizeClass = rememberWindowSizeClass(),
     emptyStateMessage: String = "No widgets to display",
     onAddWidgets: (() -> Unit)? = null
 ) {
+    // Determine optimal layout mode considering widget categories (FR-003)
+    val effectiveLayoutMode = if (layoutMode == DashboardLayoutMode.DEFAULT) {
+        DashboardLayoutMode.getOptimalModeForWidgets(
+            widgets = widgets,
+            screenWidthDp = windowSizeClass.widthDp.value.toInt(),
+            userPreference = null
+        )
+    } else {
+        layoutMode
+    }
+    
+    // Enable drag-and-drop only for CUSTOM mode
+    val effectiveEnableDragAndDrop = enableDragAndDrop || effectiveLayoutMode == DashboardLayoutMode.CUSTOM
     // Handle empty state
     if (widgets.isEmpty() && !isLoading) {
         IntegratedEmptyState(
@@ -83,20 +97,20 @@ fun ResponsiveDashboardLayout(
         AnimatedLayoutSwitcher(
             widgets = widgets,
             configuration = configuration,
-            layoutMode = layoutMode,
+            layoutMode = effectiveLayoutMode,
             onWidgetClick = onWidgetClick,
             onWidgetReorder = onWidgetReorder,
             widgetDataProvider = widgetDataProvider,
             isLoading = isLoading,
-            enableDragAndDrop = enableDragAndDrop,
+            enableDragAndDrop = effectiveEnableDragAndDrop,
             windowSizeClass = windowSizeClass,
             modifier = modifier
         )
     } else {
         // Direct layout switching without animations (for performance-critical scenarios)
-        when (layoutMode) {
+        when (effectiveLayoutMode) {
             DashboardLayoutMode.GRID -> {
-                if (enableDragAndDrop) {
+                if (effectiveEnableDragAndDrop) {
                     DragAndDropGrid(
                         widgets = widgets,
                         windowSizeClass = windowSizeClass,
@@ -129,7 +143,7 @@ fun ResponsiveDashboardLayout(
                     widgetDataProvider = widgetDataProvider,
                     isLoading = isLoading,
                     enableCollapsibleSections = windowSizeClass.shouldShowCollapsibleSections,
-                    enableDragAndDrop = enableDragAndDrop,
+                    enableDragAndDrop = effectiveEnableDragAndDrop,
                     windowSizeClass = windowSizeClass,
                     modifier = modifier
                 )
@@ -210,11 +224,11 @@ fun calculateOptimalColumns(
 /**
  * Determines responsive spacing based on window size class and content density
  * 
- * Enhanced spacing calculation following Material 3 principles and 8dp grid:
- * - Very compact (320dp-399dp): 8dp for tight mobile layouts
- * - Compact (400dp-599dp): 8dp for standard mobile layouts  
+ * Enhanced spacing calculation for tighter, more symmetrical layout (FR-005):
+ * - Very compact (320dp-399dp): 10dp for tight mobile layouts
+ * - Compact (400dp-599dp): 10dp for standard mobile layouts  
  * - Medium (600dp-904dp): 12dp for tablet portrait/phone landscape
- * - Expanded (905dp+): 16dp for large displays and desktop
+ * - Expanded (905dp+): 14dp for large displays and desktop
  * 
  * @param windowSizeClass Current window size classification
  * @param useCompactSpacing Whether to use compact spacing for dense layouts
@@ -224,21 +238,28 @@ fun calculateResponsiveSpacing(
     windowSizeClass: WindowSizeClass,
     useCompactSpacing: Boolean = false
 ): Arrangement.HorizontalOrVertical {
-    // Use 12dp spacing as specified in SPEC-20250205 (FR-002, line 154)
-    // Maintain consistent 12dp spacing across all breakpoints per specification
-    val spacing = 12.dp
+    // Optimized spacing for tighter, more symmetrical layout (FR-005)
+    val spacing = if (useCompactSpacing) {
+        8.dp // Compact mode for high-density layouts
+    } else {
+        when {
+            windowSizeClass.widthDp < 600.dp -> 10.dp // Tighter mobile spacing
+            windowSizeClass.widthDp < 768.dp -> 12.dp // Medium spacing
+            else -> 14.dp // Comfortable desktop spacing
+        }
+    }
     
     return Arrangement.spacedBy(spacing)
 }
 
 /**
- * Calculates responsive content padding following Material 3 principles
+ * Calculates responsive content padding for tighter, more symmetrical layout (FR-005)
  * 
- * Enhanced padding calculation for optimal content spacing:
- * - Very compact (320dp-399dp): 12dp for small phones
+ * Optimized padding calculation for better visual balance:
+ * - Very compact (320dp-399dp): 14dp for small phones
  * - Compact (400dp-599dp): 16dp for standard phones
- * - Medium (600dp-904dp): 20dp for tablets
- * - Expanded (905dp+): 24dp for large displays
+ * - Medium (600dp-904dp): 18dp for tablets
+ * - Expanded (905dp+): 20dp for large displays
  * 
  * @param windowSizeClass Current window size classification
  * @param useScreenEdgePadding Whether to include additional screen edge padding
@@ -248,16 +269,17 @@ fun calculateResponsivePadding(
     windowSizeClass: WindowSizeClass,
     useScreenEdgePadding: Boolean = true
 ): PaddingValues {
+    // Tighter, more symmetric padding calculation (FR-005)
     val basePadding = when {
-        windowSizeClass.widthDp < 400.dp -> 12.dp // Very compact
-        windowSizeClass.widthDp < 600.dp -> GridSystem.screenPadding // 16dp - compact
-        windowSizeClass.widthDp < 768.dp -> 20.dp // Medium
-        else -> GridSystem.spacing5 // 24dp - expanded
+        windowSizeClass.widthDp < 400.dp -> 14.dp // Slightly increased for better balance
+        windowSizeClass.widthDp < 600.dp -> 16.dp // Standard mobile
+        windowSizeClass.widthDp < 768.dp -> 18.dp // Tighter tablet padding
+        else -> 20.dp // Reduced desktop padding for better symmetry
     }
     
-    // Add extra padding for screen edges on larger displays
+    // Minimal edge padding for better content utilization
     val horizontalPadding = if (useScreenEdgePadding && windowSizeClass.widthDp > 768.dp) {
-        basePadding + 8.dp
+        basePadding + 4.dp // Reduced from 8dp to 4dp
     } else {
         basePadding
     }
@@ -272,12 +294,24 @@ fun calculateResponsivePadding(
  * Creates default widget data for preview and error states
  */
 private fun createDefaultWidgetData(widget: AnalyticsWidget): WidgetData {
+    // Clean zero-state display per FR-004
+    val (defaultValue, defaultUnit) = when (widget) {
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.TotalVolume -> "0" to "kg"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutStreak -> "0" to "days"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.AverageDuration -> "0" to "min"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutFrequency -> "0" to "workouts"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.StrengthProgress -> "0" to "kg"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.PersonalRecords -> "0" to "records"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.OneRMProgression -> "0" to "kg"
+        else -> "0" to ""
+    }
+    
     return com.example.liftrix.domain.model.analytics.BasicWidgetData(
         widgetType = widget,
         lastUpdated = kotlinx.datetime.Clock.System.now(),
-        primaryValue = "—",
-        secondaryValue = "No data available",
-        unit = "",
+        primaryValue = defaultValue,
+        secondaryValue = null, // Remove secondary messaging
+        unit = defaultUnit,
         trend = com.example.liftrix.domain.model.analytics.TrendDirection.STABLE
     )
 }

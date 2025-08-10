@@ -109,7 +109,7 @@ class UpdateProgressDashboardUseCase @Inject constructor(
             Timber.d("Triggering real-time dashboard update for user: $userId after workout: $workoutId")
             
             // Recalculate recent metrics for immediate dashboard refresh
-            val recentTimeRange = TimeRange.lastWeek()
+            val recentTimeRange = TimeRange.lastMonth()
             val metricsResult = analyticsEngine.calculateProgressMetrics(userId, recentTimeRange)
             
             if (metricsResult.isFailure) {
@@ -177,15 +177,15 @@ class UpdateProgressDashboardUseCase @Inject constructor(
         metricsResults: Map<TimeRangeType, ProgressMetrics>
     ): DashboardData {
         val primaryMetrics = metricsResults[TimeRangeType.MONTH]
-        val weeklyMetrics = metricsResults[TimeRangeType.WEEK]
-        val quarterlyMetrics = metricsResults[TimeRangeType.QUARTER]
+        val sixMonthMetrics = metricsResults[TimeRangeType.SIX_MONTHS]
+        val allTimeMetrics = metricsResults[TimeRangeType.ALL_TIME]
         
         return DashboardData(
             userId = userId,
             configuration = configuration,
             primaryMetrics = primaryMetrics,
-            weeklyMetrics = weeklyMetrics,
-            quarterlyMetrics = quarterlyMetrics,
+            sixMonthMetrics = sixMonthMetrics,
+            allTimeMetrics = allTimeMetrics,
             lastUpdated = kotlinx.datetime.Clock.System.now(),
             isRealTimeData = true
         )
@@ -196,9 +196,9 @@ class UpdateProgressDashboardUseCase @Inject constructor(
      */
     private fun getDefaultTimeRanges(): List<TimeRange> {
         return listOf(
-            TimeRange.lastWeek(),
             TimeRange.lastMonth(),
-            TimeRange.lastQuarter()
+            TimeRange.lastSixMonths(),
+            TimeRange.allTime()
         )
     }
     
@@ -281,8 +281,8 @@ data class DashboardData(
     val userId: String,
     val configuration: DashboardConfiguration,
     val primaryMetrics: ProgressMetrics?,
-    val weeklyMetrics: ProgressMetrics?,
-    val quarterlyMetrics: ProgressMetrics?,
+    val sixMonthMetrics: ProgressMetrics?,
+    val allTimeMetrics: ProgressMetrics?,
     val lastUpdated: kotlinx.datetime.Instant,
     val isRealTimeData: Boolean = false
 ) {
@@ -295,7 +295,7 @@ data class DashboardData(
      * Gets the most relevant metrics based on data availability
      */
     fun getBestAvailableMetrics(): ProgressMetrics? {
-        return primaryMetrics ?: weeklyMetrics ?: quarterlyMetrics
+        return primaryMetrics ?: sixMonthMetrics ?: allTimeMetrics
     }
     
     /**

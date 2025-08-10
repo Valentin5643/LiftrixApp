@@ -50,7 +50,7 @@ fun SmallWidgetCard(
     Card(
         onClick = onClick,
         modifier = modifier
-            .height(120.dp)  // Minimum height per spec
+            .height(105.dp)  // More rectangular aspect ratio like top widgets
             .semantics {
                 contentDescription = "${widget.displayName} widget"
                 role = Role.Button

@@ -100,8 +100,15 @@ class ProgressChartsViewModel @Inject constructor(
     /**
      * Current user ID received from Coordinator.
      * Updated via Coordinator events instead of direct auth repository observation.
+     * Stabilized to prevent null resets that cause loading loops.
      */
     private val _currentUserId = MutableStateFlow<String?>(null)
+    
+    /**
+     * Track if userId has been set to prevent resetting to null inadvertently.
+     * Once we have a valid userId, we don't reset it unless explicitly cleared.
+     */
+    private var userIdStabilized = false
 
     /**
      * Combined state flow that reactively updates when user authentication or time range changes.
@@ -124,11 +131,16 @@ class ProgressChartsViewModel @Inject constructor(
     )
 
     init {
+        
         // Start observing reactive state changes automatically
         observeStateChanges()
         
         // Load initial data when ViewModel is created
         handleEvent(ProgressChartsEvent.LoadInitialData)
+        
+        // Add userId-anchored stuck check timer
+        initializeStuckCheckTimer()
+        
     }
 
     /**
@@ -186,8 +198,32 @@ class ProgressChartsViewModel @Inject constructor(
             try {
                 when (event) {
                     is CoordinatorEvent.UserAuthChanged -> {
-                        _currentUserId.value = event.userId
-                        Timber.d("Charts: User auth changed to ${event.userId}")
+                        val previousUserId = _currentUserId.value
+                        
+                        // STABILITY FIX: Only allow userId changes under specific conditions
+                        val shouldUpdateUserId = when {
+                            // Always allow setting userId if it was null
+                            previousUserId == null && event.userId != null -> true
+                            // Allow clearing userId only if explicitly requested (logout)
+                            previousUserId != null && event.userId == null && !userIdStabilized -> true
+                            // Allow changing to different valid userId
+                            previousUserId != null && event.userId != null && previousUserId != event.userId -> true
+                            // Reject null resets once userId is stabilized
+                            previousUserId != null && event.userId == null && userIdStabilized -> false
+                            else -> false
+                        }
+                        
+                        if (shouldUpdateUserId) {
+                            _currentUserId.value = event.userId
+                            
+                            if (event.userId != null) {
+                                userIdStabilized = true
+                                handleEvent(ProgressChartsEvent.RefreshAll)
+                            } else {
+                                // Only reset stabilization on explicit logout
+                                userIdStabilized = false
+                            }
+                        }
                     }
                     is CoordinatorEvent.RefreshAllData -> {
                         handleEvent(ProgressChartsEvent.RefreshAll)
@@ -199,7 +235,6 @@ class ProgressChartsViewModel @Inject constructor(
                     }
                     is CoordinatorEvent.TimePeriodChanged -> {
                         handleEvent(ProgressChartsEvent.TimePeriodChanged(event.timeRange))
-                        Timber.d("Charts: Time period changed to ${event.timeRange}")
                     }
                     else -> {
                         // Ignore other coordinator events
@@ -267,6 +302,61 @@ class ProgressChartsViewModel @Inject constructor(
             }
             .launchIn(viewModelScope)
     }
+
+    /**
+     * Initialize stuck check timer that is anchored to userId availability.
+     * Only starts checking for stuck charts 5 seconds AFTER userId is set.
+     */
+    private fun initializeStuckCheckTimer() {
+        viewModelScope.launch {
+            _currentUserId.collect { userId ->
+                // Start stuck-check timer only after userId is available
+                if (userId != null) {
+                    launch {
+                        kotlinx.coroutines.delay(5000) // 5 second delay after auth completes
+                        
+                        // Check if charts are still loading after timeout
+                        val currentState = _uiState.value
+                        if (currentState is UiState.Success) {
+                            val currentChartsState = currentState.data
+                            val stuckCharts = listOf(
+                                "volume" to (currentChartsState.volumeChart is AsyncData.Loading),
+                                "duration" to (currentChartsState.durationChart is AsyncData.Loading), 
+                                "frequency" to (currentChartsState.frequencyChart is AsyncData.Loading)
+                            ).filter { it.second }
+                            
+                            if (stuckCharts.isNotEmpty()) {
+                                Timber.e("Charts genuinely stuck after 5s post-auth timeout: ${stuckCharts.map { it.first }}")
+                                
+                                // Force error state for truly stuck charts
+                                updateChartStates(
+                                    volumeChart = if (currentChartsState.volumeChart is AsyncData.Loading) 
+                                        AsyncData.Failure(LiftrixError.DatabaseError(
+                                            errorMessage = "Chart loading timed out. Database may be unresponsive.",
+                                            operation = "chartStuckTimeout"
+                                        )) 
+                                        else currentChartsState.volumeChart,
+                                    durationChart = if (currentChartsState.durationChart is AsyncData.Loading) 
+                                        AsyncData.Failure(LiftrixError.DatabaseError(
+                                            errorMessage = "Chart loading timed out. Database may be unresponsive.",
+                                            operation = "chartStuckTimeout"
+                                        ))
+                                        else currentChartsState.durationChart,
+                                    frequencyChart = if (currentChartsState.frequencyChart is AsyncData.Loading) 
+                                        AsyncData.Failure(LiftrixError.DatabaseError(
+                                            errorMessage = "Chart loading timed out. Database may be unresponsive.",
+                                            operation = "chartStuckTimeout"
+                                        ))
+                                        else currentChartsState.frequencyChart
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 
     /**
      * Changes the current time period and triggers data refresh for all charts.
@@ -362,21 +452,24 @@ class ProgressChartsViewModel @Inject constructor(
      * @param timeRange The time range for data retrieval
      */
     private suspend fun loadVolumeChart(userId: String, timeRange: TimeRange) {
-        val result = progressDataService.getVolumeData(userId, timeRange)
-        
-        result.fold(
-            onSuccess = { data ->
-                val totalVolume = data.sumOf { it.totalVolume.toDouble() }.toFloat()
-                timber.log.Timber.d("VolumeDebug ViewModel received ${data.size} points, ${totalVolume}kg total")
-                updateChartStates(volumeChart = AsyncData.Success(data))
-            },
-            onFailure = { error ->
-                timber.log.Timber.e("VolumeDebug ViewModel failed: ${error.message}")
-                val liftrixError = if (error is LiftrixError) error else LiftrixError.UnknownError(error.message ?: "Unknown error")
-                updateChartStates(volumeChart = AsyncData.Failure(liftrixError))
-                handleError(liftrixError)
-            }
-        )
+        try {
+            val result = progressDataService.getVolumeData(userId, timeRange)
+            
+            result.fold(
+                onSuccess = { data ->
+                    updateChartStates(volumeChart = AsyncData.Success(data))
+                },
+                onFailure = { error ->
+                    Timber.e("Volume chart fetch failure: ${error.message}")
+                    val liftrixError = if (error is LiftrixError) error else LiftrixError.UnknownError(error.message ?: "Unknown error")
+                    updateChartStates(volumeChart = AsyncData.Failure(liftrixError))
+                    handleError(liftrixError)
+                }
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Volume chart fetch exception: ${e.message}")
+            updateChartStates(volumeChart = AsyncData.Failure(LiftrixError.UnknownError("Volume fetch exception: ${e.message}")))
+        }
     }
 
     /**
@@ -386,18 +479,24 @@ class ProgressChartsViewModel @Inject constructor(
      * @param timeRange The time range for data retrieval
      */
     private suspend fun loadDurationChart(userId: String, timeRange: TimeRange) {
-        val result = progressDataService.getDurationData(userId, timeRange)
-        
-        result.fold(
-            onSuccess = { data ->
-                updateChartStates(durationChart = AsyncData.Success(data))
-            },
-            onFailure = { error ->
-                val liftrixError = if (error is LiftrixError) error else LiftrixError.UnknownError(error.message ?: "Unknown error")
-                updateChartStates(durationChart = AsyncData.Failure(liftrixError))
-                handleError(liftrixError)
-            }
-        )
+        try {
+            val result = progressDataService.getDurationData(userId, timeRange)
+            
+            result.fold(
+                onSuccess = { data ->
+                    updateChartStates(durationChart = AsyncData.Success(data))
+                },
+                onFailure = { error ->
+                    Timber.e("Duration chart fetch failure: ${error.message}")
+                    val liftrixError = if (error is LiftrixError) error else LiftrixError.UnknownError(error.message ?: "Unknown error")
+                    updateChartStates(durationChart = AsyncData.Failure(liftrixError))
+                    handleError(liftrixError)
+                }
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Duration chart fetch exception: ${e.message}")
+            updateChartStates(durationChart = AsyncData.Failure(LiftrixError.UnknownError("Duration fetch exception: ${e.message}")))
+        }
     }
 
     /**
@@ -407,18 +506,24 @@ class ProgressChartsViewModel @Inject constructor(
      * @param timeRange The time range for data retrieval
      */
     private suspend fun loadFrequencyChart(userId: String, timeRange: TimeRange) {
-        val result = progressDataService.getFrequencyData(userId, timeRange)
-        
-        result.fold(
-            onSuccess = { data ->
-                updateChartStates(frequencyChart = AsyncData.Success(data))
-            },
-            onFailure = { error ->
-                val liftrixError = if (error is LiftrixError) error else LiftrixError.UnknownError(error.message ?: "Unknown error")
-                updateChartStates(frequencyChart = AsyncData.Failure(liftrixError))
-                handleError(liftrixError)
-            }
-        )
+        try {
+            val result = progressDataService.getFrequencyData(userId, timeRange)
+            
+            result.fold(
+                onSuccess = { data ->
+                    updateChartStates(frequencyChart = AsyncData.Success(data))
+                },
+                onFailure = { error ->
+                    Timber.e("Frequency chart fetch failure: ${error.message}")
+                    val liftrixError = if (error is LiftrixError) error else LiftrixError.UnknownError(error.message ?: "Unknown error")
+                    updateChartStates(frequencyChart = AsyncData.Failure(liftrixError))
+                    handleError(liftrixError)
+                }
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Frequency chart fetch exception: ${e.message}")
+            updateChartStates(frequencyChart = AsyncData.Failure(LiftrixError.UnknownError("Frequency fetch exception: ${e.message}")))
+        }
     }
 
     /**
@@ -434,15 +539,35 @@ class ProgressChartsViewModel @Inject constructor(
         frequencyChart: AsyncData<List<com.example.liftrix.domain.repository.FrequencyDataPoint>>? = null
     ) {
         val currentState = _uiState.value
-        if (currentState is UiState.Success) {
-            _uiState.value = UiState.Success(
-                currentState.data.copy(
-                    volumeChart = volumeChart ?: currentState.data.volumeChart,
-                    durationChart = durationChart ?: currentState.data.durationChart,
-                    frequencyChart = frequencyChart ?: currentState.data.frequencyChart,
-                    lastRefreshTimestamp = System.currentTimeMillis()
+        
+        when (currentState) {
+            is UiState.Success -> {
+                val newState = UiState.Success(
+                    currentState.data.copy(
+                        volumeChart = volumeChart ?: currentState.data.volumeChart,
+                        durationChart = durationChart ?: currentState.data.durationChart,
+                        frequencyChart = frequencyChart ?: currentState.data.frequencyChart,
+                        lastRefreshTimestamp = System.currentTimeMillis()
+                    )
                 )
-            )
+                _uiState.value = newState
+            }
+            is UiState.Loading -> {
+                // If we're still in Loading state but combinedState has provided initial data, create Success state
+                val combinedStateValue = combinedState.value
+                val newState = UiState.Success(
+                    combinedStateValue.copy(
+                        volumeChart = volumeChart ?: combinedStateValue.volumeChart,
+                        durationChart = durationChart ?: combinedStateValue.durationChart,
+                        frequencyChart = frequencyChart ?: combinedStateValue.frequencyChart,
+                        lastRefreshTimestamp = System.currentTimeMillis()
+                    )
+                )
+                _uiState.value = newState
+            }
+            else -> {
+                Timber.w("Cannot update chart states - currentState is ${currentState?.javaClass?.simpleName}")
+            }
         }
     }
 
@@ -463,6 +588,20 @@ class ProgressChartsViewModel @Inject constructor(
      */
     private fun kotlinx.datetime.LocalDate.toJavaLocalDate(): JavaLocalDate =
         JavaLocalDate.of(year, monthNumber, dayOfMonth)
+    
+    /**
+     * Explicit method to reset userId stabilization on user logout.
+     * This should only be called when the user explicitly logs out.
+     */
+    fun resetUserSession() {
+        viewModelScope.launch {
+            userIdStabilized = false
+            _currentUserId.value = null
+            
+            // Reset all chart states to NotAsked
+            _uiState.value = UiState.Success(createUnauthenticatedChartsState())
+        }
+    }
     
     /**
      * Clears error state from the UI.

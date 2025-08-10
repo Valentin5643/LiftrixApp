@@ -28,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,6 +45,7 @@ import com.example.liftrix.domain.repository.FrequencyDataPoint
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.components.layouts.GridSystem
 import com.example.liftrix.ui.theme.LiftrixColors
+import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
@@ -77,6 +79,24 @@ fun WorkoutFrequencyHeatmap(
     isLoading: Boolean,
     modifier: Modifier = Modifier
 ) {
+    // DEBUG: Log component loading state
+    LaunchedEffect(isLoading, data.size) {
+        timber.log.Timber.d("🔍 FREQUENCY-COMPONENT-DEBUG: isLoading=$isLoading, data.size=${data.size}")
+    }
+    
+    // FLASH FIX: Only show loading for genuine delays, not brief flashes
+    var showLoading by remember { mutableStateOf(false) }
+    LaunchedEffect(isLoading) {
+        timber.log.Timber.d("🔍 FREQUENCY-COMPONENT-DEBUG: LaunchedEffect triggered - isLoading=$isLoading")
+        if (isLoading) {
+            // Delay showing loading to prevent flashes for quick loads
+            delay(300) 
+            showLoading = isLoading // Only show if still loading after 300ms
+        } else {
+            showLoading = false // Hide loading immediately when done
+        }
+    }
+    
     LiftrixCard(
         modifier = modifier.fillMaxWidth(),
         contentDescription = "Workout frequency calendar heatmap with navigation"
@@ -113,7 +133,7 @@ fun WorkoutFrequencyHeatmap(
             }
             
             when {
-                isLoading -> {
+                showLoading -> {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()

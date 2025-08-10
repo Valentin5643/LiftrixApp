@@ -342,7 +342,7 @@ fun CompactMetricWidget(
 }
 
 /**
- * Standard metric display component
+ * Standard metric display component - Enhanced for mock symmetry
  */
 @Composable
 private fun MetricDisplay(
@@ -359,9 +359,9 @@ private fun MetricDisplay(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Icon
+        // Icon - Slightly reduced size for better balance
         Surface(
-            modifier = Modifier.size(48.dp),
+            modifier = Modifier.size(44.dp),
             shape = RoundedCornerShape(12.dp),
             color = primaryColor.copy(alpha = 0.1f)
         ) {
@@ -372,55 +372,62 @@ private fun MetricDisplay(
                     imageVector = icon,
                     contentDescription = null,
                     tint = primaryColor,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
         }
         
-        // Content
+        // Content with improved spacing and alignment
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+            // Primary value with better alignment
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
                 Text(
                     text = primaryValue,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
-                    color = primaryColor
+                    color = primaryColor,
+                    maxLines = 1
                 )
                 
                 Text(
                     text = unit,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    maxLines = 1
                 )
             }
             
+            // Trend indicator with improved spacing
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TrendIndicator(
                     trend = trend,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(14.dp)
                 )
                 
                 Text(
                     text = trend.getPercentageDescription(trendPercentage),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    maxLines = 1
                 )
             }
             
+            // Clean secondary value display
             secondaryValue?.let { secondary ->
                 Text(
                     text = secondary,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    maxLines = 1
                 )
             }
         }

@@ -109,8 +109,15 @@ class AnalyticsWidgetViewModel @Inject constructor(
     /**
      * Current authenticated user state for data scoping.
      * Updated via Coordinator events instead of direct auth repository observation.
+     * Stabilized to prevent null resets that cause loading loops.
      */
     private val _currentUser = MutableStateFlow<User?>(null)
+    
+    /**
+     * Track if user has been set to prevent resetting to null inadvertently.
+     * Once we have a valid user, we don't reset it unless explicitly cleared.
+     */
+    private var userStabilized = false
 
     /**
      * Available analytics widgets for the current user.
@@ -779,15 +786,35 @@ class AnalyticsWidgetViewModel @Inject constructor(
                 when (event) {
                     is CoordinatorEvent.UserAuthChanged -> {
                         val previousUserId = _currentUser.value?.uid
-                        // FIXED: Added proper validation and null handling
-                        _currentUser.value = event.userId?.let { userId ->
-                            // Only create User object if we have a valid userId
-                            if (userId.isNotBlank()) {
-                                // Create a minimal User object that passes validation
-                                // Using a temporary email to satisfy the validation requirement
-                                com.example.liftrix.domain.model.User(
-                                    uid = userId,
-                                    email = "temp@liftrix.app", // FIXED: Use valid email instead of blank
+                        
+                        // STABILITY FIX: Only allow user changes under specific conditions
+                        val shouldUpdateUser = when {
+                            // Always allow setting user if it was null
+                            previousUserId == null && event.userId != null -> true
+                            // Allow clearing user only if explicitly requested (logout)
+                            previousUserId != null && event.userId == null && !userStabilized -> true
+                            // Allow changing to different valid user
+                            previousUserId != null && event.userId != null && previousUserId != event.userId -> true
+                            // Reject null resets once user is stabilized
+                            previousUserId != null && event.userId == null && userStabilized -> {
+                                Timber.w("🔍 WIDGET-AUTH-DEBUG: Rejecting user null reset - already stabilized with $previousUserId")
+                                false
+                            }
+                            else -> false
+                        }
+                        
+                        if (shouldUpdateUser) {
+                            // FIXED: Added proper validation and null handling
+                            _currentUser.value = event.userId?.let { userId ->
+                                // Only create User object if we have a valid userId
+                                if (userId.isNotBlank()) {
+                                    userStabilized = true
+                                    Timber.d("🔍 WIDGET-AUTH-DEBUG: User authenticated, widgets stabilized")
+                                    // Create a minimal User object that passes validation
+                                    // Using a temporary email to satisfy the validation requirement
+                                    com.example.liftrix.domain.model.User(
+                                        uid = userId,
+                                        email = "temp@liftrix.app", // FIXED: Use valid email instead of blank
                                     displayName = null,
                                     photoUrl = null,
                                     isAnonymous = false, // FIXED: Keep as false since we have a userId
@@ -803,11 +830,16 @@ class AnalyticsWidgetViewModel @Inject constructor(
                                 )
                             } else {
                                 // FIXED: Handle blank userId case
+                                userStabilized = false
+                                Timber.d("🔍 WIDGET-AUTH-DEBUG: User logged out, clearing stabilization")
                                 null
                             }
                         }
+                        } else {
+                            Timber.d("🔍 WIDGET-AUTH-DEBUG: Ignored redundant or invalid user change: $previousUserId -> ${event.userId}")
+                        }
                         
-                        // Only trigger initial load if user changed
+                        // Only trigger initial load if user changed  
                         if (previousUserId != _currentUser.value?.uid) {
                             if (_currentUser.value != null) {
                                 loadInitialData()
@@ -1137,12 +1169,9 @@ class AnalyticsWidgetViewModel @Inject constructor(
             }
             
             // Frequency widgets → Workout Frequency Detail
-            // TODO: Enable when WorkoutFrequencyDetailScreen is implemented
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutFrequency,
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.FrequencyChart -> {
-                // Temporarily disabled until WorkoutFrequencyDetailScreen is implemented
-                Timber.w("Frequency detail navigation disabled - screen not implemented")
-                null
+                AnalyticsWidgetEvent.NavigateToFrequencyDetail
             }
             
             // For other widgets, no specific navigation (just log interaction)

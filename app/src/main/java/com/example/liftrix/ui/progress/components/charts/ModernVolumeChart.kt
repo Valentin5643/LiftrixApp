@@ -104,6 +104,7 @@ fun ModernVolumeChart(
     // Frame time monitoring for 60fps validation
     val frameMonitor = rememberFrameTimeMonitor()
 
+    
     // Animation for chart appearance
     val animationProgress = remember { Animatable(0f) }
     LaunchedEffect(data) {
@@ -218,11 +219,16 @@ private fun DrawScope.drawModernVolumeChart(
     
     val chartConfig = LiftrixChartStyle.primaryLineChart()
     val points = data.mapIndexed { index, dataPoint ->
-        val x = (size.width * index / (data.size - 1).coerceAtLeast(1))
+        // SINGLE DATA POINT FIX: Handle single point rendering properly
+        val x = if (data.size == 1) {
+            size.width * 0.5f // Center single data point
+        } else {
+            size.width * index / (data.size - 1).toFloat()
+        }
         val normalizedValue = if (metrics.range > 0) {
             (dataPoint.volume.value - metrics.minValue) / metrics.range
         } else {
-            0.0 // For zero data, keep all points at bottom
+            0.5 // For single points or zero range, show at mid-height for visibility
         }
         val y = size.height * (1f - normalizedValue) * animationProgress
         x to y.toFloat()
@@ -572,7 +578,12 @@ private data class ChartMetrics(
             val minValue = volumes.minOrNull() ?: 0.0
             val maxValue = volumes.maxOrNull() ?: 0.0
             val avgValue = volumes.average()
-            val range = (maxValue - minValue).coerceAtLeast(1.0) // Prevent division by zero
+            // SINGLE DATA POINT FIX: For single data points, create artificial range for proper rendering
+            val range = if (data.size == 1 && maxValue > 0) {
+                maxValue * 0.2 // 20% range around single point for proper scaling
+            } else {
+                (maxValue - minValue).coerceAtLeast(1.0) // Prevent division by zero
+            }
             
             // Find personal records (local maxima)
             val personalRecords = mutableListOf<VolumeDataPoint>()

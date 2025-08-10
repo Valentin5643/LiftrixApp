@@ -48,6 +48,7 @@ fun BaseWidget(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .aspectRatio(1.35f)  // Slightly rectangular like top widgets (matching Best Streak/Consistency)
             .clip(RoundedCornerShape(16.dp))
             .clickable(enabled = !isLoading && error == null) { onClick() }
             .semantics {
@@ -69,8 +70,8 @@ fun BaseWidget(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // Header
             WidgetHeader(
@@ -106,20 +107,22 @@ private fun WidgetHeader(
     subtitle: String?
 ) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1
         )
         
         subtitle?.let { sub ->
             Text(
                 text = sub,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                maxLines = 1
             )
         }
     }

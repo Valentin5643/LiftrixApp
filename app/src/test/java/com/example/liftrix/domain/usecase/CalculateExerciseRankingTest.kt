@@ -233,7 +233,7 @@ class CalculateExerciseRankingTest {
     fun test_time_range_filtering() = runTest {
         // Given: Exercise data across different time periods
         val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
-        val timeRange = TimeRangeType.THREE_MONTHS
+        val timeRange = TimeRangeType.SIX_MONTHS
 
         // When: Filter data by time range
         val filteredData = filterDataByTimeRange(createTimeSeriesData(), timeRange, today)
@@ -252,7 +252,7 @@ class CalculateExerciseRankingTest {
         val result = calculateExerciseRankingUseCase(
             ExerciseRankingRequest(
                 metric = RankingMetric.PERFORMANCE_SCORE,
-                timeRange = TimeRangeType.THREE_MONTHS,
+                timeRange = TimeRangeType.SIX_MONTHS,
                 limit = 10
             )
         )

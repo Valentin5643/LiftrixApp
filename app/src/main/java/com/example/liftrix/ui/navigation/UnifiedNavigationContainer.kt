@@ -52,6 +52,7 @@ import com.example.liftrix.ui.common.LiveSessionBar
 import com.example.liftrix.ui.home.HomeScreen
 import com.example.liftrix.ui.workout.WorkoutScreen
 import com.example.liftrix.ui.progress.ProgressDashboardScreen
+import com.example.liftrix.ui.progress.detail.WorkoutFrequencyDetailScreen
 import com.example.liftrix.ui.coach.CoachScreen
 import com.example.liftrix.ui.social.SocialViewModel
 import com.example.liftrix.ui.social.SocialEvent
@@ -608,29 +609,9 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.WorkoutFrequencyDetail> {
-                    // TODO: Implement WorkoutFrequencyDetailScreen
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column {
-                            Text(
-                                text = "Workout Frequency Detail Screen",
-                                style = MaterialTheme.typography.headlineSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Coming Soon",
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                            Button(
-                                onClick = { navController.popBackStackSafely() },
-                                modifier = Modifier.padding(top = 16.dp)
-                            ) {
-                                Text("Back")
-                            }
-                        }
-                    }
+                    WorkoutFrequencyDetailScreen(
+                        navController = navController
+                    )
                 }
             }
             

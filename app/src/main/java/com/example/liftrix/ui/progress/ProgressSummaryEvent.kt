@@ -221,34 +221,19 @@ sealed class ProgressSummaryEvent : ViewModelEvent {
  */
 enum class PredefinedTimeRange {
     /**
-     * Last 7 days from today.
-     */
-    LAST_WEEK,
-    
-    /**
      * Last 30 days from today.
      */
     LAST_MONTH,
     
     /**
-     * Last 90 days from today.
+     * Last 180 days from today.
      */
-    LAST_QUARTER,
-    
-    /**
-     * Last 365 days from today.
-     */
-    LAST_YEAR,
+    LAST_SIX_MONTHS,
     
     /**
      * Current calendar month.
      */
     THIS_MONTH,
-    
-    /**
-     * Current calendar year.
-     */
-    THIS_YEAR,
     
     /**
      * All time (no date filtering).
@@ -261,13 +246,10 @@ enum class PredefinedTimeRange {
      * @return TimeRange instance representing this predefined range
      */
     fun toTimeRange(): TimeRange = when (this) {
-        LAST_WEEK -> TimeRange.lastWeek()
         LAST_MONTH -> TimeRange.lastMonth()
-        LAST_QUARTER -> TimeRange.lastQuarter()
-        LAST_YEAR -> TimeRange.lastYear()
+        LAST_SIX_MONTHS -> TimeRange.lastSixMonths()
         THIS_MONTH -> TimeRange.lastMonth()
-        THIS_YEAR -> TimeRange.lastYear()
-        ALL_TIME -> TimeRange.lastYear()
+        ALL_TIME -> TimeRange.allTime()
     }
     
     /**
@@ -276,12 +258,9 @@ enum class PredefinedTimeRange {
      * @return Display name for UI presentation
      */
     fun getDisplayName(): String = when (this) {
-        LAST_WEEK -> "Last Week"
         LAST_MONTH -> "Last Month"
-        LAST_QUARTER -> "Last 3 Months"
-        LAST_YEAR -> "Last Year"
+        LAST_SIX_MONTHS -> "Last 6 Months"
         THIS_MONTH -> "This Month"
-        THIS_YEAR -> "This Year"
         ALL_TIME -> "All Time"
     }
 }
