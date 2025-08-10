@@ -809,9 +809,6 @@ class AnalyticsWidgetViewModel @Inject constructor(
                                 // Only create User object if we have a valid userId
                                 if (userId.isNotBlank()) {
                                     userStabilized = true
-                                    Timber.d("🔍 WIDGET-AUTH-DEBUG: User authenticated, widgets stabilized")
-                                    // Create a minimal User object that passes validation
-                                    // Using a temporary email to satisfy the validation requirement
                                     com.example.liftrix.domain.model.User(
                                         uid = userId,
                                         email = "temp@liftrix.app", // FIXED: Use valid email instead of blank
@@ -829,9 +826,7 @@ class AnalyticsWidgetViewModel @Inject constructor(
                                     updatedAt = LocalDateTime.now()
                                 )
                             } else {
-                                // FIXED: Handle blank userId case
                                 userStabilized = false
-                                Timber.d("🔍 WIDGET-AUTH-DEBUG: User logged out, clearing stabilization")
                                 null
                             }
                         }

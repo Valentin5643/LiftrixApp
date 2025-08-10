@@ -46,33 +46,23 @@ class WidgetResolver @Inject constructor() {
      * widget resolution failures.
      */
     private val WIDGET_NAME_MIGRATION_MAP = mapOf(
-        // Legacy camelCase names → correct IDs
-        "workoutFrequency" to AnalyticsWidget.WorkoutFrequency.id,
-        "totalVolume" to AnalyticsWidget.TotalVolume.id,
-        "averageDuration" to AnalyticsWidget.AverageDuration.id,
+        // Legacy camelCase names → correct IDs (removed widgets excluded)
         "progressChart" to AnalyticsWidget.ProgressChart.id,
         "volumeLoadProgression" to AnalyticsWidget.VolumeLoadProgression.id,
         "oneRMProgression" to AnalyticsWidget.OneRMProgression.id,
         "volumeChart" to AnalyticsWidget.VolumeChart.id,
         "frequencyChart" to AnalyticsWidget.FrequencyChart.id,
-        "volumeCalendar" to AnalyticsWidget.FrequencyChart.id,
         "strengthProgress" to AnalyticsWidget.StrengthProgress.id,
         "personalRecords" to AnalyticsWidget.PersonalRecords.id,
-        "workoutStreak" to AnalyticsWidget.WorkoutStreak.id,
         "volumeTrends" to AnalyticsWidget.VolumeTrends.id,
         "recoveryMetrics" to AnalyticsWidget.RecoveryMetrics.id,
         "muscleGroupDistribution" to AnalyticsWidget.MuscleGroupDistribution.id,
         "monthlySummary" to AnalyticsWidget.MonthlySummary.id,
         
-        // Incorrect names used in forceAdvancedUserLevel() → correct IDs
-        "WorkoutFrequency" to AnalyticsWidget.WorkoutFrequency.id,
-        "TotalVolume" to AnalyticsWidget.TotalVolume.id,
-        "AverageDuration" to AnalyticsWidget.AverageDuration.id,
+        // Incorrect names used in forceAdvancedUserLevel() → correct IDs (removed widgets excluded)
         "VolumeLoadProgression" to AnalyticsWidget.VolumeLoadProgression.id,
         "OneRMProgression" to AnalyticsWidget.OneRMProgression.id,
         "ProgressChart" to AnalyticsWidget.ProgressChart.id,
-        "WorkoutStreak" to AnalyticsWidget.WorkoutStreak.id,
-        "VolumeCalendar" to AnalyticsWidget.FrequencyChart.id,
         "StrengthProgress" to AnalyticsWidget.StrengthProgress.id,
         "VolumeChart" to AnalyticsWidget.VolumeChart.id,
         "FrequencyChart" to AnalyticsWidget.FrequencyChart.id,
@@ -82,17 +72,12 @@ class WidgetResolver @Inject constructor() {
         "RecoveryMetrics" to AnalyticsWidget.RecoveryMetrics.id,
         "MonthlySummary" to AnalyticsWidget.MonthlySummary.id,
         
-        // Display name variations → correct IDs
-        "Workout Frequency" to AnalyticsWidget.WorkoutFrequency.id,
-        "Total Volume" to AnalyticsWidget.TotalVolume.id,
-        "Average Duration" to AnalyticsWidget.AverageDuration.id,
+        // Display name variations → correct IDs (removed widgets excluded)
         "Progress Chart" to AnalyticsWidget.ProgressChart.id,
         "Volume Progression" to AnalyticsWidget.VolumeLoadProgression.id,
         "1RM Progression" to AnalyticsWidget.OneRMProgression.id,
         "Volume Chart" to AnalyticsWidget.VolumeChart.id,
         "Frequency Chart" to AnalyticsWidget.FrequencyChart.id,
-        "Workout Streak" to AnalyticsWidget.WorkoutStreak.id,
-        "Volume Calendar" to AnalyticsWidget.FrequencyChart.id,
         "Strength Progress" to AnalyticsWidget.StrengthProgress.id,
         "Personal Records" to AnalyticsWidget.PersonalRecords.id,
         "Volume Trends" to AnalyticsWidget.VolumeTrends.id,
@@ -149,33 +134,27 @@ class WidgetResolver @Inject constructor() {
         
         val selectedWidgets = when (userLevel) {
             UserLevel.BEGINNER -> {
-                // 4 fixed widgets for beginners - non-configurable
-                allWidgets.filter { it.priority == WidgetPriority.FIXED_BEGINNER }
-                    .sortedBy { it.getLayoutPriority() }
+                // 4 widgets for beginners
+                allWidgets
+                    .sortedWith(compareBy(
+                        { it.complexity.ordinal },
+                        { it.getLayoutPriority() }
+                    ))
+                    .take(4)
             }
             UserLevel.INTERMEDIATE -> {
-                // 7 widgets: 4 fixed + 3 configurable (any complexity)
-                val fixedWidgets = allWidgets.filter { it.priority == WidgetPriority.FIXED_BEGINNER }
-                val configurableWidgets = allWidgets
-                    .filter { it.priority != WidgetPriority.FIXED_BEGINNER }
+                // 7 widgets for intermediate users
+                allWidgets
                     .sortedWith(compareBy(
-                        { it.priority?.configurationLevel ?: 2 }, // Default to STANDARD level if no priority
+                        { it.priority?.configurationLevel ?: 2 },
                         { it.getLayoutPriority() }
                     ))
-                    .take(3)
-                (fixedWidgets + configurableWidgets).sortedBy { it.getLayoutPriority() }
+                    .take(7)
             }
             UserLevel.ADVANCED -> {
-                // 10 widgets: 4 fixed + 6 configurable (any complexity)
-                val fixedWidgets = allWidgets.filter { it.priority == WidgetPriority.FIXED_BEGINNER }
-                val configurableWidgets = allWidgets
-                    .filter { it.priority != WidgetPriority.FIXED_BEGINNER }
-                    .sortedWith(compareBy(
-                        { it.priority?.configurationLevel ?: 2 }, // Default to STANDARD level if no priority
-                        { it.getLayoutPriority() }
-                    ))
-                    .take(6)
-                (fixedWidgets + configurableWidgets).sortedBy { it.getLayoutPriority() }
+                // All 11 widgets for advanced users
+                allWidgets
+                    .sortedBy { it.getLayoutPriority() }
             }
         }
         

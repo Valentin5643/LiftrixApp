@@ -71,25 +71,31 @@ data class WidgetPreferences(
         
         /**
          * Get default visible widgets for first-time users
+         * Note: Removed widgets that exist in Progress Summary:
+         * - TotalVolume
+         * - WorkoutFrequency
+         * - WorkoutStreak
+         * - AverageDuration
          */
         private fun getDefaultVisibleWidgets(): Set<String> {
             return setOf(
-                AnalyticsWidget.TotalVolume.id,
-                AnalyticsWidget.WorkoutFrequency.id,
-                AnalyticsWidget.WorkoutStreak.id,
-                AnalyticsWidget.AverageDuration.id
+                AnalyticsWidget.VolumeChart.id,
+                AnalyticsWidget.StrengthProgress.id,
+                AnalyticsWidget.PersonalRecords.id,
+                AnalyticsWidget.OneRMProgression.id
             )
         }
         
         /**
          * Get default widget order for consistent layout
+         * Note: Updated to exclude widgets shown in Progress Summary
          */
         private fun getDefaultWidgetOrder(): List<String> {
             return listOf(
-                AnalyticsWidget.TotalVolume.id,
-                AnalyticsWidget.WorkoutFrequency.id,
-                AnalyticsWidget.WorkoutStreak.id,
-                AnalyticsWidget.AverageDuration.id
+                AnalyticsWidget.VolumeChart.id,
+                AnalyticsWidget.StrengthProgress.id,
+                AnalyticsWidget.PersonalRecords.id,
+                AnalyticsWidget.OneRMProgression.id
             )
         }
         
@@ -104,62 +110,24 @@ data class WidgetPreferences(
             
             return when (config) {
                 is DashboardConfiguration.Beginner -> {
-                    // 4 essential widgets for building workout habits
+                    // 4 widgets for beginners
                     allWidgets
-                        .filter { it.priority == WidgetPriority.ESSENTIAL }
                         .sortedWith(compareBy({ it.complexity }, { it.getLayoutPriority() }))
                         .take(4)
-                        .ifEmpty {
-                            // Fallback: select simplest widgets if no essential ones
-                            allWidgets
-                                .filter { it.complexity == WidgetComplexity.SIMPLE }
-                                .sortedBy { it.getLayoutPriority() }
-                                .take(4)
-                        }
                 }
                 is DashboardConfiguration.Intermediate -> {
-                    // 7 widgets: essential + some trend analysis
-                    val essential = allWidgets.filter { it.priority == WidgetPriority.ESSENTIAL }
-                    val trends = allWidgets.filter { 
-                        it.category == WidgetCategory.CHARTS && 
-                        it.complexity != WidgetComplexity.COMPLEX 
-                    }
-                    val metrics = allWidgets.filter { 
-                        it.category == WidgetCategory.METRICS && 
-                        it.priority == WidgetPriority.STANDARD 
-                    }
-                    
-                    (essential + trends + metrics)
-                        .distinctBy { it.id }
+                    // 7 widgets for intermediate users
+                    allWidgets
                         .sortedBy { it.getLayoutPriority() }
                         .take(7)
                 }
                 is DashboardConfiguration.Advanced -> {
-                    // 10 widgets: comprehensive analytics with balanced selection across categories
-                    val byCategory = allWidgets.groupBy { it.category }
-                    val selected = mutableListOf<AnalyticsWidget>()
-                    
-                    // Ensure essential widgets are included
-                    val essential = allWidgets.filter { it.priority == WidgetPriority.ESSENTIAL }
-                    selected.addAll(essential.take(3))
-                    
-                    // Add widgets from each category
-                    byCategory.forEach { (category, categoryWidgets) ->
-                        val remaining = 10 - selected.size
-                        if (remaining > 0) {
-                            val toAdd = categoryWidgets
-                                .filter { !selected.contains(it) }
-                                .sortedWith(compareBy({ it.complexity }, { it.getLayoutPriority() }))
-                                .take(minOf(remaining / byCategory.size + 1, 3))
-                            selected.addAll(toAdd)
-                        }
-                    }
-                    
-                    selected.take(10).sortedBy { it.getLayoutPriority() }
+                    // All widgets for advanced users
+                    allWidgets.sortedBy { it.getLayoutPriority() }
                 }
                 is DashboardConfiguration.Custom -> {
-                    // Custom configuration allows all widgets up to advanced level
-                    allWidgets.sortedBy { it.getLayoutPriority() }.take(10)
+                    // Custom configuration allows all widgets
+                    allWidgets.sortedBy { it.getLayoutPriority() }
                 }
             }
         }

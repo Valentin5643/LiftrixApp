@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.EmojiEvents
@@ -95,20 +92,54 @@ fun ProgressSummaryCards(
                 // Primary stat card with animated progress ring
                 PrimaryStatCard(summaryData = summaryData)
                 
-                // Grid of metric cards (2x2) matching mock design
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    modifier = Modifier.height(200.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                // Fixed grid of metric cards (2x2) - non-scrollable for cleaner look
+                val stats = getMockCompactStats(summaryData, weightUnit, weightFormatter)
+                Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(getMockCompactStats(summaryData, weightUnit, weightFormatter)) { stat ->
+                    // First row with 2 cards
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
                         MockMetricCard(
-                            title = stat.title,
-                            value = stat.value,
-                            subtitle = stat.subtitle,
-                            trend = stat.trend,
-                            onClick = { /* Handle stat click */ }
+                            title = stats[0].title,
+                            value = stats[0].value,
+                            subtitle = stats[0].subtitle,
+                            trend = stats[0].trend,
+                            onClick = { /* Handle stat click */ },
+                            modifier = Modifier.weight(1f)
+                        )
+                        MockMetricCard(
+                            title = stats[1].title,
+                            value = stats[1].value,
+                            subtitle = stats[1].subtitle,
+                            trend = stats[1].trend,
+                            onClick = { /* Handle stat click */ },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    
+                    // Second row with 2 cards
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        MockMetricCard(
+                            title = stats[2].title,
+                            value = stats[2].value,
+                            subtitle = stats[2].subtitle,
+                            trend = stats[2].trend,
+                            onClick = { /* Handle stat click */ },
+                            modifier = Modifier.weight(1f)
+                        )
+                        MockMetricCard(
+                            title = stats[3].title,
+                            value = stats[3].value,
+                            subtitle = stats[3].subtitle,
+                            trend = stats[3].trend,
+                            onClick = { /* Handle stat click */ },
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }

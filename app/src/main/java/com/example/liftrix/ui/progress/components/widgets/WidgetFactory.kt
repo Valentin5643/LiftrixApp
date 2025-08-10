@@ -44,50 +44,12 @@ object WidgetFactory {
         onClick: () -> Unit = {}
     ) {
         when (widget) {
-            // METRICS Category Widgets
-            // CaloriesBurned widget removed - use AverageDuration instead
-            
-            // DailyCalories widget removed - use existing widgets
-            
-            AnalyticsWidget.WorkoutFrequency -> {
-                WorkoutFrequencyWidget(
-                    data = data as? MetricWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
-            
-            AnalyticsWidget.TotalVolume -> {
-                TotalVolumeWidget(
-                    data = data as? MetricWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
-            
-            // ConsistencyStreak renamed to WorkoutStreak
-            
-            AnalyticsWidget.AverageDuration -> {
-                AverageDurationWidget(
-                    data = data as? MetricWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
-            
-            AnalyticsWidget.WorkoutStreak -> {
-                WorkoutStreakWidget(
-                    data = data as? MetricWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
-            
-            // SetCompletionRate widget removed
+            // REMOVED WIDGETS - Now shown in Progress Summary only:
+            // - WorkoutFrequency
+            // - TotalVolume
+            // - WorkoutStreak
+            // - AverageDuration
+            // - VolumeCalendar
             
             // CHARTS Category Widgets
             AnalyticsWidget.VolumeChart -> {
@@ -103,15 +65,6 @@ object WidgetFactory {
             
             AnalyticsWidget.FrequencyChart -> {
                 FrequencyChartWidget(
-                    data = data as? ChartWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
-            
-            AnalyticsWidget.VolumeCalendar -> {
-                VolumeCalendarWidget(
                     data = data as? ChartWidgetData,
                     onRefresh = onRefresh,
                     onClick = onClick,
@@ -217,6 +170,12 @@ object WidgetFactory {
             // ExerciseVariety widget removed
             
             // TimeOfDayAnalysis widget removed
+            
+            // Handle hidden/deprecated widgets - show empty state
+            else -> {
+                // These widgets are hidden from UI but kept for compatibility
+                // Show nothing or empty state
+            }
         }
     }
     
@@ -333,10 +292,13 @@ object WidgetFactory {
      */
     private fun getCleanUnitForWidget(widget: AnalyticsWidget): String {
         return when (widget) {
+            // Hidden widgets (for compatibility)
             AnalyticsWidget.TotalVolume -> "kg"
             AnalyticsWidget.WorkoutStreak -> "days"
             AnalyticsWidget.AverageDuration -> "min"
             AnalyticsWidget.WorkoutFrequency -> "workouts"
+            
+            // Visible widgets
             AnalyticsWidget.StrengthProgress -> "kg"
             AnalyticsWidget.PersonalRecords -> "records"
             AnalyticsWidget.OneRMProgression -> "kg"

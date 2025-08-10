@@ -28,46 +28,38 @@ sealed class AnalyticsWidget(
     val priority: WidgetPriority = WidgetPriority.STANDARD,
     val isDeprecated: Boolean = false
 ) {
-    /**
-     * Basic workout frequency tracking widget
-     * Shows workouts per week/month with simple visualization
-     */
+    // Hidden widgets - Not shown in UI but kept for compatibility
     @Serializable
     data object WorkoutFrequency : AnalyticsWidget(
         id = "workout_frequency",
         displayName = "Workout Frequency",
-        description = "Track your workout consistency over time",
+        description = "Hidden - shown in Progress Summary only",
         category = WidgetCategory.METRICS,
         complexity = WidgetComplexity.SIMPLE,
-        priority = WidgetPriority.FIXED_BEGINNER
+        priority = WidgetPriority.STANDARD,
+        isDeprecated = true
     )
     
-    /**
-     * Total volume tracking widget
-     * Displays cumulative volume lifted with trend analysis
-     */
     @Serializable
     data object TotalVolume : AnalyticsWidget(
         id = "total_volume",
-        displayName = "Total Volume",
-        description = "Monitor your total weight lifted progress",
+        displayName = "Total Volume", 
+        description = "Hidden - shown in Progress Summary only",
         category = WidgetCategory.METRICS,
         complexity = WidgetComplexity.SIMPLE,
-        priority = WidgetPriority.FIXED_BEGINNER
+        priority = WidgetPriority.STANDARD,
+        isDeprecated = true
     )
     
-    /**
-     * Volume calendar widget
-     * Monthly calendar view with daily volume color coding
-     */
     @Serializable
     data object VolumeCalendar : AnalyticsWidget(
         id = "volume_calendar",
         displayName = "Volume Calendar",
-        description = "Visual calendar showing daily workout volume",
+        description = "Hidden - shown in Progress Summary only",
         category = WidgetCategory.CHARTS,
         complexity = WidgetComplexity.MODERATE,
-        priority = WidgetPriority.STANDARD
+        priority = WidgetPriority.STANDARD,
+        isDeprecated = true
     )
     
     /**
@@ -112,18 +104,15 @@ sealed class AnalyticsWidget(
         complexity = WidgetComplexity.MODERATE
     )
     
-    /**
-     * Workout streak widget
-     * Tracks current and historical workout streaks
-     */
     @Serializable
     data object WorkoutStreak : AnalyticsWidget(
         id = "workout_streak",
         displayName = "Workout Streak",
-        description = "Track your current and historical workout streaks",
+        description = "Hidden - shown in Progress Summary only",
         category = WidgetCategory.METRICS,
         complexity = WidgetComplexity.SIMPLE,
-        priority = WidgetPriority.ESSENTIAL
+        priority = WidgetPriority.STANDARD,
+        isDeprecated = true
     )
     
     /**
@@ -167,18 +156,15 @@ sealed class AnalyticsWidget(
     )
     
     
-    /**
-     * Average duration widget
-     * Tracks average workout duration with trends
-     */
     @Serializable
     data object AverageDuration : AnalyticsWidget(
         id = "average_duration",
         displayName = "Average Duration",
-        description = "Track average workout duration with trends",
+        description = "Hidden - shown in Progress Summary only",
         category = WidgetCategory.METRICS,
         complexity = WidgetComplexity.SIMPLE,
-        priority = WidgetPriority.ESSENTIAL
+        priority = WidgetPriority.STANDARD,
+        isDeprecated = true
     )
     
     /**
@@ -250,25 +236,27 @@ sealed class AnalyticsWidget(
      * Gets the widget priority for layout ordering (lower = higher priority)
      */
     fun getLayoutPriority(): Int = when (this) {
-        WorkoutFrequency -> 1
-        TotalVolume -> 2
-        WorkoutStreak -> 3
-        AverageDuration -> 4
+        // Hidden widgets (should never appear in UI)
+        WorkoutFrequency -> 999
+        TotalVolume -> 999
+        WorkoutStreak -> 999
+        AverageDuration -> 999
+        VolumeCalendar -> 999
         
-        VolumeChart -> 5
-        FrequencyChart -> 6
-        VolumeCalendar -> 7
-        ProgressChart -> 8
+        // Visible widgets
+        VolumeChart -> 1
+        FrequencyChart -> 2
+        ProgressChart -> 3
         
-        StrengthProgress -> 9
-        PersonalRecords -> 10
-        VolumeLoadProgression -> 11
-        OneRMProgression -> 12
-        MonthlySummary -> 13
+        StrengthProgress -> 4
+        PersonalRecords -> 5
+        VolumeLoadProgression -> 6
+        OneRMProgression -> 7
+        MonthlySummary -> 8
         
-        VolumeTrends -> 14
-        RecoveryMetrics -> 15
-        MuscleGroupDistribution -> 16
+        VolumeTrends -> 9
+        RecoveryMetrics -> 10
+        MuscleGroupDistribution -> 11
     }
     
     /**
@@ -319,14 +307,11 @@ sealed class AnalyticsWidget(
     
     companion object {
         /**
-         * All available analytics widgets - exactly 15 widgets per specification
+         * All available analytics widgets - only non-deprecated widgets shown in UI
          */
         fun getAllWidgets(): List<AnalyticsWidget> = listOf(
-            // METRICS Category (4 widgets)
-            WorkoutFrequency, TotalVolume, WorkoutStreak, AverageDuration,
-            
-            // CHARTS Category (4 widgets)
-            VolumeChart, FrequencyChart, VolumeCalendar, ProgressChart,
+            // CHARTS Category (3 widgets)
+            VolumeChart, FrequencyChart, ProgressChart,
             
             // PROGRESS Category (5 widgets)
             StrengthProgress, PersonalRecords, VolumeLoadProgression, 
@@ -334,7 +319,7 @@ sealed class AnalyticsWidget(
             
             // ANALYTICS Category (3 widgets)
             VolumeTrends, RecoveryMetrics, MuscleGroupDistribution
-        )
+        ).filter { !it.isDeprecated }
         
         /**
          * Gets widgets by category
