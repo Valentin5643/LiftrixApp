@@ -111,7 +111,7 @@ abstract class ServiceModule {
         @Singleton
         fun provideProgressDataService(
             progressStatsRepository: ProgressStatsRepository,
-            cacheManager: com.example.liftrix.core.cache.CacheManager,
+            cacheManager: com.example.liftrix.core.cache.EnhancedCacheManager,
             @IoDispatcher ioDispatcher: CoroutineDispatcher
         ): ProgressDataService = ProgressDataServiceImpl(
             progressStatsRepository = progressStatsRepository,
@@ -142,6 +142,7 @@ abstract class ServiceModule {
             cacheManager: com.example.liftrix.core.cache.CacheManager,
             widgetCacheManager: com.example.liftrix.service.cache.WidgetCacheManager,
             realtimeSyncManager: com.example.liftrix.service.sync.RealtimeSyncManager,
+            getWidgetDataUseCase: com.example.liftrix.domain.usecase.analytics.GetWidgetDataUseCase,
             @IoDispatcher ioDispatcher: CoroutineDispatcher
         ): AnalyticsService = AnalyticsServiceImpl(
             widgetManager = widgetManager,
@@ -150,6 +151,7 @@ abstract class ServiceModule {
             cacheManager = cacheManager,
             widgetCacheManager = widgetCacheManager,
             realtimeSyncManager = realtimeSyncManager,
+            getWidgetDataUseCase = getWidgetDataUseCase,
             ioDispatcher = ioDispatcher
         )
         

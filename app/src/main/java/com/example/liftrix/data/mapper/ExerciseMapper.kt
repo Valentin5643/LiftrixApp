@@ -93,7 +93,7 @@ class ExerciseMapper @Inject constructor(
      */
     fun toEntity(exercise: Exercise): ExerciseEntity {
         return ExerciseEntity(
-            id = if (exercise.id.value.isNotBlank() && exercise.id.value != "0") exercise.id.value.toLong() else 0,
+            id = 0, // Always use 0 for new exercises to let database auto-generate ID
             workoutId = exercise.workoutId.value,
             exerciseLibraryId = exercise.libraryExercise.id,
             orderIndex = exercise.orderIndex,

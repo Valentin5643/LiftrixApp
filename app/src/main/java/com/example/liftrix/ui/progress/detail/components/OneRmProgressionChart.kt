@@ -498,14 +498,14 @@ private fun prepareChartData(
 ): List<ChartPoint> {
     if (data.progressionPoints.isEmpty()) return emptyList()
     
-    val allValues = data.progressionPoints.map { it.oneRmValue }
+    val allValues = data.progressionPoints.map { it.bestOneRm }
     val minValue = allValues.minOrNull() ?: 0f
     val maxValue = allValues.maxOrNull() ?: 0f
     val valueRange = maxValue - minValue
     
     return data.progressionPoints.mapIndexed { index, point ->
         val normalizedX = index.toFloat() / (data.progressionPoints.size - 1).coerceAtLeast(1)
-        val value = point.oneRmValue
+        val value = point.bestOneRm
         val normalizedY = if (valueRange > 0) (value - minValue) / valueRange else 0f
         
         ChartPoint(
@@ -513,8 +513,8 @@ private fun prepareChartData(
             y = normalizedY,
             value = value,
             date = point.date.toString(),
-            exerciseId = point.exerciseId,
-            exerciseName = point.exerciseName
+            exerciseId = point.exerciseId ?: "",
+            exerciseName = point.exerciseName ?: ""
         )
     }
 }

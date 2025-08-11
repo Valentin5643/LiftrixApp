@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.os.Build
 import com.example.liftrix.BuildConfig
 import com.example.liftrix.domain.repository.WidgetPreferencesRepository
+import com.example.liftrix.service.CacheWarmingService
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,6 +21,9 @@ class LiftrixApp : Application() {
     
     @Inject
     lateinit var widgetPreferencesRepository: WidgetPreferencesRepository
+    
+    @Inject
+    lateinit var cacheWarmingService: CacheWarmingService
     
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     
@@ -41,6 +45,9 @@ class LiftrixApp : Application() {
         
         // Initialize widget migration system
         initializeWidgetMigration()
+        
+        // Initialize cache warming system
+        initializeCacheWarmingSystem()
     }
     
     /**
@@ -107,6 +114,27 @@ class LiftrixApp : Application() {
                 Timber.i("Widget migration system initialized successfully")
             } catch (e: Exception) {
                 Timber.e(e, "Failed to initialize widget migration system")
+            }
+        }
+    }
+    
+    /**
+     * Initialize cache warming system to preload frequently accessed data on app startup.
+     * This improves user experience by reducing cold start loading times for analytics dashboards.
+     */
+    private fun initializeCacheWarmingSystem() {
+        applicationScope.launch {
+            try {
+                Timber.d("Initializing cache warming system")
+                
+                // Start cache warming process in background
+                // This will preload user-specific data if authenticated user is found
+                cacheWarmingService.startCacheWarming()
+                
+                Timber.i("Cache warming system initialized successfully")
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to initialize cache warming system")
+                // Don't crash app if cache warming fails - it's an optimization, not critical
             }
         }
     }

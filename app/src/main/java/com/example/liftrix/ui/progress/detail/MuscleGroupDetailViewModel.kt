@@ -1,15 +1,23 @@
 package com.example.liftrix.ui.progress.detail
 
 import androidx.lifecycle.viewModelScope
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import androidx.lifecycle.SavedStateHandle
+import com.example.liftrix.ui.common.viewmodel.StatefulDetailViewModel
+import com.example.liftrix.ui.common.viewmodel.DetailScreenStateKeys
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.model.MuscleGroup
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.usecase.analytics.GetMuscleGroupAnalyticsUseCase
+import com.example.liftrix.domain.usecase.analytics.MuscleGroupAnalyticsData as UseCaseMuscleGroupAnalyticsData
+import com.example.liftrix.domain.usecase.analytics.MuscleGroupData as UseCaseMuscleGroupData
+import com.example.liftrix.domain.usecase.analytics.BalanceAnalysis as UseCaseBalanceAnalysis
+import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import timber.log.Timber
@@ -30,26 +38,39 @@ import kotlinx.datetime.*
  */
 @HiltViewModel
 class MuscleGroupDetailViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
     errorHandler: ErrorHandler,
-    // TODO: Inject actual use cases when implemented
-    // private val getMuscleGroupDistributionUseCase: GetMuscleGroupDistributionUseCase,
+    private val getMuscleGroupAnalyticsUseCase: GetMuscleGroupAnalyticsUseCase,
+    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+    // TODO: Inject additional use cases when available
     // private val getMuscleGroupExercisesUseCase: GetMuscleGroupExercisesUseCase,
-    // private val generateBalanceRecommendationsUseCase: GenerateBalanceRecommendationsUseCase
-) : BaseViewModel<MuscleGroupDetailViewModel.UiState, MuscleGroupDetailViewModel.Event>(errorHandler) {
+) : StatefulDetailViewModel<MuscleGroupDetailViewModel.UiState, MuscleGroupDetailViewModel.Event>(savedStateHandle, errorHandler) {
 
     override val _uiState = MutableStateFlow<UiState>(UiState.Loading)
 
     /**
      * Current configuration state
      */
-    private val _selectedMuscleGroup = MutableStateFlow<MuscleGroup?>(null)
+    private val _selectedMuscleGroup = MutableStateFlow<MuscleGroup?>(
+        savedStateHandle.get<String>(KEY_SELECTED_MUSCLE_GROUP)?.let { MuscleGroup.valueOf(it) }
+    )
     val selectedMuscleGroup = _selectedMuscleGroup
     
-    private val _timeRange = MutableStateFlow(TimeRangeType.MONTH)
+    private val _timeRange = MutableStateFlow(
+        savedStateHandle.get<String>(KEY_TIME_RANGE)?.let { TimeRangeType.valueOf(it) } ?: TimeRangeType.MONTH
+    )
     val timeRange = _timeRange
     
-    private val _viewMode = MutableStateFlow(ViewMode.DISTRIBUTION)
+    private val _viewMode = MutableStateFlow(
+        savedStateHandle.get<String>(KEY_VIEW_MODE)?.let { ViewMode.valueOf(it) } ?: ViewMode.DISTRIBUTION
+    )
     val viewMode = _viewMode
+
+    companion object {
+        private const val KEY_SELECTED_MUSCLE_GROUP = "selectedMuscleGroup"
+        private const val KEY_TIME_RANGE = "timeRange"
+        private const val KEY_VIEW_MODE = "viewMode"
+    }
 
     /**
      * UI State for the muscle group detail screen
@@ -172,6 +193,27 @@ class MuscleGroupDetailViewModel @Inject constructor(
 
     init {
         Timber.d("MuscleGroupDetailViewModel initialized")
+        
+        // Set up reactive data binding for real-time updates
+        setupReactiveDataBinding()
+    }
+    
+    /**
+     * Sets up reactive data binding to automatically update when workout data changes
+     */
+    private fun setupReactiveDataBinding() {
+        viewModelScope.launch {
+            // TODO: Replace with actual repository flow when available
+            // Example reactive binding:
+            // workoutRepository.getMuscleGroupDataFlow(getCurrentUserId()).collectLatest {
+            //     if (_uiState.value is UiState.Success) {
+            //         loadData(_selectedMuscleGroup.value, _timeRange.value) // Refresh data when muscle group data changes
+            //     }
+            // }
+            
+            // For now, set up reactive binding stub
+            Timber.d("Reactive data binding initialized for MuscleGroupDetailViewModel")
+        }
     }
 
     override fun handleEvent(event: Event) {
@@ -192,7 +234,7 @@ class MuscleGroupDetailViewModel @Inject constructor(
     }
 
     override fun updateErrorState(error: LiftrixError) {
-        _uiState.value = UiState.Error(error)
+        handleError(error)
     }
 
     /**
@@ -206,13 +248,31 @@ class MuscleGroupDetailViewModel @Inject constructor(
         // Update current configuration
         _selectedMuscleGroup.value = muscleGroup
         _timeRange.value = timeRange
+        
+        // Persist to SavedStateHandle
+        savedStateHandle[KEY_SELECTED_MUSCLE_GROUP] = muscleGroup?.name
+        savedStateHandle[KEY_TIME_RANGE] = timeRange.name
 
-        // TODO: Replace with actual use case call
         executeUseCase(
             useCase = { 
-                // Simulate API call - keep under 500ms performance target
-                kotlinx.coroutines.delay(200)
-                createMockData(muscleGroup, timeRange)
+                val userId = getCurrentUserIdUseCase() ?: return@executeUseCase Result.failure(
+                    LiftrixError.AuthenticationError("User not authenticated")
+                )
+                
+                val result = getMuscleGroupAnalyticsUseCase.execute(
+                    userId = userId,
+                    muscleGroup = convertToUseCaseMuscleGroup(muscleGroup),
+                    timeRange = timeRange
+                )
+                
+                result.fold(
+                    onSuccess = { useCaseData ->
+                        // Convert use case data to ViewModel data format
+                        val viewModelData = convertToViewModelData(useCaseData)
+                        Result.success(viewModelData)
+                    },
+                    onFailure = { error -> Result.failure(error) }
+                )
             },
             onSuccess = { data ->
                 val loadTime = System.currentTimeMillis() - startTime
@@ -261,6 +321,7 @@ class MuscleGroupDetailViewModel @Inject constructor(
         if (currentState is UiState.Success) {
             // Update view mode to exercises when selecting a segment
             _viewMode.value = ViewMode.EXERCISES
+            savedStateHandle[KEY_VIEW_MODE] = ViewMode.EXERCISES.name
             
             // Load exercises for the selected muscle group
             loadData(muscleGroup, _timeRange.value)
@@ -273,6 +334,7 @@ class MuscleGroupDetailViewModel @Inject constructor(
     private fun clearMuscleGroupSelection() {
         Timber.d("Clearing muscle group selection")
         _viewMode.value = ViewMode.DISTRIBUTION
+        savedStateHandle[KEY_VIEW_MODE] = ViewMode.DISTRIBUTION.name
         loadData(null, _timeRange.value)
     }
 
@@ -283,6 +345,7 @@ class MuscleGroupDetailViewModel @Inject constructor(
         if (newViewMode != _viewMode.value) {
             Timber.d("Updating view mode to: $newViewMode")
             _viewMode.value = newViewMode
+            savedStateHandle[KEY_VIEW_MODE] = newViewMode.name
             
             val currentState = _uiState.value
             if (currentState is UiState.Success) {
@@ -320,10 +383,112 @@ class MuscleGroupDetailViewModel @Inject constructor(
     }
 
     /**
-     * Creates mock data for development/testing
-     * TODO: Remove when actual use cases are implemented
+     * Converts UI MuscleGroup to use case MuscleGroup.
      */
-    private fun createMockData(selectedMuscleGroup: MuscleGroup?, timeRange: TimeRangeType): com.example.liftrix.domain.model.common.LiftrixResult<MuscleGroupData> {
+    private fun convertToUseCaseMuscleGroup(uiMuscleGroup: MuscleGroup?): com.example.liftrix.domain.usecase.analytics.MuscleGroup? {
+        return uiMuscleGroup?.let { ui ->
+            when (ui) {
+                MuscleGroup.CHEST -> com.example.liftrix.domain.usecase.analytics.MuscleGroup.CHEST
+                MuscleGroup.BACK -> com.example.liftrix.domain.usecase.analytics.MuscleGroup.BACK
+                MuscleGroup.SHOULDERS -> com.example.liftrix.domain.usecase.analytics.MuscleGroup.SHOULDERS
+                MuscleGroup.BICEPS -> com.example.liftrix.domain.usecase.analytics.MuscleGroup.ARMS
+                MuscleGroup.TRICEPS -> com.example.liftrix.domain.usecase.analytics.MuscleGroup.ARMS
+                MuscleGroup.QUADRICEPS, MuscleGroup.HAMSTRINGS, MuscleGroup.CALVES -> com.example.liftrix.domain.usecase.analytics.MuscleGroup.LEGS
+                MuscleGroup.GLUTES -> com.example.liftrix.domain.usecase.analytics.MuscleGroup.GLUTES
+                MuscleGroup.CORE -> com.example.liftrix.domain.usecase.analytics.MuscleGroup.CORE
+                else -> com.example.liftrix.domain.usecase.analytics.MuscleGroup.OTHER
+            }
+        }
+    }
+
+    /**
+     * Converts use case MuscleGroup to UI MuscleGroup.
+     */
+    private fun convertFromUseCaseMuscleGroup(useCaseMuscleGroup: com.example.liftrix.domain.usecase.analytics.MuscleGroup): MuscleGroup {
+        return when (useCaseMuscleGroup) {
+            com.example.liftrix.domain.usecase.analytics.MuscleGroup.CHEST -> MuscleGroup.CHEST
+            com.example.liftrix.domain.usecase.analytics.MuscleGroup.BACK -> MuscleGroup.BACK
+            com.example.liftrix.domain.usecase.analytics.MuscleGroup.SHOULDERS -> MuscleGroup.SHOULDERS
+            com.example.liftrix.domain.usecase.analytics.MuscleGroup.ARMS -> MuscleGroup.BICEPS // Default to biceps for arms
+            com.example.liftrix.domain.usecase.analytics.MuscleGroup.LEGS -> MuscleGroup.QUADRICEPS // Default to quads for legs
+            com.example.liftrix.domain.usecase.analytics.MuscleGroup.GLUTES -> MuscleGroup.GLUTES
+            com.example.liftrix.domain.usecase.analytics.MuscleGroup.CORE -> MuscleGroup.CORE
+            com.example.liftrix.domain.usecase.analytics.MuscleGroup.CARDIO -> MuscleGroup.CORE // Map to core as fallback
+            com.example.liftrix.domain.usecase.analytics.MuscleGroup.OTHER -> MuscleGroup.CORE // Map to core as fallback
+        }
+    }
+
+    /**
+     * Converts use case data format to ViewModel data format for UI compatibility.
+     */
+    private fun convertToViewModelData(useCaseData: UseCaseMuscleGroupAnalyticsData): MuscleGroupData {
+        // Create color palette for muscle groups
+        val colors = listOf(
+            androidx.compose.ui.graphics.Color(0xFF339989), // Persian Green
+            androidx.compose.ui.graphics.Color(0xFF7DE2D1), // Tiffany Blue  
+            androidx.compose.ui.graphics.Color(0xFF2B2C28), // Jet
+            androidx.compose.ui.graphics.Color(0xFF4A90A4), // Steel Blue
+            androidx.compose.ui.graphics.Color(0xFF83C5BE), // Powder Blue
+            androidx.compose.ui.graphics.Color(0xFF006D77), // Dark Cyan
+            androidx.compose.ui.graphics.Color(0xFFE29578), // Sandy Brown
+            androidx.compose.ui.graphics.Color(0xFFFDBF50), // Maize
+        )
+        
+        // Convert muscle group distribution
+        val distribution = useCaseData.muscleGroupDistribution.mapIndexed { index, data ->
+            MuscleGroupDistribution(
+                muscleGroup = convertFromUseCaseMuscleGroup(data.muscleGroup),
+                percentage = data.percentage.toFloat(),
+                totalVolume = data.totalVolume.toFloat(),
+                exerciseCount = data.uniqueExercises,
+                workoutCount = data.workoutDays,
+                color = colors[index % colors.size]
+            )
+        }
+        
+        // Convert balance analysis
+        val balanceAnalysis = BalanceAnalysis(
+            overtrainingRisk = useCaseData.balanceAnalysis.imbalances
+                .filter { it.currentPercentage > it.expectedPercentage && it.severity != com.example.liftrix.domain.usecase.analytics.ImbalanceSeverity.LOW }
+                .map { convertFromUseCaseMuscleGroup(it.muscleGroup) },
+            undertrainingRisk = useCaseData.balanceAnalysis.imbalances
+                .filter { it.currentPercentage < it.expectedPercentage && it.severity != com.example.liftrix.domain.usecase.analytics.ImbalanceSeverity.LOW }
+                .map { convertFromUseCaseMuscleGroup(it.muscleGroup) },
+            balanceScore = useCaseData.balanceAnalysis.balanceScore.toFloat(),
+            recommendations = useCaseData.recommendations.map { recommendation ->
+                BalanceRecommendation(
+                    muscleGroup = MuscleGroup.CHEST, // TODO: Extract muscle group from recommendation
+                    recommendationType = RecommendationType.INCREASE_VOLUME, // TODO: Determine type from recommendation
+                    message = recommendation,
+                    suggestedExercises = emptyList() // TODO: Extract exercises from recommendation
+                )
+            }
+        )
+        
+        // Create exercises for selected muscle group (mock for now)
+        val exercises = useCaseData.targetMuscleGroup?.let { targetGroup ->
+            createMockExercisesForMuscleGroup(convertFromUseCaseMuscleGroup(targetGroup))
+        } ?: emptyList()
+        
+        // Create mock weekly comparison
+        val weeklyComparison = createMockWeeklyComparison(useCaseData.timeRange, colors)
+        
+        return MuscleGroupData(
+            distribution = distribution,
+            selectedMuscleGroup = useCaseData.targetMuscleGroup?.let { convertFromUseCaseMuscleGroup(it) },
+            selectedMuscleGroupExercises = exercises,
+            timeRange = useCaseData.timeRange,
+            viewMode = viewMode.value,
+            balanceAnalysis = balanceAnalysis,
+            weeklyComparison = weeklyComparison
+        )
+    }
+
+    /**
+     * Creates mock data for development/testing - fallback for when use case data is insufficient
+     * TODO: Remove when comprehensive use cases are implemented
+     */
+    private fun createMockDataFallback(selectedMuscleGroup: MuscleGroup?, timeRange: TimeRangeType): com.example.liftrix.domain.model.common.LiftrixResult<MuscleGroupData> {
         
         // Create color palette for muscle groups
         val colors = listOf(
@@ -406,7 +571,7 @@ class MuscleGroupDetailViewModel @Inject constructor(
             selectedMuscleGroup = selectedMuscleGroup,
             selectedMuscleGroupExercises = exercises,
             timeRange = timeRange,
-            viewMode = _viewMode.value,
+            viewMode = viewMode.value,
             balanceAnalysis = balanceAnalysis,
             weeklyComparison = weeklyComparison
         )

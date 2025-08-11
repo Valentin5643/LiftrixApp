@@ -1,7 +1,11 @@
 package com.example.liftrix.data.repository.workout
 
 import com.example.liftrix.data.local.dao.WorkoutDao
+import com.example.liftrix.data.local.dao.ExerciseDao
+import com.example.liftrix.data.local.dao.ExerciseSetDao
+import com.example.liftrix.data.local.entity.ExerciseSetEntity
 import com.example.liftrix.data.mapper.WorkoutMapper
+import com.example.liftrix.data.mapper.ExerciseMapper
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.model.WorkoutSummary
@@ -45,7 +49,10 @@ import javax.inject.Singleton
 @Singleton
 class WorkoutRepositoryImpl @Inject constructor(
     private val workoutDao: WorkoutDao,
-    private val workoutMapper: WorkoutMapper
+    private val exerciseDao: ExerciseDao,
+    private val exerciseSetDao: ExerciseSetDao,
+    private val workoutMapper: WorkoutMapper,
+    private val exerciseMapper: ExerciseMapper
 ) : WorkoutRepository {
 
     override suspend fun createWorkout(workout: Workout): LiftrixResult<Workout> {
@@ -77,14 +84,65 @@ class WorkoutRepositoryImpl @Inject constructor(
             val entity = workoutMapper.toEntity(workout, isSynced = false)
             val insertedId = workoutDao.insertWorkout(entity)
             
+            // 🔥 CRITICAL FIX: For string primary keys, insertWorkout returns row count, not the ID
+            
             if (insertedId > 0) {
-                // 🔥 CRITICAL FIX: Preserve the original workout ID instead of overwriting with auto-increment
-                Timber.d("WORKOUT-DEBUG: Saved ${workout.name} (${workout.id.value}) for user: ${workout.userId}")
+                // 🔥 CRITICAL FIX: The workout ID is the original UUID string, not the insert return value
+                
+                // 🔥 NEW: Create ExerciseEntity and ExerciseSetEntity records for analytics queries
+                workout.exercises.forEachIndexed { exerciseIndex, exercise ->
+                    
+                    
+                    // Create a modified exercise with correct workoutId and orderIndex
+                    val exerciseWithCorrectWorkoutId = exercise.copy(
+                        workoutId = workout.id,
+                        orderIndex = exerciseIndex
+                    )
+                    
+                    val exerciseEntity = try {
+                        exerciseMapper.toEntity(exerciseWithCorrectWorkoutId)
+                    } catch (e: Exception) {
+                        throw RuntimeException("Failed to map exercise to entity: ${e.message}", e)
+                    }
+                    
+                    
+                    val exerciseId = try {
+                        exerciseDao.insertExercise(exerciseEntity)
+                    } catch (e: Exception) {
+                        throw e // Re-throw to preserve error propagation
+                    }
+                    
+                    
+                    // Create ExerciseSetEntity records for each set
+                    if (exercise.sets.isEmpty()) {
+                    } else {
+                    }
+                    
+                    
+                    try {
+                        exercise.sets.forEachIndexed { setIndex, set ->
+                            
+                            val setEntity = ExerciseSetEntity(
+                                exerciseId = exerciseId,
+                                setNumber = setIndex + 1,
+                                reps = set.reps?.count,
+                                weightKg = set.weight?.kilograms?.toFloat(),
+                                timeSeconds = set.time?.seconds?.toInt(),
+                                rpe = set.rpe?.value,
+                                completedAt = set.completedAt?.toEpochMilli()
+                            )
+                            
+                            
+                            val insertedSetId = exerciseSetDao.insertSet(setEntity)
+                        }
+                    } catch (e: Exception) {
+                    }
+                    
+                }
                 
                 // Verify the workout can be retrieved immediately
                 val verifyEntity = workoutDao.getWorkoutByIdForUser(workout.id.value, workout.userId)
                 if (verifyEntity == null) {
-                    Timber.d("WORKOUT-DEBUG: CRITICAL - Workout not found immediately after insert!")
                 }
                 
                 workout // Return original workout with preserved ID
@@ -245,6 +303,41 @@ class WorkoutRepositoryImpl @Inject constructor(
             
             if (updatedRows > 0) {
                 Timber.i("🔥 UPDATE-WORKOUT-DEBUG: Successfully updated workout - ID: ${workout.id.value}, Rows affected: $updatedRows")
+                
+                // 🔥 FIX: Also handle exercise sets during update 
+                // Delete all existing sets for this workout first, then recreate them
+                exerciseSetDao.deleteSetsForWorkout(workout.id.value)
+                
+                workout.exercises.forEachIndexed { exerciseIndex, exercise ->
+                    // Create a modified exercise with correct workoutId and orderIndex
+                    val exerciseWithCorrectWorkoutId = exercise.copy(
+                        workoutId = workout.id,
+                        orderIndex = exerciseIndex
+                    )
+                    val exerciseEntity = try {
+                        exerciseMapper.toEntity(exerciseWithCorrectWorkoutId)
+                    } catch (e: Exception) {
+                        throw RuntimeException("Failed to map exercise to entity during update: ${e.message}", e)
+                    }
+                    val exerciseId = exerciseDao.insertExercise(exerciseEntity)
+                    
+                    // Create ExerciseSetEntity records for each set
+                    exercise.sets.forEachIndexed { setIndex, set ->
+                        val setEntity = ExerciseSetEntity(
+                            exerciseId = exerciseId,
+                            setNumber = setIndex + 1,
+                            reps = set.reps?.count,
+                            weightKg = set.weight?.kilograms?.toFloat(),
+                            timeSeconds = set.time?.seconds?.toInt(),
+                            rpe = set.rpe?.value,
+                            completedAt = set.completedAt?.toEpochMilli()
+                        )
+                        
+                        
+                        exerciseSetDao.insertSet(setEntity)
+                    }
+                }
+                
                 workout
             } else {
                 Timber.e("🔥 UPDATE-WORKOUT-DEBUG: Update affected 0 rows for workout ID: ${workout.id.value}")

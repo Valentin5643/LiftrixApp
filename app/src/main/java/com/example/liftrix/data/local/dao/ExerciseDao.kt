@@ -104,4 +104,109 @@ interface ExerciseDao {
         WHERE w.user_id = :userId AND e.workout_id = :workoutId
     """)
     suspend fun validateWorkoutExerciseRelationship(userId: String, workoutId: String): Int
+    
+    // Enhanced analytics queries for dashboard real data integration
+    
+    /**
+     * Gets distinct exercise library IDs used by user within date range
+     * Used for filtering and building exercise selection lists in analytics
+     * 
+     * @param userId User ID for scoping
+     * @param startDate Start date for range (inclusive)
+     * @param endDate End date for range (inclusive)
+     * @return List of exercise library IDs ordered by most recently used
+     */
+    @Query("""
+        SELECT e.exercise_library_id 
+        FROM exercises e 
+        JOIN workouts w ON e.workout_id = w.id 
+        WHERE w.user_id = :userId 
+        AND w.status = 'COMPLETED'
+        AND DATE(w.date) BETWEEN :startDate AND :endDate
+        GROUP BY e.exercise_library_id
+        ORDER BY MAX(e.created_at) DESC
+    """)
+    suspend fun getUsedExerciseIds(userId: String, startDate: String, endDate: String): List<String>
+    
+    /**
+     * Gets exercise frequency counts for ranking and usage analysis
+     * Shows how often each exercise is performed within the date range
+     * 
+     * @param userId User ID for scoping
+     * @param startDate Start date for range (inclusive)
+     * @param endDate End date for range (inclusive)
+     * @return List of ExerciseFrequencyResult ordered by frequency DESC
+     */
+    @Query("""
+        SELECT 
+            e.exercise_library_id,
+            el.name as exercise_name,
+            el.primary_muscle_group,
+            COUNT(e.id) as exercise_frequency,
+            COUNT(DISTINCT w.date) as workout_days
+        FROM exercises e
+        JOIN workouts w ON e.workout_id = w.id
+        JOIN exercise_library el ON e.exercise_library_id = el.id
+        WHERE w.user_id = :userId
+        AND w.status = 'COMPLETED'
+        AND DATE(w.date) BETWEEN :startDate AND :endDate
+        GROUP BY e.exercise_library_id, el.name, el.primary_muscle_group
+        ORDER BY exercise_frequency DESC, workout_days DESC
+    """)
+    suspend fun getExerciseFrequency(
+        userId: String,
+        startDate: String,
+        endDate: String
+    ): List<ExerciseFrequencyResult>
+    
+    /**
+     * Gets muscle group distribution from completed workouts
+     * Used for muscle group balance analysis in dashboard
+     * 
+     * @param userId User ID for scoping
+     * @param startDate Start date for range (inclusive)
+     * @param endDate End date for range (inclusive)
+     * @return List of MuscleGroupDistributionResult ordered by count DESC
+     */
+    @Query("""
+        SELECT 
+            el.primary_muscle_group,
+            COUNT(e.id) as exercise_count,
+            COUNT(DISTINCT e.exercise_library_id) as unique_exercises,
+            COUNT(DISTINCT w.date) as workout_days
+        FROM exercises e
+        JOIN workouts w ON e.workout_id = w.id
+        JOIN exercise_library el ON e.exercise_library_id = el.id
+        WHERE w.user_id = :userId
+        AND w.status = 'COMPLETED'
+        AND DATE(w.date) BETWEEN :startDate AND :endDate
+        GROUP BY el.primary_muscle_group
+        ORDER BY exercise_count DESC
+    """)
+    suspend fun getMuscleGroupDistribution(
+        userId: String,
+        startDate: String,
+        endDate: String
+    ): List<MuscleGroupDistributionResult>
 }
+
+/**
+ * Data class for exercise frequency analysis results
+ */
+data class ExerciseFrequencyResult(
+    val exercise_library_id: String,
+    val exercise_name: String,
+    val primary_muscle_group: String,
+    val exercise_frequency: Int,
+    val workout_days: Int
+)
+
+/**
+ * Data class for muscle group distribution analysis results  
+ */
+data class MuscleGroupDistributionResult(
+    val primary_muscle_group: String,
+    val exercise_count: Int,
+    val unique_exercises: Int,
+    val workout_days: Int
+)

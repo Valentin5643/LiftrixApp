@@ -170,7 +170,8 @@ fun OneRmProgressionDetailScreen(
                         },
                         onRefresh = {
                             viewModel.handleEvent(OneRmDetailViewModel.Event.RefreshData)
-                        }
+                        },
+                        viewModel = viewModel
                     )
                 }
             }
@@ -186,12 +187,29 @@ private fun OneRmProgressionContent(
     data: OneRmDetailViewModel.OneRmProgressionData,
     showEstimated: Boolean,
     onToggleShowEstimated: (Boolean) -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    viewModel: OneRmDetailViewModel = hiltViewModel()
 ) {
+    // Restore scroll position and set up scroll position saving
+    val scrollState = rememberScrollState()
+    
+    // Restore scroll position on initialization
+    LaunchedEffect(Unit) {
+        val savedPosition = viewModel.getSavedScrollPosition()
+        if (savedPosition > 0) {
+            scrollState.scrollTo(savedPosition)
+        }
+    }
+    
+    // Save scroll position when it changes
+    LaunchedEffect(scrollState.value) {
+        viewModel.saveScrollPosition(scrollState.value)
+    }
+    
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
     ) {
         // Exercise filter summary
         if (data.exercisesIncluded.isNotEmpty()) {

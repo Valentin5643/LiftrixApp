@@ -1,19 +1,28 @@
 package com.example.liftrix.ui.progress.detail
 
 import androidx.lifecycle.viewModelScope
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import androidx.lifecycle.SavedStateHandle
+import com.example.liftrix.ui.common.viewmodel.StatefulDetailViewModel
+import com.example.liftrix.ui.common.viewmodel.DetailScreenStateKeys
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.usecase.analytics.GetOneRmProgressionUseCase
+import com.example.liftrix.domain.usecase.analytics.OneRmProgressionData as UseCaseOneRmProgressionData
+import com.example.liftrix.domain.model.analytics.ExerciseProgression
+import com.example.liftrix.domain.model.analytics.OneRmDataPoint
+import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import timber.log.Timber
 import kotlinx.datetime.*
+import kotlinx.serialization.Serializable
 
 /**
  * ViewModel for 1RM progression detail screen
@@ -30,35 +39,71 @@ import kotlinx.datetime.*
  */
 @HiltViewModel
 class OneRmDetailViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
     errorHandler: ErrorHandler,
-    // TODO: Inject actual use cases when implemented
-    // private val getOneRmProgressionUseCase: GetOneRmProgressionUseCase,
+    private val getOneRmProgressionUseCase: GetOneRmProgressionUseCase,
+    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+    // TODO: Inject exercise library and export use cases when available
     // private val getExerciseLibraryUseCase: GetExerciseLibraryUseCase,
     // private val exportOneRmDataUseCase: ExportOneRmDataUseCase
-) : BaseViewModel<OneRmDetailViewModel.UiState, OneRmDetailViewModel.Event>(errorHandler) {
+) : StatefulDetailViewModel<OneRmDetailViewModel.UiState, OneRmDetailViewModel.Event>(savedStateHandle, errorHandler) {
 
     override val _uiState = MutableStateFlow<UiState>(UiState.Loading)
 
     /**
-     * Current configuration state
+     * Current configuration state - persisted using StatefulDetailViewModel
      */
-    private val _selectedExerciseIds = MutableStateFlow<Set<String>>(emptySet())
-    val selectedExerciseIds = _selectedExerciseIds
+    val selectedExerciseIds = savedComplexStateFlow(
+        key = DetailScreenStateKeys.ONE_RM_SELECTED_EXERCISES,
+        initialValue = emptySet<String>()
+    ) { ids ->
+        // Validate that it's a reasonable number of exercises
+        ids.size <= 20
+    }
     
-    private val _timeRange = MutableStateFlow(TimeRangeType.SIX_MONTHS)
-    val timeRange = _timeRange
+    val timeRange = savedStateFlow(
+        key = DetailScreenStateKeys.ONE_RM_TIME_RANGE,
+        initialValue = TimeRangeType.SIX_MONTHS
+    ) { timeRange ->
+        // Validate enum value
+        TimeRangeType.values().contains(timeRange)
+    }
     
-    private val _showEstimated = MutableStateFlow(true)
-    val showEstimated = _showEstimated
+    val showEstimated = savedStateFlow(
+        key = DetailScreenStateKeys.ONE_RM_SHOW_ESTIMATED,
+        initialValue = true
+    )
     
-    private val _showExerciseFilter = MutableStateFlow(false)
-    val showExerciseFilter = _showExerciseFilter
+    val showExerciseFilter = savedStateFlow(
+        key = DetailScreenStateKeys.ONE_RM_FILTER_EXPANDED,
+        initialValue = false
+    )
 
     /**
      * Available exercises for filtering
      */
     private val _availableExercises = MutableStateFlow<List<ExerciseLibrary>>(emptyList())
     val availableExercises = _availableExercises
+
+    // Scroll position persistence
+    private val scrollPosition = savedStateFlow(
+        key = DetailScreenStateKeys.scrollPositionKey("one_rm"),
+        initialValue = 0
+    )
+    
+    /**
+     * Saves current scroll position
+     */
+    fun saveScrollPosition(position: Int) {
+        updateSavedState(DetailScreenStateKeys.scrollPositionKey("one_rm"), position)
+    }
+    
+    /**
+     * Gets saved scroll position for restoration
+     */
+    fun getSavedScrollPosition(): Int {
+        return scrollPosition.value
+    }
 
     /**
      * UI State for the 1RM progression detail screen
@@ -96,18 +141,7 @@ class OneRmDetailViewModel @Inject constructor(
         val summary: ProgressionSummary
     )
 
-    /**
-     * Individual data point for 1RM progression
-     */
-    data class OneRmDataPoint(
-        val date: kotlinx.datetime.LocalDate,
-        val exerciseId: String,
-        val exerciseName: String,
-        val oneRmValue: Float,
-        val isEstimated: Boolean,
-        val actualWeight: Float? = null,
-        val reps: Int? = null
-    )
+    // OneRmDataPoint now imported from domain.model.analytics.OneRmDataPoint
 
     /**
      * Exercise information for the filter
@@ -134,6 +168,60 @@ class OneRmDetailViewModel @Inject constructor(
     init {
         Timber.d("OneRmDetailViewModel initialized")
         loadAvailableExercises()
+        
+        // Set up reactive data loading based on state changes
+        setupReactiveDataLoading()
+        
+        // Set up reactive data binding for real-time updates
+        setupReactiveDataBinding()
+        
+        // Load initial data
+        refreshData()
+    }
+    
+    /**
+     * Sets up reactive data loading when state changes
+     */
+    private fun setupReactiveDataLoading() {
+        viewModelScope.launch {
+            // React to exercise filter changes
+            selectedExerciseIds.collectLatest {
+                refreshData()
+            }
+        }
+        
+        viewModelScope.launch {
+            // React to timeRange changes
+            timeRange.collectLatest {
+                refreshData()
+            }
+        }
+        
+        viewModelScope.launch {
+            // React to showEstimated changes
+            showEstimated.collectLatest {
+                refreshData()
+            }
+        }
+    }
+    
+    /**
+     * Sets up reactive data binding to automatically update when workout data changes
+     */
+    private fun setupReactiveDataBinding() {
+        viewModelScope.launch {
+            // TODO: Replace with actual repository flow when available
+            // Example reactive binding:
+            // progressStatsRepository.getOneRmProgressionFlow(getCurrentUserId()).collectLatest {
+            //     if (_uiState.value is UiState.Success) {
+            //         val currentExerciseIds = _selectedExerciseIds.value.toList().takeIf { it.isNotEmpty() }
+            //         loadData(currentExerciseIds, _timeRange.value) // Refresh data when 1RM data changes
+            //     }
+            // }
+            
+            // For now, set up reactive binding stub
+            Timber.d("Reactive data binding initialized for OneRmDetailViewModel")
+        }
     }
 
     override fun handleEvent(event: Event) {
@@ -155,7 +243,7 @@ class OneRmDetailViewModel @Inject constructor(
     }
 
     override fun updateErrorState(error: LiftrixError) {
-        _uiState.value = UiState.Error(error)
+        handleError(error)
     }
 
     /**
@@ -166,18 +254,29 @@ class OneRmDetailViewModel @Inject constructor(
         val startTime = System.currentTimeMillis()
         Timber.d("Loading 1RM data for exercises: $exerciseIds, timeRange: $timeRange")
         
-        // Update current configuration
-        _timeRange.value = timeRange
-        _selectedExerciseIds.value = exerciseIds?.toSet() ?: emptySet()
+        // Update persisted state
+        updateSavedState(DetailScreenStateKeys.ONE_RM_TIME_RANGE, timeRange)
+        updateComplexSavedState(DetailScreenStateKeys.ONE_RM_SELECTED_EXERCISES, exerciseIds?.toSet() ?: emptySet())
 
-        // TODO: Replace with actual use case call
         executeUseCase(
             useCase = { 
-                // Simulate API call - keep under 500ms performance target
-                kotlinx.coroutines.delay(300)
-                createMockData(exerciseIds, timeRange)
+                val userId = getCurrentUserIdUseCase() ?: throw Exception("User not authenticated").also {
+                }
+                
+                
+                
+                getOneRmProgressionUseCase.execute(
+                    userId = userId,
+                    exerciseIds = exerciseIds,
+                    timeRange = timeRange,
+                    includeEstimated = showEstimated.value
+                )
             },
-            onSuccess = { data ->
+            onSuccess = { useCaseData ->
+                
+                // Convert use case data to ViewModel data format
+                val data = convertToViewModelData(useCaseData)
+                
                 val loadTime = System.currentTimeMillis() - startTime
                 Timber.d("1RM data loaded in ${loadTime}ms")
                 
@@ -187,6 +286,7 @@ class OneRmDetailViewModel @Inject constructor(
                 } else {
                     Timber.i("PERFORMANCE: 1RM data load time within target: ${loadTime}ms")
                 }
+                
                 
                 if (data.progressionPoints.isEmpty()) {
                     _uiState.value = UiState.Empty()
@@ -201,18 +301,17 @@ class OneRmDetailViewModel @Inject constructor(
      * Refreshes the current data
      */
     private fun refreshData() {
-        val currentExerciseIds = _selectedExerciseIds.value.toList().takeIf { it.isNotEmpty() }
-        loadData(currentExerciseIds, _timeRange.value)
+        val currentExerciseIds = selectedExerciseIds.value.toList().takeIf { it.isNotEmpty() }
+        loadData(currentExerciseIds, timeRange.value)
     }
 
     /**
      * Updates the time range and reloads data
      */
     private fun updateTimeRange(newTimeRange: TimeRangeType) {
-        if (newTimeRange != _timeRange.value) {
+        if (newTimeRange != timeRange.value) {
             Timber.d("Updating time range to: $newTimeRange")
-            val currentExerciseIds = _selectedExerciseIds.value.toList().takeIf { it.isNotEmpty() }
-            loadData(currentExerciseIds, newTimeRange)
+            updateSavedState(DetailScreenStateKeys.ONE_RM_TIME_RANGE, newTimeRange)
         }
     }
 
@@ -220,10 +319,9 @@ class OneRmDetailViewModel @Inject constructor(
      * Updates the exercise filter and reloads data
      */
     private fun updateExerciseFilter(exerciseIds: Set<String>) {
-        if (exerciseIds != _selectedExerciseIds.value) {
+        if (exerciseIds != selectedExerciseIds.value) {
             Timber.d("Updating exercise filter to: $exerciseIds")
-            val exerciseList = exerciseIds.toList().takeIf { it.isNotEmpty() }
-            loadData(exerciseList, _timeRange.value)
+            updateComplexSavedState(DetailScreenStateKeys.ONE_RM_SELECTED_EXERCISES, exerciseIds)
         }
     }
 
@@ -231,16 +329,9 @@ class OneRmDetailViewModel @Inject constructor(
      * Toggles between showing estimated and actual 1RM values
      */
     private fun toggleShowEstimated(showEstimated: Boolean) {
-        if (showEstimated != _showEstimated.value) {
-            _showEstimated.value = showEstimated
+        if (showEstimated != this.showEstimated.value) {
+            updateSavedState(DetailScreenStateKeys.ONE_RM_SHOW_ESTIMATED, showEstimated)
             Timber.d("Toggling show estimated to: $showEstimated")
-            
-            // Update the current data with the new display mode
-            val currentState = _uiState.value
-            if (currentState is UiState.Success) {
-                val updatedData = currentState.data.copy(showEstimated = showEstimated)
-                _uiState.value = UiState.Success(updatedData)
-            }
         }
     }
 
@@ -248,14 +339,14 @@ class OneRmDetailViewModel @Inject constructor(
      * Shows the exercise filter bottom sheet
      */
     private fun showExerciseFilterSheet() {
-        _showExerciseFilter.value = true
+        updateSavedState(DetailScreenStateKeys.ONE_RM_FILTER_EXPANDED, true)
     }
 
     /**
      * Hides the exercise filter bottom sheet
      */
     private fun hideExerciseFilterSheet() {
-        _showExerciseFilter.value = false
+        updateSavedState(DetailScreenStateKeys.ONE_RM_FILTER_EXPANDED, false)
     }
 
     /**
@@ -283,8 +374,7 @@ class OneRmDetailViewModel @Inject constructor(
      * Retries loading data after an error
      */
     private fun retryLoad() {
-        val currentExerciseIds = _selectedExerciseIds.value.toList().takeIf { it.isNotEmpty() }
-        loadData(currentExerciseIds, _timeRange.value)
+        refreshData()
     }
 
     /**
@@ -305,73 +395,63 @@ class OneRmDetailViewModel @Inject constructor(
     }
 
     /**
-     * Creates mock data for development/testing
-     * TODO: Remove when actual use cases are implemented
+     * Converts use case data format to ViewModel data format for UI compatibility.
      */
-    private fun createMockData(exerciseIds: List<String>?, timeRange: TimeRangeType): com.example.liftrix.domain.model.common.LiftrixResult<OneRmProgressionData> {
-        val startDate = when (timeRange) {
-            TimeRangeType.MONTH -> Clock.System.todayIn(TimeZone.currentSystemDefault()).minus(DatePeriod(days = 30))
-            TimeRangeType.SIX_MONTHS -> Clock.System.todayIn(TimeZone.currentSystemDefault()).minus(DatePeriod(days = 180))
-            TimeRangeType.ALL_TIME -> LocalDate.fromEpochDays(0) // Start from epoch for all-time data
-        }
-        
-        val exercises = listOf(
-            ExerciseInfo("bench-press", "Bench Press", com.example.liftrix.domain.model.MuscleGroup.CHEST, true, 225f),
-            ExerciseInfo("squat", "Back Squat", com.example.liftrix.domain.model.MuscleGroup.QUADRICEPS, true, 315f),
-            ExerciseInfo("deadlift", "Deadlift", com.example.liftrix.domain.model.MuscleGroup.BACK, true, 405f)
-        )
-        
-        val filteredExercises = if (exerciseIds.isNullOrEmpty()) {
-            exercises
-        } else {
-            exercises.filter { it.id in exerciseIds }
-        }
-        
+    private fun convertToViewModelData(useCaseData: UseCaseOneRmProgressionData): OneRmProgressionData {
         val progressionPoints = mutableListOf<OneRmDataPoint>()
+        val exercisesIncluded = mutableListOf<ExerciseInfo>()
         
-        // Generate mock data points
-        for (exercise in filteredExercises) {
-            val baseWeight = exercise.latestOneRm ?: 200f
-            var currentDate = startDate
-            val endDate = Clock.System.todayIn(TimeZone.currentSystemDefault())
+        // Convert exercise progressions to progression points
+        for (exerciseProgression in useCaseData.exerciseProgressions) {
+            val exerciseInfo = ExerciseInfo(
+                id = exerciseProgression.exerciseId,
+                name = "Exercise ${exerciseProgression.exerciseId}", // TODO: Replace with actual exercise name lookup
+                category = com.example.liftrix.domain.model.MuscleGroup.CHEST, // TODO: Replace with actual category lookup
+                hasOneRmData = exerciseProgression.dataPoints.isNotEmpty(),
+                latestOneRm = exerciseProgression.currentMax.toFloat()
+            )
+            exercisesIncluded.add(exerciseInfo)
             
-            while (currentDate <= endDate) {
-                val progressionFactor = (currentDate.dayOfYear / 365f) * 0.1f + 1f
-                val oneRm = baseWeight * progressionFactor * (0.9f + kotlin.random.Random.nextFloat() * 0.2f)
-                
+            // Convert data points
+            for (dataPoint in exerciseProgression.dataPoints) {
                 progressionPoints.add(
                     OneRmDataPoint(
-                        date = currentDate,
-                        exerciseId = exercise.id,
-                        exerciseName = exercise.name,
-                        oneRmValue = oneRm,
-                        isEstimated = true,
-                        actualWeight = null,
-                        reps = null
+                        date = dataPoint.date,
+                        exerciseId = exerciseProgression.exerciseId,
+                        exerciseName = exerciseInfo.name,
+                        actualOneRm = dataPoint.actualOneRm,
+                        estimatedOneRm = dataPoint.estimatedOneRm,
+                        weight = dataPoint.weight,
+                        reps = dataPoint.reps,
+                        isEstimated = dataPoint.actualOneRm == null
                     )
                 )
-                
-                currentDate = currentDate.plus(kotlinx.datetime.DatePeriod(days = 7))
             }
         }
         
+        // Calculate summary statistics
+        val totalGrowth = useCaseData.exerciseProgressions
+            .map { it.progression }
+            .average()
+            .toFloat()
+        
         val summary = ProgressionSummary(
-            totalGrowth = 15.5f,
-            averageGrowth = 12.3f,
-            strongestExercise = exercises.maxByOrNull { it.latestOneRm ?: 0f },
-            mostImprovedExercise = exercises.firstOrNull(),
+            totalGrowth = totalGrowth,
+            averageGrowth = totalGrowth, // Same as total for now
+            strongestExercise = exercisesIncluded.maxByOrNull { it.latestOneRm ?: 0f },
+            mostImprovedExercise = useCaseData.exerciseProgressions
+                .maxByOrNull { it.progression }
+                ?.let { prog -> exercisesIncluded.find { it.id == prog.exerciseId } },
             dataPointCount = progressionPoints.size
         )
         
-        val data = OneRmProgressionData(
+        return OneRmProgressionData(
             progressionPoints = progressionPoints.sortedBy { it.date },
-            exercisesIncluded = filteredExercises,
-            timeRange = timeRange,
-            showEstimated = _showEstimated.value,
+            exercisesIncluded = exercisesIncluded,
+            timeRange = useCaseData.timeRange,
+            showEstimated = showEstimated.value,
             summary = summary
         )
-        
-        return com.example.liftrix.domain.model.common.LiftrixResult.success(data)
     }
 
     /**

@@ -524,18 +524,30 @@ private fun MuscleGroupDisplay(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Convert analytics data to MuscleGroup map for pie chart
+        Timber.d("MuscleGroup Debug: Processing ${analyticsData.metrics.size} metrics: ${analyticsData.metrics}")
+        
         val muscleGroupData = analyticsData.metrics.entries.take(6)
             .mapNotNull { entry ->
                 val (muscleGroupName, percentage) = entry
                 val percentageFloat = percentage.toFloatOrNull() ?: return@mapNotNull null
                 
+                Timber.d("MuscleGroup Debug: Converting '$muscleGroupName' -> $percentageFloat")
+                
                 // Map muscle group name to MuscleGroup enum
                 val muscleGroup = mapStringToMuscleGroup(muscleGroupName)
+                if (muscleGroup != null) {
+                    Timber.d("MuscleGroup Debug: Mapped '$muscleGroupName' to ${muscleGroup.displayName}")
+                } else {
+                    Timber.w("MuscleGroup Debug: Failed to map '$muscleGroupName'")
+                }
                 muscleGroup?.let { it to percentageFloat }
             }
             .toMap()
+            
+        Timber.d("MuscleGroup Debug: Final pie chart data has ${muscleGroupData.size} entries: $muscleGroupData")
         
         if (muscleGroupData.isNotEmpty()) {
+            Timber.d("MuscleGroup Debug: Rendering pie chart with ${muscleGroupData.size} slices")
             // Modern pie chart for muscle group distribution
             MuscleGroupPieChart(
                 data = muscleGroupData,
@@ -549,6 +561,7 @@ private fun MuscleGroupDisplay(
                 modifier = Modifier.height(200.dp)
             )
         } else {
+            Timber.w("MuscleGroup Debug: No muscle group data available, showing fallback bars")
             // Fallback to bars if data conversion fails
             val muscleGroups = analyticsData.metrics.entries.take(5)
             

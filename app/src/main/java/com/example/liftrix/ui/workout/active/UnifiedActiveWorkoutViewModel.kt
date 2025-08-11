@@ -862,9 +862,26 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
      * Checks if exercises were added beyond the original template
      */
     private fun hasExercisesAddedBeyondTemplate(session: UnifiedWorkoutSession): Boolean {
-        // For now, return true if session has any exercises
-        // TODO: Compare with original template exercise count
-        return session.exercises.isNotEmpty()
+        // If session wasn't started from a template, can't have exercises added beyond template
+        val templateId = session.templateId ?: return false
+        
+        // Get the original template to compare with
+        // For now, we'll use a simple heuristic based on exercise count and IDs
+        // This could be enhanced to store original template data in session metadata
+        
+        // If we have the original template data in session metadata, use that
+        session.metadata["originalExerciseCount"]?.let { originalCountStr ->
+            val originalCount = originalCountStr.toIntOrNull() ?: return false
+            val currentCount = session.exercises.size
+            
+            Timber.d("🔥 TEMPLATE-COMPARISON: Original: $originalCount, Current: $currentCount")
+            return currentCount > originalCount
+        }
+        
+        // Fallback: If no metadata available, assume no exercises were added
+        // This prevents false positive save prompts when starting from templates
+        Timber.d("🔥 TEMPLATE-COMPARISON: No original exercise count metadata, assuming no exercises added")
+        return false
     }
 
     /**

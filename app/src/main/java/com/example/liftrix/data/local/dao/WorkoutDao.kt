@@ -33,11 +33,11 @@ interface WorkoutDao {
     @Query("SELECT * FROM workouts WHERE status = 'IN_PROGRESS' AND user_id = :userId ORDER BY updated_at DESC LIMIT 1")
     suspend fun getActiveWorkoutForUser(userId: String): WorkoutEntity?
     
-    @Query("SELECT * FROM workouts WHERE template_id = :templateId AND user_id = :userId ORDER BY created_at DESC")
-    fun getWorkoutsFromTemplateForUser(templateId: String, userId: String): Flow<List<WorkoutEntity>>
+    @Query("SELECT * FROM workouts WHERE template_id = :templateId AND user_id = :userId ORDER BY created_at DESC LIMIT :limit")
+    fun getWorkoutsFromTemplateForUser(templateId: String, userId: String, limit: Int = 1000): Flow<List<WorkoutEntity>>
     
-    @Query("SELECT * FROM workouts WHERE user_id = :userId AND date BETWEEN :startDate AND :endDate ORDER BY date ASC")
-    suspend fun getWorkoutsInDateRangeForUser(userId: String, startDate: String, endDate: String): List<WorkoutEntity>
+    @Query("SELECT * FROM workouts WHERE user_id = :userId AND date BETWEEN :startDate AND :endDate ORDER BY date ASC LIMIT :limit")
+    suspend fun getWorkoutsInDateRangeForUser(userId: String, startDate: String, endDate: String, limit: Int = 10000): List<WorkoutEntity>
     
     /**
      * Gets workouts for a user within a specific date range
@@ -50,8 +50,8 @@ interface WorkoutDao {
      * @param endDate End date in string format (inclusive)
      * @return List of workout entities in the date range
      */
-    @Query("SELECT * FROM workouts WHERE user_id = :userId AND date BETWEEN :startDate AND :endDate ORDER BY date ASC")
-    suspend fun getWorkoutsByDateRange(userId: String, startDate: String, endDate: String): List<WorkoutEntity>
+    @Query("SELECT * FROM workouts WHERE user_id = :userId AND date BETWEEN :startDate AND :endDate ORDER BY date ASC LIMIT :limit")
+    suspend fun getWorkoutsByDateRange(userId: String, startDate: String, endDate: String, limit: Int = 10000): List<WorkoutEntity>
     
     @Query("SELECT w.* FROM workouts w JOIN exercises e ON w.id = e.workout_id WHERE e.id = :exerciseId")
     suspend fun getWorkoutByExerciseId(exerciseId: Long): WorkoutEntity?
@@ -267,13 +267,29 @@ interface WorkoutDao {
      * @return List of daily volume results ordered by date
      */
     @Query("""
-        SELECT date, SUM(
-            CASE 
-                WHEN exercises_json IS NOT NULL AND exercises_json != '' 
-                THEN json_extract(exercises_json, '$.totalVolume') 
-                ELSE 0 
-            END
-        ) as volume 
+        SELECT 
+            date,
+            SUM(
+                CASE 
+                    WHEN exercises_json IS NOT NULL AND exercises_json != '' 
+                    THEN json_extract(exercises_json, '$.totalVolume') 
+                    ELSE 0 
+                END
+            ) as total_volume,
+            SUM(
+                CASE 
+                    WHEN exercises_json IS NOT NULL AND exercises_json != '' 
+                    THEN json_extract(exercises_json, '$.totalSets') 
+                    ELSE 0 
+                END
+            ) as total_sets,
+            SUM(
+                CASE 
+                    WHEN exercises_json IS NOT NULL AND exercises_json != '' 
+                    THEN json_extract(exercises_json, '$.exerciseCount') 
+                    ELSE 0 
+                END
+            ) as exercise_count
         FROM workouts 
         WHERE user_id = :userId 
         AND status = 'COMPLETED' 
@@ -364,13 +380,7 @@ interface WorkoutDao {
     ): Double?
 }
 
-/**
- * Data class for daily volume aggregation results
- */
-data class DailyVolumeResult(
-    val date: String,
-    val volume: Double
-)
+// DailyVolumeResult is defined in ExerciseSetDao.kt - no duplicate needed
 
 /**
  * Data class for workout statistics results

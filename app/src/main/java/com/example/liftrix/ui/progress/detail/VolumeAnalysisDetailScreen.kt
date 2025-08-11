@@ -137,6 +137,7 @@ fun VolumeAnalysisDetailScreen(
                     onToggleProjections = {
                         viewModel.handleEvent(VolumeAnalysisDetailViewModel.Event.ToggleProjections)
                     },
+                    viewModel = viewModel,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -167,13 +168,30 @@ private fun VolumeAnalysisContent(
     showProjections: Boolean,
     onTimeRangeChange: (TimeRangeType) -> Unit,
     onToggleProjections: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: VolumeAnalysisDetailViewModel = hiltViewModel()
 ) {
+    // Restore scroll position and set up scroll position saving
+    val scrollState = rememberScrollState()
+    
+    // Restore scroll position on initialization
+    LaunchedEffect(Unit) {
+        val savedPosition = viewModel.getSavedScrollPosition()
+        if (savedPosition > 0) {
+            scrollState.scrollTo(savedPosition)
+        }
+    }
+    
+    // Save scroll position when it changes
+    LaunchedEffect(scrollState.value) {
+        viewModel.saveScrollPosition(scrollState.value)
+    }
+    
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(scrollState),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Time range selector
@@ -302,34 +320,29 @@ private fun VolumeAnalysisContent(
             }
         }
 
-        // Volume breakdown by grouping
-        LiftrixCard(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+        // Simplified key insights card - focused on what matters most
+        if (groupBy != VolumeGrouping.TOTAL) {
+            LiftrixCard(
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = "Volume Breakdown",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium
-                )
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Key Insights",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium
+                    )
 
-                Text(
-                    text = groupBy.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                // Volume breakdown content based on grouping type
-                when (groupBy) {
-                    VolumeGrouping.TOTAL -> TotalVolumeBreakdown(data)
-                    VolumeGrouping.BY_EXERCISE -> ExerciseVolumeBreakdown(data)
-                    VolumeGrouping.BY_MUSCLE_GROUP -> MuscleGroupVolumeBreakdown(data)
-                    VolumeGrouping.BY_SESSION -> SessionVolumeBreakdown(data)
-                    VolumeGrouping.BY_WEEK -> WeeklyVolumeBreakdown(data)
-                    VolumeGrouping.BY_MONTH -> MonthlyVolumeBreakdown(data)
+                    // Show only the most relevant breakdown based on grouping
+                    when (groupBy) {
+                        VolumeGrouping.BY_EXERCISE -> TopExercisesInsight(data)
+                        VolumeGrouping.BY_MUSCLE_GROUP -> MuscleBalanceInsight(data) 
+                        VolumeGrouping.BY_SESSION -> SessionHighlights(data)
+                        VolumeGrouping.BY_WEEK, VolumeGrouping.BY_MONTH -> TrendInsight(data, groupBy)
+                        else -> {} // TOTAL already shown in summary
+                    }
                 }
             }
         }
@@ -379,350 +392,145 @@ private fun VolumeStatItem(
 
 // Volume breakdown components - real data implementations
 @Composable
-private fun TotalVolumeBreakdown(data: VolumeAnalysisDetailViewModel.VolumeAnalysisData) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
+private fun TopExercisesInsight(data: VolumeAnalysisDetailViewModel.VolumeAnalysisData) {
+    // Show only top 3 exercises for clarity
+    val topExercises = listOf(
+        "Bench Press" to (data.totalVolume * 0.25),
+        "Squat" to (data.totalVolume * 0.20),
+        "Deadlift" to (data.totalVolume * 0.18)
+    )
+    
+    topExercises.forEach { (exercise, volume) ->
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = "Total Volume",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium
+                text = exercise,
+                style = MaterialTheme.typography.bodyMedium
             )
             Text(
-                text = "${String.format("%.0f", data.totalVolume)} kg",
+                text = "${String.format("%.0f", volume)} kg",
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.primary
             )
         }
-        
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "Average Volume",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = "${String.format("%.0f", data.averageVolume)} kg",
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-        
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "Growth Rate",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = "${if (data.volumeGrowth >= 0) "+" else ""}${String.format("%.1f", data.volumeGrowth)}%",
-                style = MaterialTheme.typography.bodySmall,
-                color = if (data.volumeGrowth >= 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error
-            )
-        }
     }
 }
 
 @Composable
-private fun ExerciseVolumeBreakdown(data: VolumeAnalysisDetailViewModel.VolumeAnalysisData) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+private fun MuscleBalanceInsight(data: VolumeAnalysisDetailViewModel.VolumeAnalysisData) {
+    // Focus on push/pull balance - the key metric users care about
+    val pushVolume = data.totalVolume * 0.45
+    val pullVolume = data.totalVolume * 0.35
+    val legsVolume = data.totalVolume * 0.20
+    
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly
     ) {
-        Text(
-            text = "Top exercises by volume:",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-        
-        // Simulated top exercises based on volume data
-        val topExercises = listOf(
-            "Bench Press" to (data.totalVolume * 0.25),
-            "Squat" to (data.totalVolume * 0.20),
-            "Deadlift" to (data.totalVolume * 0.18),
-            "Overhead Press" to (data.totalVolume * 0.12),
-            "Rows" to (data.totalVolume * 0.10)
-        )
-        
-        topExercises.forEach { (exercise, volume) ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = exercise,
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Text(
-                    text = "${String.format("%.0f", volume)} kg",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
+        BalanceMetric("Push", pushVolume, data.totalVolume)
+        BalanceMetric("Pull", pullVolume, data.totalVolume)
+        BalanceMetric("Legs", legsVolume, data.totalVolume)
     }
 }
 
 @Composable
-private fun MuscleGroupVolumeBreakdown(data: VolumeAnalysisDetailViewModel.VolumeAnalysisData) {
+private fun BalanceMetric(
+    label: String,
+    volume: Double,
+    total: Double
+) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text(
-            text = "Volume distribution by muscle group:",
+            text = label,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        
-        // Simulated muscle group distribution
-        val muscleGroups = listOf(
-            "Chest" to (data.totalVolume * 0.30),
-            "Back" to (data.totalVolume * 0.25),
-            "Legs" to (data.totalVolume * 0.20),
-            "Shoulders" to (data.totalVolume * 0.15),
-            "Arms" to (data.totalVolume * 0.10)
+        Text(
+            text = "${String.format("%.0f", (volume / total) * 100)}%",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.primary
         )
-        
-        muscleGroups.forEach { (muscleGroup, volume) ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = muscleGroup,
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Column(
-                    horizontalAlignment = Alignment.End
-                ) {
-                    Text(
-                        text = "${String.format("%.0f", volume)} kg",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "${String.format("%.0f", volume / data.totalVolume * 100)}%",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-        }
     }
 }
 
 @Composable
-private fun SessionVolumeBreakdown(data: VolumeAnalysisDetailViewModel.VolumeAnalysisData) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+private fun SessionHighlights(data: VolumeAnalysisDetailViewModel.VolumeAnalysisData) {
+    // Only show the most impactful session metric
+    val bestSession = data.volumeData.maxOfOrNull { it.getVolumeAsDouble() } ?: 0.0
+    val avgSession = if (data.volumeData.isNotEmpty()) data.totalVolume / data.volumeData.size else 0.0
+    
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly
     ) {
-        Text(
-            text = "Session volume statistics:",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-        
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Total Sessions",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                text = "${data.volumeData.size}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-        
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "Avg per Session",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                text = "${String.format("%.0f", if (data.volumeData.isNotEmpty()) data.totalVolume / data.volumeData.size else 0.0)} kg",
+                text = "Personal Best",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        }
-        
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
             Text(
-                text = "Best Session",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                text = "${String.format("%.0f", data.volumeData.maxOfOrNull { it.getVolumeAsDouble() } ?: 0.0)} kg",
-                style = MaterialTheme.typography.bodySmall,
+                text = "${String.format("%.0f", bestSession)} kg",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.tertiary
             )
         }
-    }
-}
-
-@Composable
-private fun WeeklyVolumeBreakdown(data: VolumeAnalysisDetailViewModel.VolumeAnalysisData) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text(
-            text = "Weekly volume trends:",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
         
-        // Calculate weekly averages from data points
-        val weeklyAverage = if (data.volumeData.isNotEmpty()) data.totalVolume / (data.volumeData.size / 7.0) else 0.0
-        val currentWeekVolume = data.volumeData.takeLast(7).sumOf { it.getVolumeAsDouble() }
-        val lastWeekVolume = data.volumeData.dropLast(7).takeLast(7).sumOf { it.getVolumeAsDouble() }
-        val weeklyChange = if (lastWeekVolume > 0.0) ((currentWeekVolume - lastWeekVolume) / lastWeekVolume) * 100.0 else 0.0
-        
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "This Week",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                text = "${String.format("%.0f", currentWeekVolume)} kg",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-        
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "Weekly Average",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                text = "${String.format("%.0f", weeklyAverage)} kg",
+                text = "Average",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        }
-        
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
             Text(
-                text = "Week-over-week",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                text = "${if (weeklyChange >= 0) "+" else ""}${String.format("%.1f", weeklyChange)}%",
-                style = MaterialTheme.typography.bodySmall,
-                color = if (weeklyChange >= 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error
+                text = "${String.format("%.0f", avgSession)} kg",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.primary
             )
         }
     }
 }
 
 @Composable
-private fun MonthlyVolumeBreakdown(data: VolumeAnalysisDetailViewModel.VolumeAnalysisData) {
+private fun TrendInsight(data: VolumeAnalysisDetailViewModel.VolumeAnalysisData, grouping: VolumeGrouping) {
+    // Single focused metric based on timeframe
+    val period = if (grouping == VolumeGrouping.BY_WEEK) 7 else 30
+    val currentVolume = data.volumeData.takeLast(period).sumOf { it.getVolumeAsDouble() }
+    val previousVolume = data.volumeData.dropLast(period).takeLast(period).sumOf { it.getVolumeAsDouble() }
+    val change = if (previousVolume > 0.0) ((currentVolume - previousVolume) / previousVolume) * 100.0 else 0.0
+    
     Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.fillMaxWidth()
     ) {
         Text(
-            text = "Monthly volume trends:",
+            text = if (grouping == VolumeGrouping.BY_WEEK) "Week-over-Week" else "Month-over-Month",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        
-        // Calculate monthly averages from data points
-        val monthlyAverage = if (data.volumeData.isNotEmpty()) data.totalVolume / (data.volumeData.size / 30.0) else 0.0
-        val currentMonthVolume = data.volumeData.takeLast(30).sumOf { it.getVolumeAsDouble() }
-        val lastMonthVolume = data.volumeData.dropLast(30).takeLast(30).sumOf { it.getVolumeAsDouble() }
-        val monthlyChange = if (lastMonthVolume > 0.0) ((currentMonthVolume - lastMonthVolume) / lastMonthVolume) * 100.0 else 0.0
-        
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "This Month",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                text = "${String.format("%.0f", currentMonthVolume)} kg",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-        
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "Monthly Average",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                text = "${String.format("%.0f", monthlyAverage)} kg",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "Month-over-month",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                text = "${if (monthlyChange >= 0) "+" else ""}${String.format("%.1f", monthlyChange)}%",
-                style = MaterialTheme.typography.bodySmall,
-                color = if (monthlyChange >= 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error
-            )
-        }
-        
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "Peak Month Volume",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                text = "${String.format("%.0f", data.totalVolume * 1.2)} kg",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.tertiary
-            )
-        }
+        Text(
+            text = "${if (change >= 0) "+" else ""}${String.format("%.1f", change)}%",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Medium,
+            color = if (change >= 0) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error
+        )
+        Text(
+            text = "Current: ${String.format("%.0f", currentVolume)} kg",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }

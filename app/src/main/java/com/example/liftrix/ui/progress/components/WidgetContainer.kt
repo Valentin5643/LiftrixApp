@@ -45,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import com.example.liftrix.ui.common.WindowSizeClass
@@ -64,6 +65,7 @@ import com.example.liftrix.domain.model.analytics.TrendDirection
 import com.example.liftrix.domain.model.analytics.WidgetCategory
 import com.example.liftrix.domain.model.analytics.WidgetData
 import com.example.liftrix.domain.model.analytics.BasicWidgetData
+import com.example.liftrix.domain.model.analytics.ChartWidgetData
 import com.example.liftrix.ui.theme.LiftrixColors
 import com.example.liftrix.ui.theme.LiftrixTheme
 import com.example.liftrix.core.extensions.rememberDerivedStateOf
@@ -465,7 +467,10 @@ internal fun WidgetRenderer(
     // Render appropriate widget component based on widget type
     when (widget) {
         AnalyticsWidget.TotalVolume -> {
+            // Handle both BasicWidgetData and ChartWidgetData
             val basicData = widgetData as? BasicWidgetData
+            val chartData = widgetData as? ChartWidgetData
+            
             val metricData = basicData?.let { basic ->
                 com.example.liftrix.domain.model.analytics.MetricWidgetData(
                     widgetType = widget,
@@ -479,9 +484,30 @@ internal fun WidgetRenderer(
                     trendPercentage = 0f,
                     comparisonPeriod = basic.secondaryValue ?: ""
                 )
+            } ?: chartData?.let { chart ->
+                // Extract metric data from ChartWidgetData
+                val totalVolume = chart.summary?.peak?.toInt() ?: 0
+                com.example.liftrix.domain.model.analytics.MetricWidgetData(
+                    widgetType = widget,
+                    lastUpdated = chart.lastUpdated,
+                    isLoading = chart.isLoading,
+                    error = null,
+                    primaryValue = "${totalVolume} kg",
+                    unit = "kg",
+                    secondaryValue = chart.timeRange,
+                    trend = chart.summary?.trend ?: TrendDirection.STABLE,
+                    trendPercentage = chart.summary?.changePercentage ?: 0f,
+                    comparisonPeriod = chart.timeRange
+                )
             }
-            TotalVolumeWidget(
+            
+            // Extract chart data for mini-graph
+            val graphData = chartData?.dataPoints?.map { it.y } ?: emptyList()
+            
+            // Use Enhanced widget with mini-graph
+            EnhancedTotalVolumeWidget(
                 data = metricData,
+                graphData = graphData,
                 onRefresh = {},
                 onClick = onClick,
                 modifier = modifier
@@ -489,7 +515,10 @@ internal fun WidgetRenderer(
         }
         
         AnalyticsWidget.WorkoutFrequency -> {
+            // Handle both BasicWidgetData and ChartWidgetData
             val basicData = widgetData as? BasicWidgetData
+            val chartData = widgetData as? ChartWidgetData
+            
             val metricData = basicData?.let { basic ->
                 com.example.liftrix.domain.model.analytics.MetricWidgetData(
                     widgetType = widget,
@@ -503,9 +532,30 @@ internal fun WidgetRenderer(
                     trendPercentage = 0f,
                     comparisonPeriod = basic.secondaryValue ?: ""
                 )
+            } ?: chartData?.let { chart ->
+                // Extract metric data from ChartWidgetData
+                val totalSessions = chart.dataPoints.sumOf { it.y.toDouble() }.toInt()
+                com.example.liftrix.domain.model.analytics.MetricWidgetData(
+                    widgetType = widget,
+                    lastUpdated = chart.lastUpdated,
+                    isLoading = chart.isLoading,
+                    error = null,
+                    primaryValue = "$totalSessions sessions",
+                    unit = "sessions",
+                    secondaryValue = chart.timeRange,
+                    trend = chart.summary.trend,
+                    trendPercentage = chart.summary.changePercentage,
+                    comparisonPeriod = chart.timeRange
+                )
             }
-            WorkoutFrequencyWidget(
+            
+            // Extract chart data for mini-graph
+            val graphData = chartData?.dataPoints?.map { it.y } ?: emptyList()
+            
+            // Use Enhanced widget with mini-graph
+            EnhancedWorkoutFrequencyWidget(
                 data = metricData,
+                graphData = graphData,
                 onRefresh = {},
                 onClick = onClick,
                 modifier = modifier
@@ -566,12 +616,214 @@ internal fun WidgetRenderer(
         
         // WeeklyCalorieTrend widget removed - use VolumeTrends instead
         
-        AnalyticsWidget.ProgressChart,
-        AnalyticsWidget.OneRMProgression,
+        AnalyticsWidget.ProgressChart -> {
+            // Handle both BasicWidgetData and ChartWidgetData
+            val basicData = widgetData as? BasicWidgetData
+            val chartData = widgetData as? ChartWidgetData
+            
+            val metricData = basicData?.let { basic ->
+                com.example.liftrix.domain.model.analytics.MetricWidgetData(
+                    widgetType = widget,
+                    lastUpdated = basic.lastUpdated,
+                    isLoading = isLoading,
+                    error = null,
+                    primaryValue = basic.primaryValue,
+                    unit = "kg",
+                    secondaryValue = basic.secondaryValue ?: "",
+                    trend = basic.trend ?: TrendDirection.STABLE,
+                    trendPercentage = 0f,
+                    comparisonPeriod = basic.secondaryValue ?: ""
+                )
+            } ?: chartData?.let { chart ->
+                // Extract metric data from ChartWidgetData
+                val averageValue = chart.dataPoints.map { it.y }.average().toInt()
+                com.example.liftrix.domain.model.analytics.MetricWidgetData(
+                    widgetType = widget,
+                    lastUpdated = chart.lastUpdated,
+                    isLoading = chart.isLoading,
+                    error = null,
+                    primaryValue = "$averageValue",
+                    unit = chart.summary.unit,
+                    secondaryValue = chart.timeRange,
+                    trend = chart.summary.trend,
+                    trendPercentage = chart.summary.changePercentage,
+                    comparisonPeriod = chart.timeRange
+                )
+            }
+            
+            // Extract chart data for mini-graph
+            val graphData = chartData?.dataPoints?.map { it.y } ?: emptyList()
+            
+            EnhancedStrengthProgressWidget(
+                data = metricData,
+                graphData = graphData,
+                onRefresh = {},
+                onClick = onClick,
+                modifier = modifier
+            )
+        }
+        
+        AnalyticsWidget.OneRMProgression -> {
+            // Handle both BasicWidgetData and ChartWidgetData
+            val basicData = widgetData as? BasicWidgetData
+            val chartData = widgetData as? ChartWidgetData
+            
+            val metricData = basicData?.let { basic ->
+                com.example.liftrix.domain.model.analytics.MetricWidgetData(
+                    widgetType = widget,
+                    lastUpdated = basic.lastUpdated,
+                    isLoading = isLoading,
+                    error = null,
+                    primaryValue = basic.primaryValue,
+                    unit = "kg",
+                    secondaryValue = basic.secondaryValue ?: "",
+                    trend = basic.trend ?: TrendDirection.STABLE,
+                    trendPercentage = 0f,
+                    comparisonPeriod = basic.secondaryValue ?: ""
+                )
+            } ?: chartData?.let { chart ->
+                // Extract metric data from ChartWidgetData - use peak for 1RM
+                val currentOneRM = chart.summary.peak.toInt()
+                com.example.liftrix.domain.model.analytics.MetricWidgetData(
+                    widgetType = widget,
+                    lastUpdated = chart.lastUpdated,
+                    isLoading = chart.isLoading,
+                    error = null,
+                    primaryValue = "$currentOneRM kg",
+                    unit = "kg",
+                    secondaryValue = chart.timeRange,
+                    trend = chart.summary.trend,
+                    trendPercentage = chart.summary.changePercentage,
+                    comparisonPeriod = chart.timeRange
+                )
+            }
+            
+            // Extract chart data for mini-graph
+            val graphData = chartData?.dataPoints?.map { it.y } ?: emptyList()
+            
+            EnhancedOneRmProgressionWidget(
+                data = metricData,
+                graphData = graphData,
+                onRefresh = {},
+                onClick = onClick,
+                modifier = modifier
+            )
+        }
+        
         AnalyticsWidget.VolumeLoadProgression -> {
-            ProgressChart(
-                data = createSampleChartData(widget),
-                isLoading = isLoading,
+            // Handle both BasicWidgetData and ChartWidgetData
+            val basicData = widgetData as? BasicWidgetData
+            val chartData = widgetData as? ChartWidgetData
+            
+            val metricData = basicData?.let { basic ->
+                com.example.liftrix.domain.model.analytics.MetricWidgetData(
+                    widgetType = widget,
+                    lastUpdated = basic.lastUpdated,
+                    isLoading = isLoading,
+                    error = null,
+                    primaryValue = basic.primaryValue,
+                    unit = "kg",
+                    secondaryValue = basic.secondaryValue ?: "",
+                    trend = basic.trend ?: TrendDirection.STABLE,
+                    trendPercentage = 0f,
+                    comparisonPeriod = basic.secondaryValue ?: ""
+                )
+            } ?: chartData?.let { chart ->
+                // Extract metric data from ChartWidgetData
+                val totalVolume = chart.summary?.peak?.toInt() ?: 0
+                com.example.liftrix.domain.model.analytics.MetricWidgetData(
+                    widgetType = widget,
+                    lastUpdated = chart.lastUpdated,
+                    isLoading = chart.isLoading,
+                    error = null,
+                    primaryValue = "${totalVolume} kg",
+                    unit = "kg",
+                    secondaryValue = chart.timeRange,
+                    trend = chart.summary?.trend ?: TrendDirection.STABLE,
+                    trendPercentage = chart.summary?.changePercentage ?: 0f,
+                    comparisonPeriod = chart.timeRange
+                )
+            }
+            
+            // Extract chart data for mini-graph
+            val graphData = chartData?.dataPoints?.map { it.y } ?: emptyList()
+            
+            EnhancedVolumeLoadProgressionWidget(
+                data = metricData,
+                graphData = graphData,
+                onRefresh = {},
+                onClick = onClick,
+                modifier = modifier
+            )
+        }
+        
+        AnalyticsWidget.MuscleGroupDistribution -> {
+            val basicData = widgetData as? BasicWidgetData
+            val metricData = basicData?.let { basic ->
+                com.example.liftrix.domain.model.analytics.MetricWidgetData(
+                    widgetType = widget,
+                    lastUpdated = basic.lastUpdated,
+                    isLoading = isLoading,
+                    error = null,
+                    primaryValue = basic.primaryValue,
+                    unit = "%",
+                    secondaryValue = basic.secondaryValue ?: "",
+                    trend = basic.trend ?: TrendDirection.STABLE,
+                    trendPercentage = 0f,
+                    comparisonPeriod = basic.secondaryValue ?: ""
+                )
+            }
+            EnhancedMuscleGroupWidget(
+                data = metricData,
+                distributionData = generateSampleDistributionData(),
+                onRefresh = {},
+                onClick = onClick,
+                modifier = modifier
+            )
+        }
+        
+        AnalyticsWidget.StrengthProgress -> {
+            // Handle both BasicWidgetData and ChartWidgetData
+            val basicData = widgetData as? BasicWidgetData
+            val chartData = widgetData as? ChartWidgetData
+            
+            val metricData = basicData?.let { basic ->
+                com.example.liftrix.domain.model.analytics.MetricWidgetData(
+                    widgetType = widget,
+                    lastUpdated = basic.lastUpdated,
+                    isLoading = isLoading,
+                    error = null,
+                    primaryValue = basic.primaryValue,
+                    unit = "kg",
+                    secondaryValue = basic.secondaryValue ?: "",
+                    trend = basic.trend ?: TrendDirection.STABLE,
+                    trendPercentage = 0f,
+                    comparisonPeriod = basic.secondaryValue ?: ""
+                )
+            } ?: chartData?.let { chart ->
+                // Extract metric data from ChartWidgetData
+                val strengthScore = chart.summary.peak.toInt()
+                com.example.liftrix.domain.model.analytics.MetricWidgetData(
+                    widgetType = widget,
+                    lastUpdated = chart.lastUpdated,
+                    isLoading = chart.isLoading,
+                    error = null,
+                    primaryValue = "$strengthScore",
+                    unit = chart.summary.unit,
+                    secondaryValue = chart.timeRange,
+                    trend = chart.summary.trend,
+                    trendPercentage = chart.summary.changePercentage,
+                    comparisonPeriod = chart.timeRange
+                )
+            }
+            
+            // Extract chart data for mini-graph
+            val graphData = chartData?.dataPoints?.map { it.y } ?: emptyList()
+            
+            EnhancedStrengthProgressWidget(
+                data = metricData,
+                graphData = graphData,
+                onRefresh = {},
                 onClick = onClick,
                 modifier = modifier
             )
@@ -668,6 +920,33 @@ private fun createSampleChartData(widget: AnalyticsWidget): ChartData {
             AnalyticsWidget.OneRMProgression -> ChartType.LINE
             else -> ChartType.BAR
         }
+    )
+}
+
+// Helper functions for generating sample graph data for mini-graphs
+private fun generateSampleVolumeGraphData(): List<Float> {
+    return listOf(2400f, 2650f, 2500f, 2800f, 2750f, 2900f, 2847f)
+}
+
+private fun generateSampleFrequencyGraphData(): List<Float> {
+    return listOf(3f, 4f, 3f, 5f, 4f, 4f, 3f)
+}
+
+private fun generateSampleProgressGraphData(): List<Float> {
+    return listOf(100f, 102f, 105f, 103f, 108f, 110f, 112f)
+}
+
+private fun generateSample1RMGraphData(): List<Float> {
+    return listOf(80f, 82.5f, 82.5f, 85f, 87.5f, 85f, 90f)
+}
+
+private fun generateSampleDistributionData(): List<Pair<Float, Color>> {
+    return listOf(
+        35f to com.example.liftrix.ui.theme.LiftrixColors.Primary,
+        25f to com.example.liftrix.ui.theme.LiftrixColors.Secondary,
+        20f to com.example.liftrix.ui.theme.LiftrixColors.Primary.copy(alpha = 0.7f),
+        15f to com.example.liftrix.ui.theme.LiftrixColors.Secondary.copy(alpha = 0.7f),
+        5f to Color.Gray
     )
 }
 

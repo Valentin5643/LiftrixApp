@@ -122,16 +122,13 @@ fun ModernVolumeChart(
         }
     }
 
-    Surface(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .height(LiftrixChartStyle.ChartDimensions.defaultHeight)
             .semantics {
                 contentDescription = buildContentDescription(data, timeRange)
-            },
-        shape = LiftrixChartStyle.ChartContainer.shape,
-        color = LiftrixChartStyle.ChartContainer.backgroundColor,
-        shadowElevation = LiftrixChartStyle.ChartContainer.shadowElevation
+            }
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
@@ -204,7 +201,7 @@ fun ModernVolumeChart(
 }
 
 /**
- * Draw the modernized volume chart with bezier curves
+ * Draw the modernized volume chart with bezier curves, grid, and axes
  */
 private fun DrawScope.drawModernVolumeChart(
     data: List<VolumeDataPoint>,
@@ -216,6 +213,12 @@ private fun DrawScope.drawModernVolumeChart(
     textMeasurer: TextMeasurer
 ) {
     if (data.isEmpty()) return
+    
+    // Draw grid first (background layer)
+    drawGrid()
+    
+    // Draw axes
+    drawAxes()
     
     val chartConfig = LiftrixChartStyle.primaryLineChart()
     val points = data.mapIndexed { index, dataPoint ->
@@ -254,14 +257,8 @@ private fun DrawScope.drawModernVolumeChart(
     // Draw bezier curve line
     drawBezierLineChart(points, chartConfig)
     
-    // Draw data point labels for peaks and valleys
-    with(ModernChartRenderer) {
-        drawDataPointLabels(
-            dataPoints = points,
-            values = data.map { it.volume.value.toFloat() },
-            config = chartConfig
-        )
-    }
+    // Draw interactive data points
+    drawInteractiveDataPoints(points, selectedPoint, animationProgress)
     
     // Draw personal record markers
     if (showPersonalRecords && metrics.personalRecords.isNotEmpty()) {
@@ -280,6 +277,90 @@ private fun DrawScope.drawModernVolumeChart(
         if (selectedIndex >= 0 && selectedIndex < points.size) {
             val (x, y) = points[selectedIndex]
             drawSelectedPointHighlight(x, y, density)
+        }
+    }
+}
+
+/**
+ * Draw grid lines for better chart readability (matching 1RM progression style)
+ */
+private fun DrawScope.drawGrid() {
+    val gridColor = LiftrixColors.PersianGreen.copy(alpha = 0.15f)
+    val strokeWidth = 1.dp.toPx()
+    
+    // Horizontal grid lines
+    for (i in 1..4) {
+        val y = size.height * i / 5
+        drawLine(
+            color = gridColor,
+            start = Offset(0f, y),
+            end = Offset(size.width, y),
+            strokeWidth = strokeWidth
+        )
+    }
+    
+    // Vertical grid lines
+    for (i in 1..4) {
+        val x = size.width * i / 5
+        drawLine(
+            color = gridColor,
+            start = Offset(x, 0f),
+            end = Offset(x, size.height),
+            strokeWidth = strokeWidth
+        )
+    }
+}
+
+/**
+ * Draw chart axes (matching 1RM progression style)
+ */
+private fun DrawScope.drawAxes() {
+    val axisColor = LiftrixColors.PersianGreen.copy(alpha = 0.4f)
+    val strokeWidth = 2.dp.toPx()
+    
+    // Bottom axis
+    drawLine(
+        color = axisColor,
+        start = Offset(0f, size.height),
+        end = Offset(size.width, size.height),
+        strokeWidth = strokeWidth
+    )
+    
+    // Left axis
+    drawLine(
+        color = axisColor,
+        start = Offset(0f, 0f),
+        end = Offset(0f, size.height),
+        strokeWidth = strokeWidth
+    )
+}
+
+/**
+ * Draw interactive data points with enhanced styling
+ */
+private fun DrawScope.drawInteractiveDataPoints(
+    points: List<Pair<Float, Float>>,
+    selectedPoint: VolumeDataPoint?,
+    animationProgress: Float
+) {
+    points.forEach { (x, y) ->
+        val baseRadius = 4.dp.toPx()
+        val animatedRadius = baseRadius * animationProgress
+        
+        // Draw point with Persian Green color
+        drawCircle(
+            color = LiftrixColors.PersianGreen,
+            radius = animatedRadius,
+            center = Offset(x, y)
+        )
+        
+        // Draw inner highlight for better visibility
+        if (animationProgress > 0.5f) {
+            drawCircle(
+                color = LiftrixColors.Snow.copy(alpha = 0.8f),
+                radius = animatedRadius * 0.4f,
+                center = Offset(x, y)
+            )
         }
     }
 }
@@ -474,13 +555,12 @@ private fun SelectedPointInfo(
     point: VolumeDataPoint,
     onDismiss: () -> Unit
 ) {
-    Surface(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(LiftrixColors.PersianGreen.copy(alpha = 0.1f))
-            .padding(12.dp),
-        color = Color.Transparent
+            .background(LiftrixColors.PersianGreen.copy(alpha = 0.08f))
+            .padding(12.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),

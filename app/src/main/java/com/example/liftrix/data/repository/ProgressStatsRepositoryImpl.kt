@@ -25,6 +25,7 @@ import com.example.liftrix.service.sync.RealtimeSyncManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.catch
+import kotlin.time.Duration.Companion.hours
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone as KotlinTimeZone
 import kotlinx.datetime.toJavaInstant
@@ -80,7 +81,7 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         Timber.d("🔍 REPO-DEBUG: Converted to ${volumeData.size} VolumeDataPoints")
         
         // Cache the result for 1 hour
-        cacheManager.put(cacheKey, volumeData, kotlin.time.Duration.parse("1h"))
+        cacheManager.put(cacheKey, volumeData, 1.hours)
         
         // Trigger sync event for volume data changes
         triggerSyncIfSignificantChange(userId, "volume_data", volumeData.size)

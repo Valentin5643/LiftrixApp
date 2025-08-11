@@ -215,10 +215,10 @@ object LiftrixChartStyle {
         val shape = RoundedCornerShape(ChartDimensions.cornerRadius)
         val shadowElevation = 2.dp
         val borderWidth = 1.dp
-        val borderColor = LiftrixColors.Outline
+        val borderColor = LiftrixColors.PersianGreen.copy(alpha = 0.1f)
         
-        val backgroundColor = LiftrixColors.Snow
-        val surfaceColor = LiftrixColors.SurfaceVariant
+        val backgroundColor = Color.Transparent
+        val surfaceColor = Color.Transparent
     }
 
     /**

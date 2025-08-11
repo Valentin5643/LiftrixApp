@@ -2,6 +2,7 @@ package com.example.liftrix.domain.usecase.analytics
 
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.model.analytics.OneRmDataPoint
 import com.example.liftrix.domain.model.analytics.RankingMetric
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
@@ -445,10 +446,4 @@ data class ExercisePerformanceData(
 // VolumeDataPoint moved to domain model: com.example.liftrix.domain.model.analytics.VolumeDataPoint
 // Note: Use VolumeDataPoint.fromKgFloat() for Float volume conversion
 
-/**
- * 1RM data point for tracking
- */
-data class OneRmDataPoint(
-    val date: kotlinx.datetime.LocalDate,
-    val estimatedOneRm: Float
-)
+// OneRmDataPoint moved to domain.model.analytics.OneRmDataPoint

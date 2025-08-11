@@ -56,7 +56,7 @@ class AnalyticsMapper @Inject constructor() {
         try {
             val volumeMap = dailyVolumes.associate { result ->
                 val date = LocalDate.parse(result.date)
-                date to Weight.fromKilograms(result.volume)
+                date to Weight.fromKilograms(result.total_volume)
             }
             
             val maxVolume = volumeMap.values.maxByOrNull { it.kilograms } ?: Weight.ZERO

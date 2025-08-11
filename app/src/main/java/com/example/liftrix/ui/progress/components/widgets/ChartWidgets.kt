@@ -20,6 +20,12 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.model.analytics.*
+import com.example.liftrix.domain.repository.VolumeDataPoint
+import com.example.liftrix.domain.repository.FrequencyDataPoint
+import com.example.liftrix.domain.model.WeightUnit
+import com.example.liftrix.core.formatting.WeightFormatter
+import com.example.liftrix.ui.progress.components.WorkoutVolumeChart
+import com.example.liftrix.ui.progress.components.WorkoutFrequencyHeatmap
 import com.example.liftrix.ui.theme.LiftrixColors
 import kotlin.math.max
 import kotlin.math.min
@@ -35,7 +41,7 @@ import kotlin.math.min
  */
 
 /**
- * Volume chart widget - visual volume progression
+ * Volume chart widget - visual volume progression using actual WorkoutVolumeChart
  */
 @Composable
 fun VolumeChartWidget(
@@ -44,23 +50,25 @@ fun VolumeChartWidget(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    BaseWidget(
-        title = "Volume Chart",
-        subtitle = data?.timeRange,
-        isLoading = data?.isLoading == true,
-        error = data?.error?.message,
-        onRefresh = onRefresh,
-        onClick = onClick,
-        modifier = modifier
-    ) {
-        data?.let { chartData ->
-            ChartDisplay(
-                chartData = chartData,
-                chartColor = MaterialTheme.colorScheme.primary,
-                icon = Icons.Default.TrendingUp
+    // Convert ChartWidgetData to VolumeDataPoint list
+    val volumeData = data?.let { chartData ->
+        chartData.dataPoints.map { point ->
+            VolumeDataPoint(
+                date = kotlinx.datetime.LocalDate.fromEpochDays(point.x.toInt()),
+                totalVolume = point.y,
+                exerciseCount = 1 // Default value, could be enhanced
             )
         }
-    }
+    } ?: emptyList()
+    
+    // Use the actual WorkoutVolumeChart component
+    WorkoutVolumeChart(
+        data = volumeData,
+        isLoading = data?.isLoading == true,
+        weightUnit = WeightUnit.KILOGRAMS, // Default to kg, could be made configurable
+        weightFormatter = WeightFormatter(), // Use default formatter
+        modifier = modifier
+    )
 }
 
 /**
@@ -93,7 +101,7 @@ fun DurationChartWidget(
 }
 
 /**
- * Frequency chart widget - workout frequency patterns
+ * Frequency chart widget - workout frequency patterns using actual WorkoutFrequencyHeatmap
  */
 @Composable
 fun FrequencyChartWidget(
@@ -102,23 +110,25 @@ fun FrequencyChartWidget(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    BaseWidget(
-        title = "Frequency Chart",
-        subtitle = data?.timeRange,
-        isLoading = data?.isLoading == true,
-        error = data?.error?.message,
-        onRefresh = onRefresh,
-        onClick = onClick,
-        modifier = modifier
-    ) {
-        data?.let { chartData ->
-            ChartDisplay(
-                chartData = chartData,
-                chartColor = MaterialTheme.colorScheme.primary,
-                icon = Icons.Default.BarChart
+    // Convert ChartWidgetData to FrequencyDataPoint list
+    val frequencyData = data?.let { chartData ->
+        chartData.dataPoints.map { point ->
+            FrequencyDataPoint(
+                date = kotlinx.datetime.LocalDate.fromEpochDays(point.x.toInt()),
+                workoutCount = point.y.toInt(),
+                intensity = (chartData.dataPoints.maxOfOrNull { it.y }?.let { max -> 
+                    if (max > 0f) point.y / max else 0f 
+                } ?: 0f)
             )
         }
-    }
+    } ?: emptyList()
+    
+    // Use the actual WorkoutFrequencyHeatmap component
+    WorkoutFrequencyHeatmap(
+        data = frequencyData,
+        isLoading = data?.isLoading == true,
+        modifier = modifier
+    )
 }
 
 /**

@@ -30,9 +30,11 @@ object UnifiedWorkoutSessionModule {
     @Singleton
     fun provideUnifiedWorkoutSessionManager(
         context: android.content.Context,
-        workoutRepository: com.example.liftrix.domain.repository.workout.WorkoutRepository
+        workoutRepository: com.example.liftrix.domain.repository.workout.WorkoutRepository,
+        cacheManager: com.example.liftrix.core.cache.CacheManager,
+        cacheInvalidationService: com.example.liftrix.service.CacheInvalidationService
     ): UnifiedWorkoutSessionManager {
-        return UnifiedWorkoutSessionManager(context, workoutRepository)
+        return UnifiedWorkoutSessionManager(context, workoutRepository, cacheManager, cacheInvalidationService)
     }
     
     @Provides

@@ -22,6 +22,8 @@ import com.example.liftrix.domain.model.ExerciseSetId
 import com.example.liftrix.domain.model.Reps
 import com.example.liftrix.domain.model.RPE
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
+import com.example.liftrix.core.cache.CacheManager
+import com.example.liftrix.core.cache.CacheKey
 import java.time.LocalDate
 import java.time.Duration
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -58,7 +60,9 @@ import javax.inject.Singleton
 @Singleton
 class UnifiedWorkoutSessionManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val workoutRepository: WorkoutRepository
+    private val workoutRepository: WorkoutRepository,
+    private val cacheManager: CacheManager,
+    private val cacheInvalidationService: CacheInvalidationService
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val sharedPrefs: SharedPreferences = context.getSharedPreferences(
@@ -220,6 +224,9 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                         
                         // Add small delay to ensure database transaction is fully committed
                         kotlinx.coroutines.delay(100)
+                        
+                        // Invalidate analytics cache after workout completion using enhanced invalidation service
+                        invalidateWorkoutRelatedCache(savedWorkout)
                         
                         // Only clear session after confirmed database save
                         clearSession()
@@ -760,6 +767,84 @@ class UnifiedWorkoutSessionManager @Inject constructor(
     fun clearRecoveryError() {
         _recoveryState.value = RecoveryState.NoRecovery
     }
+    
+    /**
+     * Enhanced cache invalidation after workout completion using CacheInvalidationService.
+     * 
+     * This method provides comprehensive cache invalidation based on data relationships:
+     * - Invalidates volume, frequency, and 1RM progression data
+     * - Handles exercise-specific cache entries
+     * - Processes muscle group analytics
+     * - Updates dashboard and widget caches
+     * - Provides proper error handling and recovery
+     */
+    private suspend fun invalidateWorkoutRelatedCache(workout: Workout) {
+        try {
+            Timber.d("Enhanced cache invalidation for workout completion - user: ${workout.userId}")
+            
+            // Extract exercise IDs from the workout  
+            val exerciseIds = workout.exercises.map { it.libraryExercise.id }
+            
+            // Get workout date as LocalDate
+            val workoutDate = workout.date.let { javaDate ->
+                kotlinx.datetime.LocalDate(javaDate.year, javaDate.monthValue, javaDate.dayOfMonth)
+            }
+            
+            // Calculate workout duration in minutes
+            val workoutDuration = workout.getDuration()?.toMinutes()?.toInt() ?: 0
+            
+            // Use enhanced cache invalidation service
+            val invalidationResult = cacheInvalidationService.invalidateWorkoutData(
+                userId = workout.userId,
+                workoutDate = workoutDate,
+                exerciseIds = exerciseIds,
+                workoutDuration = workoutDuration
+            )
+            
+            invalidationResult.fold(
+                onSuccess = {
+                    Timber.i("Enhanced cache invalidation completed successfully for user: ${workout.userId}")
+                },
+                onFailure = { exception ->
+                    Timber.e(exception, "Enhanced cache invalidation failed for user: ${workout.userId}")
+                    
+                    // Fallback to basic cache invalidation
+                    fallbackCacheInvalidation(workout.userId)
+                }
+            )
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Error in enhanced cache invalidation for user: ${workout.userId}")
+            
+            // Fallback to basic cache invalidation
+            fallbackCacheInvalidation(workout.userId)
+            // Don't let cache invalidation failure affect workout completion
+        }
+    }
+    
+    /**
+     * Fallback cache invalidation using basic pattern-based invalidation.
+     * 
+     * Used when the enhanced cache invalidation service fails, providing
+     * a simple but effective cache clearing mechanism to ensure data freshness.
+     */
+    private suspend fun fallbackCacheInvalidation(userId: String) {
+        try {
+            Timber.d("Fallback cache invalidation for user: $userId")
+            
+            // Use pattern-based invalidation for all user data
+            cacheManager.invalidatePattern { cacheKey ->
+                val keyString = cacheKey.keyString
+                keyString.contains(":$userId:") || keyString.contains("user:$userId")
+            }
+            
+            Timber.i("Fallback cache invalidation completed for user: $userId")
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Fallback cache invalidation failed for user: $userId")
+            // Continue anyway - don't let cache issues block workout completion
+        }
+    }
 
     /**
      * Recovery state management
@@ -794,7 +879,8 @@ data class SerializableSession(
     val endedAt: Long? = null,
     val elapsedTimeSeconds: Long = 0,
     val notes: String? = null,
-    val lastModified: Long
+    val lastModified: Long,
+    val metadata: Map<String, String> = emptyMap()
 )
 
 @Serializable
@@ -837,7 +923,8 @@ private fun UnifiedWorkoutSession.toSerializable(): SerializableSession {
         endedAt = endedAt?.epochSecond,
         elapsedTimeSeconds = elapsedTimeSeconds,
         notes = notes,
-        lastModified = lastModified.epochSecond
+        lastModified = lastModified.epochSecond,
+        metadata = metadata
     )
 }
 
@@ -880,7 +967,8 @@ private fun SerializableSession.toUnifiedWorkoutSession(): UnifiedWorkoutSession
         endedAt = endedAt?.let { Instant.ofEpochSecond(it) },
         elapsedTimeSeconds = elapsedTimeSeconds,
         notes = notes,
-        lastModified = Instant.ofEpochSecond(lastModified)
+        lastModified = Instant.ofEpochSecond(lastModified),
+        metadata = metadata
     )
 }
 

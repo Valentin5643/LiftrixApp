@@ -27,12 +27,21 @@ import com.example.liftrix.domain.usecase.settings.UpdateUserPreferencesUseCase
 import com.example.liftrix.domain.usecase.settings.EvaluateFeatureFlagUseCase
 import com.example.liftrix.domain.usecase.folder.ReorderFoldersUseCase
 import com.example.liftrix.domain.usecase.settings.EnhancedSignOutUseCase
+import com.example.liftrix.ui.common.state.StateCleanupManager
+import com.example.liftrix.domain.usecase.analytics.GetVolumeAnalysisUseCase
+import com.example.liftrix.domain.usecase.analytics.GetOneRmProgressionUseCase
+import com.example.liftrix.domain.usecase.analytics.GetMuscleGroupAnalyticsUseCase
+import com.example.liftrix.domain.usecase.analytics.GetExerciseRankingUseCase
 import com.example.liftrix.domain.usecase.settings.GetSubscriptionStatusUseCase
 import com.example.liftrix.domain.usecase.settings.GetUserSettingsUseCase
 import com.example.liftrix.domain.usecase.settings.UpdateSettingsUseCase
 import com.example.liftrix.domain.repository.WidgetPreferencesRepository
 import com.example.liftrix.domain.repository.AnomalyDetectionRepository
 import com.example.liftrix.data.local.dao.WorkoutDao
+import com.example.liftrix.data.local.dao.ExerciseSetDao
+import com.example.liftrix.data.local.dao.ExerciseDao
+import com.example.liftrix.domain.repository.ProgressStatsRepository
+import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.model.analytics.CalorieCalculator
 import com.example.liftrix.service.AnalyticsEngine
 import com.example.liftrix.sync.SyncManager
@@ -116,14 +125,16 @@ object UseCaseModule {
         analyticsService: AnalyticsService,
         settingsRepository: SettingsRepository,
         syncManager: SyncManager,
-        workManager: WorkManager
+        workManager: WorkManager,
+        stateCleanupManager: StateCleanupManager
     ): EnhancedSignOutUseCase {
         return EnhancedSignOutUseCase(
             authRepository = authRepository,
             analyticsService = analyticsService,
             settingsRepository = settingsRepository,
             syncManager = syncManager,
-            workManager = workManager
+            workManager = workManager,
+            stateCleanupManager = stateCleanupManager
         )
     }
 
@@ -305,9 +316,10 @@ object UseCaseModule {
     @Provides
     @Singleton
     fun provideGetWidgetDataUseCase(
-        analyticsService: AnalyticsService
+        progressStatsRepository: ProgressStatsRepository,
+        workoutRepository: WorkoutRepository
     ): GetWidgetDataUseCase {
-        return GetWidgetDataUseCase(analyticsService)
+        return GetWidgetDataUseCase(progressStatsRepository, workoutRepository)
     }
 
     /**
@@ -375,6 +387,91 @@ object UseCaseModule {
     @Singleton
     fun provideReorderFoldersUseCase(): ReorderFoldersUseCase {
         return ReorderFoldersUseCase()
+    }
+
+    // Real data integration use cases for progress dashboard
+
+    /**
+     * Provides GetVolumeAnalysisUseCase with proper dependency injection.
+     * 
+     * This use case provides real-time volume analysis from database,
+     * replacing mock data with actual workout analytics.
+     * 
+     * @param progressDataService The progress data service dependency
+     * @param exerciseSetDao The exercise set DAO for direct database queries
+     * @return Configured GetVolumeAnalysisUseCase instance
+     */
+    @Provides
+    @Singleton
+    fun provideGetVolumeAnalysisUseCase(
+        progressDataService: ProgressDataService,
+        exerciseSetDao: ExerciseSetDao
+    ): GetVolumeAnalysisUseCase {
+        return GetVolumeAnalysisUseCase(progressDataService, exerciseSetDao)
+    }
+
+    /**
+     * Provides GetOneRmProgressionUseCase with proper dependency injection.
+     * 
+     * This use case provides real-time 1RM calculations from database,
+     * using Epley formula for estimated values.
+     * 
+     * @param exerciseSetDao The exercise set DAO for 1RM calculations
+     * @param progressStatsRepository The progress stats repository dependency
+     * @return Configured GetOneRmProgressionUseCase instance
+     */
+    @Provides
+    @Singleton
+    fun provideGetOneRmProgressionUseCase(
+        exerciseSetDao: ExerciseSetDao,
+        progressStatsRepository: ProgressStatsRepository
+    ): GetOneRmProgressionUseCase {
+        return GetOneRmProgressionUseCase(exerciseSetDao, progressStatsRepository)
+    }
+
+    /**
+     * Provides GetMuscleGroupAnalyticsUseCase with proper dependency injection.
+     * 
+     * This use case provides muscle group distribution and balance analysis
+     * from real workout data with actionable recommendations.
+     * 
+     * @param workoutRepository The workout repository dependency
+     * @param exerciseDao The exercise DAO for muscle group queries
+     * @param exerciseSetDao The exercise set DAO for volume calculations
+     * @param analyticsEngine The analytics engine for complex calculations
+     * @return Configured GetMuscleGroupAnalyticsUseCase instance
+     */
+    @Provides
+    @Singleton
+    fun provideGetMuscleGroupAnalyticsUseCase(
+        workoutRepository: WorkoutRepository,
+        exerciseDao: ExerciseDao,
+        exerciseSetDao: ExerciseSetDao,
+        analyticsEngine: AnalyticsEngine
+    ): GetMuscleGroupAnalyticsUseCase {
+        return GetMuscleGroupAnalyticsUseCase(
+            workoutRepository,
+            exerciseDao,
+            exerciseSetDao,
+            analyticsEngine
+        )
+    }
+
+    /**
+     * Provides GetExerciseRankingUseCase with proper dependency injection.
+     * 
+     * This use case provides exercise performance ranking and plateau
+     * detection based on real workout performance metrics.
+     * 
+     * @param exerciseSetDao The exercise set DAO for ranking calculations
+     * @return Configured GetExerciseRankingUseCase instance
+     */
+    @Provides
+    @Singleton
+    fun provideGetExerciseRankingUseCase(
+        exerciseSetDao: ExerciseSetDao
+    ): GetExerciseRankingUseCase {
+        return GetExerciseRankingUseCase(exerciseSetDao)
     }
 
 }

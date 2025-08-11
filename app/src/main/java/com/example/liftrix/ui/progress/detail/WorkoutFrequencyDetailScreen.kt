@@ -204,57 +204,22 @@ private fun WorkoutFrequencyContent(
             }
         }
 
-        // Frequency patterns and analysis
+        // Consolidated key insights - focused on what matters most
         LiftrixCard(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = "Frequency Analysis",
+                    text = "Workout Insights",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium
                 )
 
-                FrequencyAnalysisContent(data = data)
-            }
-        }
-
-        // Weekly patterns
-        LiftrixCard(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "Weekly Patterns",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium
-                )
-
-                WeeklyPatternsContent(data = data)
-            }
-        }
-
-        // Rest day analysis
-        LiftrixCard(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "Rest Day Analysis",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium
-                )
-
-                RestDayAnalysisContent(data = data)
+                // Show only the most important frequency metrics
+                StreamlinedFrequencyInsights(data = data)
             }
         }
     }
@@ -302,162 +267,103 @@ private fun FrequencyStatItem(
 }
 
 @Composable
-private fun FrequencyAnalysisContent(data: WorkoutFrequencyDetailViewModel.WorkoutFrequencyData) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+private fun StreamlinedFrequencyInsights(data: WorkoutFrequencyDetailViewModel.WorkoutFrequencyData) {
+    // Focus on the most impactful metrics in a cleaner layout
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
                 text = "Current Streak",
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "${data.currentStreak} days",
+                text = "${data.currentStreak}",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Medium,
+                color = if (data.currentStreak >= 7) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = "days",
                 style = MaterialTheme.typography.bodySmall,
-                color = if (data.currentStreak >= 7) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+        
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
                 text = "Best Streak",
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "${data.bestStreak} days",
-                style = MaterialTheme.typography.bodySmall,
+                text = "${data.bestStreak}",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.primary
             )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
             Text(
-                text = "Days Since Last Workout",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                text = "${data.daysSinceLastWorkout} days",
-                style = MaterialTheme.typography.bodySmall,
-                color = when {
-                    data.daysSinceLastWorkout == 0 -> MaterialTheme.colorScheme.tertiary
-                    data.daysSinceLastWorkout <= 2 -> MaterialTheme.colorScheme.onSurfaceVariant
-                    else -> MaterialTheme.colorScheme.error
-                }
-            )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "Rest Days Average",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                text = String.format("%.1f", data.averageRestDays),
+                text = "days",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
-}
-
-@Composable
-private fun WeeklyPatternsContent(data: WorkoutFrequencyDetailViewModel.WorkoutFrequencyData) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text(
-            text = "Most active days:",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-
-        data.weeklyPattern.sortedByDescending { it.second }.take(3).forEach { (dayOfWeek, workoutCount) ->
+    
+    // Show a single actionable insight based on current state
+    if (data.daysSinceLastWorkout > 2) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer
+            )
+        ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = dayOfWeek,
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Text(
-                    text = "$workoutCount workouts",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
+                    text = "⚠️ ${data.daysSinceLastWorkout} days since last workout",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer
                 )
             }
         }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "Preferred workout times:",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Text(
-            text = "Morning: ${data.morningWorkouts}% • Afternoon: ${data.afternoonWorkouts}% • Evening: ${data.eveningWorkouts}%",
-            style = MaterialTheme.typography.bodySmall
-        )
+    } else if (data.currentStreak >= 7) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer
+            )
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "🔥 Great consistency! Keep it up!",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            }
+        }
     }
 }
 
-@Composable
-private fun RestDayAnalysisContent(data: WorkoutFrequencyDetailViewModel.WorkoutFrequencyData) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "Total Rest Days",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                text = "${data.totalRestDays}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "Optimal Rest Days",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                text = "${data.optimalRestDays}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-
-        if (data.restDayRecommendation.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "💡 ${data.restDayRecommendation}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.tertiary
-            )
-        }
-    }
-}
+// Note: WeeklyPatternsContent and RestDayAnalysisContent removed 
+// Their functionality is now consolidated into StreamlinedFrequencyInsights
+// This reduces cognitive load while maintaining essential information

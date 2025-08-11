@@ -43,8 +43,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -69,6 +71,7 @@ class WorkoutViewModel @Inject constructor(
     private val analyticsService: AnalyticsService,
     private val uxMetricsTracker: UxMetricsTracker,
     private val taskCompletionTracker: TaskCompletionTracker,
+    private val sessionManager: com.example.liftrix.service.UnifiedWorkoutSessionManager, // 🔥 FIX: Add session manager to observe completion
     errorHandler: ErrorHandler
 ) : BaseViewModel<WorkoutUiState, WorkoutEvent>(errorHandler) {
 
@@ -83,6 +86,9 @@ class WorkoutViewModel @Inject constructor(
         observeTemplates()
         observeFolders()
         observeSyncStatus()
+        
+        // 🔥 FIX: Subscribe to session state changes to refresh data after workout completion
+        observeSessionCompletion()
     }
 
     /**
@@ -176,13 +182,16 @@ class WorkoutViewModel @Inject constructor(
      * 🔥 FIXED: Combined templates and folders observation to prevent race conditions
      * This ensures both templates and folders are loaded together, preventing UI rendering issues
      * where templates can't find their matching folders or vice versa.
+     * 
+     * FIX for disappearing folders/templates after quick workout completion:
+     * Using flatMapLatest to ensure the flow continues observing even after session changes
      */
     private fun observeTemplates() {
         viewModelScope.launch {
             // Only observe templates when user is authenticated
             authRepository.currentUser
                 .filterNotNull()
-                .collect { user ->
+                .flatMapLatest { user ->
                     // Ensure default folder exists for the user
                     folderRepository.getOrCreateDefaultFolder(user.uid)
                         .onFailure { exception ->
@@ -200,50 +209,53 @@ class WorkoutViewModel @Inject constructor(
                         ))
                     ) { foldersResult, templatesResult ->
                         Pair(foldersResult, templatesResult)
-                    }.collect { (foldersResult, templatesResult) ->
-                        // Process both results together
-                        val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
-                        
-                        when {
-                            foldersResult.isSuccess && templatesResult.isSuccess -> {
-                                val folders = foldersResult.getOrThrow()
-                                val templatesData = templatesResult.getOrThrow()
-                                val templates = templatesData.templates
-                                
-                                
+                    }
+                }
+                .collect { (foldersResult, templatesResult) ->
+                    // Process both results together
+                    val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
+                    
+                    when {
+                        foldersResult.isSuccess && templatesResult.isSuccess -> {
+                            val folders = foldersResult.getOrThrow()
+                            val templatesData = templatesResult.getOrThrow()
+                            val templates = templatesData.templates
+                            
+                            // 🔥 FIX: Add logging to debug disappearing folders/templates issue
+                            Timber.d("WorkoutViewModel: Loaded ${folders.size} folders and ${templates.size} templates")
+                            
+                            setState(WorkoutUiState.Success(
+                                currentData.copy(
+                                    folders = folders,
+                                    templates = templates,
+                                    selectedFolderId = null // Reset folder selection when loading all
+                                )
+                            ))
+                        }
+                        foldersResult.isFailure -> {
+                            Timber.e("Failed to load folders: ${foldersResult.exceptionOrNull()?.message}")
+                            // Try to load templates only if folders fail
+                            if (templatesResult.isSuccess) {
+                                val templates = templatesResult.getOrThrow().templates
                                 setState(WorkoutUiState.Success(
                                     currentData.copy(
-                                        folders = folders,
                                         templates = templates,
-                                        selectedFolderId = null // Reset folder selection when loading all
+                                        folders = emptyList() // Clear folders on failure
                                     )
                                 ))
                             }
-                            foldersResult.isFailure -> {
-                                Timber.e("Failed to load folders: ${foldersResult.exceptionOrNull()?.message}")
-                                // Try to load templates only if folders fail
-                                if (templatesResult.isSuccess) {
-                                    val templates = templatesResult.getOrThrow().templates
-                                    setState(WorkoutUiState.Success(
-                                        currentData.copy(
-                                            templates = templates,
-                                            folders = emptyList() // Clear folders on failure
-                                        )
-                                    ))
-                                }
-                            }
-                            templatesResult.isFailure -> {
-                                Timber.e("Failed to load templates: ${templatesResult.exceptionOrNull()?.message}")
-                                // Load folders only if templates fail
-                                if (foldersResult.isSuccess) {
-                                    val folders = foldersResult.getOrThrow()
-                                    setState(WorkoutUiState.Success(
-                                        currentData.copy(
-                                            folders = folders,
-                                            templates = emptyList() // Clear templates on failure
-                                        )
-                                    ))
-                                }
+                        }
+                        templatesResult.isFailure -> {
+                            Timber.e("Failed to load templates: ${templatesResult.exceptionOrNull()?.message}")
+                            // Load folders only if templates fail
+                            if (foldersResult.isSuccess) {
+                                val folders = foldersResult.getOrThrow()
+                                setState(WorkoutUiState.Success(
+                                    currentData.copy(
+                                        folders = folders,
+                                        templates = emptyList() // Clear templates on failure
+                                    )
+                                ))
                             }
                         }
                     }
@@ -282,6 +294,32 @@ class WorkoutViewModel @Inject constructor(
                     }
                     else -> { /* Handle other states if needed */ }
                 }
+            }
+        }
+    }
+    
+    /**
+     * 🔥 FIX: Observes session completion to refresh data after workout ends
+     * This prevents folders/templates from disappearing after quick workout completion
+     * by ensuring data is reloaded after cache invalidation
+     */
+    private fun observeSessionCompletion() {
+        viewModelScope.launch {
+            var previousSession: com.example.liftrix.domain.model.UnifiedWorkoutSession? = null
+            
+            sessionManager.currentSession.collect { currentSession ->
+                // Detect when session transitions from active/completed to null (cleared after completion)
+                if (previousSession != null && currentSession == null) {
+                    Timber.d("WorkoutViewModel: Session completed and cleared, refreshing folders/templates data")
+                    
+                    // Add a small delay to ensure cache invalidation has completed
+                    kotlinx.coroutines.delay(200)
+                    
+                    // Trigger a refresh of folders and templates data
+                    refreshData()
+                }
+                
+                previousSession = currentSession
             }
         }
     }

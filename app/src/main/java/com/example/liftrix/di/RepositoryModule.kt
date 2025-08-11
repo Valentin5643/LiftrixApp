@@ -30,10 +30,8 @@ import com.example.liftrix.domain.repository.WidgetPreferencesRepository
 import com.example.liftrix.domain.repository.UserRepository
 import com.example.liftrix.domain.repository.UserSearchRepository
 import com.example.liftrix.domain.repository.AchievementRepository
-import com.example.liftrix.core.cache.CacheManager
 import dagger.Binds
 import dagger.Module
-import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
@@ -139,22 +137,4 @@ abstract class RepositoryModule {
         achievementRepositoryImpl: AchievementRepositoryImpl
     ): AchievementRepository
 
-    companion object {
-        
-        /**
-         * Provides CacheManager for service layer caching.
-         * 
-         * The CacheManager provides LRU cache with TTL support for service responses,
-         * reducing database load and improving performance for frequently accessed data.
-         * Configured with reasonable defaults for progress dashboard usage patterns.
-         * 
-         * @return CacheManager instance with default configuration (100 entries, 15min TTL)
-         */
-        @Provides
-        @Singleton
-        fun provideCacheManager(): CacheManager = CacheManager(
-            maxSize = 100,
-            defaultTtl = kotlin.time.Duration.parse("15m")
-        )
-    }
 } 

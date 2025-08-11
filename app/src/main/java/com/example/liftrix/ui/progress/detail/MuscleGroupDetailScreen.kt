@@ -3,20 +3,13 @@ package com.example.liftrix.ui.progress.detail
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.PieChart
-import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.FileDownload
-import androidx.compose.material.icons.filled.Balance
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -29,9 +22,7 @@ import com.example.liftrix.ui.common.components.ErrorDisplay
 import com.example.liftrix.ui.common.components.EmptyState
 import com.example.liftrix.ui.progress.detail.components.AnalyticsDetailScreen
 import com.example.liftrix.ui.progress.detail.components.MuscleGroupDistributionChart
-import com.example.liftrix.ui.progress.detail.components.MuscleGroupExercisesList
-import com.example.liftrix.ui.progress.detail.components.BalanceAnalysisCard
-import com.example.liftrix.ui.progress.detail.components.WeeklyComparisonChart
+import com.example.liftrix.ui.progress.components.GlobalTimeRangeSelector
 import timber.log.Timber
 
 /**
@@ -39,10 +30,8 @@ import timber.log.Timber
  * 
  * Full-screen detailed view of muscle group analysis with interactive features:
  * - Interactive pie chart with drill-down functionality
- * - Multiple view modes: Distribution, Comparison, Exercises, Balance
- * - Time range selection and filtering
- * - Muscle group balance analysis with recommendations
- * - Weekly comparison views
+ * - Time range selection and filtering with GlobalTimeRangeSelector
+ * - Distribution view with summary statistics
  * - Export functionality
  * - Loading, error, and empty states
  */
@@ -58,7 +47,6 @@ fun MuscleGroupDetailScreen(
     val uiState by viewModel.uiState.collectAsState()
     val selectedMuscleGroup by viewModel.selectedMuscleGroup.collectAsState()
     val currentTimeRange by viewModel.timeRange.collectAsState()
-    val viewMode by viewModel.viewMode.collectAsState()
     
     // Initialize with route parameters
     LaunchedEffect(muscleGroup, timeRange) {
@@ -93,24 +81,11 @@ fun MuscleGroupDetailScreen(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // Time range selector - TODO: Need to create a proper TimeRangeSelector component
-            LiftrixCard(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "Time Range: ${currentTimeRange.name}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // View mode selector
-            ViewModeSelector(
-                currentMode = viewMode,
-                onModeChange = { mode ->
-                    viewModel.handleEvent(MuscleGroupDetailViewModel.Event.UpdateViewMode(mode))
+            // Time range selector with proper functionality
+            GlobalTimeRangeSelector(
+                selectedTimeRange = currentTimeRange,
+                onTimeRangeChange = { newTimeRange ->
+                    viewModel.handleEvent(MuscleGroupDetailViewModel.Event.UpdateTimeRange(newTimeRange))
                 },
                 modifier = Modifier.fillMaxWidth()
             )
@@ -154,13 +129,11 @@ fun MuscleGroupDetailScreen(
                 
                 is MuscleGroupDetailViewModel.UiState.Success -> {
                     val successState = uiState as MuscleGroupDetailViewModel.UiState.Success
-                    MuscleGroupDetailContent(
+                    // Only show distribution view - remove the other tabs
+                    DistributionView(
                         data = successState.data,
                         onMuscleGroupClick = { muscleGroup ->
                             viewModel.handleEvent(MuscleGroupDetailViewModel.Event.SelectMuscleGroupSegment(muscleGroup))
-                        },
-                        onRefresh = {
-                            viewModel.handleEvent(MuscleGroupDetailViewModel.Event.RefreshData)
                         }
                     )
                 }
@@ -169,130 +142,6 @@ fun MuscleGroupDetailScreen(
     }
 }
 
-/**
- * View mode selector with tabs
- */
-@Composable
-private fun ViewModeSelector(
-    currentMode: MuscleGroupDetailViewModel.ViewMode,
-    onModeChange: (MuscleGroupDetailViewModel.ViewMode) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    LiftrixCard(modifier = modifier) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            MuscleGroupDetailViewModel.ViewMode.values().forEach { mode ->
-                val isSelected = currentMode == mode
-                val icon = when (mode) {
-                    MuscleGroupDetailViewModel.ViewMode.DISTRIBUTION -> Icons.Default.PieChart
-                    MuscleGroupDetailViewModel.ViewMode.COMPARISON -> Icons.Default.BarChart
-                    MuscleGroupDetailViewModel.ViewMode.EXERCISES -> Icons.Default.TrendingUp
-                    MuscleGroupDetailViewModel.ViewMode.RECOMMENDATIONS -> Icons.Default.Balance
-                }
-                
-                ViewModeTab(
-                    mode = mode,
-                    icon = icon,
-                    isSelected = isSelected,
-                    onClick = { onModeChange(mode) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-    }
-}
-
-/**
- * Individual view mode tab
- */
-@Composable
-private fun ViewModeTab(
-    mode: MuscleGroupDetailViewModel.ViewMode,
-    icon: ImageVector,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    TextButton(
-        onClick = onClick,
-        modifier = modifier,
-        colors = ButtonDefaults.textButtonColors(
-            containerColor = if (isSelected) {
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-            } else {
-                Color.Transparent
-            }
-        )
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (isSelected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                modifier = Modifier.size(20.dp)
-            )
-            
-            Text(
-                text = mode.displayName,
-                style = MaterialTheme.typography.bodySmall,
-                color = if (isSelected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
-            )
-        }
-    }
-}
-
-/**
- * Content for the muscle group detail screen when data is successfully loaded
- */
-@Composable
-private fun MuscleGroupDetailContent(
-    data: MuscleGroupDetailViewModel.MuscleGroupData,
-    onMuscleGroupClick: (MuscleGroup) -> Unit,
-    onRefresh: () -> Unit
-) {
-    when (data.viewMode) {
-        MuscleGroupDetailViewModel.ViewMode.DISTRIBUTION -> {
-            DistributionView(
-                data = data,
-                onMuscleGroupClick = onMuscleGroupClick
-            )
-        }
-        
-        MuscleGroupDetailViewModel.ViewMode.COMPARISON -> {
-            ComparisonView(
-                data = data
-            )
-        }
-        
-        MuscleGroupDetailViewModel.ViewMode.EXERCISES -> {
-            ExercisesView(
-                data = data
-            )
-        }
-        
-        MuscleGroupDetailViewModel.ViewMode.RECOMMENDATIONS -> {
-            BalanceRecommendationsView(
-                data = data
-            )
-        }
-    }
-}
 
 /**
  * Distribution view with pie chart
@@ -345,93 +194,6 @@ private fun DistributionView(
     }
 }
 
-/**
- * Weekly comparison view
- */
-@Composable
-private fun ComparisonView(
-    data: MuscleGroupDetailViewModel.MuscleGroupData
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-    ) {
-        // Weekly comparison chart
-        LiftrixCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(300.dp)
-        ) {
-            WeeklyComparisonChart(
-                weeklyData = data.weeklyComparison,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // Trend analysis
-        WeeklyTrendAnalysisCard(
-            weeklyData = data.weeklyComparison,
-            modifier = Modifier.fillMaxWidth()
-        )
-    }
-}
-
-/**
- * Exercises view for selected muscle group
- */
-@Composable
-private fun ExercisesView(
-    data: MuscleGroupDetailViewModel.MuscleGroupData
-) {
-    Column(
-        modifier = Modifier.fillMaxSize()
-    ) {
-        if (data.selectedMuscleGroup != null && data.selectedMuscleGroupExercises.isNotEmpty()) {
-            // Exercises list
-            MuscleGroupExercisesList(
-                exercises = data.selectedMuscleGroupExercises,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            EmptyState(
-                message = "Select a muscle group to view exercises",
-                actionText = "View Distribution",
-                onActionClick = { /* Navigate back to distribution */ }
-            )
-        }
-    }
-}
-
-/**
- * Balance recommendations view
- */
-@Composable
-private fun BalanceRecommendationsView(
-    data: MuscleGroupDetailViewModel.MuscleGroupData
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-    ) {
-        // Balance analysis
-        BalanceAnalysisCard(
-            balanceAnalysis = data.balanceAnalysis,
-            modifier = Modifier.fillMaxWidth()
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // Recommendations list
-        RecommendationsList(
-            recommendations = data.balanceAnalysis.recommendations,
-            modifier = Modifier.fillMaxWidth()
-        )
-    }
-}
 
 /**
  * Distribution summary statistics card
@@ -551,115 +313,6 @@ private fun SelectedMuscleGroupCard(
     }
 }
 
-/**
- * Weekly trend analysis card
- */
-@Composable
-private fun WeeklyTrendAnalysisCard(
-    weeklyData: List<MuscleGroupDetailViewModel.WeeklyComparison>,
-    modifier: Modifier = Modifier
-) {
-    LiftrixCard(modifier = modifier) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = "Trend Analysis",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            if (weeklyData.size >= 2) {
-                val recent = weeklyData.last()
-                val previous = weeklyData[weeklyData.size - 2]
-                val volumeChange = recent.totalVolume - previous.totalVolume
-                val changePercentage = (volumeChange / previous.totalVolume) * 100f
-                
-                Text(
-                    text = "Volume Change: ${if (volumeChange >= 0) "+" else ""}${volumeChange.toInt()} (${changePercentage.toInt()}%)",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (volumeChange >= 0) Color.Green else Color.Red
-                )
-            } else {
-                Text(
-                    text = "More data needed for trend analysis",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-/**
- * Recommendations list
- */
-@Composable
-private fun RecommendationsList(
-    recommendations: List<MuscleGroupDetailViewModel.BalanceRecommendation>,
-    modifier: Modifier = Modifier
-) {
-    LazyColumn(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(recommendations) { recommendation ->
-            RecommendationCard(recommendation = recommendation)
-        }
-    }
-}
-
-/**
- * Individual recommendation card
- */
-@Composable
-private fun RecommendationCard(
-    recommendation: MuscleGroupDetailViewModel.BalanceRecommendation
-) {
-    LiftrixCard {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = recommendation.muscleGroup.displayName,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Medium
-                )
-                
-                Badge {
-                    Text(
-                        text = recommendation.recommendationType.name,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            Text(
-                text = recommendation.message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            
-            if (recommendation.suggestedExercises.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Text(
-                    text = "Suggested: ${recommendation.suggestedExercises.joinToString(", ")}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-    }
-}
 
 /**
  * Individual summary statistic item

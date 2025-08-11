@@ -1,8 +1,8 @@
 package com.example.liftrix.service
 
-import com.example.liftrix.core.cache.CacheManager
-import com.example.liftrix.core.cache.CacheKey
-import com.example.liftrix.core.cache.CacheKeyUtils
+import com.example.liftrix.core.cache.EnhancedCacheManager
+import com.example.liftrix.core.cache.CacheKeyGenerator
+import com.example.liftrix.core.cache.AnalyticsCacheKeys
 import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
@@ -15,6 +15,10 @@ import com.example.liftrix.domain.repository.ProgressSummary
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -27,20 +31,21 @@ import kotlin.time.Duration.Companion.minutes
  * and provides proper error handling, caching, and background processing using
  * IO dispatcher for database operations.
  * 
- * Caching Strategy:
- * - Uses LRU cache with 15-minute TTL for data operations
- * - Cache keys are structured by userId and timeRange for efficient invalidation
- * - Cache-first approach with fallback to repository
- * - Automatic cache invalidation on data refresh operations
+ * Enhanced Caching Strategy:
+ * - Multi-tier caching with memory (L1) and disk (L2) layers
+ * - Intelligent TTL based on data volatility (current vs historical data)
+ * - Smart cache key generation with relationship-aware invalidation
+ * - Performance targets: <100ms cached, <500ms fresh queries
+ * - Cache hit rate target: 80%+ for repeated queries
  * 
  * @param progressStatsRepository Repository for progress statistics data
- * @param cacheManager Cache manager for LRU caching with TTL
+ * @param cacheManager Enhanced cache manager with multi-tier support
  * @param ioDispatcher IO dispatcher for background database operations
  */
 @Singleton
 class ProgressDataServiceImpl @Inject constructor(
     private val progressStatsRepository: ProgressStatsRepository,
-    private val cacheManager: CacheManager,
+    private val cacheManager: EnhancedCacheManager,
     @com.example.liftrix.di.IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : ProgressDataService {
     
@@ -66,38 +71,27 @@ class ProgressDataServiceImpl @Inject constructor(
                 )
             }
         ) {
-            Timber.d("🔍 SERVICE-DEBUG: getVolumeData() starting for userId=$userId")
-            val cacheKey = CacheKeyUtils.createVolumeKey(userId, timeRange)
+            Timber.d("$TAG: getVolumeData() starting for userId=$userId")
             
-            // Check cache first
-            Timber.d("🔍 SERVICE-DEBUG: Checking cache for key=$cacheKey")
-            val cachedEntry = cacheManager.get<List<VolumeDataPoint>>(cacheKey)
-            if (cachedEntry != null && cachedEntry.isValid()) {
-                Timber.d("🔍 SERVICE-DEBUG: Cache HIT, returning cached data")
-                return@liftrixCatching cachedEntry.data
+            // Generate intelligent cache key with TTL
+            val (cacheKey, ttl) = CacheKeyGenerator.volumeKey(userId, timeRange)
+            
+            // Use enhanced cache manager with automatic fallback
+            val data = cacheManager.getOrCompute(cacheKey, ttl) {
+                val startDate = kotlinx.datetime.LocalDate.fromEpochDays(
+                    (timeRange.startDate.time / (24 * 60 * 60 * 1000)).toInt()
+                )
+                val endDate = kotlinx.datetime.LocalDate.fromEpochDays(
+                    (timeRange.endDate.time / (24 * 60 * 60 * 1000)).toInt()
+                )
+                
+                Timber.d("$TAG: Fetching volume data from repository: startDate=$startDate, endDate=$endDate")
+                kotlinx.coroutines.withTimeout(8000) {
+                    progressStatsRepository.getWorkoutVolumeData(userId, startDate, endDate).first()
+                }
             }
             
-            Timber.d("🔍 SERVICE-DEBUG: Cache MISS, fetching from repository")
-            val startDate = kotlinx.datetime.LocalDate.fromEpochDays(
-                (timeRange.startDate.time / (24 * 60 * 60 * 1000)).toInt()
-            )
-            val endDate = kotlinx.datetime.LocalDate.fromEpochDays(
-                (timeRange.endDate.time / (24 * 60 * 60 * 1000)).toInt()
-            )
-            
-            Timber.d("🔍 SERVICE-DEBUG: Calling repository.getWorkoutVolumeData() with startDate=$startDate, endDate=$endDate")
-            val data = kotlinx.coroutines.withTimeout(8000) {
-                Timber.d("🔍 SERVICE-DEBUG: About to call .first() on Flow")
-                val result = progressStatsRepository.getWorkoutVolumeData(userId, startDate, endDate).first()
-                Timber.d("🔍 SERVICE-DEBUG: .first() completed, got ${result.size} data points")
-                result
-            }
-            
-            // Cache the result with 15-minute TTL
-            Timber.d("🔍 SERVICE-DEBUG: Caching result with ${data.size} data points")
-            cacheManager.put(cacheKey, data, ttl = 15.minutes)
-            
-            Timber.d("🔍 SERVICE-DEBUG: getVolumeData() returning ${data.size} data points")
+            Timber.d("$TAG: getVolumeData() returning ${data.size} data points")
             data
         }
     }
@@ -120,27 +114,33 @@ class ProgressDataServiceImpl @Inject constructor(
                 )
             }
         ) {
-            val cacheKey = CacheKeyUtils.createDurationKey(userId, timeRange)
-            
-            // Check cache first
-            val cachedEntry = cacheManager.get<List<DurationDataPoint>>(cacheKey)
-            if (cachedEntry != null && cachedEntry.isValid()) {
-                return@liftrixCatching cachedEntry.data
+            // Generate cache key for duration data (deprecated - filtered out)
+            val (cacheKey, ttl) = CacheKeyGenerator.volumeKey(userId, timeRange).let { (key, ttl) ->
+                // Convert to duration key pattern for backward compatibility
+                val durationKey = com.example.liftrix.core.cache.CacheKey.Operation(
+                    operation = "duration_data",
+                    userId = userId,
+                    parameters = mapOf(
+                        "time_range" to "${timeRange.startDate.time}:${timeRange.endDate.time}",
+                        "version" to "v1"
+                    )
+                )
+                Pair(durationKey, ttl)
             }
             
-            val startDate = kotlinx.datetime.LocalDate.fromEpochDays(
-                (timeRange.startDate.time / (24 * 60 * 60 * 1000)).toInt()
-            )
-            val endDate = kotlinx.datetime.LocalDate.fromEpochDays(
-                (timeRange.endDate.time / (24 * 60 * 60 * 1000)).toInt()
-            )
-            
-            val data = kotlinx.coroutines.withTimeout(8000) {
-                progressStatsRepository.getWorkoutDurationData(userId, startDate, endDate).first()
+            // Use enhanced cache manager
+            val data = cacheManager.getOrCompute(cacheKey, ttl) {
+                val startDate = kotlinx.datetime.LocalDate.fromEpochDays(
+                    (timeRange.startDate.time / (24 * 60 * 60 * 1000)).toInt()
+                )
+                val endDate = kotlinx.datetime.LocalDate.fromEpochDays(
+                    (timeRange.endDate.time / (24 * 60 * 60 * 1000)).toInt()
+                )
+                
+                kotlinx.coroutines.withTimeout(8000) {
+                    progressStatsRepository.getWorkoutDurationData(userId, startDate, endDate).first()
+                }
             }
-            
-            // Cache the result with 15-minute TTL
-            cacheManager.put(cacheKey, data, ttl = 15.minutes)
             
             data
         }
@@ -164,27 +164,25 @@ class ProgressDataServiceImpl @Inject constructor(
                 )
             }
         ) {
-            val cacheKey = CacheKeyUtils.createFrequencyKey(userId, timeRange)
-            
-            // Check cache first
-            val cachedEntry = cacheManager.get<List<FrequencyDataPoint>>(cacheKey)
-            if (cachedEntry != null && cachedEntry.isValid()) {
-                return@liftrixCatching cachedEntry.data
-            }
-            
-            val startDate = kotlinx.datetime.LocalDate.fromEpochDays(
-                (timeRange.startDate.time / (24 * 60 * 60 * 1000)).toInt()
-            )
-            val endDate = kotlinx.datetime.LocalDate.fromEpochDays(
-                (timeRange.endDate.time / (24 * 60 * 60 * 1000)).toInt()
+            // Generate frequency cache key
+            val (cacheKey, ttl) = CacheKeyGenerator.workoutFrequencyKey(
+                userId = userId,
+                year = kotlinx.datetime.Instant.fromEpochMilliseconds(timeRange.startDate.time).toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).year.toString()
             )
             
-            val data = kotlinx.coroutines.withTimeout(8000) {
-                progressStatsRepository.getWorkoutFrequencyData(userId, startDate, endDate).first()
+            // Use enhanced cache manager
+            val data = cacheManager.getOrCompute(cacheKey, ttl) {
+                val startDate = kotlinx.datetime.LocalDate.fromEpochDays(
+                    (timeRange.startDate.time / (24 * 60 * 60 * 1000)).toInt()
+                )
+                val endDate = kotlinx.datetime.LocalDate.fromEpochDays(
+                    (timeRange.endDate.time / (24 * 60 * 60 * 1000)).toInt()
+                )
+                
+                kotlinx.coroutines.withTimeout(8000) {
+                    progressStatsRepository.getWorkoutFrequencyData(userId, startDate, endDate).first()
+                }
             }
-            
-            // Cache the result with 15-minute TTL
-            cacheManager.put(cacheKey, data, ttl = 15.minutes)
             
             data
         }
@@ -210,30 +208,23 @@ class ProgressDataServiceImpl @Inject constructor(
                 )
             }
         ) {
-            val cacheKey = CacheKeyUtils.createSummaryKey(userId, timeRange)
+            // Generate dashboard summary cache key
+            val (cacheKey, ttl) = AnalyticsCacheKeys.dashboardSummary(userId)
             
-            // Check cache first
-            val cachedEntry = cacheManager.get<ProgressSummary>(cacheKey)
-            if (cachedEntry != null && cachedEntry.isValid()) {
-                Timber.d("$TAG: Cache hit for progress summary - user: $userId, timeRange: $timeRange")
-                return@liftrixCatching cachedEntry.data
+            // Use enhanced cache manager
+            val data = cacheManager.getOrCompute(cacheKey, ttl) {
+                val startDate = kotlinx.datetime.LocalDate.fromEpochDays(
+                    (timeRange.startDate.time / (24 * 60 * 60 * 1000)).toInt()
+                )
+                val endDate = kotlinx.datetime.LocalDate.fromEpochDays(
+                    (timeRange.endDate.time / (24 * 60 * 60 * 1000)).toInt()
+                )
+                
+                Timber.d("$TAG: Fetching progress summary from repository")
+                kotlinx.coroutines.withTimeout(15000) { // 15 second timeout
+                    progressStatsRepository.getProgressSummary(userId, startDate, endDate).first()
+                }
             }
-            
-            Timber.d("$TAG: Cache miss for progress summary - fetching from repository")
-            
-            val startDate = kotlinx.datetime.LocalDate.fromEpochDays(
-                (timeRange.startDate.time / (24 * 60 * 60 * 1000)).toInt()
-            )
-            val endDate = kotlinx.datetime.LocalDate.fromEpochDays(
-                (timeRange.endDate.time / (24 * 60 * 60 * 1000)).toInt()
-            )
-            
-            val data = kotlinx.coroutines.withTimeout(15000) { // 15 second timeout
-                progressStatsRepository.getProgressSummary(userId, startDate, endDate).first()
-            }
-            
-            // Cache the result with 15-minute TTL
-            cacheManager.put(cacheKey, data, ttl = 15.minutes)
             
             data
         }
@@ -255,12 +246,11 @@ class ProgressDataServiceImpl @Inject constructor(
             // Force data refresh by clearing all cached data for this user
             Timber.d("$TAG: Refreshing all data for user: $userId - clearing cache")
             
-            // Invalidate all progress data cache entries for this user
-            cacheManager.invalidatePattern { cacheKey ->
-                cacheKey.keyString.contains("progress:") && cacheKey.keyString.contains(":$userId:")
-            }
+            // Use pattern-based invalidation for all user data
+            val userPattern = CacheKeyGenerator.userPattern(userId)
+            cacheManager.invalidatePattern(userPattern)
             
-            Timber.d("$TAG: Cache cleared for user: $userId")
+            Timber.d("$TAG: Cache cleared for user: $userId using pattern: $userPattern")
             
             // Return unit to indicate successful refresh
             Unit

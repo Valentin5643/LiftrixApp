@@ -28,7 +28,8 @@ data class UnifiedWorkoutSession(
     val endedAt: Instant? = null,
     val elapsedTimeSeconds: Long = 0,
     val notes: String? = null,
-    val lastModified: Instant = Instant.now()
+    val lastModified: Instant = Instant.now(),
+    val metadata: Map<String, String> = emptyMap()
 ) {
     init {
         require(userId.isNotBlank()) { "User ID cannot be blank" }
@@ -81,6 +82,7 @@ data class UnifiedWorkoutSession(
         /**
          * Creates a new session from a template
          * 🔥 FIX: Preserves template conversion while ensuring session-scoped exercises
+         * 🔥 ENHANCED: Stores original template data for proper change detection
          */
         fun fromTemplate(
             userId: String,
@@ -95,6 +97,13 @@ data class UnifiedWorkoutSession(
                 SessionExercise.fromTemplate(templateExercise).copy(orderIndex = index)
             }
 
+            // 🔥 CRITICAL FIX: Store original template metadata for change detection
+            val metadata = mapOf(
+                "originalExerciseCount" to template.exercises.size.toString(),
+                "originalTemplateName" to template.name,
+                "templateCreatedFrom" to template.id.value
+            )
+
             return UnifiedWorkoutSession(
                 id = WorkoutSessionId.generate(),
                 userId = userId,
@@ -103,7 +112,8 @@ data class UnifiedWorkoutSession(
                 exercises = sessionExercises,
                 currentExerciseIndex = 0,
                 sessionStatus = SessionStatus.ACTIVE,
-                startedAt = Instant.now()
+                startedAt = Instant.now(),
+                metadata = metadata
             )
         }
 

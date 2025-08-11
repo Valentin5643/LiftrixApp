@@ -1,16 +1,22 @@
 package com.example.liftrix.ui.progress.detail
 
 import androidx.lifecycle.viewModelScope
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import androidx.lifecycle.SavedStateHandle
+import com.example.liftrix.ui.common.viewmodel.StatefulDetailViewModel
+import com.example.liftrix.ui.common.viewmodel.DetailScreenStateKeys
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.domain.usecase.common.ErrorHandler
+import com.example.liftrix.domain.usecase.analytics.GetVolumeAnalysisUseCase
+import com.example.liftrix.domain.usecase.analytics.VolumeAnalysisData as UseCaseVolumeAnalysisData
+import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.model.analytics.VolumeGrouping
 import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.model.error.LiftrixError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import com.example.liftrix.domain.model.analytics.VolumeDataPoint
@@ -34,32 +40,99 @@ import kotlin.time.Duration.Companion.days
  */
 @HiltViewModel
 class VolumeAnalysisDetailViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
     errorHandler: ErrorHandler,
-    // TODO: Inject actual use cases when implemented
-    // private val getVolumeAnalysisUseCase: GetVolumeAnalysisUseCase,
+    private val getVolumeAnalysisUseCase: GetVolumeAnalysisUseCase,
+    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+    // TODO: Inject additional use cases when implemented
     // private val getVolumeTrendsUseCase: GetVolumeTrendsUseCase,
     // private val exportVolumeDataUseCase: ExportVolumeDataUseCase
-) : BaseViewModel<VolumeAnalysisDetailViewModel.UiState, VolumeAnalysisDetailViewModel.Event>(errorHandler) {
+) : StatefulDetailViewModel<VolumeAnalysisDetailViewModel.UiState, VolumeAnalysisDetailViewModel.Event>(savedStateHandle, errorHandler) {
 
     override val _uiState = MutableStateFlow<UiState>(UiState.Loading)
 
     /**
-     * Current configuration state
+     * Current configuration state - persisted using StatefulDetailViewModel
      */
-    private val _groupBy = MutableStateFlow(VolumeGrouping.TOTAL)
-    val groupBy = _groupBy
     
-    private val _timeRange = MutableStateFlow(TimeRangeType.MONTH)
-    val timeRange = _timeRange
+    // Persisted state flows
+    val groupBy = savedStateFlow(
+        key = DetailScreenStateKeys.VOLUME_GROUP_BY,
+        initialValue = VolumeGrouping.TOTAL
+    ) { groupBy ->
+        // Validate enum value
+        VolumeGrouping.values().contains(groupBy)
+    }
     
-    private val _showProjections = MutableStateFlow(true)
-    val showProjections = _showProjections
+    val timeRange = savedStateFlow(
+        key = DetailScreenStateKeys.VOLUME_TIME_RANGE,
+        initialValue = TimeRangeType.MONTH
+    ) { timeRange ->
+        // Validate enum value
+        TimeRangeType.values().contains(timeRange)
+    }
+    
+    val showProjections = savedStateFlow(
+        key = DetailScreenStateKeys.VOLUME_SHOW_PROJECTIONS,
+        initialValue = true
+    )
     
     private val _isExporting = MutableStateFlow(false)
     val isExporting = _isExporting
 
     init {
+        // Set up reactive data loading based on state changes
+        setupReactiveDataLoading()
+        
+        // Set up reactive data binding for real-time updates
+        setupReactiveDataBinding()
+        
+        // Load initial data
         loadVolumeAnalysisData()
+    }
+    
+    /**
+     * Sets up reactive data loading when state changes
+     */
+    private fun setupReactiveDataLoading() {
+        viewModelScope.launch {
+            // React to groupBy changes
+            groupBy.collectLatest {
+                loadVolumeAnalysisData()
+            }
+        }
+        
+        viewModelScope.launch {
+            // React to timeRange changes  
+            timeRange.collectLatest {
+                loadVolumeAnalysisData()
+            }
+        }
+        
+        viewModelScope.launch {
+            // React to projections toggle
+            showProjections.collectLatest {
+                loadVolumeAnalysisData()
+            }
+        }
+    }
+    
+    /**
+     * Sets up reactive data binding to automatically update when workout data changes
+     */
+    private fun setupReactiveDataBinding() {
+        viewModelScope.launch {
+            // TODO: Replace with actual repository flow when available
+            // Example reactive binding:
+            // workoutRepository.getWorkoutsFlow(getCurrentUserId()).collectLatest {
+            //     if (_uiState.value is UiState.Success) {
+            //         loadVolumeAnalysisData() // Refresh data when workouts change
+            //     }
+            // }
+            
+            // For now, set up reactive binding stub
+            Timber.d("Reactive data binding initialized for VolumeAnalysisDetailViewModel")
+        }
     }
 
     /**
@@ -67,23 +140,45 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
      * Performance target: <500ms load time as per SPEC requirements
      */
     private fun loadVolumeAnalysisData() {
-        viewModelScope.launch {
-            try {
+        executeUseCase(
+            useCase = { 
+                val userId = getCurrentUserIdUseCase() ?: throw Exception("User not authenticated").also {
+                }
+                
+                
+                getVolumeAnalysisUseCase.execute(
+                    userId = userId,
+                    groupBy = groupBy.value,
+                    timeRange = timeRange.value
+                )
+            },
+            onSuccess = { useCaseData ->
                 val startTime = System.currentTimeMillis()
-                _uiState.value = UiState.Loading
                 
-                // TODO: Replace with actual use case when implemented
-                // val result = getVolumeAnalysisUseCase(
-                //     groupBy = _groupBy.value,
-                //     timeRange = _timeRange.value,
-                //     includeProjections = _showProjections.value
-                // )
                 
-                // Mock data for development - simulate realistic load time
-                kotlinx.coroutines.delay(250)
-                val mockData = generateMockVolumeAnalysisData(
-                    groupBy = _groupBy.value,
-                    timeRange = _timeRange.value
+                // Convert use case data to UI data format
+                val uiData = VolumeAnalysisData(
+                    volumeData = useCaseData.volumeData.map { dataPoint ->
+                        // Parse date from string if available, otherwise use current date
+                        val date = dataPoint.date?.let {
+                            try {
+                                LocalDate.parse(it)
+                            } catch (e: Exception) {
+                                Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date
+                            }
+                        } ?: Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date
+                        
+                        VolumeDataPoint.fromKgDouble(
+                            date = date,
+                            volumeKg = dataPoint.volume,
+                            workoutCount = dataPoint.sets,
+                            label = dataPoint.label
+                        )
+                    },
+                    totalVolume = useCaseData.totalVolume,
+                    volumeGrowth = useCaseData.volumeGrowth,
+                    averageVolume = useCaseData.averageVolume,
+                    lastUpdated = Clock.System.now()
                 )
                 
                 val loadTime = System.currentTimeMillis() - startTime
@@ -96,27 +191,24 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
                     Timber.i("PERFORMANCE: Volume analysis load time within target: ${loadTime}ms")
                 }
                 
-                _uiState.value = UiState.Success(mockData)
                 
-                Timber.d("Volume analysis data loaded: groupBy=${_groupBy.value}, timeRange=${_timeRange.value}")
+                if (useCaseData.isEmpty) {
+                    _uiState.value = UiState.Empty()
+                } else {
+                    _uiState.value = UiState.Success(uiData)
+                }
                 
-            } catch (error: Exception) {
-                val liftrixError = LiftrixError.DataRetrievalError(
-                    errorMessage = "Failed to load volume analysis data"
-                )
-                _uiState.value = UiState.Error(liftrixError)
-                Timber.e(error, "Failed to load volume analysis data")
+                Timber.d("Volume analysis data loaded: groupBy=${groupBy.value}, timeRange=${timeRange.value}")
             }
-        }
+        )
     }
 
     /**
      * Update volume grouping method
      */
     fun updateGroupBy(newGroupBy: VolumeGrouping) {
-        if (_groupBy.value != newGroupBy) {
-            _groupBy.value = newGroupBy
-            loadVolumeAnalysisData()
+        if (groupBy.value != newGroupBy) {
+            updateSavedState(DetailScreenStateKeys.VOLUME_GROUP_BY, newGroupBy)
             Timber.d("Volume grouping updated to: $newGroupBy")
         }
     }
@@ -125,9 +217,8 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
      * Update time range for analysis
      */
     fun updateTimeRange(newTimeRange: TimeRangeType) {
-        if (_timeRange.value != newTimeRange) {
-            _timeRange.value = newTimeRange
-            loadVolumeAnalysisData()
+        if (timeRange.value != newTimeRange) {
+            updateSavedState(DetailScreenStateKeys.VOLUME_TIME_RANGE, newTimeRange)
             Timber.d("Time range updated to: $newTimeRange")
         }
     }
@@ -136,9 +227,8 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
      * Toggle volume projections visibility
      */
     fun toggleProjections() {
-        _showProjections.value = !_showProjections.value
-        loadVolumeAnalysisData()
-        Timber.d("Volume projections toggled: ${_showProjections.value}")
+        updateSavedState(DetailScreenStateKeys.VOLUME_SHOW_PROJECTIONS, !showProjections.value)
+        Timber.d("Volume projections toggled: ${showProjections.value}")
     }
 
     /**
@@ -151,8 +241,8 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
                 
                 // TODO: Replace with actual export use case
                 // val result = exportVolumeDataUseCase(
-                //     groupBy = _groupBy.value,
-                //     timeRange = _timeRange.value
+                //     groupBy = groupBy.value,
+                //     timeRange = timeRange.value
                 // )
                 
                 // Mock export success
@@ -203,9 +293,29 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
             TimeRangeType.MONTH
         }
         
-        _groupBy.value = validatedGroupBy
-        _timeRange.value = validatedTimeRange
-        loadVolumeAnalysisData()
+        // Update persisted state (this will trigger reactive data loading)
+        updateSavedState(DetailScreenStateKeys.VOLUME_GROUP_BY, validatedGroupBy)
+        updateSavedState(DetailScreenStateKeys.VOLUME_TIME_RANGE, validatedTimeRange)
+    }
+
+    // Scroll position persistence
+    private val scrollPosition = savedStateFlow(
+        key = DetailScreenStateKeys.VOLUME_SCROLL_POSITION,
+        initialValue = 0
+    )
+    
+    /**
+     * Saves current scroll position
+     */
+    fun saveScrollPosition(position: Int) {
+        updateSavedState(DetailScreenStateKeys.VOLUME_SCROLL_POSITION, position)
+    }
+    
+    /**
+     * Gets saved scroll position for restoration
+     */
+    fun getSavedScrollPosition(): Int {
+        return scrollPosition.value
     }
 
     /**
@@ -288,6 +398,14 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
             averageVolume = if (volumeData.isNotEmpty()) totalVolume / volumeData.size else 0.0,
             lastUpdated = now
         )
+    }
+
+    override fun updateErrorState(error: LiftrixError) {
+        handleError(error)
+    }
+
+    override fun setLoadingState() {
+        _uiState.value = UiState.Loading
     }
 }
 

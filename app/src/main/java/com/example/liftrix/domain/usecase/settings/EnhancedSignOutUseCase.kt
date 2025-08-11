@@ -5,6 +5,7 @@ import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SettingsRepository
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.sync.SyncManager
+import com.example.liftrix.ui.common.state.StateCleanupManager
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -26,7 +27,8 @@ class EnhancedSignOutUseCase @Inject constructor(
     private val analyticsService: AnalyticsService,
     private val settingsRepository: SettingsRepository,
     private val syncManager: SyncManager,
-    private val workManager: WorkManager
+    private val workManager: WorkManager,
+    private val stateCleanupManager: StateCleanupManager
 ) {
     
     /**
@@ -36,9 +38,10 @@ class EnhancedSignOutUseCase @Inject constructor(
      * 1. Get current user ID for analytics tracking
      * 2. Sign out from Firebase authentication
      * 3. Clear local data (settings, cache)
-     * 4. Stop background work and sync operations
-     * 5. Clear analytics user properties
-     * 6. Log sign out event
+     * 4. Clear persisted UI state from all ViewModels
+     * 5. Stop background work and sync operations
+     * 6. Clear analytics user properties
+     * 7. Log sign out event
      * 
      * @return Result indicating success or failure of the sign out process
      */
@@ -72,7 +75,26 @@ class EnhancedSignOutUseCase @Inject constructor(
                 // Continue with sign out process despite local data cleanup issues
             }
             
-            // Step 4: Stop background work and sync operations
+            // Step 4: Clear persisted UI state from all ViewModels
+            try {
+                val cleanedViewModels = stateCleanupManager.cleanupAllState()
+                Timber.d("UI state cleanup completed: $cleanedViewModels ViewModels cleaned")
+                
+                // Log cleanup statistics for monitoring
+                analyticsService.logEvent(
+                    eventName = "ui_state_cleanup",
+                    parameters = mapOf(
+                        "cleaned_viewmodels" to cleanedViewModels,
+                        "total_registered" to stateCleanupManager.getRegisteredCount(),
+                        "user_id" to (currentUserId ?: "unknown")
+                    )
+                )
+            } catch (e: Exception) {
+                Timber.w(e, "Non-critical: Failed to cleanup UI state")
+                // Continue with sign out process despite UI cleanup issues
+            }
+            
+            // Step 5: Stop background work and sync operations
             try {
                 // Cancel all ongoing sync operations
                 syncManager.cancelSync()
@@ -86,7 +108,7 @@ class EnhancedSignOutUseCase @Inject constructor(
                 // Continue with sign out process despite service cleanup issues
             }
             
-            // Step 5: Clear analytics user properties
+            // Step 6: Clear analytics user properties
             try {
                 val clearAnalyticsResult = analyticsService.clearUserProperties()
                 if (clearAnalyticsResult.isFailure) {
@@ -96,7 +118,7 @@ class EnhancedSignOutUseCase @Inject constructor(
                 Timber.w(e, "Non-critical: Failed to clear analytics properties")
             }
             
-            // Step 6: Log sign out event
+            // Step 7: Log sign out event
             try {
                 val logEventResult = analyticsService.logEvent(
                     eventName = "user_signed_out",

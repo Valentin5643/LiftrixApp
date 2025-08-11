@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -103,13 +104,10 @@ fun MuscleGroupPieChart(
         }
     }
 
-    Surface(
+    Box(
         modifier = modifier.semantics {
             contentDescription = buildPieChartContentDescription(data)
-        },
-        shape = LiftrixChartStyle.ChartContainer.shape,
-        color = LiftrixChartStyle.ChartContainer.backgroundColor,
-        shadowElevation = LiftrixChartStyle.ChartContainer.shadowElevation
+        }
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
@@ -194,7 +192,7 @@ fun MuscleGroupPieChart(
 }
 
 /**
- * Draw the interactive pie chart
+ * Draw the interactive pie chart with modern styling
  */
 private fun DrawScope.drawPieChart(
     pieData: List<PieSliceData>,
@@ -204,8 +202,16 @@ private fun DrawScope.drawPieChart(
     textMeasurer: TextMeasurer
 ) {
     val center = Offset(size.width / 2f, size.height / 2f)
-    val radius = (size.minDimension / 2f) * 0.8f
-    val strokeWidth = 8.dp.toPx()
+    val baseRadius = (size.minDimension / 2f) * 0.75f
+    val strokeWidth = 3.dp.toPx()
+    
+    // Draw subtle background circle for better visual hierarchy
+    drawCircle(
+        color = LiftrixColors.PersianGreen.copy(alpha = 0.08f),
+        radius = baseRadius * 1.1f,
+        center = center,
+        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
+    )
     
     var currentAngle = -90f // Start from top
     
@@ -213,19 +219,41 @@ private fun DrawScope.drawPieChart(
         val sweepAngle = slice.sweepAngle * animationProgress
         val isSelected = slice.muscleGroup == selectedSlice
         
-        // Adjust radius for selection effect
-        val sliceRadius = if (isSelected) radius * 1.05f else radius
+        // Enhanced selection effect with proper visual hierarchy
+        val sliceRadius = if (isSelected) baseRadius * 1.08f else baseRadius
+        val elevationOffset = if (isSelected) 12f else 4f
         val sliceCenter = if (isSelected) {
             val midAngle = Math.toRadians((currentAngle + sweepAngle / 2).toDouble())
             Offset(
-                center.x + cos(midAngle).toFloat() * 8f,
-                center.y + sin(midAngle).toFloat() * 8f
+                center.x + cos(midAngle).toFloat() * elevationOffset,
+                center.y + sin(midAngle).toFloat() * elevationOffset
             )
         } else center
         
-        // Draw slice
+        // Draw subtle shadow for depth (only for selected slice)
+        if (isSelected) {
+            drawArc(
+                color = LiftrixColors.Night.copy(alpha = 0.1f),
+                startAngle = currentAngle,
+                sweepAngle = sweepAngle,
+                useCenter = true,
+                topLeft = Offset(
+                    sliceCenter.x - sliceRadius + 2f,
+                    sliceCenter.y - sliceRadius + 2f
+                ),
+                size = Size(sliceRadius * 2f, sliceRadius * 2f)
+            )
+        }
+        
+        // Draw main slice with enhanced color
+        val sliceColor = if (isSelected) {
+            slice.color.copy(alpha = 1.0f)
+        } else {
+            slice.color.copy(alpha = 0.9f)
+        }
+        
         drawArc(
-            color = slice.color,
+            color = sliceColor,
             startAngle = currentAngle,
             sweepAngle = sweepAngle,
             useCenter = true,
@@ -236,9 +264,9 @@ private fun DrawScope.drawPieChart(
             size = Size(sliceRadius * 2f, sliceRadius * 2f)
         )
         
-        // Draw stroke for definition
+        // Draw refined border for definition with better contrast
         drawArc(
-            color = LiftrixColors.Snow.copy(alpha = 0.8f),
+            color = Color.White.copy(alpha = 0.6f),
             startAngle = currentAngle,
             sweepAngle = sweepAngle,
             useCenter = false,
@@ -247,21 +275,32 @@ private fun DrawScope.drawPieChart(
                 sliceCenter.y - sliceRadius
             ),
             size = Size(sliceRadius * 2f, sliceRadius * 2f),
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth)
+            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = strokeWidth,
+                cap = StrokeCap.Round
+            )
         )
         
-        // Draw percentage label
+        // Enhanced percentage labels with better positioning
         if (showPercentages && slice.percentage >= 5f && animationProgress > 0.7f) {
             val labelAngle = Math.toRadians((currentAngle + sweepAngle / 2).toDouble())
-            val labelRadius = sliceRadius * 0.75f
+            val labelRadius = sliceRadius * 0.78f
             val labelX = sliceCenter.x + cos(labelAngle).toFloat() * labelRadius
             val labelY = sliceCenter.y + sin(labelAngle).toFloat() * labelRadius
+            
+            // Draw label background for better contrast
+            drawCircle(
+                color = LiftrixColors.Night.copy(alpha = 0.8f),
+                radius = 18.dp.toPx(),
+                center = Offset(labelX, labelY)
+            )
             
             val textResult = textMeasurer.measure(
                 text = "${slice.percentage.toInt()}%",
                 style = TextStyle(
-                    color = LiftrixColors.Snow,
-                    fontSize = 14.sp  // Updated to meet 14sp minimum requirement
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
                 )
             )
             drawText(
@@ -275,6 +314,18 @@ private fun DrawScope.drawPieChart(
         
         currentAngle += sweepAngle
     }
+    
+    // Draw center highlight for modern look with better contrast
+    drawCircle(
+        color = Color.White.copy(alpha = 0.9f),
+        radius = baseRadius * 0.15f,
+        center = center
+    )
+    drawCircle(
+        color = LiftrixColors.PersianGreen.copy(alpha = 0.9f),
+        radius = baseRadius * 0.12f,
+        center = center
+    )
 }
 
 /**
@@ -302,7 +353,7 @@ private fun PieChartLegend(
 }
 
 /**
- * Individual legend item
+ * Individual legend item with enhanced styling
  */
 @Composable
 private fun LegendItem(
@@ -312,45 +363,78 @@ private fun LegendItem(
 ) {
     Surface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
         color = if (isSelected) {
-            slice.color.copy(alpha = 0.1f)
+            slice.color.copy(alpha = 0.12f)
         } else {
             Color.Transparent
         },
-        shape = RoundedCornerShape(8.dp)
+        shape = RoundedCornerShape(10.dp)
     ) {
         Row(
             modifier = Modifier
-                .padding(8.dp)
+                .padding(12.dp)
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.weight(1f)
             ) {
+                // Enhanced color indicator with border
                 Box(
                     modifier = Modifier
-                        .size(12.dp)
-                        .background(slice.color, CircleShape)
-                )
+                        .size(16.dp)
+                        .background(
+                            slice.color, 
+                            RoundedCornerShape(4.dp)
+                        )
+                ) {
+                    if (isSelected) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Color.White.copy(alpha = 0.4f),
+                                    RoundedCornerShape(4.dp)
+                                )
+                        )
+                    }
+                }
                 
                 Text(
                     text = slice.muscleGroup.displayName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
+                    style = if (isSelected) {
+                        MaterialTheme.typography.bodyMedium
+                    } else {
+                        MaterialTheme.typography.bodySmall
+                    },
+                    color = if (isSelected) {
+                        slice.color
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                 )
             }
             
             Text(
                 text = "${slice.percentage.toInt()}%",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
+                style = if (isSelected) {
+                    MaterialTheme.typography.labelMedium
+                } else {
+                    MaterialTheme.typography.labelSmall
+                },
+                color = if (isSelected) {
+                    slice.color
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                },
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
             )
         }
     }
@@ -365,13 +449,12 @@ private fun SelectedSliceDetails(
     percentage: Float,
     onDismiss: () -> Unit
 ) {
-    Surface(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(muscleGroup.color.copy(alpha = 0.1f))
-            .padding(12.dp),
-        color = Color.Transparent
+            .background(muscleGroup.color.copy(alpha = 0.08f))
+            .padding(12.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),

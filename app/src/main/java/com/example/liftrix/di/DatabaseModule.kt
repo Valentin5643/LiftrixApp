@@ -48,6 +48,7 @@ import com.example.liftrix.data.local.migration.MIGRATION_38_39
 import com.example.liftrix.data.local.migration.MIGRATION_39_40
 import com.example.liftrix.data.local.migration.MIGRATION_40_41
 import com.example.liftrix.data.local.migration.MIGRATION_41_42
+import com.example.liftrix.data.local.migration.MIGRATION_42_43
 
 import dagger.Module
 import dagger.Provides
@@ -84,7 +85,7 @@ object DatabaseModule {
         )
             .setTransactionExecutor(Dispatchers.IO.asExecutor())
             .setQueryExecutor(Dispatchers.IO.asExecutor())
-            .addMigrations(MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36, MIGRATION_36_37, MIGRATION_37_38, MIGRATION_38_39, MIGRATION_39_40, MIGRATION_40_41, MIGRATION_41_42)
+            .addMigrations(MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36, MIGRATION_36_37, MIGRATION_37_38, MIGRATION_38_39, MIGRATION_39_40, MIGRATION_40_41, MIGRATION_41_42, MIGRATION_42_43)
             // ✅ PERSISTENCE FIX: Removed destructive migration to preserve user data
             // Only allow destructive migration on downgrade to handle edge cases
             .fallbackToDestructiveMigrationOnDowngrade()
