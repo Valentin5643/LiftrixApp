@@ -57,7 +57,7 @@ fun BalanceAnalysisCard(
                     RiskSection(
                         title = "Overtraining Risk",
                         muscleGroups = balanceAnalysis.overtrainingRisk,
-                        riskColor = Color.Red,
+                        riskColor = MaterialTheme.colorScheme.error,
                         icon = "⚠️"
                     )
                 }
@@ -90,10 +90,10 @@ private fun BalanceScoreIndicator(
     score: Float
 ) {
     val (color, status) = when {
-        score >= 80f -> Color.Green to "Excellent"
+        score >= 80f -> MaterialTheme.colorScheme.primary to "Excellent"
         score >= 60f -> MaterialTheme.colorScheme.primary to "Good"
         score >= 40f -> Color.Yellow to "Fair"
-        else -> Color.Red to "Poor"
+        else -> MaterialTheme.colorScheme.error to "Poor"
     }
     
     Column(

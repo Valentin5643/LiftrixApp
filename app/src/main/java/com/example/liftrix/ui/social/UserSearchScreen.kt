@@ -154,12 +154,14 @@ private fun SearchBar(
                 if (isSearching) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 } else {
                     Icon(
                         imageVector = Icons.Default.Search,
-                        contentDescription = null
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             },
@@ -169,7 +171,8 @@ private fun SearchBar(
                         IconButton(onClick = onClearClick) {
                             Icon(
                                 imageVector = Icons.Default.Clear,
-                                contentDescription = "Clear search"
+                                contentDescription = "Clear search",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -178,7 +181,7 @@ private fun SearchBar(
                         Icon(
                             imageVector = if (hasActiveFilters) Icons.Default.FilterAlt else Icons.Default.FilterList,
                             contentDescription = "Filter results",
-                            tint = if (hasActiveFilters) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                            tint = if (hasActiveFilters) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -186,6 +189,17 @@ private fun SearchBar(
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(
                 onSearch = { keyboardController?.hide() }
+            ),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.secondary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                focusedLabelColor = MaterialTheme.colorScheme.secondary,
+                unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                cursorColor = MaterialTheme.colorScheme.secondary,
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
             ),
             modifier = Modifier
                 .fillMaxWidth()

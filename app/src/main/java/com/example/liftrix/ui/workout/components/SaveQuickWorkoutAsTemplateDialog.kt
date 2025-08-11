@@ -55,6 +55,7 @@ fun SaveQuickWorkoutAsTemplateDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         properties = DialogProperties(
             dismissOnBackPress = true,
             dismissOnClickOutside = true

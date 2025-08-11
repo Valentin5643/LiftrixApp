@@ -133,7 +133,7 @@ private fun TrendIndicator(
     val (icon, color, text) = when (trend) {
         MuscleGroupDetailViewModel.Trend.IMPROVING -> Triple(
             Icons.Default.TrendingUp,
-            Color.Green,
+            MaterialTheme.colorScheme.primary,
             "Improving"
         )
         MuscleGroupDetailViewModel.Trend.STABLE -> Triple(
@@ -143,7 +143,7 @@ private fun TrendIndicator(
         )
         MuscleGroupDetailViewModel.Trend.DECLINING -> Triple(
             Icons.Default.TrendingDown,
-            Color.Red,
+            MaterialTheme.colorScheme.error,
             "Declining"
         )
     }

@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import com.example.liftrix.ui.theme.LiftrixColorsV2
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -59,7 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.liftrix.ui.common.ChartGradients
 import com.example.liftrix.ui.theme.LiftrixChartStyle
-import com.example.liftrix.ui.theme.LiftrixColors
+import com.example.liftrix.ui.theme.ChartColorsV2
 import com.example.liftrix.ui.theme.LiftrixTheme
 import kotlin.math.PI
 import kotlin.math.atan2
@@ -207,7 +208,7 @@ private fun DrawScope.drawPieChart(
     
     // Draw subtle background circle for better visual hierarchy
     drawCircle(
-        color = LiftrixColors.PersianGreen.copy(alpha = 0.08f),
+        color = ChartColorsV2.Infrastructure.getGridColor(true),
         radius = baseRadius * 1.1f,
         center = center,
         style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
@@ -233,7 +234,7 @@ private fun DrawScope.drawPieChart(
         // Draw subtle shadow for depth (only for selected slice)
         if (isSelected) {
             drawArc(
-                color = LiftrixColors.Night.copy(alpha = 0.1f),
+                color = Color(0xFF2A2A2A),
                 startAngle = currentAngle,
                 sweepAngle = sweepAngle,
                 useCenter = true,
@@ -290,7 +291,7 @@ private fun DrawScope.drawPieChart(
             
             // Draw label background for better contrast
             drawCircle(
-                color = LiftrixColors.Night.copy(alpha = 0.8f),
+                color = Color(0xFF888888),
                 radius = 18.dp.toPx(),
                 center = Offset(labelX, labelY)
             )
@@ -322,7 +323,7 @@ private fun DrawScope.drawPieChart(
         center = center
     )
     drawCircle(
-        color = LiftrixColors.PersianGreen.copy(alpha = 0.9f),
+        color = LiftrixColorsV2.Teal,
         radius = baseRadius * 0.12f,
         center = center
     )
@@ -594,16 +595,18 @@ private data class PieSliceData(
  */
 enum class MuscleGroup(
     val displayName: String,
-    val color: Color
+    val colorIndex: Int
 ) {
-    CHEST("Chest", LiftrixColors.PersianGreen),
-    BACK("Back", LiftrixColors.TiffanyBlue),
-    SHOULDERS("Shoulders", LiftrixColors.Jet),
-    ARMS("Arms", LiftrixColors.PersianGreen.copy(alpha = 0.8f)),
-    LEGS("Legs", LiftrixColors.TiffanyBlue.copy(alpha = 0.8f)),
-    CORE("Core", LiftrixColors.Jet.copy(alpha = 0.8f)),
-    CARDIO("Cardio", LiftrixColors.PersianGreen.copy(alpha = 0.6f)),
-    OTHER("Other", LiftrixColors.TiffanyBlue.copy(alpha = 0.6f))
+    CHEST("Chest", 0),
+    BACK("Back", 1),
+    SHOULDERS("Shoulders", 2),
+    ARMS("Arms", 3),
+    LEGS("Legs", 4),
+    CORE("Core", 5),
+    CARDIO("Cardio", 6),
+    OTHER("Other", 7);
+    
+    val color: Color get() = ChartColorsV2.getSeriesColor(colorIndex)
 }
 
 /**

@@ -628,7 +628,10 @@ private fun BottomNavigationBar(
         LegacyBottomNavItem("coach", "Coach", Icons.Default.Psychology)
     )
     
-    NavigationBar {
+    NavigationBar(
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+    ) {
         items.forEach { item ->
             NavigationBarItem(
                 icon = {

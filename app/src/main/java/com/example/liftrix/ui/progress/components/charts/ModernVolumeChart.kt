@@ -58,11 +58,10 @@ import androidx.compose.ui.unit.sp
 import com.example.liftrix.domain.model.Weight
 import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.analytics.TimeRangeType
-import com.example.liftrix.ui.common.ChartGradients
 import com.example.liftrix.ui.common.rememberFrameTimeMonitor
 import com.example.liftrix.ui.common.measureFrameTime
 import com.example.liftrix.ui.theme.LiftrixChartStyle
-import com.example.liftrix.ui.theme.LiftrixColors
+import com.example.liftrix.ui.theme.ChartColorsV2
 import com.example.liftrix.ui.theme.LiftrixTheme
 import com.example.liftrix.ui.theme.ModernChartRenderer
 import com.example.liftrix.ui.theme.drawBezierLineChart
@@ -220,7 +219,15 @@ private fun DrawScope.drawModernVolumeChart(
     // Draw axes
     drawAxes()
     
-    val chartConfig = LiftrixChartStyle.primaryLineChart()
+    val chartConfig = LiftrixChartStyle.LineChartConfig(
+        strokeWidth = LiftrixChartStyle.ChartDimensions.strokeWidthMedium.value,
+        color = ChartColorsV2.getSeriesColor(0),
+        useBezierCurves = true,
+        showDataPoints = true,
+        showGradientFill = true,
+        showGrid = false,
+        animationDuration = LiftrixChartStyle.ChartAnimations.defaultDuration
+    )
     val points = data.mapIndexed { index, dataPoint ->
         // SINGLE DATA POINT FIX: Handle single point rendering properly
         val x = if (data.size == 1) {
@@ -250,7 +257,7 @@ private fun DrawScope.drawModernVolumeChart(
         
         drawPath(
             path = fillPath,
-            brush = ChartGradients.Primary.areaFill
+            brush = ChartColorsV2.Gradients.getPrimaryGradient(true)
         )
     }
     
@@ -285,7 +292,7 @@ private fun DrawScope.drawModernVolumeChart(
  * Draw grid lines for better chart readability (matching 1RM progression style)
  */
 private fun DrawScope.drawGrid() {
-    val gridColor = LiftrixColors.PersianGreen.copy(alpha = 0.15f)
+    val gridColor = ChartColorsV2.Infrastructure.getGridColor(true)
     val strokeWidth = 1.dp.toPx()
     
     // Horizontal grid lines
@@ -315,7 +322,7 @@ private fun DrawScope.drawGrid() {
  * Draw chart axes (matching 1RM progression style)
  */
 private fun DrawScope.drawAxes() {
-    val axisColor = LiftrixColors.PersianGreen.copy(alpha = 0.4f)
+    val axisColor = ChartColorsV2.Infrastructure.getAxisColor(true)
     val strokeWidth = 2.dp.toPx()
     
     // Bottom axis
@@ -347,9 +354,9 @@ private fun DrawScope.drawInteractiveDataPoints(
         val baseRadius = 4.dp.toPx()
         val animatedRadius = baseRadius * animationProgress
         
-        // Draw point with Persian Green color
+        // Draw point with V2 primary color
         drawCircle(
-            color = LiftrixColors.PersianGreen,
+            color = ChartColorsV2.getSeriesColor(0),
             radius = animatedRadius,
             center = Offset(x, y)
         )
@@ -357,7 +364,7 @@ private fun DrawScope.drawInteractiveDataPoints(
         // Draw inner highlight for better visibility
         if (animationProgress > 0.5f) {
             drawCircle(
-                color = LiftrixColors.Snow.copy(alpha = 0.8f),
+                color = Color.White,
                 radius = animatedRadius * 0.4f,
                 center = Offset(x, y)
             )
@@ -382,14 +389,14 @@ private fun DrawScope.drawPersonalRecordMarkers(
             
             // Draw PR marker background
             drawCircle(
-                color = LiftrixColors.TiffanyBlue.copy(alpha = 0.3f),
+                color = ChartColorsV2.Semantic.Excellent.copy(alpha = 0.3f),
                 radius = 12.dp.toPx(),
                 center = Offset(x, y)
             )
             
             // Draw PR marker
             drawCircle(
-                color = LiftrixColors.TiffanyBlue,
+                color = ChartColorsV2.Semantic.Excellent,
                 radius = 6.dp.toPx(),
                 center = Offset(x, y)
             )
@@ -398,7 +405,7 @@ private fun DrawScope.drawPersonalRecordMarkers(
             val textResult = textMeasurer.measure(
                 text = "PR",
                 style = TextStyle(
-                    color = LiftrixColors.TiffanyBlue.copy(alpha = 0.9f),
+                    color = ChartColorsV2.Semantic.Excellent,
                     fontSize = 14.sp  // Updated to meet 14sp minimum requirement
                 )
             )
@@ -419,21 +426,21 @@ private fun DrawScope.drawPersonalRecordMarkers(
 private fun DrawScope.drawSelectedPointHighlight(x: Float, y: Float, density: Float) {
     // Outer ring
     drawCircle(
-        color = LiftrixColors.PersianGreen.copy(alpha = 0.3f),
+        color = ChartColorsV2.getSeriesColor(0).copy(alpha = 0.3f),
         radius = 16.dp.toPx(),
         center = Offset(x, y)
     )
     
     // Inner highlight
     drawCircle(
-        color = LiftrixColors.PersianGreen,
+        color = ChartColorsV2.getSeriesColor(0),
         radius = 8.dp.toPx(),
         center = Offset(x, y)
     )
     
     // Center point
     drawCircle(
-        color = LiftrixColors.Snow,
+        color = Color.White,
         radius = 4.dp.toPx(),
         center = Offset(x, y)
     )
@@ -507,12 +514,12 @@ private fun ChartHeader(
                     MetricChip(
                         label = "Peak",
                         value = "${metrics.maxValue.toInt()}kg",
-                        color = LiftrixColors.PersianGreen
+                        color = ChartColorsV2.getSeriesColor(0)
                     )
                     MetricChip(
                         label = "Avg",
                         value = "${metrics.avgValue.toInt()}kg",
-                        color = LiftrixColors.TiffanyBlue
+                        color = ChartColorsV2.getSeriesColor(1)
                     )
                 }
             }
@@ -559,7 +566,7 @@ private fun SelectedPointInfo(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(LiftrixColors.PersianGreen.copy(alpha = 0.08f))
+            .background(ChartColorsV2.getSeriesColor(0).copy(alpha = 0.08f))
             .padding(12.dp)
     ) {
         Row(
@@ -572,7 +579,7 @@ private fun SelectedPointInfo(
                     text = "${point.volume.value.toInt()}kg",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = LiftrixColors.PersianGreen
+                    color = ChartColorsV2.getSeriesColor(0)
                 )
                 Text(
                     text = point.date.toString(),

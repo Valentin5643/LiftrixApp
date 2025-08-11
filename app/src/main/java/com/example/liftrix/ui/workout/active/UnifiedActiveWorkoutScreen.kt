@@ -840,7 +840,7 @@ private fun SetInputRow(
                 modifier = Modifier
                     .size(48.dp)
                     .background(
-                        if (isCompleted) Color.Green else Color.Red,
+                        if (isCompleted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                         RoundedCornerShape(8.dp)
                     )
                     .clickable {
@@ -865,7 +865,7 @@ private fun SetInputRow(
             ) {
                 Text(
                     text = if (isCompleted) "✓" else "○",
-                    color = Color.White,
+                    color = if (isCompleted) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 20.sp,
                     style = MaterialTheme.typography.titleLarge
                 )

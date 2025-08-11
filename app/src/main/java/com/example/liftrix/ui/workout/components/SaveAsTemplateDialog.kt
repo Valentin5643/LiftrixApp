@@ -33,6 +33,7 @@ fun SaveAsTemplateDialog(
     AlertDialog(
         modifier = modifier,
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         title = {
             Text(
                 text = "Update Template?",

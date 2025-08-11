@@ -359,13 +359,13 @@ private fun ProgressionSummaryCard(
                 SummaryStatItem(
                     label = "Total Growth",
                     value = "${summary.totalGrowth.toInt()}%",
-                    color = if (summary.totalGrowth > 0) Color.Green else Color.Red
+                    color = if (summary.totalGrowth > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                 )
                 
                 SummaryStatItem(
                     label = "Avg Growth",
                     value = "${summary.averageGrowth.toInt()}%",
-                    color = if (summary.averageGrowth > 0) Color.Green else Color.Red
+                    color = if (summary.averageGrowth > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                 )
                 
                 SummaryStatItem(
@@ -493,7 +493,7 @@ private fun ExerciseDetailItem(
             Text(
                 text = if (exercise.hasOneRmData) "Has Data" else "No Data",
                 style = MaterialTheme.typography.bodySmall,
-                color = if (exercise.hasOneRmData) Color.Green else Color.Red
+                color = if (exercise.hasOneRmData) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
             )
         }
     }

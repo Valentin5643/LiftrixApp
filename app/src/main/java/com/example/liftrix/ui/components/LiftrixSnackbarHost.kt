@@ -23,13 +23,13 @@ fun LiftrixSnackbarHost(
         snackbar = { snackbarData ->
             Snackbar(
                 snackbarData = snackbarData,
-                // Persian Green for action text (primary)
-                actionColor = MaterialTheme.colorScheme.primary,
-                // Snackbar background uses surface colors
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                // Dismiss icon uses surface variant
-                dismissActionContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                // Action color uses inverse primary for proper contrast
+                actionColor = MaterialTheme.colorScheme.inversePrimary,
+                // Snackbar background uses inverse surface per Material 3 guidelines
+                containerColor = MaterialTheme.colorScheme.inverseSurface,
+                contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                // Dismiss icon uses inverse colors for consistency
+                dismissActionContentColor = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.7f)
             )
         }
     )

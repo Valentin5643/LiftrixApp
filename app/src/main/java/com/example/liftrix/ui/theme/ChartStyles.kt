@@ -22,7 +22,7 @@ import com.example.liftrix.ui.theme.LiftrixColors
  *
  * Comprehensive chart configuration system providing:
  * - Bezier curve line rendering with smooth animations
- * - Persian Green/Tiffany Blue gradient system compliance
+ * - Support for both V1 (Persian Green/Tiffany Blue) and V2 (Teal-based) color systems
  * - Material 3 design tokens integration
  * - Mobile-optimized touch targets and accessibility
  * - Performance-optimized 60fps rendering
@@ -31,28 +31,109 @@ import com.example.liftrix.ui.theme.LiftrixColors
 object LiftrixChartStyle {
 
     /**
-     * Primary chart colors following 5-color palette system
+     * Chart colors supporting both V1 (5-color) and V2 (Teal-based) systems
      */
     @Stable
     object ChartColors {
-        val primaryLine: Color = LiftrixColors.PersianGreen
-        val secondaryLine: Color = LiftrixColors.TiffanyBlue
-        val accentLine: Color = LiftrixColors.Jet
-        val gridColor: Color = LiftrixColors.PersianGreen.copy(alpha = 0.12f)
-        val labelColor: Color = LiftrixColors.Night.copy(alpha = 0.8f)
-        val backgroundFill: Color = LiftrixColors.Snow
-        val surfaceFill: Color = LiftrixColors.Snow.copy(alpha = 0.95f)
+        // V1 Colors (Legacy - Persian Green/Tiffany Blue system)
+        object V1 {
+            val primaryLine: Color = LiftrixColors.PersianGreen
+            val secondaryLine: Color = LiftrixColors.TiffanyBlue
+            val accentLine: Color = LiftrixColors.Jet
+            val gridColor: Color = LiftrixColors.PersianGreen.copy(alpha = 0.12f)
+            val labelColor: Color = LiftrixColors.Night.copy(alpha = 0.8f)
+            val backgroundFill: Color = LiftrixColors.Snow
+            val surfaceFill: Color = LiftrixColors.Snow.copy(alpha = 0.95f)
+            
+            // Data point markers
+            val dataPointPrimary: Color = LiftrixColors.PersianGreen
+            val dataPointSecondary: Color = LiftrixColors.TiffanyBlue
+            val dataPointHighlight: Color = LiftrixColors.Night
+            val dataPointBackground: Color = LiftrixColors.Snow
+            
+            // Interactive states
+            val hoverColor: Color = LiftrixColors.PersianGreen.copy(alpha = 0.08f)
+            val selectedColor: Color = LiftrixColors.PersianGreen.copy(alpha = 0.16f)
+            val pressedColor: Color = LiftrixColors.PersianGreen.copy(alpha = 0.24f)
+        }
         
-        // Data point markers
-        val dataPointPrimary: Color = LiftrixColors.PersianGreen
-        val dataPointSecondary: Color = LiftrixColors.TiffanyBlue
-        val dataPointHighlight: Color = LiftrixColors.Night
-        val dataPointBackground: Color = LiftrixColors.Snow
+        // V2 Colors (Modern - Teal-based system)
+        object V2 {
+            val primaryLine: Color = LiftrixColorsV2.Teal
+            val secondaryLine: Color = LiftrixColorsV2.TealHover
+            val accentLine: Color = LiftrixColorsV2.TealLight
+            val gridColor: Color = LiftrixColorsV2.Teal.copy(alpha = 0.12f)
+            val labelColor: Color = LiftrixColorsV2.Dark.TextPrimary.copy(alpha = 0.8f)
+            val backgroundFill: Color = Color.Transparent
+            val surfaceFill: Color = Color.Transparent
+            
+            // Data point markers
+            val dataPointPrimary: Color = LiftrixColorsV2.Teal
+            val dataPointSecondary: Color = LiftrixColorsV2.TealHover
+            val dataPointHighlight: Color = LiftrixColorsV2.TealDark
+            val dataPointBackground: Color = Color.White
+            
+            // Interactive states
+            val hoverColor: Color = LiftrixColorsV2.Teal.copy(alpha = 0.08f)
+            val selectedColor: Color = LiftrixColorsV2.Teal.copy(alpha = 0.16f)
+            val pressedColor: Color = LiftrixColorsV2.Teal.copy(alpha = 0.24f)
+        }
         
-        // Interactive states
-        val hoverColor: Color = LiftrixColors.PersianGreen.copy(alpha = 0.08f)
-        val selectedColor: Color = LiftrixColors.PersianGreen.copy(alpha = 0.16f)
-        val pressedColor: Color = LiftrixColors.PersianGreen.copy(alpha = 0.24f)
+        // Legacy properties for backward compatibility (default to V1)
+        val primaryLine: Color get() = V1.primaryLine
+        val secondaryLine: Color get() = V1.secondaryLine
+        val accentLine: Color get() = V1.accentLine
+        val gridColor: Color get() = V1.gridColor
+        val labelColor: Color get() = V1.labelColor
+        val backgroundFill: Color get() = V1.backgroundFill
+        val surfaceFill: Color get() = V1.surfaceFill
+        val dataPointPrimary: Color get() = V1.dataPointPrimary
+        val dataPointSecondary: Color get() = V1.dataPointSecondary
+        val dataPointHighlight: Color get() = V1.dataPointHighlight
+        val dataPointBackground: Color get() = V1.dataPointBackground
+        val hoverColor: Color get() = V1.hoverColor
+        val selectedColor: Color get() = V1.selectedColor
+        val pressedColor: Color get() = V1.pressedColor
+        
+        /**
+         * Get chart colors based on theme version
+         */
+        fun getColorsForVersion(themeVersion: ThemeVersion): ChartColorPalette {
+            return when (themeVersion) {
+                ThemeVersion.V1 -> ChartColorPalette(
+                    primaryLine = V1.primaryLine,
+                    secondaryLine = V1.secondaryLine,
+                    accentLine = V1.accentLine,
+                    gridColor = V1.gridColor,
+                    labelColor = V1.labelColor,
+                    backgroundFill = V1.backgroundFill,
+                    surfaceFill = V1.surfaceFill,
+                    dataPointPrimary = V1.dataPointPrimary,
+                    dataPointSecondary = V1.dataPointSecondary,
+                    dataPointHighlight = V1.dataPointHighlight,
+                    dataPointBackground = V1.dataPointBackground,
+                    hoverColor = V1.hoverColor,
+                    selectedColor = V1.selectedColor,
+                    pressedColor = V1.pressedColor
+                )
+                ThemeVersion.V2 -> ChartColorPalette(
+                    primaryLine = V2.primaryLine,
+                    secondaryLine = V2.secondaryLine,
+                    accentLine = V2.accentLine,
+                    gridColor = V2.gridColor,
+                    labelColor = V2.labelColor,
+                    backgroundFill = V2.backgroundFill,
+                    surfaceFill = V2.surfaceFill,
+                    dataPointPrimary = V2.dataPointPrimary,
+                    dataPointSecondary = V2.dataPointSecondary,
+                    dataPointHighlight = V2.dataPointHighlight,
+                    dataPointBackground = V2.dataPointBackground,
+                    hoverColor = V2.hoverColor,
+                    selectedColor = V2.selectedColor,
+                    pressedColor = V2.pressedColor
+                )
+            }
+        }
     }
 
     /**
@@ -171,40 +252,103 @@ object LiftrixChartStyle {
     )
 
     /**
-     * Chart gradients following Liftrix design system
+     * Chart gradients supporting both V1 and V2 design systems
      */
     @Stable
     object ChartGradients {
-        val primaryGradient: Brush = Brush.verticalGradient(
-            colors = listOf(
-                LiftrixColors.PersianGreen.copy(alpha = 0.3f),
-                LiftrixColors.PersianGreen.copy(alpha = 0.1f),
-                Color.Transparent
+        // V1 Gradients (Persian Green/Tiffany Blue)
+        object V1 {
+            val primaryGradient: Brush = Brush.verticalGradient(
+                colors = listOf(
+                    LiftrixColors.PersianGreen.copy(alpha = 0.3f),
+                    LiftrixColors.PersianGreen.copy(alpha = 0.1f),
+                    Color.Transparent
+                )
             )
-        )
 
-        val secondaryGradient: Brush = Brush.verticalGradient(
-            colors = listOf(
-                LiftrixColors.TiffanyBlue.copy(alpha = 0.3f),
-                LiftrixColors.TiffanyBlue.copy(alpha = 0.1f),
-                Color.Transparent
+            val secondaryGradient: Brush = Brush.verticalGradient(
+                colors = listOf(
+                    LiftrixColors.TiffanyBlue.copy(alpha = 0.3f),
+                    LiftrixColors.TiffanyBlue.copy(alpha = 0.1f),
+                    Color.Transparent
+                )
             )
-        )
 
-        val accentGradient: Brush = Brush.verticalGradient(
-            colors = listOf(
-                LiftrixColors.Jet.copy(alpha = 0.2f),
-                LiftrixColors.Jet.copy(alpha = 0.05f),
-                Color.Transparent
+            val accentGradient: Brush = Brush.verticalGradient(
+                colors = listOf(
+                    LiftrixColors.Jet.copy(alpha = 0.2f),
+                    LiftrixColors.Jet.copy(alpha = 0.05f),
+                    Color.Transparent
+                )
             )
-        )
 
-        val backgroundGradient: Brush = Brush.radialGradient(
-            colors = listOf(
-                LiftrixColors.PersianGreen.copy(alpha = 0.05f),
-                Color.Transparent
+            val backgroundGradient: Brush = Brush.radialGradient(
+                colors = listOf(
+                    LiftrixColors.PersianGreen.copy(alpha = 0.05f),
+                    Color.Transparent
+                )
             )
-        )
+        }
+        
+        // V2 Gradients (Teal-based)
+        object V2 {
+            val primaryGradient: Brush = Brush.verticalGradient(
+                colors = listOf(
+                    LiftrixColorsV2.Teal.copy(alpha = 0.3f),
+                    LiftrixColorsV2.Teal.copy(alpha = 0.1f),
+                    Color.Transparent
+                )
+            )
+
+            val secondaryGradient: Brush = Brush.verticalGradient(
+                colors = listOf(
+                    LiftrixColorsV2.TealHover.copy(alpha = 0.3f),
+                    LiftrixColorsV2.TealHover.copy(alpha = 0.1f),
+                    Color.Transparent
+                )
+            )
+
+            val accentGradient: Brush = Brush.verticalGradient(
+                colors = listOf(
+                    LiftrixColorsV2.TealLight.copy(alpha = 0.2f),
+                    LiftrixColorsV2.TealLight.copy(alpha = 0.05f),
+                    Color.Transparent
+                )
+            )
+
+            val backgroundGradient: Brush = Brush.radialGradient(
+                colors = listOf(
+                    LiftrixColorsV2.Teal.copy(alpha = 0.05f),
+                    Color.Transparent
+                )
+            )
+        }
+        
+        // Legacy properties for backward compatibility (default to V1)
+        val primaryGradient: Brush get() = V1.primaryGradient
+        val secondaryGradient: Brush get() = V1.secondaryGradient
+        val accentGradient: Brush get() = V1.accentGradient
+        val backgroundGradient: Brush get() = V1.backgroundGradient
+        
+        /**
+         * Get gradients based on theme version
+         */
+        fun getGradientsForVersion(themeVersion: ThemeVersion): ChartGradientPalette {
+            return when (themeVersion) {
+                ThemeVersion.V1 -> ChartGradientPalette(
+                    primaryGradient = V1.primaryGradient,
+                    secondaryGradient = V1.secondaryGradient,
+                    accentGradient = V1.accentGradient,
+                    backgroundGradient = V1.backgroundGradient
+                )
+                ThemeVersion.V2 -> ChartGradientPalette(
+                    primaryGradient = V2.primaryGradient,
+                    secondaryGradient = V2.secondaryGradient,
+                    accentGradient = V2.accentGradient,
+                    backgroundGradient = V2.backgroundGradient
+                )
+            }
+        }
     }
 
     /**
@@ -571,5 +715,54 @@ fun rememberLiftrixChartStyle(): LiftrixChartStyle {
     val colorScheme = MaterialTheme.colorScheme
     return remember(colorScheme) {
         LiftrixChartStyle
+    }
+}
+
+/**
+ * Data class representing chart color palette for theme version switching
+ */
+@Immutable
+data class ChartColorPalette(
+    val primaryLine: Color,
+    val secondaryLine: Color,
+    val accentLine: Color,
+    val gridColor: Color,
+    val labelColor: Color,
+    val backgroundFill: Color,
+    val surfaceFill: Color,
+    val dataPointPrimary: Color,
+    val dataPointSecondary: Color,
+    val dataPointHighlight: Color,
+    val dataPointBackground: Color,
+    val hoverColor: Color,
+    val selectedColor: Color,
+    val pressedColor: Color
+)
+
+/**
+ * Data class representing chart gradient palette for theme version switching
+ */
+@Immutable
+data class ChartGradientPalette(
+    val primaryGradient: Brush,
+    val secondaryGradient: Brush,
+    val accentGradient: Brush,
+    val backgroundGradient: Brush
+)
+
+/**
+ * Extension functions for theme-aware chart styling
+ */
+@Composable
+fun rememberChartColorsForVersion(themeVersion: ThemeVersion): ChartColorPalette {
+    return remember(themeVersion) {
+        LiftrixChartStyle.ChartColors.getColorsForVersion(themeVersion)
+    }
+}
+
+@Composable
+fun rememberChartGradientsForVersion(themeVersion: ThemeVersion): ChartGradientPalette {
+    return remember(themeVersion) {
+        LiftrixChartStyle.ChartGradients.getGradientsForVersion(themeVersion)
     }
 }

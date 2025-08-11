@@ -8,6 +8,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,7 +52,15 @@ fun FriendsScreen(
         // Tab Row
         TabRow(
             selectedTabIndex = selectedTabIndex,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            indicator = { tabPositions ->
+                TabRowDefaults.Indicator(
+                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         ) {
             Tab(
                 selected = selectedTabIndex == 0,
@@ -59,13 +68,15 @@ fun FriendsScreen(
                 text = { 
                     Text(
                         "Friends",
-                        style = MaterialTheme.typography.titleSmall
+                        style = MaterialTheme.typography.titleSmall,
+                        color = if (selectedTabIndex == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     ) 
                 },
                 icon = {
                     Icon(
                         imageVector = Icons.Default.People,
-                        contentDescription = null
+                        contentDescription = null,
+                        tint = if (selectedTabIndex == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             )
@@ -75,7 +86,8 @@ fun FriendsScreen(
                 text = { 
                     Text(
                         "Requests",
-                        style = MaterialTheme.typography.titleSmall
+                        style = MaterialTheme.typography.titleSmall,
+                        color = if (selectedTabIndex == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     ) 
                 },
                 icon = {
@@ -90,7 +102,8 @@ fun FriendsScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.PersonAdd,
-                            contentDescription = null
+                            contentDescription = null,
+                            tint = if (selectedTabIndex == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }

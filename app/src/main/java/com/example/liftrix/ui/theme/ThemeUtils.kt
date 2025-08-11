@@ -290,6 +290,7 @@ class ThemeManager private constructor(private val context: Context) {
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_TIME_BASED_ENABLED = "time_based_enabled"
         private const val KEY_FAST_TRANSITIONS_ENABLED = "fast_transitions_enabled"
+        private const val KEY_THEME_VERSION = "theme_version"
         
         @Volatile
         private var INSTANCE: ThemeManager? = null
@@ -313,6 +314,9 @@ class ThemeManager private constructor(private val context: Context) {
     
     private val _fastTransitionsEnabled = MutableStateFlow(loadFastTransitionsEnabled())
     val fastTransitionsEnabled: StateFlow<Boolean> = _fastTransitionsEnabled.asStateFlow()
+    
+    private val _themeVersion = MutableStateFlow(loadThemeVersion())
+    val themeVersion: StateFlow<ThemeVersion> = _themeVersion.asStateFlow()
     
     /**
      * Switch theme mode with immediate persistence
@@ -345,6 +349,16 @@ class ThemeManager private constructor(private val context: Context) {
     }
     
     /**
+     * Set theme version with persistence
+     */
+    fun setThemeVersion(version: ThemeVersion) {
+        _themeVersion.value = version
+        sharedPreferences.edit()
+            .putString(KEY_THEME_VERSION, version.name)
+            .apply()
+    }
+    
+    /**
      * Get current theme state for composables
      */
     @Composable
@@ -352,11 +366,13 @@ class ThemeManager private constructor(private val context: Context) {
         val mode by themeMode.collectAsState()
         val timeBasedEnabled by timeBasedEnabled.collectAsState()
         val fastTransitionsEnabled by fastTransitionsEnabled.collectAsState()
+        val themeVersion by themeVersion.collectAsState()
         
         return ThemeState(
             mode = mode,
             timeBasedEnabled = timeBasedEnabled,
-            fastTransitionsEnabled = fastTransitionsEnabled
+            fastTransitionsEnabled = fastTransitionsEnabled,
+            themeVersion = themeVersion
         )
     }
     
@@ -376,6 +392,15 @@ class ThemeManager private constructor(private val context: Context) {
     private fun loadFastTransitionsEnabled(): Boolean {
         return sharedPreferences.getBoolean(KEY_FAST_TRANSITIONS_ENABLED, true)
     }
+    
+    private fun loadThemeVersion(): ThemeVersion {
+        val savedVersion = sharedPreferences.getString(KEY_THEME_VERSION, ThemeVersion.V2.name)
+        return try {
+            ThemeVersion.valueOf(savedVersion ?: ThemeVersion.V2.name)
+        } catch (e: IllegalArgumentException) {
+            ThemeVersion.V2 // Default to V2 for new installations
+        }
+    }
 }
 
 /**
@@ -384,5 +409,27 @@ class ThemeManager private constructor(private val context: Context) {
 data class ThemeState(
     val mode: ThemeMode,
     val timeBasedEnabled: Boolean,
-    val fastTransitionsEnabled: Boolean
-) 
+    val fastTransitionsEnabled: Boolean,
+    val themeVersion: ThemeVersion
+)
+
+/**
+ * Extension functions for easy theme version management
+ */
+fun ThemeManager.isUsingV2Theme(): Boolean {
+    return themeVersion.value == ThemeVersion.V2
+}
+
+fun ThemeManager.switchToV2() {
+    setThemeVersion(ThemeVersion.V2)
+}
+
+fun ThemeManager.switchToV1() {
+    setThemeVersion(ThemeVersion.V1)
+}
+
+fun ThemeManager.toggleThemeVersion() {
+    val currentVersion = themeVersion.value
+    val newVersion = if (currentVersion == ThemeVersion.V1) ThemeVersion.V2 else ThemeVersion.V1
+    setThemeVersion(newVersion)
+}

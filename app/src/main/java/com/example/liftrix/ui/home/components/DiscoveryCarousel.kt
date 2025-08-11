@@ -48,7 +48,6 @@ import com.example.liftrix.ui.common.UserCardShimmer
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.components.cards.CompactLiftrixCard
 import com.example.liftrix.ui.components.layouts.GridSystem
-import com.example.liftrix.ui.theme.LiftrixColors
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**

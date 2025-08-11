@@ -2,6 +2,7 @@ package com.example.liftrix.domain.usecase.analytics
 
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.analytics.TimeRangeType
+import com.example.liftrix.domain.model.analytics.VolumeGrouping
 import com.example.liftrix.service.ProgressDataService
 import io.mockk.coEvery
 import io.mockk.coVerify

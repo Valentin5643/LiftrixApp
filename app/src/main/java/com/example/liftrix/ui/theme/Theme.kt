@@ -21,6 +21,14 @@ import com.example.liftrix.ui.common.PerformanceOptimizations
 import timber.log.Timber
 import java.util.Calendar
 
+/**
+ * Theme version enumeration for gradual rollout
+ */
+enum class ThemeVersion {
+    V1,  // Original 5-color system
+    V2   // Modern Teal-based system
+}
+
 // Performance-optimized color scheme creation with 5-color system optimizations
 // Uses ColorSystemOptimizations for 20%+ performance improvement in theme switching
 private val LightColorScheme = ColorSystemOptimizations.getColorScheme(false)
@@ -36,6 +44,7 @@ private val DarkColorScheme = ColorSystemOptimizations.getColorScheme(true)
 fun LiftrixTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false, // Disabled by default to use Liftrix brand colors
+    themeVersion: ThemeVersion = ThemeVersion.V2, // Default to V2 theme
     themeManager: ThemeManager? = null, // Optional theme manager for state management
     featureFlagManager: FeatureFlagManager? = null, // Optional feature flag manager for UI redesign rollout
     userId: String? = null, // User ID for feature flag evaluation
@@ -96,12 +105,26 @@ fun LiftrixTheme(
             ColorSystemOptimizations.ThemePerformanceMonitor.startThemeSwitching()
         }
         
-        // Performance-optimized color scheme selection with 5-color system benefits
+        // Performance-optimized color scheme selection with theme version support
         val targetColorScheme = when {
             dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-                val dynamicKey = "dynamic_${if (shouldUseDarkTheme) "dark" else "light"}_redesign_${uiRedesignEnabled}"
+                val dynamicKey = "dynamic_${if (shouldUseDarkTheme) "dark" else "light"}_${themeVersion}_redesign_${uiRedesignEnabled}"
                 PerformanceOptimizations.ThemeLoadingOptimizer.getCachedColorScheme(dynamicKey) {
                     if (shouldUseDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+                }
+            }
+            
+            themeVersion == ThemeVersion.V2 -> {
+                // Use V2 color system
+                val baseColorScheme = if (shouldUseDarkTheme) {
+                    LiftrixColorsV2.darkColorScheme
+                } else {
+                    LiftrixColorsV2.lightColorScheme
+                }
+                if (uiRedesignEnabled && featureFlagEvaluated) {
+                    enhanceColorSchemeForRedesignV2(baseColorScheme, shouldUseDarkTheme)
+                } else {
+                    baseColorScheme
                 }
             }
             
@@ -116,7 +139,7 @@ fun LiftrixTheme(
             }
             
             else -> {
-                // Use optimized 5-color system for maximum performance
+                // Use optimized V1 5-color system for maximum performance
                 val baseColorScheme = ColorSystemOptimizations.getColorScheme(shouldUseDarkTheme)
                 if (uiRedesignEnabled && featureFlagEvaluated) {
                     enhanceColorSchemeForRedesign(baseColorScheme, shouldUseDarkTheme)
@@ -197,6 +220,16 @@ fun getLightColorScheme() = LightColorScheme
  */
 fun getDarkColorScheme() = DarkColorScheme
 
+/**
+ * Get V2 light color scheme - for components that need direct access
+ */
+fun getLightColorSchemeV2() = LiftrixColorsV2.lightColorScheme
+
+/**
+ * Get V2 dark color scheme - for components that need direct access
+ */
+fun getDarkColorSchemeV2() = LiftrixColorsV2.darkColorScheme
+
 
 /**
  * Enhance color scheme for UI redesign with improved accessibility and visual hierarchy.
@@ -236,5 +269,46 @@ private fun enhanceColorSchemeForRedesign(
         // Enhanced outline colors using Persian Green for brand consistency
         outline = LiftrixColors.PersianGreen.copy(alpha = if (isDarkTheme) 0.60f else 0.38f),
         outlineVariant = LiftrixColors.PersianGreen.copy(alpha = if (isDarkTheme) 0.24f else 0.12f)
+    )
+}
+
+/**
+ * Enhance V2 color scheme for UI redesign with improved accessibility and visual hierarchy.
+ * This function applies the redesigned color enhancements when the UI redesign feature flag is active.
+ * 
+ * @param baseColorScheme The V2 base color scheme to enhance
+ * @param isDarkTheme Whether this is for dark theme
+ * @return Enhanced V2 color scheme with redesign improvements
+ */
+private fun enhanceColorSchemeForRedesignV2(
+    baseColorScheme: androidx.compose.material3.ColorScheme,
+    isDarkTheme: Boolean
+): androidx.compose.material3.ColorScheme {
+    return baseColorScheme.copy(
+        // Enhanced primary colors with Teal consistency
+        primary = LiftrixColorsV2.Teal,
+        onPrimary = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundPrimary else LiftrixColorsV2.Light.BackgroundPrimary,
+        primaryContainer = if (isDarkTheme) LiftrixColorsV2.TealContainer else LiftrixColorsV2.TealSurface,
+        onPrimaryContainer = if (isDarkTheme) LiftrixColorsV2.TealLight else LiftrixColorsV2.TealDark,
+        
+        // Enhanced secondary colors with proper contrast
+        secondary = LiftrixColorsV2.TealHover,
+        onSecondary = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundPrimary else LiftrixColorsV2.Light.BackgroundPrimary,
+        secondaryContainer = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundTertiary else LiftrixColorsV2.Light.BackgroundTertiary,
+        onSecondaryContainer = if (isDarkTheme) LiftrixColorsV2.TealLight else LiftrixColorsV2.TealDark,
+        
+        // Enhanced tertiary system using complementary colors
+        tertiary = LiftrixColorsV2.DataViz.Series4, // Green for variety
+        onTertiary = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundPrimary else LiftrixColorsV2.Light.BackgroundPrimary,
+        
+        // Improved surface colors for better component distinction
+        surface = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundPrimary else LiftrixColorsV2.Light.BackgroundPrimary,
+        onSurface = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
+        surfaceVariant = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundSecondary else LiftrixColorsV2.Light.BackgroundSecondary,
+        onSurfaceVariant = if (isDarkTheme) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary,
+        
+        // Enhanced outline colors using Teal for brand consistency
+        outline = LiftrixColorsV2.Teal.copy(alpha = if (isDarkTheme) 0.60f else 0.38f),
+        outlineVariant = LiftrixColorsV2.Teal.copy(alpha = if (isDarkTheme) 0.24f else 0.12f)
     )
 }

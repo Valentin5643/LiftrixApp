@@ -219,14 +219,14 @@ private fun DetectionStatisticsCard(
                 Icon(
                     imageVector = if (statistics.detectionEnabled) Icons.Default.CheckCircle else Icons.Default.Warning,
                     contentDescription = null,
-                    tint = if (statistics.detectionEnabled) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
+                    tint = if (statistics.detectionEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(16.dp)
                 )
                 
                 Text(
                     text = if (statistics.detectionEnabled) "Detection Active" else "Detection Disabled",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (statistics.detectionEnabled) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error
+                    color = if (statistics.detectionEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                 )
             }
         }
@@ -312,13 +312,13 @@ private fun AnomalyCard(
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
                         contentDescription = null,
-                        tint = Color(0xFF4CAF50),
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
                         text = "Resolved: ${anomaly.userAction?.name?.lowercase()?.replaceFirstChar { it.uppercase() }}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF4CAF50)
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
             } else {
@@ -356,7 +356,7 @@ private fun ConfidenceBadge(confidence: Float) {
             MaterialTheme.colorScheme.error to "High"
         }
         confidence >= WorkoutAnomaly.MEDIUM_CONFIDENCE_THRESHOLD -> {
-            Color(0xFFFF9800) to "Medium"
+            MaterialTheme.colorScheme.tertiary to "Medium"
         }
         else -> {
             MaterialTheme.colorScheme.onSurfaceVariant to "Low"
@@ -398,7 +398,7 @@ private fun NoAnomaliesCard() {
             Icon(
                 imageVector = Icons.Default.CheckCircle,
                 contentDescription = null,
-                tint = Color(0xFF4CAF50),
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(48.dp)
             )
             

@@ -22,6 +22,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.liftrix.ui.theme.ChartColorsV2
 import kotlin.math.*
 
 /**
@@ -250,7 +251,7 @@ data class BarChartData(
  * Enhanced drawing functions
  */
 private fun DrawScope.drawEnhancedGrid() {
-    val gridColor = Color.Gray.copy(alpha = 0.15f)
+    val gridColor = ChartColorsV2.Infrastructure.getGridColor(true)
     val strokeWidth = 0.5.dp.toPx()
     
     // Enhanced grid with more subtle lines
@@ -278,7 +279,7 @@ private fun DrawScope.drawEnhancedGrid() {
 }
 
 private fun DrawScope.drawEnhancedAxes() {
-    val axisColor = Color.Gray.copy(alpha = 0.4f)
+    val axisColor = ChartColorsV2.Infrastructure.getAxisColor(true)
     val strokeWidth = 1.5.dp.toPx()
     
     // X axis
@@ -591,17 +592,5 @@ private fun findTappedBar(
  * Chart colors following Liftrix design system
  */
 fun getEnhancedChartColor(index: Int): Color {
-    val colors = listOf(
-        Color(0xFF339989), // Persian Green
-        Color(0xFF7DE2D1), // Tiffany Blue
-        Color(0xFF4A90A4), // Steel Blue
-        Color(0xFF83C5BE), // Powder Blue
-        Color(0xFF006D77), // Dark Cyan
-        Color(0xFFE29578), // Sandy Brown
-        Color(0xFFFDBF50), // Maize
-        Color(0xFF264653), // Dark Green
-        Color(0xFF2A9D8F), // Medium Green
-        Color(0xFFE76F51)  // Coral
-    )
-    return colors[index % colors.size]
+    return ChartColorsV2.getSeriesColor(index)
 }

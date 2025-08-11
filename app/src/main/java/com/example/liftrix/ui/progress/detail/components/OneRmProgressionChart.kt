@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import com.example.liftrix.ui.progress.detail.OneRmDetailViewModel
+import com.example.liftrix.ui.theme.ChartColorsV2
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -207,7 +208,7 @@ private fun InteractiveLineChart(
  * Draw grid lines for better chart readability
  */
 private fun DrawScope.drawGrid() {
-    val gridColor = Color.Gray.copy(alpha = 0.2f)
+    val gridColor = ChartColorsV2.Infrastructure.getGridColor(true)
     val strokeWidth = 1.dp.toPx()
     
     // Horizontal grid lines
@@ -552,14 +553,5 @@ private fun findNearestPoint(
  * Gets chart color for exercise by index
  */
 private fun getChartColor(index: Int): Color {
-    val colors = listOf(
-        Color(0xFF339989), // Persian Green
-        Color(0xFF7DE2D1), // Tiffany Blue
-        Color(0xFF4A90A4), // Steel Blue
-        Color(0xFF83C5BE), // Powder Blue
-        Color(0xFF006D77), // Dark Cyan
-        Color(0xFFE29578), // Sandy Brown
-        Color(0xFFFDBF50), // Maize
-    )
-    return colors[index % colors.size]
+    return ChartColorsV2.getSeriesColor(index)
 }

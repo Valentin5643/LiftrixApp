@@ -17,7 +17,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.example.liftrix.ui.theme.LiftrixColors
+import com.example.liftrix.ui.theme.ChartColorsV2
 import kotlin.math.max
 import kotlin.math.min
 
@@ -29,12 +29,12 @@ import kotlin.math.min
 fun MiniLineGraph(
     dataPoints: List<Float>,
     modifier: Modifier = Modifier,
-    lineColor: Color = LiftrixColors.Primary,
-    fillColor: Color = LiftrixColors.Primary.copy(alpha = 0.1f),
+    lineColor: Color = MaterialTheme.colorScheme.primary,
+    fillColor: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
     showFill: Boolean = true
 ) {
     val primaryColor = lineColor
-    val backgroundColor = fillColor
+    val fillGradient = ChartColorsV2.Gradients.getSeriesGradient(primaryColor, isDarkTheme = true)
     
     Canvas(
         modifier = modifier
@@ -60,7 +60,7 @@ fun MiniLineGraph(
         drawMiniLineGraph(
             normalizedPoints = normalizedPoints,
             lineColor = primaryColor,
-            fillColor = backgroundColor,
+            fillBrush = fillGradient,
             showFill = showFill
         )
     }
@@ -73,7 +73,7 @@ fun MiniLineGraph(
 fun MiniBarChart(
     dataPoints: List<Float>,
     modifier: Modifier = Modifier,
-    barColor: Color = LiftrixColors.Primary,
+    barColor: Color = MaterialTheme.colorScheme.primary,
     maxBars: Int = 7
 ) {
     val displayPoints = if (dataPoints.size > maxBars) {
@@ -104,7 +104,7 @@ fun MiniBarChart(
 fun MiniProgressArc(
     progress: Float,
     modifier: Modifier = Modifier,
-    progressColor: Color = LiftrixColors.Primary,
+    progressColor: Color = MaterialTheme.colorScheme.primary,
     backgroundColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     val validProgress = progress.coerceIn(0f, 1f)
@@ -127,7 +127,7 @@ fun MiniProgressArc(
 fun MiniSparkline(
     dataPoints: List<Float>,
     modifier: Modifier = Modifier,
-    lineColor: Color = LiftrixColors.Primary,
+    lineColor: Color = MaterialTheme.colorScheme.primary,
     lineWidth: Dp = 2.dp
 ) {
     val density = LocalDensity.current
@@ -205,7 +205,7 @@ private fun DrawScope.drawSinglePoint(value: Float, color: Color) {
 private fun DrawScope.drawMiniLineGraph(
     normalizedPoints: List<Float>,
     lineColor: Color,
-    fillColor: Color,
+    fillBrush: Brush,
     showFill: Boolean
 ) {
     val padding = 2.dp.toPx()
@@ -247,14 +247,7 @@ private fun DrawScope.drawMiniLineGraph(
         
         drawPath(
             path = fillPath,
-            brush = Brush.verticalGradient(
-                colors = listOf(
-                    fillColor.copy(alpha = 0.3f),
-                    fillColor.copy(alpha = 0.05f)
-                ),
-                startY = 0f,
-                endY = size.height
-            )
+            brush = fillBrush
         )
     }
     
