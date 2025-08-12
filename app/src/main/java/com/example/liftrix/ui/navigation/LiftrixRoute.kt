@@ -84,11 +84,13 @@ sealed class LiftrixRoute {
      * 
      * @param templateId Optional workout routine ID when selecting exercises for routine creation (backend compatibility)
      * @param isForTemplate Whether the selection is for routine creation or active workout (backend compatibility)
+     * @param replaceExerciseIndex Index of exercise to replace, null means add new
      */
     @Serializable
     data class ExerciseSelection(
         val templateId: String? = null,
-        val isForTemplate: Boolean = false
+        val isForTemplate: Boolean = false,
+        val replaceExerciseIndex: Int? = null
     ) : LiftrixRoute()
     
     /**

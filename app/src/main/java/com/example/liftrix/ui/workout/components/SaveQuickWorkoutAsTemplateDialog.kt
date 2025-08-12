@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
+import timber.log.Timber
 
 /**
  * Dialog component for asking users if they want to save their Quick workout as a template.
@@ -46,15 +47,29 @@ fun SaveQuickWorkoutAsTemplateDialog(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    if (!show) return
+    val componentTimestamp = System.currentTimeMillis()
+    Timber.d("🔥 DIALOG-COMPONENT [$componentTimestamp]: SaveQuickWorkoutAsTemplateDialog called with show=$show")
+    
+    if (!show) {
+        Timber.d("🔥 DIALOG-COMPONENT [$componentTimestamp]: Early return - show is false")
+        return
+    }
+
+    // Debug when dialog is shown
+    Timber.d("🔥 DIALOG-DEBUG [$componentTimestamp]: SaveQuickWorkoutAsTemplateDialog rendering with defaultTemplateName='$defaultTemplateName'")
 
     var templateName by remember(show) { mutableStateOf(defaultTemplateName) }
     var isValidName by remember(templateName) { 
         mutableStateOf(templateName.isNotBlank() && templateName.length <= 50) 
     }
+    
+    Timber.d("🔥 DIALOG-DEBUG: templateName='$templateName', isValidName=$isValidName")
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            Timber.d("🔥 DIALOG-DEBUG: Dialog dismissed (back button or outside click)")
+            onDismiss()
+        },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
         properties = DialogProperties(
             dismissOnBackPress = true,
@@ -132,7 +147,10 @@ fun SaveQuickWorkoutAsTemplateDialog(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 TextButton(
-                    onClick = onSkip,
+                    onClick = {
+                        Timber.d("🔥 DIALOG-DEBUG: Skip button clicked!")
+                        onSkip()
+                    },
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(
@@ -145,8 +163,12 @@ fun SaveQuickWorkoutAsTemplateDialog(
 
                 TextButton(
                     onClick = {
+                        Timber.d("🔥 DIALOG-DEBUG: Save Template button clicked! isValidName=$isValidName, templateName='$templateName'")
                         if (isValidName) {
+                            Timber.d("🔥 DIALOG-DEBUG: Calling onSaveAsTemplate with name: '${templateName.trim()}'")
                             onSaveAsTemplate(templateName.trim())
+                        } else {
+                            Timber.w("🔥 DIALOG-DEBUG: Template name is invalid, not saving")
                         }
                     },
                     enabled = isValidName,

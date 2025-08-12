@@ -54,6 +54,19 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
         UnifiedActiveWorkoutUiState.Loading
     )
     val uiState: StateFlow<UnifiedActiveWorkoutUiState> = _uiState.asStateFlow()
+    
+    // 🔥 DEBUG: Track all UI state changes
+    init {
+        viewModelScope.launch {
+            _uiState.collect { state ->
+                Timber.d("🔥 VIEWMODEL-STATE-CHANGE: UI State changed to ${state::class.simpleName} at ${System.currentTimeMillis()}")
+                if (state is UnifiedActiveWorkoutUiState.Success) {
+                    Timber.d("🔥 VIEWMODEL-STATE-CHANGE: Success state - showSaveQuickWorkoutDialog=${state.showSaveQuickWorkoutDialog}, showSaveAsTemplateDialog=${state.showSaveAsTemplateDialog}")
+                    Timber.d("🔥 VIEWMODEL-STATE-CHANGE: Session name: ${state.session.name}, exercises: ${state.session.exercises.size}")
+                }
+            }
+        }
+    }
 
     // 🔥 SIMPLIFIED: Direct session access
     val currentSession: StateFlow<UnifiedWorkoutSession?> = sessionManager.currentSession
@@ -164,15 +177,34 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                     hasExercisesAddedBeyondTemplate(capturedSession)
                 
                 if (isQuickWorkout) {
+                    Timber.d("🔥 QUICK-WORKOUT-DEBUG: Detected quick workout, preparing to show save dialog")
                     // Show Quick workout save dialog WITHOUT completing session yet
                     val currentSuccessState = _uiState.value as? UnifiedActiveWorkoutUiState.Success
+                    Timber.d("🔥 QUICK-WORKOUT-DEBUG: Current UI state is Success: ${currentSuccessState != null}")
                     if (currentSuccessState != null) {
-                        _uiState.value = currentSuccessState.copy(
+                        Timber.d("🔥 QUICK-WORKOUT-DEBUG: Setting showSaveQuickWorkoutDialog = true")
+                        Timber.d("🔥 QUICK-WORKOUT-DEBUG: Current state before copy: showSaveQuickWorkoutDialog=${currentSuccessState.showSaveQuickWorkoutDialog}")
+                        val newState = currentSuccessState.copy(
                             isCompleting = false,
                             showSaveQuickWorkoutDialog = true
                         )
+                        Timber.d("🔥 QUICK-WORKOUT-DEBUG: New state after copy: showSaveQuickWorkoutDialog=${newState.showSaveQuickWorkoutDialog}")
+                        Timber.d("🔥 QUICK-WORKOUT-DEBUG: States are equal: ${currentSuccessState == newState}")
+                        
+                        _uiState.value = newState
+                        
+                        // Force trigger state change detection
+                        Timber.d("🔥 QUICK-WORKOUT-DEBUG: Force checking if state actually changed")
+                        val checkState = _uiState.value
+                        if (checkState is UnifiedActiveWorkoutUiState.Success) {
+                            Timber.d("🔥 QUICK-WORKOUT-DEBUG: Confirmed state in _uiState: showSaveQuickWorkoutDialog=${checkState.showSaveQuickWorkoutDialog}")
+                        }
+                        
                         Timber.d("🔥 QUICK-WORKOUT-SAVE: Showing save dialog for Quick workout with ${capturedSession.exercises.size} exercises")
+                        Timber.d("🔥 QUICK-WORKOUT-DEBUG: New state showSaveQuickWorkoutDialog = ${newState.showSaveQuickWorkoutDialog}")
                         return@launch
+                    } else {
+                        Timber.e("🔥 QUICK-WORKOUT-ERROR: Current UI state is not Success, cannot show dialog. Current state: ${_uiState.value::class.simpleName}")
                     }
                 } else if (isTemplateWithAddedExercises) {
                     // Show template update dialog WITHOUT completing session yet
@@ -890,6 +922,8 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
     fun saveQuickWorkoutAsTemplate(templateName: String) {
         viewModelScope.launch {
             try {
+                Timber.d("🔥 SAVE-TEMPLATE: Dialog button clicked - starting template save process for: '$templateName'")
+                
                 val currentSession = sessionManager.currentSession.value
                 if (currentSession == null) {
                     Timber.e("🔥 SAVE-TEMPLATE: Cannot save template - no active session")
@@ -908,6 +942,13 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                 }
                 
                 Timber.d("🔥 SAVE-TEMPLATE: Saving Quick workout as template: '$templateName' with ${currentSession.exercises.size} exercises")
+                
+                // First hide the dialog
+                val currentUiState = _uiState.value
+                if (currentUiState is UnifiedActiveWorkoutUiState.Success) {
+                    _uiState.value = currentUiState.copy(showSaveQuickWorkoutDialog = false)
+                    Timber.d("🔥 SAVE-TEMPLATE: Dialog hidden, proceeding with template creation")
+                }
                 
                 val result = createTemplateFromSessionUseCase(
                     session = currentSession,
@@ -943,7 +984,15 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
      */
     fun skipSaveQuickWorkoutAsTemplate() {
         viewModelScope.launch {
-            Timber.d("🔥 SAVE-TEMPLATE: User skipped saving Quick workout as template")
+            Timber.d("🔥 SAVE-TEMPLATE: User clicked 'Skip' - completing workout without saving template")
+            
+            // First hide the dialog
+            val currentUiState = _uiState.value
+            if (currentUiState is UnifiedActiveWorkoutUiState.Success) {
+                _uiState.value = currentUiState.copy(showSaveQuickWorkoutDialog = false)
+                Timber.d("🔥 SAVE-TEMPLATE: Dialog hidden, proceeding with workout completion")
+            }
+            
             // Complete the session without saving template
             completeSessionDirectly()
         }
@@ -953,9 +1002,13 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
      * Dismisses the Quick workout save dialog without completing workout
      */
     fun dismissSaveQuickWorkoutDialog() {
+        Timber.d("🔥 SAVE-TEMPLATE: User dismissed dialog (clicked outside or back) - hiding dialog but not completing workout")
         val currentState = _uiState.value
         if (currentState is UnifiedActiveWorkoutUiState.Success) {
             _uiState.value = currentState.copy(showSaveQuickWorkoutDialog = false)
+            Timber.d("🔥 SAVE-TEMPLATE: Dialog hidden, workout remains active")
+        } else {
+            Timber.w("🔥 SAVE-TEMPLATE: Cannot dismiss dialog - UI state is not Success: ${currentState::class.simpleName}")
         }
     }
 

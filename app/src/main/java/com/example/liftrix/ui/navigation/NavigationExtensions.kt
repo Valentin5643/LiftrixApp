@@ -41,12 +41,14 @@ fun NavController.navigateToWorkoutDetails(
  * 
  * @param templateId Optional template ID when selecting exercises for template creation
  * @param isForTemplate Whether the selection is for template creation or active workout
+ * @param replaceExerciseIndex Optional index of exercise to replace, null means add new
  */
 fun NavController.navigateToExerciseSelection(
     templateId: String? = null,
-    isForTemplate: Boolean = false
+    isForTemplate: Boolean = false,
+    replaceExerciseIndex: Int? = null
 ) {
-    navigate(LiftrixRoute.ExerciseSelection(templateId, isForTemplate))
+    navigate(LiftrixRoute.ExerciseSelection(templateId, isForTemplate, replaceExerciseIndex))
 }
 
 /**

@@ -308,6 +308,66 @@ fun ModernChart(
 9. **ALWAYS** extend BaseViewModel<S, E> with UiState<T> pattern for ViewModels
 10. **USE** UnifiedWorkoutSessionManager for all session state management
 
+## Redesigned Workout System Architecture
+
+### Workout Component Redesign (2024)
+The workout system has been redesigned with new UI patterns and improved UX:
+
+#### Core Redesigned Components
+- **RedesignedEditWorkoutScreen**: Modern edit interface with Material 3 design
+- **RedesignedExerciseCard**: Enhanced exercise cards with context-aware behavior
+- **RedesignedSetData**: Unified data structure for set management
+- **RedesignedPrimaryButton**: Consistent button styling across workout flows
+- **RedesignedWorkoutHeader**: Standardized header component
+
+#### Exercise Card Context System
+```kotlin
+enum class ExerciseCardContext {
+    ACTIVE_WORKOUT,     // Show completion checkboxes, focus on actual values
+    TEMPLATE_CREATION   // Hide completion, focus on target values
+}
+```
+
+#### Key Redesign Features
+1. **Context-Aware UI**: Exercise cards adapt behavior based on context (active vs template)
+2. **Unified Input System**: Consistent input fields with proper keyboard types
+3. **Enhanced Set Management**: 
+   - Previous/current value comparison
+   - Visual completion tracking
+   - Inline editing capabilities
+4. **Improved Exercise Management**:
+   - Contextual menu system (reorder, change, remove)
+   - Drag-to-reorder dialog
+   - Notes integration
+5. **Modern Visual Design**:
+   - 12dp rounded corners
+   - LiftrixColorsV2 color system
+   - Semantic spacing
+   - Proper text hierarchy
+
+#### Implementation Guidelines
+- **Always use RedesignedExerciseCard** for new workout screens
+- **Pass appropriate ExerciseCardContext** based on screen purpose
+- **Follow the RedesignedSetData structure** for consistent state management
+- **Use RedesignedPrimaryButton** for primary actions
+- **Implement exercise options menu** for exercise management
+
+#### Migration Pattern
+```kotlin
+// ✅ New redesigned pattern
+RedesignedExerciseCard(
+    exerciseName = exercise.name,
+    exerciseSubtitle = exercise.muscleGroup,
+    sets = exercise.sets.map { RedesignedSetData(...) },
+    context = ExerciseCardContext.ACTIVE_WORKOUT,
+    onAddSet = { /* handle */ },
+    onUpdateSet = { index, setData -> /* handle */ }
+)
+
+// ❌ Old pattern - avoid for new screens
+LegacyExerciseCard(...)
+```
+
 ## 🚨 Critical Gotchas
 
 ### Session State Management
@@ -382,3 +442,4 @@ val chartData = processChartData(rawData, timeRange)
 - **<5s sync operations** with exponential backoff
 - **150ms component interactions** with haptic feedback
 - **WCAG 2.1 AA accessibility** compliance
+```

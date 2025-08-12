@@ -106,21 +106,17 @@ fun UnifiedActiveWorkoutScreen(
     
     // 🔥 IMPROVED: Handle screen entry with proper session creation timing
     LaunchedEffect(Unit) {
-        timber.log.Timber.d("🔥 GUARD-DEBUG: Screen entry - isBlankWorkout: $isBlankWorkout, templateId: $templateId, session: ${session?.name ?: "null"}")
         
         // Ensure session exists before processing exercises
         if (session == null) {
             when {
                 isBlankWorkout -> {
-                    timber.log.Timber.d("🔥 GUARD-DEBUG: Starting blank workout...")
                     viewModel.startBlankWorkout()
                 }
                 templateId != null -> {
-                    timber.log.Timber.d("🔥 GUARD-DEBUG: Starting template workout (ID: $templateId)...")
                     viewModel.startTemplateWorkout(templateId)
                 }
                 else -> {
-                    timber.log.Timber.w("🔥 GUARD-DEBUG: No session and no creation parameters - navigating back")
                     onNavigateBack()
                     return@LaunchedEffect
                 }
@@ -134,7 +130,6 @@ fun UnifiedActiveWorkoutScreen(
             }
             
             if (session == null) {
-                timber.log.Timber.e("🔥 GUARD-DEBUG: Session creation timeout - forcing error state")
                 onNavigateBack()
             }
         }
@@ -143,10 +138,8 @@ fun UnifiedActiveWorkoutScreen(
     // 🔥 TIMEOUT GUARD: Prevent infinite loading
     LaunchedEffect(uiState) {
         if (uiState is UnifiedActiveWorkoutUiState.Loading) {
-            timber.log.Timber.d("🔥 TIMEOUT-DEBUG: Loading state detected, starting 3-second timeout...")
             delay(3000)
             if (uiState is UnifiedActiveWorkoutUiState.Loading) {
-                timber.log.Timber.e("🔥 TIMEOUT-DEBUG: Still loading after 3 seconds - forcing error state")
                 viewModel.retry() // This should trigger error handling
             }
         }
@@ -154,13 +147,12 @@ fun UnifiedActiveWorkoutScreen(
 
     // Debug logging for UI state changes
     LaunchedEffect(uiState) {
-        timber.log.Timber.d("🔥 SCREEN-DEBUG: UI State changed to: ${uiState::class.simpleName}")
         when (uiState) {
-            is UnifiedActiveWorkoutUiState.Loading -> timber.log.Timber.d("🔥 SCREEN-DEBUG: Showing loading screen")
-            is UnifiedActiveWorkoutUiState.Success -> timber.log.Timber.d("🔥 SCREEN-DEBUG: Showing success screen with session: ${(uiState as UnifiedActiveWorkoutUiState.Success).session.name}")
-            is UnifiedActiveWorkoutUiState.Error -> timber.log.Timber.d("🔥 SCREEN-DEBUG: Showing error screen: ${(uiState as UnifiedActiveWorkoutUiState.Error).message}")
-            is UnifiedActiveWorkoutUiState.NoSession -> timber.log.Timber.d("🔥 SCREEN-DEBUG: Showing no session screen")
-            is UnifiedActiveWorkoutUiState.WorkoutCompleted -> timber.log.Timber.d("🔥 SCREEN-DEBUG: Workout completed - should navigate away")
+            is UnifiedActiveWorkoutUiState.Loading -> {}
+            is UnifiedActiveWorkoutUiState.Success -> {}
+            is UnifiedActiveWorkoutUiState.Error -> {}
+            is UnifiedActiveWorkoutUiState.NoSession -> {}
+            is UnifiedActiveWorkoutUiState.WorkoutCompleted -> {}
         }
     }
     
@@ -169,26 +161,19 @@ fun UnifiedActiveWorkoutScreen(
     
     // 🔥 IMPROVED: Process exercises AFTER session is confirmed to exist
     LaunchedEffect(session, selectedExercise) {
-        timber.log.Timber.d("🔥 EXERCISE-ADD-DEBUG: LaunchedEffect triggered - session exists: ${session != null}, exercise: ${selectedExercise?.name ?: "null"}")
         
         if (session != null && selectedExercise != null) {
-            timber.log.Timber.d("🔥 EXERCISE-ADD-DEBUG: Both session and exercise available - proceeding with addition")
-            timber.log.Timber.d("🔥 EXERCISE-ADD-DEBUG: Session: ${session!!.name}, Exercise: ${selectedExercise!!.name}")
             
             try {
                 viewModel.addExerciseToSession(selectedExercise!!)
-                timber.log.Timber.d("🔥 EXERCISE-ADD-DEBUG: Exercise addition completed successfully")
                 
                 // Clear the saved state to prevent re-adding
                 savedStateHandle?.remove<com.example.liftrix.domain.model.ExerciseLibrary>("selected_exercise")
-                timber.log.Timber.d("🔥 EXERCISE-ADD-DEBUG: Cleared exercise from savedStateHandle")
                 
             } catch (e: Exception) {
-                timber.log.Timber.e(e, "🔥 EXERCISE-ADD-DEBUG: Error adding exercise to session")
             }
         } else {
             if (selectedExercise != null && session == null) {
-                timber.log.Timber.w("🔥 EXERCISE-ADD-DEBUG: Exercise selected but no session - will retry when session is created")
             }
         }
     }
@@ -302,10 +287,8 @@ fun UnifiedActiveWorkoutScreen(
             is UnifiedActiveWorkoutUiState.Success -> {
                 val successState = uiState as UnifiedActiveWorkoutUiState.Success
                 
-                // 🔥 CRITICAL DEBUG: Log UI state and session data
-                timber.log.Timber.d("🔥 UI-RENDER-DEBUG: Rendering Success state")
-                timber.log.Timber.d("🔥 UI-RENDER-DEBUG: Session exercises count: ${successState.session.exercises.size}")
-                timber.log.Timber.d("🔥 UI-RENDER-DEBUG: Session exercises: ${successState.session.exercises.map { it.name }}")
+                // 🔥 CRITICAL DEBUG: Log UI state and session data WITH TIMESTAMP
+                val timestamp = System.currentTimeMillis()
                 
                 ActiveWorkoutContent(
                     session = successState.session,
@@ -344,6 +327,7 @@ fun UnifiedActiveWorkoutScreen(
                 }
                 
                 // Show Quick workout save dialog when needed
+                val dialogTimestamp = System.currentTimeMillis()
                 if (successState.showSaveQuickWorkoutDialog) {
                     SaveQuickWorkoutAsTemplateDialog(
                         show = true,
@@ -358,6 +342,7 @@ fun UnifiedActiveWorkoutScreen(
                             viewModel.dismissSaveQuickWorkoutDialog()
                         }
                     )
+                } else {
                 }
             }
         }
@@ -377,9 +362,6 @@ private fun ActiveWorkoutContent(
     modifier: Modifier = Modifier
 ) {
     // Debug logging
-    timber.log.Timber.d("🔥 CONTENT-DEBUG: ActiveWorkoutContent rendering")
-    timber.log.Timber.d("🔥 CONTENT-DEBUG: session.exercises.size = ${session.exercises.size}")
-    timber.log.Timber.d("🔥 CONTENT-DEBUG: session.exercises.isEmpty() = ${session.exercises.isEmpty()}")
     
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -396,10 +378,8 @@ private fun ActiveWorkoutContent(
         
         // Exercise list or empty state
         if (session.exercises.isNotEmpty()) {
-            timber.log.Timber.d("🔥 CONTENT-DEBUG: Rendering ${session.exercises.size} exercises")
             
             itemsIndexed(session.exercises) { index, exercise ->
-                timber.log.Timber.d("🔥 CONTENT-DEBUG: Rendering ExerciseCard for: ${exercise.name} at index $index")
                 
                 ExerciseCard(
                     exercise = exercise,
@@ -414,7 +394,6 @@ private fun ActiveWorkoutContent(
                 )
             }
         } else {
-            timber.log.Timber.d("🔥 CONTENT-DEBUG: Showing EmptyExerciseList - no exercises in session")
             
             item {
                 EmptyExerciseList(
@@ -645,7 +624,6 @@ private fun ExerciseCard(
                     setNumber = set.setNumber,
                     set = set,
                     onSetUpdated = { updatedSet ->
-                        timber.log.Timber.d("🔥 SET-UPDATE: Set ${set.setNumber} updated: reps=${updatedSet.actualReps}, weight=${updatedSet.actualWeight}, completed=${updatedSet.isCompleted()}")
                         onUpdateSet(set.setNumber, updatedSet)
                     }
                 )
@@ -659,7 +637,6 @@ private fun ExerciseCard(
             // Add set button
             Button(
                 onClick = {
-                    timber.log.Timber.d("🔥 SET-ADD: Adding new set to ${exercise.name}")
                     onAddSet()
                 },
                 modifier = Modifier.fillMaxWidth(),

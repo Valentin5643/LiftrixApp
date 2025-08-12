@@ -270,6 +270,38 @@ class EditWorkoutViewModel @Inject constructor(
     }
 
     /**
+     * Replaces an exercise at the specified index with a new exercise from the library
+     */
+    fun replaceExercise(index: Int, newExerciseLibrary: com.example.liftrix.domain.model.ExerciseLibrary) {
+        val currentData = _uiState.value.dataOrNull()
+        if (currentData != null) {
+            val updatedExercises = currentData.editedExercises.toMutableList()
+            if (index in updatedExercises.indices) {
+                val oldExercise = updatedExercises[index]
+                val newExercise = Exercise(
+                    id = oldExercise.id, // Keep same ID to maintain references
+                    workoutId = oldExercise.workoutId, // Keep same workout ID
+                    libraryExercise = newExerciseLibrary,
+                    orderIndex = oldExercise.orderIndex, // Keep same position
+                    targetSets = oldExercise.targetSets, // Preserve target sets
+                    targetReps = oldExercise.targetReps, // Preserve target reps
+                    targetWeight = oldExercise.targetWeight, // Preserve target weight
+                    targetTime = oldExercise.targetTime, // Preserve target time
+                    targetDistance = oldExercise.targetDistance, // Preserve target distance
+                    sets = emptyList(), // Start with no sets for the new exercise
+                    notes = oldExercise.notes, // Preserve notes if any
+                    createdAt = oldExercise.createdAt // Keep original creation time
+                )
+                updatedExercises[index] = newExercise
+                setState(EditWorkoutUiState.Success(
+                    data = currentData.copy(editedExercises = updatedExercises)
+                ))
+                Timber.d("🔥 REPLACE-DEBUG: Replaced exercise at index $index with ${newExerciseLibrary.name}")
+            }
+        }
+    }
+
+    /**
      * Updates a specific exercise set
      */
     fun updateExerciseSet(exerciseIndex: Int, setIndex: Int, set: ExerciseSet) {
@@ -298,11 +330,12 @@ class EditWorkoutViewModel @Inject constructor(
         val currentData = _uiState.value.dataOrNull()
         if (currentData != null) {
             val updatedExercises = currentData.editedExercises.toMutableList()
-            if (index in updatedExercises.indices && updatedExercises.size > 1) {
+            if (index in updatedExercises.indices) {
                 updatedExercises.removeAt(index)
                 setState(EditWorkoutUiState.Success(
                     data = currentData.copy(editedExercises = updatedExercises)
                 ))
+                Timber.d("🔥 REMOVE-DEBUG: Removed exercise at index $index, ${updatedExercises.size} exercises remaining")
             }
         }
     }

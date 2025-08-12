@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.domain.model.WorkoutId
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,6 +52,9 @@ import androidx.navigation.toRoute
 import com.example.liftrix.ui.common.LiveSessionBar
 import com.example.liftrix.ui.home.HomeScreen
 import com.example.liftrix.ui.workout.WorkoutScreen
+import com.example.liftrix.ui.workout.active.RedesignedActiveWorkoutScreen
+import com.example.liftrix.ui.workout.create.RedesignedCreateTemplateScreen
+import com.example.liftrix.ui.workout.edit.RedesignedEditWorkoutScreen
 import com.example.liftrix.ui.progress.ProgressDashboardScreen
 import com.example.liftrix.ui.progress.detail.WorkoutFrequencyDetailScreen
 import com.example.liftrix.ui.coach.CoachScreen
@@ -277,11 +281,19 @@ fun UnifiedNavigationContainer(
                         },
                         onExerciseSelected = { exerciseLibrary ->
                             if (route.isForTemplate) {
-                                // Pass selected exercise back to template creation
-                                navController.previousBackStackEntry?.savedStateHandle?.set(
-                                    "selected_exercise", 
-                                    exerciseLibrary
-                                )
+                                if (route.replaceExerciseIndex != null) {
+                                    // Pass replacement data back to edit screen
+                                    navController.previousBackStackEntry?.savedStateHandle?.set(
+                                        "replace_exercise",
+                                        Pair(route.replaceExerciseIndex, exerciseLibrary)
+                                    )
+                                } else {
+                                    // Pass selected exercise back to template creation (add new)
+                                    navController.previousBackStackEntry?.savedStateHandle?.set(
+                                        "selected_exercise", 
+                                        exerciseLibrary
+                                    )
+                                }
                                 navController.popBackStackSafely()
                             } else {
                                 // Add exercise to current session
@@ -297,20 +309,13 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.ActiveWorkout> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.ActiveWorkout>()
-                    com.example.liftrix.ui.workout.active.UnifiedActiveWorkoutScreen(
+                    com.example.liftrix.ui.workout.active.RedesignedActiveWorkoutScreen(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         },
-                        onAddExercise = {
+                        onNavigateToExerciseLibrary = {
                             navController.navigateToExerciseSelection()
                         },
-                        onNavigateToExercise = { exerciseId ->
-                            navController.navigateToExerciseDetails(exerciseId)
-                        },
-                        onNavigateToHome = {
-                            navController.navigateAndReplace(LiftrixRoute.Home)
-                        },
-                        savedStateHandle = backStackEntry.savedStateHandle,
                         isBlankWorkout = route.isBlankWorkout,
                         templateId = route.templateId
                     )
@@ -318,15 +323,15 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.TemplateCreation> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.TemplateCreation>()
-                    com.example.liftrix.ui.workout.create.WorkoutTemplateCreationScreen(
+                    com.example.liftrix.ui.workout.create.RedesignedCreateTemplateScreen(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         },
                         onNavigateToExerciseSelection = {
                             navController.navigateToExerciseSelection(isForTemplate = true)
                         },
-                        initialFolderId = route.folderId,
-                        savedStateHandle = backStackEntry.savedStateHandle
+                        editTemplateId = null,
+                        navBackStackEntry = backStackEntry
                     )
                 }
                 
@@ -501,11 +506,33 @@ fun UnifiedNavigationContainer(
                 // Workout Editing Routes
                 composable<LiftrixRoute.EditWorkout> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.EditWorkout>()
-                    com.example.liftrix.ui.workout.edit.EditWorkoutScreen(
+                    val editWorkoutViewModel = hiltViewModel<com.example.liftrix.ui.workout.edit.EditWorkoutViewModel>()
+                    
+                    // Listen for exercise replacement from navigation
+                    LaunchedEffect(backStackEntry.savedStateHandle) {
+                        backStackEntry.savedStateHandle.getStateFlow<Pair<Int, com.example.liftrix.domain.model.ExerciseLibrary>?>(
+                            "replace_exercise", null
+                        ).collect { replacementData ->
+                            if (replacementData != null) {
+                                editWorkoutViewModel.replaceExercise(replacementData.first, replacementData.second)
+                                // Clear the saved state to prevent re-triggering
+                                backStackEntry.savedStateHandle.remove<Pair<Int, com.example.liftrix.domain.model.ExerciseLibrary>>("replace_exercise")
+                            }
+                        }
+                    }
+                    
+                    com.example.liftrix.ui.workout.edit.RedesignedEditWorkoutScreen(
                         workoutId = WorkoutId(route.workoutId),
                         onNavigateBack = {
                             navController.popBackStackSafely()
-                        }
+                        },
+                        onNavigateToExerciseSelection = {
+                            navController.navigateToExerciseSelection(isForTemplate = true)
+                        },
+                        onNavigateToExerciseSelectionWithReplacement = { exerciseIndex ->
+                            navController.navigateToExerciseSelection(isForTemplate = true, replaceExerciseIndex = exerciseIndex)
+                        },
+                        viewModel = editWorkoutViewModel
                     )
                 }
                 
@@ -941,6 +968,7 @@ private fun NavigationAwareTopAppBar(
         "Friends" to "Friends", 
         "ActiveWorkout" to "Active Workout",
         "TemplateCreation" to "Create Template",
+        "EditWorkout" to "Edit Workout",
         "ExerciseSelection" to "Add Exercise",
         "WorkoutDetails" to "Workout Details",
         "ExerciseDetails" to "Exercise Details",

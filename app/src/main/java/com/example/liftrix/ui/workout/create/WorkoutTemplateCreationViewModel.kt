@@ -1,7 +1,6 @@
 package com.example.liftrix.ui.workout.create
 
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
-import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.state.WorkoutTemplateCreationUiState
 import com.example.liftrix.ui.common.state.WorkoutTemplateCreationData
 import com.example.liftrix.ui.common.state.dataOrNull
@@ -34,7 +33,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 import timber.log.Timber
 import javax.inject.Inject
-import com.example.liftrix.ui.common.state.dataOrNull
 
 /**
  * ViewModel for the workout creation screen.
