@@ -136,7 +136,7 @@ private fun WorkoutContent(
         Text(
             text = workout.name,
             style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
@@ -241,6 +241,7 @@ private fun MetadataItem(
         Text(
             text = text,
             style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Normal,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -262,52 +263,50 @@ private fun PersonalWorkoutSummary(
         exercise.sets.count { it.isCompleted }
     }
     
-    CompactLiftrixCard(
+    Column(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-        ),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(GridSystem.spacing2)
+        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing1)
     ) {
+        // Progress text and sets info
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Completion status
-            Column {
-                Text(
-                    text = "Progress",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-                
-                Text(
-                    text = "${String.format("%.0f", completionPercentage)}% Complete",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
+            Text(
+                text = "Progress: ${String.format("%.0f", completionPercentage)}% Complete",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Normal,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             
-            // Sets completed
-            Column(
-                horizontalAlignment = Alignment.End
-            ) {
-                Text(
-                    text = "Sets",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+            Text(
+                text = "Sets: $completedSets/$totalSets",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Normal,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        
+        // Thin progress bar
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(2.dp)
                 )
-                
-                Text(
-                    text = "$completedSets/$totalSets",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(completionPercentage.toFloat() / 100f)
+                    .height(4.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.primary,
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(2.dp)
+                    )
+            )
         }
     }
 }

@@ -52,6 +52,10 @@ fun LiftrixCard(
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     contentPadding: PaddingValues = PaddingValues(16.dp), // 8pt grid base * 2
     contentDescription: String? = null,
+    border: androidx.compose.foundation.BorderStroke? = androidx.compose.foundation.BorderStroke(
+        width = 1.dp,
+        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+    ),
     content: @Composable () -> Unit
 ) {
     val accessibilityState = rememberAccessibilityState()
@@ -95,7 +99,8 @@ fun LiftrixCard(
         modifier = cardModifier,
         shape = shape,
         colors = colors,
-        elevation = elevation
+        elevation = elevation,
+        border = border
     ) {
         Box(
             modifier = Modifier.padding(contentPadding)

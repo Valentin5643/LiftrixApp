@@ -156,17 +156,13 @@ private fun EnhancedHomeContent(
         verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3),
         contentPadding = PaddingValues(vertical = GridSystem.spacing3)
     ) {
-        // Enhanced Header Section
+        // Enhanced Header Section  
         item {
-            UnifiedWorkoutCard(
-                title = "Welcome to Liftrix",
-                subtitle = "Track your fitness journey",
-                modifier = Modifier.padding(horizontal = GridSystem.spacing3)
-            ) {
-                EnhancedHomeHeader(
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
+            EnhancedHomeHeader(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = GridSystem.spacing3)
+            )
         }
         
         // Discovery Section Header
@@ -293,23 +289,13 @@ private fun EnhancedHomeContent(
 private fun EnhancedHomeHeader(
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing1)
-    ) {
-        Text(
-            text = "Welcome back!",
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        
-        Text(
-            text = "Track your progress and stay motivated with friends",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
+    Text(
+        text = "Track your progress and stay motivated with friends",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Normal,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = modifier.padding(vertical = GridSystem.spacing2)
+    )
 }
 
 /**
@@ -432,7 +418,17 @@ private fun EmptyDiscoveryState(
             )
         }
     ) {
-        // Empty content area since title and subtitle contain the message
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            Icon(
+                imageVector = Icons.Default.People,
+                contentDescription = "Person icon",
+                modifier = Modifier.size(24.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

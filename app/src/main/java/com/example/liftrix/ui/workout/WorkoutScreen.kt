@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -30,6 +31,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
 import com.example.liftrix.ui.workout.components.PrimaryActionButton
 import com.example.liftrix.ui.workout.components.SecondaryActionButton
@@ -74,6 +79,7 @@ import com.example.liftrix.ui.workout.components.QuickCreateFolderButton
  * 
  * @param onNavigateToActiveWorkout Callback for starting active workout
  * @param onNavigateToWorkoutCreation Callback for workout creation
+ * @param onNavigateToEditWorkout Callback for editing existing workout
  * @param modifier Modifier for styling
  * @param viewModel ViewModel for workout management
  */
@@ -82,6 +88,7 @@ import com.example.liftrix.ui.workout.components.QuickCreateFolderButton
 fun WorkoutScreen(
     onNavigateToActiveWorkout: (templateId: String?) -> Unit,
     onNavigateToWorkoutCreation: (folderId: String?) -> Unit,
+    onNavigateToEditWorkout: (workoutId: String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: WorkoutViewModel = hiltViewModel()
 ) {
@@ -97,6 +104,7 @@ fun WorkoutScreen(
                 screenData = currentState.data,
                 onNavigateToActiveWorkout = onNavigateToActiveWorkout,
                 onNavigateToWorkoutCreation = onNavigateToWorkoutCreation,
+                onNavigateToEditWorkout = onNavigateToEditWorkout,
                 onCreateFolder = { folderName -> 
                     viewModel.handleEvent(WorkoutEvent.CreateFolder(folderName))
                 },
@@ -125,6 +133,7 @@ private fun WorkoutContent(
     screenData: com.example.liftrix.ui.common.state.WorkoutScreenData,
     onNavigateToActiveWorkout: (templateId: String?) -> Unit,
     onNavigateToWorkoutCreation: (folderId: String?) -> Unit,
+    onNavigateToEditWorkout: (workoutId: String) -> Unit,
     onCreateFolder: (String) -> Unit,
     viewModel: WorkoutViewModel,
     modifier: Modifier = Modifier
@@ -141,11 +150,11 @@ private fun WorkoutContent(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
         }
         
         // Quick Actions Section
@@ -198,7 +207,10 @@ private fun WorkoutContent(
                         onStartWorkout = { workout -> 
                             onNavigateToActiveWorkout(workout.id.value) 
                         },
-                        onEditWorkout = { /* TODO: Navigate to edit */ },
+                        onEditWorkout = { workout -> 
+                            Timber.d("🔥 EDIT-WORKOUT-DEBUG: WorkoutScreen - onEditWorkout called with workout: id=${workout.id.value}, name=${workout.name}, userId=${workout.userId}")
+                            onNavigateToEditWorkout(workout.id.value) 
+                        },
                         onCreateWorkout = { folderId ->
                             onNavigateToWorkoutCreation(folderId)
                         },
@@ -297,7 +309,7 @@ private fun WorkoutContent(
 }
 
 /**
- * Inline folder section header with create folder access
+ * Inline folder section header with create folder access - modernized
  */
 @Composable
 private fun InlineFolderSectionHeader(
@@ -308,25 +320,41 @@ private fun InlineFolderSectionHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .padding(vertical = 16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground
         )
         
-        QuickCreateFolderButton(
-            onClick = onCreateFolder
-        )
+        // Subtle New Folder button
+        TextButton(
+            onClick = onCreateFolder,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "New Folder",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
     }
 }
 
 
 /**
- * Quick actions card for starting and creating workouts
+ * Quick actions card for starting and creating workouts - modernized layout
  */
 @Composable
 private fun QuickActionsCard(
@@ -334,28 +362,88 @@ private fun QuickActionsCard(
     onCreateWorkout: (folderId: String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    UnifiedWorkoutCard(
-        title = stringResource(R.string.workflow_create_workout),
-        subtitle = stringResource(R.string.create_workout_description),
-        modifier = modifier
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // Title section with modern typography
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.workflow_create_workout),
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Text(
+                text = stringResource(R.string.create_workout_description),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        // Action buttons with modern styling - compact for smaller screens
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            SecondaryActionButton(
-                text = stringResource(R.string.workflow_quick_workout),
+            // Quick Workout button - secondary style with outlined appearance
+            OutlinedButton(
                 onClick = onStartQuickWorkout,
-                modifier = Modifier.weight(1f),
-                leadingIcon = Icons.Default.PlayArrow
-            )
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp),
+                shape = RoundedCornerShape(22.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline
+                ),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Quick Workout",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1
+                )
+            }
             
-            PrimaryActionButton(
-                text = stringResource(R.string.workflow_create_new_workout),
+            // Create New Workout button - primary filled style
+            FilledTonalButton(
                 onClick = { onCreateWorkout(null) },
-                modifier = Modifier.weight(1f),
-                leadingIcon = Icons.Default.Assignment
-            )
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp),
+                shape = RoundedCornerShape(22.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Assignment,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Create New Workout",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1
+                )
+            }
         }
     }
 }

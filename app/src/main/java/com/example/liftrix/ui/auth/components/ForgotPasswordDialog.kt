@@ -19,6 +19,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import com.example.liftrix.ui.workout.components.PrimaryActionButton
+import com.example.liftrix.ui.workout.components.TertiaryActionButton
+import com.example.liftrix.ui.theme.LiftrixColorsV2
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -105,39 +108,30 @@ fun ForgotPasswordDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    keyboardController?.hide()
-                    isLoading = true
-                    onSendReset(email)
-                },
-                enabled = isFormValid && !isLoading
-            ) {
-                if (isLoading) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                        Spacer(modifier = Modifier.size(8.dp))
-                        Text("Sending...")
-                    }
-                } else {
-                    Text("Send Reset Link")
-                }
+            if (isLoading) {
+                PrimaryActionButton(
+                    text = "Sending...",
+                    onClick = { /* Loading state - no action */ },
+                    enabled = false
+                )
+            } else {
+                PrimaryActionButton(
+                    text = "Send Reset Link",
+                    onClick = {
+                        keyboardController?.hide()
+                        isLoading = true
+                        onSendReset(email)
+                    },
+                    enabled = isFormValid && !isLoading
+                )
             }
         },
         dismissButton = {
-            TextButton(
+            TertiaryActionButton(
+                text = "Cancel",
                 onClick = onDismiss,
                 enabled = !isLoading
-            ) {
-                Text("Cancel")
-            }
+            )
         },
         modifier = modifier
     )

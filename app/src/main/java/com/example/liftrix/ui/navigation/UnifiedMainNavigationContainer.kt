@@ -183,6 +183,9 @@ fun UnifiedMainNavigationContainer(
                             } else {
                                 navController.navigate("template_creation")
                             }
+                        },
+                        onNavigateToEditWorkout = { workoutId ->
+                            navController.navigate("edit_workout/$workoutId")
                         }
                     )
                 }

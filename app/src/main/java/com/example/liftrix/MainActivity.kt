@@ -28,7 +28,6 @@ import com.example.liftrix.ui.auth.AuthActivity
 import com.example.liftrix.ui.navigation.UnifiedNavigationContainer
 import com.example.liftrix.ui.theme.LiftrixTheme
 import com.example.liftrix.ui.theme.ThemeManager
-import com.example.liftrix.ui.theme.ThemeVersion
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint

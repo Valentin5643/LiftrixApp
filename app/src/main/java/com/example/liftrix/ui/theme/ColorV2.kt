@@ -18,7 +18,7 @@ object LiftrixColorsV2 {
     // ============================================================================
     
     // Primary Brand Color - Teal (replacing Persian Green #339989)
-    val Teal = Color(0xFF06B6D4)           // Primary actions, branding
+    val Teal = Color(0xFF00BCD4)           // Cyan 500 - Primary actions, branding
     val TealHover = Color(0xFF0891B2)      // Hover states, secondary actions
     val TealDark = Color(0xFF0E7490)       // Pressed states, emphasis
     val TealLight = Color(0xFF67E8F9)      // Highlights, accents
@@ -31,8 +31,9 @@ object LiftrixColorsV2 {
     
     object Dark {
         // Background hierarchy
-        val BackgroundPrimary = Color(0xFF000000)     // Pure black - main background
-        val BackgroundSecondary = Color(0xFF1A1A1A)   // Card backgrounds
+        val BackgroundPrimary = Color(0xFF0B0C0B)     // Very dark green-black - main background
+        val BackgroundSecondary = Color(0xFF0F0F0F)   // Card backgrounds
+        val BackgroundProgress = Color(0xFF17191A)    // Progress tab card backgrounds
         val BackgroundTertiary = Color(0xFF2A2A2A)    // Input fields, elevated surfaces
         val BackgroundElevated = Color(0xFF3A3A3A)    // Modals, overlays
         
@@ -209,7 +210,7 @@ object LiftrixColorsV2 {
         onSurfaceVariant = Dark.TextSecondary,
         surfaceContainerLow = Dark.BackgroundSecondary,
         surfaceContainer = Dark.BackgroundSecondary,
-        surfaceContainerHigh = Dark.BackgroundTertiary,
+        surfaceContainerHigh = Dark.BackgroundProgress,
         surfaceContainerHighest = Dark.BackgroundElevated,
         
         // Outline colors

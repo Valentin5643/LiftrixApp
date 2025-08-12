@@ -31,6 +31,9 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -274,12 +277,153 @@ private fun FolderHeader(
 /**
  * Folder Workout Card Component
  * 
- * Simplified workout card for display within folders.
- * Uses UnifiedWorkoutCard design but optimized for folder context.
- * Now supports drag-and-drop for moving between folders.
+ * Modern workout card matching the reference design with play button on right.
+ * Simplified layout with better visual hierarchy.
  */
 @Composable
 private fun FolderWorkoutCard(
+    workout: WorkoutTemplate,
+    onStartWorkout: () -> Unit,
+    onEditWorkout: () -> Unit,
+    onMoveWorkout: ((WorkoutTemplate, Offset) -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    val hapticFeedback = LocalHapticFeedback.current
+    var isDragActive by remember { mutableStateOf(false) }
+    var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    var totalDragDistance by remember { mutableStateOf(0f) }
+    var cardPosition by remember { mutableStateOf(Offset.Zero) }
+    
+    // Minimum drag distance to trigger move (in dp)
+    val minDragDistancePx = with(androidx.compose.ui.platform.LocalDensity.current) { 50.dp.toPx() }
+    
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp)),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Workout info on the left
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = workout.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "${workout.exercises.size} exercises",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                
+                // Compact stats row
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.padding(top = 4.dp)
+                ) {
+                    WorkoutStatChip(
+                        label = "Sets",
+                        value = workout.exercises.sumOf { it.targetSets ?: 3 }.toString()
+                    )
+                    WorkoutStatChip(
+                        label = "Duration",
+                        value = "${workout.estimatedDurationMinutes ?: 30}min"
+                    )
+                    WorkoutStatChip(
+                        label = "Used",
+                        value = "${workout.usageCount}x"
+                    )
+                }
+            }
+            
+            // Action buttons on the right
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Edit button
+                IconButton(
+                    onClick = onEditWorkout,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit workout",
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                // Play button - prominent
+                FilledIconButton(
+                    onClick = onStartWorkout,
+                    modifier = Modifier.size(48.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Start workout",
+                        modifier = Modifier.size(24.dp),
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Compact workout stat chip for displaying metrics
+ */
+@Composable
+private fun WorkoutStatChip(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
+ * Original UnifiedWorkoutCard implementation for drag support
+ */
+@Composable
+private fun FolderWorkoutCardLegacy(
     workout: WorkoutTemplate,
     onStartWorkout: () -> Unit,
     onEditWorkout: () -> Unit,

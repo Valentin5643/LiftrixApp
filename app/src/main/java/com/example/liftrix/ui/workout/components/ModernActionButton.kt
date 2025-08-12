@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.Add
@@ -32,6 +33,7 @@ import com.example.liftrix.ui.accessibility.AccessibilityEnhancements.enhancedAc
 import com.example.liftrix.ui.accessibility.AccessibilityEnhancements.ensureWcagTouchTarget
 import com.example.liftrix.ui.icons.LiftrixIcon
 import com.example.liftrix.ui.theme.LiftrixSpacing
+import com.example.liftrix.ui.theme.LiftrixColorsV2
 
 /**
  * Modern Action Button System
@@ -92,11 +94,11 @@ fun PrimaryActionButton(
                 isEnabled = enabled
             ),
         shape = shape,
-        colors = ButtonDefaults.filledTonalButtonColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            disabledContainerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.38f),
-            disabledContentColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.38f)
+        colors = ButtonDefaults.buttonColors(
+            containerColor = LiftrixColorsV2.Teal,
+            contentColor = Color.White,
+            disabledContainerColor = LiftrixColorsV2.Teal.copy(alpha = 0.38f),
+            disabledContentColor = Color.White.copy(alpha = 0.38f)
         )
     ) {
         Row(
@@ -117,7 +119,7 @@ fun PrimaryActionButton(
                 Text(
                     text = iconSymbol,
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    color = Color.White,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -172,12 +174,12 @@ fun SecondaryActionButton(
         shape = shape,
         border = BorderStroke(
             width = 1.dp,
-            color = if (enabled) MaterialTheme.colorScheme.secondary 
-                   else MaterialTheme.colorScheme.secondary.copy(alpha = 0.38f)
+            color = if (enabled) LiftrixColorsV2.Teal 
+                   else LiftrixColorsV2.Teal.copy(alpha = 0.38f)
         ),
         colors = ButtonDefaults.outlinedButtonColors(
-            contentColor = MaterialTheme.colorScheme.secondary,
-            disabledContentColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.38f)
+            contentColor = LiftrixColorsV2.Teal,
+            disabledContentColor = LiftrixColorsV2.Teal.copy(alpha = 0.38f)
         )
     ) {
         Row(
@@ -198,7 +200,7 @@ fun SecondaryActionButton(
                 Text(
                     text = iconSymbol,
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.secondary,
+                    color = LiftrixColorsV2.Teal,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -252,8 +254,8 @@ fun TertiaryActionButton(
             ),
         shape = shape,
         colors = ButtonDefaults.textButtonColors(
-            contentColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-            disabledContentColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.38f)
+            contentColor = LiftrixColorsV2.Teal.copy(alpha = 0.8f),
+            disabledContentColor = LiftrixColorsV2.Teal.copy(alpha = 0.38f)
         )
     ) {
         Row(
@@ -274,7 +276,7 @@ fun TertiaryActionButton(
                 Text(
                     text = iconSymbol,
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                    color = LiftrixColorsV2.Teal.copy(alpha = 0.8f),
                     modifier = Modifier.size(20.dp)
                 )
             }

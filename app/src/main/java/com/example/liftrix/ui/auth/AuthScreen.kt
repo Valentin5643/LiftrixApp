@@ -30,6 +30,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -53,6 +54,10 @@ import com.example.liftrix.domain.model.AuthEvent
 import com.example.liftrix.domain.model.AuthState
 import com.example.liftrix.ui.auth.components.SignInForm
 import com.example.liftrix.ui.auth.components.SignUpForm
+import com.example.liftrix.ui.workout.components.PrimaryActionButton
+import com.example.liftrix.ui.workout.components.SecondaryActionButton
+import com.example.liftrix.ui.workout.components.TertiaryActionButton
+import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
@@ -68,6 +73,7 @@ fun AuthScreen(
     val authState by viewModel.authState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val isDarkTheme = isSystemInDarkTheme()
     
     var isSignUpMode by remember { mutableStateOf(initialSignUpMode) }
     
@@ -114,150 +120,160 @@ fun AuthScreen(
 
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+        color = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundPrimary else LiftrixColorsV2.Light.BackgroundPrimary
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(24.dp)
+                    .padding(horizontal = 32.dp)
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.SpaceEvenly
             ) {
-                // App branding
-                Text(
-                    text = "Liftrix",
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Spacer(modifier = Modifier.height(40.dp))
                 
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Text(
-                    text = "Your fitness journey starts here",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-                
-                Spacer(modifier = Modifier.height(32.dp))
-
-                // Auth form
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                // Top Section: Tagline and Hero Image
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    Text(
+                        text = "Your fitness journey",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Normal,
+                        color = if (isDarkTheme) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = "starts here",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Normal,
+                        color = if (isDarkTheme) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary,
+                        textAlign = TextAlign.Center
+                    )
+                    
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Auth form section
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    if (isSignUpMode) {
+                        SignUpForm(
+                            onSignUp = { email, password, displayName ->
+                                viewModel.handleEvent(
+                                    AuthEvent.EmailPasswordSignUp(email, password, displayName)
+                                )
+                            },
+                            isLoading = authState is AuthState.Loading
+                        )
+                    } else {
+                        SignInForm(
+                            onSignIn = { email, password ->
+                                viewModel.handleEvent(
+                                    AuthEvent.EmailPasswordSignIn(email, password)
+                                )
+                            },
+                            onForgotPassword = { email ->
+                                viewModel.handleEvent(AuthEvent.ForgotPassword(email))
+                            },
+                            isLoading = authState is AuthState.Loading
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    // Alternative sign-in options
+                    Text(
+                        text = "or",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (isDarkTheme) LiftrixColorsV2.Dark.TextTertiary else LiftrixColorsV2.Light.TextTertiary
+                    )
+                    
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        if (isSignUpMode) {
-                            SignUpForm(
-                                onSignUp = { email, password, displayName ->
-                                    viewModel.handleEvent(
-                                        AuthEvent.EmailPasswordSignUp(email, password, displayName)
-                                    )
-                                },
-                                isLoading = authState is AuthState.Loading
-                            )
-                        } else {
-                            SignInForm(
-                                onSignIn = { email, password ->
-                                    viewModel.handleEvent(
-                                        AuthEvent.EmailPasswordSignIn(email, password)
-                                    )
-                                },
-                                onForgotPassword = { email ->
-                                    viewModel.handleEvent(AuthEvent.ForgotPassword(email))
-                                },
-                                isLoading = authState is AuthState.Loading
-                            )
+                        // Google Sign-In
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.handleEvent(AuthEvent.GoogleSignIn)
+                                try {
+                                    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                                        .requestIdToken(com.example.liftrix.BuildConfig.GOOGLE_CLIENT_ID)
+                                        .requestEmail()
+                                        .requestProfile()
+                                        .build()
+                                    val googleSignInClient = GoogleSignIn.getClient(context, gso)
+                                    
+                                    // Sign out any existing account first to force account picker
+                                    googleSignInClient.signOut().addOnCompleteListener {
+                                        val signInIntent = googleSignInClient.signInIntent
+                                        googleSignInLauncher.launch(signInIntent)
+                                    }
+                                } catch (e: Exception) {
+                                    Timber.e(e, "Failed to configure Google Sign-In")
+                                    viewModel.handleGoogleSignInResult(null)
+                                }
+                            },
+                            enabled = authState !is AuthState.Loading,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_google),
+                                    contentDescription = "Google",
+                                    modifier = Modifier.size(20.dp),
+                                    tint = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Google", color = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary)
+                            }
                         }
                         
-                        Spacer(modifier = Modifier.height(16.dp))
-                        
-                        // Toggle between sign in and sign up
+                        // Guest Sign-In
                         TextButton(
-                            onClick = { isSignUpMode = !isSignUpMode },
-                            enabled = authState !is AuthState.Loading
+                            onClick = {
+                                viewModel.handleEvent(AuthEvent.AnonymousSignIn)
+                            },
+                            enabled = authState !is AuthState.Loading,
+                            modifier = Modifier.weight(1f)
                         ) {
                             Text(
-                                text = if (isSignUpMode) {
-                                    "Already have an account? Sign In"
-                                } else {
-                                    "Don't have an account? Sign Up"
-                                }
+                                text = "Continue as Guest",
+                                color = LiftrixColorsV2.Light.TextSecondary
                             )
-                        }
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                // Alternative sign-in options
-                Text(
-                    text = "Or continue with",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Google Sign-In
-                    ElevatedButton(
-                        onClick = {
-                            viewModel.handleEvent(AuthEvent.GoogleSignIn)
-                            try {
-                                val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                                    .requestIdToken(com.example.liftrix.BuildConfig.GOOGLE_CLIENT_ID)
-                                    .requestEmail()
-                                    .requestProfile()
-                                    .build()
-                                val googleSignInClient = GoogleSignIn.getClient(context, gso)
-                                
-                                // Sign out any existing account first to force account picker
-                                googleSignInClient.signOut().addOnCompleteListener {
-                                    val signInIntent = googleSignInClient.signInIntent
-                                    googleSignInLauncher.launch(signInIntent)
-                                }
-                            } catch (e: Exception) {
-                                Timber.e(e, "Failed to configure Google Sign-In")
-                                viewModel.handleGoogleSignInResult(null)
-                            }
-                        },
-                        enabled = authState !is AuthState.Loading,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                painter = painterResource(id = android.R.drawable.ic_menu_search), // Replace with Google icon
-                                contentDescription = "Google",
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Google")
                         }
                     }
                     
-                    // Anonymous Sign-In
-                    OutlinedButton(
-                        onClick = {
-                            viewModel.handleEvent(AuthEvent.AnonymousSignIn)
-                        },
-                        enabled = authState !is AuthState.Loading,
-                        modifier = Modifier.weight(1f)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Toggle between sign in and sign up - moved below Google/Guest
+                    TextButton(
+                        onClick = { isSignUpMode = !isSignUpMode },
+                        enabled = authState !is AuthState.Loading
                     ) {
-                        Text("Guest")
+                        Text(
+                            text = if (isSignUpMode) {
+                                "Already have an account?"
+                            } else {
+                                "Don't have an account?"
+                            },
+                            color = LiftrixColorsV2.Light.TextSecondary
+                        )
                     }
                 }
+                
+                Spacer(modifier = Modifier.height(40.dp))
             }
             
             // Loading overlay
@@ -269,19 +285,23 @@ fun AuthScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Card(
-                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundSecondary else LiftrixColorsV2.Light.BackgroundTertiary
+                        )
                     ) {
                         Column(
                             modifier = Modifier.padding(24.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             CircularProgressIndicator(
-                                color = MaterialTheme.colorScheme.primary
+                                color = LiftrixColorsV2.Teal
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
                                 text = "Authenticating...",
-                                style = MaterialTheme.typography.bodyMedium
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary
                             )
                         }
                     }

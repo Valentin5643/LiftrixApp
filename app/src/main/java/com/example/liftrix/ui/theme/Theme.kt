@@ -44,7 +44,7 @@ private val DarkColorScheme = ColorSystemOptimizations.getColorScheme(true)
 fun LiftrixTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = false, // Disabled by default to use Liftrix brand colors
-    themeVersion: ThemeVersion = ThemeVersion.V2, // Default to V2 theme
+    themeVersion: ThemeVersion = ThemeVersion.V2, // Default to V2 theme with Teal colors
     themeManager: ThemeManager? = null, // Optional theme manager for state management
     featureFlagManager: FeatureFlagManager? = null, // Optional feature flag manager for UI redesign rollout
     userId: String? = null, // User ID for feature flag evaluation

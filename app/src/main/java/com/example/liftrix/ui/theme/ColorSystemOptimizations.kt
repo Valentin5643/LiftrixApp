@@ -192,9 +192,10 @@ object ColorSystemOptimizations {
             // V2 core colors
             colorInstanceCache[0xFF06B6D4] = LiftrixColorsV2.Teal
             colorInstanceCache[0xFF0891B2] = LiftrixColorsV2.TealHover
-            colorInstanceCache[0xFF000000] = LiftrixColorsV2.Dark.BackgroundPrimary
+            colorInstanceCache[0xFF0B0C0B] = LiftrixColorsV2.Dark.BackgroundPrimary
             colorInstanceCache[0xFFFFFFFF] = LiftrixColorsV2.Light.BackgroundPrimary
-            colorInstanceCache[0xFF1A1A1A] = LiftrixColorsV2.Dark.BackgroundSecondary
+            colorInstanceCache[0xFF0F0F0F] = LiftrixColorsV2.Dark.BackgroundSecondary
+            colorInstanceCache[0xFF17191A] = LiftrixColorsV2.Dark.BackgroundProgress
             colorInstanceCache[0xFFF8F9FA] = LiftrixColorsV2.Light.BackgroundSecondary
         }
     }

@@ -84,6 +84,9 @@ fun NavGraphBuilder.workoutGraph(
                     } else {
                         navController.navigate(WorkoutDestinations.CREATE_TEMPLATE)
                     }
+                },
+                onNavigateToEditWorkout = { workoutId ->
+                    navController.navigate("edit_workout/$workoutId")
                 }
             )
         }

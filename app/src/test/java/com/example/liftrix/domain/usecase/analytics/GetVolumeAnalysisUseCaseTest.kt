@@ -42,15 +42,7 @@ class GetVolumeAnalysisUseCaseTest {
         val groupBy = VolumeGrouping.TOTAL
         val timeRange = TimeRangeType.MONTH
         
-        val mockVolumeData = VolumeAnalysisData(
-            volumeData = listOf(
-                VolumeAnalysisDataPoint(
-                    volume = 15000.0,
-                    sets = 45,
-                    label = "Total",
-                    timestamp = kotlinx.datetime.Clock.System.now()
-                )
-            ),
+
             totalVolume = 15000.0,
             volumeGrowth = 12.5,
             averageVolume = 15000.0,

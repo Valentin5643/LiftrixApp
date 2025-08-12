@@ -59,6 +59,7 @@ import com.example.liftrix.ui.social.SocialEvent
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
 import com.example.liftrix.ui.components.ConditionalWorkoutFab
 import com.example.liftrix.ui.components.WorkoutCreationModal
+import com.example.liftrix.ui.navigation.navigateToEditWorkout
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import androidx.lifecycle.ViewModel
@@ -160,6 +161,9 @@ fun UnifiedNavigationContainer(
                         onNavigateToWorkoutCreation = { folderId ->
                             // Direct navigation to template creation (not modal)
                             navController.navigate(LiftrixRoute.TemplateCreation(folderId))
+                        },
+                        onNavigateToEditWorkout = { workoutId ->
+                            navController.navigateToEditWorkout(workoutId)
                         }
                     )
                 }

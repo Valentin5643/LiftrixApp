@@ -69,11 +69,11 @@ object ThemeMigrationUtils {
             
             // Pure Black → Night
             LiftrixColorsV2.Dark.BackgroundPrimary -> LiftrixColors.Night
-            Color(0xFF000000) -> LiftrixColors.Night
+            Color(0xFF0B0C0B) -> LiftrixColors.Night
             
             // Dark Secondary Background → Jet
             LiftrixColorsV2.Dark.BackgroundSecondary -> LiftrixColors.Jet
-            Color(0xFF1A1A1A) -> LiftrixColors.Jet
+            Color(0xFF0F0F0F) -> LiftrixColors.Jet
             
             // Pure White → Snow
             LiftrixColorsV2.Light.BackgroundPrimary -> LiftrixColors.Snow

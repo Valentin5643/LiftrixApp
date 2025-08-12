@@ -120,7 +120,11 @@ fun UnifiedWorkoutCard(
         modifier = cardModifier,
         shape = shape,
         elevation = elevation,
-        colors = colors
+        colors = colors,
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+        )
     ) {
         Column(
             modifier = Modifier.padding(
