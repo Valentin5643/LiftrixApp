@@ -2,169 +2,313 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-# Liftrix Android App - Claude Development Context
+## Build & Development Commands
 
-## 🧠 Project Mental Model
+### Essential Build Commands
+```bash
+# Build and compile
+./gradlew assembleDebug              # Build debug APK
+./gradlew compileDebugKotlin        # Compile Kotlin code only
+./gradlew build                     # Full build with tests
 
-Liftrix is a fitness tracking Android app with **Clean Architecture** and **offline-first design**:
+### Common Development Tasks
+- **Gradle sync issues**: Run `./gradlew --stop` then rebuild
+- **Compilation errors**: Check `./gradlew compileDebugKotlin` for detailed errors
+- **Run on device**: `./gradlew installDebug` after building
 
-### Core System Layers
-- **Domain Layer**: Business logic with 60+ use cases, LiftrixResult<T> error handling
-- **Data Layer**: Room database (v37) with Firebase sync, user-scoped operations
-- **UI Layer**: 100% Jetpack Compose with type-safe navigation and Material 3
-- **DI Layer**: 19 specialized Hilt modules for clean dependency management
-- **Profile Layer**: Complete profile management with achievements, images, and social features
-- **Social Layer**: User discovery with QR codes, privacy-aware profiles, connection management
+## Project Architecture
 
-### Data Flow Pattern
+### High-Level System Design
 ```
-UI Event → ViewModel → Use Case → Repository → Room Database
-                                       ↓
-                              Firebase Sync (Background)
-```
-
-### Key Architecture Principles
-- **Offline-First**: Room database is single source of truth
-- **User Scoping**: ALL database operations filter by userId
-- **Type Safety**: Sealed classes for navigation, state, and errors
-- **Error Handling**: Comprehensive LiftrixResult<T> with recovery strategies
-
-## 🧩 File Roles & Structure
-
-### Core File Types
-- **Entities**: `*Entity.kt` - Room database models with user scoping
-- **DAOs**: `*Dao.kt` - Database access objects with user filtering
-- **Repositories**: `*Repository.kt` (interfaces in domain, impls in data)
-- **Use Cases**: `*UseCase.kt` - Business logic operations
-- **ViewModels**: `*ViewModel.kt` - UI state management with BaseViewModel<S,E>
-- **Screens**: `*Screen.kt` - Compose UI screens
-- **Routes**: `LiftrixRoute.kt` - Type-safe navigation with @Serializable
-
-### Key Entry Points
-- **MainActivity**: Single activity with Compose navigation
-- **LiftrixApplication**: Hilt application class
-- **UnifiedWorkoutSessionManager**: Central session state management
-- **LiftrixDatabase**: Room database with migration chain
-- **Firebase Configuration**: Authentication, Firestore, Analytics
-
-### Directory Structure
-```
-app/src/main/java/com/example/liftrix/
-├── core/           # Error handling, extensions, utilities
-├── data/           # Room entities, DAOs, repositories
-├── di/             # 19 Hilt modules
-├── domain/         # Use cases, models, repository interfaces
-├── service/        # Business services and background workers
-└── ui/             # Compose screens, navigation, theme
+UI Layer (Jetpack Compose)
+    ↓ StateFlow<UiState<T>>
+ViewModel Layer (BaseViewModel<S,E>)
+    ↓ LiftrixResult<T>
+Use Case Layer (80+ use cases)
+    ↓ LiftrixResult<T>
+Repository Layer (14 interfaces)
+    ↓ Flow<Entity>
+DAO Layer (23 DAOs with user scoping)
+    ↓ SQL
+Room Database (22 entities, v43)
+    ↓ Background sync
+Firebase (8 services)
 ```
 
-## ⚙️ Debug/Extend Hot Zones
+### Critical Architectural Rules
 
-### Most Common Touch Points
-1. **ViewModels** (`ui/*/ViewModel.kt`) - State management and user interactions
-2. **Use Cases** (`domain/usecase/*/`) - Business logic and validation
-3. **Repositories** (`data/repository/*/`) - Data access patterns
-4. **Navigation** (`ui/navigation/`) - Screen transitions and routing
-5. **Database Entities** (`data/local/entity/`) - Data model changes
+#### 1. User Scoping (MANDATORY)
+**ALL database operations MUST filter by userId to prevent data leakage:**
+```kotlin
+// ✅ CORRECT - Always include userId
+@Query("SELECT * FROM workouts WHERE user_id = :userId")
+suspend fun getWorkoutsForUser(userId: String): List<WorkoutEntity>
 
-### Fragile/Complex Modules
-- **UnifiedWorkoutSessionManager** - Session state management (recently refactored)
-- **Database Migrations** - 37 migration files with social/profile schema updates (v11→v37)
-- **Firebase Sync Workers** - Background synchronization with conflict resolution
-- **Analytics Engine** - Performance-critical calculations with caching
-- **Progress Dashboard System** - 15 strength-focused widgets with 2-column mobile grid and interactive detail views
-- **Widget Management System** - Complex preference handling and real-time updates
-- **Profile Management System** - Complete profile workflow with achievements, images, and privacy
-- **Social Discovery System** - User search with privacy controls, QR code generation, connection management
-- **Achievement Calculation Engine** - Real-time achievement detection with streak calculations
-- **Profile Image Pipeline** - Upload, crop, cache, and sync with error recovery
-- **Chart Modernization System** - Interactive charts with bezier curves, gradients, and tap interactions
+// ❌ WRONG - Missing user scoping causes data leaks
+@Query("SELECT * FROM workouts")
+suspend fun getAllWorkouts(): List<WorkoutEntity>
+```
 
-### Common Debug Scenarios
-- **User Data Leakage**: Check all queries include `WHERE user_id = :userId`
-- **State Management Issues**: Verify StateFlow sharing strategies
-- **Navigation Problems**: Ensure @Serializable data classes
-- **Sync Conflicts**: Check timestamp-based conflict resolution
-- **Performance**: Monitor 60fps target with recomposition optimization
+#### 2. Error Handling Pattern
+**Use LiftrixResult<T> for all domain operations:**
+```kotlin
+suspend fun invoke(request: Request): LiftrixResult<Response> = liftrixCatching(
+    errorMapper = { throwable -> 
+        LiftrixError.BusinessLogicError(
+            errorMessage = "Operation failed",
+            operation = "OPERATION_NAME",
+            analyticsContext = mapOf("user_id" to userId)
+        )
+    }
+) {
+    // Business logic here
+}
+```
 
-### Debug Tools
-- **LiftrixResult<T>**: Error handling with context and recovery info
-- **ErrorHandler**: Centralized error mapping and logging
-- **Timber**: Structured logging (cleanup debug logs before production)
-- **LeakCanary**: Memory leak detection
+#### 3. Navigation (Type-Safe)
+**Use @Serializable sealed classes for routes:**
+```kotlin
+@Serializable
+sealed class LiftrixRoute {
+    @Serializable data object Home : LiftrixRoute()
+    @Serializable data class WorkoutDetail(val workoutId: String) : LiftrixRoute()
+}
+```
 
-## 🧱 Architectural Rules
+## Code Organization
 
-### Android Architecture Rules
-- **Classes < 200 instructions, < 10 public methods/properties**
-- **No static context leaks** - Use Hilt for dependency injection
-- **Single Activity Architecture** with Compose navigation
-- **Proper lifecycle management** with ViewModels and StateFlow
+### Module Structure
+- **core/**: Cross-cutting concerns (network, design system, common)
+- **data/**: Repository implementations, DAOs, entities
+- **domain/**: Use cases, repository interfaces, domain models
+- **ui/**: Compose screens, ViewModels, navigation
+- **di/**: 22 Hilt modules for dependency injection
 
-### Database Rules
-- **User scoping mandatory** - All entities must have userId field
-- **Repository pattern** - Abstract all queries through repository interfaces
-- **Sync metadata required** - Include is_synced and sync_version fields
+### Key Components & Their Roles
 
-### UI/UX Rules
-- **Components < 200 lines** - Small, testable, layout-independent
-- **Accessibility mandatory** - Content descriptions and WCAG 2.1 AA compliance
-- **60fps target** - Monitor performance with custom metrics
-- **Material 3 compliance** - Use LiftrixTheme and semantic colors
+#### Domain Layer
+- **Use Cases**: Single responsibility business operations (80+ use cases)
+- **Models**: Domain entities with business logic
+- **Repository Interfaces**: Contracts for data operations
 
-### Clean Architecture Rules
-- **Layer separation** - Domain has zero Android/framework dependencies
-- **Dependency inversion** - Interfaces in domain, implementations in data
-- **Single responsibility** - Each use case handles one business operation
-- **Error handling** - All operations return LiftrixResult<T>
+#### Data Layer  
+- **Repositories**: Implement domain interfaces with error handling
+- **DAOs**: Room database access with mandatory user scoping
+- **Entities**: Database models with sync metadata
 
-## 🛠️ Feature Extension Guidelines
+#### UI Layer
+- **Screens**: Jetpack Compose UI with Material 3
+- **ViewModels**: MVI pattern with BaseViewModel<S,E>
+- **Navigation**: Type-safe with Navigation Compose
+
+## Design System
+
+### Color System (V2 - Production)
+**Always use LiftrixColorsV2 for new development:**
+- Primary: Teal (#20C9B7)
+- Secondary: Indigo (#2A3B7D)
+- Surface colors for semantic UI
+
+### Component Hierarchy
+- **UnifiedWorkoutCard**: Base card component (12dp radius)
+- **ModernActionButton**: Three-tier buttons (Primary/Secondary/Tertiary)
+- **LiftrixSpacing**: Semantic spacing (16dp/12dp/8dp)
+
+### Deprecated Items
+**Widget IDs to filter out:**
+`calories_burned`, `daily_calories`, `weekly_calorie_trend`, `duration_chart`, `set_completion_rate`
+
+## Debug & Extend Hot Zones
+
+### Common Debug Points
+1. **Authentication Issues**: `GetCurrentUserIdUseCase` - Check cold-start handling
+2. **Sync Problems**: `WorkoutSyncWorker` - Check conflict resolution
+3. **Performance Issues**: `GetWidgetDataUseCase` - Check sequential fetching
+4. **Navigation Errors**: `UnifiedNavigationContainer` - Check route registration
 
 ### Adding New Features
-1. **Navigation**: Add to `LiftrixRoute` sealed class with @Serializable
-2. **ViewModel**: Extend `BaseViewModel<S, E>` with UiState<T> pattern
-3. **Use Cases**: Create in `domain/usecase/` returning LiftrixResult<T>
-4. **Repository**: Interface in domain, implementation in data with user scoping
-5. **Database**: Add entity with userId, create migration, update DAO
-6. **DI**: Add to appropriate Hilt module or create new feature module
 
-### Safe Extension Points
-- **New Screens**: Follow `ui/*/Screen.kt` pattern with proper ViewModels
-- **New Entities**: Add to `data/local/entity/` with user scoping and migrations
-- **New Services**: Add to `service/` and register in ServiceModule
-- **New Utilities**: Add to `ui/common/` or `core/extensions/`
+#### New Screen Checklist
+1. Add route to `LiftrixRoute` sealed class
+2. Create ViewModel extending `BaseViewModel<S,E>`
+3. Register in `UnifiedNavigationContainer`
+4. Use existing UI components from design system
 
-### Testing Requirements
-- **Unit Tests**: Use cases and repositories with MockK
-- **UI Tests**: Compose tests for critical user flows
-- **Integration Tests**: Database operations and sync workflows
-- **Performance Tests**: 60fps validation and memory usage
+#### New Database Entity Checklist
+1. Create entity with `user_id` field (mandatory)
+2. Add `is_synced` and `sync_version` fields
+3. Create DAO with user-scoped queries
+4. Add migration to increment database version
+5. Register in `LiftrixDatabase` and Hilt modules
 
-### Registration Checklist
-- [ ] Add to appropriate Hilt module
-- [ ] Create migration file for database changes
-- [ ] Update Firestore security rules for new data
-- [ ] Add navigation extensions for new screens
-- [ ] Implement proper error handling with LiftrixResult<T>
-- [ ] Add accessibility support with content descriptions
-- [ ] Create comprehensive unit and UI tests
+## Known Issues & Workarounds
 
-### Performance Considerations
-- **Database**: Use composite indexes for complex queries
-- **UI**: Implement lazy loading and proper recomposition optimization
-- **Network**: Batch Firebase operations and implement exponential backoff
-- **Memory**: Monitor with LeakCanary and target <100ms for standard operations
+### Critical Issues
+1. **Sequential Widget Fetching**: Causes UI blocking in `GetWidgetDataUseCase`
+   - **Workaround**: Implement parallel async/await fetching
+   
+2. **Debug Logging in Production**: Found in authentication flows
+   - **Fix**: Remove Timber.d() calls from production code
+
+3. **Legacy Result<T> Methods**: Maintaining dual error handling
+   - **Migration**: Use LiftrixResult<T> for all new code
+
+### Performance Bottlenecks
+- Some analytics calculations still on main thread (use Dispatchers.IO)
+- Missing composite indexes for social queries
+- UnifiedWorkoutSessionManager potential memory retention
+
+## Testing Strategy
+
+### Unit Tests
+- ViewModels with MockK
+- Use cases with fake repositories
+- Repository tests with in-memory Room
+
+### Integration Tests  
+- Firestore/Room sync flows
+- Authentication flows with Firebase emulator
+- Navigation flows with Compose testing
+
+### UI Tests
+- Compose UI tests only (no XML)
+- Emulator-based testing (no device sensors)
+- CI-compatible for GitHub Actions
+
+## Firebase Integration
+
+### Services Used
+- **Authentication**: Email/Google/Anonymous
+- **Firestore**: Offline-first with conflict resolution
+- **Storage**: Profile images with 30s upload timeout
+- **Analytics/Performance/Crashlytics**: Monitoring
+- **Remote Config**: Feature flags
+- **AI**: Workout insights
+
+### Security Rules
+- User-level document ownership enforced
+- Privacy settings respected for social features
+- Server-side validation for all writes
+
+## Progress Dashboard Architecture
+
+### Dashboard Component Hierarchy
+```
+ProgressDashboardScreen (Main container)
+    ↓ Coordinator: ProgressDashboardCoordinator
+ProgressSummaryCards (Top metrics overview)
+    ↓ GlobalTimeRangeSelector (Synchronized time control)
+ResponsiveDashboardLayout (Adaptive container)
+    ↓ AdaptiveWidgetGrid (Memory-aware grid)
+        ↓ WidgetContainer (Individual widgets)
+            ↓ Analytics/Chart/Metric Widgets
+```
+
+### Widget System (15 Total Widgets)
+**Active Widgets** (12 displayed):
+- `strength_progress` - 1RM tracking with PR markers
+- `volume_chart` - ModernVolumeChart with bezier curves
+- `frequency_chart` - Workout frequency heatmap
+- `muscle_group_chart` - Muscle distribution analysis
+- `exercise_ranking` - Top performing exercises
+- `workout_duration` - Session duration trends
+- `one_rm_progression` - Strength progression over time
+- `recent_achievements` - Latest personal records
+- `recovery_metrics` - Rest and recovery analysis
+- `consistency_score` - Workout consistency tracking
+- `overtraining_risk` - Overtraining detection
+- `progressive_overload` - Progressive overload analysis
+
+**Deprecated Widgets** (3 hidden, kept for compatibility):
+- `workout_frequency`, `total_volume`, `volume_calendar`
+
+### ViewModels & Coordination Pattern
+```kotlin
+// Coordinator manages inter-ViewModel communication
+ProgressDashboardCoordinator
+    → Broadcasts CoordinatorEvents via SharedFlow
+    → Manages global state (auth, time range, preferences)
+    
+// Specialized ViewModels observe coordinator events
+AnalyticsWidgetViewModel
+ProgressChartsViewModel
+ProgressSummaryViewModel
+    → React to CoordinatorEvent.TimePeriodChanged
+    → Handle widget-specific data loading
+```
+
+### Detail Screen Navigation
+```kotlin
+// Type-safe navigation to detail screens
+navController.navigate(
+    OneRmProgressionDetail(
+        exerciseIds = listOf("1", "2"),
+        timeRange = TimeRange.SIX_MONTHS
+    )
+)
+
+// Available detail routes
+VolumeAnalysisDetail
+OneRmDetail
+MuscleGroupDetail  
+WorkoutFrequencyDetail
+ExerciseRankingDetail
+```
+
+### Performance Optimizations
+- **AdaptiveWidgetGrid**: Memory-aware with automatic degradation
+- **ModernVolumeChart**: 60fps bezier rendering with gradient fills
+- **ResponsiveDashboardLayout**: 2-col mobile, 3-col tablet, 4-col desktop
+- **GlobalTimeRangeSelector**: Single source of truth for time filtering
+- **Widget virtualization**: Limits to 10 widgets under memory pressure
+
+### Chart Implementation Standards
+```kotlin
+// All charts follow this pattern
+@Composable
+fun ModernChart(
+    data: List<DataPoint>,
+    timeRange: TimeRangeType,
+    modifier: Modifier = Modifier,
+    onDataPointSelected: ((DataPoint) -> Unit)? = null,
+    showPersonalRecords: Boolean = true,
+    animationDuration: Int = 300
+)
+```
+
+## Quick Reference
+
+### File Patterns
+- ViewModels: `*ViewModel.kt` in `ui/` subdirectories
+- Use Cases: `*UseCase.kt` in `domain/usecase/`
+- Repositories: `*RepositoryImpl.kt` in `data/repository/`
+- DAOs: `*Dao.kt` in `data/local/dao/`
+- Entities: `*Entity.kt` in `data/local/entity/`
+
+### Validation Patterns
+- Use validation DSL for chainable rules
+- Validate at repository level before database operations
+- Return LiftrixError.ValidationError with field details
+
+### Async Patterns
+- Use coroutines with proper scope management
+- Collect Flows with lifecycle awareness
+- Handle cancellation in long-running operations
+
+## Important Reminders
+
+1. **NEVER** create database queries without user_id filtering
+2. **ALWAYS** use LiftrixResult<T> for error handling in domain/data layers
+3. **PREFER** editing existing files over creating new ones
+4. **USE** V2 color system (LiftrixColorsV2) for all UI work
+5. **FOLLOW** SOLID principles and Clean Architecture boundaries
+6. **KEEP** functions under 20 instructions, classes under 200 instructions
+7. **TEST** with emulator-based tests only (no device sensors)
+8. **NEVER** read directly from Firebase in UI layer - always use Room as source of truth
+9. **ALWAYS** extend BaseViewModel<S, E> with UiState<T> pattern for ViewModels
+10. **USE** UnifiedWorkoutSessionManager for all session state management
 
 ## 🚨 Critical Gotchas
-
-### Database User Scoping
-```kotlin
-// ✅ Correct - Always filter by userId
-@Query("SELECT * FROM workouts WHERE user_id = :userId")
-
-// ❌ Incorrect - Will cause data leakage
-@Query("SELECT * FROM workouts")
-```
 
 ### Session State Management
 ```kotlin
@@ -176,12 +320,6 @@ app/src/main/java/com/example/liftrix/
 ```kotlin
 // ✅ Read from Room, sync to Firebase in background
 // ❌ Never read directly from Firebase in UI layer
-```
-
-### ViewModel Pattern
-```kotlin
-// ✅ Always extend BaseViewModel<S, E> with UiState<T>
-// ❌ Don't create custom state management patterns
 ```
 
 ### Social Privacy Controls
@@ -213,194 +351,34 @@ val chartData = remember(rawData, timeRange) {
 val chartData = processChartData(rawData, timeRange)
 ```
 
-## 🔍 Quick Reference
+## Key Classes & Components
 
-### Key Classes to Know
-- `UnifiedWorkoutSessionManager` - Central session state
-- `LiftrixResult<T>` - Error handling wrapper
-- `BaseViewModel<S, E>` - ViewModel base class
-- `UiState<T>` - UI state management
-- `LiftrixRoute` - Type-safe navigation
-- `UnifiedWorkoutCard` - Foundational card component for workout screens
+### Core System Classes
+- `UnifiedWorkoutSessionManager` - Central session state management
+- `LiftrixResult<T>` - Error handling wrapper with recovery strategies
+- `BaseViewModel<S, E>` - ViewModel base class for MVI pattern
+- `UiState<T>` - UI state management (Loading/Success/Error/Empty)
+- `LiftrixRoute` - Type-safe navigation with @Serializable
+
+### UI Components
+- `UnifiedWorkoutCard` - Foundation card component (12dp radius, haptic feedback)
 - `ModernActionButton` - Three-tier button system (Primary/Secondary/Tertiary)
-- `LiftrixSpacing` - Semantic spacing tokens for consistent layouts
-- `ProgressDashboardScreen` - Main Progress tab with 2-column mobile grid layout
-- `ResponsiveDashboardLayout` - Adaptive grid layout (2-col mobile, 3-col tablet, 4-col desktop)
-- `AdaptiveWidgetGrid` - LazyVerticalGrid with dynamic column calculation and card spanning
-- `AnalyticsDetailScreen` - Reusable template for detail views with consistent scaffolding
-- `OneRmProgressionDetailScreen` - Interactive 1RM detail view with filtering and time ranges
-- `MuscleGroupDetailScreen` - Muscle group analysis with distribution charts and balance recommendations
-- `ModernVolumeChart` - Enhanced chart with bezier curves, gradients, and PR markers
-- `GlobalTimeRangeSelector` - Synchronized time selector affecting all charts simultaneously
-- `ProfileViewModel` - Enhanced profile management with achievements and image upload
-- `UserProfile` - Complete profile model with social features and achievements
-- `UserSearchRepository` - Social discovery with privacy filtering and QR code generation
-- `QRCodeService` - ZXing-based QR code generation and profile sharing
-- `CalculateAchievementsUseCase` - Automatic achievement detection and assignment
-- `ProfileImageManager` - Profile image upload, crop, and cache management
+- `LiftrixSpacing` - Semantic spacing tokens (16dp/12dp/8dp)
+- `ResponsiveDashboardLayout` - Adaptive grid (2-col mobile, 3-col tablet, 4-col desktop)
+- `AdaptiveWidgetGrid` - LazyVerticalGrid with dynamic columns and card spanning
+- `ModernVolumeChart` - Bezier curves, gradient fills, PR markers
+- `GlobalTimeRangeSelector` - Synchronized time selector for all charts
 
-### Common Patterns
-- All database operations are user-scoped with `WHERE user_id = :userId`
-- Navigation uses @Serializable sealed classes (LiftrixRoute)
-- Error handling uses LiftrixResult<T> pattern with recovery strategies
-- UI state follows Loading/Success/Error/Empty pattern
-- UI components use UnifiedWorkoutCard for consistent card layouts
-- Button hierarchy follows Primary > Secondary > Tertiary pattern
-- Spacing uses LiftrixSpacing semantic tokens
-- Background sync uses WorkManager with retry policies
-- Social features use privacy-aware data with viewer context
-- QR codes follow deep linking pattern with web fallback
-- Profile management uses enhanced ProfileViewModel with real-time updates
-- Achievement system runs automatically after workout completion
-- Image uploads include progress tracking and error recovery
-- Privacy settings sync immediately with proper user feedback
-- Progress dashboard uses 15 strength-focused widgets with deprecated widgets filtered out
-- Grid layout adapts based on screen width: 2-col (<600dp), 3-col (600-767dp), 4-col (768dp+)
-- Detail views use type-safe @Serializable navigation with parameter passing
-- Charts implement bezier curves, gradient fills, and tap interactions with haptic feedback
-- Time range changes synchronize across all charts with 300ms transitions
+### Social & Profile System
+- `ProfileViewModel` - Enhanced profile management with achievements
+- `UserSearchRepository` - Social discovery with privacy filtering
+- `QRCodeService` - ZXing-based QR code generation
+- `CalculateAchievementsUseCase` - Automatic achievement detection
+- `ProfileImageManager` - Image upload, crop, and cache management
 
-### Performance Targets
-- 60fps UI rendering with optimized animations
-- <100ms database queries
-- <5s sync operations
-- 150ms component interactions with haptic feedback
-- WCAG 2.1 AA accessibility compliance
-
-## 📚 Documentation
-
-For comprehensive guidance on Liftrix systems:
-
-### UI/UX Design System
-- **[UI Redesign Guide](docs/ui-redesign-guide.md)** - Complete visual redesign overview and implementation details
-- **[Component Library](docs/component-library.md)** - Detailed documentation of unified UI components with usage examples
-
-### Progress Dashboard System
-- **Grid-Based Layout**: 2-column mobile layout with responsive breakpoints (2/3/4 columns)
-- **15 Strength-Focused Widgets**: Curated widget set with deprecated calorie/duration widgets filtered out
-- **Interactive Detail Views**: 4 detail screens (1RM Progression, Volume Analysis, Muscle Groups, Exercise Rankings)
-- **Type-Safe Navigation**: @Serializable routes with parameter passing (OneRmProgressionDetail, VolumeAnalysisDetail, etc.)
-- **Modern Chart System**: Bezier curves, gradient fills, interactive markers, and synchronized time selectors
-- **Performance Optimized**: <500ms detail screen loading, 60fps chart interactions, <100ms layout calculations
-
-### Social Discovery System  
-- **Privacy-First Architecture**: All profile data respects user privacy settings with viewer context
-- **QR Code Integration**: ZXing-powered profile sharing with deep linking and web fallback
-- **Search Performance**: <500ms cached results, intelligent user indexing with debounced queries
-- **Connection Management**: Complete social graph with pending/accepted states and mutual discovery
-- **Achievement System**: Automatic achievement detection with milestone tracking and badge display
-- **Profile Completion**: Smart completion percentage calculation with user guidance
-
-## 🎨 Liftrix 5-Color Design System
-
-Liftrix uses a minimal 5-color palette achieving 98%+ app coverage:
-
-### Core Colors
-- **Night** (`#131515`) - Dark primary for text and true black backgrounds
-- **Jet** (`#2B2C28`) - Dark secondary for surfaces and secondary text
-- **Persian Green** (`#339989`) - Brand primary for actions and branding
-- **Tiffany Blue** (`#7DE2D1`) - Brand secondary for highlights and selections
-- **Snow** (`#FFFAFB`) - Light primary for backgrounds and surfaces
-- **Exception**: Error states use red colors (only deviation from 5-color rule)
-
-### Usage Guidelines
-- Always use Material 3 color roles (`MaterialTheme.colorScheme.*`)
-- Persian Green for primary actions, Tiffany Blue for secondary
-- Snow/Night/Jet provide 90%+ surface coverage
-- All combinations exceed WCAG 2.1 AA accessibility standards
-- Error states are the only exception using red colors
-
-### Component Integration
-- `UnifiedWorkoutCard` uses semantic surface colors automatically
-- `ModernActionButton` follows Persian Green (primary) / Tiffany Blue (secondary) hierarchy
-- Navigation and form elements use appropriate brand color assignments
-- All components maintain accessibility compliance through semantic color roles
-
-## 🎨 UI Component Guidelines
-
-### Using the Modern Component System
-
-#### UnifiedWorkoutCard - Foundation Component
-```kotlin
-UnifiedWorkoutCard(
-    title = "Push Day Workout",
-    subtitle = "6 exercises",
-    onClick = { /* Navigate to workout */ }
-) {
-    Text("Workout content and details")
-    
-    // Actions slot - uses Persian Green/Tiffany Blue hierarchy
-    Row {
-        SecondaryActionButton("Edit", onClick = { })      // Tiffany Blue
-        PrimaryActionButton("Start", onClick = { })       // Persian Green
-    }
-}
-```
-
-#### ModernActionButton - Three-Tier System
-```kotlin
-// Primary actions (highest priority) - Persian Green
-PrimaryActionButton("Start Workout", onClick = { })
-
-// Secondary actions (medium priority) - Tiffany Blue
-SecondaryActionButton("Edit Workout", onClick = { })
-
-// Tertiary actions (lowest priority) - Persian Green with alpha
-TertiaryActionButton("Learn More", onClick = { })
-```
-
-#### LiftrixSpacing - Semantic Layout
-```kotlin
-Column(
-    verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.cardSpacing),
-    modifier = Modifier.padding(LiftrixSpacing.screenPadding)
-) {
-    UnifiedWorkoutCard(title = "Workout 1") { /* Content */ }
-    UnifiedWorkoutCard(title = "Workout 2") { /* Content */ }
-}
-```
-
-### Component Integration Rules
-- **Always use UnifiedWorkoutCard** for workout-related content layouts
-- **Follow button hierarchy** - Primary > Secondary > Tertiary with Persian Green/Tiffany Blue
-- **Use semantic spacing tokens** from LiftrixSpacing object
-- **Include accessibility** - components have built-in WCAG 2.1 AA compliance
-- **Leverage animations** - components include 150ms press feedback and haptic response
-- **Use Material 3 color roles** - Never reference colors directly, always use `MaterialTheme.colorScheme.*`
-
-### Progress Dashboard Integration Rules
-- **Use AdaptiveWidgetGrid** for responsive grid layouts with automatic column calculation
-- **Extend AnalyticsDetailScreen** for consistent detail view scaffolding and navigation
-- **Filter deprecated widgets** using `DEPRECATED_WIDGET_IDS` list (removes 13 calorie/duration widgets)
-- **Implement bezier curves** in charts using `cubicTo()` with proper control point calculations
-- **Add gradient fills** under chart lines using `Brush.verticalGradient()` with Persian Green/Tiffany Blue
-- **Support full-width cards** using `GridItemSpan(columns)` for complex visualizations
-- **Use TimeRange synchronization** across all charts with `GlobalTimeRangeSelector`
-
-## 👤 Profile & Social System
-
-### Key Components
-- **ProfileScreen** - Main profile display with achievements and privacy controls
-- **ProfileEditScreen** - Form-based editing with validation
-- **ProfileViewModel** - State management with image upload and achievement integration
-- **UserSearchRepository** - Privacy-aware user search with caching
-- **QRCodeService** - Profile sharing via QR codes
-- **CalculateAchievementsUseCase** - Automatic achievement detection
-
-### Database Tables
-- **user_profiles** - Enhanced with bio, privacy, streaks (Migration 35→37)
-- **user_achievements** - Achievement tracking with display flags
-- **user_search_cache** - Search result caching for performance
-- **qr_code_mappings** - QR code to profile mapping
-
-### Critical Integration Points
-- Navigation routes need registration in UnifiedNavigationContainer
-- New entities need registration in LiftrixDatabase
-- DAOs need providers in DatabaseModule
-- Achievement system may need activation in ProfileViewModel
-
-This context provides the foundation for understanding Liftrix's architecture and safely extending its functionality while maintaining code quality and performance standards.[byterover-mcp]
-
-# important 
-always use byterover-retrive-knowledge tool to get the related context before any tasks 
-always use byterover-store-knowledge to store all the critical informations after sucessful tasks
+## Performance Targets
+- **60fps UI rendering** with optimized animations
+- **<100ms database queries** with proper indexing
+- **<5s sync operations** with exponential backoff
+- **150ms component interactions** with haptic feedback
+- **WCAG 2.1 AA accessibility** compliance

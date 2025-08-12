@@ -153,8 +153,11 @@ class WorkoutRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getWorkoutById(id: WorkoutId, userId: String): LiftrixResult<Workout?> {
+        Timber.d("🔥 EDIT-WORKOUT-DEBUG: WorkoutRepository.getWorkoutById starting - workoutId: ${id.value}, userId: $userId")
+        
         // Validate user ID
         if (userId.isBlank()) {
+            Timber.e("🔥 EDIT-WORKOUT-DEBUG: User ID validation failed - userId is blank")
             return LiftrixResult.failure(
                 LiftrixError.ValidationError(
                     field = "userId",
@@ -166,6 +169,7 @@ class WorkoutRepositoryImpl @Inject constructor(
         
         return liftrixCatching(
             errorMapper = { throwable ->
+                Timber.e("🔥 EDIT-WORKOUT-DEBUG: Database error occurred - ${throwable.message}")
                 LiftrixError.DatabaseError(
                     errorMessage = "Failed to retrieve workout by ID",
                     operation = "READ",
@@ -177,8 +181,18 @@ class WorkoutRepositoryImpl @Inject constructor(
                 )
             }
         ) {
+            Timber.d("🔥 EDIT-WORKOUT-DEBUG: Calling workoutDao.getWorkoutByIdForUser - id: ${id.value}, userId: $userId")
             val entity = workoutDao.getWorkoutByIdForUser(id.value, userId)
-            entity?.let { workoutMapper.toDomain(it) }
+            
+            if (entity != null) {
+                Timber.d("🔥 EDIT-WORKOUT-DEBUG: Entity found - id: ${entity.id}, name: ${entity.name}, userId: ${entity.userId}, status: ${entity.status}")
+                val domainWorkout = workoutMapper.toDomain(entity)
+                Timber.d("🔥 EDIT-WORKOUT-DEBUG: Mapped to domain - id: ${domainWorkout.id.value}, name: ${domainWorkout.name}, userId: ${domainWorkout.userId}")
+                domainWorkout
+            } else {
+                Timber.w("🔥 EDIT-WORKOUT-DEBUG: Entity not found in database - workoutId: ${id.value}, userId: $userId")
+                null
+            }
         }
     }
 

@@ -39,6 +39,7 @@ import com.example.liftrix.ui.validation.InputValidation
 import com.example.liftrix.domain.model.validation.ValidationResult
 import com.example.liftrix.ui.common.state.EditWorkoutData
 import com.example.liftrix.ui.common.state.EditWorkoutUiState
+import timber.log.Timber
 
 /**
  * Edit Workout Screen - For modifying saved workout routines
@@ -71,6 +72,7 @@ fun EditWorkoutScreen(
     
     // Load workout data when screen is created
     LaunchedEffect(workoutId) {
+        Timber.d("🔥 EDIT-WORKOUT-DEBUG: EditWorkoutScreen - LaunchedEffect triggered with workoutId: ${workoutId.value}")
         viewModel.loadWorkout(workoutId)
     }
     

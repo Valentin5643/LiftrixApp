@@ -70,7 +70,9 @@ class EditWorkoutViewModel @Inject constructor(
     init {
         // Get current user ID
         viewModelScope.launch {
+            Timber.d("🔥 EDIT-WORKOUT-DEBUG: EditWorkoutViewModel init - Getting current user ID")
             currentUserId = getCurrentUserIdUseCase()
+            Timber.d("🔥 EDIT-WORKOUT-DEBUG: EditWorkoutViewModel init - Retrieved userId: $currentUserId")
         }
     }
 
@@ -109,8 +111,13 @@ class EditWorkoutViewModel @Inject constructor(
      * Loads workout data for editing a routine
      */
     fun loadWorkout(workoutId: WorkoutId) {
+        Timber.d("🔥 EDIT-WORKOUT-DEBUG: Starting loadWorkout - workoutId: ${workoutId.value}")
+        
         val userId = currentUserId
+        Timber.d("🔥 EDIT-WORKOUT-DEBUG: Current userId: $userId")
+        
         if (userId == null) {
+            Timber.e("🔥 EDIT-WORKOUT-DEBUG: User authentication failed - userId is null")
             handleError(
                 LiftrixError.AuthenticationError(
                     errorMessage = "User not authenticated",
@@ -120,12 +127,43 @@ class EditWorkoutViewModel @Inject constructor(
             return
         }
 
+        if (userId.isBlank()) {
+            Timber.e("🔥 EDIT-WORKOUT-DEBUG: User authentication failed - userId is blank")
+            handleError(
+                LiftrixError.AuthenticationError(
+                    errorMessage = "User not authenticated",
+                    errorCode = "BLANK_USER_ID"
+                )
+            )
+            return
+        }
+
+        val request = GetWorkoutByIdRequest(workoutId, userId)
+        Timber.d("🔥 EDIT-WORKOUT-DEBUG: Creating request - workoutId: ${request.workoutId.value}, userId: ${request.userId}")
+
         executeUseCase(
             useCase = { 
-                getWorkoutByIdUseCase(GetWorkoutByIdRequest(workoutId, userId))
+                Timber.d("🔥 EDIT-WORKOUT-DEBUG: Calling getWorkoutByIdUseCase with request")
+                getWorkoutByIdUseCase(request)
             },
             onSuccess = { workout ->
+                Timber.d("🔥 EDIT-WORKOUT-DEBUG: Use case completed successfully - workout is ${if (workout != null) "NOT NULL" else "NULL"}")
+                
                 if (workout != null) {
+                    Timber.d("🔥 EDIT-WORKOUT-DEBUG: Workout found - id: ${workout.id.value}, name: ${workout.name}, userId: ${workout.userId}, status: ${workout.status}")
+                    
+                    // Additional validation check
+                    if (workout.userId != userId) {
+                        Timber.e("🔥 EDIT-WORKOUT-DEBUG: User ID mismatch - workout.userId: ${workout.userId}, current userId: $userId")
+                        handleError(
+                            LiftrixError.AuthenticationError(
+                                errorMessage = "Access denied: workout belongs to different user",
+                                errorCode = "WORKOUT_USER_MISMATCH"
+                            )
+                        )
+                        return@executeUseCase
+                    }
+                    
                     originalWorkout = workout
                     setState(
                         EditWorkoutUiState.Success(
@@ -139,8 +177,9 @@ class EditWorkoutViewModel @Inject constructor(
                             )
                         )
                     )
-                    Timber.d("Successfully loaded workout for editing: ${workout.name}")
+                    Timber.i("🔥 EDIT-WORKOUT-DEBUG: Successfully loaded workout for editing: ${workout.name}")
                 } else {
+                    Timber.e("🔥 EDIT-WORKOUT-DEBUG: Workout not found - workoutId: ${workoutId.value}, userId: $userId")
                     handleError(
                         LiftrixError.NotFoundError(
                             errorMessage = "Workout not found",
@@ -151,7 +190,7 @@ class EditWorkoutViewModel @Inject constructor(
                 }
             },
             onError = { error ->
-                Timber.e("Failed to load workout: ${error.message}")
+                Timber.e("🔥 EDIT-WORKOUT-DEBUG: Use case failed - error: ${error.message}, type: ${error::class.simpleName}")
             }
         )
     }

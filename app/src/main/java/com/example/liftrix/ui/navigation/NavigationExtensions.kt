@@ -210,6 +210,8 @@ fun NavController.navigateToCreateWorkout(
  * @param workoutId Unique identifier for the workout routine to edit
  */
 fun NavController.navigateToEditWorkout(workoutId: String) {
+    timber.log.Timber.d("🔥 EDIT-WORKOUT-DEBUG: Navigation - navigateToEditWorkout called with workoutId: '$workoutId'")
+    timber.log.Timber.d("🔥 EDIT-WORKOUT-DEBUG: Navigation - workoutId length: ${workoutId.length}, isBlank: ${workoutId.isBlank()}")
     navigate(LiftrixRoute.EditWorkout(workoutId))
 }
 

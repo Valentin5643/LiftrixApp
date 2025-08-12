@@ -8,6 +8,7 @@ import com.example.liftrix.domain.model.common.liftrixFailure
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.usecase.common.ErrorHandler
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -37,21 +38,29 @@ class GetWorkoutByIdUseCase @Inject constructor(
      * @return LiftrixResult containing the workout if found, null if not found, or error
      */
     suspend operator fun invoke(request: GetWorkoutByIdRequest): LiftrixResult<Workout?> {
+        Timber.d("🔥 EDIT-WORKOUT-DEBUG: GetWorkoutByIdUseCase starting - workoutId: ${request.workoutId.value}, userId: ${request.userId}")
+        
         val validationResult = validateRequest(request)
         if (validationResult.isFailure) {
+            Timber.e("🔥 EDIT-WORKOUT-DEBUG: Request validation failed - ${validationResult.exceptionOrNull()?.message}")
             return Result.failure(validationResult.exceptionOrNull()!!)
         }
         
         val validatedRequest = validationResult.getOrThrow()
+        Timber.d("🔥 EDIT-WORKOUT-DEBUG: Request validation passed, calling repository - workoutId: ${validatedRequest.workoutId.value}, userId: ${validatedRequest.userId}")
+        
         val workoutResult = workoutRepository.getWorkoutById(validatedRequest.workoutId, validatedRequest.userId)
         if (workoutResult.isFailure) {
+            Timber.e("🔥 EDIT-WORKOUT-DEBUG: Repository call failed - ${workoutResult.exceptionOrNull()?.message}")
             return workoutResult
         }
         
         val workout = workoutResult.getOrThrow()
+        Timber.d("🔥 EDIT-WORKOUT-DEBUG: Repository returned workout - ${if (workout != null) "FOUND" else "NOT FOUND"}")
         
         // Additional authorization check if workout is found
         if (workout != null && workout.userId != request.userId) {
+            Timber.e("🔥 EDIT-WORKOUT-DEBUG: Authorization failed - workout.userId: ${workout.userId}, request.userId: ${request.userId}")
             return liftrixFailure(
                 LiftrixError.AuthenticationError(
                     errorMessage = "Access denied: workout belongs to different user",
@@ -64,6 +73,11 @@ class GetWorkoutByIdUseCase @Inject constructor(
                 )
             )
         } else {
+            if (workout != null) {
+                Timber.d("🔥 EDIT-WORKOUT-DEBUG: Authorization passed, returning workout - id: ${workout.id.value}, name: ${workout.name}")
+            } else {
+                Timber.d("🔥 EDIT-WORKOUT-DEBUG: Workout is null, returning null result")
+            }
             return Result.success(workout)
         }
     }
