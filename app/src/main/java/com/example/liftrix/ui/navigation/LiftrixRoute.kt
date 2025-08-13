@@ -72,6 +72,18 @@ sealed class LiftrixRoute {
     data class QRCodeDisplay(val userId: String? = null) : LiftrixRoute()
     
     /**
+     * Social onboarding screen for first-time social feature setup
+     */
+    @Serializable
+    data object SocialOnboarding : LiftrixRoute()
+    
+    /**
+     * Privacy settings screen for granular social privacy controls
+     */
+    @Serializable
+    data object PrivacySettings : LiftrixRoute()
+    
+    /**
      * Workout details screen with specific workout ID
      * 
      * @param workoutId Unique identifier for the workout to display

@@ -29,7 +29,7 @@ import coil.request.ImageRequest
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.FitnessGoal
 import com.example.liftrix.domain.model.social.ConnectionStatus
-import com.example.liftrix.domain.model.social.FitnessLevel
+import com.example.liftrix.domain.model.FitnessLevel
 import com.example.liftrix.domain.model.social.PublicUserProfile
 import com.example.liftrix.domain.model.social.PublicWorkoutStats
 import com.example.liftrix.ui.components.buttons.LiftrixButton
@@ -193,28 +193,30 @@ private fun ProfileContent(
             )
         }
         
-        if (!profile.availableEquipment.isNullOrEmpty()) {
+        // TODO: Add equipment to profile model when available
+        /*if (!profile.availableEquipment.isNullOrEmpty()) {
             item {
                 EquipmentSection(
                     equipment = profile.availableEquipment,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-        }
+        }*/
         
-        if (!profile.publicFitnessGoals.isNullOrEmpty()) {
+        // TODO: Add fitness goals to profile model when available
+        /*if (!profile.fitnessGoals.isNullOrEmpty()) {
             item {
                 GoalsSection(
-                    goals = profile.publicFitnessGoals,
+                    goals = profile.fitnessGoals,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-        }
+        }*/
         
-        if (!profile.publicAchievements.isNullOrEmpty()) {
+        if (profile.achievements.isNotEmpty()) {
             item {
                 AchievementsSection(
-                    achievements = profile.publicAchievements.map { it.title }, // Map to string
+                    achievements = profile.achievements.map { it.title },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -252,7 +254,7 @@ private fun ProfileHeader(
             // Profile image
             ProfileAvatar(
                 imageUrl = profile.profileImageUrl,
-                displayName = profile.displayName,
+                displayName = profile.displayName ?: profile.username,
                 modifier = Modifier.size(100.dp)
             )
             
@@ -262,7 +264,7 @@ private fun ProfileHeader(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = profile.displayName,
+                    text = profile.displayName ?: profile.username,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
@@ -482,6 +484,72 @@ private fun ConnectionActions(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Workouts")
                 }
+            }
+            
+            ConnectionStatus.MUTUAL_FOLLOW -> {
+                LiftrixButton(
+                    onClick = onMessageClick,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Message,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Message")
+                }
+                
+                OutlinedButton(
+                    onClick = { /* Handle view workouts */ },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FitnessCenter,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Workouts")
+                }
+            }
+            
+            ConnectionStatus.GYM_BUDDY -> {
+                LiftrixButton(
+                    onClick = onMessageClick,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Message,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Message")
+                }
+                
+                OutlinedButton(
+                    onClick = { /* Handle gym buddy features */ },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Group,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Gym Buddy")
+                }
+            }
+            
+            ConnectionStatus.BLOCKED -> {
+                Text(
+                    text = "This user has been blocked",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
             }
         }
     }

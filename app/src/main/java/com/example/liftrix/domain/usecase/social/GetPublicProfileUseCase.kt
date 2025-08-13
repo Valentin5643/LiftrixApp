@@ -128,7 +128,8 @@ class GetPublicProfileUseCase @Inject constructor(
             liftrixFailure(
                 LiftrixError.ValidationError(
                     field = "GetPublicProfileRequest",
-                    violations = violations
+                    violations = violations,
+                    errorMessage = "Get public profile request validation failed"
                 )
             )
         }
@@ -165,6 +166,9 @@ class GetPublicProfileUseCase @Inject constructor(
             com.example.liftrix.domain.model.social.ConnectionStatus.PENDING_RECEIVED -> true
             com.example.liftrix.domain.model.social.ConnectionStatus.PENDING_SENT -> false
             com.example.liftrix.domain.model.social.ConnectionStatus.NONE -> true
+            com.example.liftrix.domain.model.social.ConnectionStatus.MUTUAL_FOLLOW -> true
+            com.example.liftrix.domain.model.social.ConnectionStatus.GYM_BUDDY -> true
+            com.example.liftrix.domain.model.social.ConnectionStatus.BLOCKED -> false
         }
     }
     

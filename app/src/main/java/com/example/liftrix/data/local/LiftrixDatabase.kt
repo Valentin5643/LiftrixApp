@@ -33,6 +33,12 @@ import com.example.liftrix.data.local.dao.WidgetPreferencesDao
 import com.example.liftrix.data.local.dao.AchievementDao
 import com.example.liftrix.data.local.dao.UserSearchCacheDao
 import com.example.liftrix.data.local.dao.QRCodeMappingDao
+import com.example.liftrix.data.local.dao.SocialProfileDao
+import com.example.liftrix.data.local.dao.FollowRelationshipDao
+import com.example.liftrix.data.local.dao.GymBuddyDao
+import com.example.liftrix.data.local.dao.SocialPrivacySettingsDao
+import com.example.liftrix.data.local.dao.BlockedUserDao
+import com.example.liftrix.data.local.dao.ProfileViewDao
 
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.data.local.entity.FolderEntity
@@ -59,6 +65,12 @@ import com.example.liftrix.data.local.entity.DashboardConfigurationEntity
 import com.example.liftrix.data.local.entity.UserAchievementEntity
 import com.example.liftrix.data.local.entity.UserSearchCacheEntity
 import com.example.liftrix.data.local.entity.QRCodeMappingEntity
+import com.example.liftrix.data.local.entity.SocialProfileEntity
+import com.example.liftrix.data.local.entity.FollowRelationshipEntity
+import com.example.liftrix.data.local.entity.GymBuddyEntity
+import com.example.liftrix.data.local.entity.SocialPrivacySettingsEntity
+import com.example.liftrix.data.local.entity.BlockedUserEntity
+import com.example.liftrix.data.local.entity.ProfileViewEntity
 
 
 
@@ -89,8 +101,14 @@ import com.example.liftrix.data.local.entity.QRCodeMappingEntity
         UserAchievementEntity::class,
         UserSearchCacheEntity::class,
         QRCodeMappingEntity::class,
+        SocialProfileEntity::class,
+        FollowRelationshipEntity::class,
+        GymBuddyEntity::class,
+        SocialPrivacySettingsEntity::class,
+        BlockedUserEntity::class,
+        ProfileViewEntity::class,
     ],
-    version = 43,
+    version = 44,
     exportSchema = true
 )
 @TypeConverters(
@@ -127,4 +145,10 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun achievementDao(): AchievementDao
     abstract fun userSearchCacheDao(): UserSearchCacheDao
     abstract fun qrCodeMappingDao(): QRCodeMappingDao
+    abstract fun socialProfileDao(): SocialProfileDao
+    abstract fun followRelationshipDao(): FollowRelationshipDao
+    abstract fun gymBuddyDao(): GymBuddyDao
+    abstract fun socialPrivacySettingsDao(): SocialPrivacySettingsDao
+    abstract fun blockedUserDao(): BlockedUserDao
+    abstract fun profileViewDao(): ProfileViewDao
 } 

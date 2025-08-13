@@ -6,7 +6,7 @@ import com.example.liftrix.domain.model.FitnessGoal
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.SearchFilters
 import com.example.liftrix.domain.model.social.UserSearchResult
-import com.example.liftrix.domain.model.social.FitnessLevel
+import com.example.liftrix.domain.model.FitnessLevel
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.social.SearchUsersUseCase
 import com.example.liftrix.domain.usecase.social.SearchUsersRequest

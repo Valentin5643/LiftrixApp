@@ -31,6 +31,11 @@ import com.example.liftrix.data.local.dao.WidgetPreferencesDao
 import com.example.liftrix.data.local.dao.AchievementDao
 import com.example.liftrix.data.local.dao.UserSearchCacheDao
 import com.example.liftrix.data.local.dao.QRCodeMappingDao
+import com.example.liftrix.data.local.dao.SocialProfileDao
+import com.example.liftrix.data.local.dao.FollowRelationshipDao
+import com.example.liftrix.data.local.dao.GymBuddyDao
+import com.example.liftrix.data.local.dao.SocialPrivacySettingsDao
+import com.example.liftrix.data.local.dao.BlockedUserDao
 import com.example.liftrix.data.local.seed.ExerciseLibrarySeedData
 import com.example.liftrix.data.local.seed.MetDataSeedService
 import com.example.liftrix.data.local.migration.MIGRATION_27_28
@@ -49,6 +54,7 @@ import com.example.liftrix.data.local.migration.MIGRATION_39_40
 import com.example.liftrix.data.local.migration.MIGRATION_40_41
 import com.example.liftrix.data.local.migration.MIGRATION_41_42
 import com.example.liftrix.data.local.migration.MIGRATION_42_43
+import com.example.liftrix.data.local.migration.MIGRATION_43_44
 
 import dagger.Module
 import dagger.Provides
@@ -85,7 +91,7 @@ object DatabaseModule {
         )
             .setTransactionExecutor(Dispatchers.IO.asExecutor())
             .setQueryExecutor(Dispatchers.IO.asExecutor())
-            .addMigrations(MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36, MIGRATION_36_37, MIGRATION_37_38, MIGRATION_38_39, MIGRATION_39_40, MIGRATION_40_41, MIGRATION_41_42, MIGRATION_42_43)
+            .addMigrations(MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36, MIGRATION_36_37, MIGRATION_37_38, MIGRATION_38_39, MIGRATION_39_40, MIGRATION_40_41, MIGRATION_41_42, MIGRATION_42_43, MIGRATION_43_44)
             // ✅ PERSISTENCE FIX: Removed destructive migration to preserve user data
             // Only allow destructive migration on downgrade to handle edge cases
             .fallbackToDestructiveMigrationOnDowngrade()
@@ -287,8 +293,32 @@ object DatabaseModule {
         return database.qrCodeMappingDao()
     }
 
+    // ========================================
+    // Social Infrastructure DAOs
+    // ========================================
 
+    @Provides
+    fun provideSocialProfileDao(database: LiftrixDatabase): SocialProfileDao {
+        return database.socialProfileDao()
+    }
 
+    @Provides
+    fun provideFollowRelationshipDao(database: LiftrixDatabase): FollowRelationshipDao {
+        return database.followRelationshipDao()
+    }
 
+    @Provides
+    fun provideGymBuddyDao(database: LiftrixDatabase): GymBuddyDao {
+        return database.gymBuddyDao()
+    }
 
+    @Provides
+    fun provideSocialPrivacySettingsDao(database: LiftrixDatabase): SocialPrivacySettingsDao {
+        return database.socialPrivacySettingsDao()
+    }
+
+    @Provides
+    fun provideBlockedUserDao(database: LiftrixDatabase): BlockedUserDao {
+        return database.blockedUserDao()
+    }
 }

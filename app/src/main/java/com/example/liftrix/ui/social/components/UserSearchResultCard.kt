@@ -25,7 +25,7 @@ import coil.request.ImageRequest
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.FitnessGoal
 import com.example.liftrix.domain.model.social.ConnectionStatus
-import com.example.liftrix.domain.model.social.FitnessLevel
+import com.example.liftrix.domain.model.FitnessLevel
 import com.example.liftrix.domain.model.social.UserSearchResult
 import com.example.liftrix.ui.theme.LiftrixTheme
 import java.time.LocalDateTime
@@ -430,6 +430,52 @@ private fun ConnectionAction(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Connected")
+                }
+            }
+            ConnectionStatus.MUTUAL_FOLLOW -> {
+                OutlinedButton(
+                    onClick = { /* Handle view profile */ },
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Favorite,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Following")
+                }
+            }
+            ConnectionStatus.GYM_BUDDY -> {
+                OutlinedButton(
+                    onClick = { /* Handle view profile */ },
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Gym Buddy")
+                }
+            }
+            ConnectionStatus.BLOCKED -> {
+                OutlinedButton(
+                    onClick = { },
+                    enabled = false,
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Block,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Blocked")
                 }
             }
         }

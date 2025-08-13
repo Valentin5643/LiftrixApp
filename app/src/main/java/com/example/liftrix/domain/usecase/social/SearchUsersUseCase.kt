@@ -134,7 +134,8 @@ class SearchUsersUseCase @Inject constructor(
             liftrixFailure(
                 LiftrixError.ValidationError(
                     field = "SearchUsersRequest",
-                    violations = violations
+                    violations = violations,
+                    errorMessage = "Search users request validation failed"
                 )
             )
         }

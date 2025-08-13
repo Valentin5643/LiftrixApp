@@ -169,6 +169,7 @@ dependencies {
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.perf)
     implementation(libs.firebase.config)
+    implementation(libs.firebase.messaging)
     
     // Google Play Billing
     implementation("com.android.billingclient:billing-ktx:6.0.1")

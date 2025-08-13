@@ -66,11 +66,11 @@ import java.time.format.DateTimeFormatter
  */
 @Composable
 fun AchievementDisplay(
-    achievements: List<UserAchievement>,
+    achievements: List<com.example.liftrix.domain.model.UserAchievement>,
     modifier: Modifier = Modifier,
     showTypeFilter: Boolean = true,
     maxVisibleCount: Int? = null,
-    onAchievementClick: ((UserAchievement) -> Unit)? = null
+    onAchievementClick: ((com.example.liftrix.domain.model.UserAchievement) -> Unit)? = null
 ) {
     var selectedType by remember { mutableStateOf<AchievementType?>(null) }
     var showAchievementDetail by remember { mutableStateOf<UserAchievement?>(null) }
@@ -232,7 +232,7 @@ private fun AchievementBadge(
                     onClick()
                 }
                 .enhancedAccessibilitySemantics(
-                    description = generateAchievementContentDescription(achievement),
+                    description = "${achievement.title} achievement. ${achievement.description}",
                     role = Role.Button,
                     stateDescription = "Achievement badge. Double tap to view details.",
                     isEnabled = true

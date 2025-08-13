@@ -7,8 +7,9 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.UserSearchResult
 import com.example.liftrix.domain.model.social.SearchFilters
 import com.example.liftrix.domain.model.social.PublicUserProfile
-import com.example.liftrix.domain.model.social.FitnessLevel
+import com.example.liftrix.domain.model.FitnessLevel
 import com.example.liftrix.domain.model.social.ConnectionStatus
+import com.example.liftrix.domain.model.social.FollowStatus
 import com.example.liftrix.domain.model.social.PublicWorkoutStats
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.FitnessGoal
@@ -141,25 +142,34 @@ class UserSearchRepositoryImpl @Inject constructor(
             
             PublicUserProfile(
                 userId = userId,
-                displayName = data["displayName"] as? String ?: "Unknown User",
+                username = data["username"] as? String ?: "user_${userId.take(8)}",
+                displayName = data["displayName"] as? String,
                 profileImageUrl = data["profileImageUrl"] as? String,
+                coverImageUrl = data["coverImageUrl"] as? String,
                 bio = data["bio"] as? String,
-                memberSince = memberSinceStr?.let { parseDateTime(it) } ?: LocalDateTime.now(),
+                age = data["age"] as? Int,
+                location = data["location"] as? String,
                 fitnessLevel = fitnessLevel,
-                isOnline = data["isOnline"] as? Boolean ?: false,
-                lastActiveAt = lastActiveAtStr?.let { parseDateTime(it) },
+                followersCount = (data["followersCount"] as? Number)?.toInt() ?: 0,
+                followingCount = (data["followingCount"] as? Number)?.toInt() ?: 0,
+                mutualConnectionsCount = mutualConnections,
+                totalWorkouts = totalWorkouts,
+                currentStreak = (data["currentStreak"] as? Number)?.toInt() ?: 0,
+                longestStreak = (data["longestStreak"] as? Number)?.toInt() ?: 0,
+                memberSince = memberSinceStr?.let { parseDateTime(it) } ?: LocalDateTime.now(),
+                lastActive = lastActiveAtStr?.let { parseDateTime(it) },
+                isVerified = data["isVerified"] as? Boolean ?: false,
+                isPrivate = data["isPrivate"] as? Boolean ?: false,
+                followStatus = FollowStatus.NONE, // Will be determined by relationship check
                 connectionStatus = connectionStatus,
-                mutualConnections = mutualConnections,
-                publicAchievements = parseAchievements(achievementsData),
+                canViewDetails = true, // Will be determined by privacy settings
                 publicWorkoutStats = PublicWorkoutStats(
                     totalWorkouts = totalWorkouts,
                     totalWorkoutTime = (data["totalWorkoutTime"] as? Number)?.toLong() ?: 0L,
                     averageWorkoutTime = (data["averageWorkoutTime"] as? Number)?.toLong() ?: 0L,
                     currentStreak = (data["currentStreak"] as? Number)?.toInt() ?: 0,
                     longestStreak = (data["longestStreak"] as? Number)?.toInt() ?: 0
-                ),
-                publicFitnessGoals = parseFitnessGoals(fitnessGoalsData),
-                availableEquipment = parseEquipment(equipmentData)
+                )
             )
         }
     }

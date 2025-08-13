@@ -23,7 +23,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.FitnessGoal
 import com.example.liftrix.domain.model.social.SearchFilters
-import com.example.liftrix.domain.model.social.FitnessLevel
+import com.example.liftrix.domain.model.FitnessLevel
 import com.example.liftrix.domain.model.social.UserSearchResult
 import com.example.liftrix.domain.model.social.ConnectionStatus
 import com.example.liftrix.ui.social.components.UserSearchResultCard

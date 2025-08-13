@@ -206,6 +206,8 @@ class LegacyNavigationWrapper @Inject constructor(
                 LiftrixRoute.OneRmDetail -> "Replace with: navController.navigate(LiftrixRoute.OneRmDetail)"
                 LiftrixRoute.MuscleGroupDetail -> "Replace with: navController.navigate(LiftrixRoute.MuscleGroupDetail)"
                 LiftrixRoute.WorkoutFrequencyDetail -> "Replace with: navController.navigate(LiftrixRoute.WorkoutFrequencyDetail)"
+                LiftrixRoute.PrivacySettings -> "Replace with: navController.navigate(LiftrixRoute.PrivacySettings)"
+                LiftrixRoute.SocialOnboarding -> "Replace with: navController.navigate(LiftrixRoute.SocialOnboarding)"
             }
         } else {
             null

@@ -163,6 +163,12 @@ class PublicProfileViewModel @Inject constructor(
                         com.example.liftrix.domain.model.social.ConnectionStatus.CONNECTED
                     com.example.liftrix.domain.model.social.ConnectionStatus.CONNECTED -> 
                         com.example.liftrix.domain.model.social.ConnectionStatus.NONE
+                    com.example.liftrix.domain.model.social.ConnectionStatus.MUTUAL_FOLLOW -> 
+                        com.example.liftrix.domain.model.social.ConnectionStatus.NONE
+                    com.example.liftrix.domain.model.social.ConnectionStatus.GYM_BUDDY -> 
+                        com.example.liftrix.domain.model.social.ConnectionStatus.NONE
+                    com.example.liftrix.domain.model.social.ConnectionStatus.BLOCKED -> 
+                        com.example.liftrix.domain.model.social.ConnectionStatus.BLOCKED
                 }
 
                 updateState { currentState ->

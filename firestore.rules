@@ -112,6 +112,158 @@ service cloud.firestore {
       allow write: if false; // Exercise data is read-only
     }
     
+    // ========================================
+    // SOCIAL INFRASTRUCTURE SECURITY RULES
+    // Added by SPEC-20250113-social-infrastructure
+    // ========================================
+    
+    // Helper functions for social features
+    function isValidSocialProfile() {
+      return request.resource.data.keys().hasAll(['userId', 'username', 'createdAt', 'updatedAt']) &&
+             request.resource.data.userId == request.auth.uid &&
+             request.resource.data.username is string &&
+             request.resource.data.username.size() >= 3 &&
+             request.resource.data.username.size() <= 20 &&
+             request.resource.data.username.matches('^[a-zA-Z0-9_]+$');
+    }
+    
+    function isValidDisplayName() {
+      return !('displayName' in request.resource.data) ||
+             (request.resource.data.displayName is string &&
+              request.resource.data.displayName.size() <= 50);
+    }
+    
+    function isValidSocialBio() {
+      return !('bio' in request.resource.data) ||
+             (request.resource.data.bio is string &&
+              request.resource.data.bio.size() <= 500);
+    }
+    
+    function isFollower(targetUserId) {
+      // Check if current user is following the target user
+      return exists(/databases/$(database)/documents/follow_relationships/$(request.auth.uid + '_' + targetUserId)) &&
+             get(/databases/$(database)/documents/follow_relationships/$(request.auth.uid + '_' + targetUserId)).data.status == 'ACCEPTED';
+    }
+    
+    function isPublicProfile(userId) {
+      // Check if user has a public social profile
+      return exists(/databases/$(database)/documents/social_profiles/$(userId)) &&
+             get(/databases/$(database)/documents/social_profiles/$(userId)).data.isPrivate == false;
+    }
+    
+    function hasBlockRelationship(userId1, userId2) {
+      // Check if there's a block relationship between two users (either direction)
+      return exists(/databases/$(database)/documents/blocked_users/$(userId1 + '_' + userId2)) ||
+             exists(/databases/$(database)/documents/blocked_users/$(userId2 + '_' + userId1));
+    }
+    
+    // Social profiles - core social data
+    match /social_profiles/{userId} {
+      allow read: if isAuthenticated() &&
+                     (isOwner(userId) ||
+                      (!hasBlockRelationship(request.auth.uid, userId) &&
+                       (isPublicProfile(userId) || isFollower(userId))));
+                       
+      allow write: if isAuthenticated() &&
+                      isOwner(userId) &&
+                      isValidSocialProfile() &&
+                      isValidDisplayName() &&
+                      isValidSocialBio();
+                      
+      allow create: if isAuthenticated() &&
+                       isOwner(userId) &&
+                       isValidSocialProfile() &&
+                       isValidDisplayName() &&
+                       isValidSocialBio();
+    }
+    
+    // Follow relationships - user connections
+    match /follow_relationships/{relationshipId} {
+      allow read: if isAuthenticated() &&
+                     (isOwner(resource.data.followerId) ||
+                      isOwner(resource.data.followingId));
+                      
+      allow write: if isAuthenticated() &&
+                      isOwner(request.resource.data.followerId) &&
+                      request.resource.data.followerId == request.auth.uid &&
+                      request.resource.data.keys().hasAll(['followerId', 'followingId', 'status', 'createdAt']) &&
+                      request.resource.data.status in ['PENDING', 'ACCEPTED', 'BLOCKED'] &&
+                      !hasBlockRelationship(request.resource.data.followerId, request.resource.data.followingId);
+                      
+      allow create: if isAuthenticated() &&
+                       isOwner(request.resource.data.followerId) &&
+                       request.resource.data.followerId == request.auth.uid &&
+                       request.resource.data.keys().hasAll(['followerId', 'followingId', 'status', 'createdAt']) &&
+                       request.resource.data.status in ['PENDING', 'ACCEPTED', 'BLOCKED'] &&
+                       !hasBlockRelationship(request.resource.data.followerId, request.resource.data.followingId);
+    }
+    
+    // Gym buddy relationships - inner circle connections
+    match /gym_buddies/{buddyId} {
+      allow read: if isAuthenticated() &&
+                     (isOwner(resource.data.userId) ||
+                      isOwner(resource.data.buddyId));
+                      
+      allow write: if isAuthenticated() &&
+                      (isOwner(request.resource.data.userId) ||
+                       isOwner(request.resource.data.buddyId)) &&
+                      request.resource.data.keys().hasAll(['userId', 'buddyId', 'createdAt']) &&
+                      request.resource.data.userId != request.resource.data.buddyId &&
+                      !hasBlockRelationship(request.resource.data.userId, request.resource.data.buddyId);
+                      
+      allow create: if isAuthenticated() &&
+                       (isOwner(request.resource.data.userId) ||
+                        isOwner(request.resource.data.buddyId)) &&
+                       request.resource.data.keys().hasAll(['userId', 'buddyId', 'createdAt']) &&
+                       request.resource.data.userId != request.resource.data.buddyId &&
+                       !hasBlockRelationship(request.resource.data.userId, request.resource.data.buddyId);
+    }
+    
+    // Social privacy settings - user-specific privacy controls
+    match /social_privacy_settings/{userId} {
+      allow read, write: if isAuthenticated() && isOwner(userId);
+      allow create: if isAuthenticated() && 
+                       isOwner(userId) &&
+                       request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Blocked users - user blocking functionality
+    match /blocked_users/{blockId} {
+      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      allow write: if isAuthenticated() &&
+                      isOwner(request.resource.data.userId) &&
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.keys().hasAll(['userId', 'blockedUserId', 'blockedAt']) &&
+                      request.resource.data.userId != request.resource.data.blockedUserId;
+                      
+      allow create: if isAuthenticated() &&
+                       isOwner(request.resource.data.userId) &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.keys().hasAll(['userId', 'blockedUserId', 'blockedAt']) &&
+                       request.resource.data.userId != request.resource.data.blockedUserId;
+    }
+    
+    // Shared workouts - workout sharing with privacy controls
+    match /shared_workouts/{workoutId} {
+      allow read: if isAuthenticated() &&
+                     (!hasBlockRelationship(request.auth.uid, resource.data.userId) &&
+                      (resource.data.visibility == 'PUBLIC' ||
+                       (resource.data.visibility == 'FOLLOWERS' && isFollower(resource.data.userId)) ||
+                       isOwner(resource.data.userId)));
+                       
+      allow write: if isAuthenticated() &&
+                      isOwner(request.resource.data.userId) &&
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.keys().hasAll(['userId', 'workoutData', 'visibility', 'createdAt']) &&
+                      request.resource.data.visibility in ['PUBLIC', 'FOLLOWERS', 'PRIVATE'];
+                      
+      allow create: if isAuthenticated() &&
+                       isOwner(request.resource.data.userId) &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.keys().hasAll(['userId', 'workoutData', 'visibility', 'createdAt']) &&
+                       request.resource.data.visibility in ['PUBLIC', 'FOLLOWERS', 'PRIVATE'];
+    }
+    
     // Default deny all other paths
     match /{document=**} {
       allow read, write: if false;
@@ -145,10 +297,34 @@ DEPLOYMENT INSTRUCTIONS:
    
    Collection: qr_codes
    Fields: userId (Ascending), expiresAt (Ascending)
+   
+   // Social Infrastructure Indexes (added by SPEC-20250113-social-infrastructure)
+   Collection: social_profiles
+   Fields: username (Ascending)
+   
+   Collection: social_profiles  
+   Fields: isPrivate (Ascending), memberSince (Descending)
+   
+   Collection: follow_relationships
+   Fields: followerId (Ascending), status (Ascending)
+   
+   Collection: follow_relationships
+   Fields: followingId (Ascending), status (Ascending)
+   
+   Collection: blocked_users
+   Fields: userId (Ascending), blockedAt (Descending)
+   
+   Collection: shared_workouts
+   Fields: userId (Ascending), visibility (Ascending), createdAt (Descending)
 
 5. Verify deployment by testing:
    - Profile creation and updates
    - Privacy setting changes
    - User search functionality
    - QR code generation and lookup
+   - Social profile creation and retrieval
+   - Follow relationship management
+   - Gym buddy pairing
+   - User blocking functionality
+   - Shared workout visibility controls
 */

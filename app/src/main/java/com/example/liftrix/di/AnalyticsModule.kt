@@ -49,6 +49,12 @@ abstract class AnalyticsModule {
 
         @Provides
         @Singleton
+        fun provideFirebaseMessaging(): com.google.firebase.messaging.FirebaseMessaging {
+            return com.google.firebase.messaging.FirebaseMessaging.getInstance()
+        }
+
+        @Provides
+        @Singleton
         fun provideFirebaseCrashlytics(): FirebaseCrashlytics {
             return FirebaseCrashlytics.getInstance().apply {
                 // Enable crashlytics collection
