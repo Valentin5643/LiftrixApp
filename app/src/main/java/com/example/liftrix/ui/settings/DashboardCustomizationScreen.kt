@@ -498,7 +498,7 @@ private fun DashboardCustomizationScreenPreview() {
                 ) {
                     item {
                         LayoutModeSelector(
-                            selectedMode = DashboardLayoutMode.SECTIONS,
+                            selectedMode = DashboardLayoutMode.AUTO,
                             onModeSelected = { }
                         )
                     }

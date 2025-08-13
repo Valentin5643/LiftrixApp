@@ -26,7 +26,8 @@ import com.example.liftrix.domain.model.analytics.WidgetData
 import com.example.liftrix.ui.common.WindowSizeClass
 import com.example.liftrix.ui.common.rememberWindowSizeClass
 import com.example.liftrix.ui.components.layouts.GridSystem
-import com.example.liftrix.domain.model.analytics.DashboardLayoutMode
+import com.example.liftrix.domain.model.analytics.DashboardLayoutMode as DomainDashboardLayoutMode
+import com.example.liftrix.ui.progress.components.DashboardLayoutMode as UiDashboardLayoutMode
 
 /**
  * Responsive dashboard layout engine that adapts to different screen sizes.
@@ -59,7 +60,7 @@ fun ResponsiveDashboardLayout(
     widgets: List<AnalyticsWidget>,
     configuration: DashboardConfiguration,
     modifier: Modifier = Modifier,
-    layoutMode: DashboardLayoutMode = DashboardLayoutMode.DEFAULT,
+    layoutMode: DomainDashboardLayoutMode = DomainDashboardLayoutMode.AUTO,
     onWidgetClick: (AnalyticsWidget) -> Unit = {},
     onWidgetReorder: (from: Int, to: Int) -> Unit = { _, _ -> },
     widgetDataProvider: (AnalyticsWidget) -> WidgetData = { createDefaultWidgetData(it) },
@@ -71,18 +72,19 @@ fun ResponsiveDashboardLayout(
     onAddWidgets: (() -> Unit)? = null
 ) {
     // Determine optimal layout mode considering widget categories (FR-003)
-    val effectiveLayoutMode = if (layoutMode == DashboardLayoutMode.DEFAULT) {
-        DashboardLayoutMode.getOptimalModeForWidgets(
+    val effectiveLayoutMode = if (layoutMode == DomainDashboardLayoutMode.AUTO) {
+        UiDashboardLayoutMode.getOptimalModeForWidgets(
             widgets = widgets,
             screenWidthDp = windowSizeClass.widthDp.value.toInt(),
             userPreference = null
         )
     } else {
-        layoutMode
+        // Convert domain enum to UI enum
+        UiDashboardLayoutMode.fromDomain(layoutMode) ?: UiDashboardLayoutMode.DEFAULT
     }
     
     // Enable drag-and-drop only for CUSTOM mode
-    val effectiveEnableDragAndDrop = enableDragAndDrop || effectiveLayoutMode == DashboardLayoutMode.CUSTOM
+    val effectiveEnableDragAndDrop = enableDragAndDrop || effectiveLayoutMode == UiDashboardLayoutMode.CUSTOM
     // Handle empty state
     if (widgets.isEmpty() && !isLoading) {
         IntegratedEmptyState(
@@ -109,7 +111,7 @@ fun ResponsiveDashboardLayout(
     } else {
         // Direct layout switching without animations (for performance-critical scenarios)
         when (effectiveLayoutMode) {
-            DashboardLayoutMode.GRID -> {
+            UiDashboardLayoutMode.DEFAULT -> {
                 if (effectiveEnableDragAndDrop) {
                     DragAndDropGrid(
                         widgets = widgets,
@@ -132,7 +134,7 @@ fun ResponsiveDashboardLayout(
                 }
             }
             
-            DashboardLayoutMode.SECTIONS -> {
+            UiDashboardLayoutMode.SECTIONS -> {
                 // Use existing WidgetContainer sectioned layout but with responsive enhancements
                 WidgetContainer(
                     widgets = widgets,
@@ -149,7 +151,7 @@ fun ResponsiveDashboardLayout(
                 )
             }
             
-            DashboardLayoutMode.LIST -> {
+            UiDashboardLayoutMode.GRID -> {
                 WidgetContainer(
                     widgets = widgets,
                     configuration = configuration,
@@ -164,7 +166,22 @@ fun ResponsiveDashboardLayout(
                 )
             }
             
-            DashboardLayoutMode.CUSTOM -> {
+            UiDashboardLayoutMode.LIST -> {
+                WidgetContainer(
+                    widgets = widgets,
+                    configuration = configuration,
+                    layoutMode = WidgetLayoutMode.LIST,
+                    onWidgetClick = onWidgetClick,
+                    onWidgetReorder = onWidgetReorder,
+                    widgetDataProvider = widgetDataProvider,
+                    isLoading = isLoading,
+                    enableDragAndDrop = false, // List mode uses individual widgets, not sections
+                    windowSizeClass = windowSizeClass,
+                    modifier = modifier
+                )
+            }
+            
+            UiDashboardLayoutMode.CUSTOM -> {
                 // Enhanced custom layout with advanced drag-and-drop and layout persistence
                 CustomizableLayoutGrid(
                     widgets = widgets,
@@ -181,6 +198,84 @@ fun ResponsiveDashboardLayout(
                     modifier = modifier
                 )
             }
+            
+            UiDashboardLayoutMode.GRID -> {
+                if (effectiveEnableDragAndDrop) {
+                    DragAndDropGrid(
+                        widgets = widgets,
+                        windowSizeClass = windowSizeClass,
+                        onReorder = onWidgetReorder,
+                        onWidgetClick = onWidgetClick,
+                        widgetDataProvider = widgetDataProvider,
+                        isLoading = isLoading,
+                        modifier = modifier
+                    )
+                } else {
+                    AdaptiveWidgetGrid(
+                        widgets = widgets,
+                        windowSizeClass = windowSizeClass,
+                        onWidgetClick = onWidgetClick,
+                        widgetDataProvider = widgetDataProvider,
+                        isLoading = isLoading,
+                        modifier = modifier
+                    )
+                }
+            }
+            
+            UiDashboardLayoutMode.LIST -> {
+                WidgetContainer(
+                    widgets = widgets,
+                    configuration = configuration,
+                    layoutMode = WidgetLayoutMode.LIST,
+                    onWidgetClick = onWidgetClick,
+                    onWidgetReorder = onWidgetReorder,
+                    widgetDataProvider = widgetDataProvider,
+                    isLoading = isLoading,
+                    enableDragAndDrop = effectiveEnableDragAndDrop,
+                    windowSizeClass = windowSizeClass,
+                    modifier = modifier
+                )
+            }
+            
+            UiDashboardLayoutMode.SECTIONS -> {
+                WidgetContainer(
+                    widgets = widgets,
+                    configuration = configuration,
+                    layoutMode = WidgetLayoutMode.SECTIONS,
+                    onWidgetClick = onWidgetClick,
+                    onWidgetReorder = onWidgetReorder,
+                    widgetDataProvider = widgetDataProvider,
+                    isLoading = isLoading,
+                    enableCollapsibleSections = true,
+                    enableDragAndDrop = effectiveEnableDragAndDrop,
+                    windowSizeClass = windowSizeClass,
+                    modifier = modifier
+                )
+            }
+            
+            UiDashboardLayoutMode.DEFAULT -> {
+                if (effectiveEnableDragAndDrop) {
+                    DragAndDropGrid(
+                        widgets = widgets,
+                        windowSizeClass = windowSizeClass,
+                        onReorder = onWidgetReorder,
+                        onWidgetClick = onWidgetClick,
+                        widgetDataProvider = widgetDataProvider,
+                        isLoading = isLoading,
+                        modifier = modifier
+                    )
+                } else {
+                    AdaptiveWidgetGrid(
+                        widgets = widgets,
+                        windowSizeClass = windowSizeClass,
+                        onWidgetClick = onWidgetClick,
+                        widgetDataProvider = widgetDataProvider,
+                        isLoading = isLoading,
+                        modifier = modifier
+                    )
+                }
+            }
+            
         }
     }
 }

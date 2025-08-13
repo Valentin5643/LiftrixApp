@@ -178,15 +178,15 @@ private fun LayoutModeOption(
                 
                 // Additional info based on mode
                 when (mode) {
-                    DashboardLayoutMode.GRID -> {
+                    DashboardLayoutMode.AUTO -> {
                         Text(
-                            text = "Best for quick overview",
+                            text = "Smart layout based on your level",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                             fontWeight = FontWeight.Medium
                         )
                     }
-                    DashboardLayoutMode.SECTIONS -> {
+                    DashboardLayoutMode.COMPACT -> {
                         Text(
                             text = "Recommended for beginners",
                             style = MaterialTheme.typography.labelSmall,
@@ -194,7 +194,7 @@ private fun LayoutModeOption(
                             fontWeight = FontWeight.Medium
                         )
                     }
-                    DashboardLayoutMode.LIST -> {
+                    DashboardLayoutMode.EXPANDED -> {
                         Text(
                             text = "Ideal for detailed analysis",
                             style = MaterialTheme.typography.labelSmall,
@@ -205,6 +205,38 @@ private fun LayoutModeOption(
                     DashboardLayoutMode.CUSTOM -> {
                         Text(
                             text = "For advanced users",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    DashboardLayoutMode.GRID -> {
+                        Text(
+                            text = "Traditional grid layout",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    DashboardLayoutMode.LIST -> {
+                        Text(
+                            text = "Linear scrolling layout",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    DashboardLayoutMode.SECTIONS -> {
+                        Text(
+                            text = "Organized with categories",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    DashboardLayoutMode.DEFAULT -> {
+                        Text(
+                            text = "Standard layout mode",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                             fontWeight = FontWeight.Medium
@@ -260,17 +292,29 @@ private fun LayoutPreview(
         contentAlignment = Alignment.Center
     ) {
         when (mode) {
-            DashboardLayoutMode.GRID -> {
+            DashboardLayoutMode.AUTO -> {
                 GridLayoutPreview(color = previewColor)
             }
-            DashboardLayoutMode.SECTIONS -> {
+            DashboardLayoutMode.COMPACT -> {
                 SectionsLayoutPreview(color = previewColor)
             }
-            DashboardLayoutMode.LIST -> {
+            DashboardLayoutMode.EXPANDED -> {
                 ListLayoutPreview(color = previewColor)
             }
             DashboardLayoutMode.CUSTOM -> {
                 CustomLayoutPreview(color = previewColor)
+            }
+            DashboardLayoutMode.GRID -> {
+                GridLayoutPreview(color = previewColor)
+            }
+            DashboardLayoutMode.LIST -> {
+                ListLayoutPreview(color = previewColor)
+            }
+            DashboardLayoutMode.SECTIONS -> {
+                SectionsLayoutPreview(color = previewColor)
+            }
+            DashboardLayoutMode.DEFAULT -> {
+                GridLayoutPreview(color = previewColor)
             }
         }
     }
@@ -440,7 +484,7 @@ private fun LayoutModeSelectorPreview() {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             LayoutModeSelector(
-                selectedMode = DashboardLayoutMode.SECTIONS,
+                selectedMode = DashboardLayoutMode.COMPACT,
                 onModeSelected = { }
             )
         }

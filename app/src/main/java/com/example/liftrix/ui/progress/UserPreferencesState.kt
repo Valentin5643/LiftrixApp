@@ -172,10 +172,14 @@ data class UserPreferencesState(
         private fun mapDashboardLayoutModeToWidgetLayoutMode(
             dashboardMode: com.example.liftrix.domain.model.analytics.DashboardLayoutMode
         ): WidgetLayoutMode = when (dashboardMode) {
-            com.example.liftrix.domain.model.analytics.DashboardLayoutMode.GRID -> WidgetLayoutMode.GRID
-            com.example.liftrix.domain.model.analytics.DashboardLayoutMode.SECTIONS -> WidgetLayoutMode.SECTIONS
-            com.example.liftrix.domain.model.analytics.DashboardLayoutMode.LIST -> WidgetLayoutMode.LIST
+            com.example.liftrix.domain.model.analytics.DashboardLayoutMode.AUTO -> WidgetLayoutMode.GRID
+            com.example.liftrix.domain.model.analytics.DashboardLayoutMode.COMPACT -> WidgetLayoutMode.SECTIONS
+            com.example.liftrix.domain.model.analytics.DashboardLayoutMode.EXPANDED -> WidgetLayoutMode.LIST
             com.example.liftrix.domain.model.analytics.DashboardLayoutMode.CUSTOM -> WidgetLayoutMode.STAGGERED
+            com.example.liftrix.domain.model.analytics.DashboardLayoutMode.GRID -> WidgetLayoutMode.GRID
+            com.example.liftrix.domain.model.analytics.DashboardLayoutMode.LIST -> WidgetLayoutMode.LIST
+            com.example.liftrix.domain.model.analytics.DashboardLayoutMode.SECTIONS -> WidgetLayoutMode.SECTIONS
+            com.example.liftrix.domain.model.analytics.DashboardLayoutMode.DEFAULT -> WidgetLayoutMode.GRID
         }
     }
 }

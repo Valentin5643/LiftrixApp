@@ -349,9 +349,9 @@ class WidgetPreferencesRepositoryImpl @Inject constructor(
         }
         val migratedWidgetOrder = migrateWidgetNames(rawWidgetOrder.toSet()).toList()
         
-        val dashboardLayoutString = prefs[dashboardLayoutKey] ?: DashboardLayoutMode.SECTIONS.name
+        val dashboardLayoutString = prefs[dashboardLayoutKey] ?: DashboardLayoutMode.AUTO.name
         val dashboardLayout = DashboardLayoutMode.values().find { it.name == dashboardLayoutString }
-            ?: DashboardLayoutMode.SECTIONS
+            ?: DashboardLayoutMode.AUTO
         
         val userLevelString = prefs[userLevelKey] ?: UserLevel.BEGINNER.name
         val userLevel = UserLevel.values().find { it.name == userLevelString } ?: UserLevel.BEGINNER

@@ -3,6 +3,7 @@ package com.example.liftrix.domain.usecase.social
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.SocialPrivacySettings
+import com.example.liftrix.domain.model.social.ProfileVisibility
 import com.example.liftrix.domain.model.social.WorkoutVisibility
 import com.example.liftrix.domain.repository.social.SocialPrivacySettingsRepository
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
@@ -10,6 +11,8 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
+import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
@@ -32,7 +35,7 @@ class UpdateSocialPrivacySettingsUseCaseTest {
     private val testSettings = SocialPrivacySettings(
         userId = "original_user_id", // Will be overridden
         socialEnabled = true,
-        profileVisibility = SocialPrivacySettings.ProfileVisibility.PRIVATE,
+        profileVisibility = ProfileVisibility.PRIVATE,
         allowFollowRequests = true,
         workoutSharingEnabled = false,
         gymBuddiesEnabled = false,
@@ -60,7 +63,7 @@ class UpdateSocialPrivacySettingsUseCaseTest {
     @Test
     fun `updatePrivacySettings succeeds with valid data`() = runTest {
         // Arrange
-        every { getCurrentUserIdUseCase() } returns testUserId
+        coEvery { getCurrentUserIdUseCase() } returns testUserId
         val expectedSettings = testSettings.copy(userId = testUserId)
         coEvery { repository.updatePrivacySettings(expectedSettings) } returns LiftrixResult.success(expectedSettings)
 
@@ -80,7 +83,7 @@ class UpdateSocialPrivacySettingsUseCaseTest {
     @Test
     fun `updatePrivacySettings fails when user not authenticated`() = runTest {
         // Arrange
-        every { getCurrentUserIdUseCase() } returns null
+        coEvery { getCurrentUserIdUseCase() } returns null
 
         // Act
         val result = useCase(testSettings)
@@ -88,8 +91,8 @@ class UpdateSocialPrivacySettingsUseCaseTest {
         // Assert
         assertTrue(result.isFailure)
         val error = result.exceptionOrNull() as LiftrixError.BusinessLogicError
-        assertEquals("Failed to update privacy settings", error.errorMessage)
-        assertEquals("UPDATE_PRIVACY_SETTINGS", error.operation)
+        assertEquals("Failed to update privacy settings", error.message)
+        assertEquals("UPDATE_PRIVACY_SETTINGS", error.code)
         
         coVerify(exactly = 0) { repository.updatePrivacySettings(any()) }
     }
@@ -97,10 +100,11 @@ class UpdateSocialPrivacySettingsUseCaseTest {
     @Test
     fun `updatePrivacySettings overrides userId with current user`() = runTest {
         // Arrange
-        every { getCurrentUserIdUseCase() } returns testUserId
+        coEvery { getCurrentUserIdUseCase() } returns testUserId
         
         var capturedSettings: SocialPrivacySettings? = null
-        coEvery { repository.updatePrivacySettings(capture(slot<SocialPrivacySettings>())) } answers {
+        val settingsSlot = slot<SocialPrivacySettings>()
+        coEvery { repository.updatePrivacySettings(capture(settingsSlot)) } answers {
             capturedSettings = firstArg()
             LiftrixResult.success(capturedSettings!!)
         }
@@ -121,7 +125,7 @@ class UpdateSocialPrivacySettingsUseCaseTest {
     @Test
     fun `updatePrivacySettings fails when repository fails`() = runTest {
         // Arrange
-        every { getCurrentUserIdUseCase() } returns testUserId
+        coEvery { getCurrentUserIdUseCase() } returns testUserId
         val expectedSettings = testSettings.copy(userId = testUserId)
         coEvery { repository.updatePrivacySettings(expectedSettings) } returns LiftrixResult.failure(
             LiftrixError.DatabaseError("Database connection failed")
@@ -133,7 +137,7 @@ class UpdateSocialPrivacySettingsUseCaseTest {
         // Assert
         assertTrue(result.isFailure)
         val error = result.exceptionOrNull() as LiftrixError.BusinessLogicError
-        assertEquals("Failed to update privacy settings", error.errorMessage)
+        assertEquals("Failed to update privacy settings", error.message)
         
         coVerify { repository.updatePrivacySettings(expectedSettings) }
     }
@@ -144,7 +148,7 @@ class UpdateSocialPrivacySettingsUseCaseTest {
         val complexSettings = SocialPrivacySettings(
             userId = "will_be_overridden",
             socialEnabled = true,
-            profileVisibility = SocialPrivacySettings.ProfileVisibility.PUBLIC,
+            profileVisibility = ProfileVisibility.PUBLIC,
             allowFollowRequests = false,
             workoutSharingEnabled = true,
             gymBuddiesEnabled = true,
@@ -161,10 +165,11 @@ class UpdateSocialPrivacySettingsUseCaseTest {
             updatedAt = 1234567890L
         )
         
-        every { getCurrentUserIdUseCase() } returns testUserId
+        coEvery { getCurrentUserIdUseCase() } returns testUserId
         
         var capturedSettings: SocialPrivacySettings? = null
-        coEvery { repository.updatePrivacySettings(capture(slot<SocialPrivacySettings>())) } answers {
+        val settingsSlot2 = slot<SocialPrivacySettings>()
+        coEvery { repository.updatePrivacySettings(capture(settingsSlot2)) } answers {
             capturedSettings = firstArg()
             LiftrixResult.success(capturedSettings!!)
         }
@@ -200,7 +205,7 @@ class UpdateSocialPrivacySettingsUseCaseTest {
     @Test
     fun `updatePrivacySettings handles network error gracefully`() = runTest {
         // Arrange
-        every { getCurrentUserIdUseCase() } returns testUserId
+        coEvery { getCurrentUserIdUseCase() } returns testUserId
         val expectedSettings = testSettings.copy(userId = testUserId)
         coEvery { repository.updatePrivacySettings(expectedSettings) } returns LiftrixResult.failure(
             LiftrixError.NetworkError("No internet connection")
@@ -219,7 +224,7 @@ class UpdateSocialPrivacySettingsUseCaseTest {
     @Test
     fun `updatePrivacySettings includes analytics context on error`() = runTest {
         // Arrange
-        every { getCurrentUserIdUseCase() } returns null
+        coEvery { getCurrentUserIdUseCase() } returns null
 
         // Act
         val result = useCase(testSettings)
@@ -231,6 +236,3 @@ class UpdateSocialPrivacySettingsUseCaseTest {
         assertEquals("User not authenticated", error.analyticsContext["error"])
     }
 }
-
-// Helper function for MockK slot
-private fun <T> slot(): io.mockk.CapturingSlot<T> = io.mockk.slot()

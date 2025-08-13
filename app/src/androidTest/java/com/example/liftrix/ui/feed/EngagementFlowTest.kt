@@ -5,7 +5,10 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.liftrix.MainActivity
 import com.example.liftrix.domain.model.social.*
+import com.example.liftrix.ui.feed.components.WorkoutPostCard
+import com.example.liftrix.ui.feed.components.CommentBottomSheet
 import com.example.liftrix.ui.testing.LiftrixComposeTestRule
+import com.example.liftrix.ui.theme.LiftrixTheme
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import org.junit.Before
@@ -37,17 +40,19 @@ class EngagementFlowTest {
         // Given: A post is displayed in the feed
         composeTestRule.apply {
             setContent {
-                WorkoutPostCard(
-                    post = createTestPost(likeCount = 5, isLiked = false),
-                    isLiked = false,
-                    isSaved = false,
-                    onLikeClick = { /* Mock action */ },
-                    onCommentClick = { },
-                    onShareClick = { },
-                    onSaveClick = { },
-                    onProfileClick = { },
-                    onWorkoutCopyClick = { }
-                )
+                LiftrixTheme {
+                    WorkoutPostCard(
+                        post = createTestPost(likeCount = 5, isLiked = false),
+                        isLiked = false,
+                        isSaved = false,
+                        onLikeClick = { /* Mock action */ },
+                        onCommentClick = { },
+                        onShareClick = { },
+                        onSaveClick = { },
+                        onProfileClick = { },
+                        onWorkoutCopyClick = { }
+                    )
+                }
             }
 
             // When: User taps the like button
@@ -66,20 +71,22 @@ class EngagementFlowTest {
             var likeCount = 6
 
             setContent {
-                WorkoutPostCard(
-                    post = createTestPost(likeCount = likeCount, isLiked = isLiked),
-                    isLiked = isLiked,
-                    isSaved = false,
-                    onLikeClick = { 
-                        isLiked = !isLiked
-                        likeCount = if (isLiked) likeCount + 1 else likeCount - 1
-                    },
-                    onCommentClick = { },
-                    onShareClick = { },
-                    onSaveClick = { },
-                    onProfileClick = { },
-                    onWorkoutCopyClick = { }
-                )
+                LiftrixTheme {
+                    WorkoutPostCard(
+                        post = createTestPost(likeCount = likeCount, isLiked = isLiked),
+                        isLiked = isLiked,
+                        isSaved = false,
+                        onLikeClick = { 
+                            isLiked = !isLiked
+                            likeCount = if (isLiked) likeCount + 1 else likeCount - 1
+                        },
+                        onCommentClick = { },
+                        onShareClick = { },
+                        onSaveClick = { },
+                        onProfileClick = { },
+                        onWorkoutCopyClick = { }
+                    )
+                }
             }
 
             // Initially liked
@@ -99,29 +106,31 @@ class EngagementFlowTest {
             var showComments = false
 
             setContent {
-                if (showComments) {
-                    CommentBottomSheet(
-                        postId = "test_post",
-                        comments = createTestComments(),
-                        currentUserProfileImageUrl = "https://example.com/avatar.jpg",
-                        isLoading = false,
-                        onDismiss = { showComments = false },
-                        onCommentSubmit = { _, _ -> },
-                        onCommentLike = { },
-                        onCommentReply = { }
-                    )
-                } else {
-                    WorkoutPostCard(
-                        post = createTestPost(commentCount = 3),
-                        isLiked = false,
-                        isSaved = false,
-                        onLikeClick = { },
-                        onCommentClick = { showComments = true },
-                        onShareClick = { },
-                        onSaveClick = { },
-                        onProfileClick = { },
-                        onWorkoutCopyClick = { }
-                    )
+                LiftrixTheme {
+                    if (showComments) {
+                        CommentBottomSheet(
+                            postId = "test_post",
+                            comments = createTestComments(),
+                            currentUserProfileImageUrl = "https://example.com/avatar.jpg",
+                            isLoading = false,
+                            onDismiss = { showComments = false },
+                            onCommentSubmit = { _, _ -> },
+                            onCommentLike = { },
+                            onCommentReply = { }
+                        )
+                    } else {
+                        WorkoutPostCard(
+                            post = createTestPost(commentCount = 3),
+                            isLiked = false,
+                            isSaved = false,
+                            onLikeClick = { },
+                            onCommentClick = { showComments = true },
+                            onShareClick = { },
+                            onSaveClick = { },
+                            onProfileClick = { },
+                            onWorkoutCopyClick = { }
+                        )
+                    }
                 }
             }
 
@@ -142,28 +151,30 @@ class EngagementFlowTest {
             var showComments = true
 
             setContent {
-                CommentBottomSheet(
-                    postId = "test_post",
-                    comments = comments,
-                    currentUserProfileImageUrl = "https://example.com/avatar.jpg",
-                    isLoading = false,
-                    onDismiss = { },
-                    onCommentSubmit = { content, parentId -> 
-                        val newComment = PostComment(
-                            id = "new_comment",
-                            postId = "test_post",
-                            userId = "current_user",
-                            content = content,
-                            parentCommentId = parentId,
-                            createdAt = System.currentTimeMillis(),
-                            authorDisplayName = "Current User"
-                        )
-                        comments = comments + newComment
-                        commentCount++
-                    },
-                    onCommentLike = { },
-                    onCommentReply = { }
-                )
+                LiftrixTheme {
+                    CommentBottomSheet(
+                        postId = "test_post",
+                        comments = comments,
+                        currentUserProfileImageUrl = "https://example.com/avatar.jpg",
+                        isLoading = false,
+                        onDismiss = { },
+                        onCommentSubmit = { content, parentId -> 
+                            val newComment = PostComment(
+                                id = "new_comment",
+                                postId = "test_post",
+                                userId = "current_user",
+                                content = content,
+                                parentCommentId = parentId,
+                                createdAt = System.currentTimeMillis(),
+                                authorDisplayName = "Current User"
+                            )
+                            comments = comments + newComment
+                            commentCount++
+                        },
+                        onCommentLike = { },
+                        onCommentReply = { }
+                    )
+                }
             }
 
             // When: User types a comment and submits

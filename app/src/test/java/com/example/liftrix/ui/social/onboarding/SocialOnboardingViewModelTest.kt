@@ -238,8 +238,9 @@ class SocialOnboardingViewModelTest {
             createSocialProfileUseCase(any(), any(), any())
         } returns LiftrixResult.failure(
             LiftrixError.ValidationError(
-                errorMessage = "Invalid username",
-                operation = "VALIDATE_USERNAME"
+                field = "username",
+                violations = listOf("Invalid username format"),
+                analyticsContext = mapOf("operation" to "VALIDATE_USERNAME")
             )
         )
         

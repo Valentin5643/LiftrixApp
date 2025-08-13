@@ -1,6 +1,7 @@
 package com.example.liftrix.domain.usecase.template
 
 import com.example.liftrix.domain.model.*
+import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
 import io.mockk.*
@@ -11,6 +12,7 @@ import org.junit.Test
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.fail
 
 /**
  * Unit tests for MoveWorkoutToFolderUseCase
@@ -34,7 +36,7 @@ class MoveWorkoutToFolderUseCaseTest {
     
     private val testWorkoutTemplate = WorkoutTemplate(
         id = WorkoutTemplateId("template123"),
-        userId = UserId(validUserId),
+        userId = validUserId,
         name = "Test Workout",
         folderId = "original_folder",
         createdAt = Instant.now(),
@@ -44,7 +46,7 @@ class MoveWorkoutToFolderUseCaseTest {
     
     private val targetFolder = Folder(
         id = FolderId(validFolderId),
-        userId = UserId(validUserId),
+        userId = validUserId,
         name = FolderName("Target Folder"),
         createdAt = Instant.now(),
         updatedAt = Instant.now(),
@@ -53,7 +55,7 @@ class MoveWorkoutToFolderUseCaseTest {
     
     private val differentUserFolder = Folder(
         id = FolderId(validFolderId),
-        userId = UserId(differentUserId),
+        userId = differentUserId,
         name = FolderName("Different User's Folder"),
         createdAt = Instant.now(),
         updatedAt = Instant.now(),
@@ -85,11 +87,14 @@ class MoveWorkoutToFolderUseCaseTest {
         
         // Assert
         assertTrue(result.isSuccess)
-        result.onSuccess { updatedWorkout ->
-            assertEquals(validFolderId, updatedWorkout.folderId)
-            assertEquals(testWorkoutTemplate.name, updatedWorkout.name)
-            assertEquals(testWorkoutTemplate.id, updatedWorkout.id)
-        }
+        result.fold(
+            onSuccess = { updatedWorkout ->
+                assertEquals(validFolderId, updatedWorkout.folderId)
+                assertEquals(testWorkoutTemplate.name, updatedWorkout.name)
+                assertEquals(testWorkoutTemplate.id, updatedWorkout.id)
+            },
+            onFailure = { fail("Expected success but got failure: $it") }
+        )
         
         // Verify interactions
         coVerify(exactly = 1) { folderRepository.getFolderById(FolderId(validFolderId)) }
@@ -106,9 +111,12 @@ class MoveWorkoutToFolderUseCaseTest {
         
         // Assert
         assertTrue(result.isSuccess)
-        result.onSuccess { unchangedWorkout ->
-            assertEquals(workoutInSameFolder, unchangedWorkout)
-        }
+        result.fold(
+            onSuccess = { unchangedWorkout ->
+                assertEquals(workoutInSameFolder, unchangedWorkout)
+            },
+            onFailure = { fail("Expected success but got failure: $it") }
+        )
         
         // Verify no repository interactions when no move is needed
         coVerify(exactly = 0) { folderRepository.getFolderById(any()) }
@@ -125,9 +133,12 @@ class MoveWorkoutToFolderUseCaseTest {
         
         // Assert
         assertTrue(result.isFailure)
-        result.onFailure { error ->
-            assertTrue(error.message?.contains("Target folder does not exist") == true)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                assertTrue(error.toString().contains("Target folder does not exist"))
+            }
+        )
         
         // Verify validation prevented further operations
         coVerify(exactly = 1) { folderRepository.getFolderById(FolderId(nonExistentFolder)) }
@@ -144,9 +155,12 @@ class MoveWorkoutToFolderUseCaseTest {
         
         // Assert - Should fail with user mismatch error
         assertTrue(result.isFailure)
-        result.onFailure { error ->
-            assertTrue(error.message?.contains("Cannot move workout to folder belonging to different user") == true)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                assertTrue(error.toString().contains("Cannot move workout to folder belonging to different user"))
+            }
+        )
         
         // Verify security validation prevented unauthorized access
         coVerify(exactly = 1) { folderRepository.getFolderById(FolderId(validFolderId)) }
@@ -166,9 +180,12 @@ class MoveWorkoutToFolderUseCaseTest {
         
         // Assert
         assertTrue(result.isFailure)
-        result.onFailure { error ->
-            assertTrue(error.message?.contains("Failed to update workout template") == true)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                assertTrue(error.toString().contains("Failed to update workout template"))
+            }
+        )
         
         // Verify all validations passed but update failed
         coVerify(exactly = 1) { folderRepository.getFolderById(FolderId(validFolderId)) }
@@ -192,7 +209,7 @@ class MoveWorkoutToFolderUseCaseTest {
         // Verify that the updated template maintains proper user scoping
         coVerify(exactly = 1) { 
             workoutTemplateRepository.updateTemplate(match { template ->
-                template.userId.value == validUserId &&
+                template.userId == validUserId &&
                 template.folderId == validFolderId &&
                 template.id == testWorkoutTemplate.id
             })
@@ -237,9 +254,12 @@ class MoveWorkoutToFolderUseCaseTest {
         
         // Assert
         assertTrue(result.isFailure)
-        result.onFailure { error ->
-            assertEquals(folderRepositoryError, error)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                assertTrue(error.toString().contains("Folder lookup failed"))
+            }
+        )
         
         // Verify error was caught and handled
         coVerify(exactly = 1) { folderRepository.getFolderById(FolderId(validFolderId)) }
@@ -305,9 +325,12 @@ class MoveWorkoutToFolderUseCaseTest {
         
         // Assert
         assertTrue(result.isFailure)
-        result.onFailure { error ->
-            assertTrue(error.message?.contains("Target folder does not exist") == true)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                assertTrue(error.toString().contains("Target folder does not exist"))
+            }
+        )
     }
     
     @Test
@@ -317,7 +340,7 @@ class MoveWorkoutToFolderUseCaseTest {
         // Arrange - Create workout from one user trying to move to another user's folder
         val attackerWorkout = WorkoutTemplate(
             id = WorkoutTemplateId("attacker_template"),
-            userId = UserId("attacker_user"),
+            userId = "attacker_user",
             name = "Attacker Workout",
             folderId = "attacker_folder",
             createdAt = Instant.now(),
@@ -328,7 +351,7 @@ class MoveWorkoutToFolderUseCaseTest {
         // Target folder belongs to victim user
         val victimFolder = Folder(
             id = FolderId("victim_folder"),
-            userId = UserId("victim_user"),
+            userId = "victim_user",
             name = FolderName("Victim's Folder"),
             createdAt = Instant.now(),
             updatedAt = Instant.now(),
@@ -342,9 +365,12 @@ class MoveWorkoutToFolderUseCaseTest {
         
         // Assert - Should fail with user mismatch error
         assertTrue(result.isFailure)
-        result.onFailure { error ->
-            assertTrue(error.message?.contains("Cannot move workout to folder belonging to different user") == true)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                assertTrue(error.toString().contains("Cannot move workout to folder belonging to different user"))
+            }
+        )
         
         // Verify security prevented the cross-user operation
         coVerify(exactly = 1) { folderRepository.getFolderById(FolderId("victim_folder")) }

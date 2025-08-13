@@ -21,6 +21,8 @@ import com.example.liftrix.data.repository.social.EngagementRepositoryImpl
 import com.example.liftrix.domain.repository.social.EngagementRepository
 import com.example.liftrix.data.repository.social.FollowRepositoryImpl
 import com.example.liftrix.domain.repository.social.FollowRepository
+import com.example.liftrix.data.repository.social.SocialPrivacySettingsRepositoryImpl
+import com.example.liftrix.domain.repository.social.SocialPrivacySettingsRepository
 import com.example.liftrix.domain.service.PrivacyEnforcementService
 import com.example.liftrix.domain.usecase.social.CheckUsernameAvailabilityUseCase
 import com.example.liftrix.domain.usecase.social.CreateSocialProfileUseCase
@@ -58,17 +60,7 @@ object SocialModule {
     // Social DAOs
     // ========================================
 
-    @Provides
-    @Singleton
-    fun provideSocialProfileDao(database: LiftrixDatabase): SocialProfileDao {
-        return database.socialProfileDao()
-    }
-
-    @Provides
-    @Singleton
-    fun provideFollowRelationshipDao(database: LiftrixDatabase): FollowRelationshipDao {
-        return database.followRelationshipDao()
-    }
+    // SocialProfileDao and FollowRelationshipDao provided by DatabaseModule
 
     @Provides
     @Singleton
@@ -82,23 +74,7 @@ object SocialModule {
         return database.profileViewDao()
     }
 
-    @Provides
-    @Singleton
-    fun provideGymBuddyDao(database: LiftrixDatabase): GymBuddyDao {
-        return database.gymBuddyDao()
-    }
-
-    @Provides
-    @Singleton
-    fun provideSocialPrivacySettingsDao(database: LiftrixDatabase): SocialPrivacySettingsDao {
-        return database.socialPrivacySettingsDao()
-    }
-
-    @Provides
-    @Singleton
-    fun provideBlockedUserDao(database: LiftrixDatabase): BlockedUserDao {
-        return database.blockedUserDao()
-    }
+    // GymBuddyDao, SocialPrivacySettingsDao, and BlockedUserDao provided by DatabaseModule
 
     @Provides
     @Singleton
@@ -182,6 +158,14 @@ object SocialModule {
         firestore: com.google.firebase.firestore.FirebaseFirestore
     ): FollowRepository {
         return FollowRepositoryImpl(followRelationshipDao, followRequestDao, profileViewDao, socialProfileDao, blockedUserDao, firestore)
+    }
+
+    @Provides
+    @Singleton
+    fun provideSocialPrivacySettingsRepository(
+        socialPrivacySettingsDao: SocialPrivacySettingsDao
+    ): SocialPrivacySettingsRepository {
+        return SocialPrivacySettingsRepositoryImpl(socialPrivacySettingsDao)
     }
 
     @Provides
@@ -282,19 +266,7 @@ object SocialModule {
     // External Services
     // ========================================
     
-    @Provides
-    @Singleton
-    fun provideFirebaseMessaging(): FirebaseMessaging {
-        return FirebaseMessaging.getInstance()
-    }
-    
-    @Provides
-    @Singleton
-    fun provideFirebaseAnalytics(
-        @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context
-    ): FirebaseAnalytics {
-        return FirebaseAnalytics.getInstance(context)
-    }
+    // Firebase services provided by AnalyticsModule to avoid duplicate bindings
     
     @Provides
     @Singleton

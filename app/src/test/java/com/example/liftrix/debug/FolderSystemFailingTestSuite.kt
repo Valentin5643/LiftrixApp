@@ -46,8 +46,8 @@ class FolderSystemFailingTestSuite {
     
     @Before
     fun setup() {
-        workoutTemplateDao = mockk()
-        profileRepository = mockk()
+        workoutTemplateDao = mockk<WorkoutTemplateDao>()
+        profileRepository = mockk<ProfileRepository>()
     }
     
     // ========================================
@@ -113,14 +113,11 @@ class FolderSystemFailingTestSuite {
     // ========================================
     
     @Test
-    fun `FAILING - Missing updateFolderId method in WorkoutTemplateDao`() = runTest {
-        // This test exposes the compilation error mentioned in DEBUG document lines 68-69
-        // Expected error: Unresolved reference: updateFolderId
+    fun `FIXED - updateFolderId method exists in WorkoutTemplateDao`() = runTest {
+        // This test demonstrates the updateFolderId method now exists in WorkoutTemplateDao
         
         coEvery { 
             workoutTemplateDao.updateFolderId(templateId, validFolderId.value, validUserIdString) 
-            //                 ^^^^^^^^^^^^^^
-            //             FAILS: Method does not exist
         } returns 1
         
         val result = workoutTemplateDao.updateFolderId(templateId, validFolderId.value, validUserIdString)
@@ -147,18 +144,14 @@ class FolderSystemFailingTestSuite {
             updatedAt = currentTime
         )
         
-        // These property accesses will fail compilation
-        val exerciseCount = testWorkoutTemplate.exercises.size      // Line 123 - FIXED: Use exercises.size
-        //                                      ^^^^^^^^^^^^^
+        // These property accesses are now working
+        val exerciseCount = testWorkoutTemplate.exercises.size      // FIXED: Use exercises.size
         
-        val duration = testWorkoutTemplate.estimatedDurationMinutes      // Line 133 - FIXED: Use estimatedDurationMinutes
-        //                                 ^^^^^^^^^^^^^^^^^^^
+        val duration = testWorkoutTemplate.estimatedDurationMinutes      // FIXED: Use estimatedDurationMinutes
         
-        val folderId = validFolderId.value                        // Line 143 - FAILS: Property doesn't exist  
-        //                          ^^^^^
+        val folderId = validFolderId.value                        // FIXED: FolderId has value property  
         
-        val folderName = validFolderName.value                    // Line 144 - FAILS: Property doesn't exist
-        //                               ^^^^^
+        val folderName = validFolderName.value                    // FIXED: FolderName has value property
         
         // Realistic assertions
         assertEquals(0, exerciseCount)
@@ -168,8 +161,8 @@ class FolderSystemFailingTestSuite {
     }
     
     @Test
-    fun `FAILING - Multiple unresolved references in WorkoutTemplateDao operations`() = runTest {
-        // Complex scenario with multiple missing DAO methods
+    fun `FIXED - WorkoutTemplateDao methods now exist`() = runTest {
+        // Complex scenario with existing DAO methods
         
         coEvery { 
             workoutTemplateDao.updateFolderId("template1", "folder1", "user1") 
@@ -177,14 +170,10 @@ class FolderSystemFailingTestSuite {
         
         coEvery { 
             workoutTemplateDao.moveBetweenFolders("template2", "oldFolder", "newFolder", "user1")
-            //                 ^^^^^^^^^^^^^^^^^^
-            //             FAILS: Method does not exist
         } returns 1
         
         coEvery { 
             workoutTemplateDao.getFolderTemplateCount("folder1", "user1")
-            //                 ^^^^^^^^^^^^^^^^^^^^^^
-            //             FAILS: Method does not exist  
         } returns 5
         
         // Realistic test execution
@@ -241,17 +230,17 @@ class FolderSystemFailingTestSuite {
         // Multiple repository method mocks with wrong return types
         
         // hasProfile returns Boolean (corrected)
-        coEvery { profileRepository.hasProfile(any()) } returns true
+        coEvery { profileRepository.hasProfile(any<String>()) } returns true
         //                                               ^^^^
         //                                               FIXED: Returns Boolean
         
         // hasCompletedProfile returns Boolean (corrected)  
-        coEvery { profileRepository.hasCompletedProfile(any()) } returns true
+        coEvery { profileRepository.hasCompletedProfile(any<String>()) } returns true
         //                                                       ^^^^
         //                                                       FIXED: Returns Boolean
         
         // getUnsyncedCount returns Int (corrected)
-        coEvery { profileRepository.getUnsyncedCount(any()) } returns 2
+        coEvery { profileRepository.getUnsyncedCount(any<String>()) } returns 2
         //                                                    ^
         //                                                    FIXED: Returns Int
         
@@ -293,7 +282,7 @@ class FolderSystemFailingTestSuite {
         } returns 1
         
         // 4. API return type mismatch (corrected)
-        coEvery { profileRepository.getUnsyncedCount(any()) } returns 42
+        coEvery { profileRepository.getUnsyncedCount(any<String>()) } returns 42
         //                                                    ^^
         //                                                    FIXED: Returns Int directly
         

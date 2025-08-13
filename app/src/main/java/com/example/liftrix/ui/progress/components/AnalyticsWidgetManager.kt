@@ -50,7 +50,7 @@ class AnalyticsWidgetManager @Inject constructor(
      */
     fun getConfigurationForLevel(
         userLevel: UserLevel,
-        layoutMode: DashboardLayoutMode = DashboardLayoutMode.SECTIONS
+        layoutMode: DashboardLayoutMode = DashboardLayoutMode.AUTO
     ): DashboardConfiguration {
         return DashboardConfiguration.fromUserLevelAndLayout(userLevel, layoutMode)
     }
@@ -68,7 +68,7 @@ class AnalyticsWidgetManager @Inject constructor(
     fun getWidgetsForConfiguration(
         configuration: DashboardConfiguration,
         preferences: WidgetPreferences? = null,
-        layoutMode: DashboardLayoutMode = DashboardLayoutMode.SECTIONS
+        layoutMode: DashboardLayoutMode = DashboardLayoutMode.AUTO
     ): List<AnalyticsWidget> {
         val userLevel = configuration.getUserLevel()
         return widgetResolver.resolveWidgets(userLevel, layoutMode, preferences)
@@ -311,7 +311,7 @@ class AnalyticsWidgetManager @Inject constructor(
         preferences: WidgetPreferences?
     ): com.example.liftrix.domain.model.analytics.DashboardLayoutMode {
         return preferences?.dashboardLayout 
-            ?: com.example.liftrix.domain.model.analytics.DashboardLayoutMode.SECTIONS
+            ?: com.example.liftrix.domain.model.analytics.DashboardLayoutMode.AUTO
     }
     
     /**
@@ -458,7 +458,7 @@ class AnalyticsWidgetManager @Inject constructor(
         return widgetResolver.createDefaultPreferences(
             userId = userId,
             userLevel = configuration.getUserLevel(),
-            layoutMode = if (configuration.supportsCustomization()) DashboardLayoutMode.CUSTOM else DashboardLayoutMode.SECTIONS
+            layoutMode = if (configuration.supportsCustomization()) DashboardLayoutMode.CUSTOM else DashboardLayoutMode.AUTO
         )
     }
     

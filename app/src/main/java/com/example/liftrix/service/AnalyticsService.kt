@@ -95,7 +95,7 @@ interface AnalyticsService {
      * 
      * Example:
      * ```
-     * val updatedPreferences = currentPreferences.updateLayout(DashboardLayoutMode.GRID)
+     * val updatedPreferences = currentPreferences.updateLayout(DashboardLayoutMode.AUTO)
      * val result = analyticsService.updateWidgetPreferences(updatedPreferences)
      * result.fold(
      *     onSuccess = { updateUIConfiguration() },

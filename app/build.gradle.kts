@@ -247,6 +247,7 @@ dependencies {
     testImplementation(libs.androidx.junit)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.room.testing)
+    testImplementation("androidx.paging:paging-testing:3.2.1")
     testImplementation(libs.androidx.sqlite.framework)
     testImplementation(libs.androidx.runner)
     

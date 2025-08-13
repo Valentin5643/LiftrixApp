@@ -3,6 +3,7 @@ package com.example.liftrix.domain.usecase.folder
 import com.example.liftrix.domain.model.*
 import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.data.local.LiftrixDatabase
 import io.mockk.*
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -23,6 +24,7 @@ class DeleteFolderUseCaseTest {
     
     private lateinit var folderRepository: FolderRepository
     private lateinit var workoutTemplateRepository: WorkoutTemplateRepository
+    private lateinit var mockDatabase: LiftrixDatabase
     private lateinit var deleteFolderUseCase: DeleteFolderUseCase
     
     // Test data constants
@@ -35,7 +37,7 @@ class DeleteFolderUseCaseTest {
     
     private val testFolder = Folder(
         id = validFolderId,
-        userId = UserId(validUserId),
+        userId = validUserId,
         name = FolderName("Test Folder"),
         createdAt = Instant.now(),
         updatedAt = Instant.now(),
@@ -44,7 +46,7 @@ class DeleteFolderUseCaseTest {
     
     private val defaultFolder = Folder(
         id = defaultFolderId,
-        userId = UserId(validUserId),
+        userId = validUserId,
         name = FolderName("Uncategorized"),
         createdAt = Instant.now(),
         updatedAt = Instant.now(),
@@ -53,7 +55,7 @@ class DeleteFolderUseCaseTest {
     
     private val testTemplate1 = WorkoutTemplate(
         id = WorkoutTemplateId("template1"),
-        userId = UserId(validUserId),
+        userId = validUserId,
         name = "Test Workout 1",
         folderId = validFolderId.value,
         createdAt = Instant.now(),
@@ -63,7 +65,7 @@ class DeleteFolderUseCaseTest {
     
     private val testTemplate2 = WorkoutTemplate(
         id = WorkoutTemplateId("template2"),
-        userId = UserId(validUserId),
+        userId = validUserId,
         name = "Test Workout 2",
         folderId = validFolderId.value,
         createdAt = Instant.now(),
@@ -75,7 +77,8 @@ class DeleteFolderUseCaseTest {
     fun setup() {
         folderRepository = mockk()
         workoutTemplateRepository = mockk()
-        deleteFolderUseCase = DeleteFolderUseCase(folderRepository, workoutTemplateRepository)
+        mockDatabase = mockk(relaxed = true)
+        deleteFolderUseCase = DeleteFolderUseCase(folderRepository, workoutTemplateRepository, mockDatabase)
     }
     
     @After
@@ -89,7 +92,7 @@ class DeleteFolderUseCaseTest {
         val emptyFolder = testFolder.copy(templateCount = 0)
         val input = DeleteFolderUseCase.DeleteFolderInput(validUserId, validFolderId)
         
-        coEvery { folderRepository.getFolderById(validFolderId, validUserId) } returns flowOf(emptyFolder)
+        coEvery { folderRepository.getFolderByIdDirect(validFolderId, validUserId) } returns Result.success(emptyFolder)
         coEvery { folderRepository.getOrCreateDefaultFolder(validUserId) } returns Result.success(defaultFolder)
         coEvery { folderRepository.deleteFolder(validFolderId, validUserId) } returns Result.success(Unit)
         
@@ -100,7 +103,7 @@ class DeleteFolderUseCaseTest {
         assertTrue(result.isSuccess)
         
         // Verify interactions
-        coVerify(exactly = 1) { folderRepository.getFolderById(validFolderId, validUserId) }
+        coVerify(exactly = 1) { folderRepository.getFolderByIdDirect(validFolderId, validUserId) }
         coVerify(exactly = 1) { folderRepository.getOrCreateDefaultFolder(validUserId) }
         coVerify(exactly = 1) { folderRepository.deleteFolder(validFolderId, validUserId) }
         coVerify(exactly = 0) { workoutTemplateRepository.getTemplatesByFolder(any(), any()) }
@@ -112,7 +115,7 @@ class DeleteFolderUseCaseTest {
         val input = DeleteFolderUseCase.DeleteFolderInput(validUserId, validFolderId)
         val templates = listOf(testTemplate1, testTemplate2)
         
-        coEvery { folderRepository.getFolderById(validFolderId, validUserId) } returns flowOf(testFolder)
+        coEvery { folderRepository.getFolderByIdDirect(validFolderId, validUserId) } returns Result.success(testFolder)
         coEvery { folderRepository.getOrCreateDefaultFolder(validUserId) } returns Result.success(defaultFolder)
         coEvery { workoutTemplateRepository.getTemplatesByFolder(validUserId, validFolderId.value) } returns flowOf(Result.success(templates))
         coEvery { folderRepository.moveTemplateToFolder(any(), any(), validUserId) } returns Result.success(Unit)
@@ -146,7 +149,7 @@ class DeleteFolderUseCaseTest {
         }
         
         // Verify no repository interactions
-        coVerify(exactly = 0) { folderRepository.getFolderById(any(), any()) }
+        coVerify(exactly = 0) { folderRepository.getFolderByIdDirect(any(), any()) }
         coVerify(exactly = 0) { folderRepository.deleteFolder(any(), any()) }
     }
     
@@ -166,7 +169,7 @@ class DeleteFolderUseCaseTest {
         }
         
         // Verify no repository interactions
-        coVerify(exactly = 0) { folderRepository.getFolderById(any(), any()) }
+        coVerify(exactly = 0) { folderRepository.getFolderByIdDirect(any(), any()) }
         coVerify(exactly = 0) { folderRepository.deleteFolder(any(), any()) }
     }
     
@@ -175,7 +178,7 @@ class DeleteFolderUseCaseTest {
         // Arrange
         val input = DeleteFolderUseCase.DeleteFolderInput(validUserId, nonExistentFolderId)
         
-        coEvery { folderRepository.getFolderById(nonExistentFolderId, validUserId) } returns flowOf(null)
+        coEvery { folderRepository.getFolderByIdDirect(nonExistentFolderId, validUserId) } returns Result.success(null)
         
         // Act
         val result = deleteFolderUseCase(input)
@@ -188,7 +191,7 @@ class DeleteFolderUseCaseTest {
         }
         
         // Verify folder lookup but no deletion
-        coVerify(exactly = 1) { folderRepository.getFolderById(nonExistentFolderId, validUserId) }
+        coVerify(exactly = 1) { folderRepository.getFolderByIdDirect(nonExistentFolderId, validUserId) }
         coVerify(exactly = 0) { folderRepository.deleteFolder(any(), any()) }
     }
     
@@ -198,7 +201,7 @@ class DeleteFolderUseCaseTest {
         val defaultFolderWithId = testFolder.copy(id = FolderId("uncategorized_user123"))
         val input = DeleteFolderUseCase.DeleteFolderInput(validUserId, defaultFolderWithId.id)
         
-        coEvery { folderRepository.getFolderById(defaultFolderWithId.id, validUserId) } returns flowOf(defaultFolderWithId)
+        coEvery { folderRepository.getFolderByIdDirect(defaultFolderWithId.id, validUserId) } returns Result.success(defaultFolderWithId)
         
         // Act
         val result = deleteFolderUseCase(input)
@@ -211,7 +214,7 @@ class DeleteFolderUseCaseTest {
         }
         
         // Verify protection prevented deletion
-        coVerify(exactly = 1) { folderRepository.getFolderById(defaultFolderWithId.id, validUserId) }
+        coVerify(exactly = 1) { folderRepository.getFolderByIdDirect(defaultFolderWithId.id, validUserId) }
         coVerify(exactly = 0) { folderRepository.deleteFolder(any(), any()) }
     }
     
@@ -221,7 +224,7 @@ class DeleteFolderUseCaseTest {
         val input = DeleteFolderUseCase.DeleteFolderInput(validUserId, validFolderId)
         val defaultFolderError = RuntimeException("Default folder creation failed")
         
-        coEvery { folderRepository.getFolderById(validFolderId, validUserId) } returns flowOf(testFolder)
+        coEvery { folderRepository.getFolderByIdDirect(validFolderId, validUserId) } returns Result.success(testFolder)
         coEvery { folderRepository.getOrCreateDefaultFolder(validUserId) } returns Result.failure(defaultFolderError)
         
         // Act
@@ -243,7 +246,7 @@ class DeleteFolderUseCaseTest {
         val input = DeleteFolderUseCase.DeleteFolderInput(validUserId, validFolderId)
         val templateError = RuntimeException("Template retrieval failed")
         
-        coEvery { folderRepository.getFolderById(validFolderId, validUserId) } returns flowOf(testFolder)
+        coEvery { folderRepository.getFolderByIdDirect(validFolderId, validUserId) } returns Result.success(testFolder)
         coEvery { folderRepository.getOrCreateDefaultFolder(validUserId) } returns Result.success(defaultFolder)
         coEvery { workoutTemplateRepository.getTemplatesByFolder(validUserId, validFolderId.value) } returns flowOf(Result.failure(templateError))
         
@@ -267,7 +270,7 @@ class DeleteFolderUseCaseTest {
         val templates = listOf(testTemplate1, testTemplate2)
         val moveError = RuntimeException("Template move failed")
         
-        coEvery { folderRepository.getFolderById(validFolderId, validUserId) } returns flowOf(testFolder)
+        coEvery { folderRepository.getFolderByIdDirect(validFolderId, validUserId) } returns Result.success(testFolder)
         coEvery { folderRepository.getOrCreateDefaultFolder(validUserId) } returns Result.success(defaultFolder)
         coEvery { workoutTemplateRepository.getTemplatesByFolder(validUserId, validFolderId.value) } returns flowOf(Result.success(templates))
         coEvery { folderRepository.moveTemplateToFolder("template1", defaultFolderId, validUserId) } returns Result.failure(moveError)
@@ -291,7 +294,7 @@ class DeleteFolderUseCaseTest {
         val input = DeleteFolderUseCase.DeleteFolderInput(validUserId, validFolderId)
         val templates = listOf(testTemplate1)
         
-        coEvery { folderRepository.getFolderById(validFolderId, validUserId) } returns flowOf(testFolder)
+        coEvery { folderRepository.getFolderByIdDirect(validFolderId, validUserId) } returns Result.success(testFolder)
         coEvery { folderRepository.getOrCreateDefaultFolder(validUserId) } returns Result.success(defaultFolder)
         coEvery { workoutTemplateRepository.getTemplatesByFolder(validUserId, validFolderId.value) } returns flowOf(Result.success(templates))
         coEvery { folderRepository.moveTemplateToFolder(any(), any(), validUserId) } returns Result.success(Unit)
@@ -304,7 +307,7 @@ class DeleteFolderUseCaseTest {
         assertTrue(result.isSuccess)
         
         // Verify user scoping in all repository calls
-        coVerify(exactly = 1) { folderRepository.getFolderById(validFolderId, validUserId) }
+        coVerify(exactly = 1) { folderRepository.getFolderByIdDirect(validFolderId, validUserId) }
         coVerify(exactly = 1) { folderRepository.getOrCreateDefaultFolder(validUserId) }
         coVerify(exactly = 1) { workoutTemplateRepository.getTemplatesByFolder(validUserId, validFolderId.value) }
         coVerify(exactly = 1) { folderRepository.moveTemplateToFolder("template1", defaultFolderId, validUserId) }
@@ -318,7 +321,7 @@ class DeleteFolderUseCaseTest {
         val input = DeleteFolderUseCase.DeleteFolderInput(differentUserId, validFolderId)
         
         // Mock that folder is not found for different user (user scoping)
-        coEvery { folderRepository.getFolderById(validFolderId, differentUserId) } returns flowOf(null)
+        coEvery { folderRepository.getFolderByIdDirect(validFolderId, differentUserId) } returns Result.success(null)
         
         // Act
         val result = deleteFolderUseCase(input)
@@ -331,7 +334,7 @@ class DeleteFolderUseCaseTest {
         }
         
         // Verify user scoping prevented unauthorized access
-        coVerify(exactly = 1) { folderRepository.getFolderById(validFolderId, differentUserId) }
+        coVerify(exactly = 1) { folderRepository.getFolderByIdDirect(validFolderId, differentUserId) }
         coVerify(exactly = 0) { folderRepository.deleteFolder(any(), any()) }
     }
 }

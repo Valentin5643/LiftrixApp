@@ -7,6 +7,7 @@ import com.example.liftrix.domain.model.social.SocialPrivacySettings
 import com.example.liftrix.domain.model.social.ProfileVisibility
 import com.example.liftrix.domain.model.social.WorkoutVisibility
 import com.example.liftrix.domain.model.social.WorkoutPost
+import com.example.liftrix.domain.model.social.PostVisibility
 import javax.inject.Inject
 import javax.inject.Singleton
 

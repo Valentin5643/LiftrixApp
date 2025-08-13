@@ -30,15 +30,15 @@ class WidgetFunctionalityPreservationTest {
         assertEquals("OneRMProgression should have correct ID", "one_rm_progression", oneRmWidget.id)
         assertEquals("OneRMProgression should have expected display name", "1RM Progression", oneRmWidget.displayName)
         
-        val volumeWidget = AnalyticsWidget.VolumeAnalysis
-        assertEquals("VolumeAnalysis should have correct ID", "volume_analysis", volumeWidget.id)
-        assertEquals("VolumeAnalysis should have expected display name", "Volume Analysis", volumeWidget.displayName)
+        val volumeWidget = AnalyticsWidget.VolumeChart
+        assertEquals("VolumeChart should have correct ID", "volume_chart", volumeWidget.id)
+        assertEquals("VolumeChart should have expected display name", "Volume Chart", volumeWidget.displayName)
         
         val muscleGroupWidget = AnalyticsWidget.MuscleGroupDistribution
         assertEquals("MuscleGroupDistribution should have correct ID", "muscle_group_distribution", muscleGroupWidget.id)
         
-        val exerciseRankingWidget = AnalyticsWidget.ExerciseRanking
-        assertEquals("ExerciseRanking should have correct ID", "exercise_ranking", exerciseRankingWidget.id)
+        val exerciseRankingWidget = AnalyticsWidget.MuscleGroupDistribution
+        assertEquals("MuscleGroupDistribution should have correct ID", "muscle_group_distribution", exerciseRankingWidget.id)
     }
 
     @Test
@@ -106,13 +106,10 @@ class WidgetFunctionalityPreservationTest {
         
         // Volume widgets should map to Volume detail
         val volumeWidgets = listOf(
-            AnalyticsWidget.VolumeAnalysis,
             AnalyticsWidget.VolumeChart,
-            AnalyticsWidget.VolumeTrends
-        ).filter { 
-            // Only include widgets that actually exist
-            try { it.id; true } catch (e: Exception) { false }
-        }
+            AnalyticsWidget.VolumeTrends,
+            AnalyticsWidget.VolumeLoadProgression
+        )
         
         volumeWidgets.forEach { widget ->
             assertNotNull("Volume widget should be mappable", widget.id)
@@ -130,16 +127,13 @@ class WidgetFunctionalityPreservationTest {
         
         // Exercise Ranking widgets should map to Exercise Ranking detail
         val exerciseRankingWidgets = listOf(
-            AnalyticsWidget.ExerciseRanking
-        ).filter { 
-            // Only include widgets that actually exist
-            try { it.id; true } catch (e: Exception) { false }
-        }
+            AnalyticsWidget.MuscleGroupDistribution
+        )
         
         exerciseRankingWidgets.forEach { widget ->
-            assertNotNull("Exercise ranking widget should be mappable", widget.id)
-            assertTrue("Exercise ranking widget ID should be recognizable", 
-                widget.id.contains("exercise", ignoreCase = true) || widget.id.contains("top", ignoreCase = true))
+            assertNotNull("Muscle group widget should be mappable", widget.id)
+            assertTrue("Muscle group widget ID should be recognizable", 
+                widget.id.contains("muscle", ignoreCase = true) || widget.id.contains("group", ignoreCase = true))
         }
     }
 

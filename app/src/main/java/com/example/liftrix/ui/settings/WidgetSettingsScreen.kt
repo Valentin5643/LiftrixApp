@@ -562,7 +562,7 @@ private fun WidgetSettingsScreenPreview() {
                 ) {
                     item {
                         LayoutModeSelector(
-                            selectedMode = DashboardLayoutMode.SECTIONS,
+                            selectedMode = DashboardLayoutMode.AUTO,
                             onModeSelected = { }
                         )
                     }

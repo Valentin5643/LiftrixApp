@@ -100,7 +100,7 @@ class WidgetResolverTest {
         // When
         val widgets = widgetResolver.resolveWidgets(
             userLevel = UserLevel.INTERMEDIATE,
-            layoutMode = DashboardLayoutMode.GRID
+            layoutMode = DashboardLayoutMode.AUTO
         )
 
         // Then
@@ -112,7 +112,7 @@ class WidgetResolverTest {
         // When
         val widgets = widgetResolver.resolveWidgets(
             userLevel = UserLevel.BEGINNER,
-            layoutMode = DashboardLayoutMode.SECTIONS
+            layoutMode = DashboardLayoutMode.AUTO
         )
 
         // Then
@@ -124,7 +124,7 @@ class WidgetResolverTest {
         // When
         val widgets = widgetResolver.resolveWidgets(
             userLevel = UserLevel.ADVANCED,
-            layoutMode = DashboardLayoutMode.LIST
+            layoutMode = DashboardLayoutMode.COMPACT
         )
 
         // Then
@@ -304,7 +304,7 @@ class WidgetResolverTest {
         // When resolving with null preferences
         val widgets = widgetResolver.resolveWidgets(
             userLevel = UserLevel.INTERMEDIATE,
-            layoutMode = DashboardLayoutMode.SECTIONS,
+            layoutMode = DashboardLayoutMode.AUTO,
             preferences = null
         )
 

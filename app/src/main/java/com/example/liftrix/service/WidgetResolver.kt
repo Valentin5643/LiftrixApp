@@ -99,7 +99,7 @@ class WidgetResolver @Inject constructor() {
      */
     fun resolveWidgets(
         userLevel: UserLevel,
-        layoutMode: DashboardLayoutMode = DashboardLayoutMode.SECTIONS,
+        layoutMode: DashboardLayoutMode = DashboardLayoutMode.AUTO,
         preferences: WidgetPreferences? = null
     ): List<AnalyticsWidget> {
         Timber.d("=== RESOLVER DEBUG: resolveWidgets called with userLevel=$userLevel, layoutMode=$layoutMode")
@@ -418,7 +418,7 @@ class WidgetResolver @Inject constructor() {
     fun createDefaultPreferences(
         userId: String,
         userLevel: UserLevel,
-        layoutMode: DashboardLayoutMode = DashboardLayoutMode.SECTIONS
+        layoutMode: DashboardLayoutMode = DashboardLayoutMode.AUTO
     ): WidgetPreferences {
         val defaultWidgets = resolveStandardWidgets(userLevel)
         val widgetIds = defaultWidgets.map { it.id }.toSet()

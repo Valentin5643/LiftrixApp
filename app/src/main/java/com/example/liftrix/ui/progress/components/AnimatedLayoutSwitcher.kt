@@ -13,7 +13,7 @@ import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.DashboardConfiguration
 import com.example.liftrix.domain.model.analytics.WidgetData
-import com.example.liftrix.domain.model.analytics.DashboardLayoutMode
+import com.example.liftrix.ui.progress.components.DashboardLayoutMode
 import com.example.liftrix.ui.common.WindowSizeClass
 
 /**
@@ -117,7 +117,7 @@ fun AnimatedLayoutSwitcher(
             label = "layout_mode_transition"
         ) { currentLayoutMode ->
             when (currentLayoutMode) {
-                DashboardLayoutMode.GRID -> {
+                DashboardLayoutMode.DEFAULT -> {
                     StaggeredAnimationWrapper(
                         widgets = widgets,
                         animationDelay = 50L
@@ -160,10 +160,29 @@ fun AnimatedLayoutSwitcher(
                     }
                 }
                 
-                DashboardLayoutMode.LIST -> {
+                DashboardLayoutMode.GRID -> {
                     StaggeredAnimationWrapper(
                         widgets = widgets,
                         animationDelay = 100L
+                    ) {
+                        WidgetContainer(
+                            widgets = widgets,
+                            configuration = configuration,
+                            layoutMode = WidgetLayoutMode.LIST,
+                            onWidgetClick = onWidgetClick,
+                            onWidgetReorder = onWidgetReorder,
+                            widgetDataProvider = widgetDataProvider,
+                            isLoading = isLoading,
+                            enableDragAndDrop = false,
+                            windowSizeClass = windowSizeClass
+                        )
+                    }
+                }
+                
+                DashboardLayoutMode.LIST -> {
+                    StaggeredAnimationWrapper(
+                        widgets = widgets,
+                        animationDelay = 75L
                     ) {
                         WidgetContainer(
                             widgets = widgets,
@@ -196,6 +215,97 @@ fun AnimatedLayoutSwitcher(
                                 // TODO: Implement custom layout persistence
                             }
                         )
+                    }
+                }
+                
+                DashboardLayoutMode.GRID -> {
+                    StaggeredAnimationWrapper(
+                        widgets = widgets,
+                        animationDelay = 50L
+                    ) {
+                        if (enableDragAndDrop) {
+                            DragAndDropGrid(
+                                widgets = widgets,
+                                windowSizeClass = windowSizeClass,
+                                onReorder = onWidgetReorder,
+                                onWidgetClick = onWidgetClick,
+                                widgetDataProvider = widgetDataProvider,
+                                isLoading = isLoading
+                            )
+                        } else {
+                            AdaptiveWidgetGrid(
+                                widgets = widgets,
+                                windowSizeClass = windowSizeClass,
+                                onWidgetClick = onWidgetClick,
+                                widgetDataProvider = widgetDataProvider,
+                                isLoading = isLoading
+                            )
+                        }
+                    }
+                }
+                
+                DashboardLayoutMode.LIST -> {
+                    StaggeredAnimationWrapper(
+                        widgets = widgets,
+                        animationDelay = 80L
+                    ) {
+                        WidgetContainer(
+                            widgets = widgets,
+                            configuration = configuration,
+                            layoutMode = WidgetLayoutMode.LIST,
+                            onWidgetClick = onWidgetClick,
+                            onWidgetReorder = onWidgetReorder,
+                            widgetDataProvider = widgetDataProvider,
+                            isLoading = isLoading,
+                            enableDragAndDrop = enableDragAndDrop,
+                            windowSizeClass = windowSizeClass
+                        )
+                    }
+                }
+                
+                DashboardLayoutMode.SECTIONS -> {
+                    StaggeredAnimationWrapper(
+                        widgets = widgets,
+                        animationDelay = 70L
+                    ) {
+                        WidgetContainer(
+                            widgets = widgets,
+                            configuration = configuration,
+                            layoutMode = WidgetLayoutMode.SECTIONS,
+                            onWidgetClick = onWidgetClick,
+                            onWidgetReorder = onWidgetReorder,
+                            widgetDataProvider = widgetDataProvider,
+                            isLoading = isLoading,
+                            enableDragAndDrop = enableDragAndDrop,
+                            enableCollapsibleSections = true,
+                            windowSizeClass = windowSizeClass
+                        )
+                    }
+                }
+                
+                DashboardLayoutMode.DEFAULT -> {
+                    StaggeredAnimationWrapper(
+                        widgets = widgets,
+                        animationDelay = 50L
+                    ) {
+                        if (enableDragAndDrop) {
+                            DragAndDropGrid(
+                                widgets = widgets,
+                                windowSizeClass = windowSizeClass,
+                                onReorder = onWidgetReorder,
+                                onWidgetClick = onWidgetClick,
+                                widgetDataProvider = widgetDataProvider,
+                                isLoading = isLoading
+                            )
+                        } else {
+                            AdaptiveWidgetGrid(
+                                widgets = widgets,
+                                windowSizeClass = windowSizeClass,
+                                onWidgetClick = onWidgetClick,
+                                widgetDataProvider = widgetDataProvider,
+                                isLoading = isLoading
+                            )
+                        }
                     }
                 }
             }

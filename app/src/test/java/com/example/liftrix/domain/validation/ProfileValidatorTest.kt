@@ -1,7 +1,7 @@
 package com.example.liftrix.domain.validation
 
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.social.ProfileValidator
+import com.example.liftrix.domain.validation.ProfileValidator
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
@@ -46,7 +46,7 @@ class ProfileValidatorTest {
             val result = validator.validateUsername(username)
             assertTrue(result.isFailure)
             val error = result.exceptionOrNull() as LiftrixError.ValidationError
-            assertTrue(error.errorMessage.contains("blank"))
+            assertTrue(error.violations.any { it.contains("empty") })
         }
     }
 
@@ -58,18 +58,18 @@ class ProfileValidatorTest {
             val result = validator.validateUsername(username)
             assertTrue(result.isFailure)
             val error = result.exceptionOrNull() as LiftrixError.ValidationError
-            assertTrue(error.errorMessage.contains("3 characters"))
+            assertTrue(error.violations.any { it.contains("3 characters") })
         }
     }
 
     @Test
     fun `validateUsername fails with too long username`() = runTest {
-        val longUsername = "a".repeat(21)
+        val longUsername = "a".repeat(31)
 
         val result = validator.validateUsername(longUsername)
         assertTrue(result.isFailure)
         val error = result.exceptionOrNull() as LiftrixError.ValidationError
-        assertTrue(error.errorMessage.contains("20 characters"))
+        assertTrue(error.violations.any { it.contains("30 characters") })
     }
 
     @Test
@@ -89,7 +89,7 @@ class ProfileValidatorTest {
             val result = validator.validateUsername(username)
             assertTrue(result.isFailure, "Username '$username' should be invalid")
             val error = result.exceptionOrNull() as LiftrixError.ValidationError
-            assertTrue(error.errorMessage.contains("letters, numbers, and underscores"))
+            assertTrue(error.violations.any { it.contains("letters, numbers, and underscores") })
         }
     }
 
@@ -137,7 +137,7 @@ class ProfileValidatorTest {
             val result = validator.validateDisplayName(name)
             assertTrue(result.isFailure)
             val error = result.exceptionOrNull() as LiftrixError.ValidationError
-            assertTrue(error.errorMessage.contains("blank"))
+            assertTrue(error.violations.any { it.contains("empty") })
         }
     }
 
@@ -148,7 +148,7 @@ class ProfileValidatorTest {
         val result = validator.validateDisplayName(longName)
         assertTrue(result.isFailure)
         val error = result.exceptionOrNull() as LiftrixError.ValidationError
-        assertTrue(error.errorMessage.contains("50 characters"))
+        assertTrue(error.violations.any { it.contains("50 characters") })
     }
 
     // Bio validation tests
@@ -181,7 +181,7 @@ class ProfileValidatorTest {
         val result = validator.validateBio(longBio)
         assertTrue(result.isFailure)
         val error = result.exceptionOrNull() as LiftrixError.ValidationError
-        assertTrue(error.errorMessage.contains("500 characters"))
+        assertTrue(error.violations.any { it.contains("500 characters") })
     }
 
     @Test
@@ -217,7 +217,7 @@ class ProfileValidatorTest {
     fun `validation handles null and boundary values correctly`() = runTest {
         // Test exact boundary values
         val minValidUsername = "abc"
-        val maxValidUsername = "a".repeat(20)
+        val maxValidUsername = "a".repeat(30)
         val maxValidDisplayName = "a".repeat(50)
         val maxValidBio = "a".repeat(500)
 
@@ -228,7 +228,7 @@ class ProfileValidatorTest {
 
         // Test just over boundary values
         val tooShortUsername = "ab"
-        val tooLongUsername = "a".repeat(21)
+        val tooLongUsername = "a".repeat(31)
         val tooLongDisplayName = "a".repeat(51)
         val tooLongBio = "a".repeat(501)
 

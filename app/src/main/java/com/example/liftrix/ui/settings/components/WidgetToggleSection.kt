@@ -406,7 +406,7 @@ private fun WidgetToggleSectionPreview() {
             userId = "test_user",
             visibleWidgets = setOf("total_volume", "workout_frequency"),
             widgetOrder = listOf("total_volume", "workout_frequency"),
-            dashboardLayout = DashboardLayoutMode.SECTIONS,
+            dashboardLayout = DashboardLayoutMode.AUTO,
             userLevel = UserLevel.BEGINNER
         )
         

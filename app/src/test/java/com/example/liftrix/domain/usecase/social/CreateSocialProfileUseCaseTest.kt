@@ -10,6 +10,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
@@ -46,7 +47,7 @@ class CreateSocialProfileUseCaseTest {
     @Test
     fun `createProfile succeeds with valid data`() = runTest {
         // Arrange
-        every { getCurrentUserIdUseCase() } returns testUserId
+        coEvery { getCurrentUserIdUseCase() } returns testUserId
         every { validator.validateUsername(testUsername) } returns LiftrixResult.success(Unit)
         every { validator.validateDisplayName(testDisplayName) } returns LiftrixResult.success(Unit)
         every { validator.validateBio(testBio) } returns LiftrixResult.success(Unit)
@@ -74,7 +75,7 @@ class CreateSocialProfileUseCaseTest {
     @Test
     fun `createProfile succeeds with null bio`() = runTest {
         // Arrange
-        every { getCurrentUserIdUseCase() } returns testUserId
+        coEvery { getCurrentUserIdUseCase() } returns testUserId
         every { validator.validateUsername(testUsername) } returns LiftrixResult.success(Unit)
         every { validator.validateDisplayName(testDisplayName) } returns LiftrixResult.success(Unit)
         coEvery { repository.checkUsernameAvailability(testUsername) } returns LiftrixResult.success(true)
@@ -94,7 +95,7 @@ class CreateSocialProfileUseCaseTest {
     @Test
     fun `createProfile fails when user not authenticated`() = runTest {
         // Arrange
-        every { getCurrentUserIdUseCase() } returns null
+        coEvery { getCurrentUserIdUseCase() } returns null
 
         // Act
         val result = useCase(testUsername, testDisplayName, testBio)
@@ -102,18 +103,19 @@ class CreateSocialProfileUseCaseTest {
         // Assert
         assertTrue(result.isFailure)
         val error = result.exceptionOrNull() as LiftrixError.BusinessLogicError
-        assertEquals("Failed to create social profile", error.errorMessage)
-        assertEquals("CREATE_SOCIAL_PROFILE", error.operation)
+        assertEquals("Failed to create social profile: User not authenticated", error.message)
+        assertEquals("CREATE_SOCIAL_PROFILE_FAILED", error.code)
     }
 
     @Test
     fun `createProfile fails with invalid username`() = runTest {
         // Arrange
-        every { getCurrentUserIdUseCase() } returns testUserId
+        coEvery { getCurrentUserIdUseCase() } returns testUserId
         every { validator.validateUsername(testUsername) } returns LiftrixResult.failure(
             LiftrixError.ValidationError(
-                errorMessage = "Invalid username",
-                operation = "VALIDATE_USERNAME"
+                field = "username",
+                violations = listOf("Invalid username"),
+                analyticsContext = mapOf("operation" to "VALIDATE_USERNAME")
             )
         )
 
@@ -129,12 +131,13 @@ class CreateSocialProfileUseCaseTest {
     @Test
     fun `createProfile fails with invalid display name`() = runTest {
         // Arrange
-        every { getCurrentUserIdUseCase() } returns testUserId
+        coEvery { getCurrentUserIdUseCase() } returns testUserId
         every { validator.validateUsername(testUsername) } returns LiftrixResult.success(Unit)
         every { validator.validateDisplayName(testDisplayName) } returns LiftrixResult.failure(
             LiftrixError.ValidationError(
-                errorMessage = "Invalid display name",
-                operation = "VALIDATE_DISPLAY_NAME"
+                field = "displayName",
+                violations = listOf("Invalid display name"),
+                analyticsContext = mapOf("operation" to "VALIDATE_DISPLAY_NAME")
             )
         )
 
@@ -150,13 +153,14 @@ class CreateSocialProfileUseCaseTest {
     @Test
     fun `createProfile fails with invalid bio`() = runTest {
         // Arrange
-        every { getCurrentUserIdUseCase() } returns testUserId
+        coEvery { getCurrentUserIdUseCase() } returns testUserId
         every { validator.validateUsername(testUsername) } returns LiftrixResult.success(Unit)
         every { validator.validateDisplayName(testDisplayName) } returns LiftrixResult.success(Unit)
         every { validator.validateBio(testBio) } returns LiftrixResult.failure(
             LiftrixError.ValidationError(
-                errorMessage = "Invalid bio",
-                operation = "VALIDATE_BIO"
+                field = "bio",
+                violations = listOf("Invalid bio"),
+                analyticsContext = mapOf("operation" to "VALIDATE_BIO")
             )
         )
 
@@ -172,7 +176,7 @@ class CreateSocialProfileUseCaseTest {
     @Test
     fun `createProfile fails when username is taken`() = runTest {
         // Arrange
-        every { getCurrentUserIdUseCase() } returns testUserId
+        coEvery { getCurrentUserIdUseCase() } returns testUserId
         every { validator.validateUsername(testUsername) } returns LiftrixResult.success(Unit)
         every { validator.validateDisplayName(testDisplayName) } returns LiftrixResult.success(Unit)
         every { validator.validateBio(testBio) } returns LiftrixResult.success(Unit)
@@ -189,7 +193,7 @@ class CreateSocialProfileUseCaseTest {
     @Test
     fun `createProfile fails when username availability check fails`() = runTest {
         // Arrange
-        every { getCurrentUserIdUseCase() } returns testUserId
+        coEvery { getCurrentUserIdUseCase() } returns testUserId
         every { validator.validateUsername(testUsername) } returns LiftrixResult.success(Unit)
         every { validator.validateDisplayName(testDisplayName) } returns LiftrixResult.success(Unit)
         every { validator.validateBio(testBio) } returns LiftrixResult.success(Unit)
@@ -208,7 +212,7 @@ class CreateSocialProfileUseCaseTest {
     @Test
     fun `createProfile fails when repository fails`() = runTest {
         // Arrange
-        every { getCurrentUserIdUseCase() } returns testUserId
+        coEvery { getCurrentUserIdUseCase() } returns testUserId
         every { validator.validateUsername(testUsername) } returns LiftrixResult.success(Unit)
         every { validator.validateDisplayName(testDisplayName) } returns LiftrixResult.success(Unit)
         every { validator.validateBio(testBio) } returns LiftrixResult.success(Unit)
@@ -228,14 +232,15 @@ class CreateSocialProfileUseCaseTest {
     @Test
     fun `createProfile creates profile with correct privacy defaults`() = runTest {
         // Arrange
-        every { getCurrentUserIdUseCase() } returns testUserId
+        coEvery { getCurrentUserIdUseCase() } returns testUserId
         every { validator.validateUsername(testUsername) } returns LiftrixResult.success(Unit)
         every { validator.validateDisplayName(testDisplayName) } returns LiftrixResult.success(Unit)
         every { validator.validateBio(testBio) } returns LiftrixResult.success(Unit)
         coEvery { repository.checkUsernameAvailability(testUsername) } returns LiftrixResult.success(true)
         
         var capturedProfile: SocialProfile? = null
-        coEvery { repository.createProfile(capture(slot<SocialProfile>())) } answers {
+        val profileSlot = slot<SocialProfile>()
+        coEvery { repository.createProfile(capture(profileSlot)) } answers {
             capturedProfile = firstArg()
             LiftrixResult.success(capturedProfile!!)
         }
@@ -260,13 +265,14 @@ class CreateSocialProfileUseCaseTest {
     fun `createProfile normalizes username to lowercase`() = runTest {
         // Arrange
         val mixedCaseUsername = "TestUser123"
-        every { getCurrentUserIdUseCase() } returns testUserId
+        coEvery { getCurrentUserIdUseCase() } returns testUserId
         every { validator.validateUsername(mixedCaseUsername) } returns LiftrixResult.success(Unit)
         every { validator.validateDisplayName(testDisplayName) } returns LiftrixResult.success(Unit)
         coEvery { repository.checkUsernameAvailability(mixedCaseUsername) } returns LiftrixResult.success(true)
         
         var capturedProfile: SocialProfile? = null
-        coEvery { repository.createProfile(capture(slot<SocialProfile>())) } answers {
+        val profileSlot2 = slot<SocialProfile>()
+        coEvery { repository.createProfile(capture(profileSlot2)) } answers {
             capturedProfile = firstArg()
             LiftrixResult.success(capturedProfile!!)
         }
@@ -287,14 +293,15 @@ class CreateSocialProfileUseCaseTest {
         val paddedDisplayName = "  Test User  "
         val paddedBio = "  Test bio  "
         
-        every { getCurrentUserIdUseCase() } returns testUserId
+        coEvery { getCurrentUserIdUseCase() } returns testUserId
         every { validator.validateUsername(paddedUsername) } returns LiftrixResult.success(Unit)
         every { validator.validateDisplayName(paddedDisplayName) } returns LiftrixResult.success(Unit)
         every { validator.validateBio(paddedBio) } returns LiftrixResult.success(Unit)
         coEvery { repository.checkUsernameAvailability(paddedUsername) } returns LiftrixResult.success(true)
         
         var capturedProfile: SocialProfile? = null
-        coEvery { repository.createProfile(capture(slot<SocialProfile>())) } answers {
+        val profileSlot3 = slot<SocialProfile>()
+        coEvery { repository.createProfile(capture(profileSlot3)) } answers {
             capturedProfile = firstArg()
             LiftrixResult.success(capturedProfile!!)
         }
@@ -312,6 +319,3 @@ class CreateSocialProfileUseCaseTest {
         }
     }
 }
-
-// Helper function for MockK slot
-private fun <T> slot(): io.mockk.CapturingSlot<T> = io.mockk.slot()

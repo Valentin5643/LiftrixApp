@@ -60,6 +60,10 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.liftrix.domain.model.Folder
 import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.ui.theme.LiftrixSpacing
+import com.example.liftrix.ui.workout.components.PrimaryActionButton
+import com.example.liftrix.ui.workout.components.SecondaryActionButton
+import com.example.liftrix.ui.workout.components.TertiaryActionButton
+import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 

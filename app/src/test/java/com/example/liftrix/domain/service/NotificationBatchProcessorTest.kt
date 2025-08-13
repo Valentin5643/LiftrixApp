@@ -1,14 +1,13 @@
 package com.example.liftrix.domain.service
 
-import com.example.liftrix.domain.model.LiftrixResult
+import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.notifications.NotificationQueue
 import com.example.liftrix.domain.model.notifications.QueuedNotification
 import com.example.liftrix.domain.repository.notifications.NotificationQueueRepository
 import com.example.liftrix.domain.service.notifications.NotificationBatchProcessor
 import com.example.liftrix.domain.service.notifications.FCMSender
 import com.example.liftrix.domain.service.notifications.BatchNotificationBuilder
-import com.google.firebase.messaging.BatchResponse
-import com.google.firebase.messaging.SendResponse
 import io.mockk.*
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -19,6 +18,19 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.util.*
+
+// Mock Firebase classes for testing
+data class BatchResponse(
+    val successCount: Int,
+    val failureCount: Int,
+    val responses: List<SendResponse>
+)
+
+data class SendResponse(
+    val messageId: String?,
+    val exception: Exception?,
+    val isSuccessful: Boolean
+)
 
 /**
  * Unit tests for NotificationBatchProcessor.
@@ -44,9 +56,9 @@ class NotificationBatchProcessorTest {
 
     @Before
     fun setup() {
-        mockQueueRepository = mockk()
-        mockFcmSender = mockk()
-        mockNotificationBuilder = mockk()
+        mockQueueRepository = mockk<NotificationQueueRepository>()
+        mockFcmSender = mockk<FCMSender>()
+        mockNotificationBuilder = mockk<BatchNotificationBuilder>()
         
         batchProcessor = NotificationBatchProcessor(
             queueRepository = mockQueueRepository,
@@ -77,17 +89,17 @@ class NotificationBatchProcessorTest {
         val pendingNotifications = listOf(singleNotification)
         
         coEvery { mockQueueRepository.getPending(testUserId) } returns flowOf(
-            LiftrixResult.Success(pendingNotifications)
+            Result.success(pendingNotifications)
         )
         
-        coEvery { mockFcmSender.sendSingle(any()) } returns LiftrixResult.Success(Unit)
-        coEvery { mockQueueRepository.markSent(any()) } returns flowOf(LiftrixResult.Success(Unit))
+        coEvery { mockFcmSender.sendSingle(any<QueuedNotification>()) } returns Result.success(Unit)
+        coEvery { mockQueueRepository.markSent(any<String>()) } returns flowOf(Result.success(Unit))
         
         // When
         val result = batchProcessor.processBatch(testUserId)
         
         // Then
-        assertTrue("Batch processing should succeed", result is LiftrixResult.Success)
+        assertTrue("Batch processing should succeed", result.isSuccess)
         
         coVerify(exactly = 1) { mockFcmSender.sendSingle(singleNotification) }
         coVerify(exactly = 1) { mockQueueRepository.markSent("notif-1") }
@@ -110,22 +122,22 @@ class NotificationBatchProcessorTest {
         val mockInboxNotification = mockk<NotificationQueue>()
         
         coEvery { mockQueueRepository.getPending(testUserId) } returns flowOf(
-            LiftrixResult.Success(notifications)
+            Result.success(notifications)
         )
         
         coEvery { mockNotificationBuilder.buildInboxStyleNotification(notifications, testUserId) } returns 
-            LiftrixResult.Success(mockInboxNotification)
+            Result.success(mockInboxNotification)
         
         coEvery { mockFcmSender.sendToUser(testUserId, mockInboxNotification) } returns 
-            LiftrixResult.Success(Unit)
+            Result.success(Unit)
         
-        coEvery { mockQueueRepository.markSent(any()) } returns flowOf(LiftrixResult.Success(Unit))
+        coEvery { mockQueueRepository.markSent(any<String>()) } returns flowOf(Result.success(Unit))
         
         // When
         val result = batchProcessor.processBatch(testUserId)
         
         // Then
-        assertTrue("Batch processing should succeed", result is LiftrixResult.Success)
+        assertTrue("Batch processing should succeed", result.isSuccess)
         
         coVerify(exactly = 1) { mockNotificationBuilder.buildInboxStyleNotification(notifications, testUserId) }
         coVerify(exactly = 1) { mockFcmSender.sendToUser(testUserId, mockInboxNotification) }
@@ -153,22 +165,22 @@ class NotificationBatchProcessorTest {
         val mockSummaryNotification = mockk<NotificationQueue>()
         
         coEvery { mockQueueRepository.getPending(testUserId) } returns flowOf(
-            LiftrixResult.Success(notifications)
+            Result.success(notifications)
         )
         
         coEvery { mockNotificationBuilder.buildSummaryNotification(notifications, testUserId) } returns 
-            LiftrixResult.Success(mockSummaryNotification)
+            Result.success(mockSummaryNotification)
         
         coEvery { mockFcmSender.sendToUser(testUserId, mockSummaryNotification) } returns 
-            LiftrixResult.Success(Unit)
+            Result.success(Unit)
         
-        coEvery { mockQueueRepository.markSent(any()) } returns flowOf(LiftrixResult.Success(Unit))
+        coEvery { mockQueueRepository.markSent(any<String>()) } returns flowOf(Result.success(Unit))
         
         // When
         val result = batchProcessor.processBatch(testUserId)
         
         // Then
-        assertTrue("Batch processing should succeed", result is LiftrixResult.Success)
+        assertTrue("Batch processing should succeed", result.isSuccess)
         
         coVerify(exactly = 1) { mockNotificationBuilder.buildSummaryNotification(notifications, testUserId) }
         coVerify(exactly = 1) { mockFcmSender.sendToUser(testUserId, mockSummaryNotification) }
@@ -199,25 +211,25 @@ class NotificationBatchProcessorTest {
         val mockAchievementNotification = mockk<NotificationQueue>()
         
         coEvery { mockQueueRepository.getPending(testUserId) } returns flowOf(
-            LiftrixResult.Success(allNotifications)
+            Result.success(allNotifications)
         )
         
         coEvery { 
             mockNotificationBuilder.buildInboxStyleNotification(socialNotifications, testUserId) 
-        } returns LiftrixResult.Success(mockSocialNotification)
+        } returns Result.success(mockSocialNotification)
         
         coEvery { 
             mockNotificationBuilder.buildInboxStyleNotification(achievementNotifications, testUserId) 
-        } returns LiftrixResult.Success(mockAchievementNotification)
+        } returns Result.success(mockAchievementNotification)
         
-        coEvery { mockFcmSender.sendToUser(testUserId, any()) } returns LiftrixResult.Success(Unit)
-        coEvery { mockQueueRepository.markSent(any()) } returns flowOf(LiftrixResult.Success(Unit))
+        coEvery { mockFcmSender.sendToUser(testUserId, any<NotificationQueue>()) } returns Result.success(Unit)
+        coEvery { mockQueueRepository.markSent(any<String>()) } returns flowOf(Result.success(Unit))
         
         // When
         val result = batchProcessor.processBatch(testUserId)
         
         // Then
-        assertTrue("Batch processing should succeed", result is LiftrixResult.Success)
+        assertTrue("Batch processing should succeed", result.isSuccess)
         
         // Verify two separate notifications were built and sent
         coVerify(exactly = 1) { 
@@ -237,14 +249,14 @@ class NotificationBatchProcessorTest {
     fun `processBatch with empty queue returns success without processing`() = runTest {
         // Given
         coEvery { mockQueueRepository.getPending(testUserId) } returns flowOf(
-            LiftrixResult.Success(emptyList())
+            Result.success(emptyList())
         )
         
         // When
         val result = batchProcessor.processBatch(testUserId)
         
         // Then
-        assertTrue("Batch processing should succeed for empty queue", result is LiftrixResult.Success)
+        assertTrue("Batch processing should succeed for empty queue", result.isSuccess)
         
         coVerify(exactly = 0) { mockFcmSender.sendSingle(any()) }
         coVerify(exactly = 0) { mockFcmSender.sendToUser(any(), any()) }
@@ -258,18 +270,20 @@ class NotificationBatchProcessorTest {
     fun `processBatch handles queue retrieval failure`() = runTest {
         // Given
         coEvery { mockQueueRepository.getPending(testUserId) } returns flowOf(
-            LiftrixResult.Error(mockk {
-                every { errorMessage } returns "Database connection failed"
-            })
+            Result.failure(LiftrixError.DatabaseError(
+                errorMessage = "Database connection failed",
+                operation = "GET_PENDING_NOTIFICATIONS",
+                analyticsContext = mapOf("user_id" to testUserId)
+            ))
         )
         
         // When
         val result = batchProcessor.processBatch(testUserId)
         
         // Then
-        assertTrue("Batch processing should fail when queue retrieval fails", result is LiftrixResult.Error)
-        val error = (result as LiftrixResult.Error).error
-        assertEquals("Error message should be propagated", "Database connection failed", error.errorMessage)
+        assertTrue("Batch processing should fail when queue retrieval fails", result.isFailure)
+        val error = result.exceptionOrNull() as LiftrixError
+        assertEquals("Error message should be propagated", "Database connection failed", error.message)
         
         coVerify(exactly = 0) { mockFcmSender.sendSingle(any()) }
         coVerify(exactly = 0) { mockFcmSender.sendToUser(any(), any()) }
@@ -284,18 +298,21 @@ class NotificationBatchProcessorTest {
         val notification = createTestQueuedNotification("notif-1", testUserId, testBatchKey)
         
         coEvery { mockQueueRepository.getPending(testUserId) } returns flowOf(
-            LiftrixResult.Success(listOf(notification))
+            Result.success(listOf(notification))
         )
         
-        coEvery { mockFcmSender.sendSingle(notification) } returns LiftrixResult.Error(mockk {
-            every { errorMessage } returns "FCM send failed"
-        })
+        coEvery { mockFcmSender.sendSingle(notification) } returns Result.failure(
+            LiftrixError.NetworkError(
+                errorMessage = "FCM send failed",
+                analyticsContext = mapOf("notification_id" to "notif-1")
+            )
+        )
         
         // When
         val result = batchProcessor.processBatch(testUserId)
         
         // Then
-        assertTrue("Batch processing should fail when FCM sending fails", result is LiftrixResult.Error)
+        assertTrue("Batch processing should fail when FCM sending fails", result.isFailure)
         
         // Verify notification was not marked as sent
         coVerify(exactly = 0) { mockQueueRepository.markSent(any()) }
@@ -313,23 +330,26 @@ class NotificationBatchProcessorTest {
         )
         
         coEvery { mockQueueRepository.getPending(testUserId) } returns flowOf(
-            LiftrixResult.Success(notifications)
+            Result.success(notifications)
         )
         
         // First notification succeeds
-        coEvery { mockFcmSender.sendSingle(notifications[0]) } returns LiftrixResult.Success(Unit)
+        coEvery { mockFcmSender.sendSingle(notifications[0]) } returns Result.success(Unit)
         // Second notification fails
-        coEvery { mockFcmSender.sendSingle(notifications[1]) } returns LiftrixResult.Error(mockk {
-            every { errorMessage } returns "Send failed"
-        })
+        coEvery { mockFcmSender.sendSingle(notifications[1]) } returns Result.failure(
+            LiftrixError.NetworkError(
+                errorMessage = "Send failed",
+                analyticsContext = mapOf("notification_id" to "notif-2")
+            )
+        )
         
-        coEvery { mockQueueRepository.markSent("notif-1") } returns flowOf(LiftrixResult.Success(Unit))
+        coEvery { mockQueueRepository.markSent("notif-1") } returns flowOf(Result.success(Unit))
         
         // When
         val result = batchProcessor.processBatch(testUserId)
         
         // Then
-        assertTrue("Batch processing should handle partial failures", result is LiftrixResult.Error)
+        assertTrue("Batch processing should handle partial failures", result.isFailure)
         
         // Verify only successful notification was marked as sent
         coVerify(exactly = 1) { mockQueueRepository.markSent("notif-1") }
@@ -356,25 +376,25 @@ class NotificationBatchProcessorTest {
         
         // Mock the repository to return only ready notifications
         coEvery { mockQueueRepository.getPending(testUserId) } returns flowOf(
-            LiftrixResult.Success(readyNotifications)
+            Result.success(readyNotifications)
         )
         
         val mockInboxNotification = mockk<NotificationQueue>()
         
         coEvery { 
             mockNotificationBuilder.buildInboxStyleNotification(readyNotifications, testUserId) 
-        } returns LiftrixResult.Success(mockInboxNotification)
+        } returns Result.success(mockInboxNotification)
         
         coEvery { mockFcmSender.sendToUser(testUserId, mockInboxNotification) } returns 
-            LiftrixResult.Success(Unit)
+            Result.success(Unit)
         
-        coEvery { mockQueueRepository.markSent(any()) } returns flowOf(LiftrixResult.Success(Unit))
+        coEvery { mockQueueRepository.markSent(any<String>()) } returns flowOf(Result.success(Unit))
         
         // When
         val result = batchProcessor.processBatch(testUserId)
         
         // Then
-        assertTrue("Batch processing should succeed", result is LiftrixResult.Success)
+        assertTrue("Batch processing should succeed", result.isSuccess)
         
         // Verify only ready notifications were processed
         coVerify(exactly = 1) { mockFcmSender.sendToUser(testUserId, mockInboxNotification) }
@@ -399,17 +419,17 @@ class NotificationBatchProcessorTest {
         val mockSummaryNotification = mockk<NotificationQueue>()
         
         coEvery { mockQueueRepository.getPending(testUserId) } returns flowOf(
-            LiftrixResult.Success(largeNotificationList)
+            Result.success(largeNotificationList)
         )
         
         coEvery { 
             mockNotificationBuilder.buildSummaryNotification(largeNotificationList, testUserId) 
-        } returns LiftrixResult.Success(mockSummaryNotification)
+        } returns Result.success(mockSummaryNotification)
         
         coEvery { mockFcmSender.sendToUser(testUserId, mockSummaryNotification) } returns 
-            LiftrixResult.Success(Unit)
+            Result.success(Unit)
         
-        coEvery { mockQueueRepository.markSent(any()) } returns flowOf(LiftrixResult.Success(Unit))
+        coEvery { mockQueueRepository.markSent(any<String>()) } returns flowOf(Result.success(Unit))
         
         val startTime = System.currentTimeMillis()
         
@@ -419,7 +439,7 @@ class NotificationBatchProcessorTest {
         // Then
         val processingTime = System.currentTimeMillis() - startTime
         
-        assertTrue("Batch processing should succeed", result is LiftrixResult.Success)
+        assertTrue("Batch processing should succeed", result.isSuccess)
         assertTrue("Processing should complete within reasonable time", processingTime < 1000) // Less than 1 second
         
         // Verify all notifications were processed as a single summary
@@ -451,25 +471,25 @@ class NotificationBatchProcessorTest {
         val mockNormalPriorityNotification = mockk<NotificationQueue>()
         
         coEvery { mockQueueRepository.getPending(testUserId) } returns flowOf(
-            LiftrixResult.Success(allNotifications)
+            Result.success(allNotifications)
         )
         
         coEvery { 
             mockNotificationBuilder.buildInboxStyleNotification(highPriorityNotifications, testUserId) 
-        } returns LiftrixResult.Success(mockHighPriorityNotification)
+        } returns Result.success(mockHighPriorityNotification)
         
         coEvery { 
             mockNotificationBuilder.buildInboxStyleNotification(normalPriorityNotifications, testUserId) 
-        } returns LiftrixResult.Success(mockNormalPriorityNotification)
+        } returns Result.success(mockNormalPriorityNotification)
         
-        coEvery { mockFcmSender.sendToUser(testUserId, any()) } returns LiftrixResult.Success(Unit)
-        coEvery { mockQueueRepository.markSent(any()) } returns flowOf(LiftrixResult.Success(Unit))
+        coEvery { mockFcmSender.sendToUser(testUserId, any<NotificationQueue>()) } returns Result.success(Unit)
+        coEvery { mockQueueRepository.markSent(any<String>()) } returns flowOf(Result.success(Unit))
         
         // When
         val result = batchProcessor.processBatch(testUserId)
         
         // Then
-        assertTrue("Batch processing should succeed", result is LiftrixResult.Success)
+        assertTrue("Batch processing should succeed", result.isSuccess)
         
         // Verify both priority groups were processed separately
         coVerify(exactly = 1) { 
@@ -525,24 +545,26 @@ class NotificationBatchProcessorTest {
         
         // Add successful responses
         repeat(successCount) {
-            responses.add(mockk<SendResponse> {
-                every { isSuccessful } returns true
-                every { messageId } returns "msg-$it"
-            })
+            responses.add(SendResponse(
+                messageId = "msg-$it",
+                exception = null,
+                isSuccessful = true
+            ))
         }
         
         // Add failed responses
         repeat(failureCount) {
-            responses.add(mockk<SendResponse> {
-                every { isSuccessful } returns false
-                every { exception } returns RuntimeException("Send failed")
-            })
+            responses.add(SendResponse(
+                messageId = null,
+                exception = RuntimeException("Send failed"),
+                isSuccessful = false
+            ))
         }
         
-        return mockk<BatchResponse> {
-            every { successCount } returns successCount
-            every { failureCount } returns failureCount
-            every { responses } returns responses
-        }
+        return BatchResponse(
+            successCount = successCount,
+            failureCount = failureCount,
+            responses = responses
+        )
     }
 }

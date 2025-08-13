@@ -3,7 +3,13 @@ package com.example.liftrix.domain.usecase.social
 import androidx.paging.PagingData
 import androidx.paging.testing.asSnapshot
 import com.example.liftrix.domain.model.common.LiftrixResult
-import com.example.liftrix.domain.model.social.*
+import com.example.liftrix.domain.model.social.WorkoutPost
+import com.example.liftrix.domain.model.social.PostVisibility
+import com.example.liftrix.domain.model.social.FollowRelationship
+import com.example.liftrix.domain.model.social.FollowStatus
+import com.example.liftrix.domain.model.social.ConnectionStatus
+import com.example.liftrix.domain.model.social.MediaItem
+import com.example.liftrix.domain.model.social.MediaType
 import com.example.liftrix.domain.repository.social.FeedRepository
 import com.example.liftrix.domain.repository.social.FollowRepository
 import com.example.liftrix.domain.service.PrivacyEnforcementService
@@ -64,20 +70,20 @@ class FeedGeneratorUseCaseTest {
             )
         )
 
-        coEvery { followRepository.getFollowing(testUserId) } returns LiftrixResult.Success(followedUsers)
-        every { feedRepository.getHomeFeed(testUserId, 20) } returns flowOf(PagingData.from(expectedPosts))
+        coEvery { followRepository.getFollowing(testUserId) } returns LiftrixResult.success(followedUsers)
+        every { feedRepository.getHomeFeed(testUserId) } returns flowOf(PagingData.from(expectedPosts))
         coEvery { privacyService.canViewPost(testUserId, any()) } returns true
 
         // When
-        val result = feedRepository.getHomeFeed(testUserId)
+        val result = feedGeneratorUseCase.invoke(testUserId, includeDiscovery = false)
 
-        // Then
+        // Then - Test the first page of results
         val snapshot = result.asSnapshot()
         assertEquals(1, snapshot.size)
         assertEquals("post1", snapshot[0].id)
         assertEquals(followedUserId, snapshot[0].userId)
         
-        verify { feedRepository.getHomeFeed(testUserId, 20) }
+        verify { feedRepository.getHomeFeed(testUserId) }
     }
 
     @Test
@@ -96,12 +102,12 @@ class FeedGeneratorUseCaseTest {
             )
         )
 
-        coEvery { followRepository.getFollowing(testUserId) } returns LiftrixResult.Success(followedUsers)
-        every { feedRepository.getDiscoveryFeed(testUserId, 20) } returns flowOf(PagingData.from(expectedPosts))
+        coEvery { followRepository.getFollowing(testUserId) } returns LiftrixResult.success(followedUsers)
+        every { feedRepository.getDiscoveryFeed(testUserId) } returns flowOf(PagingData.from(expectedPosts))
         coEvery { privacyService.canViewPost(testUserId, any()) } returns true
 
         // When
-        val result = feedRepository.getDiscoveryFeed(testUserId)
+        val result = feedGeneratorUseCase.invoke(testUserId, includeDiscovery = true)
 
         // Then
         val snapshot = result.asSnapshot()
@@ -170,12 +176,12 @@ class FeedGeneratorUseCaseTest {
             )
         )
 
-        coEvery { followRepository.getFollowing(testUserId) } returns emptyList()
-        every { feedRepository.getHomeFeed(testUserId, 20) } returns flowOf(PagingData.from(privatePosts))
+        coEvery { followRepository.getFollowing(testUserId) } returns LiftrixResult.success(emptyList())
+        every { feedRepository.getHomeFeed(testUserId) } returns flowOf(PagingData.from(privatePosts))
         coEvery { privacyService.canViewPost(testUserId, any()) } returns false
 
         // When
-        val result = feedRepository.getHomeFeed(testUserId)
+        val result = feedGeneratorUseCase.invoke(testUserId, includeDiscovery = false)
 
         // Then - posts should be filtered out by privacy service
         val snapshot = result.asSnapshot()
@@ -195,14 +201,14 @@ class FeedGeneratorUseCaseTest {
             )
         )
 
-        coEvery { followRepository.getFollowing(testUserId) } returns listOf(
+        coEvery { followRepository.getFollowing(testUserId) } returns LiftrixResult.success(listOf(
             createFollowRelationship(testUserId, followedUserId)
-        )
-        every { feedRepository.getHomeFeed(testUserId, 20) } returns flowOf(PagingData.from(followersOnlyPosts))
+        ))
+        every { feedRepository.getHomeFeed(testUserId) } returns flowOf(PagingData.from(followersOnlyPosts))
         coEvery { privacyService.canViewPost(testUserId, any()) } returns true
 
         // When
-        val result = feedRepository.getHomeFeed(testUserId)
+        val result = feedGeneratorUseCase.invoke(testUserId, includeDiscovery = false)
 
         // Then
         val snapshot = result.asSnapshot()
@@ -223,12 +229,12 @@ class FeedGeneratorUseCaseTest {
             )
         )
 
-        coEvery { followRepository.getFollowing(testUserId) } returns emptyList()
-        every { feedRepository.getDiscoveryFeed(testUserId, 20) } returns flowOf(PagingData.from(publicPosts))
+        coEvery { followRepository.getFollowing(testUserId) } returns LiftrixResult.success(emptyList())
+        every { feedRepository.getDiscoveryFeed(testUserId) } returns flowOf(PagingData.from(publicPosts))
         coEvery { privacyService.canViewPost(testUserId, any()) } returns true
 
         // When
-        val result = feedRepository.getDiscoveryFeed(testUserId)
+        val result = feedGeneratorUseCase.invoke(testUserId, includeDiscovery = true)
 
         // Then
         val snapshot = result.asSnapshot()

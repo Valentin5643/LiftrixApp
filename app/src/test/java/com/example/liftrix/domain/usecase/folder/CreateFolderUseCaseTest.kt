@@ -188,7 +188,7 @@ class CreateFolderUseCaseTest {
         
         // Mock profile doesn't exist initially, but exists after creation
         coEvery { profileRepository.hasProfile(validUserId) } returnsMany listOf(false, true, true)
-        coEvery { profileRepository.saveProfile(any()) } returns Result.success(minimalProfile)
+        coEvery { profileRepository.saveProfile(any()) } returns Result.success(Unit)
         coEvery { folderRepository.doesFolderNameExist(validUserId, validFolderName) } returns false
         coEvery { folderRepository.createFolder(any()) } returns Result.success(expectedFolder)
         
@@ -234,7 +234,7 @@ class CreateFolderUseCaseTest {
         
         // Mock profile creation succeeds but profile still doesn't exist after
         coEvery { profileRepository.hasProfile(validUserId) } returnsMany listOf(false, false, false)
-        coEvery { profileRepository.saveProfile(any()) } returns Result.success(minimalProfile)
+        coEvery { profileRepository.saveProfile(any()) } returns Result.success(Unit)
         
         // Act
         val result = createFolderUseCase(input)
@@ -332,7 +332,7 @@ class CreateFolderUseCaseTest {
         coVerify(exactly = 1) { folderRepository.doesFolderNameExist(validUserId, validFolderName) }
         coVerify(exactly = 1) { 
             folderRepository.createFolder(match { folder -> 
-                folder.userId.value == validUserId 
+                folder.userId == validUserId 
             })
         }
     }

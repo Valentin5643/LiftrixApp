@@ -472,5 +472,6 @@ fun AnalyticsWidgetEvent.getAffectedWidgets(): Set<String> = when (this) {
     is AnalyticsWidgetEvent.TrackInteraction -> setOf(widgetId)
     is AnalyticsWidgetEvent.DismissError -> if (widgetId != null) setOf(widgetId) else emptySet()
     is AnalyticsWidgetEvent.RetryOperation -> if (widgetId != null) setOf(widgetId) else emptySet()
+    is AnalyticsWidgetEvent.ClearError -> if (widgetId != null) setOf(widgetId) else emptySet()
     else -> emptySet()
 }

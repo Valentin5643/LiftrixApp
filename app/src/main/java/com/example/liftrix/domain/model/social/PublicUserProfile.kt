@@ -97,6 +97,7 @@ enum class FollowStatus {
     BLOCKED            // User is blocked
 }
 
+
 /**
  * Public workout statistics for profile viewing
  */

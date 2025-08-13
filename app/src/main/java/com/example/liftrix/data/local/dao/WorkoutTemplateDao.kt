@@ -160,4 +160,66 @@ interface WorkoutTemplateDao {
      */
     @Query("SELECT COUNT(*) FROM workout_templates WHERE folder_id = :folderId AND user_id = :userId")
     suspend fun getFolderTemplateCount(folderId: String, userId: String): Int
+    
+    /**
+     * Bulk update folder IDs for multiple templates (user-scoped)
+     */
+    @Query("UPDATE workout_templates SET folder_id = :folderId WHERE id IN (:templateIds) AND user_id = :userId")
+    suspend fun bulkUpdateFolderIds(templateIds: List<String>, folderId: String, userId: String): Int
+    
+    /**
+     * Move templates between folders (user-scoped)
+     */
+    @Query("UPDATE workout_templates SET folder_id = :targetFolderId WHERE id IN (:templateIds) AND folder_id = :sourceFolderId AND user_id = :userId")
+    suspend fun moveTemplatesBetweenFolders(templateIds: List<String>, sourceFolderId: String, targetFolderId: String, userId: String): Int
+    
+    /**
+     * Validate folder capacity (check if templates can fit in folder)
+     */
+    suspend fun validateFolderCapacity(folderId: String, additionalCount: Int, userId: String): Boolean {
+        val currentCount = getFolderTemplateCount(folderId, userId)
+        return (currentCount + additionalCount) <= 100 // Max 100 templates per folder
+    }
+    
+    /**
+     * Update folder statistics (placeholder - would update folder metadata)
+     */
+    suspend fun updateFolderStatistics(folderId: String, userId: String) {
+        // This would update folder-level statistics in a separate FolderDao
+        // For now, it's a no-op placeholder
+    }
+    
+    /**
+     * Update template statistics (placeholder - would update template metadata)
+     */
+    suspend fun updateTemplateStatistics(templateId: String, userId: String) {
+        // This would update template-level statistics
+        // For now, it's a no-op placeholder
+    }
+    
+    /**
+     * Validate folder creation (check if folder name is valid and unique)
+     */
+    suspend fun validateFolderCreation(folderName: String, userId: String): Boolean {
+        // This would validate against a folders table
+        // For now, return true as placeholder
+        return folderName.isNotBlank() && folderName.length <= 100
+    }
+    
+    /**
+     * Assign templates to a folder (user-scoped)
+     */
+    @Query("UPDATE workout_templates SET folder_id = :folderId WHERE id IN (:templateIds) AND user_id = :userId")
+    suspend fun assignTemplatesToFolder(templateIds: List<String>, folderId: String, userId: String): Int
+    
+    /**
+     * Calculate folder analytics (placeholder - would compute folder-level metrics)
+     */
+    suspend fun calculateFolderAnalytics(folderId: String, userId: String): Map<String, Any> {
+        val templateCount = getFolderTemplateCount(folderId, userId)
+        return mapOf(
+            "templateCount" to templateCount,
+            "avgDifficulty" to 3.0 // Placeholder value
+        )
+    }
 } 

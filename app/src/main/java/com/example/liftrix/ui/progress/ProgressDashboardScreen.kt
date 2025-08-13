@@ -95,7 +95,7 @@ import com.example.liftrix.core.formatting.WeightFormatter
 import com.example.liftrix.ui.progress.components.WidgetContainer
 import com.example.liftrix.ui.progress.components.WidgetLayoutMode
 import com.example.liftrix.ui.progress.components.ResponsiveDashboardLayout
-import com.example.liftrix.domain.model.analytics.DashboardLayoutMode
+import com.example.liftrix.ui.progress.components.DashboardLayoutMode
 import com.example.liftrix.ui.common.rememberWindowSizeClass
 import com.example.liftrix.ui.progress.components.DailyCaloriesCard
 import com.example.liftrix.ui.progress.components.WeeklyCalorieTrendCard
@@ -121,13 +121,7 @@ import com.example.liftrix.ui.progress.NavigationCallbacks
 private fun mapDomainLayoutModeToUI(
     domainMode: com.example.liftrix.domain.model.analytics.DashboardLayoutMode?
 ): DashboardLayoutMode? {
-    return when (domainMode) {
-        com.example.liftrix.domain.model.analytics.DashboardLayoutMode.GRID -> DashboardLayoutMode.GRID
-        com.example.liftrix.domain.model.analytics.DashboardLayoutMode.SECTIONS -> DashboardLayoutMode.SECTIONS
-        com.example.liftrix.domain.model.analytics.DashboardLayoutMode.LIST -> DashboardLayoutMode.LIST
-        com.example.liftrix.domain.model.analytics.DashboardLayoutMode.CUSTOM -> DashboardLayoutMode.CUSTOM
-        null -> null
-    }
+    return DashboardLayoutMode.fromDomain(domainMode)
 }
 
 /**
@@ -991,11 +985,13 @@ private fun ResponsiveWidgetsSection(
                     Timber.d("🔍 DEBUG LAYOUT: screenWidth=${windowSizeClass.widthDp.value.toInt()}")
                     Timber.d("🔍 DEBUG LAYOUT: widgetCount=${filteredWidgets.size}")
                     
-                    val result = DashboardLayoutMode.getOptimalMode(
+                    // Convert UI enum result back to domain enum for ResponsiveDashboardLayout
+                    val uiLayoutMode = DashboardLayoutMode.getOptimalMode(
                         screenWidthDp = windowSizeClass.widthDp.value.toInt(),
                         widgetCount = filteredWidgets.size,
                         userPreference = userPreference
                     )
+                    val result = DashboardLayoutMode.toDomain(uiLayoutMode)
                     
                     Timber.d("🔍 DEBUG LAYOUT: FINAL RESULT=$result")
                     result

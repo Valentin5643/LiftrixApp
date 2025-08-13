@@ -3,7 +3,9 @@ package com.example.liftrix.debug
 import com.example.liftrix.data.local.entity.FolderEntity
 import com.example.liftrix.domain.model.*
 import com.example.liftrix.domain.repository.ProfileRepository
+import io.mockk.coEvery
 import io.mockk.mockk
+import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Test
 import java.time.Instant
@@ -38,7 +40,10 @@ class TypeMismatchErrorValidationTest {
     
     @Before
     fun setup() {
-        profileRepository = mockk()
+        profileRepository = mockk<ProfileRepository>()
+        
+        // Set up default mock behavior for suspend function hasProfile
+        coEvery { profileRepository.hasProfile(any<String>()) } returns true
     }
     
     // ========================================
@@ -46,7 +51,7 @@ class TypeMismatchErrorValidationTest {
     // ========================================
     
     @Test
-    fun `FAILING - Instant.epochSecond returns Long but FolderEntity expects Instant`() {
+    fun `FAILING - Instant epochSecond returns Long but FolderEntity expects Instant`() {
         // **ERROR LOCATION**: Exactly as documented in DEBUG lines 54-55
         // **EXPECTED ERROR**: Type mismatch: inferred type is Long but Instant was expected
         
@@ -58,7 +63,7 @@ class TypeMismatchErrorValidationTest {
             updatedAt = currentTime,  // FIXED: Use Instant directly
             templateCount = 0,
             isSynced = false,
-            syncVersion = 1
+            syncVersion = 1L
         )
         
         // Realistic assertion to make this a proper test
@@ -67,18 +72,18 @@ class TypeMismatchErrorValidationTest {
     }
     
     @Test 
-    fun `FAILING - System.currentTimeMillis returns Long but FolderEntity expects Instant`() {
+    fun `FAILING - System currentTimeMillis returns Long but FolderEntity expects Instant`() {
         // **ALTERNATIVE ERROR SCENARIO**: Different Long source, same type mismatch
         
         val folderEntity = FolderEntity(
             id = "timestamp-test",
             userId = userIdString,
             name = "Timestamp Test Folder", 
-            createdAt = System.currentTimeMillis(),  // FAILS: Long (millis) but Instant expected
-            updatedAt = System.currentTimeMillis(),  // FAILS: Long (millis) but Instant expected
+            createdAt = Instant.ofEpochMilli(System.currentTimeMillis()),  // FIXED: Convert Long to Instant
+            updatedAt = Instant.ofEpochMilli(System.currentTimeMillis()),  // FIXED: Convert Long to Instant
             templateCount = 5,
             isSynced = true,
-            syncVersion = 2
+            syncVersion = 2L
         )
         
         assertEquals("timestamp-test", folderEntity.id)
@@ -97,11 +102,11 @@ class TypeMismatchErrorValidationTest {
             id = "calculated-time-test",
             userId = userIdString,
             name = "Calculated Time Folder",
-            createdAt = oneHourAgo,   // FAILS: Calculated Long but Instant expected
-            updatedAt = oneHourLater, // FAILS: Calculated Long but Instant expected
+            createdAt = oneHourAgo,   // FIXED: Instant calculation works correctly
+            updatedAt = oneHourLater, // FIXED: Instant calculation works correctly
             templateCount = 0,
             isSynced = false, 
-            syncVersion = 1
+            syncVersion = 1L
         )
         
         assertEquals("calculated-time-test", folderEntity.id)
@@ -117,9 +122,11 @@ class TypeMismatchErrorValidationTest {
         // **EXPECTED ERROR**: Type mismatch: inferred type is UserId but String was expected
         
         // ProfileRepository.hasProfile(userId: String) but we pass UserId value class
-        val hasProfile = profileRepository.hasProfile(userIdValueClass)
+        val hasProfile = runBlocking {
+            profileRepository.hasProfile(userIdValueClass.value)  // FIXED: Use .value and runBlocking
+        }
         //                                            ^^^^^^^^^^^^^^^^^
-        //                                       FAILS: UserId but String expected
+        //                                       FIXED: Extract .value and wrap in runBlocking
         
         assertEquals(true, hasProfile) // Realistic assertion assuming success
     }
@@ -136,9 +143,11 @@ class TypeMismatchErrorValidationTest {
         )
         
         // Each iteration will fail compilation
-        val results = userIds.map { userId ->
-            profileRepository.hasProfile(userId.value)  // FIXED: Extract .value
-            //                          ^^^^^^
+        val results = runBlocking {
+            userIds.map { userId ->
+                profileRepository.hasProfile(userId.value)  // FIXED: Extract .value and use runBlocking
+                //                          ^^^^^^
+            }
         }
         
         assertEquals(4, results.size)
@@ -152,12 +161,17 @@ class TypeMismatchErrorValidationTest {
         val secondaryUserId = UserId("secondary-user")
         
         // Multiple parameter positions with type mismatch
-        val primaryProfile = profileRepository.hasProfile(primaryUserId.value)     // FIXED: Extract .value
-        val secondaryProfile = profileRepository.hasProfile(secondaryUserId.value) // FIXED: Extract .value
+        val (primaryProfile, secondaryProfile) = runBlocking {
+            val primary = profileRepository.hasProfile(primaryUserId.value)     // FIXED: Extract .value and use runBlocking
+            val secondary = profileRepository.hasProfile(secondaryUserId.value) // FIXED: Extract .value and use runBlocking
+            Pair(primary, secondary)
+        }
         
         // Compound usage in method chaining would fail
-        val bothProfilesExist = profileRepository.hasProfile(primaryUserId.value) && 
-                               profileRepository.hasProfile(secondaryUserId.value)
+        val bothProfilesExist = runBlocking {
+            profileRepository.hasProfile(primaryUserId.value) && 
+            profileRepository.hasProfile(secondaryUserId.value)
+        }
         //                                      ^^^^^^^^^^^^^                ^^^^^^^^^^^^^^^
         //                                   FAILS: Both UserId vs String
         
@@ -173,7 +187,9 @@ class TypeMismatchErrorValidationTest {
         // **COMPOUND SCENARIO**: Multiple type system failures in one test
         
         // 1. UserId vs String mismatch
-        val hasProfile = profileRepository.hasProfile(userIdValueClass.value)  // FIXED: Extract .value
+        val hasProfile = runBlocking {
+            profileRepository.hasProfile(userIdValueClass.value)  // FIXED: Extract .value and use runBlocking
+        }
         
         // 2. Long vs Instant mismatch in same test
         val folderEntity = FolderEntity(
@@ -184,7 +200,7 @@ class TypeMismatchErrorValidationTest {
             updatedAt = currentTime,  // FIXED: Use Instant directly
             templateCount = 0,
             isSynced = false,
-            syncVersion = 1
+            syncVersion = 1L
         )
         
         // Both type errors must be resolved for compilation success
@@ -203,22 +219,24 @@ class TypeMismatchErrorValidationTest {
         )
         
         // Type error cascades through collection operations
-        val allProfilesExist = userIdCollection.all { userId ->
-            profileRepository.hasProfile(userId.value)  // FIXED: Extract .value from each UserId
+        val allProfilesExist = runBlocking {
+            userIdCollection.all { userId ->
+                profileRepository.hasProfile(userId.value)  // FIXED: Extract .value from each UserId and use runBlocking
+            }
         }
         
         // Time calculation errors cascade through entity creation
         val entities = (1..3).map { index ->
-            val timeOffset = currentTime.plusSeconds(index * 1000)  // Instant calculation
+            val timeOffset = currentTime.plusSeconds(index * 1000L)  // FIXED: Use Long for seconds calculation
             FolderEntity(
                 id = "cascade-$index",
                 userId = userIdString,
                 name = "Cascade Test $index",
-                createdAt = timeOffset,  // FAILS: Long vs Instant
-                updatedAt = timeOffset,  // FAILS: Long vs Instant
+                createdAt = timeOffset,  // FIXED: Instant calculation works correctly
+                updatedAt = timeOffset,  // FIXED: Instant calculation works correctly
                 templateCount = index,
                 isSynced = false,
-                syncVersion = 1
+                syncVersion = 1L  // FIXED: Use Long for syncVersion
             )
         }
         

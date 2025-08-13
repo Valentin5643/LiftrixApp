@@ -287,10 +287,10 @@ class PreferencesServiceImpl @Inject constructor(
      */
     private fun mapWidgetLayoutModeToDashboardLayoutMode(mode: WidgetLayoutMode): DashboardLayoutMode {
         return when (mode) {
-            WidgetLayoutMode.GRID -> DashboardLayoutMode.GRID
-            WidgetLayoutMode.STAGGERED -> DashboardLayoutMode.GRID // Map staggered to grid for now
-            WidgetLayoutMode.LIST -> DashboardLayoutMode.LIST
-            WidgetLayoutMode.SECTIONS -> DashboardLayoutMode.SECTIONS
+            WidgetLayoutMode.GRID -> DashboardLayoutMode.AUTO
+            WidgetLayoutMode.STAGGERED -> DashboardLayoutMode.AUTO // Map staggered to auto for now
+            WidgetLayoutMode.LIST -> DashboardLayoutMode.COMPACT
+            WidgetLayoutMode.SECTIONS -> DashboardLayoutMode.AUTO
         }
     }
     

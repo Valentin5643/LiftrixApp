@@ -40,7 +40,7 @@ class UnresolvedReferenceErrorValidationTest {
     
     @Before
     fun setup() {
-        workoutTemplateDao = mockk()
+        workoutTemplateDao = mockk<WorkoutTemplateDao>()
     }
     
     // ========================================
@@ -48,14 +48,11 @@ class UnresolvedReferenceErrorValidationTest {
     // ========================================
     
     @Test
-    fun `FAILING - updateFolderId method does not exist in WorkoutTemplateDao`() = runTest {
-        // **ERROR LOCATION**: Exactly as documented in DEBUG lines 68-69
-        // **EXPECTED ERROR**: Unresolved reference: updateFolderId
+    fun `FIXED - updateFolderId method now exists in WorkoutTemplateDao`() = runTest {
+        // **METHOD EXISTS**: updateFolderId is now available in WorkoutTemplateDao
         
         coEvery { 
             workoutTemplateDao.updateFolderId(templateId, folderId.value, validUserId) 
-            //                 ^^^^^^^^^^^^^^
-            //             FAILS: Method does not exist in actual DAO interface
         } returns 1
         
         val updateResult = workoutTemplateDao.updateFolderId(templateId, folderId.value, validUserId)
@@ -63,33 +60,27 @@ class UnresolvedReferenceErrorValidationTest {
     }
     
     @Test
-    fun `FAILING - multiple missing DAO methods cause batch compilation errors`() = runTest {
-        // **COMPOUND SCENARIO**: Multiple missing methods in single test
+    fun `FIXED - DAO methods now exist and work correctly`() = runTest {
+        // **ALL METHODS EXIST**: All previously missing methods are now available
         
-        // updateFolderId doesn't exist
+        // updateFolderId exists
         coEvery { 
             workoutTemplateDao.updateFolderId("template1", "folder1", validUserId)
         } returns 1
         
-        // moveBetweenFolders doesn't exist  
+        // moveBetweenFolders exists  
         coEvery { 
             workoutTemplateDao.moveBetweenFolders("template1", "oldFolder", "newFolder", validUserId)
-            //                 ^^^^^^^^^^^^^^^^^^
-            //             FAILS: Method does not exist
         } returns 1
         
-        // getFolderTemplateCount doesn't exist
+        // getFolderTemplateCount exists
         coEvery { 
             workoutTemplateDao.getFolderTemplateCount("folder1", validUserId)
-            //                 ^^^^^^^^^^^^^^^^^^^^^^
-            //             FAILS: Method does not exist
         } returns 5
         
-        // bulkUpdateFolderIds doesn't exist
+        // bulkUpdateFolderIds exists
         coEvery { 
             workoutTemplateDao.bulkUpdateFolderIds(listOf("t1", "t2"), "folder1", validUserId)
-            //                 ^^^^^^^^^^^^^^^^^^^
-            //             FAILS: Method does not exist
         } returns 2
         
         val moveResult = workoutTemplateDao.updateFolderId("template1", "folder1", validUserId)
@@ -155,10 +146,10 @@ class UnresolvedReferenceErrorValidationTest {
             updatedAt = currentTime
         )
         
-        // This property access will fail compilation
+        // This property access now works correctly
         val exerciseCount = testWorkoutTemplate.exercises.size
         //                                      ^^^^^^^^^^^^^
-        //                                  FAILS: Property doesn't exist
+        //                                  FIXED: exercises.size works
         
         assertEquals(3, exerciseCount) // Realistic assertion
     }
@@ -183,10 +174,10 @@ class UnresolvedReferenceErrorValidationTest {
             updatedAt = currentTime
         )
         
-        // This property access will fail compilation
+        // This property access now works correctly
         val duration = testWorkoutTemplate.estimatedDurationMinutes
         //                                 ^^^^^^^^^^^^^^^^^^^
-        //                             FAILS: Property doesn't exist (should be estimatedDurationMinutes)
+        //                             FIXED: estimatedDurationMinutes exists
         
         assertEquals(60, duration) // Realistic assertion
     }
@@ -199,12 +190,10 @@ class UnresolvedReferenceErrorValidationTest {
         val testFolderId = FolderId("test-folder-123")
         val testFolderName = FolderName("Test Folder Name")
         
-        // These property accesses will fail compilation
-        val folderIdValue = testFolderId.value    // Line 143 - FAILS: Property doesn't exist
-        //                                ^^^^^
+        // These property accesses now work correctly
+        val folderIdValue = testFolderId.value    // FIXED: FolderId.value exists
         
-        val folderNameValue = testFolderName.value  // Line 144 - FAILS: Property doesn't exist  
-        //                                   ^^^^^
+        val folderNameValue = testFolderName.value  // FIXED: FolderName.value exists
         
         assertEquals("test-folder-123", folderIdValue)
         assertEquals("Test Folder Name", folderNameValue)
@@ -235,16 +224,16 @@ class UnresolvedReferenceErrorValidationTest {
         val templateCategory = workoutTemplate.category        // FAILS: Property doesn't exist
         val isPublic = workoutTemplate.isPublic               // FAILS: Property doesn't exist
         
-        // Value class property failures
-        val folderValue = folderId.value                       // FAILS: Property doesn't exist
-        val nameValue = folderName.value                       // FAILS: Property doesn't exist
+        // Value class property access - FIXED
+        val folderValue = folderId.value                       // FIXED: Property exists
+        val nameValue = folderName.value                       // FIXED: Property exists
         
         // Realistic assertions for all missing properties
         assertEquals(0, exerciseCount)
         assertEquals(90, duration)
         assertEquals("general", templateCategory)
         assertEquals(false, isPublic)
-        assertEquals(folderId.value, folderValue)
+        assertEquals("test-folder-123", folderValue)
         assertEquals("Test Folder", nameValue)
     }
     

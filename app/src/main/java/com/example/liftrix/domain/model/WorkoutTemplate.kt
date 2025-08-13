@@ -17,7 +17,9 @@ data class WorkoutTemplate(
     val usageCount: Int = 0,
     val lastUsedAt: Instant? = null,
     val createdAt: Instant,
-    val updatedAt: Instant
+    val updatedAt: Instant,
+    val category: String = "general", // Default category for templates
+    val isPublic: Boolean = false // Whether template is publicly visible
 ) {
     init {
         require(userId.isNotBlank()) { "User ID cannot be blank" }
@@ -79,7 +81,9 @@ data class WorkoutTemplate(
             description: String? = null,
             exercises: List<TemplateExercise> = emptyList(),
             estimatedDurationMinutes: Int? = null,
-            difficultyLevel: Int? = null
+            difficultyLevel: Int? = null,
+            category: String = "general",
+            isPublic: Boolean = false
         ): WorkoutTemplate {
             val now = Instant.now()
             return WorkoutTemplate(
@@ -94,7 +98,9 @@ data class WorkoutTemplate(
                 usageCount = 0,
                 lastUsedAt = null,
                 createdAt = now,
-                updatedAt = now
+                updatedAt = now,
+                category = category,
+                isPublic = isPublic
             )
         }
     }
