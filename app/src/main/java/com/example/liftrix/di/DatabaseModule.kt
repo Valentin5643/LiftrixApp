@@ -36,6 +36,11 @@ import com.example.liftrix.data.local.dao.FollowRelationshipDao
 import com.example.liftrix.data.local.dao.GymBuddyDao
 import com.example.liftrix.data.local.dao.SocialPrivacySettingsDao
 import com.example.liftrix.data.local.dao.BlockedUserDao
+import com.example.liftrix.data.local.dao.FCMTokenDao
+import com.example.liftrix.data.local.dao.NotificationPreferenceDao
+import com.example.liftrix.data.local.dao.NotificationQueueDao
+import com.example.liftrix.data.local.dao.NotificationMuteDao
+import com.example.liftrix.data.local.dao.NotificationHistoryDao
 import com.example.liftrix.data.local.seed.ExerciseLibrarySeedData
 import com.example.liftrix.data.local.seed.MetDataSeedService
 import com.example.liftrix.data.local.migration.MIGRATION_27_28
@@ -57,6 +62,7 @@ import com.example.liftrix.data.local.migration.MIGRATION_42_43
 import com.example.liftrix.data.local.migration.MIGRATION_43_44
 import com.example.liftrix.data.local.migration.MIGRATION_44_45
 import com.example.liftrix.data.local.migration.MIGRATION_45_46
+import com.example.liftrix.data.local.migration.MIGRATION_46_47
 
 import dagger.Module
 import dagger.Provides
@@ -98,7 +104,7 @@ object DatabaseModule {
                 MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35, 
                 MIGRATION_35_36, MIGRATION_36_37, MIGRATION_37_38, MIGRATION_38_39, 
                 MIGRATION_39_40, MIGRATION_40_41, MIGRATION_41_42, MIGRATION_42_43, 
-                MIGRATION_43_44, MIGRATION_44_45, MIGRATION_45_46
+                MIGRATION_43_44, MIGRATION_44_45, MIGRATION_45_46, MIGRATION_46_47
             )
             // ✅ PERSISTENCE FIX: Removed destructive migration to preserve user data
             // Only allow destructive migration on downgrade to handle edge cases
@@ -328,5 +334,34 @@ object DatabaseModule {
     @Provides
     fun provideBlockedUserDao(database: LiftrixDatabase): BlockedUserDao {
         return database.blockedUserDao()
+    }
+
+    // ========================================
+    // Notification System DAOs
+    // ========================================
+
+    @Provides
+    fun provideFCMTokenDao(database: LiftrixDatabase): FCMTokenDao {
+        return database.fcmTokenDao()
+    }
+
+    @Provides
+    fun provideNotificationPreferenceDao(database: LiftrixDatabase): NotificationPreferenceDao {
+        return database.notificationPreferenceDao()
+    }
+
+    @Provides
+    fun provideNotificationQueueDao(database: LiftrixDatabase): NotificationQueueDao {
+        return database.notificationQueueDao()
+    }
+
+    @Provides
+    fun provideNotificationMuteDao(database: LiftrixDatabase): NotificationMuteDao {
+        return database.notificationMuteDao()
+    }
+
+    @Provides
+    fun provideNotificationHistoryDao(database: LiftrixDatabase): NotificationHistoryDao {
+        return database.notificationHistoryDao()
     }
 }

@@ -98,6 +98,12 @@ sealed class SettingsEvent {
      */
     object NavigateToWidgetSettings : SettingsEvent()
     
+    /**
+     * Triggered when user taps on notification settings.
+     * Should navigate to notification settings screen.
+     */
+    object NavigateToNotifications : SettingsEvent()
+    
     // Authentication events
     /**
      * Triggered when user initiates logout process.

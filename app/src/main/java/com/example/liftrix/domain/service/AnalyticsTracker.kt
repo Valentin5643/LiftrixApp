@@ -61,4 +61,20 @@ interface AnalyticsTracker {
         resultsCount: Int,
         selectedResult: String? = null
     )
+    
+    /**
+     * Track notification actions
+     */
+    fun trackNotificationAction(
+        action: String,
+        properties: Map<String, String> = emptyMap()
+    )
+    
+    /**
+     * Track notification received events
+     */
+    fun trackNotificationReceived(
+        type: String,
+        isInForeground: Boolean
+    )
 }

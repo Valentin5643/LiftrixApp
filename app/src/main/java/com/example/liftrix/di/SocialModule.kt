@@ -184,6 +184,12 @@ object SocialModule {
         return FollowRepositoryImpl(followRelationshipDao, followRequestDao, profileViewDao, socialProfileDao, blockedUserDao, firestore)
     }
 
+    @Provides
+    @Singleton
+    fun provideNotificationRepository(): com.example.liftrix.domain.repository.NotificationRepository {
+        return com.example.liftrix.data.repository.NotificationRepositoryImpl()
+    }
+
     // ========================================
     // Social Services
     // ========================================

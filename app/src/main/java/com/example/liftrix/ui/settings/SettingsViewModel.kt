@@ -126,6 +126,7 @@ class SettingsViewModel @Inject constructor(
             is SettingsEvent.NavigateToAnomalyDetection -> handleAnomalyDetectionNavigation()
             is SettingsEvent.NavigateToAnomalyDashboard -> handleAnomalyDashboardNavigation()
             is SettingsEvent.NavigateToWidgetSettings -> handleWidgetSettingsNavigation()
+            is SettingsEvent.NavigateToNotifications -> handleNotificationsNavigation()
             is SettingsEvent.SignOutRequested -> requestSignOut()
             is SettingsEvent.SignOutConfirmed -> confirmSignOut()
             is SettingsEvent.SignOutCancelled -> cancelSignOut()
@@ -407,6 +408,14 @@ class SettingsViewModel @Inject constructor(
      */
     private fun handleWidgetSettingsNavigation() {
         trackNavigationEvent("widget_settings")
+        // Navigation will be handled by the UI layer
+    }
+
+    /**
+     * Handles notifications navigation event.
+     */
+    private fun handleNotificationsNavigation() {
+        trackNavigationEvent("notifications")
         // Navigation will be handled by the UI layer
     }
 

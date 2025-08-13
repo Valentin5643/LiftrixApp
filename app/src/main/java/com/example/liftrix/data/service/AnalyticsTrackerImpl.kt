@@ -134,6 +134,43 @@ class AnalyticsTrackerImpl @Inject constructor(
         }
     }
     
+    override fun trackNotificationAction(
+        action: String,
+        properties: Map<String, String>
+    ) {
+        try {
+            val params = mutableMapOf<String, Any>(
+                "action" to action
+            )
+            
+            params.putAll(properties)
+            
+            firebaseAnalytics.logEvent("notification_action", params.toBundle())
+            
+            Timber.d("Analytics: Notification action tracked - $action")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to track notification action analytics")
+        }
+    }
+    
+    override fun trackNotificationReceived(
+        type: String,
+        isInForeground: Boolean
+    ) {
+        try {
+            val params = mutableMapOf<String, Any>(
+                "notification_type" to type,
+                "is_foreground" to isInForeground
+            )
+            
+            firebaseAnalytics.logEvent("notification_received", params.toBundle())
+            
+            Timber.d("Analytics: Notification received tracked - $type (foreground: $isInForeground)")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to track notification received analytics")
+        }
+    }
+    
     private fun Map<String, Any>.toBundle(): android.os.Bundle {
         val bundle = android.os.Bundle()
         this.forEach { (key, value) ->

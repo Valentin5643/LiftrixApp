@@ -353,12 +353,15 @@ private fun GeneralSettings(
             enabled = !uiState.isUpdatingSettings
         )
         
-        SettingsToggleItem(
-            title = "Push Notifications",
-            subtitle = "Receive notifications for workout reminders",
-            isChecked = uiState.currentNotificationSetting,
-            onToggle = onNotificationsToggle,
-            enabled = !uiState.isUpdatingSettings
+        SettingsNavigationItem(
+            title = "Notifications",
+            subtitle = if (uiState.currentNotificationSetting) "Enabled" else "Disabled",
+            icon = Icons.Default.Notifications,
+            onClick = { 
+                // Trigger analytics event
+                stableOnEvent(SettingsEvent.NavigateToNotifications)
+                // Navigate to notification settings (callback would be passed from navigation)
+            }
         )
         
         SettingsToggleItem(

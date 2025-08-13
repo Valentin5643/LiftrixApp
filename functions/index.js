@@ -768,3 +768,683 @@ async function addToDiscoveryFeed(postId, postData, relevanceScore) {
     logger.error(`Error adding post ${postId} to discovery feed`, error);
   }
 }
+
+// ================================
+// NOTIFICATION SYSTEM FUNCTIONS
+// ================================
+
+const {getMessaging} = require("firebase-admin/messaging");
+const messaging = getMessaging();
+
+/**
+ * Cloud Function to send immediate notifications
+ * Called when high-priority events occur (PRs, follow requests)
+ */
+exports.sendImmediateNotification = onCall(async (request) => {
+  if (!request.auth) {
+    throw new Error("Authentication required");
+  }
+
+  const {targetUserId, type, title, body, data} = request.data;
+  
+  if (!targetUserId || !type || !title || !body) {
+    throw new Error("Missing required notification parameters");
+  }
+
+  try {
+    // Check notification preferences
+    const preferencesDoc = await db.collection("notification_preferences")
+        .doc(targetUserId).get();
+    
+    if (!preferencesDoc.exists) {
+      logger.warn(`No notification preferences found for user: ${targetUserId}`);
+      return {success: false, reason: "No preferences found"};
+    }
+
+    const preferences = preferencesDoc.data();
+    
+    // Check master toggle
+    if (!preferences.notifications_enabled) {
+      logger.info(`Notifications disabled for user: ${targetUserId}`);
+      return {success: false, reason: "Notifications disabled"};
+    }
+
+    // Check category-specific preferences
+    if (!isNotificationTypeEnabled(type, preferences)) {
+      logger.info(`Notification type ${type} disabled for user: ${targetUserId}`);
+      return {success: false, reason: "Notification type disabled"};
+    }
+
+    // Check if we're in quiet hours
+    if (isInQuietHours(preferences)) {
+      logger.info(`In quiet hours, queueing notification for user: ${targetUserId}`);
+      await queueNotificationForLater(targetUserId, type, title, body, data, preferences);
+      return {success: true, reason: "Queued for quiet hours"};
+    }
+
+    // Check for mutes
+    const fromUserId = data?.fromUserId;
+    if (fromUserId && await isUserMuted(targetUserId, fromUserId, type)) {
+      logger.info(`User ${fromUserId} muted by ${targetUserId}`);
+      return {success: false, reason: "User muted"};
+    }
+
+    // Get FCM tokens for user
+    const tokensSnapshot = await db.collection("fcm_tokens")
+        .where("user_id", "==", targetUserId)
+        .where("is_active", "==", true)
+        .get();
+
+    if (tokensSnapshot.empty) {
+      logger.warn(`No active FCM tokens found for user: ${targetUserId}`);
+      return {success: false, reason: "No active tokens"};
+    }
+
+    // Send to all active tokens
+    const tokens = tokensSnapshot.docs.map((doc) => doc.data().token);
+    const message = {
+      notification: {
+        title: title,
+        body: body,
+      },
+      data: {
+        type: type,
+        ...data,
+      },
+      android: {
+        priority: "high",
+        notification: {
+          channelId: getChannelIdForType(type),
+          priority: "high",
+          defaultSound: preferences.notification_sound !== false,
+          defaultVibrateTimings: preferences.notification_vibration !== false,
+        },
+      },
+      tokens: tokens,
+    };
+
+    const response = await messaging.sendEachForMulticast(message);
+
+    // Process any failed tokens
+    const failedTokens = [];
+    response.responses.forEach((resp, idx) => {
+      if (!resp.success) {
+        failedTokens.push(tokens[idx]);
+        logger.warn(`Failed to send to token: ${tokens[idx]}, error: ${resp.error}`);
+      }
+    });
+
+    // Deactivate failed tokens
+    if (failedTokens.length > 0) {
+      await deactivateFailedTokens(failedTokens);
+    }
+
+    // Store notification in history
+    await storeNotificationHistory(targetUserId, type, title, body, data);
+
+    logger.info(
+        `Sent notification to ${response.successCount} devices ` +
+        `for user: ${targetUserId}, type: ${type}`,
+    );
+
+    return {
+      success: true,
+      sentCount: response.successCount,
+      failedCount: response.failureCount,
+    };
+  } catch (error) {
+    logger.error(`Error sending immediate notification: ${error.message}`, error);
+    throw new Error(`Failed to send notification: ${error.message}`);
+  }
+});
+
+/**
+ * Cloud Function triggered when workout post creates PR
+ * Sends immediate notification to gym buddies
+ */
+exports.notifyGymBuddyPR = onDocumentWritten(
+    "workout_posts/{postId}",
+    async (event) => {
+      const postData = event.data?.after?.data();
+      
+      if (!postData || !postData.prs_count || postData.prs_count === 0) {
+        return null;
+      }
+
+      try {
+        const authorId = postData.user_id;
+        const postId = event.params.postId;
+
+        // Get gym buddies (mutual followers)
+        const gymBuddiesSnapshot = await db.collection("follow_relationships")
+            .where("following_user_id", "==", authorId)
+            .where("status", "==", "ACCEPTED")
+            .get();
+
+        // Get author's profile for display name
+        const authorDoc = await db.collection("social_profiles").doc(authorId).get();
+        const authorName = authorDoc.exists ? 
+            authorDoc.data().display_name : "A gym buddy";
+
+        // Send notification to each gym buddy
+        for (const buddyDoc of gymBuddiesSnapshot.docs) {
+          const buddyId = buddyDoc.data().follower_user_id;
+          
+          // Check if they're also friends (mutual follow)
+          const mutualFollowSnapshot = await db.collection("follow_relationships")
+              .where("follower_user_id", "==", authorId)
+              .where("following_user_id", "==", buddyId)
+              .where("status", "==", "ACCEPTED")
+              .limit(1)
+              .get();
+
+          if (mutualFollowSnapshot.empty) {
+            continue; // Only notify mutual followers (gym buddies)
+          }
+
+          const prDetails = postData.prs_achieved || ["New PR!"];
+          const prText = prDetails.length > 1 ? 
+              `${prDetails.length} PRs` : prDetails[0];
+
+          await sendImmediateNotificationInternal(
+              buddyId,
+              "GYM_BUDDY_PR",
+              `🎉 ${authorName} hit a PR!`,
+              prText,
+              {
+                postId: postId,
+                fromUserId: authorId,
+                fromUserName: authorName,
+                prDetail: prText,
+              },
+          );
+        }
+
+        logger.info(`Sent gym buddy PR notifications for post: ${postId}`);
+        return null;
+      } catch (error) {
+        logger.error(`Error sending gym buddy PR notifications: ${error.message}`, error);
+        throw error;
+      }
+    });
+
+/**
+ * Cloud Function triggered when follow request is created
+ * Sends immediate notification to target user
+ */
+exports.notifyFollowRequest = onDocumentWritten(
+    "follow_relationships/{relationshipId}",
+    async (event) => {
+      const relationshipData = event.data?.after?.data();
+      
+      if (!relationshipData || relationshipData.status !== "PENDING") {
+        return null;
+      }
+
+      try {
+        const followerId = relationshipData.follower_user_id;
+        const followingId = relationshipData.following_user_id;
+
+        // Get follower's profile
+        const followerDoc = await db.collection("social_profiles").doc(followerId).get();
+        const followerName = followerDoc.exists ? 
+            followerDoc.data().display_name : "Someone";
+
+        await sendImmediateNotificationInternal(
+            followingId,
+            "FOLLOW_REQUEST",
+            "New Follow Request",
+            `${followerName} wants to follow you`,
+            {
+              fromUserId: followerId,
+              fromUserName: followerName,
+              relationshipId: event.params.relationshipId,
+            },
+        );
+
+        logger.info(`Sent follow request notification from ${followerId} to ${followingId}`);
+        return null;
+      } catch (error) {
+        logger.error(`Error sending follow request notification: ${error.message}`, error);
+        throw error;
+      }
+    });
+
+/**
+ * Scheduled function to process batched notifications
+ * Runs every hour to send grouped social notifications
+ */
+exports.processBatchedNotifications = onSchedule(
+    {
+      schedule: "0 * * * *", // Every hour
+      timeZone: "UTC",
+    },
+    async (event) => {
+      try {
+        const now = new Date();
+        const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+
+        // Get pending notifications ready for batching
+        const pendingSnapshot = await db.collection("notification_queue")
+            .where("status", "==", "PENDING")
+            .where("scheduled_for", "<=", now)
+            .where("can_batch", "==", true)
+            .limit(1000)
+            .get();
+
+        if (pendingSnapshot.empty) {
+          logger.info("No pending notifications to batch");
+          return null;
+        }
+
+        // Group by user and batch key
+        const userBatches = {};
+        pendingSnapshot.docs.forEach((doc) => {
+          const notification = doc.data();
+          const userId = notification.user_id;
+          const batchKey = notification.batch_key || "default";
+
+          if (!userBatches[userId]) {
+            userBatches[userId] = {};
+          }
+          if (!userBatches[userId][batchKey]) {
+            userBatches[userId][batchKey] = [];
+          }
+
+          userBatches[userId][batchKey].push({
+            id: doc.id,
+            ...notification,
+          });
+        });
+
+        let processedCount = 0;
+
+        // Process each user's batched notifications
+        for (const [userId, batches] of Object.entries(userBatches)) {
+          for (const [batchKey, notifications] of Object.entries(batches)) {
+            await processBatchForUser(userId, notifications);
+            processedCount += notifications.length;
+          }
+        }
+
+        logger.info(`Processed ${processedCount} batched notifications for ${Object.keys(userBatches).length} users`);
+        return null;
+      } catch (error) {
+        logger.error("Error processing batched notifications", error);
+        throw error;
+      }
+    });
+
+/**
+ * Scheduled function to send quiet hours notifications
+ * Runs every morning to send queued notifications
+ */
+exports.sendQuietHoursNotifications = onSchedule(
+    {
+      schedule: "0 8 * * *", // 8 AM UTC daily
+      timeZone: "UTC",
+    },
+    async (event) => {
+      try {
+        const now = new Date();
+
+        // Get notifications scheduled for quiet hours
+        const queuedSnapshot = await db.collection("notification_queue")
+            .where("status", "==", "PENDING")
+            .where("scheduled_for", "<=", now)
+            .limit(1000)
+            .get();
+
+        if (queuedSnapshot.empty) {
+          logger.info("No quiet hours notifications to send");
+          return null;
+        }
+
+        let sentCount = 0;
+
+        // Process each notification
+        for (const doc of queuedSnapshot.docs) {
+          const notification = doc.data();
+          
+          try {
+            await sendQueuedNotification(notification);
+            await doc.ref.update({
+              status: "SENT",
+              sent_at: now,
+            });
+            sentCount++;
+          } catch (error) {
+            logger.error(`Failed to send queued notification ${doc.id}:`, error);
+            await doc.ref.update({
+              status: "FAILED",
+              failure_reason: error.message,
+            });
+          }
+        }
+
+        logger.info(`Sent ${sentCount} quiet hours notifications`);
+        return null;
+      } catch (error) {
+        logger.error("Error sending quiet hours notifications", error);
+        throw error;
+      }
+    });
+
+// ================================
+// NOTIFICATION HELPER FUNCTIONS
+// ================================
+
+/**
+ * Internal helper to send immediate notification
+ */
+async function sendImmediateNotificationInternal(targetUserId, type, title, body, data) {
+  // This mirrors the main sendImmediateNotification function but for internal use
+  const preferencesDoc = await db.collection("notification_preferences")
+      .doc(targetUserId).get();
+  
+  if (!preferencesDoc.exists || !preferencesDoc.data().notifications_enabled) {
+    return false;
+  }
+
+  const preferences = preferencesDoc.data();
+  
+  if (!isNotificationTypeEnabled(type, preferences)) {
+    return false;
+  }
+
+  if (isInQuietHours(preferences)) {
+    await queueNotificationForLater(targetUserId, type, title, body, data, preferences);
+    return true;
+  }
+
+  const tokensSnapshot = await db.collection("fcm_tokens")
+      .where("user_id", "==", targetUserId)
+      .where("is_active", "==", true)
+      .get();
+
+  if (tokensSnapshot.empty) {
+    return false;
+  }
+
+  const tokens = tokensSnapshot.docs.map((doc) => doc.data().token);
+  const message = {
+    notification: {title, body},
+    data: {type, ...data},
+    android: {
+      priority: "high",
+      notification: {
+        channelId: getChannelIdForType(type),
+        priority: "high",
+        defaultSound: preferences.notification_sound !== false,
+        defaultVibrateTimings: preferences.notification_vibration !== false,
+      },
+    },
+    tokens: tokens,
+  };
+
+  const response = await messaging.sendEachForMulticast(message);
+  
+  if (response.failureCount > 0) {
+    const failedTokens = [];
+    response.responses.forEach((resp, idx) => {
+      if (!resp.success) {
+        failedTokens.push(tokens[idx]);
+      }
+    });
+    await deactivateFailedTokens(failedTokens);
+  }
+
+  await storeNotificationHistory(targetUserId, type, title, body, data);
+  return response.successCount > 0;
+}
+
+/**
+ * Check if notification type is enabled in user preferences
+ */
+function isNotificationTypeEnabled(type, preferences) {
+  switch (type) {
+    case "GYM_BUDDY_PR":
+      return preferences.gym_buddy_prs !== false;
+    case "FOLLOW_REQUEST":
+      return preferences.follow_requests !== false;
+    case "POST_LIKE":
+      return preferences.post_likes !== false;
+    case "POST_COMMENT":
+      return preferences.post_comments !== false;
+    case "MENTION":
+      return preferences.mentions !== false;
+    case "ACHIEVEMENT":
+      return preferences.achievement_notifications !== false;
+    case "WORKOUT_REMINDER":
+      return preferences.reminder_notifications !== false;
+    default:
+      return preferences.social_notifications !== false;
+  }
+}
+
+/**
+ * Check if current time is in user's quiet hours
+ */
+function isInQuietHours(preferences) {
+  if (!preferences.quiet_hours_enabled) {
+    return false;
+  }
+
+  const now = new Date();
+  const currentHour = now.getHours();
+  const startHour = preferences.quiet_hours_start || 22;
+  const endHour = preferences.quiet_hours_end || 8;
+
+  if (startHour <= endHour) {
+    return currentHour >= startHour && currentHour < endHour;
+  } else {
+    return currentHour >= startHour || currentHour < endHour;
+  }
+}
+
+/**
+ * Queue notification for later delivery (quiet hours)
+ */
+async function queueNotificationForLater(userId, type, title, body, data, preferences) {
+  const tomorrow8AM = new Date();
+  tomorrow8AM.setDate(tomorrow8AM.getDate() + 1);
+  tomorrow8AM.setHours(preferences.quiet_hours_end || 8, 0, 0, 0);
+
+  await db.collection("notification_queue").add({
+    user_id: userId,
+    type: type,
+    title: title,
+    body: body,
+    data: JSON.stringify(data),
+    priority: "NORMAL",
+    channel_id: getChannelIdForType(type),
+    batch_key: `${type}_${userId}`,
+    can_batch: type !== "GYM_BUDDY_PR", // PRs should be immediate
+    scheduled_for: tomorrow8AM,
+    expires_at: new Date(tomorrow8AM.getTime() + 24 * 60 * 60 * 1000), // Expire after 24 hours
+    status: "PENDING",
+    created_at: new Date(),
+  });
+}
+
+/**
+ * Check if user has muted notifications from another user
+ */
+async function isUserMuted(userId, fromUserId, notificationType) {
+  const muteSnapshot = await db.collection("notification_mutes")
+      .where("user_id", "==", userId)
+      .where("mute_type", "==", "USER")
+      .where("muted_user_id", "==", fromUserId)
+      .limit(1)
+      .get();
+
+  if (muteSnapshot.empty) {
+    return false;
+  }
+
+  const muteData = muteSnapshot.docs[0].data();
+  const mutedUntil = muteData.muted_until;
+  
+  // If no expiry, it's permanent
+  if (!mutedUntil) {
+    return true;
+  }
+
+  // Check if mute has expired
+  return mutedUntil.toDate() > new Date();
+}
+
+/**
+ * Get notification channel ID for Android
+ */
+function getChannelIdForType(type) {
+  switch (type) {
+    case "GYM_BUDDY_PR":
+      return "gym_buddy_channel";
+    case "FOLLOW_REQUEST":
+      return "social_requests_channel";
+    case "POST_LIKE":
+    case "POST_COMMENT":
+    case "MENTION":
+      return "social_engagement_channel";
+    case "ACHIEVEMENT":
+      return "achievement_channel";
+    case "WORKOUT_REMINDER":
+      return "reminder_channel";
+    default:
+      return "default_channel";
+  }
+}
+
+/**
+ * Deactivate FCM tokens that failed to send
+ */
+async function deactivateFailedTokens(failedTokens) {
+  const batch = db.batch();
+  
+  for (const token of failedTokens) {
+    const tokenQuery = await db.collection("fcm_tokens")
+        .where("token", "==", token)
+        .limit(1)
+        .get();
+    
+    if (!tokenQuery.empty) {
+      batch.update(tokenQuery.docs[0].ref, {
+        is_active: false,
+        updated_at: new Date(),
+      });
+    }
+  }
+  
+  await batch.commit();
+}
+
+/**
+ * Store notification in user's history
+ */
+async function storeNotificationHistory(userId, type, title, body, data) {
+  await db.collection("notification_history").add({
+    user_id: userId,
+    type: type,
+    title: title,
+    body: body,
+    data: JSON.stringify(data),
+    is_read: false,
+    received_at: new Date(),
+  });
+}
+
+/**
+ * Process batched notifications for a user
+ */
+async function processBatchForUser(userId, notifications) {
+  if (notifications.length === 1) {
+    // Send single notification
+    await sendQueuedNotification(notifications[0]);
+  } else if (notifications.length <= 4) {
+    // Send as expandable notification
+    await sendBatchedNotification(userId, notifications, "inbox");
+  } else {
+    // Send as summary
+    await sendBatchedNotification(userId, notifications, "summary");
+  }
+
+  // Mark all as sent
+  const batch = db.batch();
+  notifications.forEach((notification) => {
+    const ref = db.collection("notification_queue").doc(notification.id);
+    batch.update(ref, {
+      status: "SENT",
+      sent_at: new Date(),
+    });
+  });
+  
+  await batch.commit();
+}
+
+/**
+ * Send a queued notification
+ */
+async function sendQueuedNotification(notification) {
+  const data = notification.data ? JSON.parse(notification.data) : {};
+  
+  return await sendImmediateNotificationInternal(
+      notification.user_id,
+      notification.type,
+      notification.title,
+      notification.body,
+      data,
+  );
+}
+
+/**
+ * Send batched notification (inbox or summary style)
+ */
+async function sendBatchedNotification(userId, notifications, style) {
+  const tokensSnapshot = await db.collection("fcm_tokens")
+      .where("user_id", "==", userId)
+      .where("is_active", "==", true)
+      .get();
+
+  if (tokensSnapshot.empty) {
+    return;
+  }
+
+  const tokens = tokensSnapshot.docs.map((doc) => doc.data().token);
+  
+  let title, body;
+  if (style === "summary") {
+    title = `${notifications.length} new updates`;
+    body = "Tap to view all notifications";
+  } else {
+    title = `${notifications.length} new updates`;
+    body = notifications.map((n) => `${n.title}: ${n.body}`).join("\n");
+  }
+
+  const message = {
+    notification: {title, body},
+    data: {
+      type: "BATCHED",
+      count: notifications.length.toString(),
+      style: style,
+    },
+    android: {
+      notification: {
+        channelId: "social_engagement_channel",
+      },
+    },
+    tokens: tokens,
+  };
+
+  await messaging.sendEachForMulticast(message);
+  
+  // Store in history
+  await storeNotificationHistory(userId, "BATCHED", title, body, {
+    count: notifications.length,
+    notifications: notifications.map((n) => ({
+      type: n.type,
+      title: n.title,
+      body: n.body,
+    })),
+  });
+}

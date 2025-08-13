@@ -45,6 +45,11 @@ import com.example.liftrix.data.local.dao.PostLikeDao
 import com.example.liftrix.data.local.dao.PostCommentDao
 import com.example.liftrix.data.local.dao.FeedCacheDao
 import com.example.liftrix.data.local.dao.SavedPostDao
+import com.example.liftrix.data.local.dao.FCMTokenDao
+import com.example.liftrix.data.local.dao.NotificationPreferenceDao
+import com.example.liftrix.data.local.dao.NotificationQueueDao
+import com.example.liftrix.data.local.dao.NotificationMuteDao
+import com.example.liftrix.data.local.dao.NotificationHistoryDao
 
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.data.local.entity.FolderEntity
@@ -83,6 +88,11 @@ import com.example.liftrix.data.local.entity.PostLikeEntity
 import com.example.liftrix.data.local.entity.PostCommentEntity
 import com.example.liftrix.data.local.entity.FeedCacheEntity
 import com.example.liftrix.data.local.entity.SavedPostEntity
+import com.example.liftrix.data.local.entity.FCMTokenEntity
+import com.example.liftrix.data.local.entity.NotificationPreferenceEntity
+import com.example.liftrix.data.local.entity.NotificationQueueEntity
+import com.example.liftrix.data.local.entity.NotificationMuteEntity
+import com.example.liftrix.data.local.entity.NotificationHistoryEntity
 
 
 
@@ -125,8 +135,13 @@ import com.example.liftrix.data.local.entity.SavedPostEntity
         PostCommentEntity::class,
         FeedCacheEntity::class,
         SavedPostEntity::class,
+        FCMTokenEntity::class,
+        NotificationPreferenceEntity::class,
+        NotificationQueueEntity::class,
+        NotificationMuteEntity::class,
+        NotificationHistoryEntity::class,
     ],
-    version = 46,
+    version = 47,
     exportSchema = true
 )
 @TypeConverters(
@@ -175,4 +190,9 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun postCommentDao(): PostCommentDao
     abstract fun feedCacheDao(): FeedCacheDao
     abstract fun savedPostDao(): SavedPostDao
+    abstract fun fcmTokenDao(): FCMTokenDao
+    abstract fun notificationPreferenceDao(): NotificationPreferenceDao
+    abstract fun notificationQueueDao(): NotificationQueueDao
+    abstract fun notificationMuteDao(): NotificationMuteDao
+    abstract fun notificationHistoryDao(): NotificationHistoryDao
 }

@@ -44,9 +44,11 @@ import com.example.liftrix.ui.theme.LiftrixTheme
  * touch target sizes following WCAG 2.1 AA guidelines.
  * 
  * @param title The title text displayed in the card header
+ * @param subtitle Optional subtitle text displayed below the title
  * @param isExpanded Whether the card is currently expanded
  * @param onToggle Callback invoked when the card is tapped to toggle expansion
  * @param modifier Modifier to be applied to the card
+ * @param headerContent Optional composable content displayed in the header (e.g., Switch)
  * @param content The content displayed when the card is expanded
  */
 @Composable
@@ -55,6 +57,8 @@ fun ExpandableSettingsCard(
     isExpanded: Boolean,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    headerContent: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
     // Performance monitoring for animation
@@ -95,34 +99,54 @@ fun ExpandableSettingsCard(
                 Column(
                     modifier = Modifier.padding(16.dp)
                 ) {
-                    // Card Header with Title and Expand/Collapse Icon
+                    // Card Header with Title, Subtitle, Header Content and Expand/Collapse Icon
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        
-                        IconButton(
-                            onClick = stableOnToggle,
-                            modifier = Modifier
-                                .ensureMinimumTouchTarget()
-                                .accessibilitySemantics(
-                                    description = if (isExpanded) "Collapse $title" else "Expand $title",
-                                    role = Role.Button
-                                )
+                        Column(
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Icon(
-                                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(24.dp)
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
+                            
+                            subtitle?.let { subtitleText ->
+                                Text(
+                                    text = subtitleText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Optional header content (e.g., Switch)
+                            headerContent?.invoke()
+                            
+                            IconButton(
+                                onClick = stableOnToggle,
+                                modifier = Modifier
+                                    .ensureMinimumTouchTarget()
+                                    .accessibilitySemantics(
+                                        description = if (isExpanded) "Collapse $title" else "Expand $title",
+                                        role = Role.Button
+                                    )
+                            ) {
+                                Icon(
+                                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         }
                     }
                     

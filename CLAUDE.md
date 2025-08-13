@@ -166,6 +166,30 @@ sealed class LiftrixRoute {
 ./gradlew compileDebugKotlin  # MUST pass before any commits
 ```
 
+### LiftrixError Constructor Patterns (CRITICAL)
+**ALL error instantiations MUST use correct constructor parameters:**
+```kotlin
+// ✅ CORRECT - ValidationError pattern
+LiftrixError.ValidationError(
+    field = "username",
+    violations = listOf("Failed to check availability"),
+    analyticsContext = mapOf("operation" to "CHECK_USERNAME_AVAILABILITY")
+)
+
+// ✅ CORRECT - BusinessLogicError pattern  
+LiftrixError.BusinessLogicError(
+    code = "OPERATION_FAILED",
+    errorMessage = "Operation failed",
+    analyticsContext = mapOf("operation" to "OPERATION_NAME")
+)
+
+// ❌ WRONG - Using non-existent parameters
+LiftrixError.ValidationError(
+    errorMessage = "Failed to check username availability",
+    operation = "CHECK_USERNAME_AVAILABILITY"  // Wrong parameter
+)
+```
+
 ### Common Error Patterns & Fixes
 
 #### 1. Result<T> vs LiftrixResult<T> Mixing
@@ -251,6 +275,41 @@ when (result) {
         defaultValue
     }
 }
+```
+
+#### 7. Flow<Result<T>> Return Type Fixes
+**UseCase methods must return correct Flow patterns:**
+```kotlin
+// ✅ CORRECT - Direct Flow<Result<T>> return
+suspend fun invoke(): Flow<Result<Int>> {
+    return repository.getCount()
+        .catch { throwable ->
+            emit(Result.failure(
+                LiftrixError.BusinessLogicError(
+                    code = "COUNT_FETCH_FAILED",
+                    errorMessage = "Failed to get count"
+                )
+            ))
+        }
+}
+
+// ❌ WRONG - Double-wrapped Result
+suspend fun invoke(): Flow<Result<Int>> = liftrixCatching {
+    repository.getCount()  // Returns Result<Flow<Result<Int>>>
+}
+```
+
+#### 8. Import Path Validation
+**Always use correct import paths for LiftrixError and utilities:**
+```kotlin
+// ✅ CORRECT imports
+import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.model.common.liftrixCatching
+import com.example.liftrix.domain.model.common.liftrixFailure
+
+// ❌ WRONG - Common incorrect paths that cause compilation errors
+import com.example.liftrix.core.common.liftrixCatching  // Wrong path
+import com.example.liftrix.domain.model.common.LiftrixError  // Wrong path
 ```
 
 ## Testing Strategy
