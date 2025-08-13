@@ -35,6 +35,7 @@ import com.example.liftrix.data.local.dao.UserSearchCacheDao
 import com.example.liftrix.data.local.dao.QRCodeMappingDao
 import com.example.liftrix.data.local.dao.SocialProfileDao
 import com.example.liftrix.data.local.dao.FollowRelationshipDao
+import com.example.liftrix.data.local.dao.FollowRequestDao
 import com.example.liftrix.data.local.dao.GymBuddyDao
 import com.example.liftrix.data.local.dao.SocialPrivacySettingsDao
 import com.example.liftrix.data.local.dao.BlockedUserDao
@@ -72,6 +73,7 @@ import com.example.liftrix.data.local.entity.UserSearchCacheEntity
 import com.example.liftrix.data.local.entity.QRCodeMappingEntity
 import com.example.liftrix.data.local.entity.SocialProfileEntity
 import com.example.liftrix.data.local.entity.FollowRelationshipEntity
+import com.example.liftrix.data.local.entity.FollowRequestEntity
 import com.example.liftrix.data.local.entity.GymBuddyEntity
 import com.example.liftrix.data.local.entity.SocialPrivacySettingsEntity
 import com.example.liftrix.data.local.entity.BlockedUserEntity
@@ -113,6 +115,7 @@ import com.example.liftrix.data.local.entity.SavedPostEntity
         QRCodeMappingEntity::class,
         SocialProfileEntity::class,
         FollowRelationshipEntity::class,
+        FollowRequestEntity::class,
         GymBuddyEntity::class,
         SocialPrivacySettingsEntity::class,
         BlockedUserEntity::class,
@@ -123,7 +126,7 @@ import com.example.liftrix.data.local.entity.SavedPostEntity
         FeedCacheEntity::class,
         SavedPostEntity::class,
     ],
-    version = 45,
+    version = 46,
     exportSchema = true
 )
 @TypeConverters(
@@ -162,6 +165,7 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun qrCodeMappingDao(): QRCodeMappingDao
     abstract fun socialProfileDao(): SocialProfileDao
     abstract fun followRelationshipDao(): FollowRelationshipDao
+    abstract fun followRequestDao(): FollowRequestDao
     abstract fun gymBuddyDao(): GymBuddyDao
     abstract fun socialPrivacySettingsDao(): SocialPrivacySettingsDao
     abstract fun blockedUserDao(): BlockedUserDao
@@ -171,4 +175,4 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun postCommentDao(): PostCommentDao
     abstract fun feedCacheDao(): FeedCacheDao
     abstract fun savedPostDao(): SavedPostDao
-} 
+}

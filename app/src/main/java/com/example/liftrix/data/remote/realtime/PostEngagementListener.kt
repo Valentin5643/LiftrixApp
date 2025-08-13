@@ -45,8 +45,7 @@ class PostEngagementListener @Inject constructor(
                             Result.failure(
                                 LiftrixError.NetworkError(
                                     errorMessage = "Real-time likes sync failed: ${error.message}",
-                                    operation = "LIKES_SYNC",
-                                    analyticsContext = mapOf("post_id" to postId)
+                                    analyticsContext = mapOf("post_id" to postId, "operation" to "LIKES_SYNC")
                                 )
                             )
                         )
@@ -101,13 +100,15 @@ class PostEngagementListener @Inject constructor(
                         if (document.exists()) {
                             try {
                                 val data = document.data!!
-                                updatePostEngagementMetrics(
-                                    postId = postId,
-                                    likeCount = (data["like_count"] as? Long)?.toInt() ?: 0,
-                                    commentCount = (data["comment_count"] as? Long)?.toInt() ?: 0,
-                                    shareCount = (data["share_count"] as? Long)?.toInt() ?: 0,
-                                    saveCount = (data["save_count"] as? Long)?.toInt() ?: 0
-                                )
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    updatePostEngagementMetrics(
+                                        postId = postId,
+                                        likeCount = (data["like_count"] as? Long)?.toInt() ?: 0,
+                                        commentCount = (data["comment_count"] as? Long)?.toInt() ?: 0,
+                                        shareCount = (data["share_count"] as? Long)?.toInt() ?: 0,
+                                        saveCount = (data["save_count"] as? Long)?.toInt() ?: 0
+                                    )
+                                }
                             } catch (e: Exception) {
                                 Timber.e(e, "Error updating post metrics for: $postId")
                             }
@@ -124,11 +125,10 @@ class PostEngagementListener @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Failed to start engagement sync for post: $postId")
             trySend(
-                LiftrixResult.Error(
+                Result.failure(
                     LiftrixError.NetworkError(
                         errorMessage = "Failed to start engagement sync: ${e.message}",
-                        operation = "START_ENGAGEMENT_SYNC",
-                        analyticsContext = mapOf("post_id" to postId)
+                        analyticsContext = mapOf("post_id" to postId, "operation" to "START_ENGAGEMENT_SYNC")
                     )
                 )
             )
@@ -240,8 +240,13 @@ class PostEngagementListener @Inject constructor(
 
     private suspend fun deleteLikeLocally(likeId: String) {
         try {
-            postLikeDao.deleteLike(likeId)
-            Timber.v("Deleted like locally: $likeId")
+            val like = postLikeDao.getLikeById(likeId)
+            if (like != null) {
+                postLikeDao.deleteLike(like)
+                Timber.v("Deleted like locally: $likeId")
+            } else {
+                Timber.w("Like not found for deletion: $likeId")
+            }
         } catch (e: Exception) {
             Timber.e(e, "Failed to delete like locally: $likeId")
         }
@@ -249,7 +254,7 @@ class PostEngagementListener @Inject constructor(
 
     private suspend fun updatePostLikeCount(postId: String, likeCount: Int) {
         try {
-            workoutPostDao.updateLikeCount(postId, likeCount)
+            workoutPostDao.updateLikeCount(postId, likeCount, System.currentTimeMillis())
             Timber.v("Updated post like count: $postId -> $likeCount")
         } catch (e: Exception) {
             Timber.e(e, "Failed to update post like count: $postId")
@@ -269,7 +274,8 @@ class PostEngagementListener @Inject constructor(
                 likeCount = likeCount,
                 commentCount = commentCount,
                 shareCount = shareCount,
-                saveCount = saveCount
+                saveCount = saveCount,
+                updatedAt = System.currentTimeMillis()
             )
             Timber.v("Updated post engagement metrics: $postId")
         } catch (e: Exception) {

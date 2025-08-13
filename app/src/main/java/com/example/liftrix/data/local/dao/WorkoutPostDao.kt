@@ -95,6 +95,24 @@ interface WorkoutPostDao {
     """)
     suspend fun updateSaveCount(postId: String, saveCount: Int, updatedAt: Long)
     
+    @Query("""
+        UPDATE workout_posts 
+        SET like_count = :likeCount, 
+            comment_count = :commentCount, 
+            share_count = :shareCount, 
+            save_count = :saveCount, 
+            updated_at = :updatedAt
+        WHERE id = :postId
+    """)
+    suspend fun updateEngagementMetrics(
+        postId: String, 
+        likeCount: Int, 
+        commentCount: Int, 
+        shareCount: Int, 
+        saveCount: Int, 
+        updatedAt: Long = System.currentTimeMillis()
+    )
+    
     @Query("SELECT COUNT(*) FROM workout_posts WHERE user_id = :userId")
     suspend fun getUserPostCount(userId: String): Int
     

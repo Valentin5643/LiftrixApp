@@ -29,7 +29,6 @@ class CreateSocialProfileUseCase @Inject constructor(
                 errorMessage = "Failed to create social profile: ${throwable.message ?: "Unknown error"}",
                 analyticsContext = mapOf(
                     "username" to username,
-                    "operation" to "CREATE_SOCIAL_PROFILE",
                     "error" to (throwable.message ?: "Unknown error")
                 )
             )

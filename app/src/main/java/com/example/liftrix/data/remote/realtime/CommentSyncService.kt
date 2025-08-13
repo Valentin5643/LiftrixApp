@@ -48,8 +48,7 @@ class CommentSyncService @Inject constructor(
                         Result.failure(
                             LiftrixError.NetworkError(
                                 errorMessage = "Real-time comment sync failed: ${error.message}",
-                                operation = "COMMENT_SYNC",
-                                analyticsContext = mapOf("post_id" to postId)
+                                analyticsContext = mapOf("post_id" to postId, "operation" to "COMMENT_SYNC")
                             )
                         )
                     )
@@ -92,8 +91,9 @@ class CommentSyncService @Inject constructor(
                         trySend(
                             Result.failure(
                                 LiftrixError.BusinessLogicError(
+                                    code = "PROCESS_COMMENT_CHANGES",
                                     errorMessage = "Failed to process comment updates: ${e.message}",
-                                    operation = "PROCESS_COMMENT_CHANGES"
+                                    analyticsContext = emptyMap()
                                 )
                             )
                         )
@@ -112,8 +112,7 @@ class CommentSyncService @Inject constructor(
                 Result.failure(
                     LiftrixError.NetworkError(
                         errorMessage = "Failed to start comment sync: ${e.message}",
-                        operation = "START_COMMENT_SYNC",
-                        analyticsContext = mapOf("post_id" to postId)
+                        analyticsContext = mapOf("post_id" to postId, "operation" to "START_COMMENT_SYNC")
                     )
                 )
             )
@@ -157,11 +156,11 @@ class CommentSyncService @Inject constructor(
         errorMapper = { throwable ->
             LiftrixError.NetworkError(
                 errorMessage = "Failed to create comment: ${throwable.message}",
-                operation = "CREATE_COMMENT_WITH_SYNC",
                 analyticsContext = mapOf(
                     "post_id" to postId,
                     "user_id" to userId,
-                    "has_parent" to (parentCommentId != null).toString()
+                    "has_parent" to (parentCommentId != null).toString(),
+                    "operation" to "CREATE_COMMENT_WITH_SYNC"
                 )
             )
         }
@@ -229,8 +228,7 @@ class CommentSyncService @Inject constructor(
         errorMapper = { throwable ->
             LiftrixError.NetworkError(
                 errorMessage = "Failed to update comment like count: ${throwable.message}",
-                operation = "UPDATE_COMMENT_LIKES",
-                analyticsContext = mapOf("comment_id" to commentId)
+                analyticsContext = mapOf("comment_id" to commentId, "operation" to "UPDATE_COMMENT_LIKES")
             )
         }
     ) {
@@ -257,8 +255,7 @@ class CommentSyncService @Inject constructor(
         errorMapper = { throwable ->
             LiftrixError.NetworkError(
                 errorMessage = "Failed to delete comment: ${throwable.message}",
-                operation = "DELETE_COMMENT_WITH_SYNC",
-                analyticsContext = mapOf("comment_id" to commentId, "user_id" to userId)
+                analyticsContext = mapOf("comment_id" to commentId, "user_id" to userId, "operation" to "DELETE_COMMENT_WITH_SYNC")
             )
         }
     ) {
@@ -294,8 +291,13 @@ class CommentSyncService @Inject constructor(
 
     private suspend fun deleteCommentLocally(commentId: String, postId: String) {
         try {
-            commentDao.deleteComment(commentId)
-            Timber.v("Deleted comment locally: $commentId")
+            val comment = commentDao.getCommentById(commentId)
+            if (comment != null) {
+                commentDao.deleteComment(comment)
+                Timber.v("Deleted comment locally: $commentId")
+            } else {
+                Timber.w("Comment not found for deletion: $commentId")
+            }
         } catch (e: Exception) {
             Timber.e(e, "Failed to delete comment locally: $commentId")
         }

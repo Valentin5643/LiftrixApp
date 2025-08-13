@@ -26,6 +26,9 @@ interface PostLikeDao {
     @Query("DELETE FROM post_likes WHERE post_id = :postId AND user_id = :userId")
     suspend fun deleteLikeByPostAndUser(postId: String, userId: String)
     
+    @Query("SELECT * FROM post_likes WHERE id = :likeId")
+    suspend fun getLikeById(likeId: String): PostLikeEntity?
+    
     @Query("SELECT * FROM post_likes WHERE post_id = :postId AND user_id = :userId")
     suspend fun getLikeByPostAndUser(postId: String, userId: String): PostLikeEntity?
     

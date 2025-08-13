@@ -4,12 +4,14 @@ import androidx.paging.PagingData
 import androidx.paging.filter
 import androidx.paging.map
 import com.example.liftrix.domain.model.social.WorkoutPost
+import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.repository.social.FeedRepository
 import com.example.liftrix.domain.repository.social.FollowRepository
 import com.example.liftrix.domain.service.PrivacyEnforcementService
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -35,9 +37,16 @@ class FeedGeneratorUseCase @Inject constructor(
     ): Flow<PagingData<WorkoutPost>> = flow {
         try {
             // Get followed users
-            val followedUsers = followRepository.getFollowing(userId)
-                .map { it.followingUserId }
-                .toSet()
+            val followingResult = followRepository.getFollowing(userId)
+            val followedUsers = followingResult.fold(
+                onSuccess = { followRelationships -> 
+                    followRelationships.map { it.followingId }.toSet()
+                },
+                onFailure = { error ->
+                    Timber.e("Error getting followed users: $error")
+                    emptySet()
+                }
+            )
             
             Timber.d("Generating feed for user: $userId, following: ${followedUsers.size} users, includeDiscovery: $includeDiscovery")
             
@@ -52,16 +61,16 @@ class FeedGeneratorUseCase @Inject constructor(
             
             // Apply privacy filters and scoring
             emitAll(
-                feedFlow.map { pagingData ->
+                feedFlow.map { pagingData: PagingData<WorkoutPost> ->
                     pagingData
-                        .filter { post -> 
+                        .filter { post: WorkoutPost -> 
                             val canView = privacyService.canViewPost(userId, post)
                             if (!canView) {
                                 Timber.v("Post ${post.id} filtered out by privacy settings")
                             }
                             canView
                         }
-                        .map { post -> 
+                        .map { post: WorkoutPost -> 
                             post.copy(
                                 relevanceScore = calculateRelevance(post, userId)
                             )
@@ -138,15 +147,15 @@ class FeedGeneratorUseCase @Inject constructor(
             )
             
             emitAll(
-                discoveryFeed.map { pagingData ->
+                discoveryFeed.map { pagingData: PagingData<WorkoutPost> ->
                     pagingData
-                        .filter { post -> 
+                        .filter { post: WorkoutPost -> 
                             // Only include posts from the specified time window
                             post.createdAt >= cutoffTime &&
                             // Ensure user can view the post
                             privacyService.canViewPost(userId, post)
                         }
-                        .map { post ->
+                        .map { post: WorkoutPost ->
                             // Apply discovery-specific scoring
                             post.copy(
                                 relevanceScore = calculateDiscoveryScore(post, userId)

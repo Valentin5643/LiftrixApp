@@ -12,7 +12,12 @@ data class PostLike(
     val id: String,
     val postId: String,
     val userId: String,
-    val createdAt: Long
+    val createdAt: Long,
+    
+    // User information (denormalized)
+    val userDisplayName: String = "",
+    val userUsername: String = "",
+    val userProfileImageUrl: String? = null
 )
 
 /**
@@ -23,23 +28,27 @@ data class PostComment(
     val postId: String,
     val userId: String,
     val content: String,
-    val replyToCommentId: String? = null,
+    val replyToCommentId: String? = null, // For nested replies
+    
+    // Engagement
     val likeCount: Int = 0,
+    val isLikedByCurrentUser: Boolean = false,
+    val isLikedByViewer: Boolean = false,
     val isEdited: Boolean = false,
+    
+    // Timestamps
     val createdAt: Long,
     val editedAt: Long? = null,
+    val updatedAt: Long = createdAt, // For mapper compatibility
     
     // Author information (denormalized for performance)
-    val authorUsername: String? = null,
-    val authorDisplayName: String? = null,
+    val authorDisplayName: String = "",
+    val authorUsername: String = "",
     val authorProfilePhotoUrl: String? = null,
     
-    // Nested replies (if loaded)
+    // Nested comment support
     val replies: List<PostComment> = emptyList(),
-    val hasMoreReplies: Boolean = false,
-    
-    // Viewer interactions
-    val isLikedByViewer: Boolean = false
+    val hasMoreReplies: Boolean = false
 )
 
 /**
@@ -58,7 +67,7 @@ data class SavedPost(
 data class CreateCommentRequest(
     val postId: String,
     val content: String,
-    val replyToCommentId: String? = null
+    val parentCommentId: String? = null
 )
 
 /**
@@ -79,7 +88,9 @@ data class PostEngagementStats(
     val shareCount: Int = 0,
     val saveCount: Int = 0,
     val isLikedByViewer: Boolean = false,
-    val isSavedByViewer: Boolean = false
+    val isSavedByViewer: Boolean = false,
+    val topLikers: List<String> = emptyList(), // Display names of top likers
+    val recentComments: List<PostComment> = emptyList()
 )
 
 /**

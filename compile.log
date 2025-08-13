@@ -1,0 +1,46 @@
+COMPILATION ERRORS LOG - Generated: 2025-08-13
+
+=== KOTLIN COMPILATION ERRORS ===
+
+FeedGeneratorUseCase.kt Errors:
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/domain/usecase/social/FeedGeneratorUseCase.kt:40:33 'when' expression must be exhaustive. Add an 'else' branch.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/domain/usecase/social/FeedGeneratorUseCase.kt:41:34 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/domain/usecase/social/FeedGeneratorUseCase.kt:41:61 Unresolved reference 'data'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/domain/usecase/social/FeedGeneratorUseCase.kt:41:66 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/domain/usecase/social/FeedGeneratorUseCase.kt:41:70 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/domain/usecase/social/FeedGeneratorUseCase.kt:41:75 Unresolved reference 'followingId'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/domain/usecase/social/FeedGeneratorUseCase.kt:41:89 Unresolved reference 'toSet'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/domain/usecase/social/FeedGeneratorUseCase.kt:42:34 Unresolved reference 'Error'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/domain/usecase/social/FeedGeneratorUseCase.kt:43:79 Unresolved reference 'error'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/domain/usecase/social/FeedGeneratorUseCase.kt:44:21 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/domain/usecase/social/FeedGeneratorUseCase.kt:48:85 Unresolved reference 'size'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/domain/usecase/social/FeedGeneratorUseCase.kt:61:26 None of the following candidates is applicable: fun <T : Any, R : Any> PagingData<T>.map(executor: Executor, transform: (T) -> R): PagingData<R> fun <T : Any, R : Any> PagingData<T>.map(transform: suspend (T) -> R): PagingData<R>
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/domain/usecase/social/FeedGeneratorUseCase.kt:61:32 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/domain/usecase/social/FeedGeneratorUseCase.kt:147:31 None of the following candidates is applicable: fun <T : Any, R : Any> PagingData<T>.map(executor: Executor, transform: (T) -> R): PagingData<R> fun <T : Any, R : Any> PagingData<T>.map(transform: suspend (T) -> R): PagingData<R>
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/domain/usecase/social/FeedGeneratorUseCase.kt:147:37 Cannot infer type for this parameter. Please specify it explicitly.
+
+FeedScreen.kt Errors:
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/feed/FeedScreen.kt:26:22 Unresolved reference 'compose'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/feed/FeedScreen.kt:27:22 Unresolved reference 'compose'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/feed/FeedScreen.kt:28:22 Unresolved reference 'compose'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/feed/FeedScreen.kt:48:40 Unresolved reference 'selectedTab'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/feed/FeedScreen.kt:58:36 Unresolved reference 'selectedTab'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/feed/FeedScreen.kt:70:36 Unresolved reference 'selectedTab'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/feed/FeedScreen.kt:84:32 Unresolved reference 'rememberPullRefreshState'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/feed/FeedScreen.kt:92:18 Unresolved reference 'pullRefresh'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/feed/FeedScreen.kt:98:65 Argument type mismatch: actual type is 'com.example.liftrix.ui.feed.PostInteraction', but 'com.example.liftrix.ui.feed.FeedEvent.PostInteraction' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/feed/FeedScreen.kt:103:13 Unresolved reference 'PullRefreshIndicator'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/feed/FeedScreen.kt:115:14 Unresolved reference 'FeedUiState'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/feed/FeedScreen.kt:130:40 Unresolved reference 'selectedTab'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/feed/FeedScreen.kt:146:39 Unresolved reference 'likedPosts'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/feed/FeedScreen.kt:147:39 Unresolved reference 'savedPosts'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/feed/FeedScreen.kt:190:33 Argument type mismatch: actual type is 'kotlin.Throwable', but 'com.example.liftrix.domain.model.error.LiftrixError' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/feed/FeedScreen.kt:205:29 Argument type mismatch: actual type is 'kotlin.Throwable', but 'com.example.liftrix.domain.model.error.LiftrixError' was expected.
+
+FeedViewModel.kt Errors:
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/feed/FeedViewModel.kt:68:67 Argument type mismatch: actual type is 'com.example.liftrix.ui.feed.FeedEvent.PostInteraction', but 'com.example.liftrix.ui.feed.PostInteraction' was expected.
+
+=== BUILD SUMMARY ===
+FAILURE: Build failed with an exception.
+Total Errors: 27 compilation errors across 3 files
+Files Affected: FeedGeneratorUseCase.kt, FeedScreen.kt, FeedViewModel.kt

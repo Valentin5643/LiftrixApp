@@ -2,6 +2,8 @@ package com.example.liftrix.di
 
 import com.example.liftrix.data.local.dao.BlockedUserDao
 import com.example.liftrix.data.local.dao.FollowRelationshipDao
+import com.example.liftrix.data.local.dao.FollowRequestDao
+import com.example.liftrix.data.local.dao.ProfileViewDao
 import com.example.liftrix.data.local.dao.GymBuddyDao
 import com.example.liftrix.data.local.dao.SocialPrivacySettingsDao
 import com.example.liftrix.data.local.dao.SocialProfileDao
@@ -17,6 +19,8 @@ import com.example.liftrix.data.repository.social.FeedRepositoryImpl
 import com.example.liftrix.domain.repository.social.FeedRepository
 import com.example.liftrix.data.repository.social.EngagementRepositoryImpl
 import com.example.liftrix.domain.repository.social.EngagementRepository
+import com.example.liftrix.data.repository.social.FollowRepositoryImpl
+import com.example.liftrix.domain.repository.social.FollowRepository
 import com.example.liftrix.domain.service.PrivacyEnforcementService
 import com.example.liftrix.domain.usecase.social.CheckUsernameAvailabilityUseCase
 import com.example.liftrix.domain.usecase.social.CreateSocialProfileUseCase
@@ -32,6 +36,8 @@ import com.example.liftrix.data.service.FeedCacheServiceImpl
 import com.example.liftrix.data.mapper.EngagementMapper
 import com.example.liftrix.data.mapper.WorkoutPostMapper
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.messaging.FirebaseMessaging
+import com.google.firebase.analytics.FirebaseAnalytics
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -62,6 +68,18 @@ object SocialModule {
     @Singleton
     fun provideFollowRelationshipDao(database: LiftrixDatabase): FollowRelationshipDao {
         return database.followRelationshipDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideFollowRequestDao(database: LiftrixDatabase): FollowRequestDao {
+        return database.followRequestDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideProfileViewDao(database: LiftrixDatabase): ProfileViewDao {
+        return database.profileViewDao()
     }
 
     @Provides
@@ -151,6 +169,19 @@ object SocialModule {
         workoutPostMapper: WorkoutPostMapper
     ): EngagementRepository {
         return EngagementRepositoryImpl(postLikeDao, postCommentDao, savedPostDao, workoutPostDao, socialProfileDao, engagementMapper, workoutPostMapper)
+    }
+
+    @Provides
+    @Singleton
+    fun provideFollowRepository(
+        followRelationshipDao: FollowRelationshipDao,
+        followRequestDao: FollowRequestDao,
+        profileViewDao: ProfileViewDao,
+        socialProfileDao: SocialProfileDao,
+        blockedUserDao: BlockedUserDao,
+        firestore: com.google.firebase.firestore.FirebaseFirestore
+    ): FollowRepository {
+        return FollowRepositoryImpl(followRelationshipDao, followRequestDao, profileViewDao, socialProfileDao, blockedUserDao, firestore)
     }
 
     // ========================================
@@ -247,8 +278,22 @@ object SocialModule {
     
     @Provides
     @Singleton
+    fun provideFirebaseMessaging(): FirebaseMessaging {
+        return FirebaseMessaging.getInstance()
+    }
+    
+    @Provides
+    @Singleton
+    fun provideFirebaseAnalytics(
+        @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context
+    ): FirebaseAnalytics {
+        return FirebaseAnalytics.getInstance(context)
+    }
+    
+    @Provides
+    @Singleton
     fun provideNotificationService(
-        firebaseMessaging: com.google.firebase.messaging.FirebaseMessaging
+        firebaseMessaging: FirebaseMessaging
     ): com.example.liftrix.domain.service.NotificationService {
         return com.example.liftrix.data.service.NotificationServiceImpl(firebaseMessaging)
     }
@@ -256,7 +301,7 @@ object SocialModule {
     @Provides
     @Singleton
     fun provideAnalyticsTracker(
-        firebaseAnalytics: com.google.firebase.analytics.FirebaseAnalytics
+        firebaseAnalytics: FirebaseAnalytics
     ): com.example.liftrix.domain.service.AnalyticsTracker {
         return com.example.liftrix.data.service.AnalyticsTrackerImpl(firebaseAnalytics)
     }
@@ -273,9 +318,19 @@ object SocialModule {
     @Provides
     @Singleton
     fun provideFeedCacheService(
-        feedCacheDao: FeedCacheDao
+        feedCacheDao: FeedCacheDao,
+        workoutPostDao: WorkoutPostDao,
+        postLikeDao: PostLikeDao,
+        postCommentDao: PostCommentDao,
+        followRelationshipDao: FollowRelationshipDao
     ): FeedCacheService {
-        return FeedCacheServiceImpl(feedCacheDao)
+        return FeedCacheServiceImpl(
+            feedCacheDao = feedCacheDao,
+            workoutPostDao = workoutPostDao,
+            postLikeDao = postLikeDao,
+            postCommentDao = postCommentDao,
+            followRelationshipDao = followRelationshipDao
+        )
     }
 
     // ========================================

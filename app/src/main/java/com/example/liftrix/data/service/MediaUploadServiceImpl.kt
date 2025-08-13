@@ -7,7 +7,8 @@ import android.media.MediaMetadataRetriever
 import android.media.ThumbnailUtils
 import android.net.Uri
 import android.provider.MediaStore
-import com.example.liftrix.domain.model.common.LiftrixError
+import android.util.Size
+import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.social.MediaItem
@@ -47,7 +48,6 @@ class MediaUploadServiceImpl @Inject constructor(
         errorMapper = { throwable ->
             LiftrixError.NetworkError(
                 errorMessage = "Failed to upload media items: ${throwable.message}",
-                operation = "UPLOAD_MEDIA_ITEMS",
                 analyticsContext = mapOf(
                     "user_id" to userId,
                     "item_count" to mediaRequests.size.toString()
@@ -67,7 +67,6 @@ class MediaUploadServiceImpl @Inject constructor(
         errorMapper = { throwable ->
             LiftrixError.NetworkError(
                 errorMessage = "Failed to upload media: ${throwable.message}",
-                operation = "UPLOAD_MEDIA_ITEM",
                 analyticsContext = mapOf(
                     "user_id" to userId,
                     "media_type" to mediaRequest.type.name
@@ -192,7 +191,6 @@ class MediaUploadServiceImpl @Inject constructor(
         errorMapper = { throwable ->
             LiftrixError.NetworkError(
                 errorMessage = "Failed to upload profile image: ${throwable.message}",
-                operation = "UPLOAD_PROFILE_IMAGE",
                 analyticsContext = mapOf("user_id" to userId)
             )
         }
@@ -215,7 +213,6 @@ class MediaUploadServiceImpl @Inject constructor(
         errorMapper = { throwable ->
             LiftrixError.NetworkError(
                 errorMessage = "Failed to delete media: ${throwable.message}",
-                operation = "DELETE_MEDIA",
                 analyticsContext = mapOf("media_url" to mediaUrl)
             )
         }
@@ -230,9 +227,10 @@ class MediaUploadServiceImpl @Inject constructor(
         quality: Int
     ): LiftrixResult<Uri> = liftrixCatching(
         errorMapper = { throwable ->
-            LiftrixError.ProcessingError(
+            LiftrixError.BusinessLogicError(
+                code = "COMPRESS_IMAGE",
                 errorMessage = "Failed to compress image: ${throwable.message}",
-                operation = "COMPRESS_IMAGE"
+                analyticsContext = emptyMap()
             )
         }
     ) {
@@ -271,9 +269,10 @@ class MediaUploadServiceImpl @Inject constructor(
         thumbnailSize: Int
     ): LiftrixResult<Uri> = liftrixCatching(
         errorMapper = { throwable ->
-            LiftrixError.ProcessingError(
+            LiftrixError.BusinessLogicError(
+                code = "GENERATE_THUMBNAIL",
                 errorMessage = "Failed to generate thumbnail: ${throwable.message}",
-                operation = "GENERATE_THUMBNAIL"
+                analyticsContext = emptyMap()
             )
         }
     ) {
@@ -306,9 +305,10 @@ class MediaUploadServiceImpl @Inject constructor(
         resolution: String
     ): LiftrixResult<Uri> = liftrixCatching(
         errorMapper = { throwable ->
-            LiftrixError.ProcessingError(
+            LiftrixError.BusinessLogicError(
+                code = "COMPRESS_VIDEO",
                 errorMessage = "Failed to compress video: ${throwable.message}",
-                operation = "COMPRESS_VIDEO"
+                analyticsContext = emptyMap()
             )
         }
     ) {
@@ -323,28 +323,43 @@ class MediaUploadServiceImpl @Inject constructor(
         timeUs: Long
     ): LiftrixResult<Uri> = liftrixCatching(
         errorMapper = { throwable ->
-            LiftrixError.ProcessingError(
+            LiftrixError.BusinessLogicError(
+                code = "GENERATE_VIDEO_THUMBNAIL",
                 errorMessage = "Failed to generate video thumbnail: ${throwable.message}",
-                operation = "GENERATE_VIDEO_THUMBNAIL"
+                analyticsContext = emptyMap()
             )
         }
     ) {
         withContext(Dispatchers.IO) {
-            val bitmap = ThumbnailUtils.createVideoThumbnail(
-                context.contentResolver,
-                videoUri,
-                android.util.Size(300, 300),
-                null
-            ) ?: throw IllegalArgumentException("Cannot create video thumbnail")
-            
-            val outputFile = File(context.cacheDir, "video_thumbnail_${UUID.randomUUID()}.jpg")
-            FileOutputStream(outputFile).use { outputStream ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 85, outputStream)
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(context, videoUri)
+                val bitmap = retriever.getFrameAtTime(
+                    timeUs,
+                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                ) ?: throw IllegalArgumentException("Cannot extract frame from video")
+                
+                // Scale bitmap to 300x300 while maintaining aspect ratio
+                val scaledBitmap = Bitmap.createScaledBitmap(
+                    bitmap,
+                    300,
+                    (300 * bitmap.height / bitmap.width.toFloat()).toInt(),
+                    true
+                )
+                
+                val outputFile = File(context.cacheDir, "video_thumbnail_${UUID.randomUUID()}.jpg")
+                FileOutputStream(outputFile).use { outputStream ->
+                    scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 85, outputStream)
+                }
+                
+                // Clean up bitmaps
+                if (bitmap != scaledBitmap) bitmap.recycle()
+                scaledBitmap.recycle()
+                
+                Uri.fromFile(outputFile)
+            } finally {
+                runCatching { retriever.release() }
             }
-            
-            bitmap.recycle()
-            
-            Uri.fromFile(outputFile)
         }
     }
 
@@ -373,9 +388,10 @@ class MediaUploadServiceImpl @Inject constructor(
 
     override suspend fun cancelUpload(uploadId: String): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
-            LiftrixError.ProcessingError(
+            LiftrixError.BusinessLogicError(
+                code = "CANCEL_UPLOAD",
                 errorMessage = "Failed to cancel upload: ${throwable.message}",
-                operation = "CANCEL_UPLOAD"
+                analyticsContext = emptyMap()
             )
         }
     ) {

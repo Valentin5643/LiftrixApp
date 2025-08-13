@@ -4,9 +4,11 @@ import com.example.liftrix.data.local.entity.WorkoutPostEntity
 import com.example.liftrix.domain.model.social.WorkoutPost
 import com.example.liftrix.domain.model.social.PostVisibility
 import com.example.liftrix.domain.model.social.CreateWorkoutPostRequest
+import com.example.liftrix.domain.model.social.MediaItem
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
+import com.example.liftrix.domain.model.social.MediaType
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -35,9 +37,10 @@ class WorkoutPostMapper @Inject constructor() {
             id = entity.id,
             userId = entity.userId,
             workoutId = entity.workoutId,
-            caption = entity.caption,
+            caption = entity.caption ?: "",
             mediaUrls = parseStringList(entity.mediaUrls),
             mediaThumbnails = parseStringList(entity.mediaThumbnails),
+            mediaItems = createMediaItemsFromUrls(entity.mediaUrls, entity.mediaThumbnails),
             workoutDuration = entity.workoutDuration,
             totalVolume = entity.totalVolume,
             exercisesCount = entity.exercisesCount,
@@ -156,6 +159,44 @@ class WorkoutPostMapper @Inject constructor() {
             PostVisibility.valueOf(visibility)
         } catch (e: Exception) {
             PostVisibility.FOLLOWERS // Default fallback
+        }
+    }
+    
+    /**
+     * Creates MediaItem list from URL strings
+     * This is a temporary method until proper media metadata is stored in the database
+     */
+    private fun createMediaItemsFromUrls(mediaUrls: String?, mediaThumbnails: String?): List<MediaItem> {
+        val urls = parseStringList(mediaUrls)
+        val thumbnails = parseStringList(mediaThumbnails)
+        
+        if (urls.isEmpty()) return emptyList()
+        
+        return urls.mapIndexed { index, url ->
+            MediaItem(
+                id = "media_${System.currentTimeMillis()}_$index",
+                type = inferMediaType(url),
+                originalUrl = url,
+                thumbnailUrl = thumbnails.getOrNull(index),
+                compressedUrl = null,
+                width = null,
+                height = null,
+                fileSizeBytes = 0L, // Unknown, would need to be fetched
+                duration = null,
+                uploadedAt = System.currentTimeMillis()
+            )
+        }
+    }
+    
+    /**
+     * Infers media type from URL extension
+     */
+    private fun inferMediaType(url: String): MediaType {
+        return when {
+            url.contains(".mp4", ignoreCase = true) || 
+            url.contains(".mov", ignoreCase = true) || 
+            url.contains(".avi", ignoreCase = true) -> MediaType.VIDEO
+            else -> MediaType.IMAGE
         }
     }
 }

@@ -184,9 +184,10 @@ private fun PostCreationTopBar(
                 )
             ) {
                 if (isLoading) {
-                    LoadingIndicator(
-                        size = 16.dp,
-                        color = LiftrixColorsV2.onPrimary
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = LiftrixColorsV2.onPrimary,
+                        strokeWidth = 2.dp
                     )
                 } else {
                     Text(
@@ -255,14 +256,14 @@ private fun PostContentSection(
             Spacer(modifier = Modifier.height(LiftrixSpacing.medium))
             
             Surface(
-                color = LiftrixColorsV2.errorContainer,
+                color = MaterialTheme.colorScheme.errorContainer,
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
                     text = error,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = LiftrixColorsV2.onErrorContainer,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
                     modifier = Modifier.padding(LiftrixSpacing.medium)
                 )
             }

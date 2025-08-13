@@ -41,12 +41,12 @@ class EngagementRepositoryImpl @Inject constructor(
     override suspend fun toggleLike(postId: String, userId: String): LiftrixResult<Boolean> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "TOGGLE_POST_LIKE",
                 errorMessage = "Failed to toggle post like",
-                operation = "TOGGLE_POST_LIKE",
                 analyticsContext = mapOf(
                     "post_id" to postId,
                     "user_id" to userId,
-                    "error" to throwable.message
+                    "error" to (throwable.message ?: "Unknown error")
                 )
             )
         }
@@ -86,8 +86,8 @@ class EngagementRepositoryImpl @Inject constructor(
     override suspend fun isPostLiked(postId: String, userId: String): LiftrixResult<Boolean> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "IS_POST_LIKED",
                 errorMessage = "Failed to check post like status",
-                operation = "IS_POST_LIKED",
                 analyticsContext = mapOf(
                     "post_id" to postId,
                     "user_id" to userId
@@ -132,12 +132,12 @@ class EngagementRepositoryImpl @Inject constructor(
     ): LiftrixResult<PostComment> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "CREATE_COMMENT",
                 errorMessage = "Failed to create comment",
-                operation = "CREATE_COMMENT",
                 analyticsContext = mapOf(
                     "post_id" to request.postId,
                     "user_id" to userId,
-                    "is_reply" to (request.replyToCommentId != null)
+                    "is_reply" to (request.parentCommentId != null).toString()
                 )
             )
         }
@@ -171,8 +171,8 @@ class EngagementRepositoryImpl @Inject constructor(
     ): LiftrixResult<PostComment> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "EDIT_COMMENT",
                 errorMessage = "Failed to edit comment",
-                operation = "EDIT_COMMENT",
                 analyticsContext = mapOf(
                     "comment_id" to request.commentId,
                     "user_id" to userId
@@ -213,8 +213,8 @@ class EngagementRepositoryImpl @Inject constructor(
     override suspend fun deleteComment(commentId: String, userId: String): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "DELETE_COMMENT",
                 errorMessage = "Failed to delete comment",
-                operation = "DELETE_COMMENT",
                 analyticsContext = mapOf(
                     "comment_id" to commentId,
                     "user_id" to userId
@@ -261,8 +261,8 @@ class EngagementRepositoryImpl @Inject constructor(
     override suspend fun getCommentReplies(commentId: String): LiftrixResult<List<PostComment>> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "GET_COMMENT_REPLIES",
                 errorMessage = "Failed to get comment replies",
-                operation = "GET_COMMENT_REPLIES",
                 analyticsContext = mapOf("comment_id" to commentId)
             )
         }
@@ -286,8 +286,8 @@ class EngagementRepositoryImpl @Inject constructor(
     override suspend fun toggleSave(postId: String, userId: String): LiftrixResult<Boolean> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "TOGGLE_POST_SAVE",
                 errorMessage = "Failed to toggle post save",
-                operation = "TOGGLE_POST_SAVE",
                 analyticsContext = mapOf(
                     "post_id" to postId,
                     "user_id" to userId
@@ -330,8 +330,8 @@ class EngagementRepositoryImpl @Inject constructor(
     override suspend fun isPostSaved(postId: String, userId: String): LiftrixResult<Boolean> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "IS_POST_SAVED",
                 errorMessage = "Failed to check post save status",
-                operation = "IS_POST_SAVED",
                 analyticsContext = mapOf(
                     "post_id" to postId,
                     "user_id" to userId
@@ -377,8 +377,8 @@ class EngagementRepositoryImpl @Inject constructor(
     ): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "RECORD_SHARE",
                 errorMessage = "Failed to record share",
-                operation = "RECORD_SHARE",
                 analyticsContext = mapOf(
                     "post_id" to postId,
                     "user_id" to userId,
@@ -409,8 +409,8 @@ class EngagementRepositoryImpl @Inject constructor(
     ): LiftrixResult<PostEngagementStats> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "GET_POST_ENGAGEMENT_STATS",
                 errorMessage = "Failed to get post engagement stats",
-                operation = "GET_POST_ENGAGEMENT_STATS",
                 analyticsContext = mapOf(
                     "post_id" to postId,
                     "viewer_id" to viewerId
@@ -461,11 +461,11 @@ class EngagementRepositoryImpl @Inject constructor(
     ): LiftrixResult<List<Pair<String, Double>>> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "GET_TRENDING_ENGAGEMENT",
                 errorMessage = "Failed to get trending engagement",
-                operation = "GET_TRENDING_ENGAGEMENT",
                 analyticsContext = mapOf(
-                    "time_window_hours" to timeWindowHours,
-                    "limit" to limit
+                    "time_window_hours" to timeWindowHours.toString(),
+                    "limit" to limit.toString()
                 )
             )
         }
@@ -473,6 +473,38 @@ class EngagementRepositoryImpl @Inject constructor(
         withContext(Dispatchers.IO) {
             // TODO: Implement trending calculation based on recent engagement
             emptyList()
+        }
+    }
+    
+    override suspend fun copyWorkoutFromPost(
+        postId: String,
+        userId: String
+    ): LiftrixResult<String> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "COPY_WORKOUT_FROM_POST",
+                errorMessage = "Failed to copy workout from post",
+                analyticsContext = mapOf(
+                    "post_id" to postId,
+                    "user_id" to userId,
+                    "error" to (throwable.message ?: "Unknown error")
+                )
+            )
+        }
+    ) {
+        withContext(Dispatchers.IO) {
+            val post = workoutPostDao.getPostById(postId)
+                ?: throw IllegalArgumentException("Post not found: $postId")
+            
+            // TODO: Implement actual workout copying logic
+            // This would involve:
+            // 1. Getting the workout from workoutDao using post.workoutId
+            // 2. Creating a new workout template for the user
+            // 3. Copying exercises, sets, and other workout data
+            // 4. Returning the new template ID
+            
+            val templateId = java.util.UUID.randomUUID().toString()
+            templateId
         }
     }
     

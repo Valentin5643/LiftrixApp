@@ -64,7 +64,7 @@ class FeedGeneratorUseCaseTest {
             )
         )
 
-        coEvery { followRepository.getFollowing(testUserId) } returns followedUsers
+        coEvery { followRepository.getFollowing(testUserId) } returns LiftrixResult.Success(followedUsers)
         every { feedRepository.getHomeFeed(testUserId, 20) } returns flowOf(PagingData.from(expectedPosts))
         coEvery { privacyService.canViewPost(testUserId, any()) } returns true
 
@@ -96,7 +96,7 @@ class FeedGeneratorUseCaseTest {
             )
         )
 
-        coEvery { followRepository.getFollowing(testUserId) } returns followedUsers
+        coEvery { followRepository.getFollowing(testUserId) } returns LiftrixResult.Success(followedUsers)
         every { feedRepository.getDiscoveryFeed(testUserId, 20) } returns flowOf(PagingData.from(expectedPosts))
         coEvery { privacyService.canViewPost(testUserId, any()) } returns true
 
@@ -278,10 +278,18 @@ class FeedGeneratorUseCaseTest {
     ): FollowRelationship {
         return FollowRelationship(
             id = "${followerId}_${followingId}",
-            followerUserId = followerId,
-            followingUserId = followingId,
-            status = FollowStatus.ACCEPTED,
-            createdAt = System.currentTimeMillis()
+            followerId = followerId,
+            followingId = followingId,
+            status = FollowStatus.FOLLOWING,
+            createdAt = System.currentTimeMillis(),
+            acceptedAt = System.currentTimeMillis(),
+            blockedAt = null,
+            userId = followingId,
+            displayName = "Test User",
+            profileImageUrl = null,
+            bio = "Test bio",
+            location = null,
+            connectionStatus = ConnectionStatus.CONNECTED
         )
     }
 
@@ -322,22 +330,3 @@ class FeedGeneratorUseCaseTest {
     }
 }
 
-/**
- * Simple follow relationship model for testing
- */
-data class FollowRelationship(
-    val id: String,
-    val followerUserId: String,
-    val followingUserId: String,
-    val status: FollowStatus,
-    val createdAt: Long
-)
-
-/**
- * Follow status enum for testing
- */
-enum class FollowStatus {
-    PENDING,
-    ACCEPTED,
-    DECLINED
-}

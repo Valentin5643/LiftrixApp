@@ -37,12 +37,12 @@ class CalculateFeedRelevanceScoreUseCase @Inject constructor(
     ): LiftrixResult<Double> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "CALCULATE_FEED_RELEVANCE_SCORE",
                 errorMessage = "Failed to calculate feed relevance score",
-                operation = "CALCULATE_FEED_RELEVANCE_SCORE",
                 analyticsContext = mapOf(
                     "post_id" to postId,
                     "viewer_id" to viewerId,
-                    "error" to throwable.message
+                    "error" to (throwable.message ?: "Unknown error")
                 )
             )
         }
@@ -64,12 +64,12 @@ class CalculateFeedRelevanceScoreUseCase @Inject constructor(
     ): LiftrixResult<Map<String, Double>> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "BATCH_CALCULATE_RELEVANCE_SCORES",
                 errorMessage = "Failed to batch calculate relevance scores",
-                operation = "BATCH_CALCULATE_RELEVANCE_SCORES",
                 analyticsContext = mapOf(
-                    "post_count" to postIds.size,
+                    "post_count" to postIds.size.toString(),
                     "viewer_id" to viewerId,
-                    "error" to throwable.message
+                    "error" to (throwable.message ?: "Unknown error")
                 )
             )
         }

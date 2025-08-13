@@ -305,7 +305,7 @@ private fun CommentContent(
 ) {
     Row(
         modifier = modifier,
-        crossAxisAlignment = Alignment.CrossAxisAlignment.Start
+        verticalAlignment = Alignment.Top
     ) {
         // Profile image
         AsyncImage(

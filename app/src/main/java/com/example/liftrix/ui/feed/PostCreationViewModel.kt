@@ -7,9 +7,11 @@ import com.example.liftrix.domain.model.social.*
 import com.example.liftrix.domain.repository.social.FeedRepository
 import com.example.liftrix.domain.service.MediaUploadService
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.event.ViewModelEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -22,12 +24,18 @@ import javax.inject.Inject
 class PostCreationViewModel @Inject constructor(
     private val feedRepository: FeedRepository,
     private val mediaUploadService: MediaUploadService,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
-) : BaseViewModel<PostCreationUiState, PostCreationEvent>() {
+    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    errorHandler: ErrorHandler
+) : BaseViewModel<PostCreationUiState, PostCreationEvent>(errorHandler) {
 
-    override val initialState = PostCreationUiState()
+    override val _uiState: MutableStateFlow<PostCreationUiState> = MutableStateFlow(PostCreationUiState())
+    
+    // Public method for UI to call
+    fun onEvent(event: PostCreationEvent) {
+        handleEvent(event)
+    }
 
-    override fun onEvent(event: PostCreationEvent) {
+    override fun handleEvent(event: PostCreationEvent) {
         when (event) {
             is PostCreationEvent.LoadWorkout -> loadWorkout(event.workoutId)
             is PostCreationEvent.UpdateCaption -> updateCaption(event.caption)
@@ -38,13 +46,10 @@ class PostCreationViewModel @Inject constructor(
         }
     }
 
-    override fun updateUiState(update: PostCreationUiState.() -> PostCreationUiState) {
-        _uiState.value = _uiState.value.update()
-    }
 
     private fun loadWorkout(workoutId: String) {
-        updateUiState {
-            copy(
+        updateState { currentState ->
+            currentState.copy(
                 isLoading = true,
                 workoutId = workoutId,
                 error = null
@@ -63,8 +68,8 @@ class PostCreationViewModel @Inject constructor(
                     prsCount = 2
                 )
                 
-                updateUiState {
-                    copy(
+                updateState { currentState ->
+                    currentState.copy(
                         isLoading = false,
                         workoutSummary = mockWorkout
                     )
@@ -72,8 +77,8 @@ class PostCreationViewModel @Inject constructor(
                 
                 Timber.d("Workout loaded successfully: $workoutId")
             } catch (e: Exception) {
-                updateUiState {
-                    copy(
+                updateState { currentState ->
+                    currentState.copy(
                         isLoading = false,
                         error = "Failed to load workout: ${e.message}"
                     )
@@ -84,14 +89,14 @@ class PostCreationViewModel @Inject constructor(
     }
 
     private fun updateCaption(caption: String) {
-        updateUiState {
-            copy(caption = caption)
+        updateState { currentState ->
+            currentState.copy(caption = caption)
         }
     }
 
     private fun updateVisibility(visibility: PostVisibility) {
-        updateUiState {
-            copy(visibility = visibility)
+        updateState { currentState ->
+            currentState.copy(visibility = visibility)
         }
     }
 
@@ -107,8 +112,8 @@ class PostCreationViewModel @Inject constructor(
         // Limit to 5 total media items
         val allRequests = (currentRequests + newRequests).take(5)
         
-        updateUiState {
-            copy(mediaRequests = allRequests)
+        updateState { currentState ->
+            currentState.copy(mediaRequests = allRequests)
         }
         
         Timber.d("Added ${newRequests.size} media items, total: ${allRequests.size}")
@@ -118,8 +123,8 @@ class PostCreationViewModel @Inject constructor(
         val currentRequests = _uiState.value.mediaRequests.toMutableList()
         if (index in 0 until currentRequests.size) {
             currentRequests.removeAt(index)
-            updateUiState {
-                copy(mediaRequests = currentRequests)
+            updateState { currentState ->
+                currentState.copy(mediaRequests = currentRequests)
             }
             Timber.d("Removed media item at index $index")
         }
@@ -129,36 +134,31 @@ class PostCreationViewModel @Inject constructor(
         val state = _uiState.value
         
         if (!state.canCreatePost) {
-            updateUiState {
-                copy(error = "Please complete all required fields")
+            updateState { currentState ->
+                currentState.copy(error = "Please complete all required fields")
             }
             return
         }
         
-        updateUiState {
-            copy(
+        updateState { currentState ->
+            currentState.copy(
                 isCreatingPost = true,
                 error = null
             )
         }
         
         viewModelScope.launch {
-            getCurrentUserIdUseCase().collect { userResult ->
-                when (userResult) {
-                    is LiftrixResult.Success -> {
-                        val userId = userResult.data
-                        createPostForUser(userId, state)
-                    }
-                    is LiftrixResult.Error -> {
-                        updateUiState {
-                            copy(
-                                isCreatingPost = false,
-                                error = "Authentication required"
-                            )
-                        }
-                        Timber.e("Failed to get current user ID for post creation")
-                    }
+            val userId = getCurrentUserIdUseCase()
+            if (userId != null) {
+                createPostForUser(userId, state)
+            } else {
+                updateState { currentState ->
+                    currentState.copy(
+                        isCreatingPost = false,
+                        error = "Authentication required"
+                    )
                 }
+                Timber.e("Failed to get current user ID for post creation")
             }
         }
     }
@@ -183,31 +183,29 @@ class PostCreationViewModel @Inject constructor(
                 visibility = state.visibility
             )
             
-            feedRepository.createPost(userId, createRequest).collect { result ->
-                when (result) {
-                    is LiftrixResult.Success -> {
-                        updateUiState {
-                            copy(
-                                isCreatingPost = false,
-                                isPostCreated = true
-                            )
-                        }
-                        Timber.d("Post created successfully: ${result.data.id}")
+            feedRepository.createPost(userId, createRequest).fold(
+                onSuccess = { post ->
+                    updateState { currentState ->
+                        currentState.copy(
+                            isCreatingPost = false,
+                            isPostCreated = true
+                        )
                     }
-                    is LiftrixResult.Error -> {
-                        updateUiState {
-                            copy(
-                                isCreatingPost = false,
-                                error = "Failed to create post: ${result.error.errorMessage}"
-                            )
-                        }
-                        Timber.e("Failed to create post", result.error)
+                    Timber.d("Post created successfully: ${post.id}")
+                },
+                onFailure = { error ->
+                    updateState { currentState ->
+                        currentState.copy(
+                            isCreatingPost = false,
+                            error = "Failed to create post: ${error.message}"
+                        )
                     }
+                    Timber.e("Failed to create post", error)
                 }
-            }
+            )
         } catch (e: Exception) {
-            updateUiState {
-                copy(
+            updateState { currentState ->
+                currentState.copy(
                     isCreatingPost = false,
                     error = "Failed to create post: ${e.message}"
                 )
@@ -246,7 +244,7 @@ data class PostCreationUiState(
 /**
  * Events for post creation screen
  */
-sealed class PostCreationEvent {
+sealed class PostCreationEvent : ViewModelEvent {
     data class LoadWorkout(val workoutId: String) : PostCreationEvent()
     data class UpdateCaption(val caption: String) : PostCreationEvent()
     data class UpdateVisibility(val visibility: PostVisibility) : PostCreationEvent()

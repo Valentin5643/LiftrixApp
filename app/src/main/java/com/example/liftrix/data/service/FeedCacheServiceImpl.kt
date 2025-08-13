@@ -35,8 +35,8 @@ class FeedCacheServiceImpl @Inject constructor(
     ): LiftrixResult<Double> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "CALCULATE_RELEVANCE_SCORE",
                 errorMessage = "Failed to calculate relevance score",
-                operation = "CALCULATE_RELEVANCE_SCORE",
                 analyticsContext = mapOf(
                     "post_id" to postId,
                     "viewer_id" to viewerId
@@ -90,11 +90,11 @@ class FeedCacheServiceImpl @Inject constructor(
     ): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "UPDATE_FEED_CACHE",
                 errorMessage = "Failed to update feed cache",
-                operation = "UPDATE_FEED_CACHE",
                 analyticsContext = mapOf(
                     "user_id" to userId,
-                    "force_refresh" to forceRefresh
+                    "force_refresh" to forceRefresh.toString()
                 )
             )
         }
@@ -118,7 +118,7 @@ class FeedCacheServiceImpl @Inject constructor(
             val currentTime = System.currentTimeMillis()
             
             // Process posts from followed users
-            followedUsers.forEach { followedUserId ->
+            for (followedUserId in followedUsers) {
                 // Calculate scores for this user's posts
                 // This is simplified - would need proper batching in production
                 val score = calculateRelevanceScore("dummy_post_id", userId).getOrNull() ?: 0.0
@@ -143,8 +143,8 @@ class FeedCacheServiceImpl @Inject constructor(
     override suspend fun invalidatePostCache(postId: String): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "INVALIDATE_POST_CACHE",
                 errorMessage = "Failed to invalidate post cache",
-                operation = "INVALIDATE_POST_CACHE",
                 analyticsContext = mapOf("post_id" to postId)
             )
         }
@@ -159,8 +159,8 @@ class FeedCacheServiceImpl @Inject constructor(
     override suspend fun invalidateUserCache(userId: String): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "INVALIDATE_USER_CACHE",
                 errorMessage = "Failed to invalidate user cache",
-                operation = "INVALIDATE_USER_CACHE",
                 analyticsContext = mapOf("user_id" to userId)
             )
         }
@@ -173,9 +173,9 @@ class FeedCacheServiceImpl @Inject constructor(
     override suspend fun cleanupOldCache(olderThanHours: Int): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "CLEANUP_OLD_CACHE",
                 errorMessage = "Failed to cleanup old cache",
-                operation = "CLEANUP_OLD_CACHE",
-                analyticsContext = mapOf("older_than_hours" to olderThanHours)
+                analyticsContext = mapOf("older_than_hours" to olderThanHours.toString())
             )
         }
     ) {
@@ -194,12 +194,12 @@ class FeedCacheServiceImpl @Inject constructor(
     ): LiftrixResult<List<String>> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "GET_CACHED_FEED_POST_IDS",
                 errorMessage = "Failed to get cached feed post IDs",
-                operation = "GET_CACHED_FEED_POST_IDS",
                 analyticsContext = mapOf(
                     "user_id" to userId,
-                    "limit" to limit,
-                    "offset" to offset
+                    "limit" to limit.toString(),
+                    "offset" to offset.toString()
                 )
             )
         }
@@ -215,11 +215,11 @@ class FeedCacheServiceImpl @Inject constructor(
     ): LiftrixResult<Boolean> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "HAS_SUFFICIENT_CACHE",
                 errorMessage = "Failed to check cache sufficiency",
-                operation = "HAS_SUFFICIENT_CACHE",
                 analyticsContext = mapOf(
                     "user_id" to userId,
-                    "min_cache_size" to minCacheSize
+                    "min_cache_size" to minCacheSize.toString()
                 )
             )
         }

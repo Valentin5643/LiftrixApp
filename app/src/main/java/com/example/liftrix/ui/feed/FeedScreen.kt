@@ -2,7 +2,6 @@ package com.example.liftrix.ui.feed
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,15 +15,18 @@ import androidx.navigation.NavController
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
 import com.example.liftrix.R
+import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.WorkoutPost
 import com.example.liftrix.ui.common.components.ErrorDisplay
 import com.example.liftrix.ui.common.components.LoadingIndicator
 import com.example.liftrix.ui.feed.components.WorkoutPostCard
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.theme.LiftrixSpacing
-import com.google.accompanist.swiperefresh.SwipeRefresh
-import com.google.accompanist.swiperefresh.rememberSwipeRefreshState
+import eu.bambooapps.material3.pullrefresh.PullRefreshIndicator
+import eu.bambooapps.material3.pullrefresh.pullRefresh
+import eu.bambooapps.material3.pullrefresh.rememberPullRefreshState
 
 /**
  * Main social feed screen with tabs for Home and Discovery feeds
@@ -80,18 +82,29 @@ fun FeedScreen(
         }
         
         // Feed content with pull-to-refresh
-        SwipeRefresh(
-            state = rememberSwipeRefreshState(posts.loadState.refresh is LoadState.Loading),
-            onRefresh = { posts.refresh() },
-            modifier = Modifier.fillMaxSize()
+        val pullRefreshState = rememberPullRefreshState(
+            refreshing = posts.loadState.refresh is LoadState.Loading,
+            onRefresh = { posts.refresh() }
+        )
+        
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pullRefresh(pullRefreshState)
         ) {
             FeedContent(
                 posts = posts,
                 uiState = uiState,
                 onPostInteraction = { interaction ->
-                    viewModel.onEvent(FeedEvent.PostInteraction(interaction))
+                    viewModel.onEvent(FeedEvent.HandlePostInteraction(interaction))
                 },
                 navController = navController
+            )
+            
+            PullRefreshIndicator(
+                refreshing = posts.loadState.refresh is LoadState.Loading,
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
             )
         }
     }
@@ -126,7 +139,7 @@ private fun FeedContent(
         // Post items
         items(
             count = posts.itemCount,
-            key = posts.itemKey { it.id }
+            key = posts.itemKey()
         ) { index ->
             posts[index]?.let { post ->
                 WorkoutPostCard(
@@ -175,7 +188,7 @@ private fun FeedContent(
             is LoadState.Error -> {
                 item {
                     ErrorDisplay(
-                        error = (posts.loadState.append as LoadState.Error).error,
+                        error = convertThrowableToLiftrixError((posts.loadState.append as LoadState.Error).error),
                         onRetry = { posts.retry() },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -190,7 +203,7 @@ private fun FeedContent(
         if (posts.loadState.refresh is LoadState.Error && posts.itemCount == 0) {
             item {
                 ErrorDisplay(
-                    error = (posts.loadState.refresh as LoadState.Error).error,
+                    error = convertThrowableToLiftrixError((posts.loadState.refresh as LoadState.Error).error),
                     onRetry = { posts.refresh() },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -198,6 +211,18 @@ private fun FeedContent(
                 )
             }
         }
+    }
+}
+
+/**
+ * Converts a generic Throwable to LiftrixError for consistent error handling
+ */
+private fun convertThrowableToLiftrixError(throwable: Throwable): LiftrixError {
+    return when (throwable) {
+        is LiftrixError -> throwable
+        else -> LiftrixError.NetworkError(
+            errorMessage = throwable.message ?: "An unknown error occurred"
+        )
     }
 }
 

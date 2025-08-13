@@ -103,8 +103,8 @@ class FeedRepositoryImpl @Inject constructor(
     ): LiftrixResult<WorkoutPost> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "CREATE_WORKOUT_POST",
                 errorMessage = "Failed to create workout post",
-                operation = "CREATE_WORKOUT_POST",
                 analyticsContext = mapOf(
                     "user_id" to userId,
                     "workout_id" to request.workoutId
@@ -140,8 +140,8 @@ class FeedRepositoryImpl @Inject constructor(
     override suspend fun getPost(postId: String, viewerId: String): LiftrixResult<WorkoutPost> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "GET_WORKOUT_POST",
                 errorMessage = "Failed to get workout post",
-                operation = "GET_WORKOUT_POST",
                 analyticsContext = mapOf(
                     "post_id" to postId,
                     "viewer_id" to viewerId
@@ -165,8 +165,8 @@ class FeedRepositoryImpl @Inject constructor(
     ): LiftrixResult<WorkoutPost> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "UPDATE_WORKOUT_POST",
                 errorMessage = "Failed to update workout post",
-                operation = "UPDATE_WORKOUT_POST",
                 analyticsContext = mapOf(
                     "post_id" to postId,
                     "user_id" to userId
@@ -198,8 +198,8 @@ class FeedRepositoryImpl @Inject constructor(
     override suspend fun deletePost(postId: String, userId: String): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "DELETE_WORKOUT_POST",
                 errorMessage = "Failed to delete workout post",
-                operation = "DELETE_WORKOUT_POST",
                 analyticsContext = mapOf(
                     "post_id" to postId,
                     "user_id" to userId
@@ -225,8 +225,8 @@ class FeedRepositoryImpl @Inject constructor(
     override suspend fun refreshFeed(userId: String): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "REFRESH_FEED",
                 errorMessage = "Failed to refresh feed",
-                operation = "REFRESH_FEED",
                 analyticsContext = mapOf("user_id" to userId)
             )
         }
@@ -285,8 +285,8 @@ class FeedRepositoryImpl @Inject constructor(
     override suspend fun invalidateFeedCache(userId: String): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
+                code = "INVALIDATE_FEED_CACHE",
                 errorMessage = "Failed to invalidate feed cache",
-                operation = "INVALIDATE_FEED_CACHE",
                 analyticsContext = mapOf("user_id" to userId)
             )
         }
@@ -329,5 +329,29 @@ class FeedRepositoryImpl @Inject constructor(
     private fun calculateExercisesCount(workout: Any?): Int? {
         // TODO: Implement based on workout entity structure
         return null
+    }
+    
+    override fun getHomeFeed(
+        userId: String,
+        pageSize: Int
+    ): Flow<PagingData<WorkoutPost>> {
+        return getFeed(
+            userId = userId,
+            feedType = FeedType.HOME,
+            targetUserId = null,
+            pageSize = pageSize
+        )
+    }
+    
+    override fun getDiscoveryFeed(
+        userId: String,
+        pageSize: Int
+    ): Flow<PagingData<WorkoutPost>> {
+        return getFeed(
+            userId = userId,
+            feedType = FeedType.DISCOVERY,
+            targetUserId = null,
+            pageSize = pageSize
+        )
     }
 }

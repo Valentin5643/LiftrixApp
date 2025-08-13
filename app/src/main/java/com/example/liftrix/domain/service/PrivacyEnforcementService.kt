@@ -6,6 +6,7 @@ import com.example.liftrix.data.local.dao.SocialPrivacySettingsDao
 import com.example.liftrix.domain.model.social.SocialPrivacySettings
 import com.example.liftrix.domain.model.social.ProfileVisibility
 import com.example.liftrix.domain.model.social.WorkoutVisibility
+import com.example.liftrix.domain.model.social.WorkoutPost
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -227,6 +228,46 @@ class PrivacyEnforcementService @Inject constructor(
     private suspend fun isHiddenFromDiscovery(userId: String): Boolean {
         val privacySettings = privacySettingsDao.getPrivacySettings(userId)
         return privacySettings?.hideFromSuggestions == true
+    }
+
+    // ========================================
+    // Post Visibility Rules
+    // ========================================
+
+    /**
+     * Checks if a workout post can be viewed by the specified viewer.
+     * 
+     * @param viewerId The ID of the viewer (null for anonymous)
+     * @param post The workout post to check visibility for
+     * @return true if post can be viewed, false otherwise
+     */
+    suspend fun canViewPost(viewerId: String?, post: WorkoutPost): Boolean {
+        // Post authors can always view their own posts
+        if (viewerId == post.userId) return true
+        
+        // Anonymous users cannot view posts
+        if (viewerId == null) return false
+        
+        // Check if viewer is blocked by post author
+        if (blockedUserDao.hasBlockRelationship(viewerId, post.userId)) {
+            return false
+        }
+        
+        // Check post visibility and privacy settings
+        return when (post.visibility) {
+            com.example.liftrix.domain.model.social.PostVisibility.PUBLIC -> {
+                // Public posts are visible to everyone (unless blocked)
+                true
+            }
+            com.example.liftrix.domain.model.social.PostVisibility.FOLLOWERS -> {
+                // Followers-only posts require follow relationship
+                isFollower(viewerId, post.userId)
+            }
+            com.example.liftrix.domain.model.social.PostVisibility.PRIVATE -> {
+                // Private posts are only visible to the author
+                false
+            }
+        }
     }
 
     // ========================================

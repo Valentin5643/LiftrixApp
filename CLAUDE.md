@@ -24,13 +24,13 @@ UI Layer (Jetpack Compose)
     ↓ StateFlow<UiState<T>>
 ViewModel Layer (BaseViewModel<S,E>)
     ↓ LiftrixResult<T>
-Use Case Layer (80+ use cases)
+Use Case Layer (85+ use cases)
     ↓ LiftrixResult<T>
-Repository Layer (14 interfaces)
+Repository Layer (16 interfaces)
     ↓ Flow<Entity>
-DAO Layer (23 DAOs with user scoping)
+DAO Layer (28 DAOs with user scoping)
     ↓ SQL
-Room Database (22 entities, v43)
+Room Database (27 entities, v45)
     ↓ Background sync
 Firebase (8 services)
 ```
@@ -158,6 +158,101 @@ sealed class LiftrixRoute {
 - Missing composite indexes for social queries
 - UnifiedWorkoutSessionManager potential memory retention
 
+## Critical Compilation Error Prevention
+
+### Mandatory Pre-Commit Checks
+**Always run before committing social/UI features:**
+```bash
+./gradlew compileDebugKotlin  # MUST pass before any commits
+```
+
+### Common Error Patterns & Fixes
+
+#### 1. Result<T> vs LiftrixResult<T> Mixing
+**NEVER mix error handling patterns:**
+```kotlin
+// ✅ CORRECT - Use LiftrixResult fold pattern
+val result = repository.getData(userId)
+val data = result.fold(
+    onSuccess = { it },
+    onFailure = { error ->
+        Timber.e("Error: $error")
+        emptyList()
+    }
+)
+
+// ❌ WRONG - Using legacy Result pattern causes compilation errors
+when (result) {
+    is Success -> result.data  // Missing imports
+    is Error -> emptyList()    // Type not found
+}
+```
+
+#### 2. Missing Compose Dependencies
+**Required imports for social features:**
+```kotlin
+// Paging Compose - MANDATORY for feed screens
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
+
+// Pull Refresh - MANDATORY for feed refresh
+import eu.bambooapps.material3.pullrefresh.PullRefreshIndicator
+import eu.bambooapps.material3.pullrefresh.pullRefresh
+import eu.bambooapps.material3.pullrefresh.rememberPullRefreshState
+```
+
+#### 3. UI State Completeness
+**All UI state data classes MUST include these properties:**
+```kotlin
+data class FeatureUiState(
+    val isLoading: Boolean = false,
+    val error: LiftrixError? = null,
+    // Feature-specific state properties
+    val selectedTab: TabType = TabType.DEFAULT,
+    val cachedData: Set<String> = emptySet()
+)
+```
+
+#### 4. Event Type Alignment
+**Event handlers must match exact event types:**
+```kotlin
+// ✅ CORRECT - Proper event wrapping
+onInteraction = { interaction ->
+    viewModel.handleEvent(FeatureEvent.UserInteraction(interaction))
+}
+
+// ❌ WRONG - Direct event causes type mismatch
+onInteraction = { interaction ->
+    viewModel.handleEvent(interaction)  // Type error
+}
+```
+
+#### 5. PagingData Type Inference
+**Explicit type parameters required:**
+```kotlin
+// ✅ CORRECT - Explicit generic types
+posts.map<EntityType, DomainType> { entity ->
+    mapper.toDomain(entity)
+}
+
+// ❌ WRONG - Compiler cannot infer types
+posts.map { entity -> mapper.toDomain(entity) }
+```
+
+#### 6. Exhaustive When Expressions
+**All when expressions MUST handle all cases:**
+```kotlin
+// ✅ CORRECT - Handles all LiftrixResult cases
+when (result) {
+    is LiftrixResult.Success -> result.data
+    is LiftrixResult.Error -> {
+        Timber.e("Error: ${result.error}")
+        defaultValue
+    }
+}
+```
+
 ## Testing Strategy
 
 ### Unit Tests
@@ -189,6 +284,88 @@ sealed class LiftrixRoute {
 - User-level document ownership enforced
 - Privacy settings respected for social features
 - Server-side validation for all writes
+
+## Social Feed Engagement Architecture
+
+### Feed System Core Components
+```kotlin
+// Feed Architecture Pattern
+FeedScreen (Compose UI with pull-to-refresh)
+    ↓ collectAsLazyPagingItems()
+FeedViewModel (MVI with optimistic updates)
+    ↓ LiftrixResult<PagingData<WorkoutPost>>
+FeedGeneratorUseCase (Relevance scoring algorithm)
+    ↓ Flow<PagingData<WorkoutPost>>
+FeedRepositoryImpl (Paging3 + RemoteMediator)
+    ↓ Room + Firestore sync
+FeedCacheService (Performance layer)
+```
+
+### Critical Social Patterns
+
+#### 1. Privacy Enforcement (MANDATORY)
+**ALL social content MUST validate viewer permissions:**
+```kotlin
+// ✅ CORRECT - Always check privacy before displaying
+val canView = privacyService.canViewPost(viewerId, post)
+if (!canView) return@filter false
+
+// ❌ WRONG - Exposing private content
+posts.map { post -> displayPost(post) }  // No privacy check
+```
+
+#### 2. Optimistic Updates Pattern
+**Use immediate UI updates with background sync:**
+```kotlin
+// ✅ CORRECT - Optimistic + revert on failure
+_likedPosts.value = _likedPosts.value + postId
+val result = engagementRepository.toggleLike(postId, userId)
+if (result is LiftrixResult.Error) {
+    _likedPosts.value = _likedPosts.value - postId  // Revert
+}
+```
+
+#### 3. Paging3 Implementation
+**Required imports and pattern for feed screens:**
+```kotlin
+// MANDATORY imports for social feeds
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
+
+// Standard paging setup
+val posts = viewModel.feedPosts.collectAsLazyPagingItems()
+```
+
+### Social Debug Hot Zones
+
+#### Critical Debug Points
+1. **Privacy Violations**: `PrivacyEnforcementService.canViewPost()` - Check all social content filtering
+2. **Optimistic Update Failures**: Engagement operations - Verify revert logic
+3. **Feed Cache Staleness**: `FeedCacheService` - Check invalidation on follows/unfollows
+4. **Real-time Sync Issues**: `CommentSyncService` - Monitor Firestore listener lifecycle
+5. **Sequential DB Operations**: Use batch operations for multiple engagement updates
+
+#### Common Social Issues
+- **Memory Leaks**: Firestore listeners not removed in `onDestroy`
+- **User Scoping Violations**: Social queries missing `viewer_id` filtering
+- **Feed Algorithm Bias**: Relevance scoring favoring certain content types
+- **Privacy Context Missing**: Profile access without proper viewer context
+
+### Media Upload Pipeline
+```kotlin
+// Media processing flow
+MediaUploadServiceImpl
+    → Firebase Storage (30s timeout)
+    → Image compression + thumbnails
+    → CDN distribution
+    → Background upload with progress tracking
+```
+
+### Social Privacy Levels
+- **PUBLIC**: Visible to everyone, appears in discovery feed
+- **FOLLOWERS**: Only visible to followers, filtered by relationship
+- **PRIVATE**: Only visible to author (no social sharing)
 
 ## Progress Dashboard Architecture
 
@@ -391,6 +568,31 @@ userSearchRepository.getPublicProfile(profileUserId, viewerId)
 userSearchRepository.getPublicProfile(profileUserId, null)
 ```
 
+### Social Feed Engagement Gotchas
+```kotlin
+// ✅ Use optimistic updates with proper error handling
+_likedPosts.value = _likedPosts.value + postId
+val result = engagementRepository.toggleLike(postId, userId)
+if (result is LiftrixResult.Error) {
+    _likedPosts.value = _likedPosts.value - postId  // Must revert
+}
+
+// ❌ Never update engagement without optimistic UI feedback
+val result = engagementRepository.toggleLike(postId, userId)
+if (result is LiftrixResult.Success) {
+    _likedPosts.value = _likedPosts.value + postId  // Too slow
+}
+```
+
+### Feed Caching Performance
+```kotlin
+// ✅ Use relevance-based caching with proper invalidation
+feedCacheService.invalidateCache(userId, InvalidationReason.NEW_FOLLOW)
+
+// ❌ Don't cache feeds without proper invalidation strategy
+feedCache.put(userId, posts)  // Cache will become stale
+```
+
 ### Progress Dashboard Navigation
 ```kotlin
 // ✅ Use type-safe navigation with @Serializable data classes
@@ -435,6 +637,15 @@ val chartData = processChartData(rawData, timeRange)
 - `QRCodeService` - ZXing-based QR code generation
 - `CalculateAchievementsUseCase` - Automatic achievement detection
 - `ProfileImageManager` - Image upload, crop, and cache management
+
+### Social Feed & Engagement System
+- `FeedRepositoryImpl` - Paging3 integration with RemoteMediator for offline support
+- `EngagementRepositoryImpl` - Optimistic updates for likes, comments, saves with error recovery
+- `FeedGeneratorUseCase` - Intelligent relevance scoring (Recency + Engagement + PRs + Media)
+- `FeedCacheService` - Performance layer with relevance-based caching and smart invalidation
+- `CommentSyncService` - Real-time Firestore listeners for live comment updates
+- `MediaUploadServiceImpl` - Firebase Storage integration with compression and CDN
+- `PrivacyEnforcementService` - Content filtering based on privacy levels and user relationships
 
 ## Performance Targets
 - **60fps UI rendering** with optimized animations
