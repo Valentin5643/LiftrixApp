@@ -39,6 +39,11 @@ import com.example.liftrix.data.local.dao.GymBuddyDao
 import com.example.liftrix.data.local.dao.SocialPrivacySettingsDao
 import com.example.liftrix.data.local.dao.BlockedUserDao
 import com.example.liftrix.data.local.dao.ProfileViewDao
+import com.example.liftrix.data.local.dao.WorkoutPostDao
+import com.example.liftrix.data.local.dao.PostLikeDao
+import com.example.liftrix.data.local.dao.PostCommentDao
+import com.example.liftrix.data.local.dao.FeedCacheDao
+import com.example.liftrix.data.local.dao.SavedPostDao
 
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.data.local.entity.FolderEntity
@@ -71,6 +76,11 @@ import com.example.liftrix.data.local.entity.GymBuddyEntity
 import com.example.liftrix.data.local.entity.SocialPrivacySettingsEntity
 import com.example.liftrix.data.local.entity.BlockedUserEntity
 import com.example.liftrix.data.local.entity.ProfileViewEntity
+import com.example.liftrix.data.local.entity.WorkoutPostEntity
+import com.example.liftrix.data.local.entity.PostLikeEntity
+import com.example.liftrix.data.local.entity.PostCommentEntity
+import com.example.liftrix.data.local.entity.FeedCacheEntity
+import com.example.liftrix.data.local.entity.SavedPostEntity
 
 
 
@@ -107,8 +117,13 @@ import com.example.liftrix.data.local.entity.ProfileViewEntity
         SocialPrivacySettingsEntity::class,
         BlockedUserEntity::class,
         ProfileViewEntity::class,
+        WorkoutPostEntity::class,
+        PostLikeEntity::class,
+        PostCommentEntity::class,
+        FeedCacheEntity::class,
+        SavedPostEntity::class,
     ],
-    version = 44,
+    version = 45,
     exportSchema = true
 )
 @TypeConverters(
@@ -151,4 +166,9 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun socialPrivacySettingsDao(): SocialPrivacySettingsDao
     abstract fun blockedUserDao(): BlockedUserDao
     abstract fun profileViewDao(): ProfileViewDao
+    abstract fun workoutPostDao(): WorkoutPostDao
+    abstract fun postLikeDao(): PostLikeDao
+    abstract fun postCommentDao(): PostCommentDao
+    abstract fun feedCacheDao(): FeedCacheDao
+    abstract fun savedPostDao(): SavedPostDao
 } 

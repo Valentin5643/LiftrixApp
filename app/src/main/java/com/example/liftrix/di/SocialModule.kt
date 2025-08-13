@@ -5,9 +5,18 @@ import com.example.liftrix.data.local.dao.FollowRelationshipDao
 import com.example.liftrix.data.local.dao.GymBuddyDao
 import com.example.liftrix.data.local.dao.SocialPrivacySettingsDao
 import com.example.liftrix.data.local.dao.SocialProfileDao
+import com.example.liftrix.data.local.dao.PostCommentDao
+import com.example.liftrix.data.local.dao.PostLikeDao
+import com.example.liftrix.data.local.dao.SavedPostDao
+import com.example.liftrix.data.local.dao.WorkoutPostDao
+import com.example.liftrix.data.local.dao.FeedCacheDao
 import com.example.liftrix.data.local.LiftrixDatabase
 import com.example.liftrix.data.repository.social.SocialProfileRepositoryImpl
 import com.example.liftrix.domain.repository.social.SocialProfileRepository
+import com.example.liftrix.data.repository.social.FeedRepositoryImpl
+import com.example.liftrix.domain.repository.social.FeedRepository
+import com.example.liftrix.data.repository.social.EngagementRepositoryImpl
+import com.example.liftrix.domain.repository.social.EngagementRepository
 import com.example.liftrix.domain.service.PrivacyEnforcementService
 import com.example.liftrix.domain.usecase.social.CheckUsernameAvailabilityUseCase
 import com.example.liftrix.domain.usecase.social.CreateSocialProfileUseCase
@@ -16,6 +25,13 @@ import com.example.liftrix.domain.usecase.social.GetSocialProfileUseCase
 import com.example.liftrix.domain.usecase.social.SearchSocialProfilesUseCase
 import com.example.liftrix.domain.usecase.social.UpdateSocialProfileUseCase
 import com.example.liftrix.domain.validation.ProfileValidator
+import com.example.liftrix.domain.service.MediaUploadService
+import com.example.liftrix.data.service.MediaUploadServiceImpl
+import com.example.liftrix.domain.service.FeedCacheService
+import com.example.liftrix.data.service.FeedCacheServiceImpl
+import com.example.liftrix.data.mapper.EngagementMapper
+import com.example.liftrix.data.mapper.WorkoutPostMapper
+import com.google.firebase.storage.FirebaseStorage
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -66,6 +82,36 @@ object SocialModule {
         return database.blockedUserDao()
     }
 
+    @Provides
+    @Singleton
+    fun providePostCommentDao(database: LiftrixDatabase): PostCommentDao {
+        return database.postCommentDao()
+    }
+
+    @Provides
+    @Singleton
+    fun providePostLikeDao(database: LiftrixDatabase): PostLikeDao {
+        return database.postLikeDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideSavedPostDao(database: LiftrixDatabase): SavedPostDao {
+        return database.savedPostDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideWorkoutPostDao(database: LiftrixDatabase): WorkoutPostDao {
+        return database.workoutPostDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideFeedCacheDao(database: LiftrixDatabase): FeedCacheDao {
+        return database.feedCacheDao()
+    }
+
     // ========================================
     // Social Repositories
     // ========================================
@@ -77,6 +123,34 @@ object SocialModule {
         blockedUserDao: BlockedUserDao
     ): SocialProfileRepository {
         return SocialProfileRepositoryImpl(socialProfileDao, blockedUserDao)
+    }
+
+    @Provides
+    @Singleton
+    fun provideFeedRepository(
+        workoutPostDao: WorkoutPostDao,
+        postLikeDao: PostLikeDao,
+        savedPostDao: SavedPostDao,
+        socialProfileDao: SocialProfileDao,
+        workoutDao: com.example.liftrix.data.local.dao.WorkoutDao,
+        workoutPostMapper: WorkoutPostMapper,
+        feedCacheService: FeedCacheService
+    ): FeedRepository {
+        return FeedRepositoryImpl(workoutPostDao, postLikeDao, savedPostDao, socialProfileDao, workoutDao, workoutPostMapper, feedCacheService)
+    }
+
+    @Provides
+    @Singleton
+    fun provideEngagementRepository(
+        postLikeDao: PostLikeDao,
+        postCommentDao: PostCommentDao,
+        savedPostDao: SavedPostDao,
+        workoutPostDao: WorkoutPostDao,
+        socialProfileDao: SocialProfileDao,
+        engagementMapper: EngagementMapper,
+        workoutPostMapper: WorkoutPostMapper
+    ): EngagementRepository {
+        return EngagementRepositoryImpl(postLikeDao, postCommentDao, savedPostDao, workoutPostDao, socialProfileDao, engagementMapper, workoutPostMapper)
     }
 
     // ========================================
@@ -185,5 +259,38 @@ object SocialModule {
         firebaseAnalytics: com.google.firebase.analytics.FirebaseAnalytics
     ): com.example.liftrix.domain.service.AnalyticsTracker {
         return com.example.liftrix.data.service.AnalyticsTrackerImpl(firebaseAnalytics)
+    }
+    
+    @Provides
+    @Singleton
+    fun provideMediaUploadService(
+        @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
+        firebaseStorage: FirebaseStorage
+    ): MediaUploadService {
+        return MediaUploadServiceImpl(context, firebaseStorage)
+    }
+
+    @Provides
+    @Singleton
+    fun provideFeedCacheService(
+        feedCacheDao: FeedCacheDao
+    ): FeedCacheService {
+        return FeedCacheServiceImpl(feedCacheDao)
+    }
+
+    // ========================================
+    // Mappers
+    // ========================================
+
+    @Provides
+    @Singleton
+    fun provideEngagementMapper(): EngagementMapper {
+        return EngagementMapper()
+    }
+
+    @Provides
+    @Singleton
+    fun provideWorkoutPostMapper(): WorkoutPostMapper {
+        return WorkoutPostMapper()
     }
 }

@@ -23,5 +23,48 @@
     <string name="placeholder_empty">No data available</string>
     <string name="placeholder_error">Something went wrong</string>
     
+    <!-- Feed Tab Labels -->
+    <string name="feed_tab_home">Home</string>
+    <string name="feed_tab_discovery">Discover</string>
+    
+    <!-- Feed Empty States -->
+    <string name="feed_empty_home_title">Welcome to Your Feed!</string>
+    <string name="feed_empty_home_description">Follow other users to see their workout posts here. Start by searching for friends and fitness enthusiasts to connect with.</string>
+    <string name="feed_empty_discovery_title">Explore New Workouts</string>
+    <string name="feed_empty_discovery_description">Discover inspiring workouts and fitness content from the community. New posts will appear here as people share their fitness journeys.</string>
+    
+    <!-- Comments -->
+    <string name="comments_title">Comments (%d)</string>
+    <string name="comments_empty_title">No comments yet</string>
+    <string name="comments_empty_description">Be the first to share your thoughts on this workout!</string>
+    <string name="comment_placeholder">Add a comment...</string>
+    <string name="comment_reply_placeholder">Write a reply...</string>
+    <string name="replying_to">Replying to %s</string>
+    
+    <!-- Post Creation -->
+    <string name="create_post_title">Share Workout</string>
+    <string name="post_share_button">Share</string>
+    <string name="post_caption_placeholder">Share your thoughts about this workout...</string>
+    <string name="post_media_section_title">Photos &amp; Videos</string>
+    <string name="post_add_media_button">Add Media</string>
+    <string name="post_privacy_title">Who can see this?</string>
+    
+    <!-- Media Picker -->
+    <string name="media_picker_title">Add Media</string>
+    <string name="media_picker_camera">Camera</string>
+    <string name="media_picker_camera_description">Take a photo or video</string>
+    <string name="media_picker_gallery">Gallery</string>
+    <string name="media_picker_gallery_description">Choose from your photos</string>
+    
+    <!-- Privacy Settings -->
+    <string name="privacy_settings_title">Post Privacy</string>
+    <string name="privacy_settings_description">Choose who can see this post</string>
+    <string name="visibility_public_title">Public</string>
+    <string name="visibility_public_description">Anyone can see this post</string>
+    <string name="visibility_followers_title">Followers</string>
+    <string name="visibility_followers_description">Only your followers can see this post</string>
+    <string name="visibility_private_title">Only Me</string>
+    <string name="visibility_private_description">Only you can see this post</string>
+    
     <!-- Firebase configuration - moved to BuildConfig for security -->
 </resources>

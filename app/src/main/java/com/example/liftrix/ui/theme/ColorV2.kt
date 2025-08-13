@@ -339,6 +339,21 @@ object LiftrixColorsV2 {
     }
     
     // ============================================================================
+    // DIRECT ACCESS PROPERTIES FOR UI COMPATIBILITY
+    // ============================================================================
+    
+    // Legacy compatibility properties - point to appropriate theme colors
+    val primary = Teal
+    val onPrimary = Color.Black  // High contrast on teal
+    val primaryContainer = TealContainer
+    val onPrimaryContainer = TealLight
+    val surface = Dark.BackgroundSecondary
+    val onSurface = Dark.TextPrimary
+    val surfaceVariant = Dark.SurfaceVariant
+    val onSurfaceVariant = Dark.TextSecondary
+    val outline = Dark.Outline
+    
+    // ============================================================================
     // MIGRATION HELPERS
     // ============================================================================
     

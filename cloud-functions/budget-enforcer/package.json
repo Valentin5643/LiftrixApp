@@ -1,0 +1,17 @@
+{
+  "name": "budget-enforcer",
+  "version": "1.0.0",
+  "description": "Automatically disable billing when budget is exceeded",
+  "main": "index.js",
+  "engines": {
+    "node": "18"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.0.0",
+    "googleapis": "^126.0.1"
+  },
+  "scripts": {
+    "start": "functions-framework --target=enforceBudget",
+    "deploy": "gcloud functions deploy enforceBudget --runtime nodejs18 --trigger-topic budget-alerts --entry-point enforceBudget --memory 256MB --timeout 60s --max-instances 1"
+  }
+}

@@ -177,10 +177,15 @@ dependencies {
     // Room dependencies
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
+    implementation("androidx.room:room-paging:2.5.2")
     implementation(libs.firebase.storage)
     // Switch to KSP for better compatibility with SDK 35
     ksp(libs.room.compiler)
     // kapt(libs.room.compiler)
+    
+    // Paging3 for social feed
+    implementation("androidx.paging:paging-runtime:3.2.1")
+    implementation("androidx.paging:paging-compose:3.2.1")
     
     // Navigation
     implementation(libs.navigation.compose)
