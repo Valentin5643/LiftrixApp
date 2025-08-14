@@ -1,0 +1,379 @@
+Starting a Gradle Daemon, 4 stopped Daemons could not be reused, use --status for details
+Configuration on demand is an incubating feature.
+Reusing configuration cache.
+> Task :app:preBuild UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:injectCrashlyticsMappingFileIdDebug UP-TO-DATE
+> Task :app:processDebugGoogleServices UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:kspDebugKotlin UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+
+> Task :app:validateRoomQueries
+? Validating Room entity default values...
+? Checking 46 entity files for violations...
+   Checking: src\main\java\com\example\liftrix\data\local\entity\AnalyticsCacheEntity.kt
+   Checking: src\main\java\com\example\liftrix\data\local\entity\AnomalyDetectionSettingsEntity.kt
+   Checking: src\main\java\com\example\liftrix\data\local\entity\BlockedUserEntity.kt
+   Found 1 defaultValue annotations:
+   ? Line 61: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\CustomExerciseEntity.kt
+   Found 2 defaultValue annotations:
+   ? Line 59: Valid numeric default
+   ? Line 62: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\DashboardConfigurationEntity.kt
+   Found 11 defaultValue annotations:
+   ? Line 24: Valid string enum default
+   ? Line 27: Valid numeric default
+   ? Line 30: Valid numeric default
+   ? Line 33: Valid numeric default
+   ? Line 36: Valid string enum default
+   ? Line 39: Valid numeric default
+   ? Line 42: Valid numeric default
+   ? Line 45: Valid numeric default
+   ? Line 48: Valid numeric default
+   ? Line 57: Valid numeric default
+   ? Line 60: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\ExerciseEntity.kt
+   Checking: src\main\java\com\example\liftrix\data\local\entity\ExerciseHistoryEntity.kt
+   Checking: src\main\java\com\example\liftrix\data\local\entity\ExerciseLibraryEntity.kt
+   Checking: src\main\java\com\example\liftrix\data\local\entity\ExerciseSetEntity.kt
+   Checking: src\main\java\com\example\liftrix\data\local\entity\ExerciseUsageHistoryEntity.kt
+   Checking: src\main\java\com\example\liftrix\data\local\entity\ExerciseWeightMemoryEntity.kt
+   Found 1 defaultValue annotations:
+   ? Line 30: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\ExternalShareEntity.kt
+   Checking: src\main\java\com\example\liftrix\data\local\entity\FCMTokenEntity.kt
+   Found 2 defaultValue annotations:
+   ? Line 56: Valid numeric default
+   ? Line 70: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\FeedCacheEntity.kt
+   Checking: src\main\java\com\example\liftrix\data\local\entity\FolderEntity.kt
+   Found 3 defaultValue annotations:
+   ? Line 55: Valid numeric default
+   ? Line 58: Valid numeric default
+   ? Line 61: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\FollowRelationshipEntity.kt
+   Found 2 defaultValue annotations:
+   ? Line 68: Valid numeric default
+   ? Line 71: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\FollowRequestEntity.kt
+   Found 4 defaultValue annotations:
+   ? Line 81: Valid numeric default
+   ? Line 84: Valid numeric default
+   ? Line 91: Valid numeric default
+   ? Line 94: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\FriendEntity.kt
+   Found 1 defaultValue annotations:
+   ? Line 42: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\GuestSessionEntity.kt
+   Checking: src\main\java\com\example\liftrix\data\local\entity\GymBuddyEntity.kt
+   Found 4 defaultValue annotations:
+   ? Line 61: Valid numeric default
+   ? Line 65: Valid numeric default
+   ? Line 72: Valid numeric default
+   ? Line 75: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\MediaItemEntity.kt
+   Found 4 defaultValue annotations:
+   ? Line 83: Valid string enum default
+   ? Line 93: Valid numeric default
+   ? Line 104: Valid numeric default
+   ? Line 107: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\MetDataEntity.kt
+   Checking: src\main\java\com\example\liftrix\data\local\entity\NotificationHistoryEntity.kt
+   Found 1 defaultValue annotations:
+   ? Line 53: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\NotificationMuteEntity.kt
+   Checking: src\main\java\com\example\liftrix\data\local\entity\NotificationPreferenceEntity.kt
+   Found 19 defaultValue annotations:
+   ? Line 21: Valid numeric default
+   ? Line 25: Valid numeric default
+   ? Line 28: Valid numeric default
+   ? Line 31: Valid numeric default
+   ? Line 34: Valid numeric default
+   ? Line 38: Valid numeric default
+   ? Line 41: Valid numeric default
+   ? Line 44: Valid numeric default
+   ? Line 47: Valid numeric default
+   ? Line 50: Valid numeric default
+   ? Line 54: Valid string enum default
+   ? Line 57: Valid numeric default
+   ? Line 60: Valid numeric default
+   ? Line 63: Valid numeric default
+   ? Line 67: Valid numeric default
+   ? Line 70: Valid numeric default
+   ? Line 74: Valid numeric default
+   ? Line 77: Valid numeric default
+   ? Line 81: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\NotificationQueueEntity.kt
+   Found 3 defaultValue annotations:
+   ? Line 54: Valid string enum default
+   ? Line 64: Valid numeric default
+   ? Line 75: Valid string enum default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\PostCommentEntity.kt
+   Found 4 defaultValue annotations:
+   ? Line 63: Valid numeric default
+   ? Line 66: Valid numeric default
+   ? Line 80: Valid numeric default
+   ? Line 83: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\PostLikeEntity.kt
+   Found 1 defaultValue annotations:
+   ? Line 52: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\PrivacySettingsEntity.kt
+   Checking: src\main\java\com\example\liftrix\data\local\entity\ProfileViewEntity.kt
+   Found 2 defaultValue annotations:
+   ? Line 68: Valid numeric default
+   ? Line 71: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\ProgressPhotoEntity.kt
+   Found 3 defaultValue annotations:
+   ? Line 72: Valid numeric default
+   ? Line 83: Valid numeric default
+   ? Line 86: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\QRCodeMappingEntity.kt
+   Checking: src\main\java\com\example\liftrix\data\local\entity\SavedPostEntity.kt
+   Checking: src\main\java\com\example\liftrix\data\local\entity\SettingsEntity.kt
+   Found 3 defaultValue annotations:
+   ? Line 35: Valid string enum default
+   ? Line 38: Valid numeric default
+   ? Line 41: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\SharedRoutineEntity.kt
+   Found 8 defaultValue annotations:
+   ? Line 79: Valid numeric default
+   ? Line 82: Valid numeric default
+   ? Line 85: Valid numeric default
+   ? Line 89: Valid numeric default
+   ? Line 96: Valid numeric default
+   ? Line 99: Valid numeric default
+   ? Line 110: Valid numeric default
+   ? Line 113: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\SocialPrivacySettingsEntity.kt
+   Found 17 defaultValue annotations:
+   ? Line 39: Valid numeric default
+   ?? Line 42: Other valid pattern
+   ? Line 46: Valid numeric default
+   ? Line 49: Valid numeric default
+   ? Line 52: Valid numeric default
+   ? Line 55: Valid numeric default
+   ? Line 58: Valid numeric default
+   ? Line 61: Valid numeric default
+   ?? Line 65: Other valid pattern
+   ? Line 68: Valid numeric default
+   ? Line 71: Valid numeric default
+   ? Line 74: Valid numeric default
+   ? Line 78: Valid numeric default
+   ? Line 81: Valid numeric default
+   ?? Line 85: Other valid pattern
+   ? Line 89: Valid numeric default
+   ? Line 92: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\SocialProfileEntity.kt
+   Found 9 defaultValue annotations:
+   ? Line 53: Valid numeric default
+   ? Line 56: Valid numeric default
+   ? Line 59: Valid numeric default
+   ? Line 69: Valid numeric default
+   ? Line 73: Valid numeric default
+   ? Line 76: Valid numeric default
+   ? Line 79: Valid numeric default
+   ? Line 93: Valid numeric default
+   ? Line 96: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\SubscriptionEntity.kt
+   Found 2 defaultValue annotations:
+   ? Line 74: Valid numeric default
+   ? Line 77: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\UserAchievementEntity.kt
+   Found 3 defaultValue annotations:
+   ? Line 49: Valid numeric default
+   ? Line 58: Valid numeric default
+   ? Line 61: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\UserProfileEntity.kt
+   Found 9 defaultValue annotations:
+   ? Line 65: Valid numeric default
+   ? Line 68: Valid numeric default
+   ? Line 75: Valid numeric default
+   ? Line 81: Valid numeric default
+   ? Line 84: Valid numeric default
+   ? Line 87: Valid numeric default
+   ? Line 93: Valid numeric default
+   ? Line 103: Valid numeric default
+   ? Line 113: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\UserSearchCacheEntity.kt
+   Checking: src\main\java\com\example\liftrix\data\local\entity\WidgetPreferenceEntity.kt
+   Found 5 defaultValue annotations:
+   ? Line 28: Valid numeric default
+   ? Line 34: Valid string enum default
+   ? Line 37: Valid numeric default
+   ? Line 46: Valid numeric default
+   ? Line 49: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\WorkoutAnomalyEntity.kt
+   Checking: src\main\java\com\example\liftrix\data\local\entity\WorkoutEntity.kt
+   Found 2 defaultValue annotations:
+   ? Line 62: Valid numeric default
+   ? Line 65: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\WorkoutPostEntity.kt
+   Found 8 defaultValue annotations:
+   ? Line 69: Valid numeric default
+   ? Line 73: Valid numeric default
+   ? Line 76: Valid numeric default
+   ? Line 79: Valid numeric default
+   ? Line 82: Valid numeric default
+   ? Line 86: Valid string enum default
+   ? Line 97: Valid numeric default
+   ? Line 100: Valid numeric default
+   Checking: src\main\java\com\example\liftrix\data\local\entity\WorkoutTemplateEntity.kt
+   Found 3 defaultValue annotations:
+   ? Line 57: Valid numeric default
+   ? Line 69: Valid numeric default
+   ? Line 72: Valid numeric default
+
+? VALIDATION PASSED: No Room entity violations found!
+? All Room entities have proper default values
+
+
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :app:hiltAggregateDepsDebug UP-TO-DATE
+> Task :app:hiltJavaCompileDebug UP-TO-DATE
+> Task :app:bundleDebugClassesToCompileJar UP-TO-DATE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:transformDebugClassesWithAsm UP-TO-DATE
+> Task :app:bundleDebugClassesToRuntimeJar UP-TO-DATE
+> Task :app:kspDebugUnitTestKotlin UP-TO-DATE
+> Task :app:compileDebugUnitTestKotlin UP-TO-DATE
+> Task :app:compileDebugUnitTestJavaWithJavac UP-TO-DATE
+> Task :app:hiltAggregateDepsDebugUnitTest UP-TO-DATE
+> Task :app:hiltJavaCompileDebugUnitTest NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes UP-TO-DATE
+> Task :app:transformDebugUnitTestClassesWithAsm UP-TO-DATE
+
+> Task :app:testDebugUnitTest
+
+LiftrixAppTest > onCreate should not create channels on pre-O Android versions FAILED
+    java.lang.IllegalStateException at FirebaseApp.java:179
+
+LiftrixAppTest > onCreate should initialize notification channels on Android O+ FAILED
+    java.lang.IllegalStateException at FirebaseApp.java:179
+
+Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :app:testDebugUnitTest
+
+FolderRepositoryImplIntegrationTest > getOrCreateDefaultFolder should handle user-specific default folders FAILED
+    java.lang.AssertionError at FolderRepositoryImplIntegrationTest.kt:351
+
+FolderRepositoryImplIntegrationTest > moveTemplateToFolder should enforce user scoping during move operation FAILED
+    java.lang.AssertionError at FolderRepositoryImplIntegrationTest.kt:324
+
+FolderRepositoryImplIntegrationTest > deleteFolder should enforce user scoping during deletion FAILED
+    java.lang.AssertionError at FolderRepositoryImplIntegrationTest.kt:222
+
+FolderRepositoryImplIntegrationTest > updateFolder should modify existing folder with user validation FAILED
+    java.lang.AssertionError at FolderRepositoryImplIntegrationTest.kt:198
+
+FolderRepositoryImplIntegrationTest > createFolder should handle DAO insertion failures FAILED
+    java.lang.AssertionError at FolderRepositoryImplIntegrationTest.kt:179
+
+FolderSystemFailingTestSuite > FAILING - Edge case error combinations for stress testing FAILED
+    org.junit.ComparisonFailure at FolderSystemFailingTestSuite.kt:294
+
+CalculateExerciseRankingTest > test_time_range_filtering FAILED
+    java.lang.AssertionError at CalculateExerciseRankingTest.kt:233
+
+GetMuscleGroupAnalyticsUseCaseTest > execute should return success with muscle group distribution data FAILED
+    java.lang.AssertionError at GetMuscleGroupAnalyticsUseCaseTest.kt:55
+
+GetMuscleGroupAnalyticsUseCaseTest > execute should validate user ID parameter FAILED
+    java.lang.AssertionError at GetMuscleGroupAnalyticsUseCaseTest.kt:196
+
+GetOneRmProgressionUseCaseTest > execute should correctly handle estimated vs actual 1RM filtering FAILED
+    java.lang.AssertionError at GetOneRmProgressionUseCaseTest.kt:216
+
+GetOneRmProgressionUseCaseTest > execute should return success for all exercises when exerciseIds is null FAILED
+    java.lang.AssertionError at GetOneRmProgressionUseCaseTest.kt:89
+
+CreateFolderUseCaseTest > invoke with existing folder name should fail FAILED
+    java.lang.AssertionError at CreateFolderUseCaseTest.kt:155
+
+CreateFolderUseCaseTest > invoke with valid input should create folder successfully FAILED
+    java.lang.AssertionError at CreateFolderUseCaseTest.kt:52
+
+CreateFolderUseCaseTest > invoke should ensure user scoping by including userId in all operations FAILED
+    java.lang.AssertionError at CreateFolderUseCaseTest.kt:311
+
+CreateFolderUseCaseTest > invoke should handle repository creation failure gracefully FAILED
+    java.lang.AssertionError at CreateFolderUseCaseTest.kt:256
+
+CreateFolderUseCaseTest > invoke with blank folder name should throw IllegalArgumentException FAILED
+    java.lang.AssertionError at CreateFolderUseCaseTest.kt:102
+
+CreateFolderUseCaseTest > invoke should trim folder name whitespace FAILED
+    java.lang.AssertionError at CreateFolderUseCaseTest.kt:280
+
+DeleteFolderUseCaseTest > invoke should fail when template move operation fails FAILED
+    kotlinx.coroutines.test.UncompletedCoroutinesError at TestBuilders.kt:353
+
+DeleteFolderUseCaseTest > invoke should ensure user scoping in all operations FAILED
+    kotlinx.coroutines.test.UncompletedCoroutinesError at TestBuilders.kt:353
+
+DeleteFolderUseCaseTest > invoke should handle different user attempting to delete another user's folder FAILED
+    kotlinx.coroutines.test.UncompletedCoroutinesError at TestBuilders.kt:353
+
+DeleteFolderUseCaseTest > invoke with valid input should delete empty folder successfully FAILED
+    kotlinx.coroutines.test.UncompletedCoroutinesError at TestBuilders.kt:353
+
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Gradle build daemon has been stopped: stop command received
+
+* Try:
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+* Exception is:
+org.gradle.launcher.daemon.server.api.DaemonStoppedException: Gradle build daemon has been stopped: stop command received
+	at org.gradle.launcher.daemon.server.DaemonStateCoordinator.waitForCommandCompletion(DaemonStateCoordinator.java:353)
+	at org.gradle.launcher.daemon.server.DaemonStateCoordinator.runCommand(DaemonStateCoordinator.java:327)
+	at org.gradle.launcher.daemon.server.exec.StartBuildOrRespondWithBusy.doBuild(StartBuildOrRespondWithBusy.java:56)
+	at org.gradle.launcher.daemon.server.exec.BuildCommandOnly.execute(BuildCommandOnly.java:37)
+	at org.gradle.launcher.daemon.server.api.DaemonCommandExecution.proceed(DaemonCommandExecution.java:104)
+	at org.gradle.launcher.daemon.server.exec.ReturnResult.execute(ReturnResult.java:36)
+	at org.gradle.launcher.daemon.server.api.DaemonCommandExecution.proceed(DaemonCommandExecution.java:104)
+	at org.gradle.launcher.daemon.server.exec.CleanUpVirtualFileSystemAfterBuild.doBuild(CleanUpVirtualFileSystemAfterBuild.java:58)
+	at org.gradle.launcher.daemon.server.exec.BuildCommandOnly.execute(BuildCommandOnly.java:37)
+	at org.gradle.launcher.daemon.server.api.DaemonCommandExecution.proceed(DaemonCommandExecution.java:104)
+	at org.gradle.launcher.daemon.server.api.HandleReportStatus.execute(HandleReportStatus.java:35)
+	at org.gradle.launcher.daemon.server.api.DaemonCommandExecution.proceed(DaemonCommandExecution.java:104)
+	at org.gradle.launcher.daemon.server.exec.HandleCancel.execute(HandleCancel.java:39)
+	at org.gradle.launcher.daemon.server.api.DaemonCommandExecution.proceed(DaemonCommandExecution.java:104)
+	at org.gradle.launcher.daemon.server.api.HandleInvalidateVirtualFileSystem.execute(HandleInvalidateVirtualFileSystem.java:46)
+	at org.gradle.launcher.daemon.server.api.DaemonCommandExecution.proceed(DaemonCommandExecution.java:104)
+	at org.gradle.launcher.daemon.server.api.HandleStop.execute(HandleStop.java:46)
+	at org.gradle.launcher.daemon.server.api.DaemonCommandExecution.proceed(DaemonCommandExecution.java:104)
+	at org.gradle.launcher.daemon.server.exec.DaemonCommandExecuter.executeCommand(DaemonCommandExecuter.java:55)
+	at org.gradle.launcher.daemon.server.DefaultIncomingConnectionHandler$ConnectionWorker.handleCommand(DefaultIncomingConnectionHandler.java:161)
+	at org.gradle.launcher.daemon.server.DefaultIncomingConnectionHandler$ConnectionWorker.receiveAndHandleCommand(DefaultIncomingConnectionHandler.java:134)
+	at org.gradle.launcher.daemon.server.DefaultIncomingConnectionHandler$ConnectionWorker.run(DefaultIncomingConnectionHandler.java:122)
+	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
+	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:48)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1136)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:635)
+	at java.base/java.lang.Thread.run(Thread.java:842)
+

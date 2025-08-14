@@ -37,9 +37,12 @@ import com.example.liftrix.domain.service.FeedCacheService
 import com.example.liftrix.data.service.FeedCacheServiceImpl
 import com.example.liftrix.data.mapper.EngagementMapper
 import com.example.liftrix.data.mapper.WorkoutPostMapper
+import com.example.liftrix.domain.service.QRCodeService
+import com.example.liftrix.service.QRCodeServiceImpl
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.analytics.FirebaseAnalytics
+import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -54,213 +57,231 @@ import javax.inject.Singleton
  */
 @Module
 @InstallIn(SingletonComponent::class)
-object SocialModule {
+abstract class SocialModule {
 
     // ========================================
-    // Social DAOs
+    // Service Bindings
     // ========================================
 
-    // SocialProfileDao and FollowRelationshipDao provided by DatabaseModule
-
-    @Provides
+    /**
+     * Binds QRCodeService interface to its implementation.
+     * 
+     * Provides QR code generation, parsing, and validation functionality
+     * for gym buddy pairing and profile sharing features.
+     */
+    @Binds
     @Singleton
-    fun provideFollowRequestDao(database: LiftrixDatabase): FollowRequestDao {
-        return database.followRequestDao()
-    }
+    abstract fun bindQRCodeService(
+        qrCodeServiceImpl: QRCodeServiceImpl
+    ): QRCodeService
 
-    @Provides
-    @Singleton
-    fun provideProfileViewDao(database: LiftrixDatabase): ProfileViewDao {
-        return database.profileViewDao()
-    }
+    companion object {
+        
+        // ========================================
+        // Social DAOs
+        // ========================================
+
+        // SocialProfileDao and FollowRelationshipDao provided by DatabaseModule
+
+        @Provides
+        @Singleton
+        fun provideFollowRequestDao(database: LiftrixDatabase): FollowRequestDao {
+            return database.followRequestDao()
+        }
+
+        @Provides
+        @Singleton
+        fun provideProfileViewDao(database: LiftrixDatabase): ProfileViewDao {
+                return database.profileViewDao()
+            }
 
     // GymBuddyDao, SocialPrivacySettingsDao, and BlockedUserDao provided by DatabaseModule
 
-    @Provides
-    @Singleton
-    fun providePostCommentDao(database: LiftrixDatabase): PostCommentDao {
-        return database.postCommentDao()
-    }
+        @Provides
+        @Singleton
+        fun providePostCommentDao(database: LiftrixDatabase): PostCommentDao {
+                return database.postCommentDao()
+            }
 
-    @Provides
-    @Singleton
-    fun providePostLikeDao(database: LiftrixDatabase): PostLikeDao {
-        return database.postLikeDao()
-    }
+        @Provides
+        @Singleton
+        fun providePostLikeDao(database: LiftrixDatabase): PostLikeDao {
+                return database.postLikeDao()
+            }
 
-    @Provides
-    @Singleton
-    fun provideSavedPostDao(database: LiftrixDatabase): SavedPostDao {
-        return database.savedPostDao()
-    }
+        @Provides
+        @Singleton
+        fun provideSavedPostDao(database: LiftrixDatabase): SavedPostDao {
+                return database.savedPostDao()
+            }
 
-    @Provides
-    @Singleton
-    fun provideWorkoutPostDao(database: LiftrixDatabase): WorkoutPostDao {
-        return database.workoutPostDao()
-    }
+        @Provides
+        @Singleton
+        fun provideWorkoutPostDao(database: LiftrixDatabase): WorkoutPostDao {
+                return database.workoutPostDao()
+            }
 
-    @Provides
-    @Singleton
-    fun provideFeedCacheDao(database: LiftrixDatabase): FeedCacheDao {
-        return database.feedCacheDao()
-    }
+        @Provides
+        @Singleton
+        fun provideFeedCacheDao(database: LiftrixDatabase): FeedCacheDao {
+                return database.feedCacheDao()
+            }
 
-    // ========================================
-    // Social Repositories
-    // ========================================
+        // ========================================
+        // Social Repositories
+        // ========================================
 
-    @Provides
-    @Singleton
-    fun provideSocialProfileRepository(
-        socialProfileDao: SocialProfileDao,
-        blockedUserDao: BlockedUserDao
-    ): SocialProfileRepository {
-        return SocialProfileRepositoryImpl(socialProfileDao, blockedUserDao)
-    }
+        @Provides
+        @Singleton
+        fun provideSocialProfileRepository(
+            socialProfileDao: SocialProfileDao,
+            blockedUserDao: BlockedUserDao
+            ): SocialProfileRepository {
+                return SocialProfileRepositoryImpl(socialProfileDao, blockedUserDao)
+            }
 
-    @Provides
-    @Singleton
-    fun provideFeedRepository(
-        workoutPostDao: WorkoutPostDao,
-        postLikeDao: PostLikeDao,
-        savedPostDao: SavedPostDao,
-        socialProfileDao: SocialProfileDao,
-        workoutDao: com.example.liftrix.data.local.dao.WorkoutDao,
-        workoutPostMapper: WorkoutPostMapper,
-        feedCacheService: FeedCacheService
-    ): FeedRepository {
-        return FeedRepositoryImpl(workoutPostDao, postLikeDao, savedPostDao, socialProfileDao, workoutDao, workoutPostMapper, feedCacheService)
-    }
+        @Provides
+        @Singleton
+        fun provideFeedRepository(
+            workoutPostDao: WorkoutPostDao,
+            postLikeDao: PostLikeDao,
+            savedPostDao: SavedPostDao,
+            socialProfileDao: SocialProfileDao,
+            workoutDao: com.example.liftrix.data.local.dao.WorkoutDao,
+            workoutPostMapper: WorkoutPostMapper,
+            feedCacheService: FeedCacheService
+            ): FeedRepository {
+                return FeedRepositoryImpl(workoutPostDao, postLikeDao, savedPostDao, socialProfileDao, workoutDao, workoutPostMapper, feedCacheService)
+            }
 
-    @Provides
-    @Singleton
-    fun provideEngagementRepository(
-        postLikeDao: PostLikeDao,
-        postCommentDao: PostCommentDao,
-        savedPostDao: SavedPostDao,
-        workoutPostDao: WorkoutPostDao,
-        socialProfileDao: SocialProfileDao,
-        engagementMapper: EngagementMapper,
-        workoutPostMapper: WorkoutPostMapper
-    ): EngagementRepository {
-        return EngagementRepositoryImpl(postLikeDao, postCommentDao, savedPostDao, workoutPostDao, socialProfileDao, engagementMapper, workoutPostMapper)
-    }
+        @Provides
+        @Singleton
+        fun provideEngagementRepository(
+            postLikeDao: PostLikeDao,
+            postCommentDao: PostCommentDao,
+            savedPostDao: SavedPostDao,
+            workoutPostDao: WorkoutPostDao,
+            socialProfileDao: SocialProfileDao,
+            engagementMapper: EngagementMapper,
+            workoutPostMapper: WorkoutPostMapper
+            ): EngagementRepository {
+                return EngagementRepositoryImpl(postLikeDao, postCommentDao, savedPostDao, workoutPostDao, socialProfileDao, engagementMapper, workoutPostMapper)
+            }
 
-    @Provides
-    @Singleton
-    fun provideFollowRepository(
-        followRelationshipDao: FollowRelationshipDao,
-        followRequestDao: FollowRequestDao,
-        profileViewDao: ProfileViewDao,
-        socialProfileDao: SocialProfileDao,
-        blockedUserDao: BlockedUserDao,
-        firestore: com.google.firebase.firestore.FirebaseFirestore
-    ): FollowRepository {
-        return FollowRepositoryImpl(followRelationshipDao, followRequestDao, profileViewDao, socialProfileDao, blockedUserDao, firestore)
-    }
+        @Provides
+        @Singleton
+        fun provideFollowRepository(
+            followRelationshipDao: FollowRelationshipDao,
+            followRequestDao: FollowRequestDao,
+            profileViewDao: ProfileViewDao,
+            socialProfileDao: SocialProfileDao,
+            blockedUserDao: BlockedUserDao,
+            firestore: com.google.firebase.firestore.FirebaseFirestore
+            ): FollowRepository {
+                return FollowRepositoryImpl(followRelationshipDao, followRequestDao, profileViewDao, socialProfileDao, blockedUserDao, firestore)
+            }
 
-    @Provides
-    @Singleton
-    fun provideSocialPrivacySettingsRepository(
-        socialPrivacySettingsDao: SocialPrivacySettingsDao
-    ): SocialPrivacySettingsRepository {
-        return SocialPrivacySettingsRepositoryImpl(socialPrivacySettingsDao)
-    }
+        @Provides
+        @Singleton
+        fun provideSocialPrivacySettingsRepository(
+            socialPrivacySettingsDao: SocialPrivacySettingsDao
+            ): SocialPrivacySettingsRepository {
+                return SocialPrivacySettingsRepositoryImpl(socialPrivacySettingsDao)
+            }
 
-    @Provides
-    @Singleton
-    fun provideNotificationRepository(): com.example.liftrix.domain.repository.NotificationRepository {
-        return com.example.liftrix.data.repository.NotificationRepositoryImpl()
-    }
+        @Provides
+        @Singleton
+        fun provideNotificationRepository(): com.example.liftrix.domain.repository.NotificationRepository {
+            return com.example.liftrix.data.repository.NotificationRepositoryImpl()
+        }
 
     // ========================================
     // Social Services
     // ========================================
 
-    @Provides
-    @Singleton
-    fun providePrivacyEnforcementService(
-        privacySettingsDao: SocialPrivacySettingsDao,
-        followRelationshipDao: FollowRelationshipDao,
-        blockedUserDao: BlockedUserDao
-    ): PrivacyEnforcementService {
-        return PrivacyEnforcementService(
+        @Provides
+        @Singleton
+        fun providePrivacyEnforcementService(
+            privacySettingsDao: SocialPrivacySettingsDao,
+            followRelationshipDao: FollowRelationshipDao,
+            blockedUserDao: BlockedUserDao
+        ): PrivacyEnforcementService {
+            return PrivacyEnforcementService(
             privacySettingsDao = privacySettingsDao,
             followRelationshipDao = followRelationshipDao,
             blockedUserDao = blockedUserDao
         )
-    }
+        }
 
     // ========================================
     // Validation
     // ========================================
 
-    @Provides
-    @Singleton
-    fun provideProfileValidator(): ProfileValidator {
-        return ProfileValidator()
-    }
+        @Provides
+        @Singleton
+        fun provideProfileValidator(): ProfileValidator {
+            return ProfileValidator()
+        }
 
     // ========================================
     // Social Use Cases
     // ========================================
 
-    @Provides
-    @Singleton
-    fun provideCreateSocialProfileUseCase(
-        repository: SocialProfileRepository,
-        validator: ProfileValidator,
-        getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
-    ): CreateSocialProfileUseCase {
-        return CreateSocialProfileUseCase(repository, validator, getCurrentUserIdUseCase)
-    }
+        @Provides
+        @Singleton
+        fun provideCreateSocialProfileUseCase(
+            repository: SocialProfileRepository,
+            validator: ProfileValidator,
+            getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+        ): CreateSocialProfileUseCase {
+            return CreateSocialProfileUseCase(repository, validator, getCurrentUserIdUseCase)
+        }
 
-    @Provides
-    @Singleton
-    fun provideGetSocialProfileUseCase(
-        repository: SocialProfileRepository,
-        getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
-    ): GetSocialProfileUseCase {
-        return GetSocialProfileUseCase(repository, getCurrentUserIdUseCase)
-    }
+        @Provides
+        @Singleton
+        fun provideGetSocialProfileUseCase(
+            repository: SocialProfileRepository,
+            getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+        ): GetSocialProfileUseCase {
+            return GetSocialProfileUseCase(repository, getCurrentUserIdUseCase)
+        }
 
-    @Provides
-    @Singleton
-    fun provideUpdateSocialProfileUseCase(
-        repository: SocialProfileRepository,
-        validator: ProfileValidator,
-        getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
-    ): UpdateSocialProfileUseCase {
-        return UpdateSocialProfileUseCase(repository, validator, getCurrentUserIdUseCase)
-    }
+        @Provides
+        @Singleton
+        fun provideUpdateSocialProfileUseCase(
+            repository: SocialProfileRepository,
+            validator: ProfileValidator,
+            getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+        ): UpdateSocialProfileUseCase {
+            return UpdateSocialProfileUseCase(repository, validator, getCurrentUserIdUseCase)
+        }
 
-    @Provides
-    @Singleton
-    fun provideCheckUsernameAvailabilityUseCase(
-        repository: SocialProfileRepository,
-        validator: ProfileValidator
-    ): CheckUsernameAvailabilityUseCase {
-        return CheckUsernameAvailabilityUseCase(repository, validator)
-    }
+        @Provides
+        @Singleton
+        fun provideCheckUsernameAvailabilityUseCase(
+            repository: SocialProfileRepository,
+            validator: ProfileValidator
+        ): CheckUsernameAvailabilityUseCase {
+            return CheckUsernameAvailabilityUseCase(repository, validator)
+        }
 
-    @Provides
-    @Singleton
-    fun provideSearchSocialProfilesUseCase(
-        repository: SocialProfileRepository,
-        getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
-    ): SearchSocialProfilesUseCase {
-        return SearchSocialProfilesUseCase(repository, getCurrentUserIdUseCase)
-    }
+        @Provides
+        @Singleton
+        fun provideSearchSocialProfilesUseCase(
+            repository: SocialProfileRepository,
+            getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+        ): SearchSocialProfilesUseCase {
+            return SearchSocialProfilesUseCase(repository, getCurrentUserIdUseCase)
+        }
 
-    @Provides
-    @Singleton
-    fun provideGetDiscoverableSocialProfilesUseCase(
-        repository: SocialProfileRepository,
-        getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
-    ): GetDiscoverableSocialProfilesUseCase {
-        return GetDiscoverableSocialProfilesUseCase(repository, getCurrentUserIdUseCase)
-    }
+        @Provides
+        @Singleton
+        fun provideGetDiscoverableSocialProfilesUseCase(
+            repository: SocialProfileRepository,
+            getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+        ): GetDiscoverableSocialProfilesUseCase {
+            return GetDiscoverableSocialProfilesUseCase(repository, getCurrentUserIdUseCase)
+        }
     
     // ========================================
     // External Services
@@ -268,62 +289,63 @@ object SocialModule {
     
     // Firebase services provided by AnalyticsModule to avoid duplicate bindings
     
-    @Provides
-    @Singleton
-    fun provideNotificationService(
-        firebaseMessaging: FirebaseMessaging
-    ): com.example.liftrix.domain.service.NotificationService {
-        return com.example.liftrix.data.service.NotificationServiceImpl(firebaseMessaging)
-    }
+        @Provides
+        @Singleton
+        fun provideNotificationService(
+            firebaseMessaging: FirebaseMessaging
+        ): com.example.liftrix.domain.service.NotificationService {
+            return com.example.liftrix.data.service.NotificationServiceImpl(firebaseMessaging)
+        }
     
-    @Provides
-    @Singleton
-    fun provideAnalyticsTracker(
-        firebaseAnalytics: FirebaseAnalytics
-    ): com.example.liftrix.domain.service.AnalyticsTracker {
-        return com.example.liftrix.data.service.AnalyticsTrackerImpl(firebaseAnalytics)
-    }
+        @Provides
+        @Singleton
+        fun provideAnalyticsTracker(
+            firebaseAnalytics: FirebaseAnalytics
+        ): com.example.liftrix.domain.service.AnalyticsTracker {
+            return com.example.liftrix.data.service.AnalyticsTrackerImpl(firebaseAnalytics)
+        }
     
-    @Provides
-    @Singleton
-    fun provideMediaUploadService(
-        @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
-        firebaseStorage: FirebaseStorage
-    ): MediaUploadService {
-        return MediaUploadServiceImpl(context, firebaseStorage)
-    }
+        @Provides
+        @Singleton
+        fun provideMediaUploadService(
+            @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
+            firebaseStorage: FirebaseStorage
+        ): MediaUploadService {
+            return MediaUploadServiceImpl(context, firebaseStorage)
+        }
 
-    @Provides
-    @Singleton
-    fun provideFeedCacheService(
-        feedCacheDao: FeedCacheDao,
-        workoutPostDao: WorkoutPostDao,
-        postLikeDao: PostLikeDao,
-        postCommentDao: PostCommentDao,
-        followRelationshipDao: FollowRelationshipDao
-    ): FeedCacheService {
-        return FeedCacheServiceImpl(
+        @Provides
+        @Singleton
+        fun provideFeedCacheService(
+            feedCacheDao: FeedCacheDao,
+            workoutPostDao: WorkoutPostDao,
+            postLikeDao: PostLikeDao,
+            postCommentDao: PostCommentDao,
+            followRelationshipDao: FollowRelationshipDao
+        ): FeedCacheService {
+            return FeedCacheServiceImpl(
             feedCacheDao = feedCacheDao,
             workoutPostDao = workoutPostDao,
             postLikeDao = postLikeDao,
             postCommentDao = postCommentDao,
             followRelationshipDao = followRelationshipDao
         )
-    }
+        }
 
     // ========================================
     // Mappers
     // ========================================
 
-    @Provides
-    @Singleton
-    fun provideEngagementMapper(): EngagementMapper {
-        return EngagementMapper()
-    }
+        @Provides
+        @Singleton
+        fun provideEngagementMapper(): EngagementMapper {
+            return EngagementMapper()
+        }
 
-    @Provides
-    @Singleton
-    fun provideWorkoutPostMapper(): WorkoutPostMapper {
-        return WorkoutPostMapper()
-    }
+        @Provides
+        @Singleton
+        fun provideWorkoutPostMapper(): WorkoutPostMapper {
+                return WorkoutPostMapper()
+            }
+        }
 }

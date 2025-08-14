@@ -19,7 +19,8 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "gym_buddies",
     indices = [
-        Index(value = ["user_id"]),
+        Index(value = ["user_id"], unique = true),
+        Index(value = ["buddy_id"], unique = true),
         Index(value = ["user_id", "buddy_id"], unique = true)
     ],
     foreignKeys = [

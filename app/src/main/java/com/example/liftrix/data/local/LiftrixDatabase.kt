@@ -54,6 +54,9 @@ import com.example.liftrix.data.local.dao.MediaItemDao
 import com.example.liftrix.data.local.dao.SharedRoutineDao
 import com.example.liftrix.data.local.dao.ExternalShareDao
 import com.example.liftrix.data.local.dao.ProgressPhotoDao
+import com.example.liftrix.data.local.dao.QRCodeSessionDao
+import com.example.liftrix.data.local.dao.PRNotificationDao
+import com.example.liftrix.data.local.dao.GymBuddyActivityDao
 
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.data.local.entity.FolderEntity
@@ -101,6 +104,9 @@ import com.example.liftrix.data.local.entity.MediaItemEntity
 import com.example.liftrix.data.local.entity.SharedRoutineEntity
 import com.example.liftrix.data.local.entity.ExternalShareEntity
 import com.example.liftrix.data.local.entity.ProgressPhotoEntity
+import com.example.liftrix.data.local.entity.QRCodeSessionEntity
+import com.example.liftrix.data.local.entity.PRNotificationEntity
+import com.example.liftrix.data.local.entity.GymBuddyActivityEntity
 
 
 
@@ -152,8 +158,11 @@ import com.example.liftrix.data.local.entity.ProgressPhotoEntity
         SharedRoutineEntity::class,
         ExternalShareEntity::class,
         ProgressPhotoEntity::class,
+        QRCodeSessionEntity::class,
+        PRNotificationEntity::class,
+        GymBuddyActivityEntity::class,
     ],
-    version = 48,
+    version = 49,
     exportSchema = true
 )
 @TypeConverters(
@@ -211,4 +220,7 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun sharedRoutineDao(): SharedRoutineDao
     abstract fun externalShareDao(): ExternalShareDao
     abstract fun progressPhotoDao(): ProgressPhotoDao
+    abstract fun qrCodeSessionDao(): QRCodeSessionDao
+    abstract fun prNotificationDao(): PRNotificationDao
+    abstract fun gymBuddyActivityDao(): GymBuddyActivityDao
 }
