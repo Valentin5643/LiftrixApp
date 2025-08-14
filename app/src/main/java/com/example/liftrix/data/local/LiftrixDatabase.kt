@@ -50,6 +50,10 @@ import com.example.liftrix.data.local.dao.NotificationPreferenceDao
 import com.example.liftrix.data.local.dao.NotificationQueueDao
 import com.example.liftrix.data.local.dao.NotificationMuteDao
 import com.example.liftrix.data.local.dao.NotificationHistoryDao
+import com.example.liftrix.data.local.dao.MediaItemDao
+import com.example.liftrix.data.local.dao.SharedRoutineDao
+import com.example.liftrix.data.local.dao.ExternalShareDao
+import com.example.liftrix.data.local.dao.ProgressPhotoDao
 
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.data.local.entity.FolderEntity
@@ -93,6 +97,10 @@ import com.example.liftrix.data.local.entity.NotificationPreferenceEntity
 import com.example.liftrix.data.local.entity.NotificationQueueEntity
 import com.example.liftrix.data.local.entity.NotificationMuteEntity
 import com.example.liftrix.data.local.entity.NotificationHistoryEntity
+import com.example.liftrix.data.local.entity.MediaItemEntity
+import com.example.liftrix.data.local.entity.SharedRoutineEntity
+import com.example.liftrix.data.local.entity.ExternalShareEntity
+import com.example.liftrix.data.local.entity.ProgressPhotoEntity
 
 
 
@@ -140,8 +148,12 @@ import com.example.liftrix.data.local.entity.NotificationHistoryEntity
         NotificationQueueEntity::class,
         NotificationMuteEntity::class,
         NotificationHistoryEntity::class,
+        MediaItemEntity::class,
+        SharedRoutineEntity::class,
+        ExternalShareEntity::class,
+        ProgressPhotoEntity::class,
     ],
-    version = 47,
+    version = 48,
     exportSchema = true
 )
 @TypeConverters(
@@ -195,4 +207,8 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun notificationQueueDao(): NotificationQueueDao
     abstract fun notificationMuteDao(): NotificationMuteDao
     abstract fun notificationHistoryDao(): NotificationHistoryDao
+    abstract fun mediaItemDao(): MediaItemDao
+    abstract fun sharedRoutineDao(): SharedRoutineDao
+    abstract fun externalShareDao(): ExternalShareDao
+    abstract fun progressPhotoDao(): ProgressPhotoDao
 }

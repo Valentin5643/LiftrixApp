@@ -73,6 +73,11 @@ class GetMuscleGroupAnalyticsUseCase @Inject constructor(
                 )
             }
         ) {
+            // Validate user ID to prevent data leakage
+            if (userId.isBlank()) {
+                throw IllegalArgumentException("User ID cannot be blank")
+            }
+            
             Timber.d("Retrieving muscle group analytics for user: $userId, muscleGroup: $muscleGroup, timeRange: $timeRange")
             
             val (startDate, endDate) = calculateDateRange(timeRange)

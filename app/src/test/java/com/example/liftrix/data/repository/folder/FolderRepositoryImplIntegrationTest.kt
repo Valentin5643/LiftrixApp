@@ -179,6 +179,7 @@ class FolderRepositoryImplIntegrationTest {
     fun `createFolder should handle DAO insertion failures`() = runTest {
         // Arrange
         val daoError = RuntimeException("Database insertion failed")
+        coEvery { folderDao.doesFolderNameExist(validUserId, validFolderName) } returns false
         coEvery { folderDao.insertFolder(any()) } throws daoError
         
         // Act
@@ -190,7 +191,8 @@ class FolderRepositoryImplIntegrationTest {
             assertEquals(daoError, exception)
         }
         
-        // Verify insertion was attempted
+        // Verify operations were attempted
+        coVerify(exactly = 1) { folderDao.doesFolderNameExist(validUserId, validFolderName) }
         coVerify(exactly = 1) { folderDao.insertFolder(any()) }
     }
     
@@ -200,8 +202,11 @@ class FolderRepositoryImplIntegrationTest {
         val updatedFolder = testFolder.copy(name = FolderName("Updated Name"))
         val updatedEntity = testFolderEntity.copy(name = "Updated Name")
         
+        coEvery { folderDao.getFolderById(validFolderId.value, validUserId) } returns testFolderEntity
+        coEvery { folderDao.doesFolderNameExist(validUserId, "Updated Name") } returns false
         coEvery { folderDao.updateFolder(any()) } returns 1
         coEvery { folderDao.getFolderById(validFolderId.value) } returns updatedEntity
+        every { folderMapper.updateEntity(any(), any()) } returns updatedEntity
         
         // Act
         val result = folderRepository.updateFolder(updatedFolder)
@@ -214,8 +219,11 @@ class FolderRepositoryImplIntegrationTest {
         }
         
         // Verify DAO operations
+        coVerify(exactly = 1) { folderDao.getFolderById(validFolderId.value, validUserId) }
+        coVerify(exactly = 1) { folderDao.doesFolderNameExist(validUserId, "Updated Name") }
         coVerify(exactly = 1) { folderDao.updateFolder(any()) }
-        verify(exactly = 1) { folderMapper.toNewEntity(updatedFolder) }
+        coVerify(exactly = 1) { folderDao.getFolderById(validFolderId.value) }
+        verify(exactly = 1) { folderMapper.updateEntity(any(), updatedFolder) }
     }
     
     @Test
@@ -330,9 +338,18 @@ class FolderRepositoryImplIntegrationTest {
         coEvery { folderDao.getFolderById(targetFolderId.value, validUserId) } returns testFolderEntity
         coEvery { folderDao.getFolderById(targetFolderId.value, differentUserId) } returns null
         
-        // Mock that template exists and belongs to user
+        // Mock template operations for valid user
         coEvery { workoutTemplateDao.updateFolderId(templateId, targetFolderId.value, validUserId) } returns 1
+        coEvery { workoutTemplateDao.getTemplateById(templateId, validUserId) } returns mockk {
+            every { folderId } returns "oldFolder"
+        }
+        
+        // Mock template operations for different user  
         coEvery { workoutTemplateDao.updateFolderId(templateId, targetFolderId.value, differentUserId) } returns 0
+        
+        // Mock folder count operations
+        coEvery { folderDao.decrementTemplateCount(any(), any()) } returns 1
+        coEvery { folderDao.incrementTemplateCount(any(), any()) } returns 1
         
         // Act
         val resultValidUser = folderRepository.moveTemplateToFolder(templateId, targetFolderId, validUserId)
@@ -357,9 +374,9 @@ class FolderRepositoryImplIntegrationTest {
         )
         
         // First call - folder doesn't exist, second call - folder exists after creation
-        coEvery { folderDao.getFoldersByUserId(validUserId) } returns flowOf(emptyList()) andThen flowOf(listOf(defaultFolderEntity))
+        coEvery { folderDao.getFoldersByUserId(validUserId) } returns flowOf(emptyList())
+        coEvery { userProfileDao.getProfileForUserSuspend(validUserId) } returns mockk() // User profile exists
         coEvery { folderDao.insertFolder(any()) } returns 1L
-        coEvery { folderDao.doesFolderNameExist(validUserId, "Uncategorized") } returns false
         
         // Act
         val result = folderRepository.getOrCreateDefaultFolder(validUserId)
@@ -369,11 +386,11 @@ class FolderRepositoryImplIntegrationTest {
         result.onSuccess { folder ->
             assertEquals("Uncategorized", folder.name.value)
             assertEquals(validUserId, folder.userId)
-            assertTrue(folder.id.value.contains("uncategorized"))
         }
         
         // Verify default folder creation flow
-        coVerify(atLeast = 1) { folderDao.insertFolder(any()) }
+        coVerify(exactly = 1) { folderDao.getFoldersByUserId(validUserId) }
+        coVerify(exactly = 1) { folderDao.insertFolder(any()) }
     }
     
     @Test

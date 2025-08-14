@@ -8,7 +8,9 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.usecase.analytics.CalculateExerciseRankingUseCase
 import com.example.liftrix.domain.usecase.analytics.ExerciseRankingRequest
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
+import com.example.liftrix.domain.repository.workout.ExercisePerformanceData
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.model.common.LiftrixResult
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.Clock
@@ -231,22 +233,37 @@ class CalculateExerciseRankingTest {
 
     @Test
     fun test_time_range_filtering() = runTest {
-        // Given: Exercise data across different time periods
-        val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
-        val timeRange = TimeRangeType.SIX_MONTHS
+        // Given: Mock authenticated user
+        coEvery { getCurrentUserIdUseCase() } returns "test_user_123"
+        coEvery { workoutRepository.getExercisePerformanceData(any(), any(), any()) } returns 
+            LiftrixResult.success(emptyList<ExercisePerformanceData>())
+        
+        val request = ExerciseRankingRequest(
+            metric = RankingMetric.PERFORMANCE_SCORE,
+            timeRange = TimeRangeType.SIX_MONTHS,
+            limit = 10
+        )
 
-        // When: Filter data by time range
-        val filteredData = filterDataByTimeRange(createTimeSeriesData(), timeRange, today)
+        // When: Execute the use case
+        val result = calculateExerciseRankingUseCase(request)
 
-        // Then: Should only include data within the specified range
-        assertTrue(filteredData.isNotEmpty())
-        // Additional assertions would check that all data points are within the time range
+        // Then: Should return success (even with empty data)
+        result.fold(
+            onSuccess = { data ->
+                assertTrue("Should return valid result", data.rankings.isEmpty())
+            },
+            onFailure = {
+                fail("Should not fail with valid parameters")
+            }
+        )
     }
 
     @Test
     fun test_insufficient_data_handling() = runTest {
-        // Given: Exercise with insufficient data points
-        val insufficientData = createExerciseWithInsufficientData()
+        // Given: Mock authenticated user but no data
+        coEvery { getCurrentUserIdUseCase() } returns "test_user_123"
+        coEvery { workoutRepository.getExercisePerformanceData(any(), any(), any()) } returns 
+            LiftrixResult.success(emptyList<ExercisePerformanceData>())
 
         // When: Attempt to calculate performance score
         val result = calculateExerciseRankingUseCase(
@@ -260,14 +277,13 @@ class CalculateExerciseRankingTest {
         // Then: Should handle insufficient data gracefully
         result.fold(
             onSuccess = { data ->
-                // Should return empty list or exercises with valid rankings
-                assertTrue(data.rankings.isEmpty() || data.rankings.all { it.score >= 0f })
+                // Should return empty list for insufficient data
+                assertTrue("Should return empty rankings for no data", data.rankings.isEmpty())
             },
             onFailure = { error ->
                 // Should provide meaningful error message
                 val errorMsg = error.message ?: "Unknown error"
-                assertTrue(errorMsg.contains("insufficient data") || 
-                          errorMsg.contains("calculation") ||
+                assertTrue("Error message should be meaningful", errorMsg.contains("calculation") ||
                           errorMsg.contains("ranking"))
             }
         )

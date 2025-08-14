@@ -74,6 +74,16 @@ class GetOneRmProgressionUseCase @Inject constructor(
                 )
             }
         ) {
+            // Validate user ID to prevent data leakage
+            if (userId.isBlank()) {
+                return@liftrixCatching OneRmProgressionData(
+                    exerciseProgressions = emptyList(),
+                    overallProgression = emptyList(),
+                    timeRange = timeRange,
+                    isEmpty = true
+                )
+            }
+            
             Timber.d("Retrieving 1RM progression for user: $userId, exercises: ${exerciseIds?.size ?: "all"}, timeRange: $timeRange")
             
             val (startDate, endDate) = calculateDateRange(timeRange)
@@ -150,16 +160,22 @@ class GetOneRmProgressionUseCase @Inject constructor(
                 
                 val dataPoints = exerciseData
                     .sortedBy { it.completed_at }
-                    .map { result ->
-                        OneRmDataPoint(
-                            date = Instant.fromEpochMilliseconds(result.completed_at)
-                                .toLocalDateTime(TimeZone.currentSystemDefault())
-                                .date,
-                            actualOneRm = if (result.reps == 1) result.weight_kg else null,
-                            estimatedOneRm = if (includeEstimated) result.estimated_one_rm.toFloat() else result.weight_kg,
-                            weight = result.weight_kg,
-                            reps = result.reps
-                        )
+                    .mapNotNull { result ->
+                        // Filter based on includeEstimated flag
+                        if (!includeEstimated && result.reps != 1) {
+                            null // Skip estimated values when includeEstimated is false
+                        } else {
+                            OneRmDataPoint(
+                                date = Instant.fromEpochMilliseconds(result.completed_at)
+                                    .toLocalDateTime(TimeZone.currentSystemDefault())
+                                    .date,
+                                actualOneRm = if (result.reps == 1) result.weight_kg else null,
+                                estimatedOneRm = result.estimated_one_rm.toFloat(),
+                                weight = result.weight_kg,
+                                reps = result.reps,
+                                isEstimated = result.reps != 1
+                            )
+                        }
                     }
                 
                 val currentMax = dataPoints.maxOfOrNull { point: OneRmDataPoint ->

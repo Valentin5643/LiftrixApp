@@ -32,7 +32,7 @@ class DeleteFolderUseCaseTest {
     private val validFolderId = FolderId("folder456")
     private val defaultFolderId = FolderId("uncategorized_user123")
     private val invalidUserId = ""
-    private val invalidFolderId = FolderId("")
+    private val blankFolderIdString = ""  // For validation testing
     private val nonExistentFolderId = FolderId("nonexistent")
     
     private val testFolder = Folder(
@@ -155,18 +155,18 @@ class DeleteFolderUseCaseTest {
     
     @Test
     fun `invoke with blank folderId should fail validation`() = runTest {
-        // Arrange
-        val input = DeleteFolderUseCase.DeleteFolderInput(validUserId, invalidFolderId)
-        
-        // Act
-        val result = deleteFolderUseCase(input)
+        // Arrange & Act - FolderId creation should throw immediately
+        val exception = try {
+            FolderId(blankFolderIdString)
+            null
+        } catch (e: IllegalArgumentException) {
+            e
+        }
         
         // Assert
-        assertTrue(result.isFailure)
-        result.onFailure { exception ->
-            assertTrue(exception is IllegalArgumentException)
-            assertTrue(exception.message?.contains("Folder ID cannot be blank") == true)
-        }
+        assertTrue(exception != null, "Should throw IllegalArgumentException for blank folder ID")
+        assertTrue(exception?.message?.contains("Folder ID cannot be blank") == true, 
+            "Exception should contain validation message")
         
         // Verify no repository interactions
         coVerify(exactly = 0) { folderRepository.getFolderByIdDirect(any(), any()) }

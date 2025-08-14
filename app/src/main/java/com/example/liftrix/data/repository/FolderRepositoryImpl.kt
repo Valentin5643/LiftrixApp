@@ -116,8 +116,11 @@ class FolderRepositoryImpl @Inject constructor(
             val updateResult = folderDao.updateFolder(updatedEntity)
 
             if (updateResult > 0) {
+                // Get the updated entity from database to return the actual state
+                val refreshedEntity = folderDao.getFolderById(folder.id.value)
+                val updatedFolder = refreshedEntity?.let { folderMapper.toDomain(it) } ?: folder
                 Timber.d("Updated folder: ${folder.name.value} for user ${folder.userId}")
-                Result.success(folder)
+                Result.success(updatedFolder)
             } else {
                 Result.failure(RuntimeException("Failed to update folder in database"))
             }
@@ -129,29 +132,22 @@ class FolderRepositoryImpl @Inject constructor(
 
     override suspend fun deleteFolder(folderId: FolderId, userId: String): Result<Unit> {
         return try {
-            // Verify folder exists and is owned by user
-            val existingFolder = folderDao.getFolderById(folderId.value, userId)
-            if (existingFolder == null) {
-                return Result.failure(
-                    IllegalArgumentException("Folder not found or not owned by user: ${folderId.value}")
-                )
-            }
-
-            // Don't allow deletion of default "Uncategorized" folder
-            if (existingFolder.name == Folder.DEFAULT_FOLDER_NAME) {
-                return Result.failure(
-                    IllegalArgumentException("Cannot delete the default 'Uncategorized' folder")
-                )
-            }
-
-            // Delete the folder
+            // Delete the folder with user scoping enforcement
             val deleteResult = folderDao.deleteFolder(folderId.value, userId)
 
             if (deleteResult > 0) {
                 Timber.d("Successfully deleted folder: ${folderId.value}")
                 Result.success(Unit)
             } else {
-                Result.failure(RuntimeException("Failed to delete folder from database - no rows affected"))
+                // Check if folder exists for verification
+                val existingFolder = folderDao.getFolderById(folderId.value)
+                if (existingFolder == null) {
+                    Result.failure(IllegalArgumentException("Folder not found: ${folderId.value}"))
+                } else if (existingFolder.userId != userId) {
+                    Result.failure(IllegalArgumentException("Folder not owned by user: ${folderId.value}"))
+                } else {
+                    Result.failure(RuntimeException("Failed to delete folder from database - no rows affected"))
+                }
             }
         } catch (e: Exception) {
             Timber.e(e, "Failed to delete folder: ${folderId.value}")
@@ -173,37 +169,28 @@ class FolderRepositoryImpl @Inject constructor(
                 )
             }
 
-            // Get current template to verify ownership and get current folder
-            val template = workoutTemplateDao.getTemplateById(templateId, userId)
-            if (template == null) {
-                return Result.failure(
-                    IllegalArgumentException("Template not found or not owned by user")
-                )
-            }
-
-            val oldFolderId = template.folderId ?: "null" // Handle null folder ID
-            val newFolderId = targetFolderId.value
-
-            // Skip if template is already in target folder
-            if (oldFolderId == newFolderId) {
-                return Result.success(Unit)
-            }
-
-            // 🔥 IMPLEMENTATION: Use WorkoutTemplateDao to move template between folders
-            val updateResult = workoutTemplateDao.updateFolderId(templateId, newFolderId, userId)
+            // Use WorkoutTemplateDao to move template with user scoping
+            val updateResult = workoutTemplateDao.updateFolderId(templateId, targetFolderId.value, userId)
             
             if (updateResult > 0) {
-                // Update folder template counts
-                database.withTransaction {
-                    // Decrement old folder count (only if it's not null)
-                    if (oldFolderId != newFolderId && oldFolderId != "null") {
-                        folderDao.decrementTemplateCount(oldFolderId, System.currentTimeMillis())
+                // Get template info for folder count updates
+                val template = workoutTemplateDao.getTemplateById(templateId, userId)
+                if (template != null) {
+                    val oldFolderId = template.folderId
+                    val newFolderId = targetFolderId.value
+                    
+                    // Update folder template counts
+                    database.withTransaction {
+                        // Decrement old folder count (only if it's not null and different)
+                        if (oldFolderId != null && oldFolderId != newFolderId) {
+                            folderDao.decrementTemplateCount(oldFolderId, System.currentTimeMillis())
+                        }
+                        // Increment new folder count
+                        folderDao.incrementTemplateCount(newFolderId, System.currentTimeMillis())
                     }
-                    // Always increment new folder count
-                    folderDao.incrementTemplateCount(newFolderId, System.currentTimeMillis())
                 }
                 
-                Timber.d("Successfully moved template $templateId from $oldFolderId to $newFolderId")
+                Timber.d("Successfully moved template $templateId to folder ${targetFolderId.value}")
                 Result.success(Unit)
             } else {
                 Result.failure(RuntimeException("Failed to update template folder - no rows affected"))
@@ -316,26 +303,12 @@ class FolderRepositoryImpl @Inject constructor(
 
     override suspend fun getOrCreateDefaultFolder(userId: String): Result<Folder> {
         return try {
-            val defaultFolderId = "uncategorized_$userId"
-            
-            // Try to get existing default folder
-            val existingFolder = folderDao.getFolderById(defaultFolderId)
-            if (existingFolder != null) {
-                val domain = folderMapper.toDomain(existingFolder)
+            // Check if default folder already exists by name
+            val existingFolders = folderDao.getFoldersByUserId(userId).first()
+            val defaultFolder = existingFolders.find { it.name == "Uncategorized" }
+            if (defaultFolder != null) {
+                val domain = folderMapper.toDomain(defaultFolder)
                 return Result.success(domain)
-            }
-
-            // 🔥 FIX: Check for duplicate folder name before attempting insert
-            val folderNameExists = folderDao.doesFolderNameExist(userId, "Uncategorized")
-            if (folderNameExists) {
-                Timber.d("🔥 FOLDER-EXISTS: Default folder already exists for user $userId, fetching existing folder")
-                // Find the existing folder by name and return it
-                val folders = folderDao.getFoldersByUserId(userId).first()
-                val existingByName = folders.find { it.name == "Uncategorized" }
-                if (existingByName != null) {
-                    val domain = folderMapper.toDomain(existingByName)
-                    return Result.success(domain)
-                }
             }
 
             // Use database transaction for atomic folder + user profile creation
@@ -355,16 +328,15 @@ class FolderRepositoryImpl @Inject constructor(
                 // Create default folder with Firebase UID (domain model)
                 val defaultFolder = Folder.createDefault(userId) // Use Firebase UID for domain model
                 val entity = folderMapper.toNewEntity(defaultFolder)
-                // 🔥 FIX: Don't override userId - entity mapping should already use correct Firebase UID
                 
-                Timber.d("🔥 FOLDER-CREATE-DEBUG: Creating folder entity with userId=${entity.userId} for Firebase UID=$userId")
+                Timber.d("Creating folder entity with userId=${entity.userId} for Firebase UID=$userId")
                 val insertResult = folderDao.insertFolder(entity)
 
                 if (insertResult <= 0) {
                     throw RuntimeException("Failed to create default folder - insert returned $insertResult")
                 }
                 
-                Timber.d("✅ Successfully created default folder for user $userId (insertResult=$insertResult)")
+                Timber.d("Successfully created default folder for user $userId (insertResult=$insertResult)")
                 defaultFolder
             }
             
@@ -381,8 +353,8 @@ class FolderRepositoryImpl @Inject constructor(
                 else -> "Failed to create default folder: ${e.message}"
             }
             
-            Timber.e(e, "🔥 FOLDER-ERROR: Failed to get or create default folder for user $userId")
-            Timber.e("🔥 FOLDER-ERROR-DETAILS: Exception type=${e.javaClass.simpleName}, message='${e.message}'")
+            Timber.e(e, "Failed to get or create default folder for user $userId")
+            Timber.e("Exception type=${e.javaClass.simpleName}, message='${e.message}'")
             Result.failure(RuntimeException(errorMessage, e))
         }
     }

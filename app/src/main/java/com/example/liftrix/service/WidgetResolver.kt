@@ -378,7 +378,7 @@ class WidgetResolver @Inject constructor() {
         return when (userLevel) {
             UserLevel.BEGINNER -> 4
             UserLevel.INTERMEDIATE -> 7
-            UserLevel.ADVANCED -> 10
+            UserLevel.ADVANCED -> 11
         }
     }
     

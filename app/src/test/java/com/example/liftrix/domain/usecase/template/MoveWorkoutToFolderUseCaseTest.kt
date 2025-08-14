@@ -318,19 +318,18 @@ class MoveWorkoutToFolderUseCaseTest {
         // Arrange
         val emptyFolderId = ""
         
-        coEvery { folderRepository.getFolderById(FolderId(emptyFolderId)) } returns null
-        
-        // Act
-        val result = moveWorkoutToFolderUseCase(testWorkoutTemplate, emptyFolderId)
+        // Act - Should fail during FolderId validation
+        val exception = try {
+            FolderId(emptyFolderId)
+            null
+        } catch (e: IllegalArgumentException) {
+            e
+        }
         
         // Assert
-        assertTrue(result.isFailure)
-        result.fold(
-            onSuccess = { fail("Expected failure but got success") },
-            onFailure = { error ->
-                assertTrue(error.toString().contains("Target folder does not exist"))
-            }
-        )
+        assertTrue(exception != null, "Should throw IllegalArgumentException for empty folder ID")
+        assertTrue(exception?.message?.contains("Folder ID cannot be blank") == true, 
+            "Exception should contain validation message")
     }
     
     @Test

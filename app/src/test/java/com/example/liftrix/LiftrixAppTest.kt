@@ -15,19 +15,19 @@ import org.robolectric.annotation.Config
  * Tests notification channel creation and application initialization.
  */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [Build.VERSION_CODES.O], application = LiftrixApp::class)
+@Config(sdk = [Build.VERSION_CODES.O], application = TestLiftrixApp::class)
 class LiftrixAppTest {
 
     @Test
     fun `onCreate should initialize notification channels on Android O+`() {
         // Arrange
-        val context = ApplicationProvider.getApplicationContext<LiftrixApp>()
+        val context = ApplicationProvider.getApplicationContext<TestLiftrixApp>()
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         
         // Act - onCreate is called automatically by test framework
         
         // Assert
-        val channel = notificationManager.getNotificationChannel(LiftrixApp.WORKOUT_TIMER_CHANNEL_ID)
+        val channel = notificationManager.getNotificationChannel(TestLiftrixApp.WORKOUT_TIMER_CHANNEL_ID)
         assertNotNull("Workout timer notification channel should be created", channel)
         assert(channel.name == "Workout Timer")
         assert(channel.importance == NotificationManager.IMPORTANCE_LOW)
@@ -35,10 +35,10 @@ class LiftrixAppTest {
     }
     
     @Test
-    @Config(sdk = [Build.VERSION_CODES.N], application = LiftrixApp::class)
+    @Config(sdk = [Build.VERSION_CODES.N], application = TestLiftrixApp::class)
     fun `onCreate should not create channels on pre-O Android versions`() {
         // Arrange
-        val context = ApplicationProvider.getApplicationContext<LiftrixApp>()
+        val context = ApplicationProvider.getApplicationContext<TestLiftrixApp>()
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         
         // Act - onCreate is called automatically by test framework

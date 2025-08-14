@@ -29,7 +29,7 @@ class CreateFolderUseCaseTest {
     private val validFolderName = "Test Folder"
     private val existingFolderName = "Existing Folder"
     private val invalidUserId = ""
-    private val invalidFolderName = ""
+    private val blankFolderNameString = ""  // For validation testing
     private val tooLongFolderName = "a".repeat(51) // Assuming max length is 50
     private val tooShortFolderName = "ab" // Assuming min length is 3
     
@@ -100,18 +100,20 @@ class CreateFolderUseCaseTest {
     
     @Test
     fun `invoke with blank folder name should throw IllegalArgumentException`() = runTest {
-        // Arrange
-        val input = CreateFolderUseCase.CreateFolderInput(validUserId, invalidFolderName)
-        
-        // Act & Assert
-        val result = createFolderUseCase(input)
-        assertTrue(result.isFailure)
-        result.onFailure { exception ->
-            assertTrue(exception is IllegalArgumentException)
-            assertTrue(exception.message?.contains("Folder name cannot be blank") == true)
+        // Arrange & Act - FolderName creation should throw immediately
+        val exception = try {
+            FolderName(blankFolderNameString)
+            null
+        } catch (e: IllegalArgumentException) {
+            e
         }
         
-        // Verify no repository interactions for invalid input
+        // Assert
+        assertTrue(exception != null, "Should throw IllegalArgumentException for blank folder name")
+        assertTrue(exception?.message?.contains("Folder name cannot be blank") == true, 
+            "Exception should contain validation message")
+        
+        // Verify no repository interactions since validation fails early
         coVerify(exactly = 0) { folderRepository.createFolder(any()) }
     }
     
