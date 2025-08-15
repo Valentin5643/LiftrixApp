@@ -171,6 +171,104 @@ class AnalyticsTrackerImpl @Inject constructor(
         }
     }
     
+    override fun trackShare(
+        contentType: String,
+        contentId: String,
+        platform: String,
+        userId: String,
+        hasCustomMessage: Boolean,
+        additionalProperties: Map<String, Any>
+    ) {
+        try {
+            val params = mutableMapOf<String, Any>(
+                "content_type" to contentType,
+                "content_id" to contentId,
+                "platform" to platform,
+                "user_id" to userId,
+                "has_custom_message" to hasCustomMessage
+            )
+            
+            params.putAll(additionalProperties)
+            
+            firebaseAnalytics.logEvent(FirebaseAnalytics.Event.SHARE, params.toBundle())
+            
+            Timber.d("Analytics: Share tracked - $userId shared $contentType:$contentId to $platform")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to track share analytics")
+        }
+    }
+    
+    override fun trackEngagement(
+        action: String,
+        contentType: String,
+        contentId: String,
+        contentOwnerUserId: String,
+        userId: String,
+        additionalProperties: Map<String, Any>
+    ) {
+        try {
+            val params = mutableMapOf<String, Any>(
+                "action" to action,
+                "content_type" to contentType,
+                "content_id" to contentId,
+                "content_owner_user_id" to contentOwnerUserId,
+                "user_id" to userId
+            )
+            
+            params.putAll(additionalProperties)
+            
+            firebaseAnalytics.logEvent("engagement", params.toBundle())
+            
+            Timber.d("Analytics: Engagement tracked - $userId performed $action on $contentType:$contentId")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to track engagement analytics")
+        }
+    }
+    
+    override fun trackQRCodeEvent(
+        action: String,
+        userId: String,
+        qrType: String,
+        additionalProperties: Map<String, Any>
+    ) {
+        try {
+            val params = mutableMapOf<String, Any>(
+                "action" to action,
+                "user_id" to userId,
+                "qr_type" to qrType
+            )
+            
+            params.putAll(additionalProperties)
+            
+            firebaseAnalytics.logEvent("qr_code_event", params.toBundle())
+            
+            Timber.d("Analytics: QR code event tracked - $userId performed $action for $qrType")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to track QR code event analytics")
+        }
+    }
+    
+    override fun trackError(
+        errorType: String,
+        errorMessage: String,
+        additionalProperties: Map<String, Any>
+    ) {
+        try {
+            val params = mutableMapOf<String, Any>(
+                "error_type" to errorType,
+                "error_message" to errorMessage.take(200) // Limit message length
+            )
+            
+            params.putAll(additionalProperties)
+            
+            firebaseAnalytics.logEvent("error_occurred", params.toBundle())
+            
+            Timber.d("Analytics: Error tracked - $errorType: $errorMessage")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to track error analytics")
+        }
+    }
+    
     private fun Map<String, Any>.toBundle(): android.os.Bundle {
         val bundle = android.os.Bundle()
         this.forEach { (key, value) ->

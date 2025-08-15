@@ -314,4 +314,64 @@ sealed class LiftrixRoute {
      */
     @Serializable
     data object ExerciseRankingDetail : LiftrixRoute()
+    
+    // Social System Routes (Added for social system completion)
+    
+    /**
+     * Share workout screen for sharing workout sessions and routines
+     * 
+     * @param workoutId Unique identifier for the workout to share
+     */
+    @Serializable
+    data class ShareWorkout(val workoutId: String) : LiftrixRoute()
+    
+    /**
+     * Progress comparison screen for comparing workout progress between users
+     * 
+     * @param comparisonId Unique identifier for the comparison to display
+     * @param shareMode Whether this comparison is being viewed in share mode (default: false)
+     */
+    @Serializable
+    data class ProgressComparison(
+        val comparisonId: String,
+        val shareMode: Boolean = false
+    ) : LiftrixRoute()
+    
+    /**
+     * Social feed screen showing workout posts and social interactions
+     * 
+     * @param initialTab Initial tab to display in the feed (default: "HOME")
+     */
+    @Serializable
+    data class SocialFeed(
+        val initialTab: String = "HOME"
+    ) : LiftrixRoute()
+    
+    /**
+     * Notification settings screen for managing social notifications
+     */
+    @Serializable
+    data object NotificationSettings : LiftrixRoute()
+    
+    /**
+     * Gym buddy screen for QR code pairing and gym partner connections
+     */
+    @Serializable
+    data object GymBuddy : LiftrixRoute()
+    
+    /**
+     * Post creation screen for creating and sharing workout posts
+     * 
+     * @param workoutId Unique identifier for the workout to create a post from
+     */
+    @Serializable
+    data class PostCreation(val workoutId: String) : LiftrixRoute()
+    
+    /**
+     * Post comments screen for viewing and managing post comments
+     * 
+     * @param postId Unique identifier for the post to view comments for
+     */
+    @Serializable
+    data class PostComments(val postId: String) : LiftrixRoute()
 }

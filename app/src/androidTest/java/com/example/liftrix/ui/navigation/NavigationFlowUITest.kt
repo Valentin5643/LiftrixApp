@@ -235,4 +235,203 @@ class NavigationFlowUITest {
         composeTestRule.onNodeWithText("Home")
             .assertIsSelected()
     }
+
+    // ==========================================
+    // Social Screen Navigation Tests
+    // ==========================================
+
+    @Test
+    fun navigation_socialFeedScreenIsAccessible() {
+        composeTestRule.setContent {
+            LiftrixTheme {
+                UnifiedMainNavigationContainer(
+                    startDestination = LiftrixRoute.SocialFeed
+                )
+            }
+        }
+
+        // Then: Social feed screen is displayed
+        composeTestRule.onNodeWithContentDescription("Social feed screen")
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("Feed")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun navigation_shareWorkoutScreenIsAccessible() {
+        val workoutId = "workout-123"
+        
+        composeTestRule.setContent {
+            LiftrixTheme {
+                UnifiedMainNavigationContainer(
+                    startDestination = LiftrixRoute.ShareWorkout(workoutId)
+                )
+            }
+        }
+
+        // Then: Share workout screen is displayed with workout ID
+        composeTestRule.onNodeWithContentDescription("Share workout screen for $workoutId")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun navigation_publicProfileScreenIsAccessible() {
+        val userId = "profile-user-123"
+        
+        composeTestRule.setContent {
+            LiftrixTheme {
+                UnifiedMainNavigationContainer(
+                    startDestination = LiftrixRoute.PublicProfile(userId)
+                )
+            }
+        }
+
+        // Then: Public profile screen is displayed for user
+        composeTestRule.onNodeWithContentDescription("Public profile for user $userId")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun navigation_gymBuddyScreenIsAccessible() {
+        composeTestRule.setContent {
+            LiftrixTheme {
+                UnifiedMainNavigationContainer(
+                    startDestination = LiftrixRoute.GymBuddy
+                )
+            }
+        }
+
+        // Then: Gym buddy screen is displayed
+        composeTestRule.onNodeWithContentDescription("Gym buddy screen")
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("Gym Buddies")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun navigation_progressComparisonScreenIsAccessible() {
+        val exerciseIds = listOf("exercise1", "exercise2")
+        
+        composeTestRule.setContent {
+            LiftrixTheme {
+                UnifiedMainNavigationContainer(
+                    startDestination = LiftrixRoute.ProgressComparison(exerciseIds)
+                )
+            }
+        }
+
+        // Then: Progress comparison screen is displayed
+        composeTestRule.onNodeWithContentDescription("Progress comparison for exercises")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun navigation_notificationSettingsScreenIsAccessible() {
+        composeTestRule.setContent {
+            LiftrixTheme {
+                UnifiedMainNavigationContainer(
+                    startDestination = LiftrixRoute.NotificationSettings
+                )
+            }
+        }
+
+        // Then: Notification settings screen is displayed
+        composeTestRule.onNodeWithContentDescription("Notification settings screen with comprehensive controls")
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("Notifications")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun navigation_socialScreensFromFriendsTab() {
+        composeTestRule.setContent {
+            LiftrixTheme {
+                UnifiedMainNavigationContainer()
+            }
+        }
+
+        // Given: User taps Friends tab
+        composeTestRule.onNodeWithText("Friends").performClick()
+
+        // Then: Social feed is displayed
+        composeTestRule.onNodeWithContentDescription("Social feed screen")
+            .assertIsDisplayed()
+
+        // When: User navigates to gym buddy screen from social menu
+        composeTestRule.onNodeWithContentDescription("Gym buddy navigation button")
+            .performClick()
+
+        // Then: Gym buddy screen is accessible from social context
+        composeTestRule.onNodeWithContentDescription("Gym buddy screen")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun navigation_socialScreenBackNavigation() {
+        composeTestRule.setContent {
+            LiftrixTheme {
+                UnifiedMainNavigationContainer(
+                    startDestination = LiftrixRoute.PublicProfile("user123")
+                )
+            }
+        }
+
+        // Given: User is on public profile screen
+        composeTestRule.onNodeWithContentDescription("Public profile for user user123")
+            .assertIsDisplayed()
+
+        // When: User navigates back
+        composeTestRule.onNodeWithContentDescription("Back to previous screen")
+            .performClick()
+
+        // Then: Navigation handles back correctly for social screens
+        composeTestRule.onNodeWithText("Home")
+            .assertIsSelected()
+    }
+
+    @Test
+    fun navigation_socialScreenParameterPassing() {
+        val workoutId = "social-workout-456"
+        
+        composeTestRule.setContent {
+            LiftrixTheme {
+                UnifiedMainNavigationContainer(
+                    startDestination = LiftrixRoute.ShareWorkout(workoutId)
+                )
+            }
+        }
+
+        // Then: Parameters are correctly passed to social screens
+        composeTestRule.onNodeWithContentDescription("Share workout screen for $workoutId")
+            .assertIsDisplayed()
+        
+        // And: Screen shows workout-specific content
+        composeTestRule.onNodeWithText("Share Workout")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun navigation_socialScreenDeepLinkHandling() {
+        val userId = "deep-link-user"
+        
+        composeTestRule.setContent {
+            LiftrixTheme {
+                UnifiedMainNavigationContainer(
+                    startDestination = LiftrixRoute.PublicProfile(userId)
+                )
+            }
+        }
+
+        // Then: Deep links to social screens work correctly
+        composeTestRule.onNodeWithContentDescription("Public profile for user $userId")
+            .assertIsDisplayed()
+        
+        // And: User can navigate away and back
+        composeTestRule.onNodeWithText("Friends").performClick()
+        composeTestRule.onNodeWithContentDescription("Back to profile")
+            .performClick()
+            
+        composeTestRule.onNodeWithContentDescription("Public profile for user $userId")
+            .assertIsDisplayed()
+    }
 }

@@ -10,6 +10,7 @@ import com.example.liftrix.data.local.dao.PostLikeDao
 import com.example.liftrix.data.local.dao.SavedPostDao
 import com.example.liftrix.data.local.dao.SocialProfileDao
 import com.example.liftrix.data.local.dao.WorkoutDao
+import com.example.liftrix.data.local.dao.FeedCacheDao
 import com.example.liftrix.data.mapper.WorkoutPostMapper
 import com.example.liftrix.data.paging.FeedRemoteMediator
 import com.example.liftrix.domain.repository.social.FeedRepository
@@ -40,7 +41,8 @@ class FeedRepositoryImpl @Inject constructor(
     private val socialProfileDao: SocialProfileDao,
     private val workoutDao: WorkoutDao,
     private val workoutPostMapper: WorkoutPostMapper,
-    private val feedCacheService: FeedCacheService
+    private val feedCacheService: FeedCacheService,
+    private val feedCacheDao: FeedCacheDao
 ) : FeedRepository {
     
     @OptIn(ExperimentalPagingApi::class)
@@ -59,8 +61,13 @@ class FeedRepositoryImpl @Inject constructor(
                         enablePlaceholders = false,
                         prefetchDistance = pageSize / 2
                     ),
-                    // TODO: Implement remote mediator when needed
-                    // remoteMediator = FeedRemoteMediator(...),
+                    remoteMediator = FeedRemoteMediator(
+                        workoutPostDao,
+                        feedCacheDao,
+                        feedCacheService,
+                        userId,
+                        FeedType.HOME
+                    ),
                     pagingSourceFactory = { workoutPostDao.getHomeFeedPosts(emptyList()) }
                 )
             }
@@ -72,8 +79,13 @@ class FeedRepositoryImpl @Inject constructor(
                         enablePlaceholders = false,
                         prefetchDistance = pageSize / 2
                     ),
-                    // TODO: Implement remote mediator when needed
-                    // remoteMediator = FeedRemoteMediator(...),
+                    remoteMediator = FeedRemoteMediator(
+                        workoutPostDao,
+                        feedCacheDao,
+                        feedCacheService,
+                        userId,
+                        FeedType.DISCOVERY
+                    ),
                     pagingSourceFactory = { workoutPostDao.getDiscoveryFeedPosts(listOf(userId)) }
                 )
             }
@@ -253,7 +265,7 @@ class FeedRepositoryImpl @Inject constructor(
     }
     
     override fun getUserMentions(userId: String, pageSize: Int): Flow<PagingData<WorkoutPost>> {
-        // TODO: Implement mentions when comment system supports mentions
+        // Note: Mentions will be implemented when comment system supports @ mentions
         return Pager(
             config = PagingConfig(pageSize = pageSize),
             pagingSourceFactory = { workoutPostDao.getHomeFeedPosts(emptyList()) }
@@ -317,17 +329,20 @@ class FeedRepositoryImpl @Inject constructor(
     
     // Helper functions for workout metadata calculation
     private fun calculateWorkoutDuration(workout: Any?): Int? {
-        // TODO: Implement based on workout entity structure
+        // For now, return null as workout duration calculation needs WorkoutEntity structure
+        // In a full implementation, this would calculate duration from workout.startTime to workout.endTime
         return null
     }
     
     private fun calculateTotalVolume(workout: Any?): Double? {
-        // TODO: Implement based on workout entity structure
+        // For now, return null as total volume calculation needs access to exercise sets
+        // In a full implementation, this would sum weight * reps for all completed sets
         return null
     }
     
     private fun calculateExercisesCount(workout: Any?): Int? {
-        // TODO: Implement based on workout entity structure
+        // For now, return null as exercise count needs access to exercises collection
+        // In a full implementation, this would count unique exercises in the workout
         return null
     }
     

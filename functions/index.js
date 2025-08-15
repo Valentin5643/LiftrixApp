@@ -754,19 +754,181 @@ async function canUserViewPost(viewerId, postData) {
  */
 async function addToDiscoveryFeed(postId, postData, relevanceScore) {
   try {
-    // For now, just log that we would add to discovery
-    // In a full implementation, you would:
-    // 1. Get users who don't follow the author
-    // 2. Apply additional filtering (interests, location, etc.)
-    // 3. Add to their discovery feed cache
+    logger.info(`Adding post ${postId} to discovery feed (score: ${relevanceScore})`);
 
-    logger.info(
-        `Would add post ${postId} to discovery feed ` +
-        `(score: ${relevanceScore})`,
-    );
+    // Only add public posts to discovery feed
+    if (postData.visibility !== "PUBLIC") {
+      logger.info(`Post ${postId} is not public, skipping discovery feed`);
+      return;
+    }
+
+    // Get a sample of users who don't follow the author
+    // For performance, we'll limit this to 1000 users per post
+    const discoveryTargets = await findDiscoveryTargets(postData.user_id, 1000);
+
+    if (discoveryTargets.length === 0) {
+      logger.info(`No discovery targets found for post ${postId}`);
+      return;
+    }
+
+    // Create feed entries for discovery users
+    const batch = db.batch();
+    let addedCount = 0;
+
+    for (const targetUserId of discoveryTargets) {
+      const feedRef = db.collection("feed_cache").doc(`${targetUserId}_discovery_${postId}`);
+      
+      batch.set(feedRef, {
+        user_id: targetUserId,
+        post_id: postId,
+        author_id: postData.user_id,
+        feed_type: "DISCOVERY",
+        relevance_score: relevanceScore,
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+        post_created_at: postData.created_at,
+        // Add content preview for faster loading
+        preview_data: {
+          author_name: postData.author_display_name || "Unknown",
+          workout_name: postData.workout_summary?.name || "",
+          exercise_count: postData.workout_summary?.exercise_count || 0,
+          media_count: postData.media_urls?.length || 0,
+          prs_count: postData.workout_summary?.prs_count || 0
+        }
+      });
+
+      addedCount++;
+
+      // Process in batches of 500 to avoid Firestore limits
+      if (addedCount % 500 === 0) {
+        await batch.commit();
+        logger.info(`Committed batch of ${addedCount} discovery feed entries`);
+      }
+    }
+
+    // Commit any remaining entries
+    if (addedCount % 500 !== 0) {
+      await batch.commit();
+    }
+
+    logger.info(`Added post ${postId} to discovery feed for ${addedCount} users`);
+
   } catch (error) {
     logger.error(`Error adding post ${postId} to discovery feed`, error);
+    throw error;
   }
+}
+
+/**
+ * Finds users who should see this post in their discovery feed
+ * Excludes users who already follow the author
+ */
+async function findDiscoveryTargets(authorUserId, maxTargets = 1000) {
+  try {
+    // Get users who already follow the author (to exclude them)
+    const followersSnapshot = await db.collection("follow_relationships")
+        .where("target_user_id", "==", authorUserId)
+        .where("status", "==", "FOLLOWING")
+        .select("follower_id")
+        .get();
+
+    const followerIds = new Set(followersSnapshot.docs.map(doc => doc.data().follower_id));
+    followerIds.add(authorUserId); // Also exclude the author themselves
+
+    // Get a sample of active users (users who have posted recently)
+    const recentActiveUsersSnapshot = await db.collection("users")
+        .where("last_active_at", ">=", getXDaysAgo(30)) // Active in last 30 days
+        .where("privacy_settings.discoverable", "==", true) // Opted into discovery
+        .limit(maxTargets * 2) // Get more than needed to account for filtering
+        .get();
+
+    const discoveryTargets = [];
+    
+    for (const userDoc of recentActiveUsersSnapshot.docs) {
+      const userId = userDoc.id;
+      
+      // Skip if user follows author or is the author
+      if (followerIds.has(userId)) {
+        continue;
+      }
+
+      // Apply additional filtering based on user preferences
+      const userData = userDoc.data();
+      if (await shouldAddToUserDiscovery(userId, userData, authorUserId)) {
+        discoveryTargets.push(userId);
+        
+        if (discoveryTargets.length >= maxTargets) {
+          break;
+        }
+      }
+    }
+
+    logger.info(`Found ${discoveryTargets.length} discovery targets for author ${authorUserId}`);
+    return discoveryTargets;
+
+  } catch (error) {
+    logger.error(`Error finding discovery targets for author ${authorUserId}`, error);
+    return [];
+  }
+}
+
+/**
+ * Determines if a post should be added to a specific user's discovery feed
+ * Based on user interests, engagement patterns, and preferences
+ */
+async function shouldAddToUserDiscovery(userId, userData, authorUserId) {
+  try {
+    // Check if user has discovery enabled
+    if (!userData.privacy_settings?.discoverable) {
+      return false;
+    }
+
+    // Check if user has blocked the author
+    const blockSnapshot = await db.collection("blocked_users")
+        .where("blocker_id", "==", userId)
+        .where("blocked_id", "==", authorUserId)
+        .limit(1)
+        .get();
+    
+    if (!blockSnapshot.empty) {
+      return false;
+    }
+
+    // Check discovery feed frequency preference
+    const discoverySettings = userData.discovery_settings || {};
+    const maxDiscoveryPerDay = discoverySettings.max_posts_per_day || 10;
+    
+    // Check how many discovery posts user has received today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const todayDiscoverySnapshot = await db.collection("feed_cache")
+        .where("user_id", "==", userId)
+        .where("feed_type", "==", "DISCOVERY")
+        .where("created_at", ">=", today)
+        .select()
+        .get();
+    
+    if (todayDiscoverySnapshot.size >= maxDiscoveryPerDay) {
+      return false;
+    }
+
+    // Simple interest matching could be added here
+    // For now, we'll use a basic randomization to avoid overwhelming users
+    return Math.random() < 0.3; // 30% chance to include
+
+  } catch (error) {
+    logger.warn(`Error checking discovery eligibility for user ${userId}`, error);
+    return false;
+  }
+}
+
+/**
+ * Helper function to get date X days ago
+ */
+function getXDaysAgo(days) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date;
 }
 
 // ================================

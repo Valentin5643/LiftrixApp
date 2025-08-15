@@ -32,7 +32,8 @@ class FollowUserUseCase @Inject constructor(
     private val followRepository: FollowRepository,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     private val notificationService: NotificationService,
-    private val analyticsTracker: AnalyticsTracker
+    private val analyticsTracker: AnalyticsTracker,
+    private val getSocialProfileUseCase: GetSocialProfileUseCase
 ) {
 
     /**
@@ -170,31 +171,43 @@ class FollowUserUseCase @Inject constructor(
                 FollowAction.FOLLOW -> {
                     when (result) {
                         FollowStatus.PENDING_SENT -> {
+                            // Get requester's name
+                            val requesterProfile = getSocialProfileUseCase(currentUserId).getOrNull()
+                            val requesterName = requesterProfile?.displayName ?: "Someone"
+                            
                             // Send follow request notification for private profiles
                             notificationService.sendFollowRequestNotification(
                                 targetUserId = targetUserId,
                                 requesterUserId = currentUserId,
-                                requesterName = "" // TODO: Get actual requester name
+                                requesterName = requesterName
                             )
                         }
                         FollowStatus.FOLLOWING -> {
+                            // Get follower's name
+                            val followerProfile = getSocialProfileUseCase(currentUserId).getOrNull()
+                            val followerName = followerProfile?.displayName ?: "Someone"
+                            
                             // Send follow notification for public profiles
-                            // TODO: Implement sendFollowNotification method
-                            // notificationService.sendFollowNotification(
-                            //     targetUserId = targetUserId,
-                            //     followerUserId = currentUserId
-                            // )
+                            notificationService.sendFollowNotification(
+                                targetUserId = targetUserId,
+                                followerUserId = currentUserId,
+                                followerName = followerName
+                            )
                         }
                         else -> { /* No notification needed */ }
                     }
                 }
                 
                 FollowAction.ACCEPT -> {
+                    // Get accepter's name
+                    val accepterProfile = getSocialProfileUseCase(currentUserId).getOrNull()
+                    val accepterName = accepterProfile?.displayName ?: "Someone"
+                    
                     // Send follow acceptance notification
                     notificationService.sendFollowAcceptedNotification(
                         targetUserId = targetUserId, // Person who sent original request
                         accepterUserId = currentUserId, // Person who accepted
-                        accepterName = "" // TODO: Get actual accepter name
+                        accepterName = accepterName
                     )
                 }
                 

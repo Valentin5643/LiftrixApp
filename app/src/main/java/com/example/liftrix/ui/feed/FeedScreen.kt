@@ -16,6 +16,7 @@ import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
+import com.example.liftrix.ui.navigation.LiftrixRoute
 import com.example.liftrix.R
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.WorkoutPost
@@ -150,7 +151,7 @@ private fun FeedContent(
                         onPostInteraction(PostInteraction.Like(post.id))
                     },
                     onCommentClick = { 
-                        navController.navigate("feed/comments/${post.id}")
+                        navController.navigate(LiftrixRoute.PostComments(post.id))
                     },
                     onShareClick = { 
                         onPostInteraction(PostInteraction.Share(post))
@@ -159,7 +160,7 @@ private fun FeedContent(
                         onPostInteraction(PostInteraction.Save(post.id))
                     },
                     onProfileClick = { 
-                        navController.navigate("profile/${post.userId}")
+                        navController.navigate(LiftrixRoute.PublicProfile(post.userId))
                     },
                     onWorkoutCopyClick = {
                         onPostInteraction(PostInteraction.CopyWorkout(post))

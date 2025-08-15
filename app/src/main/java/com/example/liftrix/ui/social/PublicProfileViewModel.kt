@@ -7,6 +7,10 @@ import com.example.liftrix.domain.model.social.PublicUserProfile
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.social.GetPublicProfileUseCase
 import com.example.liftrix.domain.usecase.social.GetPublicProfileRequest
+import com.example.liftrix.domain.usecase.social.FollowUserUseCase
+import com.example.liftrix.domain.usecase.social.FollowAction
+import com.example.liftrix.domain.model.social.FollowStatus
+import com.example.liftrix.domain.model.social.ConnectionStatus
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,6 +28,7 @@ import javax.inject.Inject
 @HiltViewModel
 class PublicProfileViewModel @Inject constructor(
     private val getPublicProfileUseCase: GetPublicProfileUseCase,
+    private val followUserUseCase: FollowUserUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<PublicProfileUiState, PublicProfileEvent>(errorHandler) {
 
@@ -151,40 +156,68 @@ class PublicProfileViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                // TODO: Implement connection toggle use case
-                // For now, we'll simulate the action
-                
-                val newConnectionStatus = when (currentProfile.connectionStatus) {
-                    com.example.liftrix.domain.model.social.ConnectionStatus.NONE -> 
-                        com.example.liftrix.domain.model.social.ConnectionStatus.PENDING_SENT
-                    com.example.liftrix.domain.model.social.ConnectionStatus.PENDING_SENT -> 
-                        com.example.liftrix.domain.model.social.ConnectionStatus.NONE
-                    com.example.liftrix.domain.model.social.ConnectionStatus.PENDING_RECEIVED -> 
-                        com.example.liftrix.domain.model.social.ConnectionStatus.CONNECTED
-                    com.example.liftrix.domain.model.social.ConnectionStatus.CONNECTED -> 
-                        com.example.liftrix.domain.model.social.ConnectionStatus.NONE
-                    com.example.liftrix.domain.model.social.ConnectionStatus.MUTUAL_FOLLOW -> 
-                        com.example.liftrix.domain.model.social.ConnectionStatus.NONE
-                    com.example.liftrix.domain.model.social.ConnectionStatus.GYM_BUDDY -> 
-                        com.example.liftrix.domain.model.social.ConnectionStatus.NONE
-                    com.example.liftrix.domain.model.social.ConnectionStatus.BLOCKED -> 
-                        com.example.liftrix.domain.model.social.ConnectionStatus.BLOCKED
+                // Determine the follow action based on current connection status
+                val followAction = when (currentProfile.connectionStatus) {
+                    ConnectionStatus.NONE -> FollowAction.FOLLOW
+                    ConnectionStatus.PENDING_SENT -> FollowAction.CANCEL
+                    ConnectionStatus.PENDING_RECEIVED -> FollowAction.ACCEPT
+                    ConnectionStatus.CONNECTED -> FollowAction.UNFOLLOW
+                    ConnectionStatus.MUTUAL_FOLLOW -> FollowAction.UNFOLLOW
+                    ConnectionStatus.GYM_BUDDY -> FollowAction.UNFOLLOW
+                    ConnectionStatus.BLOCKED -> {
+                        // Cannot toggle blocked status from this screen
+                        updateState { currentState ->
+                            currentState.copy(isConnectionLoading = false)
+                        }
+                        return@launch
+                    }
                 }
 
-                updateState { currentState ->
-                    currentState.copy(
-                        profile = currentState.profile?.copy(
-                            connectionStatus = newConnectionStatus
-                        ),
-                        isConnectionLoading = false
-                    )
-                }
+                // Execute the follow action
+                val result = followUserUseCase(
+                    targetUserId = currentProfile.userId,
+                    action = followAction,
+                    context = "PUBLIC_PROFILE"
+                )
 
-                Timber.d("Connection status updated to: $newConnectionStatus")
+                result.fold(
+                    onSuccess = { followStatus ->
+                        // Convert FollowStatus to ConnectionStatus
+                        val newConnectionStatus = mapFollowStatusToConnectionStatus(followStatus)
+
+                        updateState { currentState ->
+                            currentState.copy(
+                                profile = currentState.profile?.copy(
+                                    connectionStatus = newConnectionStatus
+                                ),
+                                isConnectionLoading = false
+                            )
+                        }
+
+                        Timber.d("Connection status updated to: $newConnectionStatus")
+                    },
+                    onFailure = { throwable ->
+                        val error = LiftrixError.BusinessLogicError(
+                            code = "CONNECTION_UPDATE_FAILED",
+                            errorMessage = "Failed to update connection: ${throwable.message}",
+                            analyticsContext = mapOf(
+                                "operation" to "TOGGLE_CONNECTION",
+                                "target_user_id" to currentProfile.userId
+                            )
+                        )
+                        handleError(error)
+                        
+                        updateState { currentState ->
+                            currentState.copy(isConnectionLoading = false)
+                        }
+                        
+                        Timber.e(error, "Failed to toggle connection")
+                    }
+                )
                 
             } catch (exception: Exception) {
                 val error = LiftrixError.NetworkError(
-                    errorMessage = "Failed to update connection status"
+                    errorMessage = "Failed to update connection status: ${exception.message}"
                 )
                 
                 handleError(error)
@@ -195,6 +228,21 @@ class PublicProfileViewModel @Inject constructor(
                 
                 Timber.e(exception, "Failed to toggle connection")
             }
+        }
+    }
+
+    /**
+     * Maps FollowStatus to ConnectionStatus for UI display
+     */
+    private fun mapFollowStatusToConnectionStatus(followStatus: FollowStatus): ConnectionStatus {
+        return when (followStatus) {
+            FollowStatus.NONE -> ConnectionStatus.NONE
+            FollowStatus.PENDING_SENT -> ConnectionStatus.PENDING_SENT
+            FollowStatus.PENDING_RECEIVED -> ConnectionStatus.PENDING_RECEIVED
+            FollowStatus.FOLLOWING -> ConnectionStatus.CONNECTED
+            // Note: MUTUAL_FOLLOWING doesn't exist in FollowStatus enum
+            // Using FOLLOWING -> CONNECTED mapping as the primary status
+            FollowStatus.BLOCKED -> ConnectionStatus.BLOCKED
         }
     }
 

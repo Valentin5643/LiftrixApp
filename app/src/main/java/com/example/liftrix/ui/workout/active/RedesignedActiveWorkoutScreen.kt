@@ -38,6 +38,7 @@ fun RedesignedActiveWorkoutScreen(
     viewModel: UnifiedActiveWorkoutViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
     onNavigateToExerciseLibrary: (() -> Unit)? = null,
+    onNavigateToPostCreation: ((String) -> Unit)? = null,
     isBlankWorkout: Boolean = false,
     templateId: String? = null
 ) {
@@ -92,7 +93,13 @@ fun RedesignedActiveWorkoutScreen(
             }
             
             is UnifiedActiveWorkoutUiState.WorkoutCompleted -> {
-                WorkoutCompletedContent(onNavigateBack = onNavigateBack)
+                WorkoutCompletedContent(
+                    workoutId = (uiState as UnifiedActiveWorkoutUiState.WorkoutCompleted).workoutId,
+                    onNavigateBack = onNavigateBack,
+                    onNavigateToPostCreation = onNavigateToPostCreation ?: { _ -> 
+                        // Fallback if navigation not provided
+                    }
+                )
             }
             
             is UnifiedActiveWorkoutUiState.Error -> {
@@ -497,7 +504,11 @@ private fun NoSessionContent(onNavigateBack: () -> Unit) {
 }
 
 @Composable
-private fun WorkoutCompletedContent(onNavigateBack: () -> Unit) {
+private fun WorkoutCompletedContent(
+    workoutId: String,
+    onNavigateBack: () -> Unit,
+    onNavigateToPostCreation: (String) -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -521,12 +532,34 @@ private fun WorkoutCompletedContent(onNavigateBack: () -> Unit) {
                 fontSize = 14.sp
             )
         )
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        // Share Workout Button
         RedesignedPrimaryButton(
-            text = "Back to Home",
-            onClick = onNavigateBack,
-            modifier = Modifier.fillMaxWidth(0.6f)
+            text = "Share Workout",
+            onClick = { onNavigateToPostCreation(workoutId) },
+            modifier = Modifier.fillMaxWidth(0.8f)
         )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Back to Home Button
+        OutlinedButton(
+            onClick = onNavigateBack,
+            modifier = Modifier.fillMaxWidth(0.8f),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = LiftrixColorsV2.Teal
+            ),
+            border = androidx.compose.foundation.BorderStroke(1.dp, LiftrixColorsV2.Teal)
+        ) {
+            Text(
+                text = "Back to Home",
+                style = TextStyle(
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            )
+        }
     }
 }
 

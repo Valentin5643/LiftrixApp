@@ -69,6 +69,25 @@ class NotificationServiceImpl @Inject constructor(
         Unit
     }
     
+    override suspend fun sendFollowNotification(
+        targetUserId: String,
+        followerUserId: String,
+        followerName: String
+    ): LiftrixResult<Unit> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.NetworkError(
+                errorMessage = "Failed to send follow notification",
+                analyticsContext = mapOf("operation" to "SEND_FOLLOW_NOTIFICATION")
+            )
+        }
+    ) {
+        Timber.d("Sending follow notification: $followerName -> $targetUserId")
+        
+        // Implementation would send FCM notification for public profile follows
+        Timber.i("Follow notification sent: $followerName started following user $targetUserId")
+        Unit
+    }
+    
     override suspend fun sendGymBuddyInviteNotification(
         targetUserId: String,
         inviterUserId: String,

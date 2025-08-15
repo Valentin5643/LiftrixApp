@@ -11,6 +11,7 @@ import com.example.liftrix.domain.model.SharedWorkout
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SocialRepository
+import com.example.liftrix.domain.usecase.social.GetSocialProfileUseCase
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -35,7 +36,8 @@ class SocialRepositoryImpl @Inject constructor(
     private val friendMapper: FriendMapper,
     private val authRepository: AuthRepository,
     private val firestore: FirebaseFirestore,
-    private val recommendationCache: RecommendationCache
+    private val recommendationCache: RecommendationCache,
+    private val getSocialProfileUseCase: GetSocialProfileUseCase
 ) : SocialRepository {
 
     companion object {
@@ -218,14 +220,15 @@ class SocialRepositoryImpl @Inject constructor(
         return friendDao.getFriends(userId).map { friendEntities ->
             friendEntities.mapNotNull { entity ->
                 try {
-                    // For now, use friendUserId as display name
-                    // TODO: Integrate with user profile data for actual display names
+                    // Get the friend's profile data for proper display
+                    val friendProfile = getSocialProfileUseCase(entity.friendUserId).getOrNull()
+                    
                     friendMapper.toDomain(
                         entity = entity,
-                        displayName = "User ${entity.friendUserId.take(8)}", // Placeholder
-                        email = null, // TODO: Fetch from user profile
-                        avatarUrl = null, // TODO: Fetch from user profile
-                        presence = null // TODO: Integrate with presence service
+                        displayName = friendProfile?.displayName ?: "User ${entity.friendUserId.take(8)}",
+                        email = null, // Email is not in social profile - could be added if needed
+                        avatarUrl = friendProfile?.profilePhotoUrl,
+                        presence = null // TODO: Integrate with presence service when available
                     )
                 } catch (e: Exception) {
                     Timber.w(e, "Failed to map friend entity: ${entity.friendUserId}")

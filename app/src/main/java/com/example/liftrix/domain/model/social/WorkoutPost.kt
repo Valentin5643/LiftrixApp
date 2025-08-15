@@ -20,6 +20,8 @@ data class WorkoutPost(
     val totalVolume: Double? = null,
     val exercisesCount: Int? = null,
     val prsCount: Int = 0,
+    val achievements: List<WorkoutAchievement> = emptyList(),
+    val workoutSummary: WorkoutSummary? = null,
     
     // Engagement metrics
     val likeCount: Int = 0,
@@ -64,6 +66,28 @@ data class CreateWorkoutPostRequest(
     val caption: String? = null,
     val mediaUrls: List<String> = emptyList(),
     val visibility: PostVisibility = PostVisibility.FOLLOWERS
+)
+
+/**
+ * Workout summary for posts
+ */
+data class WorkoutSummary(
+    val totalSets: Int = 0,
+    val totalReps: Int = 0,
+    val totalVolume: Double = 0.0,
+    val exerciseCount: Int = 0,
+    val duration: Int? = null
+)
+
+/**
+ * Achievement for workout posts
+ */
+data class WorkoutAchievement(
+    val id: String,
+    val type: String,
+    val title: String,
+    val description: String,
+    val value: Double? = null
 )
 
 /**

@@ -185,6 +185,71 @@ fun NavController.navigateToImageCrop(imageUri: String) {
     navigate(LiftrixRoute.ImageCrop(imageUri))
 }
 
+// MARK: - Social System Navigation Functions (Added for social system completion)
+
+/**
+ * Navigate to share workout screen for sharing workout sessions and routines
+ * 
+ * @param workoutId Unique identifier for the workout to share
+ */
+fun NavController.navigateToShareWorkout(workoutId: String) {
+    navigate(LiftrixRoute.ShareWorkout(workoutId))
+}
+
+/**
+ * Navigate to progress comparison screen for comparing workout progress between users
+ * 
+ * @param comparisonId Unique identifier for the comparison to display
+ * @param shareMode Whether this comparison is being viewed in share mode (default: false)
+ */
+fun NavController.navigateToProgressComparison(
+    comparisonId: String, 
+    shareMode: Boolean = false
+) {
+    navigate(LiftrixRoute.ProgressComparison(comparisonId, shareMode))
+}
+
+/**
+ * Navigate to social feed screen showing workout posts and social interactions
+ * 
+ * @param initialTab Initial tab to display in the feed (default: "HOME")
+ */
+fun NavController.navigateToSocialFeed(initialTab: String = "HOME") {
+    navigate(LiftrixRoute.SocialFeed(initialTab))
+}
+
+/**
+ * Navigate to notification settings screen for managing social notifications
+ */
+fun NavController.navigateToNotificationSettings() {
+    navigate(LiftrixRoute.NotificationSettings)
+}
+
+/**
+ * Navigate to gym buddy screen for QR code pairing and gym partner connections
+ */
+fun NavController.navigateToGymBuddy() {
+    navigate(LiftrixRoute.GymBuddy)
+}
+
+/**
+ * Navigate to post creation screen for creating and sharing workout posts
+ * 
+ * @param workoutId Unique identifier for the workout to create a post from
+ */
+fun NavController.navigateToPostCreation(workoutId: String) {
+    navigate(LiftrixRoute.PostCreation(workoutId))
+}
+
+/**
+ * Navigate to post comments screen for viewing and managing post comments
+ * 
+ * @param postId Unique identifier for the post to view comments for
+ */
+fun NavController.navigateToPostComments(postId: String) {
+    navigate(LiftrixRoute.PostComments(postId))
+}
+
 // MARK: - Feature Navigation
 
 /**

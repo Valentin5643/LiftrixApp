@@ -208,6 +208,11 @@ class LegacyNavigationWrapper @Inject constructor(
                 LiftrixRoute.WorkoutFrequencyDetail -> "Replace with: navController.navigate(LiftrixRoute.WorkoutFrequencyDetail)"
                 LiftrixRoute.PrivacySettings -> "Replace with: navController.navigate(LiftrixRoute.PrivacySettings)"
                 LiftrixRoute.SocialOnboarding -> "Replace with: navController.navigate(LiftrixRoute.SocialOnboarding)"
+                is LiftrixRoute.ShareWorkout -> "Replace with: navController.navigate(LiftrixRoute.ShareWorkout(workoutId))"
+                is LiftrixRoute.ProgressComparison -> "Replace with: navController.navigate(LiftrixRoute.ProgressComparison(comparisonId, shareMode))"
+                is LiftrixRoute.SocialFeed -> "Replace with: navController.navigate(LiftrixRoute.SocialFeed(initialTab))"
+                LiftrixRoute.NotificationSettings -> "Replace with: navController.navigate(LiftrixRoute.NotificationSettings)"
+                LiftrixRoute.GymBuddy -> "Replace with: navController.navigate(LiftrixRoute.GymBuddy)"
             }
         } else {
             null

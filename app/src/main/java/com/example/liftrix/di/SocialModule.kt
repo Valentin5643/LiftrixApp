@@ -33,6 +33,8 @@ import com.example.liftrix.domain.usecase.social.UpdateSocialProfileUseCase
 import com.example.liftrix.domain.validation.ProfileValidator
 import com.example.liftrix.domain.service.MediaUploadService
 import com.example.liftrix.data.service.MediaUploadServiceImpl
+import com.example.liftrix.domain.service.MediaProcessingService
+import com.example.liftrix.service.MediaProcessingServiceImpl
 import com.example.liftrix.domain.service.FeedCacheService
 import com.example.liftrix.data.service.FeedCacheServiceImpl
 import com.example.liftrix.data.mapper.EngagementMapper
@@ -74,6 +76,18 @@ abstract class SocialModule {
     abstract fun bindQRCodeService(
         qrCodeServiceImpl: QRCodeServiceImpl
     ): QRCodeService
+
+    /**
+     * Binds MediaProcessingService interface to its implementation.
+     * 
+     * Provides media processing, compression, and thumbnail generation
+     * functionality for social content sharing features.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindMediaProcessingService(
+        mediaProcessingServiceImpl: MediaProcessingServiceImpl
+    ): MediaProcessingService
 
     companion object {
         
@@ -149,9 +163,10 @@ abstract class SocialModule {
             socialProfileDao: SocialProfileDao,
             workoutDao: com.example.liftrix.data.local.dao.WorkoutDao,
             workoutPostMapper: WorkoutPostMapper,
-            feedCacheService: FeedCacheService
+            feedCacheService: FeedCacheService,
+            feedCacheDao: FeedCacheDao
             ): FeedRepository {
-                return FeedRepositoryImpl(workoutPostDao, postLikeDao, savedPostDao, socialProfileDao, workoutDao, workoutPostMapper, feedCacheService)
+                return FeedRepositoryImpl(workoutPostDao, postLikeDao, savedPostDao, socialProfileDao, workoutDao, workoutPostMapper, feedCacheService, feedCacheDao)
             }
 
         @Provides
@@ -163,9 +178,10 @@ abstract class SocialModule {
             workoutPostDao: WorkoutPostDao,
             socialProfileDao: SocialProfileDao,
             engagementMapper: EngagementMapper,
-            workoutPostMapper: WorkoutPostMapper
+            workoutPostMapper: WorkoutPostMapper,
+            analyticsTracker: com.example.liftrix.domain.service.AnalyticsTracker
             ): EngagementRepository {
-                return EngagementRepositoryImpl(postLikeDao, postCommentDao, savedPostDao, workoutPostDao, socialProfileDao, engagementMapper, workoutPostMapper)
+                return EngagementRepositoryImpl(postLikeDao, postCommentDao, savedPostDao, workoutPostDao, socialProfileDao, engagementMapper, workoutPostMapper, analyticsTracker)
             }
 
         @Provides
@@ -188,6 +204,14 @@ abstract class SocialModule {
             ): SocialPrivacySettingsRepository {
                 return SocialPrivacySettingsRepositoryImpl(socialPrivacySettingsDao)
             }
+
+        @Provides
+        @Singleton
+        fun provideGymBuddyRepository(
+            gymBuddyDao: GymBuddyDao
+        ): com.example.liftrix.domain.repository.social.GymBuddyRepository {
+            return com.example.liftrix.data.repository.social.GymBuddyRepositoryImpl(gymBuddyDao)
+        }
 
         @Provides
         @Singleton

@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -50,6 +51,13 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.example.liftrix.ui.common.LiveSessionBar
+import com.example.liftrix.domain.model.ShareableContent
+import com.example.liftrix.domain.model.ShareableContentType
+import com.example.liftrix.domain.model.SocialPlatform
+import com.example.liftrix.domain.model.ProgressComparison
+import com.example.liftrix.domain.model.ProgressPhoto
+import com.example.liftrix.domain.model.BodyPart
+import com.example.liftrix.domain.model.PhotoType
 import com.example.liftrix.ui.home.HomeScreen
 import com.example.liftrix.ui.workout.WorkoutScreen
 import com.example.liftrix.ui.workout.active.RedesignedActiveWorkoutScreen
@@ -315,6 +323,9 @@ fun UnifiedNavigationContainer(
                         },
                         onNavigateToExerciseLibrary = {
                             navController.navigateToExerciseSelection()
+                        },
+                        onNavigateToPostCreation = { workoutId ->
+                            navController.navigate(LiftrixRoute.PostCreation(workoutId))
                         },
                         isBlankWorkout = route.isBlankWorkout,
                         templateId = route.templateId
@@ -606,6 +617,79 @@ fun UnifiedNavigationContainer(
                     )
                 }
                 
+                // Social System Routes (Added for social system completion)
+                
+                composable<LiftrixRoute.ShareWorkout> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.ShareWorkout>()
+                    ShareWorkoutContainer(
+                        workoutId = route.workoutId,
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.ProgressComparison> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.ProgressComparison>()
+                    ProgressComparisonContainer(
+                        comparisonId = route.comparisonId,
+                        shareMode = route.shareMode,
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.SocialFeed> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.SocialFeed>()
+                    com.example.liftrix.ui.feed.FeedScreen(
+                        navController = navController
+                    )
+                }
+                
+                composable<LiftrixRoute.NotificationSettings> {
+                    com.example.liftrix.ui.settings.NotificationSettingsScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.GymBuddy> {
+                    com.example.liftrix.ui.social.gymbuddy.GymBuddyScreen(
+                        onNavigateToQrScanner = {
+                            // TODO: Navigate to QR Scanner when implemented
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.PostCreation> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.PostCreation>()
+                    com.example.liftrix.ui.feed.PostCreationScreen(
+                        workoutId = route.workoutId,
+                        navController = navController
+                    )
+                }
+                
+                composable<LiftrixRoute.PostComments> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.PostComments>()
+                    // TODO: Implement PostCommentsScreen when available
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Post Comments Screen")
+                            Text("Post ID: ${route.postId}")
+                            Button(
+                                onClick = { navController.popBackStackSafely() }
+                            ) {
+                                Text("Back")
+                            }
+                        }
+                    }
+                }
+                
                 // Analytics Detail Screen Routes
                 composable<LiftrixRoute.VolumeAnalysisDetail> {
                     com.example.liftrix.ui.progress.detail.VolumeAnalysisDetailScreen(
@@ -766,7 +850,8 @@ private fun BottomNavigationBar(
         BottomNavItem(LiftrixRoute.Home, "Home", Icons.Default.Home),
         BottomNavItem(LiftrixRoute.Workout, "Workout", Icons.Default.FitnessCenter),
         BottomNavItem(LiftrixRoute.Progress, "Progress", Icons.Default.TrendingUp),
-        BottomNavItem(LiftrixRoute.Coach, "Coach", Icons.Default.Psychology)
+        BottomNavItem(LiftrixRoute.Coach, "Coach", Icons.Default.Psychology),
+        BottomNavItem(LiftrixRoute.Friends, "Social", Icons.Default.People)
     )
     
     NavigationBar {
@@ -984,14 +1069,23 @@ private fun NavigationAwareTopAppBar(
         "VolumeAnalysisDetail" to "Volume Analysis",
         "OneRmDetail" to "1RM Progression", 
         "MuscleGroupDetail" to "Muscle Groups",
-        "WorkoutFrequencyDetail" to "Workout Frequency"
+        "WorkoutFrequencyDetail" to "Workout Frequency",
+        // Social System Routes (Added for social system completion)
+        "ShareWorkout" to "Share Workout",
+        "ProgressComparison" to "Progress Comparison",
+        "SocialFeed" to "Social Feed",
+        "NotificationSettings" to "Notification Settings",
+        "GymBuddy" to "Gym Buddy",
+        "PostCreation" to "Create Post",
+        "PostComments" to "Comments"
     )
     
     // Check if current route is a main tab (should show global top bar)
     val isMainTab = currentRoute?.contains("Home") == true ||
                    currentRoute?.contains("Workout") == true ||
                    currentRoute?.contains("Progress") == true ||
-                   currentRoute?.contains("Coach") == true
+                   currentRoute?.contains("Coach") == true ||
+                   currentRoute?.contains("Friends") == true
     
     // Check if current route should show back navigation
     val shouldShowBackNavigation = routeTitles.keys.any { 
@@ -1088,5 +1182,97 @@ private fun NavigationAwareTopAppBar(
             titleContentColor = MaterialTheme.colorScheme.onSurface,
             actionIconContentColor = MaterialTheme.colorScheme.onSurface
         )
+    )
+}
+
+/**
+ * Container composable for ShareWorkout screen that bridges the gap between
+ * navigation parameters (workoutId) and the actual screen requirements (ShareableContent).
+ */
+@Composable
+private fun ShareWorkoutContainer(
+    workoutId: String,
+    onNavigateBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // TODO: Create ViewModel to load ShareableContent from workoutId
+    // For now, create a placeholder ShareableContent
+    val shareableContent = ShareableContent(
+        id = workoutId,
+        type = ShareableContentType.WORKOUT,
+        title = "Workout Session",
+        subtitle = "Shared workout",
+        stats = emptyMap(),
+        imageUrl = null,
+        userAvatar = null,
+        metadata = emptyMap()
+    )
+    
+    val shareUrl = "https://liftrix.app/share/workout/$workoutId"
+    
+    com.example.liftrix.ui.share.ShareWorkoutScreen(
+        workoutContent = shareableContent,
+        shareUrl = shareUrl,
+        onNavigateBack = onNavigateBack,
+        onShareToPlatform = { platform, message ->
+            // TODO: Implement sharing to platform
+        },
+        onGenerateQRCode = {
+            // TODO: Implement QR code generation
+        },
+        modifier = modifier
+    )
+}
+
+/**
+ * Container composable for ProgressComparison screen that bridges the gap between
+ * navigation parameters and the actual screen requirements.
+ */
+@Composable  
+private fun ProgressComparisonContainer(
+    comparisonId: String,
+    shareMode: Boolean,
+    onNavigateBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // TODO: Create ViewModel to load ProgressComparison from comparisonId
+    // For now, create a placeholder ProgressComparison
+    val currentTime = System.currentTimeMillis()
+    val placeholderBeforePhoto = ProgressPhoto(
+        id = "before_photo_$comparisonId",
+        userId = "",
+        mediaId = "placeholder_media_before",
+        bodyPart = BodyPart.FULL_BODY,
+        photoType = PhotoType.FRONT,
+        isPrivate = !shareMode,
+        takenAt = currentTime - (4 * 7 * 24 * 60 * 60 * 1000), // 4 weeks ago
+        createdAt = currentTime
+    )
+    val placeholderAfterPhoto = ProgressPhoto(
+        id = "after_photo_$comparisonId",
+        userId = "",
+        mediaId = "placeholder_media_after",
+        bodyPart = BodyPart.FULL_BODY,
+        photoType = PhotoType.FRONT,
+        isPrivate = !shareMode,
+        takenAt = currentTime,
+        createdAt = currentTime
+    )
+    val comparison = ProgressComparison(
+        id = comparisonId,
+        userId = "",
+        name = "Progress Comparison",
+        bodyPart = BodyPart.FULL_BODY,
+        beforePhoto = placeholderBeforePhoto,
+        afterPhoto = placeholderAfterPhoto,
+        timeDifferenceWeeks = 4,
+        createdAt = currentTime
+    )
+    
+    com.example.liftrix.ui.progress.ProgressComparisonView(
+        comparison = comparison,
+        modifier = modifier,
+        onImageTap = { /* TODO: Handle image tap */ },
+        onComparisonModeToggle = { /* TODO: Handle mode toggle */ }
     )
 }

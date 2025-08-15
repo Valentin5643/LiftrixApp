@@ -77,4 +77,47 @@ interface AnalyticsTracker {
         type: String,
         isInForeground: Boolean
     )
+    
+    /**
+     * Track sharing events
+     */
+    fun trackShare(
+        contentType: String, // POST, WORKOUT, PROGRESS
+        contentId: String,
+        platform: String, // INSTAGRAM, WHATSAPP, TWITTER, etc.
+        userId: String,
+        hasCustomMessage: Boolean = false,
+        additionalProperties: Map<String, Any> = emptyMap()
+    )
+    
+    /**
+     * Track engagement events
+     */
+    fun trackEngagement(
+        action: String, // LIKE, COMMENT, SAVE, COPY_WORKOUT
+        contentType: String, // POST, WORKOUT
+        contentId: String,
+        contentOwnerUserId: String,
+        userId: String,
+        additionalProperties: Map<String, Any> = emptyMap()
+    )
+    
+    /**
+     * Track QR code events
+     */
+    fun trackQRCodeEvent(
+        action: String, // GENERATE, SCAN, SHARE, SAVE
+        userId: String,
+        qrType: String = "GYM_BUDDY",
+        additionalProperties: Map<String, Any> = emptyMap()
+    )
+    
+    /**
+     * Track error events
+     */
+    fun trackError(
+        errorType: String,
+        errorMessage: String,
+        additionalProperties: Map<String, Any> = emptyMap()
+    )
 }

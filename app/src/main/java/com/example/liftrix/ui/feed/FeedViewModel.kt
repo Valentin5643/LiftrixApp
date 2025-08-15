@@ -10,6 +10,7 @@ import com.example.liftrix.domain.repository.social.FeedRepository
 import com.example.liftrix.domain.repository.social.EngagementRepository
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
+import com.example.liftrix.domain.service.AnalyticsTracker
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,12 +28,16 @@ class FeedViewModel @Inject constructor(
     private val feedRepository: FeedRepository,
     private val engagementRepository: EngagementRepository,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val analyticsTracker: AnalyticsTracker,
     errorHandler: ErrorHandler
 ) : BaseViewModel<FeedUiState, FeedEvent>(errorHandler) {
 
     private val _selectedTab = MutableStateFlow(FeedTab.HOME)
     private val _likedPosts = MutableStateFlow<Set<String>>(emptySet())
     private val _savedPosts = MutableStateFlow<Set<String>>(emptySet())
+    
+    private val _viewModelEvents = MutableSharedFlow<FeedViewModelEvent>()
+    val viewModelEvents: SharedFlow<FeedViewModelEvent> = _viewModelEvents.asSharedFlow()
     
     override val _uiState = MutableStateFlow(
         FeedUiState(
@@ -224,10 +229,68 @@ class FeedViewModel @Inject constructor(
 
     private fun sharePost(post: WorkoutPost) {
         viewModelScope.launch {
-            // Share functionality - could integrate with Android share intent
-            Timber.d("Sharing post: ${post.id}")
-            // TODO: Implement share functionality
+            try {
+                // Track share analytics with proper share event
+                val userId = getCurrentUserIdUseCase() ?: ""
+                analyticsTracker.trackShare(
+                    contentType = "POST",
+                    contentId = post.id,
+                    platform = "NATIVE_SHARE", // Android native share intent
+                    userId = userId,
+                    hasCustomMessage = false,
+                    additionalProperties = mapOf(
+                        "target_user_id" to post.userId,
+                        "source" to "FEED",
+                        "has_achievements" to post.achievements.isNotEmpty()
+                    )
+                )
+                
+                // Create share content
+                val shareText = buildShareContent(post)
+                
+                // Emit share event to UI to trigger Android share intent
+                _viewModelEvents.emit(FeedViewModelEvent.SharePost(shareText, post.id))
+                
+                Timber.d("Post share initiated: ${post.id}")
+                
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to share post: ${post.id}")
+                analyticsTracker.trackError(
+                    "SHARE_POST_FAILED",
+                    e.message ?: "Unknown error",
+                    mapOf("post_id" to post.id)
+                )
+            }
         }
+    }
+    
+    private fun buildShareContent(post: WorkoutPost): String {
+        val workoutSummary = buildString {
+            append("Check out this awesome workout!\n\n")
+            
+            if (post.authorUsername?.isNotEmpty() == true) {
+                append("💪 By: ${post.authorDisplayName ?: post.authorUsername}\n")
+            }
+            
+            if (post.workoutSummary?.totalSets != null) {
+                append("📊 ${post.workoutSummary.totalSets} sets")
+                if (post.workoutDuration != null) {
+                    append(" • ${post.workoutDuration / 60}m")
+                }
+                append("\n")
+            }
+            
+            if (post.achievements.isNotEmpty()) {
+                append("🏆 ${post.achievements.size} Personal Records!\n")
+            }
+            
+            if (post.caption.isNotEmpty()) {
+                append("\n\"${post.caption}\"\n")
+            }
+            
+            append("\nShared from Liftrix")
+        }
+        return workoutSummary
     }
 
     private fun copyWorkout(post: WorkoutPost) {
@@ -238,6 +301,18 @@ class FeedViewModel @Inject constructor(
                 val result = engagementRepository.copyWorkoutFromPost(post.id, userId)
                 result.fold(
                     onSuccess = {
+                        // Track copy workout analytics
+                        analyticsTracker.trackEngagement(
+                            action = "COPY_WORKOUT",
+                            contentType = "POST",
+                            contentId = post.id,
+                            contentOwnerUserId = post.userId,
+                            userId = userId,
+                            additionalProperties = mapOf(
+                                "source" to "FEED",
+                                "workout_has_achievements" to post.achievements.isNotEmpty()
+                            )
+                        )
                         Timber.d("Workout copied successfully from post: ${post.id}")
                         // TODO: Show success message/navigation
                     },
@@ -323,4 +398,11 @@ sealed class PostInteraction {
     data class Save(val postId: String) : PostInteraction()
     data class Share(val post: WorkoutPost) : PostInteraction()
     data class CopyWorkout(val post: WorkoutPost) : PostInteraction()
+}
+
+/**
+ * ViewModel events that trigger UI actions
+ */
+sealed class FeedViewModelEvent : ViewModelEvent {
+    data class SharePost(val shareText: String, val postId: String) : FeedViewModelEvent()
 }

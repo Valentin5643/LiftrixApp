@@ -9,11 +9,14 @@ import com.example.liftrix.data.repository.FCMTokenRepositoryImpl
 import com.example.liftrix.data.repository.notifications.NotificationPreferencesRepositoryImpl
 import com.example.liftrix.data.repository.notifications.NotificationMuteRepositoryImpl
 import com.example.liftrix.data.service.NotificationHandlerImpl
+import com.example.liftrix.data.service.NotificationRouterImpl
 import com.example.liftrix.domain.repository.FCMTokenRepository
 import com.example.liftrix.domain.repository.notifications.NotificationPreferencesRepository
 import com.example.liftrix.domain.repository.notifications.NotificationMuteRepository
 import com.example.liftrix.domain.service.NotificationHandler
+import com.example.liftrix.domain.service.NotificationRouter
 import com.example.liftrix.services.NotificationChannelManager
+import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -35,11 +38,25 @@ import javax.inject.Singleton
  */
 @Module
 @InstallIn(SingletonComponent::class)
-object NotificationModule {
+abstract class NotificationModule {
 
-    @Provides
+    /**
+     * Binds NotificationRouter interface to its implementation.
+     * 
+     * Provides intelligent notification routing with batching and priority handling
+     * for social notifications and follow requests.
+     */
+    @Binds
     @Singleton
-    fun provideNotificationPreferencesRepository(
+    abstract fun bindNotificationRouter(
+        notificationRouterImpl: NotificationRouterImpl
+    ): NotificationRouter
+
+    companion object {
+        
+        @Provides
+        @Singleton
+        fun provideNotificationPreferencesRepository(
         notificationPreferenceDao: NotificationPreferenceDao,
         notificationPreferencesMapper: NotificationPreferencesMapper
     ): NotificationPreferencesRepository {
@@ -78,5 +95,7 @@ object NotificationModule {
         notificationChannelManager: NotificationChannelManager
     ): NotificationHandler {
         return NotificationHandlerImpl(context, notificationChannelManager)
+    }
+    
     }
 }

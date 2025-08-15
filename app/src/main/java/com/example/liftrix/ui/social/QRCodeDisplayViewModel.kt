@@ -1,15 +1,24 @@
 package com.example.liftrix.ui.social
 
+import android.content.ContentValues
+import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.os.Environment
+import android.provider.MediaStore
+import androidx.core.content.FileProvider
 import androidx.lifecycle.viewModelScope
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
+import dagger.hilt.android.qualifiers.ApplicationContext
 import com.example.liftrix.domain.model.error.LiftrixError
+import java.io.File
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.social.QRCodeGenerationUseCase
 import com.example.liftrix.domain.usecase.social.QRCodeGenerationRequest
+import com.example.liftrix.domain.service.AnalyticsTracker
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,6 +36,8 @@ import javax.inject.Inject
 @HiltViewModel
 class QRCodeDisplayViewModel @Inject constructor(
     private val qrCodeGenerationUseCase: QRCodeGenerationUseCase,
+    private val analyticsTracker: AnalyticsTracker,
+    @ApplicationContext private val context: Context,
     errorHandler: ErrorHandler
 ) : BaseViewModel<QRCodeDisplayUiState, QRCodeDisplayEvent>(errorHandler) {
 
@@ -36,7 +47,8 @@ class QRCodeDisplayViewModel @Inject constructor(
             profileUrl = null,
             isLoading = false,
             error = null,
-            currentUserId = null
+            currentUserId = null,
+            saveSuccess = false
         )
     )
 
@@ -91,6 +103,16 @@ class QRCodeDisplayViewModel @Inject constructor(
                 val qrCodeBitmap = generateQRCodeBitmap(result.qrCodeData)
                 
                 if (qrCodeBitmap != null) {
+                    // Track QR code generation analytics
+                    analyticsTracker.trackQRCodeEvent(
+                        action = "GENERATE",
+                        userId = userId,
+                        qrType = "GYM_BUDDY",
+                        additionalProperties = mapOf(
+                            "has_shareable_url" to (result.shareableUrl != null)
+                        )
+                    )
+                    
                     updateState { currentState ->
                         currentState.copy(
                             qrCodeBitmap = qrCodeBitmap,
@@ -163,20 +185,60 @@ class QRCodeDisplayViewModel @Inject constructor(
     private fun shareQRCode(bitmap: Bitmap) {
         viewModelScope.launch {
             try {
-                // TODO: Implement QR code sharing functionality
-                // This would typically involve:
-                // 1. Saving the bitmap to a temporary file
-                // 2. Creating a share intent with the image
-                // 3. Launching the system share sheet
-                
                 Timber.d("QR code sharing initiated")
                 
-                // For now, we'll just log the action
-                // The actual implementation would depend on the specific sharing requirements
+                // Save bitmap to temporary cache file
+                val filename = "liftrix_qr_${System.currentTimeMillis()}.png"
+                val cacheDir = File(context.cacheDir, "shared_qr_codes")
+                if (!cacheDir.exists()) {
+                    cacheDir.mkdirs()
+                }
+                
+                val file = File(cacheDir, filename)
+                val outputStream = file.outputStream()
+                
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+                outputStream.flush()
+                outputStream.close()
+                
+                // Create content URI using FileProvider
+                val contentUri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
+                
+                // Create share intent
+                val shareIntent = Intent().apply {
+                    action = Intent.ACTION_SEND
+                    type = "image/png"
+                    putExtra(Intent.EXTRA_STREAM, contentUri)
+                    putExtra(Intent.EXTRA_TEXT, "Check out my Liftrix profile!")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                
+                // Launch system share sheet
+                val chooserIntent = Intent.createChooser(shareIntent, "Share QR Code")
+                chooserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(chooserIntent)
+                
+                // Track QR code share analytics
+                val currentUserId = _uiState.value.currentUserId ?: "unknown"
+                analyticsTracker.trackQRCodeEvent(
+                    action = "SHARE",
+                    userId = currentUserId,
+                    qrType = "GYM_BUDDY",
+                    additionalProperties = mapOf(
+                        "method" to "native_share"
+                    )
+                )
+                
+                Timber.d("QR code share intent launched successfully")
                 
             } catch (exception: Exception) {
                 val error = LiftrixError.FileSystemError(
-                    errorMessage = "Failed to share QR code"
+                    errorMessage = "Failed to share QR code: ${exception.message}"
                 )
                 handleError(error)
                 Timber.e(exception, "Failed to share QR code")
@@ -190,20 +252,58 @@ class QRCodeDisplayViewModel @Inject constructor(
     private fun saveQRCode(bitmap: Bitmap) {
         viewModelScope.launch {
             try {
-                // TODO: Implement QR code saving functionality
-                // This would typically involve:
-                // 1. Requesting storage permissions if needed
-                // 2. Saving the bitmap to the device's Pictures/Downloads folder
-                // 3. Showing a success/failure message to the user
-                
                 Timber.d("QR code saving initiated")
                 
-                // For now, we'll just log the action
-                // The actual implementation would depend on the specific saving requirements
+                // Create filename with timestamp
+                val filename = "Liftrix_QR_${System.currentTimeMillis()}.png"
+                val mimeType = "image/png"
+                
+                // Use MediaStore to save to Pictures directory
+                val contentResolver = context.contentResolver
+                val imageCollection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                
+                val imageDetails = ContentValues().apply {
+                    put(MediaStore.Images.Media.DISPLAY_NAME, filename)
+                    put(MediaStore.Images.Media.MIME_TYPE, mimeType)
+                    put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Liftrix")
+                }
+                
+                // Insert the image and get URI
+                val imageUri = contentResolver.insert(imageCollection, imageDetails)
+                
+                if (imageUri != null) {
+                    // Write bitmap to the URI
+                    contentResolver.openOutputStream(imageUri)?.use { outputStream ->
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+                        outputStream.flush()
+                    }
+                    
+                    Timber.d("QR code saved successfully to Pictures/Liftrix/$filename")
+                    
+                    // Track QR code save analytics
+                    val currentUserId = _uiState.value.currentUserId ?: "unknown"
+                    analyticsTracker.trackQRCodeEvent(
+                        action = "SAVE",
+                        userId = currentUserId,
+                        qrType = "GYM_BUDDY",
+                        additionalProperties = mapOf(
+                            "storage_location" to "Pictures/Liftrix"
+                        )
+                    )
+                    
+                    // Update UI state to show success
+                    updateState { currentState ->
+                        currentState.copy(
+                            saveSuccess = true
+                        )
+                    }
+                } else {
+                    throw Exception("Failed to create media store entry")
+                }
                 
             } catch (exception: Exception) {
                 val error = LiftrixError.FileSystemError(
-                    errorMessage = "Failed to save QR code"
+                    errorMessage = "Failed to save QR code: ${exception.message}"
                 )
                 handleError(error)
                 Timber.e(exception, "Failed to save QR code")
@@ -268,7 +368,8 @@ data class QRCodeDisplayUiState(
     val profileUrl: String?,
     val isLoading: Boolean,
     val error: LiftrixError?,
-    val currentUserId: String?
+    val currentUserId: String?,
+    val saveSuccess: Boolean = false
 ) {
     
     /**

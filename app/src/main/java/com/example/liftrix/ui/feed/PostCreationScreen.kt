@@ -23,7 +23,9 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
+import java.io.File
 import com.example.liftrix.R
 import com.example.liftrix.domain.model.social.MediaUploadRequest
 import com.example.liftrix.domain.model.social.PostVisibility
@@ -49,12 +51,31 @@ fun PostCreationScreen(
     var showMediaPicker by remember { mutableStateOf(false) }
     var showPrivacySettings by remember { mutableStateOf(false) }
     
+    // Create temporary file for camera capture
+    val tempCameraUri = remember {
+        val tempFile = File(context.cacheDir, "temp_camera_${System.currentTimeMillis()}.jpg")
+        FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            tempFile
+        )
+    }
+    
     // Media picker launcher
     val mediaPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
     ) { uris ->
         if (uris.isNotEmpty()) {
             viewModel.onEvent(PostCreationEvent.AddMedia(uris))
+        }
+    }
+    
+    // Camera launcher
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            viewModel.onEvent(PostCreationEvent.AddMedia(listOf(tempCameraUri)))
         }
     }
     
@@ -127,7 +148,7 @@ fun PostCreationScreen(
         MediaPickerDialog(
             onDismiss = { showMediaPicker = false },
             onCameraClick = {
-                // TODO: Launch camera
+                cameraLauncher.launch(tempCameraUri)
                 showMediaPicker = false
             },
             onGalleryClick = {

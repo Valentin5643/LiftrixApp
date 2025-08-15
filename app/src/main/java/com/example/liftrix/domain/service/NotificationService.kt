@@ -34,6 +34,15 @@ interface NotificationService {
     ): LiftrixResult<Unit>
     
     /**
+     * Send follow notification (for public profiles)
+     */
+    suspend fun sendFollowNotification(
+        targetUserId: String,
+        followerUserId: String,
+        followerName: String
+    ): LiftrixResult<Unit>
+    
+    /**
      * Send gym buddy invitation notification
      */
     suspend fun sendGymBuddyInviteNotification(

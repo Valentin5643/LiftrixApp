@@ -52,7 +52,7 @@ data class PublicUserProfile(
     
     // Recent content (privacy-aware)
     val recentWorkouts: List<RecentWorkout> = emptyList(),
-    val achievements: List<Achievement> = emptyList(),
+    val achievements: List<ProfileAchievement> = emptyList(),
     
     // Workout statistics (privacy-aware)
     val publicWorkoutStats: PublicWorkoutStats? = null
@@ -77,7 +77,7 @@ data class RecentWorkout(
 /**
  * Achievement summary for profile display
  */
-data class Achievement(
+data class ProfileAchievement(
     val id: String,
     val title: String,
     val description: String,

@@ -9,6 +9,8 @@ import com.example.liftrix.domain.model.social.QRUserProfile
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.social.GymBuddyRepository
 import com.example.liftrix.domain.service.AnalyticsService
+import com.example.liftrix.domain.service.QRCodeService
+import com.example.liftrix.domain.usecase.social.GetSocialProfileUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -26,8 +28,9 @@ import javax.inject.Inject
 class GymBuddyViewModel @Inject constructor(
     private val gymBuddyRepository: GymBuddyRepository,
     private val authRepository: AuthRepository,
-    private val analyticsService: AnalyticsService
-    // TODO: Inject QRCodeService and UserProfileRepository when available
+    private val analyticsService: AnalyticsService,
+    private val qrCodeService: QRCodeService,
+    private val getSocialProfileUseCase: GetSocialProfileUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GymBuddyUiState())
@@ -157,29 +160,60 @@ class GymBuddyViewModel @Inject constructor(
 
                 updateState { copy(isGeneratingQr = true, error = null) }
 
-                // TODO: Implement QR code generation when QRCodeService is available
-                // For now, create mock QR data
-                val mockQrCode = QRCodeData(
-                    token = "mock-token-${System.currentTimeMillis()}",
-                    expiresAt = System.currentTimeMillis() + (5 * 60 * 1000), // 5 minutes
-                    bitmap = null
-                )
-
-                val mockUserProfile = QRUserProfile(
-                    displayName = currentUser.displayName ?: "User",
-                    username = "user_${currentUser.uid.take(8)}"
-                )
-
-                updateState {
-                    copy(
-                        isGeneratingQr = false,
-                        qrCode = mockQrCode,
-                        userProfile = mockUserProfile,
-                        error = null
-                    )
+                // Get user's social profile for QR data
+                val socialProfileResult = getSocialProfileUseCase(currentUser.uid)
+                if (socialProfileResult.isFailure) {
+                    updateState { 
+                        copy(
+                            isGeneratingQr = false,
+                            error = "Failed to load user profile: ${socialProfileResult.exceptionOrNull()?.message}"
+                        ) 
+                    }
+                    return@launch
                 }
 
-                trackQrCodeGenerated()
+                val socialProfile = socialProfileResult.getOrNull()
+                val userProfile = QRUserProfile(
+                    displayName = socialProfile?.displayName ?: currentUser.displayName ?: "User",
+                    username = socialProfile?.username ?: "user_${currentUser.uid.take(8)}"
+                )
+
+                // Create gym buddy pairing token with expiration
+                val pairingToken = "liftrix://gym-buddy/${currentUser.uid}?token=${System.currentTimeMillis()}"
+                val expiresAt = System.currentTimeMillis() + (5 * 60 * 1000) // 5 minutes
+
+                // Generate QR code bitmap
+                val qrResult = qrCodeService.generateQRCode(pairingToken, size = 300, margin = 1)
+                
+                qrResult.fold(
+                    onSuccess = { bitmap ->
+                        val qrCodeData = QRCodeData(
+                            token = pairingToken,
+                            expiresAt = expiresAt,
+                            bitmap = bitmap
+                        )
+
+                        updateState {
+                            copy(
+                                isGeneratingQr = false,
+                                qrCode = qrCodeData,
+                                userProfile = userProfile,
+                                error = null
+                            )
+                        }
+
+                        trackQrCodeGenerated()
+                    },
+                    onFailure = { throwable ->
+                        Timber.e("QR code generation failed: $throwable")
+                        updateState { 
+                            copy(
+                                isGeneratingQr = false,
+                                error = "Failed to generate QR code: ${throwable.message}"
+                            ) 
+                        }
+                    }
+                )
 
             } catch (exception: Exception) {
                 Timber.e(exception, "Error generating QR code")

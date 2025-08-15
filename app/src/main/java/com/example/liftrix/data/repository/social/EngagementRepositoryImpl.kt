@@ -9,13 +9,17 @@ import com.example.liftrix.data.mapper.EngagementMapper
 import com.example.liftrix.data.mapper.WorkoutPostMapper
 import com.example.liftrix.domain.repository.social.EngagementRepository
 import com.example.liftrix.domain.model.social.*
+import com.example.liftrix.domain.model.MediaItem
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.service.AnalyticsTracker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
+import kotlin.math.*
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,7 +35,8 @@ class EngagementRepositoryImpl @Inject constructor(
     private val workoutPostDao: WorkoutPostDao,
     private val socialProfileDao: SocialProfileDao,
     private val engagementMapper: EngagementMapper,
-    private val workoutPostMapper: WorkoutPostMapper
+    private val workoutPostMapper: WorkoutPostMapper,
+    private val analyticsTracker: AnalyticsTracker
 ) : EngagementRepository {
     
     // ==========================================
@@ -63,6 +68,15 @@ class EngagementRepositoryImpl @Inject constructor(
                 currentPost?.let { post ->
                     val newCount = maxOf(0, post.likeCount - 1)
                     workoutPostDao.updateLikeCount(postId, newCount, System.currentTimeMillis())
+                    
+                    // Track unlike analytics
+                    analyticsTracker.trackEngagement(
+                        action = "UNLIKE",
+                        contentType = "POST",
+                        contentId = postId,
+                        contentOwnerUserId = post.userId,
+                        userId = userId
+                    )
                 }
                 
                 false
@@ -76,6 +90,15 @@ class EngagementRepositoryImpl @Inject constructor(
                 currentPost?.let { post ->
                     val newCount = post.likeCount + 1
                     workoutPostDao.updateLikeCount(postId, newCount, System.currentTimeMillis())
+                    
+                    // Track like analytics
+                    analyticsTracker.trackEngagement(
+                        action = "LIKE",
+                        contentType = "POST",
+                        contentId = postId,
+                        contentOwnerUserId = post.userId,
+                        userId = userId
+                    )
                 }
                 
                 true
@@ -105,21 +128,58 @@ class EngagementRepositoryImpl @Inject constructor(
     }
     
     override fun getPostLikers(postId: String, pageSize: Int): Flow<PagingData<PostLike>> {
+        // For now, return a simple implementation using the available DAO method
+        // In production, this would be a proper PagingSource or Room's direct PagingSource support
         return Pager(
             config = PagingConfig(
                 pageSize = pageSize,
                 enablePlaceholders = false
             ),
             pagingSourceFactory = { 
-                // TODO: Implement proper paging source for likes
-                workoutPostDao.getHomeFeedPosts(emptyList()) 
+                // This is a simplified implementation - in production would use proper Room PagingSource
+                // Room supports PagingSource directly, but we use a simple approach here
+                object : androidx.paging.PagingSource<Int, PostLike>() {
+                    override suspend fun load(params: LoadParams<Int>): LoadResult<Int, PostLike> {
+                        return try {
+                            val offset = params.key ?: 0
+                            val limit = minOf(params.loadSize, pageSize)
+                            
+                            val likersWithProfiles = postLikeDao.getPostLikersWithProfiles(
+                                postId = postId,
+                                limit = limit
+                            )
+                            
+                            val postLikes = likersWithProfiles.map { likerProfile ->
+                                PostLike(
+                                    id = likerProfile.id,
+                                    postId = likerProfile.postId,
+                                    userId = likerProfile.userId,
+                                    createdAt = likerProfile.createdAt,
+                                    userDisplayName = likerProfile.displayName ?: "",
+                                    userUsername = likerProfile.username ?: "",
+                                    userProfileImageUrl = likerProfile.profilePhotoUrl
+                                )
+                            }
+                            
+                            LoadResult.Page(
+                                data = postLikes,
+                                prevKey = if (offset == 0) null else offset - params.loadSize,
+                                nextKey = if (postLikes.isEmpty()) null else offset + postLikes.size
+                            )
+                        } catch (e: Exception) {
+                            LoadResult.Error(e)
+                        }
+                    }
+                    
+                    override fun getRefreshKey(state: androidx.paging.PagingState<Int, PostLike>): Int? {
+                        return state.anchorPosition?.let { anchorPosition ->
+                            state.closestPageToPosition(anchorPosition)?.prevKey?.plus(1)
+                                ?: state.closestPageToPosition(anchorPosition)?.nextKey?.minus(1)
+                        }
+                    }
+                }
             }
-        ).flow.map { pagingData ->
-            pagingData.map { entity ->
-                // This is a placeholder - would need proper like entity mapping
-                PostLike("", "", "", 0L)
-            }
-        }
+        ).flow
     }
     
     // ==========================================
@@ -307,6 +367,15 @@ class EngagementRepositoryImpl @Inject constructor(
                 currentPost?.let { post ->
                     val newCount = maxOf(0, post.saveCount - 1)
                     workoutPostDao.updateSaveCount(postId, newCount, System.currentTimeMillis())
+                    
+                    // Track unsave analytics
+                    analyticsTracker.trackEngagement(
+                        action = "UNSAVE",
+                        contentType = "POST",
+                        contentId = postId,
+                        contentOwnerUserId = post.userId,
+                        userId = userId
+                    )
                 }
                 
                 false
@@ -320,6 +389,15 @@ class EngagementRepositoryImpl @Inject constructor(
                 currentPost?.let { post ->
                     val newCount = post.saveCount + 1
                     workoutPostDao.updateSaveCount(postId, newCount, System.currentTimeMillis())
+                    
+                    // Track save analytics
+                    analyticsTracker.trackEngagement(
+                        action = "SAVE",
+                        contentType = "POST",
+                        contentId = postId,
+                        contentOwnerUserId = post.userId,
+                        userId = userId
+                    )
                 }
                 
                 true
@@ -355,15 +433,72 @@ class EngagementRepositoryImpl @Inject constructor(
                 enablePlaceholders = false
             ),
             pagingSourceFactory = { 
-                // TODO: Implement proper saved posts paging source
-                workoutPostDao.getHomeFeedPosts(listOf(userId))
+                object : androidx.paging.PagingSource<Int, WorkoutPost>() {
+                    override suspend fun load(params: LoadParams<Int>): LoadResult<Int, WorkoutPost> {
+                        return try {
+                            val offset = params.key ?: 0
+                            val limit = minOf(params.loadSize, pageSize)
+                            
+                            // Get saved posts with details - limited approach for now
+                            // In production, this would be a proper offset-based query
+                            val allSavedPosts = savedPostDao.getUserSavedPostsWithDetails(userId)
+                            val savedPostsList = mutableListOf<WorkoutPost>()
+                            
+                            // Collect from Flow (simplified - in production use proper pagination)
+                            allSavedPosts.collect { savedPosts ->
+                                val paginatedPosts = savedPosts
+                                    .drop(offset)
+                                    .take(limit)
+                                    .map { savedPostWithDetails ->
+                                        WorkoutPost(
+                                            id = savedPostWithDetails.postId,
+                                            userId = savedPostWithDetails.userId,
+                                            workoutId = "", // Would be mapped from workout_posts table
+                                            caption = savedPostWithDetails.caption ?: "",
+                                            mediaUrls = emptyList(),
+                                            mediaThumbnails = emptyList(),
+                                            mediaItems = emptyList(),
+                                            visibility = PostVisibility.PUBLIC, // Default visibility
+                                            workoutDuration = savedPostWithDetails.workoutDuration,
+                                            totalVolume = 0.0, // Would be calculated
+                                            exercisesCount = savedPostWithDetails.exercisesCount ?: 0,
+                                            prsCount = savedPostWithDetails.prsCount,
+                                            likeCount = 0, // Would be fetched separately
+                                            commentCount = 0, // Would be fetched separately
+                                            shareCount = 0, // Would be fetched separately
+                                            saveCount = 0, // Would be fetched separately
+                                            createdAt = savedPostWithDetails.createdAt,
+                                            updatedAt = savedPostWithDetails.createdAt,
+                                            authorUsername = savedPostWithDetails.authorUsername ?: "",
+                                            authorDisplayName = savedPostWithDetails.authorDisplayName ?: "",
+                                            authorProfilePhotoUrl = savedPostWithDetails.authorProfilePhotoUrl,
+                                            isLikedByViewer = false, // Would be checked separately
+                                            isSavedByViewer = true // Always true for saved posts
+                                        )
+                                    }
+                                savedPostsList.addAll(paginatedPosts)
+                                return@collect
+                            }
+                            
+                            LoadResult.Page(
+                                data = savedPostsList,
+                                prevKey = if (offset == 0) null else offset - params.loadSize,
+                                nextKey = if (savedPostsList.isEmpty()) null else offset + savedPostsList.size
+                            )
+                        } catch (e: Exception) {
+                            LoadResult.Error(e)
+                        }
+                    }
+                    
+                    override fun getRefreshKey(state: androidx.paging.PagingState<Int, WorkoutPost>): Int? {
+                        return state.anchorPosition?.let { anchorPosition ->
+                            state.closestPageToPosition(anchorPosition)?.prevKey?.plus(1)
+                                ?: state.closestPageToPosition(anchorPosition)?.nextKey?.minus(1)
+                        }
+                    }
+                }
             }
-        ).flow.map { pagingData ->
-            pagingData.map { entity ->
-                // This is a placeholder - would need proper saved post mapping
-                workoutPostMapper.toDomain(entity)
-            }
-        }
+        ).flow
     }
     
     // ==========================================

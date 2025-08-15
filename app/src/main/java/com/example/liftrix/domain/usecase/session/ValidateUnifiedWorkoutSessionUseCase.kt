@@ -1,8 +1,8 @@
-// TODO: Fix this use case - temporarily disabled for compilation
-/*package com.example.liftrix.domain.usecase.session
+package com.example.liftrix.domain.usecase.session
 
 import com.example.liftrix.domain.model.UnifiedWorkoutSession
 import com.example.liftrix.domain.model.WorkoutTemplate
+import com.example.liftrix.domain.model.WorkoutTemplateId
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
 import timber.log.Timber
@@ -173,8 +173,9 @@ class ValidateUnifiedWorkoutSessionUseCase @Inject constructor(
      */
     private suspend fun validateTemplateRelationship(session: UnifiedWorkoutSession, issues: MutableList<String>) {
         if (session.templateId != null) {
-            val template = workoutTemplateRepository.getTemplateById(session.templateId!!.value)
-                .getOrNull()
+            val templateId = WorkoutTemplateId.fromString(session.templateId!!)
+            val templateResult = workoutTemplateRepository.getTemplateById(templateId, session.userId)
+            val template = templateResult.getOrNull()
             
             if (template == null) {
                 issues.add("Referenced template not found: ${session.templateId}")
@@ -396,4 +397,4 @@ class ValidateUnifiedWorkoutSessionUseCase @Inject constructor(
         val passed: Boolean,
         val results: List<String>
     )
-}*/
+}

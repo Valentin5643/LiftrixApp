@@ -426,6 +426,95 @@ MediaUploadServiceImpl
 - **FOLLOWERS**: Only visible to followers, filtered by relationship
 - **PRIVATE**: Only visible to author (no social sharing)
 
+## Gym Buddy System Architecture
+
+### Gym Buddy Core Components
+```kotlin
+// Gym Buddy System (Max 5 buddies per user)
+GymBuddyScreen (QR display & scanner)
+    ↓ GymBuddyViewModel
+QRCodeService (ZXing integration)
+    ↓ Time-limited tokens (5 min expiry)
+GymBuddyRepository
+    ↓ Mutual connections with limit enforcement
+PRDetectionService
+    ↓ Comprehensive PR algorithms
+```
+
+### QR Code Pairing Pattern
+```kotlin
+// QR code generation with expiration
+val pairingToken = "liftrix://gym-buddy/${userId}?token=${timestamp}"
+val qrResult = qrCodeService.generateQRCode(pairingToken, size = 300)
+
+// Validate scan and create mutual connection
+if (System.currentTimeMillis() > payload.expiresAt) {
+    throw QRExpiredException("QR code expired")
+}
+gymBuddyRepository.createMutualConnection(userId1, userId2, viaQr = true)
+```
+
+### PR Detection System
+- **PR Types**: ONE_RM, VOLUME, REPS, MAX_WEIGHT
+- **Detection Algorithms**: Epley formula for 1RM estimation
+- **Significance Levels**: EXCEPTIONAL (10%+), MAJOR (5%+), MODERATE (2%+), MINOR (<2%)
+- **Notification Cooldown**: 1 PR notification per buddy per day
+
+## Notification System Architecture
+
+### FCM Integration Pattern
+```kotlin
+// Notification routing with intelligent batching
+NotificationRouter
+    → Priority check (HIGH/NORMAL/LOW)
+    → Privacy filter (blocks, mutes, preferences)
+    → Quiet hours enforcement (10 PM - 8 AM default)
+    → Batch processor (hourly for social)
+    → FCM delivery
+```
+
+### Notification Categories & Controls
+- **Master Toggle**: Global on/off
+- **Category Controls**: Workout, Social, Achievement, Reminder
+- **Social Subcategories**: Gym buddy PRs, Follow requests, Post likes/comments
+- **Delivery Frequency**: IMMEDIATE, HOURLY, DAILY
+- **User Mutes**: Per-user or category with optional duration
+
+### Notification Action Service
+```kotlin
+// Handle notification actions without opening app
+NotificationActionService
+    → CELEBRATE_PR: Record celebration for gym buddy
+    → ACCEPT_FOLLOW: Accept follow request directly
+    → DECLINE_FOLLOW: Decline follow request directly
+```
+
+### Critical Notification Patterns
+
+#### 1. Token Management (MANDATORY)
+```kotlin
+// ✅ CORRECT - Update FCM token on refresh
+override fun onNewToken(token: String) {
+    tokenRepository.updateToken(token, deviceId, platform)
+}
+
+// ❌ WRONG - Not handling token refresh
+// Notifications will fail after token expires
+```
+
+#### 2. Batch Processing for Performance
+```kotlin
+// ✅ CORRECT - Batch similar notifications
+val grouped = notifications.groupBy { it.batchKey }
+grouped.forEach { (key, items) ->
+    if (items.size > 1) sendInboxStyle(items)
+    else sendSingle(items.first())
+}
+
+// ❌ WRONG - Sending individual notifications
+notifications.forEach { fcmSender.send(it) }  // Causes notification spam
+```
+
 ## Progress Dashboard Architecture
 
 ### Dashboard Component Hierarchy
@@ -627,6 +716,28 @@ userSearchRepository.getPublicProfile(profileUserId, viewerId)
 userSearchRepository.getPublicProfile(profileUserId, null)
 ```
 
+### Gym Buddy QR Code Gotchas
+```kotlin
+// ✅ Enforce 5 buddy limit and validate QR expiration
+if (buddies.size >= 5) throw BuddyLimitException("Maximum 5 buddies")
+if (System.currentTimeMillis() > expiresAt) throw QRExpiredException()
+
+// ❌ Never allow unlimited buddies or expired QR codes
+gymBuddyRepository.createConnection(userId1, userId2)  // No validation
+```
+
+### PR Notification Gotchas
+```kotlin
+// ✅ Enforce daily cooldown per buddy
+val cooldownKey = "$userId:$buddyId:${LocalDate.now()}"
+if (!prRepository.hasSentToday(cooldownKey)) {
+    // Send notification
+}
+
+// ❌ Never spam PR notifications
+buddies.forEach { sendPRNotification(it) }  // No cooldown
+```
+
 ### Social Feed Engagement Gotchas
 ```kotlin
 // ✅ Use optimistic updates with proper error handling
@@ -705,6 +816,13 @@ val chartData = processChartData(rawData, timeRange)
 - `CommentSyncService` - Real-time Firestore listeners for live comment updates
 - `MediaUploadServiceImpl` - Firebase Storage integration with compression and CDN
 - `PrivacyEnforcementService` - Content filtering based on privacy levels and user relationships
+
+### Gym Buddy & PR System
+- `GymBuddyViewModel` - QR code generation and buddy management
+- `GymBuddyRepository` - Mutual connections with 5 buddy limit
+- `PRDetectionServiceImpl` - Comprehensive PR detection algorithms
+- `NotificationActionService` - Handle notification actions without opening app
+- `NotificationRouter` - Intelligent routing with batching and quiet hours
 
 ## Performance Targets
 - **60fps UI rendering** with optimized animations

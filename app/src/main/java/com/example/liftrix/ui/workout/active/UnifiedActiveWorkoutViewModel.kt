@@ -235,12 +235,16 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
      * 🔥 NEW: Directly completes the session without showing dialogs
      */
     private suspend fun completeSessionDirectly() {
+        // Get workout ID before completion
+        val currentSession = sessionManager.currentSession.value
+        val workoutId = currentSession?.templateId ?: currentSession?.sessionId?.value ?: "unknown"
+        
         val success = sessionManager.completeSession()
         if (success) {
             Timber.i("Workout completion initiated")
             
             // Show completion state briefly
-            _uiState.value = UnifiedActiveWorkoutUiState.WorkoutCompleted
+            _uiState.value = UnifiedActiveWorkoutUiState.WorkoutCompleted(workoutId)
             
             // Give user a moment to see completion state
             delay(1500)
@@ -731,7 +735,8 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                     val updatedSession = sessionManager.currentSession.value
                     if (updatedSession?.sessionStatus == UnifiedWorkoutSession.SessionStatus.COMPLETED) {
                         Timber.i("🔥 RETRY-SAVE: Session save retry successful")
-                        _uiState.value = UnifiedActiveWorkoutUiState.WorkoutCompleted
+                        val workoutId = updatedSession.templateId ?: updatedSession.sessionId.value
+                        _uiState.value = UnifiedActiveWorkoutUiState.WorkoutCompleted(workoutId)
                         delay(1000)
                         _uiState.value = UnifiedActiveWorkoutUiState.NoSession
                     } else {
@@ -881,8 +886,12 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
      */
     private fun finishWorkoutCompletion() {
         viewModelScope.launch {
+            // Get workout ID from current session
+            val currentSession = sessionManager.currentSession.value
+            val workoutId = currentSession?.templateId ?: currentSession?.sessionId?.value ?: "unknown"
+            
             // Show completion state - navigation will be triggered by the screen
-            _uiState.value = UnifiedActiveWorkoutUiState.WorkoutCompleted
+            _uiState.value = UnifiedActiveWorkoutUiState.WorkoutCompleted(workoutId)
             Timber.d("🔥 WORKOUT-COMPLETION: Set state to WorkoutCompleted - navigation should trigger")
             
             // 🔥 FIXED: Don't transition to NoSession - let the navigation handle the state change
@@ -1026,7 +1035,7 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
 sealed class UnifiedActiveWorkoutUiState {
     object Loading : UnifiedActiveWorkoutUiState()
     object NoSession : UnifiedActiveWorkoutUiState()
-    object WorkoutCompleted : UnifiedActiveWorkoutUiState()
+    data class WorkoutCompleted(val workoutId: String) : UnifiedActiveWorkoutUiState()
     
     data class Success(
         val session: UnifiedWorkoutSession,

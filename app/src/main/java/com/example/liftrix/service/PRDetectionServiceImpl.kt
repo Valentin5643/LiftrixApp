@@ -18,6 +18,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.max
 import kotlin.math.pow
+import java.time.LocalDate
 
 /**
  * Implementation of PRDetectionService for identifying personal records
@@ -426,33 +427,154 @@ class PRDetectionServiceImpl @Inject constructor(
      * Gets historical best 1RM for an exercise
      */
     private suspend fun getHistoricalBest1RM(exerciseName: String, userId: String): PersonalRecord? {
-        // Query for the best estimated 1RM from historical data
-        // This would need to be implemented based on your existing exercise data structure
-        // For now, returning null as placeholder
-        return null
+        try {
+            // Use a very wide date range to get all historical data
+            val startDate = "2000-01-01"
+            val endDate = java.time.LocalDate.now().toString()
+            
+            val oneRmData = exerciseSetDao.getOneRmDataForExercises(
+                userId = userId,
+                exerciseLibraryIds = listOf(exerciseName), // Assuming exercise name is used as library ID
+                startDate = startDate,
+                endDate = endDate,
+                limit = 1
+            )
+            
+            val bestResult = oneRmData.maxByOrNull { it.estimated_one_rm }
+            
+            return bestResult?.let { result ->
+                PersonalRecord(
+                    exerciseName = exerciseName,
+                    prType = PRType.ONE_RM,
+                    weight = result.weight_kg.toDouble(),
+                    reps = result.reps,
+                    estimatedOneRM = result.estimated_one_rm,
+                    volume = result.weight_kg.toDouble() * result.reps,
+                    achievedAt = result.completed_at,
+                    previousBest = null,
+                    improvementPercent = null
+                )
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get historical best 1RM for exercise: $exerciseName")
+            return null
+        }
     }
 
     /**
      * Gets historical best volume for an exercise
      */
     private suspend fun getHistoricalBestVolume(exerciseName: String, userId: String): PersonalRecord? {
-        // Query for the best volume (weight * reps) from historical data
-        return null
+        try {
+            // Use a very wide date range to get all historical data
+            val startDate = "2000-01-01"
+            val endDate = java.time.LocalDate.now().toString()
+            
+            val oneRmData = exerciseSetDao.getOneRmDataForExercises(
+                userId = userId,
+                exerciseLibraryIds = listOf(exerciseName),
+                startDate = startDate,
+                endDate = endDate,
+                limit = 5000 // Get more data for volume calculation
+            )
+            
+            val bestVolumeResult = oneRmData.maxByOrNull { result ->
+                result.weight_kg.toDouble() * result.reps
+            }
+            
+            return bestVolumeResult?.let { result ->
+                val volume = result.weight_kg.toDouble() * result.reps
+                PersonalRecord(
+                    exerciseName = exerciseName,
+                    prType = PRType.VOLUME,
+                    weight = result.weight_kg.toDouble(),
+                    reps = result.reps,
+                    estimatedOneRM = result.estimated_one_rm,
+                    volume = volume,
+                    achievedAt = result.completed_at,
+                    previousBest = null,
+                    improvementPercent = null
+                )
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get historical best volume for exercise: $exerciseName")
+            return null
+        }
     }
 
     /**
      * Gets historical best reps for an exercise
      */
     private suspend fun getHistoricalBestReps(exerciseName: String, userId: String): PersonalRecord? {
-        // Query for the most reps achieved for this exercise
-        return null
+        try {
+            // Use a very wide date range to get all historical data
+            val startDate = "2000-01-01"
+            val endDate = java.time.LocalDate.now().toString()
+            
+            val oneRmData = exerciseSetDao.getOneRmDataForExercises(
+                userId = userId,
+                exerciseLibraryIds = listOf(exerciseName),
+                startDate = startDate,
+                endDate = endDate,
+                limit = 5000
+            )
+            
+            val bestRepsResult = oneRmData.maxByOrNull { it.reps }
+            
+            return bestRepsResult?.let { result ->
+                PersonalRecord(
+                    exerciseName = exerciseName,
+                    prType = PRType.REPS,
+                    weight = result.weight_kg.toDouble(),
+                    reps = result.reps,
+                    estimatedOneRM = result.estimated_one_rm,
+                    volume = result.weight_kg.toDouble() * result.reps,
+                    achievedAt = result.completed_at,
+                    previousBest = null,
+                    improvementPercent = null
+                )
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get historical best reps for exercise: $exerciseName")
+            return null
+        }
     }
 
     /**
      * Gets historical max weight for an exercise
      */
     private suspend fun getHistoricalMaxWeight(exerciseName: String, userId: String): PersonalRecord? {
-        // Query for the heaviest weight lifted for this exercise
-        return null
+        try {
+            // Use a very wide date range to get all historical data
+            val startDate = "2000-01-01"
+            val endDate = java.time.LocalDate.now().toString()
+            
+            val oneRmData = exerciseSetDao.getOneRmDataForExercises(
+                userId = userId,
+                exerciseLibraryIds = listOf(exerciseName),
+                startDate = startDate,
+                endDate = endDate,
+                limit = 5000
+            )
+            
+            val bestWeightResult = oneRmData.maxByOrNull { it.weight_kg }
+            
+            return bestWeightResult?.let { result ->
+                PersonalRecord(
+                    exerciseName = exerciseName,
+                    prType = PRType.MAX_WEIGHT,
+                    weight = result.weight_kg.toDouble(),
+                    reps = result.reps,
+                    estimatedOneRM = result.estimated_one_rm,
+                    volume = result.weight_kg.toDouble() * result.reps,
+                    achievedAt = result.completed_at,
+                    previousBest = null,
+                    improvementPercent = null
+                )
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get historical max weight for exercise: $exerciseName")
+            return null
+        }
     }
 }

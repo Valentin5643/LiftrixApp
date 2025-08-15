@@ -8,6 +8,10 @@ import com.example.liftrix.domain.repository.social.FeedRepository
 import com.example.liftrix.domain.service.MediaUploadService
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
+import com.example.liftrix.domain.usecase.workout.GetWorkoutByIdUseCase
+import com.example.liftrix.domain.usecase.workout.GetWorkoutByIdRequest
+import com.example.liftrix.domain.model.WorkoutId
+import com.example.liftrix.domain.model.toSummary
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,6 +29,7 @@ class PostCreationViewModel @Inject constructor(
     private val feedRepository: FeedRepository,
     private val mediaUploadService: MediaUploadService,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val getWorkoutByIdUseCase: GetWorkoutByIdUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<PostCreationUiState, PostCreationEvent>(errorHandler) {
 
@@ -58,24 +63,62 @@ class PostCreationViewModel @Inject constructor(
         
         viewModelScope.launch {
             try {
-                // TODO: Replace with actual workout loading use case
-                val mockWorkout = WorkoutSummary(
-                    id = workoutId,
-                    name = "Push Day Workout",
-                    durationMinutes = 65,
-                    totalVolume = 12500.0,
-                    exerciseCount = 6,
-                    prsCount = 2
-                )
-                
-                updateState { currentState ->
-                    currentState.copy(
-                        isLoading = false,
-                        workoutSummary = mockWorkout
-                    )
+                val userId = getCurrentUserIdUseCase()
+                if (userId == null) {
+                    updateState { currentState ->
+                        currentState.copy(
+                            isLoading = false,
+                            error = "User not authenticated"
+                        )
+                    }
+                    return@launch
                 }
-                
-                Timber.d("Workout loaded successfully: $workoutId")
+
+                val request = GetWorkoutByIdRequest(
+                    workoutId = WorkoutId(workoutId),
+                    userId = userId
+                )
+
+                val result = getWorkoutByIdUseCase(request)
+                result.fold(
+                    onSuccess = { workout ->
+                        if (workout != null) {
+                            val domainSummary = workout.toSummary()
+                            // Convert domain WorkoutSummary to social WorkoutSummary
+                            val socialWorkoutSummary = WorkoutSummary(
+                                id = domainSummary.id.value,
+                                name = domainSummary.name,
+                                durationMinutes = domainSummary.duration?.toMinutes()?.toInt() ?: 0,
+                                totalVolume = domainSummary.totalVolume.kilograms,
+                                exerciseCount = domainSummary.exerciseCount,
+                                prsCount = 0 // TODO: Calculate PRs from workout if needed
+                            )
+                            updateState { currentState ->
+                                currentState.copy(
+                                    isLoading = false,
+                                    workoutSummary = socialWorkoutSummary
+                                )
+                            }
+                            Timber.d("Workout loaded successfully: $workoutId")
+                        } else {
+                            updateState { currentState ->
+                                currentState.copy(
+                                    isLoading = false,
+                                    error = "Workout not found"
+                                )
+                            }
+                        }
+                    },
+                    onFailure = { error ->
+                        updateState { currentState ->
+                            currentState.copy(
+                                isLoading = false,
+                                error = "Failed to load workout: ${error.message}"
+                            )
+                        }
+                        Timber.e(error, "Failed to load workout: $workoutId")
+                    }
+                )
             } catch (e: Exception) {
                 updateState { currentState ->
                     currentState.copy(
