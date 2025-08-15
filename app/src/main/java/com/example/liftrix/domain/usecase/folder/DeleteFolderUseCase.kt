@@ -1,15 +1,13 @@
 package com.example.liftrix.domain.usecase.folder
 
+import com.example.liftrix.domain.model.Folder
 import com.example.liftrix.domain.model.FolderId
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
-import com.example.liftrix.data.local.LiftrixDatabase
-import androidx.room.withTransaction
 import kotlinx.coroutines.flow.first
-import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,20 +22,16 @@ import javax.inject.Singleton
  * - Folder ownership validation
  * - Default folder protection
  * - Template reallocation to default folder
- * - Atomic operations
+ * - Atomic operations (handled by repository layer)
  */
 @Singleton
 class DeleteFolderUseCase @Inject constructor(
     private val folderRepository: FolderRepository,
-    private val workoutTemplateRepository: WorkoutTemplateRepository,
-    private val database: LiftrixDatabase // 🔥 ADDED: For atomic transactions
+    private val workoutTemplateRepository: WorkoutTemplateRepository
 ) {
     
     /**
-     * Deletes a folder and moves all its templates to the default folder atomically
-     * 
-     * 🔥 FIXED: Now uses database transactions to prevent CASCADE DELETE race conditions
-     * The migration 38→39 removed the CASCADE DELETE constraint, so templates won't be deleted
+     * Deletes a folder and moves all its templates to the default folder
      * 
      * @param input The deletion input containing userId and folderId
      * @return Result indicating success or failure
@@ -61,69 +55,123 @@ class DeleteFolderUseCase @Inject constructor(
         ) {
             validateInput(input)
             
-            // 🔥 CRITICAL FIX: Use database transaction for atomic folder deletion + template preservation
-            database.withTransaction {
-                // Verify user owns the folder using direct method to prevent Flow abortion
-                val folderResult = folderRepository.getFolderByIdDirect(input.folderId, input.userId)
-                val folder: com.example.liftrix.domain.model.Folder = when {
-                    folderResult.isFailure -> {
-                        throw (folderResult.exceptionOrNull() ?: RuntimeException("Failed to access folder"))
-                    }
-                    folderResult.getOrNull() == null -> {
-                        throw IllegalArgumentException("Folder not found or not owned by user")
-                    }
-                    else -> folderResult.getOrThrow()!! // Safe to use !! here since we checked for null above
-                }
-                
-                // Prevent deletion of default "Uncategorized" folder
-                if (folder.id.value.startsWith("uncategorized_")) {
-                    throw IllegalArgumentException("Cannot delete the default 'Uncategorized' folder")
-                }
-                
-                // Get or create default folder for template reallocation
-                val defaultFolderResult = folderRepository.getOrCreateDefaultFolder(input.userId)
-                if (defaultFolderResult.isFailure) {
-                    throw (defaultFolderResult.exceptionOrNull() ?: RuntimeException("Failed to access default folder"))
-                }
-                
-                val defaultFolder = defaultFolderResult.getOrThrow()
-                
-                // 🔥 PERFORMANCE FIX: Move templates using direct DAO operations within transaction
-                // This is faster than using repository flows and prevents race conditions
-                val templatesResult = workoutTemplateRepository.getTemplatesByFolder(input.userId, folder.id.value).first()
-                if (templatesResult.isFailure) {
-                    throw (templatesResult.exceptionOrNull() ?: RuntimeException("Failed to load templates"))
-                }
-                
-                val templates = templatesResult.getOrThrow()
-                
-                // Move each template to default folder atomically  
-                // 🔥 NULL SAFETY: Handle templates that may have null folder IDs
-                for (template in templates) {
-                    // Skip templates that are already in default folder or have null folder ID
-                    if (template.folderId == null || template.folderId == defaultFolder.id.value) {
-                        continue
-                    }
-                    
-                    val moveResult = folderRepository.moveTemplateToFolder(
-                        templateId = template.id.value,
-                        targetFolderId = FolderId(defaultFolder.id.value),
-                        userId = input.userId
-                    )
-                    if (moveResult.isFailure) {
-                        throw (moveResult.exceptionOrNull() ?: RuntimeException("Failed to move template ${template.id.value}"))
-                    }
-                }
-                
-                // Delete the folder (templates have been moved to default folder)
-                val deleteResult = folderRepository.deleteFolder(input.folderId, input.userId)
-                if (deleteResult.isFailure) {
-                    val exception = deleteResult.exceptionOrNull() ?: RuntimeException("Failed to delete folder")
-                    throw exception
-                }
+            // Step 1: Verify user owns the folder
+            val folder = validateFolderOwnership(input)
+            
+            // Step 2: Prevent deletion of default "Uncategorized" folder
+            validateNotDefaultFolder(folder)
+            
+            // Step 3: Get or create default folder for template reallocation
+            val defaultFolder = ensureDefaultFolder(input.userId)
+            
+            // Step 4: Move templates to default folder if folder has templates
+            if (folder.templateCount > 0) {
+                moveTemplatesToDefaultFolder(input.userId, folder.id.value, defaultFolder.id)
             }
             
-            Unit
+            // Step 5: Delete the folder (templates have been moved to default folder)
+            deleteFolderSafely(input.folderId, input.userId)
+        }
+    }
+    
+    /**
+     * Validates user owns the folder
+     */
+    private suspend fun validateFolderOwnership(input: DeleteFolderInput): Folder {
+        val folderResult = folderRepository.getFolderByIdDirect(input.folderId, input.userId)
+        val folder = when {
+            folderResult.isFailure -> {
+                val exception = folderResult.exceptionOrNull()
+                if (exception != null) {
+                    throw exception
+                } else {
+                    throw RuntimeException("Failed to access folder")
+                }
+            }
+            folderResult.getOrNull() == null -> {
+                throw IllegalArgumentException("Folder not found or not owned by user")
+            }
+            else -> folderResult.getOrThrow()!!
+        }
+        return folder
+    }
+    
+    /**
+     * Validates folder is not a default folder
+     */
+    private fun validateNotDefaultFolder(folder: Folder) {
+        if (folder.id.value.startsWith("uncategorized_")) {
+            throw IllegalArgumentException("Cannot delete the default 'Uncategorized' folder")
+        }
+    }
+    
+    /**
+     * Ensures default folder exists for template reallocation
+     */
+    private suspend fun ensureDefaultFolder(userId: String): Folder {
+        val defaultFolderResult = folderRepository.getOrCreateDefaultFolder(userId)
+        if (defaultFolderResult.isFailure) {
+            val exception = defaultFolderResult.exceptionOrNull()
+            if (exception != null) {
+                throw exception
+            } else {
+                throw RuntimeException("Default folder creation failed")
+            }
+        }
+        return defaultFolderResult.getOrThrow()!!
+    }
+    
+    /**
+     * Moves all templates from source folder to default folder
+     */
+    private suspend fun moveTemplatesToDefaultFolder(userId: String, sourceFolderId: String, defaultFolderId: FolderId) {
+        val templatesResult = workoutTemplateRepository.getTemplatesByFolder(userId, sourceFolderId).first()
+        if (templatesResult.isFailure) {
+            val exception = templatesResult.exceptionOrNull()
+            if (exception != null) {
+                throw exception
+            } else {
+                throw RuntimeException("Template retrieval failed")
+            }
+        }
+        
+        val templates = templatesResult.getOrThrow()
+        
+        // Move each template to default folder
+        for (template in templates) {
+            // Skip templates that are already in default folder or have null folder ID
+            if (template.folderId == null || template.folderId == defaultFolderId.value) {
+                continue
+            }
+            
+            val moveResult = folderRepository.moveTemplateToFolder(
+                templateId = template.id.value,
+                targetFolderId = defaultFolderId,
+                userId = userId
+            )
+            if (moveResult.isFailure) {
+                val exception = moveResult.exceptionOrNull()
+                if (exception != null) {
+                    throw exception
+                } else {
+                    throw RuntimeException("Template move failed")
+                }
+            }
+        }
+    }
+    
+    /**
+     * Deletes the folder safely
+     */
+    private suspend fun deleteFolderSafely(folderId: FolderId, userId: String) {
+        val deleteResult = folderRepository.deleteFolder(folderId, userId)
+        if (deleteResult.isFailure) {
+            val exception = deleteResult.exceptionOrNull()
+            if (exception != null) {
+                throw exception
+            } else {
+                throw RuntimeException("Failed to delete folder")
+            }
         }
     }
     

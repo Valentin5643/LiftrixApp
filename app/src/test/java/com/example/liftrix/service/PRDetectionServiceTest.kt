@@ -194,6 +194,9 @@ class PRDetectionServiceTest {
         // Should detect PRs for the different exercise, not our target exercise
         assertTrue("Should not detect PRs for target exercise", 
             prs.none { it.exerciseName == testExerciseLibrary.name })
+        
+        // The workout contains a different exercise, so PRs may be detected for that exercise
+        // This is correct behavior - we just want to ensure no PRs for the target exercise
     }
 
     @Test
@@ -345,7 +348,14 @@ class PRDetectionServiceTest {
         Exercise(
             id = ExerciseId(exerciseId),
             workoutId = WorkoutId("test-workout"),
-            libraryExercise = testExerciseLibrary,
+            libraryExercise = if (exerciseId == "different-exercise") {
+                testExerciseLibrary.copy(
+                    id = "different-exercise",
+                    name = "Different Exercise"
+                )
+            } else {
+                testExerciseLibrary
+            },
             orderIndex = 0,
             sets = sets,
             createdAt = java.time.Instant.now()

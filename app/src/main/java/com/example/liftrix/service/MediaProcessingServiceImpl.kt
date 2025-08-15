@@ -201,6 +201,10 @@ class MediaProcessingServiceImpl @Inject constructor(
             }
             
             if (inputStream == null) {
+                // Add error message if not already added by exception handler
+                if (errors.isEmpty()) {
+                    errors.add("Cannot open media file")
+                }
                 return Result.success(
                     MediaValidationResult(
                         isValid = false,

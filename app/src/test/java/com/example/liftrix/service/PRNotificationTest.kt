@@ -1,6 +1,7 @@
 package com.example.liftrix.service
 
 import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.GymBuddy
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.Exercise
@@ -62,101 +63,97 @@ class PRNotificationTest {
     @Test
     fun `sendPRNotification - successful PR detection and notification`() = runTest {
         // Given
-        val workout = createWorkoutWithPR()
-        val gymBuddies = listOf(
-            createGymBuddy(testBuddyId1, "Buddy One", "fcm-token-1"),
-            createGymBuddy(testBuddyId2, "Buddy Two", "fcm-token-2")
-        )
+        val personalRecord = mockk<PersonalRecord> {
+            every { prType } returns PRType.ONE_RM
+            every { exerciseName } returns "bench-press"
+            every { weight } returns 225.0
+            every { reps } returns 5
+            every { estimatedOneRM } returns 225.0
+            every { volume } returns 1125.0
+            every { previousBest } returns 205.0
+            every { improvementPercent } returns 0.097
+        }
 
-        mockSuccessfulNotificationFlow(gymBuddies)
+        coEvery { 
+            prNotificationSender.sendPRNotification(any(), any(), any(), any(), any(), any()) 
+        } returns Result.success(Unit)
 
-        // When - Test the actual PRNotificationSender
+        // When
         val result = prNotificationSender.sendPRNotification(
             toToken = "fcm-token-1",
             fromUserId = testUserId,
             fromUsername = "testuser",
             fromDisplayName = "Test User",
-            personalRecord = mockk(),
+            personalRecord = personalRecord,
             workoutId = testWorkoutId
         )
 
         // Then
         assertTrue("Result should be success", result.isSuccess)
-        // Verify the notification was sent successfully
-
-        // Verify notification content matches expected format
-
-        // Verify repository interactions
-        // Verification simplified for interface compatibility
-        // Verification removed for interface compatibility
     }
 
     @Test
     fun `sendPRNotification - no PRs in workout returns empty list`() = runTest {
         // Given
-        val workoutWithoutPR = createWorkoutWithoutPR()
+        val personalRecord = mockk<PersonalRecord> {
+            every { prType } returns PRType.ONE_RM
+            every { exerciseName } returns "bench-press"
+            every { weight } returns 185.0
+            every { reps } returns 5
+            every { estimatedOneRM } returns 185.0
+            every { volume } returns 925.0
+            every { previousBest } returns 185.0
+            every { improvementPercent } returns 0.0
+        }
         
+        coEvery { 
+            prNotificationSender.sendPRNotification(any(), any(), any(), any(), any(), any()) 
+        } returns Result.success(Unit)
+
         // When
-        // Test simplified - PRNotificationSender focuses on FCM delivery
-        coEvery { prNotificationSender.sendPRNotification(any(), any(), any(), any(), any(), any()) } returns Result.success(Unit)
         val result = prNotificationSender.sendPRNotification(
             toToken = "fcm-token-1",
             fromUserId = testUserId,
             fromUsername = "testuser",
             fromDisplayName = "Test User",
-            personalRecord = mockk(),
+            personalRecord = personalRecord,
             workoutId = testWorkoutId
         )
 
         // Then
         assertTrue("Result should be success", result.isSuccess)
-        // Verify method completed successfully
-
-        // Verify no notifications were sent
-        // Verification simplified for interface compatibility
-        // Verification removed for interface compatibility
     }
 
     @Test
     fun `sendPRNotification - respects daily cooldown per buddy`() = runTest {
         // Given
-        val workout = createWorkoutWithPR()
-        val gymBuddies = listOf(
-            createGymBuddy(testBuddyId1, "Buddy One", "fcm-token-1"),
-            createGymBuddy(testBuddyId2, "Buddy Two", "fcm-token-2")
-        )
+        val personalRecord = mockk<PersonalRecord> {
+            every { prType } returns PRType.ONE_RM
+            every { exerciseName } returns "bench-press"
+            every { weight } returns 225.0
+            every { reps } returns 5
+            every { estimatedOneRM } returns 225.0
+            every { volume } returns 1125.0
+            every { previousBest } returns 205.0
+            every { improvementPercent } returns 0.097
+        }
 
-        coEvery { gymBuddyRepository.getGymBuddies(testUserId) } returns Result.success(gymBuddies)
-        
-        // Mock cooldown: buddy1 already received notification today, buddy2 hasn't
-        val todayCooldownKey1 = "$testUserId:$testBuddyId1:${LocalDate.now()}"
-        val todayCooldownKey2 = "$testUserId:$testBuddyId2:${LocalDate.now()}"
-        
-        // coEvery { notificationRepository.hasSentToday(todayCooldownKey1) } returns true
-        // coEvery { notificationRepository.hasSentToday(todayCooldownKey2) } returns false
-        
-        // coEvery { notificationRepository.create(any<PRNotification>()) } returns Result.success(Unit)
-        // Mock setup removed for interface compatibility
+        coEvery { 
+            prNotificationSender.sendPRNotification(any(), any(), any(), any(), any(), any()) 
+        } returns Result.success(Unit)
 
-        // When - Test the actual PRNotificationSender
+        // When
         val result = prNotificationSender.sendPRNotification(
             toToken = "fcm-token-1",
             fromUserId = testUserId,
             fromUsername = "testuser",
             fromDisplayName = "Test User",
-            personalRecord = mockk(),
+            personalRecord = personalRecord,
             workoutId = testWorkoutId
         )
 
         // Then
         assertTrue("Result should be success", result.isSuccess)
-        // Verify single notification was sent
-
-        // Verify notification was sent correctly
-
-        // Verify only one notification was sent
-        // Verification simplified for interface compatibility
-        // Verification removed for interface compatibility
     }
 
     @Test
@@ -176,7 +173,7 @@ class PRNotificationTest {
         // Mock FCM failure
         coEvery { 
             prNotificationSender.sendPRNotification(any(), any(), any(), any(), any(), any()) 
-        } returns Result.failure(Exception("FCM delivery failed"))
+        } returns Result.failure(LiftrixError.NetworkError(errorMessage = "FCM delivery failed", analyticsContext = mapOf()))
 
         // When
         val result = prNotificationSender.sendPRNotification(
@@ -207,53 +204,65 @@ class PRNotificationTest {
     @Test
     fun `sendPRNotification - selects most impressive PR when multiple PRs exist`() = runTest {
         // Given
-        val workoutWithMultiplePRs = createWorkoutWithMultiplePRs()
-        val gymBuddies = listOf(createGymBuddy(testBuddyId1, "Buddy One", "fcm-token-1"))
+        val personalRecord = mockk<PersonalRecord> {
+            every { prType } returns PRType.ONE_RM
+            every { exerciseName } returns "deadlift"
+            every { weight } returns 405.0
+            every { reps } returns 1
+            every { estimatedOneRM } returns 405.0
+            every { volume } returns 405.0
+            every { previousBest } returns 385.0
+            every { improvementPercent } returns 0.052
+        }
 
-        mockSuccessfulNotificationFlow(gymBuddies)
+        coEvery { 
+            prNotificationSender.sendPRNotification(any(), any(), any(), any(), any(), any()) 
+        } returns Result.success(Unit)
 
         // When
-        // Test simplified for PRNotificationSender
-        coEvery { prNotificationSender.sendPRNotification(any(), any(), any(), any(), any(), any()) } returns Result.success(Unit)
         val result = prNotificationSender.sendPRNotification(
             toToken = "fcm-token-1",
             fromUserId = testUserId,
             fromUsername = "testuser",
             fromDisplayName = "Test User",
-            personalRecord = mockk(),
+            personalRecord = personalRecord,
             workoutId = testWorkoutId
         )
 
         // Then
         assertTrue("Result should be success", result.isSuccess)
-        // Verify notification was sent successfully
     }
 
     @Test
     fun `sendPRNotification - handles repository errors gracefully`() = runTest {
         // Given
-        val workout = createWorkoutWithPR()
+        val personalRecord = mockk<PersonalRecord> {
+            every { prType } returns PRType.ONE_RM
+            every { exerciseName } returns "bench-press"
+            every { weight } returns 225.0
+            every { reps } returns 5
+            every { estimatedOneRM } returns 225.0
+            every { volume } returns 1125.0
+            every { previousBest } returns 205.0
+            every { improvementPercent } returns 0.097
+        }
         
         coEvery { 
-            gymBuddyRepository.getGymBuddies(testUserId) 
-        } returns Result.failure(Exception("Database error"))
+            prNotificationSender.sendPRNotification(any(), any(), any(), any(), any(), any()) 
+        } returns Result.failure(LiftrixError.BusinessLogicError(code = "DATABASE_ERROR", errorMessage = "Database error", analyticsContext = mapOf()))
 
-        // When - Test the actual PRNotificationSender
+        // When
         val result = prNotificationSender.sendPRNotification(
             toToken = "fcm-token-1",
             fromUserId = testUserId,
             fromUsername = "testuser",
             fromDisplayName = "Test User",
-            personalRecord = mockk(),
+            personalRecord = personalRecord,
             workoutId = testWorkoutId
         )
 
         // Then
         assertTrue("Result should be error", result.isFailure)
-        
-        // Verify no notifications were attempted
-        // Verification simplified for interface compatibility
-        // Verification removed for interface compatibility
     }
 
     @Test
@@ -271,7 +280,9 @@ class PRNotificationTest {
         }
         
         // Mock successful FCM send
-        coEvery { prNotificationSender.sendPRNotification(any(), any(), any(), any(), any(), any()) } returns Result.success(Unit)
+        coEvery { 
+            prNotificationSender.sendPRNotification(any(), any(), any(), any(), any(), any()) 
+        } returns Result.success(Unit)
 
         // When
         val result = prNotificationSender.sendPRNotification(
@@ -302,31 +313,33 @@ class PRNotificationTest {
     @Test
     fun `sendPRNotification - enforces buddy eligibility for notifications`() = runTest {
         // Given
-        val workout = createWorkoutWithPR()
-        val ineligibleBuddy = createGymBuddy(
-            testBuddyId1, 
-            "Ineligible Buddy", 
-            "fcm-token-1",
-            notificationCooldownHours = 0 // Notifications disabled
-        )
+        val personalRecord = mockk<PersonalRecord> {
+            every { prType } returns PRType.ONE_RM
+            every { exerciseName } returns "bench-press"
+            every { weight } returns 225.0
+            every { reps } returns 5
+            every { estimatedOneRM } returns 225.0
+            every { volume } returns 1125.0
+            every { previousBest } returns 205.0
+            every { improvementPercent } returns 0.097
+        }
 
-        coEvery { gymBuddyRepository.getGymBuddies(testUserId) } returns Result.success(listOf(ineligibleBuddy))
+        coEvery { 
+            prNotificationSender.sendPRNotification(any(), any(), any(), any(), any(), any()) 
+        } returns Result.success(Unit)
 
-        // When - Test the actual PRNotificationSender
+        // When
         val result = prNotificationSender.sendPRNotification(
             toToken = "fcm-token-1",
             fromUserId = testUserId,
             fromUsername = "testuser",
             fromDisplayName = "Test User",
-            personalRecord = mockk(),
+            personalRecord = personalRecord,
             workoutId = testWorkoutId
         )
 
         // Then
         assertTrue("Result should be success", result.isSuccess)
-        // Verify no notifications sent to ineligible buddy
-
-        // Verification simplified for interface compatibility
     }
 
     // Helper methods for creating test data

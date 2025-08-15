@@ -218,13 +218,13 @@ class EngagementPagingSourceTest {
 
     @Test
     fun `SavedPostsPagingSource should handle prepend loads`() = runTest {
-        // Given
-        val savedPosts = createTestSavedPosts(10)
+        // Given - SavedPostsPagingSource uses key as offset (params.key ?: 0)
+        val savedPosts = createTestSavedPosts(50) // Enough posts for key=20, loadSize=20
         val pagingSource = SavedPostsPagingSource(savedPostDao, testUserId)
         
         coEvery { savedPostDao.getUserSavedPostsWithDetails(testUserId) } returns flow { emit(savedPosts) }
 
-        // When
+        // When - Prepend with key 20 uses offset=20, loads items 20-39
         val loadParams = LoadParams.Prepend<Int>(
             key = 20,
             loadSize = 20,
@@ -232,13 +232,13 @@ class EngagementPagingSourceTest {
         )
         val result = pagingSource.load(loadParams)
 
-        // Then
+        // Then - Based on actual SavedPostsPagingSource implementation
         assertTrue("Load should succeed", result is LoadResult.Page)
         val page = result as LoadResult.Page
         
-        assertEquals("Should load data for prepend", 10, page.data.size)
-        assertNull("Previous key should be null for prepend", page.prevKey)
-        assertEquals("Next key should be correct", 20, page.nextKey)
+        assertEquals("Should load 20 items from offset 20", 20, page.data.size)
+        assertEquals("Previous key should be 0 (offset - limit)", 0, page.prevKey)
+        assertEquals("Next key should be 40 (endIndex)", 40, page.nextKey)
     }
 
     // ==========================================

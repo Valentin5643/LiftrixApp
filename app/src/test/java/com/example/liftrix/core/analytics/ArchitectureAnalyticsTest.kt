@@ -8,6 +8,9 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.CoroutineScope
 import org.junit.Before
 import org.junit.Test
 
@@ -21,11 +24,13 @@ class ArchitectureAnalyticsTest {
 
     private lateinit var analyticsService: AnalyticsService
     private lateinit var architectureAnalytics: ArchitectureAnalytics
+    private lateinit var testScope: TestScope
 
     @Before
     fun setup() {
         analyticsService = mockk(relaxed = true)
-        architectureAnalytics = ArchitectureAnalytics(analyticsService)
+        testScope = TestScope(UnconfinedTestDispatcher())
+        architectureAnalytics = ArchitectureAnalytics(analyticsService, testScope)
     }
 
     @Test

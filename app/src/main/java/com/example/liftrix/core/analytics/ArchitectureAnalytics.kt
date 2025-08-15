@@ -36,10 +36,9 @@ import javax.inject.Singleton
  */
 @Singleton
 class ArchitectureAnalytics @Inject constructor(
-    private val analyticsService: AnalyticsService
+    private val analyticsService: AnalyticsService,
+    private val coroutineScope: CoroutineScope = CoroutineScope(Dispatchers.IO)
 ) {
-    
-    private val coroutineScope = CoroutineScope(Dispatchers.IO)
     
     companion object {
         // Architecture analytics event names

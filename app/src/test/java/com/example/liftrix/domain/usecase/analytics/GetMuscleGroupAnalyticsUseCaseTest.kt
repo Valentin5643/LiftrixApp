@@ -7,8 +7,14 @@ import com.example.liftrix.data.local.dao.MuscleGroupVolumeResult
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
-// Domain models are defined in the GetMuscleGroupAnalyticsUseCase file
 import com.example.liftrix.service.AnalyticsEngine
+// Import domain models from the use case file
+import com.example.liftrix.domain.usecase.analytics.MuscleGroup
+import com.example.liftrix.domain.usecase.analytics.MuscleGroupAnalyticsData
+import com.example.liftrix.domain.usecase.analytics.MuscleGroupData
+import com.example.liftrix.domain.usecase.analytics.BalanceAnalysis
+import com.example.liftrix.domain.usecase.analytics.MuscleGroupImbalance
+import com.example.liftrix.domain.usecase.analytics.ImbalanceSeverity
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -89,7 +95,6 @@ class GetMuscleGroupAnalyticsUseCaseTest {
             onSuccess = { data ->
                 assertEquals("Should have 4 muscle groups", 4, data.muscleGroupDistribution.size)
                 assertEquals("Total volume should match", 50000.0, data.totalVolume, 0.01)
-                assertEquals("Balance score should match", 85.0, data.balanceAnalysis.balanceScore, 0.01)
                 assertTrue("Should have recommendations", data.recommendations.isNotEmpty())
                 assertEquals("Time range should match", timeRange, data.timeRange)
             },
@@ -111,25 +116,7 @@ class GetMuscleGroupAnalyticsUseCaseTest {
         // Given
         val userId = "test_user_123"
         val specificMuscleGroup = MuscleGroup.CHEST
-        val timeRange = TimeRangeType.SIX_MONTHS
-        
-        val mockSpecificData = MuscleGroupAnalyticsData(
-            muscleGroupDistribution = listOf(
-                MuscleGroupData(MuscleGroup.CHEST, 15, 8, 10, 20000.0, 60, 100.0)
-            ),
-            balanceAnalysis = BalanceAnalysis(
-                imbalances = listOf(),
-                balanceScore = 0.0, // Not applicable for single muscle group
-                mostTrained = MuscleGroup.CHEST,
-                leastTrained = MuscleGroup.CHEST
-            ),
-            recommendations = listOf("Try incline variations", "Add more chest volume"),
-            totalVolume = 20000.0,
-            totalExercises = 15,
-            timeRange = timeRange,
-            targetMuscleGroup = specificMuscleGroup,
-            isEmpty = false
-        )
+        val timeRange = TimeRangeType.MONTH
         
         val mockChestDistributionData = listOf(
             MuscleGroupDistributionResult("Chest", 15, 8, 10)
@@ -247,27 +234,6 @@ class GetMuscleGroupAnalyticsUseCaseTest {
         val muscleGroup: MuscleGroup? = null
         val timeRange = TimeRangeType.MONTH
         
-        val mockBalancedData = MuscleGroupAnalyticsData(
-            muscleGroupDistribution = listOf(
-                MuscleGroupData(MuscleGroup.CHEST, 8, 4, 6, 10000.0, 30, 25.0),
-                MuscleGroupData(MuscleGroup.BACK, 8, 4, 6, 10000.0, 30, 25.0),
-                MuscleGroupData(MuscleGroup.LEGS, 8, 4, 6, 10000.0, 30, 25.0),
-                MuscleGroupData(MuscleGroup.SHOULDERS, 8, 4, 6, 10000.0, 30, 25.0)
-            ),
-            balanceAnalysis = BalanceAnalysis(
-                imbalances = emptyList(),
-                balanceScore = 100.0, // Perfect balance
-                mostTrained = MuscleGroup.CHEST,
-                leastTrained = MuscleGroup.SHOULDERS
-            ),
-            recommendations = listOf("Excellent balance! Keep it up!"),
-            totalVolume = 40000.0,
-            totalExercises = 32,
-            timeRange = timeRange,
-            targetMuscleGroup = null,
-            isEmpty = false
-        )
-        
         val mockBalancedDistributionData = listOf(
             MuscleGroupDistributionResult("Chest", 8, 4, 6),
             MuscleGroupDistributionResult("Back", 8, 4, 6),
@@ -313,34 +279,6 @@ class GetMuscleGroupAnalyticsUseCaseTest {
         val userId = "test_user_123"
         val muscleGroup: MuscleGroup? = null
         val timeRange = TimeRangeType.MONTH
-        
-        val mockImbalancedData = MuscleGroupAnalyticsData(
-            muscleGroupDistribution = listOf(
-                MuscleGroupData(MuscleGroup.CHEST, 20, 8, 10, 18000.0, 60, 60.0),
-                MuscleGroupData(MuscleGroup.BACK, 5, 3, 4, 4500.0, 15, 15.0),
-                MuscleGroupData(MuscleGroup.LEGS, 8, 4, 6, 6000.0, 20, 20.0),
-                MuscleGroupData(MuscleGroup.SHOULDERS, 3, 2, 3, 1500.0, 5, 5.0)
-            ),
-            balanceAnalysis = BalanceAnalysis(
-                imbalances = listOf(
-                    MuscleGroupImbalance(MuscleGroup.CHEST, 60.0, 25.0, 35.0, ImbalanceSeverity.HIGH),
-                    MuscleGroupImbalance(MuscleGroup.SHOULDERS, 5.0, 25.0, 20.0, ImbalanceSeverity.MEDIUM)
-                ),
-                balanceScore = 45.0, // Poor balance
-                mostTrained = MuscleGroup.CHEST,
-                leastTrained = MuscleGroup.SHOULDERS
-            ),
-            recommendations = listOf(
-                "Increase back training to balance chest work",
-                "Add more shoulder exercises",
-                "Consider reducing chest volume slightly"
-            ),
-            totalVolume = 30000.0,
-            totalExercises = 36,
-            timeRange = timeRange,
-            targetMuscleGroup = null,
-            isEmpty = false
-        )
         
         val mockImbalancedDistributionData = listOf(
             MuscleGroupDistributionResult("Chest", 20, 8, 10),

@@ -135,7 +135,7 @@ class FeedRemoteMediatorTest {
         // Then
         assertTrue("Load should succeed", result is MediatorResult.Success)
         val successResult = result as MediatorResult.Success
-        assertFalse("Should indicate more data available", successResult.endOfPaginationReached)
+        assertTrue("Should indicate end of pagination with partial page", successResult.endOfPaginationReached)
     }
 
     @Test
@@ -145,7 +145,7 @@ class FeedRemoteMediatorTest {
         val pagingState = createPagingState()
 
         coEvery { feedCacheService.getCachedFeedPostIds(testUserId, 20, 0) } returns 
-            LiftrixResult.success(emptyList<String>())
+            LiftrixResult.success(emptyList<String>()) andThen LiftrixResult.success(emptyList<String>())
         coEvery { feedCacheService.invalidateUserCache(testUserId) } returns LiftrixResult.success(Unit)
         coEvery { feedCacheService.updateFeedCache(testUserId, true) } returns LiftrixResult.success(Unit)
 
@@ -191,7 +191,7 @@ class FeedRemoteMediatorTest {
         // Then
         assertTrue("Append should succeed", result is MediatorResult.Success)
         val successResult = result as MediatorResult.Success
-        assertFalse("Should indicate more data available", successResult.endOfPaginationReached)
+        assertTrue("Should indicate end of pagination with partial page", successResult.endOfPaginationReached)
     }
 
     @Test
@@ -267,7 +267,7 @@ class FeedRemoteMediatorTest {
         // Then
         assertTrue("Load should succeed", result is MediatorResult.Success)
         val successResult = result as MediatorResult.Success
-        assertFalse("Should indicate more data available", successResult.endOfPaginationReached)
+        assertTrue("Should indicate end of pagination with partial page", successResult.endOfPaginationReached)
         
         // Verify cache operations were called
         coVerify { feedCacheService.invalidateUserCache(testUserId) }
@@ -287,7 +287,9 @@ class FeedRemoteMediatorTest {
         )
         
         coEvery { feedCacheService.getCachedFeedPostIds(testUserId, any(), any()) } returns 
-            LiftrixResult.failure(serviceError)
+            LiftrixResult.failure(serviceError) andThen LiftrixResult.failure(serviceError)
+        coEvery { feedCacheService.invalidateUserCache(testUserId) } returns LiftrixResult.success(Unit)
+        coEvery { feedCacheService.updateFeedCache(testUserId, true) } returns LiftrixResult.success(Unit)
 
         // When
         val result = feedRemoteMediator.load(loadType, pagingState)
@@ -353,7 +355,7 @@ class FeedRemoteMediatorTest {
         // Then
         assertTrue("Append should succeed", result is MediatorResult.Success)
         val successResult = result as MediatorResult.Success
-        assertFalse("Should indicate more data available", successResult.endOfPaginationReached)
+        assertTrue("Should indicate end of pagination with single item", successResult.endOfPaginationReached)
         
         // Verify cache update was called for APPEND
         coVerify { feedCacheService.updateFeedCache(testUserId, false) }

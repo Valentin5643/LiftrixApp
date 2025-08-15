@@ -15,6 +15,7 @@ import com.example.liftrix.data.repository.WidgetPreferencesRepositoryImpl
 import com.example.liftrix.data.repository.UserRepositoryImpl
 import com.example.liftrix.data.repository.UserSearchRepositoryImpl
 import com.example.liftrix.data.repository.AchievementRepositoryImpl
+import com.example.liftrix.data.repository.PRNotificationRepositoryImpl
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.CustomExerciseRepository
 import com.example.liftrix.domain.repository.ProfileRepository
@@ -30,6 +31,7 @@ import com.example.liftrix.domain.repository.WidgetPreferencesRepository
 import com.example.liftrix.domain.repository.UserRepository
 import com.example.liftrix.domain.repository.UserSearchRepository
 import com.example.liftrix.domain.repository.AchievementRepository
+import com.example.liftrix.domain.repository.PRNotificationRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -135,5 +137,11 @@ abstract class RepositoryModule {
     abstract fun bindAchievementRepository(
         achievementRepositoryImpl: AchievementRepositoryImpl
     ): AchievementRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindPRNotificationRepository(
+        prNotificationRepositoryImpl: PRNotificationRepositoryImpl
+    ): PRNotificationRepository
 
 } 
