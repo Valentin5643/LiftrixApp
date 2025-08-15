@@ -211,6 +211,8 @@ class LegacyNavigationWrapper @Inject constructor(
                 is LiftrixRoute.ShareWorkout -> "Replace with: navController.navigate(LiftrixRoute.ShareWorkout(workoutId))"
                 is LiftrixRoute.ProgressComparison -> "Replace with: navController.navigate(LiftrixRoute.ProgressComparison(comparisonId, shareMode))"
                 is LiftrixRoute.SocialFeed -> "Replace with: navController.navigate(LiftrixRoute.SocialFeed(initialTab))"
+                is LiftrixRoute.PostCreation -> "Replace with: navController.navigate(LiftrixRoute.PostCreation(workoutId))"
+                is LiftrixRoute.PostComments -> "Replace with: navController.navigate(LiftrixRoute.PostComments(postId))"
                 LiftrixRoute.NotificationSettings -> "Replace with: navController.navigate(LiftrixRoute.NotificationSettings)"
                 LiftrixRoute.GymBuddy -> "Replace with: navController.navigate(LiftrixRoute.GymBuddy)"
             }

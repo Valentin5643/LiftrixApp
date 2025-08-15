@@ -237,7 +237,7 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
     private suspend fun completeSessionDirectly() {
         // Get workout ID before completion
         val currentSession = sessionManager.currentSession.value
-        val workoutId = currentSession?.templateId ?: currentSession?.sessionId?.value ?: "unknown"
+        val workoutId = currentSession?.templateId ?: currentSession?.id?.value ?: "unknown"
         
         val success = sessionManager.completeSession()
         if (success) {
@@ -735,7 +735,7 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                     val updatedSession = sessionManager.currentSession.value
                     if (updatedSession?.sessionStatus == UnifiedWorkoutSession.SessionStatus.COMPLETED) {
                         Timber.i("🔥 RETRY-SAVE: Session save retry successful")
-                        val workoutId = updatedSession.templateId ?: updatedSession.sessionId.value
+                        val workoutId = updatedSession.templateId ?: updatedSession.id.value
                         _uiState.value = UnifiedActiveWorkoutUiState.WorkoutCompleted(workoutId)
                         delay(1000)
                         _uiState.value = UnifiedActiveWorkoutUiState.NoSession
@@ -888,7 +888,7 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
         viewModelScope.launch {
             // Get workout ID from current session
             val currentSession = sessionManager.currentSession.value
-            val workoutId = currentSession?.templateId ?: currentSession?.sessionId?.value ?: "unknown"
+            val workoutId = currentSession?.templateId ?: currentSession?.id?.value ?: "unknown"
             
             // Show completion state - navigation will be triggered by the screen
             _uiState.value = UnifiedActiveWorkoutUiState.WorkoutCompleted(workoutId)
