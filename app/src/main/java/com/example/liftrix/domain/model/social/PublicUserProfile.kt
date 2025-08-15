@@ -23,6 +23,7 @@ data class PublicUserProfile(
     val age: Int?,
     val location: String?,
     val fitnessLevel: FitnessLevel?,
+    val fitnessGoals: List<String>? = emptyList(),
     
     // Social stats
     val followersCount: Int,

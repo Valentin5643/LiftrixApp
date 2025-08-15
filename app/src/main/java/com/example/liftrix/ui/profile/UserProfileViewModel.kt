@@ -12,6 +12,7 @@ import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.domain.usecase.common.ErrorHandler
+import com.example.liftrix.domain.model.error.LiftrixError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -100,20 +101,31 @@ class UserProfileViewModel @Inject constructor(
                     Timber.i("Profile loaded successfully for user: $userId")
                 } else {
                     val error = result.exceptionOrNull()
+                    val liftrixError = LiftrixError.BusinessLogicError(
+                        code = "PROFILE_LOAD_FAILED",
+                        errorMessage = "Failed to load profile: ${error?.message ?: "Unknown error"}",
+                        analyticsContext = mapOf(
+                            "operation" to "LOAD_USER_PROFILE",
+                            "user_id" to userId
+                        )
+                    )
                     updateState { 
                         it.copy(
                             isLoading = false,
-                            error = "Failed to load profile: ${error?.message ?: "Unknown error"}"
+                            error = liftrixError
                         )
                     }
                     Timber.e(error, "Failed to load profile for user: $userId")
                 }
                 
             } catch (e: Exception) {
+                val liftrixError = LiftrixError.NetworkError(
+                    errorMessage = "Unexpected error loading profile: ${e.message}"
+                )
                 updateState { 
                     it.copy(
                         isLoading = false,
-                        error = "Unexpected error loading profile: ${e.message}"
+                        error = liftrixError
                     )
                 }
                 Timber.e(e, "Unexpected error loading profile for user: $userId")
@@ -169,20 +181,32 @@ class UserProfileViewModel @Inject constructor(
                     Timber.i("Follow action successful: $action -> $newStatus")
                 } else {
                     val error = result.exceptionOrNull()
+                    val liftrixError = LiftrixError.BusinessLogicError(
+                        code = "FOLLOW_ACTION_FAILED",
+                        errorMessage = "Failed to ${action.name.lowercase()}: ${error?.message ?: "Unknown error"}",
+                        analyticsContext = mapOf(
+                            "operation" to "FOLLOW_ACTION",
+                            "action" to action.name,
+                            "target_user_id" to profile.userId
+                        )
+                    )
                     updateState { 
                         it.copy(
                             isFollowActionLoading = false,
-                            error = "Failed to ${action.name.lowercase()}: ${error?.message ?: "Unknown error"}"
+                            error = liftrixError
                         )
                     }
                     Timber.e(error, "Follow action failed: $action")
                 }
                 
             } catch (e: Exception) {
+                val liftrixError = LiftrixError.NetworkError(
+                    errorMessage = "Unexpected error during follow action: ${e.message}"
+                )
                 updateState { 
                     it.copy(
                         isFollowActionLoading = false,
-                        error = "Unexpected error during follow action: ${e.message}"
+                        error = liftrixError
                     )
                 }
                 Timber.e(e, "Unexpected error during follow action")
@@ -217,20 +241,31 @@ class UserProfileViewModel @Inject constructor(
                     Timber.i("User blocked successfully: ${profile.userId}")
                 } else {
                     val error = result.exceptionOrNull()
+                    val liftrixError = LiftrixError.BusinessLogicError(
+                        code = "BLOCK_USER_FAILED",
+                        errorMessage = "Failed to block user: ${error?.message ?: "Unknown error"}",
+                        analyticsContext = mapOf(
+                            "operation" to "BLOCK_USER",
+                            "target_user_id" to profile.userId
+                        )
+                    )
                     updateState { 
                         it.copy(
                             isFollowActionLoading = false,
-                            error = "Failed to block user: ${error?.message ?: "Unknown error"}"
+                            error = liftrixError
                         )
                     }
                     Timber.e(error, "Failed to block user: ${profile.userId}")
                 }
                 
             } catch (e: Exception) {
+                val liftrixError = LiftrixError.NetworkError(
+                    errorMessage = "Unexpected error blocking user: ${e.message}"
+                )
                 updateState { 
                     it.copy(
                         isFollowActionLoading = false,
-                        error = "Unexpected error blocking user: ${e.message}"
+                        error = liftrixError
                     )
                 }
                 Timber.e(e, "Unexpected error blocking user")
@@ -250,8 +285,46 @@ class UserProfileViewModel @Inject constructor(
      * Share profile functionality
      */
     fun shareProfile(profile: PublicUserProfile) {
-        // TODO: Implement profile sharing
-        Timber.d("Sharing profile: ${profile.userId}")
+        viewModelScope.launch {
+            try {
+                // Generate share URL for the profile
+                val shareUrl = "https://liftrix.app/profile/${profile.userId}"
+                
+                // Create shareable content
+                val shareMessage = buildString {
+                    append("Check out ${profile.displayName ?: profile.username}'s fitness profile on Liftrix!\n\n")
+                    profile.bio?.let { append("$it\n\n") }
+                    append("💪 ${profile.totalWorkouts} workouts completed\n")
+                    append("🔥 ${profile.currentStreak} day streak\n")
+                    if (profile.followersCount > 0) {
+                        append("👥 ${profile.followersCount} followers\n")
+                    }
+                    append("\n$shareUrl")
+                }
+                
+                // Store the share URL in state for QR code generation if needed
+                updateState { 
+                    it.copy(
+                        profileShareUrl = shareUrl,
+                        shareMessage = shareMessage
+                    )
+                }
+                
+                Timber.i("Profile share prepared for user: ${profile.userId}")
+                
+                // Trigger platform share (could be handled by UI layer)
+                handleEvent(UserProfileEvent.ShareProfile(shareUrl, shareMessage))
+                
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to share profile")
+                val liftrixError = LiftrixError.NetworkError(
+                    errorMessage = "Failed to share profile: ${e.message}"
+                )
+                updateState { 
+                    it.copy(error = liftrixError)
+                }
+            }
+        }
     }
     
     /**
@@ -284,7 +357,11 @@ class UserProfileViewModel @Inject constructor(
             is UserProfileEvent.ToggleFollow -> toggleFollow()
             is UserProfileEvent.BlockUser -> blockUser()
             is UserProfileEvent.SelectTab -> selectTab(event.tab)
-            is UserProfileEvent.ShareProfile -> shareProfile(event.profile)
+            is UserProfileEvent.ShareProfile -> {
+                // Share functionality is already handled within shareProfile method
+                // This event could trigger platform-specific sharing UI
+                Timber.d("Profile share event received: ${event.shareUrl}")
+            }
             is UserProfileEvent.ShowMoreOptions -> showMoreOptions()
             is UserProfileEvent.HideMoreOptions -> hideMoreOptions()
             is UserProfileEvent.RetryLastOperation -> retryLastOperation()
@@ -319,8 +396,10 @@ data class UserProfileUiState(
     val selectedTab: ProfileTab = ProfileTab.WORKOUTS,
     val isLoading: Boolean = false,
     val isFollowActionLoading: Boolean = false,
-    val error: String? = null,
-    val showMoreOptions: Boolean = false
+    val error: LiftrixError? = null,
+    val showMoreOptions: Boolean = false,
+    val profileShareUrl: String? = null,
+    val shareMessage: String? = null
 )
 
 /**
@@ -331,7 +410,7 @@ sealed class UserProfileEvent : ViewModelEvent {
     data object ToggleFollow : UserProfileEvent()
     data object BlockUser : UserProfileEvent()
     data class SelectTab(val tab: ProfileTab) : UserProfileEvent()
-    data class ShareProfile(val profile: PublicUserProfile) : UserProfileEvent()
+    data class ShareProfile(val shareUrl: String, val shareMessage: String) : UserProfileEvent()
     data object ShowMoreOptions : UserProfileEvent()
     data object HideMoreOptions : UserProfileEvent()
     data object RetryLastOperation : UserProfileEvent()

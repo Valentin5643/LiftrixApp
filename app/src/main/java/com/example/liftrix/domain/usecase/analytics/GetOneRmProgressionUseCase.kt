@@ -68,9 +68,15 @@ class GetOneRmProgressionUseCase @Inject constructor(
     ): LiftrixResult<OneRmProgressionData> = withContext(Dispatchers.IO) {
         return@withContext liftrixCatching(
             errorMapper = { throwable ->
-                LiftrixError.CalculationError(
+                LiftrixError.BusinessLogicError(
+                    code = "ONE_RM_PROGRESSION_FAILED", 
                     errorMessage = "Failed to retrieve 1RM progression for user $userId, exercises ${exerciseIds?.size ?: "all"}, timeRange $timeRange: ${throwable.message}",
-                    operation = "getOneRmProgression"
+                    analyticsContext = mapOf(
+                        "operation" to "getOneRmProgression",
+                        "userId" to userId,
+                        "exerciseCount" to (exerciseIds?.size?.toString() ?: "ALL"),
+                        "timeRange" to timeRange.name
+                    )
                 )
             }
         ) {
@@ -88,24 +94,13 @@ class GetOneRmProgressionUseCase @Inject constructor(
             
             val (startDate, endDate) = calculateDateRange(timeRange)
             
-            // Get all exercises if none specified
-            val targetExercises = exerciseIds ?: getAllUserExercises(userId, startDate, endDate)
-            
-            if (targetExercises.isEmpty()) {
-                return@liftrixCatching OneRmProgressionData(
-                    exerciseProgressions = emptyList(),
-                    overallProgression = emptyList(),
-                    timeRange = timeRange,
-                    isEmpty = true
-                )
-            }
-            
-            // If no specific exercises requested, get all exercises data
-            val oneRmData = if (targetExercises.isEmpty()) {
-                // Get all 1RM data without exercise filter
+            // Get 1RM data based on whether specific exercises were requested
+            val oneRmData = if (exerciseIds.isNullOrEmpty()) {
+                // Get all 1RM data for user when no specific exercises requested
                 exerciseSetDao.getAllOneRmData(userId, startDate, endDate)
             } else {
-                exerciseSetDao.getOneRmDataForExercises(userId, targetExercises, startDate, endDate)
+                // Get 1RM data for specific exercises
+                exerciseSetDao.getOneRmDataForExercises(userId, exerciseIds, startDate, endDate)
             }
             
             val exerciseProgressions = buildExerciseProgressions(oneRmData, includeEstimated)
@@ -134,17 +129,6 @@ class GetOneRmProgressionUseCase @Inject constructor(
         return Pair(startDate.toString(), endDate.toString())
     }
     
-    /**
-     * Gets all exercises used by user in date range if none specified.
-     */
-    private suspend fun getAllUserExercises(
-        userId: String,
-        startDate: String,
-        endDate: String
-    ): List<String> {
-        val oneRmData = exerciseSetDao.getOneRmDataForExercises(userId, emptyList(), startDate, endDate)
-        return oneRmData.map { it.exercise_library_id }.distinct()
-    }
     
     /**
      * Builds individual exercise progressions from raw 1RM data.

@@ -316,12 +316,18 @@ class FolderSystemFailingTestSuite {
         }
         
         // Property access errors on created objects
-        multipleUserIds.forEach { userId ->
-            val folderName = FolderName("Stress Test $userId")
+        multipleUserIds.forEachIndexed { index, userId ->
+            val folderName = FolderName("Stress Test ${userId.value}")
             val nameValue = folderName.value  // FIXED: Use correct property name
             //                         ^^^^^^^^^^^^
             
-            assertEquals("expected", nameValue)
+            val expectedValue = when (index) {
+                0 -> "Stress Test stress1"
+                1 -> "Stress Test stress2"
+                2 -> "Stress Test stress3"
+                else -> "Stress Test ${userId.value}"
+            }
+            assertEquals(expectedValue, nameValue)
         }
     }
 }

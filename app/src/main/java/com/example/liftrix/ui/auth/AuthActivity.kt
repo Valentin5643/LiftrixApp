@@ -226,11 +226,12 @@ private fun AuthFlowScreen(
     var showAuthScreen by remember { mutableStateOf(false) }
     var showOnboarding by remember { mutableStateOf(false) }
     var isSignUpMode by remember { mutableStateOf(false) }
+    var authenticatedUserId by remember { mutableStateOf<String?>(null) }
     
     when {
         showOnboarding -> {
             com.example.liftrix.ui.onboarding.navigation.OnboardingNavigation(
-                userId = "temp-user-id", // TODO: Get actual user ID after auth
+                userId = authenticatedUserId ?: "guest-user", // Use authenticated ID if available, otherwise guest
                 onComplete = {
                     showOnboarding = false
                     isSignUpMode = true

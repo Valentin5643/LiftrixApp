@@ -78,7 +78,7 @@ class QRCodeServiceImpl @Inject constructor() : QRCodeService {
                 )
             } catch (e: WriterException) {
                 throw LiftrixError.ValidationError(
-                    field = "qr_code_data",
+                    field = "data",
                     violations = listOf("Failed to encode QR code data: ${e.message}")
                 )
             }
@@ -136,9 +136,9 @@ class QRCodeServiceImpl @Inject constructor() : QRCodeService {
             // Validate decoded data
             if (!validateQRCodeData(decodedText)) {
                 throw LiftrixError.ValidationError(
-                field = "qrCodeData",
-                violations = listOf("Invalid QR code data format")
-            )
+                    field = "qr_code_bitmap",
+                    violations = listOf("Invalid QR code data format")
+                )
             }
             
             decodedText

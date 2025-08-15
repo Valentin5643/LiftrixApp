@@ -535,7 +535,7 @@ private fun ChartContainer(
     onRefresh: () -> Unit,
     content: @Composable () -> Unit
 ) {
-    Card(
+    Card( // Specialized chart container card
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
@@ -744,7 +744,7 @@ private fun ErrorStateContent(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        Card(
+        Card( // Specialized error display card
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
@@ -1011,7 +1011,7 @@ private fun ResponsiveWidgetsSection(
             )
         } else {
             // Empty state with customization prompt
-            Card(
+            Card( // Specialized empty state card
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -1224,7 +1224,7 @@ private fun CalorieInsightsSummary(
     calorieSummary: CalorieSummary,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    Card( // Specialized calorie insights card
         modifier = modifier,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -1403,7 +1403,7 @@ private fun AnalyticsOnboardingCard(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    Card( // Specialized onboarding card
         modifier = modifier,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer
@@ -1451,7 +1451,7 @@ private fun AnalyticsMigrationNotificationCard(
         animationProgress.animateTo(1f, animationSpec = tween(300))
     }
     
-    Card(
+    Card( // Specialized migration notification card
         modifier = modifier
             .graphicsLayer(
                 alpha = animationProgress.value,
@@ -1510,7 +1510,7 @@ private fun DebugPanel(
     onWidgetMigrate: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Card(
+    Card( // Specialized debug panel card
         modifier = modifier
             .border(2.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(12.dp)),
         colors = CardDefaults.cardColors(

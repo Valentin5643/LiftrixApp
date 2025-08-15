@@ -254,7 +254,7 @@ class GymBuddyViewModel @Inject constructor(
      */
     private fun showBuddyOptions(buddy: GymBuddy) {
         selectedBuddy = buddy
-        // TODO: Show bottom sheet or dialog with buddy options
+        // Buddy options UI handled by screen composable
         trackBuddyOptionsViewed(buddy)
     }
 

@@ -5,7 +5,6 @@ import com.example.liftrix.domain.model.MediaItem
 import com.example.liftrix.domain.model.MediaProcessingOptions
 import com.example.liftrix.domain.model.MediaType
 import com.example.liftrix.domain.model.ProcessedMedia
-import com.example.liftrix.domain.model.common.LiftrixResult
 
 /**
  * Service interface for comprehensive media processing pipeline.
@@ -26,7 +25,7 @@ interface MediaProcessingService {
     suspend fun processPhoto(
         uri: Uri,
         options: MediaProcessingOptions = MediaProcessingOptions()
-    ): LiftrixResult<ProcessedMedia>
+    ): Result<ProcessedMedia>
     
     /**
      * Processes a video with compression, thumbnail extraction, and optimization.
@@ -38,7 +37,7 @@ interface MediaProcessingService {
     suspend fun processVideo(
         uri: Uri,
         options: MediaProcessingOptions = MediaProcessingOptions()
-    ): LiftrixResult<ProcessedMedia>
+    ): Result<ProcessedMedia>
     
     /**
      * Generates a blurhash placeholder for progressive image loading.
@@ -46,7 +45,7 @@ interface MediaProcessingService {
      * @param imageBytes Processed image data
      * @return Blurhash string for placeholder
      */
-    suspend fun generateBlurhash(imageBytes: ByteArray): LiftrixResult<String>
+    suspend fun generateBlurhash(imageBytes: ByteArray): Result<String>
     
     /**
      * Validates if the media URI is supported and within size limits.
@@ -58,7 +57,7 @@ interface MediaProcessingService {
     suspend fun validateMedia(
         uri: Uri,
         mediaType: MediaType
-    ): LiftrixResult<MediaValidationResult>
+    ): Result<MediaValidationResult>
     
     /**
      * Estimates processing time and output size for given media.
@@ -70,7 +69,7 @@ interface MediaProcessingService {
     suspend fun estimateProcessing(
         uri: Uri,
         mediaType: MediaType
-    ): LiftrixResult<ProcessingEstimate>
+    ): Result<ProcessingEstimate>
 }
 
 /**

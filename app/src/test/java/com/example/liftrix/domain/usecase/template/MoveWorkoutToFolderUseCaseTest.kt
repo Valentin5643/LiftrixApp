@@ -305,12 +305,15 @@ class MoveWorkoutToFolderUseCaseTest {
         
         // Assert
         assertTrue(result.isFailure)
-        result.onFailure { error ->
-            // Should fail with "folder does not exist" before any user validation
-            assertTrue(error.message?.contains("Target folder does not exist") == true)
-            // Should not contain user validation error message
-            assertTrue(error.message?.contains("different user") == false)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                // Should fail with "folder does not exist" before any user validation
+                assertTrue(error.toString().contains("Target folder does not exist"))
+                // Should not contain user validation error message
+                assertTrue(!error.toString().contains("different user"))
+            }
+        )
     }
     
     @Test

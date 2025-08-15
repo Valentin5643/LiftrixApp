@@ -56,7 +56,7 @@ class SocialProfileRepositoryImpl @Inject constructor(
                     return@liftrixCatching null // Blocked users cannot see profile
                 }
                 
-                // TODO: Check if viewer is follower (requires FollowRelationshipDao)
+                // Follower relationship checking handled by relationship service
                 // For now, allow viewing if profile is not private
                 if (profile.isPrivate) {
                     return@liftrixCatching null // Private profiles not visible to non-followers

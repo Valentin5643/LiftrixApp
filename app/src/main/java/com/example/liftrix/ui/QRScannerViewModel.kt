@@ -10,6 +10,7 @@ import com.example.liftrix.domain.service.QRCodeService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -133,14 +134,10 @@ class QRScannerViewModel @Inject constructor(
                     return@launch
                 }
 
-                // TODO: Parse QR payload and validate gym buddy data
-                // For now, simulate processing
-                kotlinx.coroutines.delay(1000) // Simulate processing time
-
-                // Mock validation for gym buddy QR codes
-                if (qrCode.contains("liftrix://gym-buddy/") || 
-                    qrCode.startsWith("eyJ") || // Base64 encoded JSON
-                    qrCode.matches(Regex("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"))) {
+                // Parse QR payload and validate gym buddy data
+                val qrPayload = parseGymBuddyQRPayload(qrCode)
+                
+                if (qrPayload != null && validateGymBuddyData(qrPayload)) {
                     
                     // Valid gym buddy QR code - set scanned code for processing by parent
                     updateState { 
@@ -210,6 +207,82 @@ class QRScannerViewModel @Inject constructor(
      */
     private fun updateState(transform: QRScannerUiState.() -> QRScannerUiState) {
         _uiState.value = _uiState.value.transform()
+    }
+    
+    /**
+     * Parses QR payload to extract gym buddy data
+     */
+    private fun parseGymBuddyQRPayload(qrCode: String): GymBuddyQRPayload? {
+        return try {
+            when {
+                qrCode.startsWith("liftrix://gym-buddy/") -> {
+                    // Parse URL format: liftrix://gym-buddy/{userId}?token={token}&expires={timestamp}
+                    val uri = android.net.Uri.parse(qrCode)
+                    val userId = uri.pathSegments.getOrNull(1)
+                    val token = uri.getQueryParameter("token")
+                    val expiresAt = uri.getQueryParameter("expires")?.toLongOrNull()
+                    
+                    if (userId != null && token != null && expiresAt != null) {
+                        GymBuddyQRPayload(
+                            userId = userId,
+                            token = token,
+                            expiresAt = expiresAt,
+                            format = "URL"
+                        )
+                    } else null
+                }
+                qrCode.startsWith("eyJ") -> {
+                    // Parse Base64 encoded JSON
+                    val decodedBytes = android.util.Base64.decode(qrCode, android.util.Base64.DEFAULT)
+                    val jsonString = String(decodedBytes, Charsets.UTF_8)
+                    val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                    json.decodeFromString<GymBuddyQRPayload>(jsonString)
+                }
+                qrCode.matches(Regex("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$")) -> {
+                    // Parse UUID format (legacy)
+                    GymBuddyQRPayload(
+                        userId = qrCode,
+                        token = "legacy",
+                        expiresAt = System.currentTimeMillis() + (5 * 60 * 1000), // 5 minutes
+                        format = "UUID"
+                    )
+                }
+                else -> null
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to parse QR payload: $qrCode")
+            null
+        }
+    }
+    
+    /**
+     * Validates gym buddy QR data including expiration and user ID format
+     */
+    private fun validateGymBuddyData(payload: GymBuddyQRPayload): Boolean {
+        try {
+            // Check expiration
+            if (System.currentTimeMillis() > payload.expiresAt) {
+                Timber.w("QR code expired: ${payload.expiresAt} < ${System.currentTimeMillis()}")
+                return false
+            }
+            
+            // Check user ID format
+            if (payload.userId.isBlank() || payload.userId == currentUserId) {
+                Timber.w("Invalid or self user ID: ${payload.userId}")
+                return false
+            }
+            
+            // Check token validity
+            if (payload.token.isBlank()) {
+                Timber.w("Invalid token in QR payload")
+                return false
+            }
+            
+            return true
+        } catch (e: Exception) {
+            Timber.e(e, "Error validating gym buddy data")
+            return false
+        }
     }
 
     // Analytics tracking methods
@@ -421,3 +494,14 @@ sealed class QRScannerEvent {
     object RetryScanning : QRScannerEvent()
     object ScannerClosed : QRScannerEvent()
 }
+
+/**
+ * Data class representing parsed gym buddy QR code payload
+ */
+@Serializable
+data class GymBuddyQRPayload(
+    val userId: String,
+    val token: String,
+    val expiresAt: Long,
+    val format: String = "JSON"
+)

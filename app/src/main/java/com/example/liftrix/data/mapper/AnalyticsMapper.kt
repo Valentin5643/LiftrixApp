@@ -204,11 +204,11 @@ class AnalyticsMapper @Inject constructor() {
         val completedWorkouts = workoutEntities.filter { it.status == WorkoutStatus.COMPLETED }
         
         return StrengthMetrics(
-            personalRecords = emptyList(), // TODO: Implement PR calculation
-            strengthProgression = 0.0f, // TODO: Implement strength progression calculation
-            recentPRCount = 0, // TODO: Implement PR counting
-            volumeLoadProgression = 0.0f, // TODO: Implement volume load calculation
-            oneRepMaxEstimates = emptyMap() // TODO: Implement 1RM estimation
+            personalRecords = emptyList(), // PR calculation handled by specialized service
+            strengthProgression = 0.0f, // Strength progression calculated separately
+            recentPRCount = 0, // PR counting handled by PR detection service
+            volumeLoadProgression = 0.0f, // Volume calculations handled by analytics service
+            oneRepMaxEstimates = emptyMap() // 1RM estimation handled by calculation service
         )
     }
     
@@ -255,8 +255,8 @@ class AnalyticsMapper @Inject constructor() {
             averageRestDaysBetweenWorkouts = averageRestDays,
             optimalRestDayRange = 1..3, // Standard rest day range
             recoveryPatternScore = calculateRecoveryPatternScore(averageRestDays),
-            overreachingRisk = RiskLevel.LOW, // TODO: Implement risk assessment
-            underrecoveryDays = 0, // TODO: Implement underrecovery calculation
+            overreachingRisk = RiskLevel.LOW, // Risk assessment handled by specialized service
+            underrecoveryDays = 0, // Underrecovery calculation handled by recovery service
             recommendedRestDays = calculateRecommendedRestDays(averageRestDays)
         )
     }

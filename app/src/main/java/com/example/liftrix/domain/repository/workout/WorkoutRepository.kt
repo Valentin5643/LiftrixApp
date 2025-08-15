@@ -12,6 +12,9 @@ import kotlinx.datetime.LocalDate
 // Type alias for ExercisePerformanceData from CalculateExerciseRankingUseCase
 typealias ExercisePerformanceData = com.example.liftrix.domain.usecase.analytics.ExercisePerformanceData
 
+// Type alias for WorkoutData from GetWorkoutFrequencyAnalyticsUseCase
+typealias WorkoutData = com.example.liftrix.domain.usecase.analytics.WorkoutData
+
 /**
  * Repository interface for core workout operations following single responsibility principle.
  * 
@@ -245,4 +248,18 @@ interface WorkoutRepository {
      * @return LiftrixResult with workout statistics
      */
     suspend fun getWorkoutStats(userId: String): LiftrixResult<WorkoutStats>
+    
+    /**
+     * Get workouts within a specific date range for a user.
+     * 
+     * @param userId The user ID for data scoping
+     * @param startDate Start date for the range (inclusive)
+     * @param endDate End date for the range (inclusive)
+     * @return List of simplified workout data for frequency calculations
+     */
+    suspend fun getWorkoutsInDateRange(
+        userId: String,
+        startDate: kotlinx.datetime.LocalDate,
+        endDate: kotlinx.datetime.LocalDate
+    ): List<WorkoutData>
 }

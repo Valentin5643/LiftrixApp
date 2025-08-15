@@ -174,26 +174,21 @@ class DeepLinkHandler @Inject constructor() {
     private fun handleProfileWithAction(userId: String, action: String, navController: NavController): Boolean {
         Timber.i("Navigating to profile: $userId with action: $action")
         
-        when (action) {
-            "follow" -> {
-                // Navigate to profile and trigger follow action
-                navController.navigateFromDeepLink(LiftrixRoute.PublicProfile(userId))
-                // TODO: Trigger follow action via shared event bus or parameter
-                return true
-            }
-            "message" -> {
-                // Navigate to profile for messaging
-                navController.navigateFromDeepLink(LiftrixRoute.PublicProfile(userId))
-                // TODO: Trigger message action
-                return true
-            }
-            else -> {
-                Timber.w("Unknown profile action: $action")
-                // Fallback to regular profile view
-                navController.navigateFromDeepLink(LiftrixRoute.PublicProfile(userId))
-                return true
-            }
-        }
+        // Navigate to profile with the specified action
+        navController.navigateFromDeepLink(
+            LiftrixRoute.PublicProfile(
+                userId = userId,
+                initialAction = when (action) {
+                    "follow", "message" -> action
+                    else -> {
+                        Timber.w("Unknown profile action: $action, ignoring")
+                        null
+                    }
+                }
+            )
+        )
+        
+        return true
     }
     
     private fun isWorkoutLink(uri: Uri): Boolean {

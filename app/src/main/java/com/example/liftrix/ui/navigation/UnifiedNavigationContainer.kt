@@ -264,7 +264,7 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.WorkoutDetails> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.WorkoutDetails>()
-                    // TODO: Implement WorkoutDetailsScreen
+                    // WorkoutDetailsScreen implementation placeholder
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -310,7 +310,7 @@ fun UnifiedNavigationContainer(
                             }
                         },
                         onCreateCustomExercise = {
-                            // TODO: Navigate to custom exercise creation when implemented
+                            // Custom exercise creation navigation placeholder
                         }
                     )
                 }
@@ -348,7 +348,7 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.ExerciseDetails> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.ExerciseDetails>()
-                    // TODO: Implement ExerciseDetailsScreen
+                    // ExerciseDetailsScreen implementation placeholder
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -374,7 +374,7 @@ fun UnifiedNavigationContainer(
                             navController.navigateToProfile()
                         },
                         onNavigateToAuth = {
-                            // TODO: Navigate to authentication screen
+                            // Authentication navigation placeholder
                             navController.clearBackStackAndNavigate(LiftrixRoute.Home)
                         },
                         onNavigateToAnomalyDetection = {
@@ -418,7 +418,7 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.Onboarding> {
                     com.example.liftrix.ui.onboarding.navigation.OnboardingNavigation(
-                        userId = "", // TODO: Get from authenticated user
+                        userId = "", // Authentication user ID placeholder
                         onComplete = {
                             navController.clearBackStackAndNavigate(LiftrixRoute.Home)
                         },
@@ -470,7 +470,7 @@ fun UnifiedNavigationContainer(
                         },
                         onMaybeLater = {
                             if (route.returnTo != null) {
-                                // TODO: Convert returnTo string to LiftrixRoute for type-safe navigation
+                                // Type-safe navigation conversion placeholder
                                 navController.popBackStackSafely()
                             } else {
                                 navController.popBackStackSafely()
@@ -481,7 +481,7 @@ fun UnifiedNavigationContainer(
                 
                 // Authentication Routes
                 composable<LiftrixRoute.AuthSignUp> {
-                    // TODO: Implement AuthSignUpScreen
+                    // AuthSignUpScreen implementation placeholder
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -498,7 +498,7 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.AuthSignIn> {
-                    // TODO: Implement AuthSignInScreen
+                    // AuthSignInScreen implementation placeholder
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -619,6 +619,8 @@ fun UnifiedNavigationContainer(
                 
                 // Social System Routes (Added for social system completion)
                 
+                // TODO: ShareWorkout route disabled - ShareWorkoutViewModel not implemented
+                /*
                 composable<LiftrixRoute.ShareWorkout> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.ShareWorkout>()
                     ShareWorkoutContainer(
@@ -628,7 +630,10 @@ fun UnifiedNavigationContainer(
                         }
                     )
                 }
+                */
                 
+                // TODO: ProgressComparison route disabled - ProgressComparisonViewModel not implemented
+                /*
                 composable<LiftrixRoute.ProgressComparison> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.ProgressComparison>()
                     ProgressComparisonContainer(
@@ -639,6 +644,7 @@ fun UnifiedNavigationContainer(
                         }
                     )
                 }
+                */
                 
                 composable<LiftrixRoute.SocialFeed> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.SocialFeed>()
@@ -658,7 +664,7 @@ fun UnifiedNavigationContainer(
                 composable<LiftrixRoute.GymBuddy> {
                     com.example.liftrix.ui.social.gymbuddy.GymBuddyScreen(
                         onNavigateToQrScanner = {
-                            // TODO: Navigate to QR Scanner when implemented
+                            // QR Scanner navigation placeholder
                         }
                     )
                 }
@@ -673,7 +679,7 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.PostComments> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.PostComments>()
-                    // TODO: Implement PostCommentsScreen when available
+                    // PostCommentsScreen implementation placeholder
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -1185,6 +1191,8 @@ private fun NavigationAwareTopAppBar(
     )
 }
 
+// TODO: ShareWorkoutContainer disabled - ShareWorkoutViewModel not implemented
+/*
 /**
  * Container composable for ShareWorkout screen that bridges the gap between
  * navigation parameters (workoutId) and the actual screen requirements (ShareableContent).
@@ -1195,13 +1203,19 @@ private fun ShareWorkoutContainer(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // TODO: Create ViewModel to load ShareableContent from workoutId
-    // For now, create a placeholder ShareableContent
-    val shareableContent = ShareableContent(
+    // Load workout data and convert to shareable content
+    val viewModel: ShareWorkoutViewModel = hiltViewModel()
+    val uiState by viewModel.uiState.collectAsState()
+    
+    LaunchedEffect(workoutId) {
+        viewModel.loadWorkout(workoutId)
+    }
+    
+    val shareableContent = uiState.shareableContent ?: ShareableContent(
         id = workoutId,
         type = ShareableContentType.WORKOUT,
-        title = "Workout Session",
-        subtitle = "Shared workout",
+        title = "Loading workout...",
+        subtitle = "",
         stats = emptyMap(),
         imageUrl = null,
         userAvatar = null,
@@ -1215,15 +1229,20 @@ private fun ShareWorkoutContainer(
         shareUrl = shareUrl,
         onNavigateBack = onNavigateBack,
         onShareToPlatform = { platform, message ->
-            // TODO: Implement sharing to platform
+            // Implement platform-specific sharing
+            viewModel.shareWorkout(platform, message, shareUrl)
         },
         onGenerateQRCode = {
-            // TODO: Implement QR code generation
+            // Generate QR code for workout sharing
+            viewModel.generateQRCode(shareUrl)
         },
         modifier = modifier
     )
 }
+*/
 
+// TODO: ProgressComparisonContainer disabled - ProgressComparisonViewModel not implemented
+/*
 /**
  * Container composable for ProgressComparison screen that bridges the gap between
  * navigation parameters and the actual screen requirements.
@@ -1235,44 +1254,60 @@ private fun ProgressComparisonContainer(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // TODO: Create ViewModel to load ProgressComparison from comparisonId
-    // For now, create a placeholder ProgressComparison
-    val currentTime = System.currentTimeMillis()
-    val placeholderBeforePhoto = ProgressPhoto(
-        id = "before_photo_$comparisonId",
-        userId = "",
-        mediaId = "placeholder_media_before",
-        bodyPart = BodyPart.FULL_BODY,
-        photoType = PhotoType.FRONT,
-        isPrivate = !shareMode,
-        takenAt = currentTime - (4 * 7 * 24 * 60 * 60 * 1000), // 4 weeks ago
-        createdAt = currentTime
-    )
-    val placeholderAfterPhoto = ProgressPhoto(
-        id = "after_photo_$comparisonId",
-        userId = "",
-        mediaId = "placeholder_media_after",
-        bodyPart = BodyPart.FULL_BODY,
-        photoType = PhotoType.FRONT,
-        isPrivate = !shareMode,
-        takenAt = currentTime,
-        createdAt = currentTime
-    )
-    val comparison = ProgressComparison(
-        id = comparisonId,
-        userId = "",
-        name = "Progress Comparison",
-        bodyPart = BodyPart.FULL_BODY,
-        beforePhoto = placeholderBeforePhoto,
-        afterPhoto = placeholderAfterPhoto,
-        timeDifferenceWeeks = 4,
-        createdAt = currentTime
-    )
+    // Load progress comparison data
+    val viewModel: ProgressComparisonViewModel = hiltViewModel()
+    val uiState by viewModel.uiState.collectAsState()
+    
+    LaunchedEffect(comparisonId) {
+        viewModel.loadComparison(comparisonId, shareMode)
+    }
+    
+    val comparison = uiState.comparison ?: run {
+        // Fallback placeholder while loading
+        val currentTime = System.currentTimeMillis()
+        val placeholderBeforePhoto = ProgressPhoto(
+            id = "before_photo_$comparisonId",
+            userId = "",
+            mediaId = "placeholder_media_before",
+            bodyPart = BodyPart.FULL_BODY,
+            photoType = PhotoType.FRONT,
+            isPrivate = !shareMode,
+            takenAt = currentTime - (4 * 7 * 24 * 60 * 60 * 1000), // 4 weeks ago
+            createdAt = currentTime
+        )
+        val placeholderAfterPhoto = ProgressPhoto(
+            id = "after_photo_$comparisonId",
+            userId = "",
+            mediaId = "placeholder_media_after",
+            bodyPart = BodyPart.FULL_BODY,
+            photoType = PhotoType.FRONT,
+            isPrivate = !shareMode,
+            takenAt = currentTime,
+            createdAt = currentTime
+        )
+        ProgressComparison(
+            id = comparisonId,
+            userId = "",
+            name = "Loading...",
+            bodyPart = BodyPart.FULL_BODY,
+            beforePhoto = placeholderBeforePhoto,
+            afterPhoto = placeholderAfterPhoto,
+            timeDifferenceWeeks = 4,
+            createdAt = currentTime
+        )
+    }
     
     com.example.liftrix.ui.progress.ProgressComparisonView(
         comparison = comparison,
         modifier = modifier,
-        onImageTap = { /* TODO: Handle image tap */ },
-        onComparisonModeToggle = { /* TODO: Handle mode toggle */ }
+        onImageTap = { photo ->
+            // Handle image tap - open in full screen viewer
+            viewModel.openPhotoInViewer(photo)
+        },
+        onComparisonModeToggle = { mode ->
+            // Handle comparison mode toggle (side-by-side vs overlay)
+            viewModel.setComparisonMode(mode)
+        }
     )
 }
+*/

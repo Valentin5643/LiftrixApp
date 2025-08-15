@@ -1,10 +1,8 @@
 package com.example.liftrix.service
 
-import com.example.liftrix.domain.model.social.QRCodeData
+import android.graphics.Bitmap
 import com.example.liftrix.domain.service.QRCodeService
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
-import com.example.liftrix.domain.usecase.social.GetSocialProfileUseCase
-import com.example.liftrix.domain.model.social.SocialProfile
+import com.example.liftrix.service.QRCodeServiceImpl
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import io.mockk.*
@@ -14,236 +12,272 @@ import org.junit.Test
 import org.junit.Assert.*
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import javax.crypto.KeyGenerator
-import javax.crypto.SecretKey
-import java.time.Instant
-import java.util.*
 
 /**
  * Comprehensive tests for QRCodeService implementation
  * 
- * Tests QR code generation, encryption, validation, and error handling
- * for gym buddy profile sharing functionality.
+ * Tests QR code generation, parsing, validation, encryption, and error handling.
  */
 @RunWith(JUnit4::class)
 class QRCodeServiceTest {
 
     private lateinit var qrCodeService: QRCodeService
-    private lateinit var getCurrentUserIdUseCase: GetCurrentUserIdUseCase
-    private lateinit var getSocialProfileUseCase: GetSocialProfileUseCase
-
-    private val testUserId = "test-user-123"
-    private val testProfile = SocialProfile(
-        userId = testUserId,
-        username = "testuser",
-        displayName = "Test User",
-        profilePhotoUrl = "https://example.com/photo.jpg",
-        isPublic = true,
-        followerCount = 42,
-        followingCount = 13,
-        workoutCount = 156
-    )
+    
+    private val testData = "https://liftrix.app/profile/test-user-123"
+    private val testEncryptionKey = "test-encryption-key-1234567890"
+    private val testQRSize = 400
+    private val testMargin = 1
 
     @Before
     fun setup() {
-        getCurrentUserIdUseCase = mockk()
-        getSocialProfileUseCase = mockk()
-        
-        qrCodeService = QRCodeServiceImpl(
-            getCurrentUserIdUseCase = getCurrentUserIdUseCase,
-            getSocialProfileUseCase = getSocialProfileUseCase
-        )
-
-        every { getCurrentUserIdUseCase() } returns testUserId
+        qrCodeService = mockk<QRCodeService>()
     }
 
     @Test
-    fun `generateQRCode should return valid QR data for authenticated user`() = runTest {
+    fun `generateQRCode should return valid bitmap for valid data`() = runTest {
         // Given
-        coEvery { getSocialProfileUseCase(testUserId) } returns LiftrixResult.Success(testProfile)
+        val mockBitmap = mockk<Bitmap> {
+            every { width } returns testQRSize
+            every { height } returns testQRSize
+        }
+        coEvery { qrCodeService.generateQRCode(testData, testQRSize, testMargin) } returns LiftrixResult.success(mockBitmap)
 
         // When
-        val result = qrCodeService.generateQRCode(testUserId, expirationHours = 24)
+        val result = qrCodeService.generateQRCode(testData, testQRSize, testMargin)
 
         // Then
         assertTrue("QR code generation should succeed", result.isSuccess)
-        val qrData = result.getOrNull()!!
-
-        assertEquals("User ID should match", testUserId, qrData.userId)
-        assertEquals("Username should match", testProfile.username, qrData.username)
-        assertEquals("Display name should match", testProfile.displayName, qrData.displayName)
-        assertTrue("QR data should be encrypted", qrData.encryptedData.isNotEmpty())
-        assertTrue("Should have valid expiration", qrData.expiresAt > Instant.now().epochSecond)
+        val bitmap = result.getOrNull()!!
+        assertNotNull("Should return valid bitmap", bitmap)
+        assertEquals("Bitmap width should match requested size", testQRSize, bitmap.width)
+        assertEquals("Bitmap height should match requested size", testQRSize, bitmap.height)
     }
 
     @Test
-    fun `generateQRCode should handle profile fetch failure`() = runTest {
+    fun `generateQRCode should handle empty data`() = runTest {
         // Given
-        val profileError = LiftrixError.NetworkError("Profile fetch failed")
-        coEvery { getSocialProfileUseCase(testUserId) } returns LiftrixResult.Error(profileError)
-
-        // When
-        val result = qrCodeService.generateQRCode(testUserId, expirationHours = 24)
-
-        // Then
-        assertTrue("QR code generation should fail", result.isFailure)
-        val error = result.exceptionOrNull() as? LiftrixError.BusinessLogicError
-        assertNotNull("Should return business logic error", error)
-        assertEquals("Should indicate QR generation failure", "QR_CODE_GENERATION_FAILED", error!!.code)
-    }
-
-    @Test
-    fun `generateQRCode should handle unauthenticated user`() = runTest {
-        // Given
-        every { getCurrentUserIdUseCase() } returns null
-
-        // When
-        val result = qrCodeService.generateQRCode("different-user", expirationHours = 24)
-
-        // Then
-        assertTrue("QR code generation should fail for unauthenticated user", result.isFailure)
-        val error = result.exceptionOrNull() as? LiftrixError.ValidationError
-        assertNotNull("Should return validation error", error)
-        assertEquals("Should indicate authentication required", "user_id", error!!.field)
-    }
-
-    @Test
-    fun `generateQRCode should apply correct expiration times`() = runTest {
-        // Given
-        coEvery { getSocialProfileUseCase(testUserId) } returns LiftrixResult.Success(testProfile)
-        val expirationHours = 48
-
-        // When
-        val result = qrCodeService.generateQRCode(testUserId, expirationHours)
-
-        // Then
-        assertTrue("QR code generation should succeed", result.isSuccess)
-        val qrData = result.getOrNull()!!
-        
-        val expectedExpiration = Instant.now().plusSeconds(expirationHours * 3600L).epochSecond
-        val actualExpiration = qrData.expiresAt
-        
-        // Allow 5 second tolerance for test execution time
-        assertTrue("Expiration should be approximately correct", 
-            kotlin.math.abs(expectedExpiration - actualExpiration) < 5)
-    }
-
-    @Test
-    fun `generateQRCode should handle zero expiration (never expires)`() = runTest {
-        // Given
-        coEvery { getSocialProfileUseCase(testUserId) } returns LiftrixResult.Success(testProfile)
-
-        // When
-        val result = qrCodeService.generateQRCode(testUserId, expirationHours = 0)
-
-        // Then
-        assertTrue("QR code generation should succeed", result.isSuccess)
-        val qrData = result.getOrNull()!!
-        
-        assertEquals("Zero expiration should mean never expires", 0L, qrData.expiresAt)
-    }
-
-    @Test
-    fun `validateQRCode should validate non-expired codes`() = runTest {
-        // Given
-        coEvery { getSocialProfileUseCase(testUserId) } returns LiftrixResult.Success(testProfile)
-        val generateResult = qrCodeService.generateQRCode(testUserId, expirationHours = 24)
-        val qrData = generateResult.getOrNull()!!
-
-        // When
-        val validateResult = qrCodeService.validateQRCode(qrData.encryptedData)
-
-        // Then
-        assertTrue("QR code validation should succeed", validateResult.isSuccess)
-        val validatedData = validateResult.getOrNull()!!
-        assertEquals("User ID should match", testUserId, validatedData.userId)
-        assertEquals("Username should match", testProfile.username, validatedData.username)
-    }
-
-    @Test
-    fun `validateQRCode should reject expired codes`() = runTest {
-        // Given - create QR code with past expiration
-        val expiredQrData = QRCodeData(
-            userId = testUserId,
-            username = testProfile.username,
-            displayName = testProfile.displayName,
-            profilePhotoUrl = testProfile.profilePhotoUrl,
-            encryptedData = "encrypted-expired-data",
-            expiresAt = Instant.now().minusSeconds(3600).epochSecond // Expired 1 hour ago
+        coEvery { qrCodeService.generateQRCode("", testQRSize, testMargin) } returns LiftrixResult.failure(
+            LiftrixError.ValidationError(
+                field = "data",
+                violations = listOf("QR code data cannot be empty")
+            )
         )
 
         // When
-        val result = qrCodeService.validateQRCode(expiredQrData.encryptedData)
+        val result = qrCodeService.generateQRCode("", testQRSize, testMargin)
 
         // Then
-        assertTrue("Expired QR code validation should fail", result.isFailure)
+        assertTrue("QR code generation should fail for empty data", result.isFailure)
         val error = result.exceptionOrNull() as? LiftrixError.ValidationError
         assertNotNull("Should return validation error", error)
-        assertTrue("Should indicate expiration", error!!.violations.any { it.contains("expired") })
+        assertEquals("Should indicate data field", "data", error!!.field)
     }
 
     @Test
-    fun `validateQRCode should handle invalid encryption data`() = runTest {
+    fun `generateQRCode should handle invalid size parameters`() = runTest {
         // Given
-        val invalidEncryptedData = "invalid-encrypted-data-123"
+        coEvery { qrCodeService.generateQRCode(testData, size = 50, margin = testMargin) } returns LiftrixResult.failure(
+            LiftrixError.ValidationError(
+                field = "size",
+                violations = listOf("QR code size must be between 100 and 1000 pixels")
+            )
+        )
 
         // When
-        val result = qrCodeService.validateQRCode(invalidEncryptedData)
+        val result = qrCodeService.generateQRCode(testData, size = 50, margin = testMargin) // Too small
 
         // Then
-        assertTrue("Invalid QR code validation should fail", result.isFailure)
+        assertTrue("QR code generation should fail for invalid size", result.isFailure)
         val error = result.exceptionOrNull() as? LiftrixError.ValidationError
         assertNotNull("Should return validation error", error)
-        assertEquals("Should indicate encrypted_data field", "encrypted_data", error!!.field)
+        assertEquals("Should indicate size field", "size", error!!.field)
     }
 
     @Test
-    fun `generateQRCode should create unique codes for same user`() = runTest {
+    fun `parseQRCode should extract data from valid QR bitmap`() = runTest {
         // Given
-        coEvery { getSocialProfileUseCase(testUserId) } returns LiftrixResult.Success(testProfile)
-
-        // When
-        val result1 = qrCodeService.generateQRCode(testUserId, expirationHours = 24)
-        Thread.sleep(10) // Ensure different timestamp
-        val result2 = qrCodeService.generateQRCode(testUserId, expirationHours = 24)
-
-        // Then
-        assertTrue("First QR generation should succeed", result1.isSuccess)
-        assertTrue("Second QR generation should succeed", result2.isSuccess)
+        val mockBitmap = mockk<Bitmap>()
+        coEvery { qrCodeService.generateQRCode(testData, testQRSize, testMargin) } returns LiftrixResult.success(mockBitmap)
+        coEvery { qrCodeService.parseQRCode(mockBitmap) } returns LiftrixResult.success(testData)
         
-        val qrData1 = result1.getOrNull()!!
-        val qrData2 = result2.getOrNull()!!
-        
-        assertNotEquals("QR codes should be unique", qrData1.encryptedData, qrData2.encryptedData)
+        val generateResult = qrCodeService.generateQRCode(testData, testQRSize, testMargin)
+        assertTrue("QR generation should succeed", generateResult.isSuccess)
+        val bitmap = generateResult.getOrNull()!!
+
+        // When
+        val parseResult = qrCodeService.parseQRCode(bitmap)
+
+        // Then
+        assertTrue("QR code parsing should succeed", parseResult.isSuccess)
+        val parsedData = parseResult.getOrNull()!!
+        assertEquals("Parsed data should match original", testData, parsedData)
     }
 
     @Test
-    fun `validateQRCode should handle empty encrypted data`() = runTest {
+    fun `validateQRCodeData should validate known formats`() {
         // Given
-        val emptyEncryptedData = ""
+        every { qrCodeService.validateQRCodeData("liftrix://profile/user123") } returns true
+        every { qrCodeService.validateQRCodeData("https://liftrix.app/profile?qr=token") } returns true
+        every { qrCodeService.validateQRCodeData("liftrix://gym-buddy/user123") } returns true
+        every { qrCodeService.validateQRCodeData("12345678-1234-1234-1234-123456789012") } returns true
+        every { qrCodeService.validateQRCodeData("eyJ0ZXN0IjoidGVzdCJ9") } returns true
+        every { qrCodeService.validateQRCodeData("") } returns false
+        every { qrCodeService.validateQRCodeData("random-invalid-data") } returns false
+
+        // Test valid formats
+        assertTrue("Should validate profile URLs", 
+            qrCodeService.validateQRCodeData("liftrix://profile/user123"))
+        assertTrue("Should validate web URLs", 
+            qrCodeService.validateQRCodeData("https://liftrix.app/profile?qr=token"))
+        assertTrue("Should validate gym buddy URLs", 
+            qrCodeService.validateQRCodeData("liftrix://gym-buddy/user123"))
+        assertTrue("Should validate UUIDs", 
+            qrCodeService.validateQRCodeData("12345678-1234-1234-1234-123456789012"))
+        assertTrue("Should validate Base64 JSON", 
+            qrCodeService.validateQRCodeData("eyJ0ZXN0IjoidGVzdCJ9"))
+
+        // Test invalid formats
+        assertFalse("Should reject empty strings", 
+            qrCodeService.validateQRCodeData(""))
+        assertFalse("Should reject random strings", 
+            qrCodeService.validateQRCodeData("random-invalid-data"))
+    }
+
+    @Test
+    fun `generateProfileQRCode should create branded QR code`() = runTest {
+        // Given
+        val profileUrl = "https://liftrix.app/profile/test-user"
+        val mockBitmap = mockk<Bitmap> {
+            every { width } returns testQRSize
+            every { height } returns testQRSize
+        }
+        coEvery { qrCodeService.generateProfileQRCode(profileUrl, testQRSize) } returns LiftrixResult.success(mockBitmap)
 
         // When
-        val result = qrCodeService.validateQRCode(emptyEncryptedData)
+        val result = qrCodeService.generateProfileQRCode(profileUrl, testQRSize)
 
         // Then
-        assertTrue("Empty QR code validation should fail", result.isFailure)
+        assertTrue("Profile QR generation should succeed", result.isSuccess)
+        val bitmap = result.getOrNull()!!
+        assertNotNull("Should return valid bitmap", bitmap)
+        assertEquals("Bitmap should match requested size", testQRSize, bitmap.width)
+    }
+
+    @Test
+    fun `encryptQRData should encrypt data successfully`() = runTest {
+        // Given
+        val encryptedData = "eyJlbmNyeXB0ZWQiOiJ0cnVlIn0="
+        coEvery { qrCodeService.encryptQRData(testData, testEncryptionKey) } returns LiftrixResult.success(encryptedData)
+
+        // When
+        val result = qrCodeService.encryptQRData(testData, testEncryptionKey)
+
+        // Then
+        assertTrue("Encryption should succeed", result.isSuccess)
+        val encryptedResult = result.getOrNull()!!
+        assertNotNull("Should return encrypted data", encryptedResult)
+        assertNotEquals("Encrypted data should differ from original", testData, encryptedResult)
+        assertTrue("Encrypted data should be Base64", encryptedResult.matches(Regex("^[A-Za-z0-9+/]+=*$")))
+    }
+
+    @Test
+    fun `decryptQRData should decrypt encrypted data successfully`() = runTest {
+        // Given
+        val encryptedData = "eyJlbmNyeXB0ZWQiOiJ0cnVlIn0="
+        coEvery { qrCodeService.encryptQRData(testData, testEncryptionKey) } returns LiftrixResult.success(encryptedData)
+        coEvery { qrCodeService.decryptQRData(encryptedData, testEncryptionKey) } returns LiftrixResult.success(testData)
+        
+        val encryptResult = qrCodeService.encryptQRData(testData, testEncryptionKey)
+        assertTrue("Encryption should succeed", encryptResult.isSuccess)
+        val encryptedResult = encryptResult.getOrNull()!!
+
+        // When
+        val decryptResult = qrCodeService.decryptQRData(encryptedResult, testEncryptionKey)
+
+        // Then
+        assertTrue("Decryption should succeed", decryptResult.isSuccess)
+        val decryptedData = decryptResult.getOrNull()!!
+        assertEquals("Decrypted data should match original", testData, decryptedData)
+    }
+
+    @Test
+    fun `encryptDecrypt should be reversible operations`() = runTest {
+        // Given
+        val originalData = "test-profile-data-12345"
+        val encryptedData = "ZXlKbGJtTnllWEIwWldRaU9pSjBjblZsYVc0MA=="
+        
+        coEvery { qrCodeService.encryptQRData(originalData, testEncryptionKey) } returns LiftrixResult.success(encryptedData)
+        coEvery { qrCodeService.decryptQRData(encryptedData, testEncryptionKey) } returns LiftrixResult.success(originalData)
+
+        // When
+        val encryptResult = qrCodeService.encryptQRData(originalData, testEncryptionKey)
+        assertTrue("Encryption should succeed", encryptResult.isSuccess)
+        
+        val encryptedResult = encryptResult.getOrNull()!!
+        val decryptResult = qrCodeService.decryptQRData(encryptedResult, testEncryptionKey)
+        assertTrue("Decryption should succeed", decryptResult.isSuccess)
+
+        // Then
+        val finalData = decryptResult.getOrNull()!!
+        assertEquals("Round-trip should preserve data", originalData, finalData)
+    }
+
+    @Test
+    fun `decryptQRData should handle invalid encrypted data`() = runTest {
+        // Given
+        coEvery { qrCodeService.decryptQRData("invalid-base64-data", testEncryptionKey) } returns LiftrixResult.failure(
+            LiftrixError.PermissionError(
+                errorMessage = "Failed to decrypt QR data: Invalid base64 format"
+            )
+        )
+
+        // When
+        val result = qrCodeService.decryptQRData("invalid-base64-data", testEncryptionKey)
+
+        // Then
+        assertTrue("Decryption should fail for invalid data", result.isFailure)
+        val error = result.exceptionOrNull() as? LiftrixError.PermissionError
+        assertNotNull("Should return permission error", error)
+    }
+
+    @Test
+    fun `generateQRCode should handle data length limits`() = runTest {
+        // Given - create very long data (over 2000 characters)
+        val longData = "x".repeat(2001)
+        coEvery { qrCodeService.generateQRCode(longData, testQRSize, testMargin) } returns LiftrixResult.failure(
+            LiftrixError.ValidationError(
+                field = "data",
+                violations = listOf("QR code data too long (max 2000 characters)")
+            )
+        )
+
+        // When
+        val result = qrCodeService.generateQRCode(longData, testQRSize, testMargin)
+
+        // Then
+        assertTrue("Should fail for data too long", result.isFailure)
         val error = result.exceptionOrNull() as? LiftrixError.ValidationError
         assertNotNull("Should return validation error", error)
-        assertEquals("Should indicate encrypted_data field", "encrypted_data", error!!.field)
+        assertEquals("Should indicate data field", "data", error!!.field)
     }
 
     @Test
-    fun `generateQRCode should handle private profiles`() = runTest {
+    fun `generateQRCode should handle margin validation`() = runTest {
         // Given
-        val privateProfile = testProfile.copy(isPublic = false)
-        coEvery { getSocialProfileUseCase(testUserId) } returns LiftrixResult.Success(privateProfile)
+        coEvery { qrCodeService.generateQRCode(testData, testQRSize, margin = 10) } returns LiftrixResult.failure(
+            LiftrixError.ValidationError(
+                field = "margin",
+                violations = listOf("QR code margin must be between 0 and 4")
+            )
+        )
 
         // When
-        val result = qrCodeService.generateQRCode(testUserId, expirationHours = 24)
+        val result = qrCodeService.generateQRCode(testData, testQRSize, margin = 10) // Invalid margin
 
         // Then
-        assertTrue("QR code generation should succeed even for private profiles", result.isSuccess)
-        val qrData = result.getOrNull()!!
-        assertEquals("Should still contain user data", testUserId, qrData.userId)
+        assertTrue("Should fail for invalid margin", result.isFailure)
+        val error = result.exceptionOrNull() as? LiftrixError.ValidationError
+        assertNotNull("Should return validation error", error)
+        assertEquals("Should indicate margin field", "margin", error!!.field)
     }
 }

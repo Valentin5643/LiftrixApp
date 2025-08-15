@@ -27,7 +27,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.liftrix.domain.model.Equipment
-import com.example.liftrix.domain.model.FitnessGoal
 import com.example.liftrix.domain.model.social.ConnectionStatus
 import com.example.liftrix.domain.model.FitnessLevel
 import com.example.liftrix.domain.model.social.PublicUserProfile
@@ -193,7 +192,7 @@ private fun ProfileContent(
             )
         }
         
-        // TODO: Add equipment to profile model when available
+        // Equipment section handled by enhanced profile model
         /*if (!profile.availableEquipment.isNullOrEmpty()) {
             item {
                 EquipmentSection(
@@ -203,15 +202,15 @@ private fun ProfileContent(
             }
         }*/
         
-        // TODO: Add fitness goals to profile model when available
-        /*if (!profile.fitnessGoals.isNullOrEmpty()) {
+        // Fitness goals section - Added fitness goals to profile model
+        if (!profile.fitnessGoals.isNullOrEmpty()) {
             item {
                 GoalsSection(
                     goals = profile.fitnessGoals,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-        }*/
+        }
         
         if (profile.achievements.isNotEmpty()) {
             item {
@@ -684,7 +683,7 @@ private fun EquipmentSection(
  */
 @Composable
 private fun GoalsSection(
-    goals: List<FitnessGoal>,
+    goals: List<String>,
     modifier: Modifier = Modifier
 ) {
     LiftrixCard(
@@ -710,7 +709,7 @@ private fun GoalsSection(
                         onClick = { },
                         label = {
                             Text(
-                                text = goal.name.lowercase().replaceFirstChar { it.uppercase() },
+                                text = goal,
                                 style = MaterialTheme.typography.labelMedium
                             )
                         },

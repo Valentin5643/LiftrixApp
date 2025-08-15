@@ -11,6 +11,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.example.liftrix.ui.components.WorkoutCreationModal
+import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
+import com.example.liftrix.ui.workout.components.PrimaryActionButton
 
 /**
  * Simple workout creation screen that shows the modal immediately.

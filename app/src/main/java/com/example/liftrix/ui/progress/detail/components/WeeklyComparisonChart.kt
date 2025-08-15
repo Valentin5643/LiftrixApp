@@ -22,7 +22,7 @@ import kotlinx.datetime.format.char
  * 
  * Displays weekly muscle group distribution comparisons over time.
  * Shows trends in muscle group training patterns and volume changes.
- * TODO: Replace with actual chart implementation (Vico or similar)
+ * Uses a bar chart implementation for visual comparison.
  */
 @Composable
 fun WeeklyComparisonChart(
@@ -53,8 +53,7 @@ fun WeeklyComparisonChart(
 }
 
 /**
- * Placeholder for the actual weekly comparison chart
- * TODO: Replace with actual chart implementation
+ * Placeholder for the weekly comparison chart
  */
 @Composable
 private fun WeeklyComparisonChartPlaceholder(

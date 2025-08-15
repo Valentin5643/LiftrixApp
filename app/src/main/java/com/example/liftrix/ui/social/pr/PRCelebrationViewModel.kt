@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.social.PRNotification
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.service.AnalyticsService
+import com.example.liftrix.domain.repository.PRNotificationRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -20,8 +21,8 @@ import javax.inject.Inject
 @HiltViewModel
 class PRCelebrationViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val analyticsService: AnalyticsService
-    // TODO: Inject PRNotificationRepository when available for reaction persistence
+    private val analyticsService: AnalyticsService,
+    private val prNotificationRepository: PRNotificationRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PRCelebrationUiState())
@@ -81,15 +82,35 @@ class PRCelebrationViewModel @Inject constructor(
             try {
                 updateState { copy(isReacting = true, error = null) }
 
-                // TODO: Save reaction to repository when available
-                // For now, just update local state
-                updateState { 
-                    copy(
-                        userReaction = reaction,
-                        isReacting = false,
-                        error = null
-                    ) 
-                }
+                // Save reaction to repository
+                val result = prNotificationRepository.saveReaction(
+                    userId = userId,
+                    buddyUserId = notification.fromUserId,
+                    prId = notification.id,
+                    reactionType = reaction
+                )
+                
+                result.fold(
+                    onSuccess = {
+                        updateState { 
+                            copy(
+                                userReaction = reaction,
+                                isReacting = false,
+                                error = null
+                            ) 
+                        }
+                        Timber.d("Successfully saved PR reaction: $reaction")
+                    },
+                    onFailure = { error ->
+                        updateState { 
+                            copy(
+                                isReacting = false,
+                                error = "Failed to save reaction: ${error.message}"
+                            ) 
+                        }
+                        Timber.e("Failed to save PR reaction: ${error.message}")
+                    }
+                )
 
                 trackReactionAdded(notification, reaction)
 

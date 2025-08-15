@@ -4,6 +4,9 @@ import com.example.liftrix.domain.model.Folder
 import com.example.liftrix.domain.model.FolderId
 import com.example.liftrix.domain.model.FolderName
 import com.example.liftrix.domain.model.UserProfile
+import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.model.common.liftrixCatching
+import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.repository.ProfileRepository
 import timber.log.Timber
@@ -35,8 +38,24 @@ class CreateFolderUseCase @Inject constructor(
      * @param input The folder creation input containing userId and name
      * @return Result containing the created folder or error
      */
-    suspend operator fun invoke(input: CreateFolderInput): Result<Folder> {
-        return try {
+    suspend operator fun invoke(input: CreateFolderInput): LiftrixResult<Folder> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                Timber.e(throwable, "🔥 CREATE-FOLDER-USE-CASE: Exception during folder creation")
+                when (throwable) {
+                    is IllegalArgumentException -> LiftrixError.ValidationError(
+                        field = "folderName",
+                        violations = listOf(throwable.message ?: "Invalid input"),
+                        analyticsContext = mapOf("operation" to "CREATE_FOLDER")
+                    )
+                    else -> LiftrixError.BusinessLogicError(
+                        code = "FOLDER_CREATION_FAILED",
+                        errorMessage = "Failed to create folder: ${throwable.message}",
+                        analyticsContext = mapOf("operation" to "CREATE_FOLDER", "userId" to input.userId)
+                    )
+                }
+            }
+        ) {
             Timber.d("🔥 CREATE-FOLDER-USE-CASE: Starting folder creation - userId: '${input.userId}', name: '${input.name}'")
             
             validateInput(input)
@@ -59,7 +78,7 @@ class CreateFolderUseCase @Inject constructor(
                     },
                     onFailure = { exception ->
                         Timber.e(exception, "🔥 CREATE-FOLDER-USE-CASE: Failed to create minimal user profile")
-                        return Result.failure(exception)
+                        throw exception
                     }
                 )
             } else {
@@ -72,24 +91,23 @@ class CreateFolderUseCase @Inject constructor(
             
             if (!profileExistsNow) {
                 Timber.e("🔥 CREATE-FOLDER-USE-CASE: CRITICAL - Profile still doesn't exist after creation attempt!")
-                return Result.failure(IllegalStateException("Unable to ensure user profile exists for foreign key constraint"))
+                throw IllegalStateException("Unable to ensure user profile exists for user: ${input.userId}")
             }
             
             // Check if folder name already exists for this user
-            val nameExists = folderRepository.doesFolderNameExist(input.userId, input.name)
+            val trimmedName = input.name.trim()
+            val nameExists = folderRepository.doesFolderNameExist(input.userId, trimmedName)
             Timber.d("🔥 CREATE-FOLDER-USE-CASE: Name existence check - exists: $nameExists")
             
             if (nameExists) {
-                Timber.w("🔥 CREATE-FOLDER-USE-CASE: Folder name '${input.name}' already exists for user '${input.userId}'")
-                return Result.failure(
-                    IllegalArgumentException("Folder name '${input.name}' already exists for this user")
-                )
+                Timber.w("🔥 CREATE-FOLDER-USE-CASE: Folder name '$trimmedName' already exists for user '${input.userId}'")
+                throw IllegalArgumentException("Folder name '$trimmedName' already exists")
             }
             
             val folder = Folder(
                 id = FolderId.generate(),
                 userId = input.userId,
-                name = FolderName(input.name.trim()),
+                name = FolderName(trimmedName),
                 createdAt = Instant.now(),
                 updatedAt = Instant.now(),
                 templateCount = 0
@@ -100,16 +118,13 @@ class CreateFolderUseCase @Inject constructor(
             result.fold(
                 onSuccess = { createdFolder ->
                     Timber.d("🔥 CREATE-FOLDER-USE-CASE: Repository createFolder completed successfully - folder: ${createdFolder.name.value}")
+                    createdFolder
                 },
                 onFailure = { exception ->
                     Timber.e(exception, "🔥 CREATE-FOLDER-USE-CASE: Repository createFolder FAILED")
+                    throw exception
                 }
             )
-            result
-            
-        } catch (e: Exception) {
-            Timber.e(e, "🔥 CREATE-FOLDER-USE-CASE: Exception during folder creation")
-            Result.failure(e)
         }
     }
     

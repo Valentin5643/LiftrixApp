@@ -147,10 +147,10 @@ class FeedGeneratorUseCaseTest {
             mediaItems = emptyList()
         )
 
-        // Calculate scores using reflection or making the method public for testing
-        val recentPRScore = calculateTestRelevanceScore(recentPostWithPRs)
-        val oldPopularScore = calculateTestRelevanceScore(oldPopularPost)
-        val simpleRecentScore = calculateTestRelevanceScore(simpleRecentPost)
+        // Calculate scores using a helper that mirrors the private method logic
+        val recentPRScore = calculateTestRelevanceScore(recentPostWithPRs, testUserId)
+        val oldPopularScore = calculateTestRelevanceScore(oldPopularPost, testUserId)
+        val simpleRecentScore = calculateTestRelevanceScore(simpleRecentPost, testUserId)
 
         // Recent post with PRs should score highest due to recency + PRs + media + engagement
         assertTrue("Recent PR post should score higher than old popular post", 
@@ -316,7 +316,7 @@ class FeedGeneratorUseCaseTest {
      * Test implementation of relevance score calculation
      * This mimics the algorithm from the actual implementation
      */
-    private fun calculateTestRelevanceScore(post: WorkoutPost): Float {
+    private fun calculateTestRelevanceScore(post: WorkoutPost, viewerId: String): Float {
         var score = 0f
         
         // Recency (max 40 points)

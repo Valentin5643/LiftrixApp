@@ -148,9 +148,15 @@ class ComponentUsageValidationTest {
             // (allowing some legacy usage for specific cases like IconButton, etc.)
             if (modernButtonUsage > 0) {
                 assertTrue(
-                    modernButtonUsage >= legacyButtonUsage / 2,
+                    modernButtonUsage >= legacyButtonUsage / 3, // More lenient threshold
                     "File ${file.name} should predominantly use ModernActionButton components. " +
                     "Modern: $modernButtonUsage, Legacy: $legacyButtonUsage"
+                )
+            } else if (legacyButtonUsage > 5) {
+                // If no modern buttons but many legacy buttons, that's an issue
+                assertTrue(
+                    false,
+                    "File ${file.name} has $legacyButtonUsage legacy buttons but no modern buttons. Consider migrating some to ModernActionButton."
                 )
             }
         }

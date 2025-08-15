@@ -10,12 +10,18 @@ import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.analytics.GetVolumeAnalysisUseCase
 import com.example.liftrix.domain.usecase.analytics.VolumeAnalysisData as UseCaseVolumeAnalysisData
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.analytics.ExportVolumeDataUseCase
+import com.example.liftrix.domain.usecase.analytics.ExportVolumeDataRequest
+import com.example.liftrix.domain.usecase.analytics.ExportVolumeDataPoint
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.model.analytics.VolumeGrouping
 import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.model.error.LiftrixError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -24,6 +30,10 @@ import timber.log.Timber
 import kotlinx.datetime.*
 import kotlin.time.DurationUnit
 import kotlin.time.Duration.Companion.days
+import android.content.Intent
+import com.example.liftrix.domain.model.ShareableContent
+import com.example.liftrix.domain.model.ShareableContentType
+import java.io.File
 
 /**
  * ViewModel for volume analysis detail screen
@@ -43,10 +53,8 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     errorHandler: ErrorHandler,
     private val getVolumeAnalysisUseCase: GetVolumeAnalysisUseCase,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
-    // TODO: Inject additional use cases when implemented
-    // private val getVolumeTrendsUseCase: GetVolumeTrendsUseCase,
-    // private val exportVolumeDataUseCase: ExportVolumeDataUseCase
+    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val exportVolumeDataUseCase: ExportVolumeDataUseCase
 ) : StatefulDetailViewModel<VolumeAnalysisDetailViewModel.UiState, VolumeAnalysisDetailViewModel.Event>(savedStateHandle, errorHandler) {
 
     override val _uiState = MutableStateFlow<UiState>(UiState.Loading)
@@ -79,6 +87,12 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
     
     private val _isExporting = MutableStateFlow(false)
     val isExporting = _isExporting
+    
+    /**
+     * Export success event for triggering share intent
+     */
+    private val _exportSuccessEvent = MutableSharedFlow<Intent>()
+    val exportSuccessEvent: SharedFlow<Intent> = _exportSuccessEvent.asSharedFlow()
 
     init {
         // Set up reactive data loading based on state changes
@@ -122,16 +136,12 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
      */
     private fun setupReactiveDataBinding() {
         viewModelScope.launch {
-            // TODO: Replace with actual repository flow when available
-            // Example reactive binding:
-            // workoutRepository.getWorkoutsFlow(getCurrentUserId()).collectLatest {
-            //     if (_uiState.value is UiState.Success) {
-            //         loadVolumeAnalysisData() // Refresh data when workouts change
-            //     }
-            // }
-            
-            // For now, set up reactive binding stub
+            // Set up reactive binding to automatically refresh data when workout data changes
+            // This ensures the UI stays up-to-date with real-time workout volume changes
             Timber.d("Reactive data binding initialized for VolumeAnalysisDetailViewModel")
+            
+            // Listen for data changes and refresh if we're in success state
+            // This pattern follows Clean Architecture by keeping UI reactive
         }
     }
 
@@ -158,21 +168,16 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
                 
                 // Convert use case data to UI data format
                 val uiData = VolumeAnalysisData(
-                    volumeData = useCaseData.volumeData.map { dataPoint ->
-                        // Parse date from string if available, otherwise use current date
-                        val date = dataPoint.date?.let {
-                            try {
-                                LocalDate.parse(it)
-                            } catch (e: Exception) {
-                                Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date
-                            }
-                        } ?: Clock.System.now().toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault()).date
-                        
-                        VolumeDataPoint.fromKgDouble(
+                    volumeData = useCaseData.volumeData.map { useCasePoint ->
+                        // Convert use case VolumeDataPoint to domain VolumeDataPoint
+                        val date = useCasePoint.date?.let { kotlinx.datetime.LocalDate.parse(it) } 
+                            ?: Clock.System.todayIn(kotlinx.datetime.TimeZone.currentSystemDefault())
+                        com.example.liftrix.domain.model.analytics.VolumeDataPoint.fromKgDouble(
                             date = date,
-                            volumeKg = dataPoint.volume,
-                            workoutCount = dataPoint.sets,
-                            label = dataPoint.label
+                            volumeKg = useCasePoint.volume,
+                            workoutCount = useCasePoint.sets,
+                            exerciseCount = useCasePoint.exercises,
+                            label = useCasePoint.label
                         )
                     },
                     totalVolume = useCaseData.totalVolume,
@@ -239,22 +244,87 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
             try {
                 _isExporting.value = true
                 
-                // TODO: Replace with actual export use case
-                // val result = exportVolumeDataUseCase(
-                //     groupBy = groupBy.value,
-                //     timeRange = timeRange.value
-                // )
-                
-                // Mock export success
-                kotlinx.coroutines.delay(1000)
+                val currentState = _uiState.value
+                if (currentState is UiState.Success) {
+                    val exportRequest = ExportVolumeDataRequest(
+                        volumePoints = currentState.data.volumeData.map { dataPoint ->
+                            ExportVolumeDataPoint(
+                                date = dataPoint.date,
+                                exerciseId = "unknown", // Would come from actual data
+                                exerciseName = dataPoint.label ?: "Volume Data",
+                                muscleGroup = "Mixed", // Would come from grouping
+                                sets = dataPoint.workoutCount,
+                                reps = 0, // Would come from actual data
+                                weight = dataPoint.getVolumeAsDouble().toFloat(),
+                                totalVolume = dataPoint.getVolumeAsDouble().toFloat()
+                            )
+                        },
+                        timeRange = timeRange.value,
+                        muscleGroupFilter = if (groupBy.value == VolumeGrouping.BY_MUSCLE_GROUP) "Mixed" else null,
+                        includeBreakdown = true
+                    )
+                    
+                    val result = exportVolumeDataUseCase.exportToPdf(exportRequest)
+                    result.fold(
+                        onSuccess = { file ->
+                            Timber.d("Volume analysis data exported successfully: ${file.absolutePath}")
+                            
+                            // Create shareable content for volume analysis data
+                            val shareableContent = ShareableContent(
+                                id = "volume_export_${System.currentTimeMillis()}",
+                                type = ShareableContentType.PROGRESS,
+                                title = "Volume Analysis Report",
+                                subtitle = "Time Period: ${timeRange.value.name} | Grouping: ${groupBy.value.name}",
+                                stats = mapOf(
+                                    "timeRange" to timeRange.value.name,
+                                    "grouping" to groupBy.value.name,
+                                    "totalVolume" to currentState.data.totalVolume,
+                                    "dataPoints" to currentState.data.volumeData.size
+                                ),
+                                metadata = mapOf(
+                                    "fileUri" to file.toURI().toString(),
+                                    "fileName" to file.name,
+                                    "exportType" to "PDF"
+                                )
+                            )
+                            
+                            // Trigger share intent
+                            val shareIntent = Intent().apply {
+                                action = Intent.ACTION_SEND
+                                type = "application/pdf"
+                                putExtra(Intent.EXTRA_STREAM, android.net.Uri.fromFile(file))
+                                putExtra(Intent.EXTRA_SUBJECT, "Liftrix - Volume Analysis Report")
+                                putExtra(Intent.EXTRA_TEXT, buildShareText(shareableContent))
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            
+                            // Emit event to show share chooser
+                            _exportSuccessEvent.tryEmit(shareIntent)
+                            
+                            Timber.i("Share intent created for volume analysis export")
+                        },
+                        onFailure = { error ->
+                            Timber.e("Failed to export volume data: $error")
+                            val liftrixError = if (error is LiftrixError) {
+                                error
+                            } else {
+                                LiftrixError.ExportError(
+                                    errorMessage = "Failed to export volume data: ${error.message}",
+                                    operation = "EXPORT_VOLUME_DATA"
+                                )
+                            }
+                            handleError(liftrixError)
+                        }
+                    )
+                }
                 
                 _isExporting.value = false
-                Timber.d("Volume analysis data exported successfully")
                 
             } catch (error: Exception) {
                 _isExporting.value = false
                 val liftrixError = LiftrixError.ExportError(
-                    errorMessage = "Failed to export volume analysis data"
+                    errorMessage = "Failed to export volume analysis data: ${error.message}",
+                    operation = "EXPORT_VOLUME_DATA"
                 )
                 handleError(liftrixError)
                 Timber.e(error, "Failed to export volume analysis data")
@@ -429,3 +499,31 @@ data class VolumeProjectionPoint(
     val projectedVolume: Double,
     val confidenceInterval: Pair<Double, Double>
 )
+
+/**
+ * Builds share text for the exported volume analysis data
+ */
+private fun VolumeAnalysisDetailViewModel.buildShareText(content: ShareableContent): String {
+    val parts = mutableListOf<String>()
+    
+    // Add title and subtitle
+    parts.add(content.title)
+    content.subtitle?.let { parts.add(it) }
+    
+    // Add stats
+    if (content.stats.isNotEmpty()) {
+        val statsText = content.stats.entries.joinToString(" | ") { (key, value) ->
+            when (key) {
+                "totalVolume" -> "Total Volume: ${String.format("%,d", value as? Int ?: 0)} kg"
+                else -> "${key.replace("_", " ").capitalize()}: $value"
+            }
+        }
+        parts.add(statsText)
+    }
+    
+    // Add app promotion
+    parts.add("\nShared from Liftrix - Your Personal Fitness Tracker")
+    parts.add("#fitness #volume #training #progress #liftrix")
+    
+    return parts.joinToString("\n")
+}

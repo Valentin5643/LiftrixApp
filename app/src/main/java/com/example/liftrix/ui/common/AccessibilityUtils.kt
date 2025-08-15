@@ -365,4 +365,14 @@ fun rememberAccessibilityState(
             enabled = enabled
         )
     }
-} 
+}
+
+/**
+ * Data class for accessibility state management
+ */
+data class AccessibilityState(
+    val contentDescription: String,
+    val stateDescription: String?,
+    val role: Role?,
+    val enabled: Boolean
+) 

@@ -22,6 +22,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.test.fail
 
 /**
  * Integration tests for FolderRepositoryImpl
@@ -164,11 +165,14 @@ class FolderRepositoryImplIntegrationTest {
         
         // Assert
         assertTrue(result.isSuccess)
-        result.onSuccess { createdFolder ->
-            assertEquals(testFolder.id, createdFolder.id)
-            assertEquals(testFolder.userId, createdFolder.userId)
-            assertEquals(testFolder.name, createdFolder.name)
-        }
+        result.fold(
+            onSuccess = { createdFolder ->
+                assertEquals(testFolder.id, createdFolder.id)
+                assertEquals(testFolder.userId, createdFolder.userId)
+                assertEquals(testFolder.name, createdFolder.name)
+            },
+            onFailure = { fail("Expected success but got failure: $it") }
+        )
         
         // Verify DAO operations
         coVerify(exactly = 1) { folderDao.insertFolder(any()) }
@@ -187,9 +191,12 @@ class FolderRepositoryImplIntegrationTest {
         
         // Assert
         assertTrue(result.isFailure)
-        result.onFailure { exception ->
-            assertEquals(daoError, exception)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { exception ->
+                assertEquals(daoError, exception)
+            }
+        )
         
         // Verify operations were attempted
         coVerify(exactly = 1) { folderDao.doesFolderNameExist(validUserId, validFolderName) }
@@ -213,10 +220,13 @@ class FolderRepositoryImplIntegrationTest {
         
         // Assert
         assertTrue(result.isSuccess)
-        result.onSuccess { folder ->
-            assertEquals("Updated Name", folder.name.value)
-            assertEquals(validUserId, folder.userId)
-        }
+        result.fold(
+            onSuccess = { folder ->
+                assertEquals("Updated Name", folder.name.value)
+                assertEquals(validUserId, folder.userId)
+            },
+            onFailure = { fail("Expected success but got failure: $it") }
+        )
         
         // Verify DAO operations
         coVerify(exactly = 1) { folderDao.getFolderById(validFolderId.value, validUserId) }
@@ -383,10 +393,13 @@ class FolderRepositoryImplIntegrationTest {
         
         // Assert
         assertTrue(result.isSuccess)
-        result.onSuccess { folder ->
-            assertEquals("Uncategorized", folder.name.value)
-            assertEquals(validUserId, folder.userId)
-        }
+        result.fold(
+            onSuccess = { folder ->
+                assertEquals("Uncategorized", folder.name.value)
+                assertEquals(validUserId, folder.userId)
+            },
+            onFailure = { fail("Expected success but got failure: $it") }
+        )
         
         // Verify default folder creation flow
         coVerify(exactly = 1) { folderDao.getFoldersByUserId(validUserId) }
@@ -422,9 +435,12 @@ class FolderRepositoryImplIntegrationTest {
         
         // Assert
         assertTrue(result.isFailure)
-        result.onFailure { exception ->
-            assertEquals(mapperError, exception)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { exception ->
+                assertEquals(mapperError, exception)
+            }
+        )
         
         // Verify mapping was attempted
         verify(exactly = 1) { folderMapper.toNewEntity(testFolder) }
@@ -459,11 +475,14 @@ class FolderRepositoryImplIntegrationTest {
         assertTrue(createResult.isSuccess)
         assertTrue(updateResult.isSuccess)
         
-        updateResult.onSuccess { folder ->
-            assertEquals("Updated", folder.name.value)
-            assertEquals(originalFolder.id, folder.id)
-            assertEquals(originalFolder.userId, folder.userId)
-        }
+        updateResult.fold(
+            onSuccess = { folder ->
+                assertEquals("Updated", folder.name.value)
+                assertEquals(originalFolder.id, folder.id)
+                assertEquals(originalFolder.userId, folder.userId)
+            },
+            onFailure = { fail("Expected success but got failure: $it") }
+        )
         
         // Verify proper mapping in both directions
         verify(exactly = 1) { folderMapper.toNewEntity(originalFolder) }

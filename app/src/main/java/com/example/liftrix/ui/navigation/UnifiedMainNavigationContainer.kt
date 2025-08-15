@@ -280,7 +280,8 @@ fun UnifiedMainNavigationContainer(
                             navController.navigateUp()
                         },
                         onCreateCustomExercise = {
-                            // TODO: Navigate to custom exercise creation when implemented
+                            // TODO: Navigate to custom exercise creation screen when route is implemented
+                            // navController.navigate(LiftrixRoute.CustomExerciseCreation)
                         }
                     )
                 }
@@ -297,7 +298,8 @@ fun UnifiedMainNavigationContainer(
                             navController.navigateUp()
                         },
                         onCreateCustomExercise = {
-                            // TODO: Navigate to custom exercise creation when implemented
+                            // TODO: Navigate to custom exercise creation screen when route is implemented
+                            // navController.navigate(LiftrixRoute.CustomExerciseCreation)
                         }
                     )
                 }
@@ -309,10 +311,12 @@ fun UnifiedMainNavigationContainer(
                             navController.navigateUp()
                         },
                         onNavigateToProfile = {
-                            // TODO: Navigate to profile editing screen when implemented
+                            // Navigate to profile editing screen
+                            navController.navigate(LiftrixRoute.ProfileEdit)
                         },
                         onNavigateToAuth = {
-                            // TODO: Navigate to auth when implemented
+                            // Navigate to authentication screen
+                            navController.navigate(LiftrixRoute.AuthSignIn)
                         }
                     )
                 }

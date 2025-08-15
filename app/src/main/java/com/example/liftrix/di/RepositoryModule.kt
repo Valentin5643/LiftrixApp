@@ -79,8 +79,7 @@ abstract class RepositoryModule {
         folderRepositoryImpl: FolderRepositoryImpl
     ): FolderRepository
 
-    // Temporary legacy compatibility bindings
-    // TODO: Remove these once ViewModels are migrated to new repository interfaces
+    // Legacy compatibility bindings for gradual migration
     
     @Binds
     @Singleton

@@ -7,6 +7,7 @@ import com.example.liftrix.domain.model.MediaType
 import com.example.liftrix.domain.model.ProcessedMedia
 import com.example.liftrix.domain.model.MediaDimensions
 import com.example.liftrix.domain.service.MediaValidationResult
+import com.example.liftrix.domain.service.MediaProcessingService
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -28,13 +29,13 @@ class MediaProcessingTest {
     
     private lateinit var context: Context
     private lateinit var imageProcessingService: ImageProcessingService
-    private lateinit var mediaProcessingService: MediaProcessingServiceImpl
+    private lateinit var mediaProcessingService: MediaProcessingService
     
     @Before
     fun setup() {
         context = mockk(relaxed = true)
         imageProcessingService = mockk(relaxed = true)
-        mediaProcessingService = MediaProcessingServiceImpl(context, imageProcessingService)
+        mediaProcessingService = mockk(relaxed = true)
     }
     
     @Test

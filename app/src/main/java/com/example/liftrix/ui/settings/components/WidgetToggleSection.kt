@@ -370,7 +370,7 @@ private fun WidgetSubsection(
                 canReorder = isVisible && onReorder != null,
                 onToggle = { onToggle(widget) },
                 onReorder = if (isVisible && onReorder != null) {
-                    { /* TODO: Implement reordering logic */ }
+                    { onReorder(listOf(widget.id)) }
                 } else null
             )
         }

@@ -559,12 +559,12 @@ private fun UserProfileLoadingState() {
 
 @Composable
 private fun UserProfileErrorState(
-    error: String?,
+    error: com.example.liftrix.domain.model.error.LiftrixError?,
     onRetry: () -> Unit
 ) {
     UnifiedWorkoutCard(
         title = "Error Loading Profile",
-        subtitle = error ?: "Unknown error"
+        subtitle = error?.message ?: "Unknown error"
     ) {
         Column(
             verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.elementSpacing)

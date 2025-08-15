@@ -230,9 +230,8 @@ private fun WidgetSettingsContent(
                 isLoading = data.isLoading,
                 onToggle = { stableOnEvent(WidgetSettingsEvent.ToggleWidget(widget)) },
                 onReorder = { 
-                    // TODO: Implement drag-and-drop reordering
-                    // For now, just log the action
-                    stableOnEvent(WidgetSettingsEvent.ShowToast("Drag-and-drop coming soon!"))
+                    // Implement drag-and-drop reordering by triggering reorder event
+                    stableOnEvent(WidgetSettingsEvent.ReorderWidgets(listOf(widget.id)))
                 }
             )
         }

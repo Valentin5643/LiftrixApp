@@ -228,12 +228,20 @@ class SocialOnboardingViewModel @Inject constructor(
             },
             onError = { error ->
                 // Handle specific validation errors
-                when (error.analyticsContext["operation"]) {
-                    "VALIDATE_USERNAME" -> {
-                        updateState { it.copy(usernameError = error.message) }
-                    }
-                    "VALIDATE_DISPLAY_NAME" -> {
-                        updateState { it.copy(displayNameError = error.message) }
+                when (error) {
+                    is LiftrixError.ValidationError -> {
+                        when (error.field) {
+                            "username" -> {
+                                updateState { it.copy(usernameError = "Invalid username") }
+                            }
+                            "displayName" -> {
+                                updateState { it.copy(displayNameError = "Invalid display name") }
+                            }
+                            else -> {
+                                // Show general error
+                                handleError(error)
+                            }
+                        }
                     }
                     else -> {
                         // Show general error

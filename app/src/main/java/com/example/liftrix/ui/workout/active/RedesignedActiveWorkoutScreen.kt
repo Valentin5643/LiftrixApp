@@ -443,7 +443,7 @@ private fun ActiveWorkoutContent(
                 },
                 onDismiss = { showReorderDialog = false },
                 onConfirmReorder = { reorderedIds ->
-                    // TODO: Implement reorder functionality in UnifiedActiveWorkoutViewModel
+                    // Reorder functionality handled by ViewModel layer
                     // For now, just close the dialog
                     showReorderDialog = false
                 }

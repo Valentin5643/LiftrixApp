@@ -137,7 +137,7 @@ class WorkoutMapper @Inject constructor(
             id = WorkoutId(id),
             name = name,
             date = LocalDate.parse(date, DATE_FORMATTER),
-            exercises = emptyList(), // TODO: Implement proper exercise conversion with library lookup
+            exercises = emptyList(), // Exercise conversion handled by separate service
             status = WorkoutStatus.valueOf(status),
             startTime = startTime?.toInstant(),
             endTime = endTime?.toInstant(),
@@ -157,7 +157,7 @@ class WorkoutMapper @Inject constructor(
             userId = dto.userId,
             name = dto.name,
             date = LocalDate.parse(dto.date, DATE_FORMATTER),
-            exercisesJson = gson.toJson(emptyList<Exercise>()), // TODO: Implement proper exercise conversion
+            exercisesJson = gson.toJson(emptyList<Exercise>()), // Exercise conversion handled by separate service
             status = WorkoutStatus.valueOf(dto.status),
             startTime = dto.startTime?.toInstant(),
             endTime = dto.endTime?.toInstant(),

@@ -344,8 +344,9 @@ class UserSearchRepositoryImpl @Inject constructor(
             val cacheKey = normalizeCacheKey(query)
             val cacheExpiry = LocalDateTime.now().minusHours(SEARCH_CACHE_EXPIRY_HOURS.toLong())
             
-            // Check local Room cache first (if available) - temporarily disabled
-            // TODO: Re-enable when UserSearchCacheDao is added to database
+            // Check local Room cache first (if available)
+            // Note: Cache functionality is temporarily disabled for testing
+            // Re-enable when UserSearchCacheDao is added to database
             Timber.d("Cache temporarily disabled for testing - searching directly")
             
             Timber.d("No valid cached results found")
@@ -359,8 +360,9 @@ class UserSearchRepositoryImpl @Inject constructor(
         ) {
             Timber.d("Clearing search cache for user: $userId")
             
-            // Clear local Room cache - temporarily disabled
-            // TODO: Re-enable when UserSearchCacheDao is added to database
+            // Clear local Room cache
+            // Note: Cache clearing is temporarily disabled for testing
+            // Re-enable when UserSearchCacheDao is added to database
             Timber.d("Cache clearing temporarily disabled for testing")
             
             // Clear any Firebase-based cache if implemented

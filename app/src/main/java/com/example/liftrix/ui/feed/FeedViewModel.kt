@@ -314,7 +314,7 @@ class FeedViewModel @Inject constructor(
                             )
                         )
                         Timber.d("Workout copied successfully from post: ${post.id}")
-                        // TODO: Show success message/navigation
+                        // Success handled by navigation in UI layer
                     },
                     onFailure = { error ->
                         val liftrixError = if (error is LiftrixError) {

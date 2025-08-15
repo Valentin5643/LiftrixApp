@@ -1,10 +1,18 @@
 package com.example.liftrix.data.paging
 
-import androidx.paging.*
-import androidx.paging.RemoteMediator.*
+import androidx.paging.ExperimentalPagingApi
+import androidx.paging.LoadType
+import androidx.paging.PagingConfig
+import androidx.paging.PagingSource
+import androidx.paging.PagingState
+import androidx.paging.RemoteMediator
+import androidx.paging.RemoteMediator.InitializeAction
+import androidx.paging.RemoteMediator.MediatorResult
 import com.example.liftrix.data.local.dao.WorkoutPostDao
+import com.example.liftrix.data.local.dao.FeedCacheDao
 import com.example.liftrix.data.local.entity.WorkoutPostEntity
-import com.example.liftrix.data.remote.social.SocialApiService
+import com.example.liftrix.domain.service.FeedCacheService
+import com.example.liftrix.domain.model.social.FeedType
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import io.mockk.*
@@ -14,7 +22,6 @@ import org.junit.Test
 import org.junit.Assert.*
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import java.io.IOException
 
 /**
  * Comprehensive tests for FeedRemoteMediator implementation
@@ -22,12 +29,14 @@ import java.io.IOException
  * Tests network sync, caching logic, error handling, and refresh behavior
  * for the social feed pagination system.
  */
+@OptIn(ExperimentalPagingApi::class)
 @RunWith(JUnit4::class)
 class FeedRemoteMediatorTest {
 
     private lateinit var feedRemoteMediator: FeedRemoteMediator
     private lateinit var workoutPostDao: WorkoutPostDao
-    private lateinit var socialApiService: SocialApiService
+    private lateinit var feedCacheDao: FeedCacheDao
+    private lateinit var feedCacheService: FeedCacheService
 
     private val testUserId = "user-123"
     private val testPosts = listOf(
@@ -39,29 +48,86 @@ class FeedRemoteMediatorTest {
     @Before
     fun setup() {
         workoutPostDao = mockk(relaxed = true)
-        socialApiService = mockk()
+        feedCacheDao = mockk(relaxed = true)
+        feedCacheService = mockk()
         
         feedRemoteMediator = FeedRemoteMediator(
-            userId = testUserId,
             workoutPostDao = workoutPostDao,
-            socialApiService = socialApiService
+            feedCacheDao = feedCacheDao,
+            feedCacheService = feedCacheService,
+            userId = testUserId,
+            feedType = FeedType.HOME,
+            targetUserId = null
         )
     }
 
     // ==========================================
-    // Refresh Load Tests
+    // Initialize Tests
     // ==========================================
 
     @Test
-    fun `load should return Success and cache posts on REFRESH`() = runTest {
+    fun `initialize should skip refresh when sufficient cache exists`() = runTest {
+        // Given
+        coEvery { feedCacheService.hasSufficientCache(testUserId) } returns 
+            LiftrixResult.success(true)
+
+        // When
+        val result = feedRemoteMediator.initialize()
+
+        // Then
+        assertEquals("Should skip initial refresh", 
+            InitializeAction.SKIP_INITIAL_REFRESH, result)
+    }
+
+    @Test
+    fun `initialize should launch refresh when cache insufficient`() = runTest {
+        // Given
+        coEvery { feedCacheService.hasSufficientCache(testUserId) } returns 
+            LiftrixResult.success(false)
+
+        // When
+        val result = feedRemoteMediator.initialize()
+
+        // Then
+        assertEquals("Should launch initial refresh", 
+            InitializeAction.LAUNCH_INITIAL_REFRESH, result)
+    }
+
+    @Test
+    fun `initialize should launch refresh when cache service fails`() = runTest {
+        // Given
+        val cacheError = LiftrixError.BusinessLogicError(
+            code = "CACHE_CHECK_FAILED",
+            errorMessage = "Failed to check cache status",
+            analyticsContext = mapOf("operation" to "CACHE_CHECK")
+        )
+        
+        coEvery { feedCacheService.hasSufficientCache(testUserId) } returns 
+            LiftrixResult.failure(cacheError)
+
+        // When
+        val result = feedRemoteMediator.initialize()
+
+        // Then
+        assertEquals("Should launch refresh on cache service error", 
+            InitializeAction.LAUNCH_INITIAL_REFRESH, result)
+    }
+
+    // ==========================================
+    // Load Tests
+    // ==========================================
+
+    @Test
+    fun `load should return Success with cached data on REFRESH`() = runTest {
         // Given
         val loadType = LoadType.REFRESH
         val pagingState = createPagingState()
+        val cachedPostIds = listOf("post-1", "post-2", "post-3")
 
-        coEvery { socialApiService.getHomeFeed(testUserId, 0, 20) } returns 
-            LiftrixResult.Success(testPosts.map { it.toApiModel() })
-        coEvery { workoutPostDao.clearFeedCache(testUserId) } just Runs
-        coEvery { workoutPostDao.insertPosts(any()) } just Runs
+        coEvery { feedCacheService.getCachedFeedPostIds(testUserId, 20, 0) } returns 
+            LiftrixResult.success(cachedPostIds)
+        coEvery { feedCacheService.invalidateUserCache(testUserId) } returns LiftrixResult.success(Unit)
+        coEvery { feedCacheService.updateFeedCache(testUserId, true) } returns LiftrixResult.success(Unit)
 
         // When
         val result = feedRemoteMediator.load(loadType, pagingState)
@@ -70,45 +136,18 @@ class FeedRemoteMediatorTest {
         assertTrue("Load should succeed", result is MediatorResult.Success)
         val successResult = result as MediatorResult.Success
         assertFalse("Should indicate more data available", successResult.endOfPaginationReached)
-
-        // Verify caching behavior
-        coVerify { workoutPostDao.clearFeedCache(testUserId) }
-        coVerify { workoutPostDao.insertPosts(match { posts ->
-            posts.size == testPosts.size && posts.all { it.userId == testUserId || it.isFromFeed }
-        }) }
     }
 
     @Test
-    fun `load should handle API failure on REFRESH`() = runTest {
+    fun `load should handle empty cache on REFRESH`() = runTest {
         // Given
         val loadType = LoadType.REFRESH
         val pagingState = createPagingState()
 
-        val networkError = LiftrixError.NetworkError("Feed service unavailable")
-        coEvery { socialApiService.getHomeFeed(testUserId, 0, 20) } returns 
-            LiftrixResult.Error(networkError)
-
-        // When
-        val result = feedRemoteMediator.load(loadType, pagingState)
-
-        // Then
-        assertTrue("Load should return error", result is MediatorResult.Error)
-        val errorResult = result as MediatorResult.Error
-        assertTrue("Should contain network error", errorResult.throwable is LiftrixError.NetworkError)
-
-        // Verify no caching occurs on failure
-        coVerify(exactly = 0) { workoutPostDao.clearFeedCache(any()) }
-        coVerify(exactly = 0) { workoutPostDao.insertPosts(any()) }
-    }
-
-    @Test
-    fun `load should handle empty feed response`() = runTest {
-        // Given
-        val loadType = LoadType.REFRESH
-        val pagingState = createPagingState()
-
-        coEvery { socialApiService.getHomeFeed(testUserId, 0, 20) } returns 
-            LiftrixResult.Success(emptyList())
+        coEvery { feedCacheService.getCachedFeedPostIds(testUserId, 20, 0) } returns 
+            LiftrixResult.success(emptyList<String>())
+        coEvery { feedCacheService.invalidateUserCache(testUserId) } returns LiftrixResult.success(Unit)
+        coEvery { feedCacheService.updateFeedCache(testUserId, true) } returns LiftrixResult.success(Unit)
 
         // When
         val result = feedRemoteMediator.load(loadType, pagingState)
@@ -119,68 +158,8 @@ class FeedRemoteMediatorTest {
         assertTrue("Should indicate end of pagination", successResult.endOfPaginationReached)
     }
 
-    // ==========================================
-    // Append Load Tests
-    // ==========================================
-
     @Test
-    fun `load should append new posts on APPEND`() = runTest {
-        // Given
-        val loadType = LoadType.APPEND
-        val pagingState = createPagingState(
-            lastItem = testPosts.first(),
-            offset = 20
-        )
-
-        val newPosts = listOf(
-            createWorkoutPostEntity("post-4", "user-4", "Evening workout"),
-            createWorkoutPostEntity("post-5", "user-5", "Back and biceps")
-        )
-
-        coEvery { socialApiService.getHomeFeed(testUserId, 20, 20) } returns 
-            LiftrixResult.Success(newPosts.map { it.toApiModel() })
-        coEvery { workoutPostDao.insertPosts(any()) } just Runs
-
-        // When
-        val result = feedRemoteMediator.load(loadType, pagingState)
-
-        // Then
-        assertTrue("Load should succeed", result is MediatorResult.Success)
-        
-        // Verify no cache clearing on append
-        coVerify(exactly = 0) { workoutPostDao.clearFeedCache(any()) }
-        coVerify { workoutPostDao.insertPosts(match { posts ->
-            posts.size == newPosts.size
-        }) }
-    }
-
-    @Test
-    fun `load should handle pagination end on APPEND`() = runTest {
-        // Given
-        val loadType = LoadType.APPEND
-        val pagingState = createPagingState(offset = 100)
-
-        // API returns less than requested page size, indicating end
-        val finalPosts = listOf(createWorkoutPostEntity("final-post", "user-final", "Last post"))
-        
-        coEvery { socialApiService.getHomeFeed(testUserId, 100, 20) } returns 
-            LiftrixResult.Success(finalPosts.map { it.toApiModel() })
-
-        // When
-        val result = feedRemoteMediator.load(loadType, pagingState)
-
-        // Then
-        assertTrue("Load should succeed", result is MediatorResult.Success)
-        val successResult = result as MediatorResult.Success
-        assertTrue("Should indicate end of pagination reached", successResult.endOfPaginationReached)
-    }
-
-    // ==========================================
-    // Prepend Load Tests
-    // ==========================================
-
-    @Test
-    fun `load should handle PREPEND load type`() = runTest {
+    fun `load should return Success on PREPEND`() = runTest {
         // Given
         val loadType = LoadType.PREPEND
         val pagingState = createPagingState()
@@ -189,147 +168,228 @@ class FeedRemoteMediatorTest {
         val result = feedRemoteMediator.load(loadType, pagingState)
 
         // Then
-        assertTrue("Prepend should succeed immediately", result is MediatorResult.Success)
+        assertTrue("Prepend should succeed", result is MediatorResult.Success)
         val successResult = result as MediatorResult.Success
-        assertTrue("Prepend should indicate end reached", successResult.endOfPaginationReached)
+        assertTrue("Should indicate end of pagination for prepend", 
+            successResult.endOfPaginationReached)
     }
 
-    // ==========================================
-    // Error Handling Tests
-    // ==========================================
-
     @Test
-    fun `load should handle database errors gracefully`() = runTest {
+    fun `load should handle APPEND with existing data`() = runTest {
         // Given
-        val loadType = LoadType.REFRESH
-        val pagingState = createPagingState()
+        val loadType = LoadType.APPEND
+        val pagingState = createPagingStateWithData()
+        val nextPageIds = listOf("post-4", "post-5")
 
-        coEvery { socialApiService.getHomeFeed(testUserId, 0, 20) } returns 
-            LiftrixResult.Success(testPosts.map { it.toApiModel() })
-        coEvery { workoutPostDao.clearFeedCache(testUserId) } throws RuntimeException("Database error")
+        coEvery { feedCacheService.getCachedFeedPostIds(testUserId, 20, 3) } returns 
+            LiftrixResult.success(nextPageIds)
+        coEvery { feedCacheService.updateFeedCache(testUserId, false) } returns LiftrixResult.success(Unit)
 
         // When
         val result = feedRemoteMediator.load(loadType, pagingState)
 
         // Then
-        assertTrue("Load should return error", result is MediatorResult.Error)
-        val errorResult = result as MediatorResult.Error
-        assertTrue("Should contain database error", errorResult.throwable is RuntimeException)
+        assertTrue("Append should succeed", result is MediatorResult.Success)
+        val successResult = result as MediatorResult.Success
+        assertFalse("Should indicate more data available", successResult.endOfPaginationReached)
     }
 
     @Test
-    fun `load should handle network timeout`() = runTest {
+    fun `load should handle cache service errors`() = runTest {
         // Given
         val loadType = LoadType.REFRESH
         val pagingState = createPagingState()
-
-        coEvery { socialApiService.getHomeFeed(testUserId, 0, 20) } returns 
-            LiftrixResult.Error(LiftrixError.NetworkError("Request timeout"))
-
-        // When
-        val result = feedRemoteMediator.load(loadType, pagingState)
-
-        // Then
-        assertTrue("Load should return error", result is MediatorResult.Error)
-        val errorResult = result as MediatorResult.Error
-        assertEquals("Should preserve timeout error", "Request timeout", errorResult.throwable.message)
-    }
-
-    @Test
-    fun `load should retry after transient failures`() = runTest {
-        // Given
-        val loadType = LoadType.REFRESH
-        val pagingState = createPagingState()
-
-        // First call fails, second succeeds
-        coEvery { socialApiService.getHomeFeed(testUserId, 0, 20) } returnsMany listOf(
-            LiftrixResult.Error(LiftrixError.NetworkError("Temporary failure")),
-            LiftrixResult.Success(testPosts.map { it.toApiModel() })
+        val cacheError = LiftrixError.BusinessLogicError(
+            code = "CACHE_ERROR",
+            errorMessage = "Cache service failed",
+            analyticsContext = mapOf("operation" to "FEED_LOAD")
         )
 
-        // When - first call
-        val firstResult = feedRemoteMediator.load(loadType, pagingState)
-        
-        // Then - first call fails
-        assertTrue("First load should fail", firstResult is MediatorResult.Error)
-        
-        // When - retry
-        val retryResult = feedRemoteMediator.load(loadType, pagingState)
-        
-        // Then - retry succeeds
-        assertTrue("Retry should succeed", retryResult is MediatorResult.Success)
-    }
+        coEvery { feedCacheService.getCachedFeedPostIds(testUserId, any(), any()) } returns 
+            LiftrixResult.failure(cacheError)
+        coEvery { feedCacheService.invalidateUserCache(testUserId) } returns LiftrixResult.success(Unit)
+        coEvery { feedCacheService.updateFeedCache(testUserId, true) } returns LiftrixResult.success(Unit)
 
-    // ==========================================
-    // Concurrency Tests
-    // ==========================================
-
-    @Test
-    fun `load should handle concurrent refresh requests`() = runTest {
-        // Given
-        val loadType = LoadType.REFRESH
-        val pagingState = createPagingState()
-
-        coEvery { socialApiService.getHomeFeed(testUserId, 0, 20) } returns 
-            LiftrixResult.Success(testPosts.map { it.toApiModel() })
-        coEvery { workoutPostDao.clearFeedCache(testUserId) } just Runs
-        coEvery { workoutPostDao.insertPosts(any()) } just Runs
-
-        // When - simulate concurrent calls
-        val result1 = feedRemoteMediator.load(loadType, pagingState)
-        val result2 = feedRemoteMediator.load(loadType, pagingState)
+        // When
+        val result = feedRemoteMediator.load(loadType, pagingState)
 
         // Then
-        assertTrue("First load should succeed", result1 is MediatorResult.Success)
-        assertTrue("Second load should succeed", result2 is MediatorResult.Success)
-        
-        // Verify cache cleared for both requests
-        coVerify(atLeast = 1) { workoutPostDao.clearFeedCache(testUserId) }
+        assertTrue("Load should succeed with empty data on error", result is MediatorResult.Success)
+        val successResult = result as MediatorResult.Success
+        assertTrue("Should indicate end of pagination on error", successResult.endOfPaginationReached)
     }
 
     // ==========================================
     // Helper Methods
     // ==========================================
 
-    private fun createWorkoutPostEntity(id: String, userId: String, caption: String) = 
-        WorkoutPostEntity(
+    private fun createPagingState(): PagingState<Int, WorkoutPostEntity> {
+        return PagingState(
+            pages = emptyList(),
+            anchorPosition = null,
+            config = PagingConfig(pageSize = 20),
+            leadingPlaceholderCount = 0
+        )
+    }
+
+    private fun createPagingStateWithData(): PagingState<Int, WorkoutPostEntity> {
+        val pages = listOf(
+            PagingSource.LoadResult.Page(
+                data = testPosts,
+                prevKey = null,
+                nextKey = 3
+            )
+        )
+        return PagingState(
+            pages = pages,
+            anchorPosition = null,
+            config = PagingConfig(pageSize = 20),
+            leadingPlaceholderCount = 0
+        )
+    }
+
+    @Test
+    fun `load should handle cache invalidation on REFRESH`() = runTest {
+        // Given
+        val loadType = LoadType.REFRESH
+        val pagingState = createPagingState()
+        
+        // First call returns empty cache, trigger network update
+        coEvery { feedCacheService.getCachedFeedPostIds(testUserId, 20, 0) } returns 
+            LiftrixResult.success(emptyList<String>()) andThen LiftrixResult.success(listOf("post-1", "post-2"))
+        
+        coEvery { feedCacheService.invalidateUserCache(testUserId) } returns LiftrixResult.success(Unit)
+        coEvery { feedCacheService.updateFeedCache(testUserId, true) } returns LiftrixResult.success(Unit)
+
+        // When
+        val result = feedRemoteMediator.load(loadType, pagingState)
+
+        // Then
+        assertTrue("Load should succeed", result is MediatorResult.Success)
+        val successResult = result as MediatorResult.Success
+        assertFalse("Should indicate more data available", successResult.endOfPaginationReached)
+        
+        // Verify cache operations were called
+        coVerify { feedCacheService.invalidateUserCache(testUserId) }
+        coVerify { feedCacheService.updateFeedCache(testUserId, true) }
+    }
+
+    @Test
+    fun `load should handle service error gracefully`() = runTest {
+        // Given
+        val loadType = LoadType.REFRESH
+        val pagingState = createPagingState()
+        
+        val serviceError = LiftrixError.BusinessLogicError(
+            code = "SERVICE_ERROR",
+            errorMessage = "Feed service unavailable",
+            analyticsContext = mapOf("operation" to "FEED_CACHE_SERVICE")
+        )
+        
+        coEvery { feedCacheService.getCachedFeedPostIds(testUserId, any(), any()) } returns 
+            LiftrixResult.failure(serviceError)
+
+        // When
+        val result = feedRemoteMediator.load(loadType, pagingState)
+
+        // Then
+        assertTrue("Load should succeed with empty data", result is MediatorResult.Success)
+        val successResult = result as MediatorResult.Success
+        assertTrue("Should indicate end of pagination on error", successResult.endOfPaginationReached)
+    }
+
+    @Test
+    fun `load should handle APPEND with no more cached data`() = runTest {
+        // Given
+        val loadType = LoadType.APPEND
+        val pagingState = createPagingStateWithData()
+
+        // First call returns empty cache, second call after update also returns empty
+        coEvery { feedCacheService.getCachedFeedPostIds(testUserId, 20, 3) } returns 
+            LiftrixResult.success(emptyList<String>())
+        coEvery { feedCacheService.updateFeedCache(testUserId, false) } returns LiftrixResult.success(Unit)
+
+        // When
+        val result = feedRemoteMediator.load(loadType, pagingState)
+
+        // Then
+        assertTrue("Append should succeed", result is MediatorResult.Success)
+        val successResult = result as MediatorResult.Success
+        assertTrue("Should indicate end of pagination", successResult.endOfPaginationReached)
+    }
+
+    @Test
+    fun `load should handle runtime exceptions gracefully`() = runTest {
+        // Given
+        val loadType = LoadType.REFRESH
+        val pagingState = createPagingState()
+        
+        coEvery { feedCacheService.getCachedFeedPostIds(testUserId, any(), any()) } throws 
+            RuntimeException("Unexpected error")
+
+        // When
+        val result = feedRemoteMediator.load(loadType, pagingState)
+
+        // Then
+        assertTrue("Load should return error result", result is MediatorResult.Error)
+        val errorResult = result as MediatorResult.Error
+        assertTrue("Should preserve original exception type", errorResult.throwable is RuntimeException)
+    }
+
+    @Test
+    fun `load should verify cache operations on APPEND`() = runTest {
+        // Given
+        val loadType = LoadType.APPEND
+        val pagingState = createPagingStateWithData()
+        val nextPageIds = listOf("post-4")
+
+        coEvery { feedCacheService.getCachedFeedPostIds(testUserId, 20, 3) } returns 
+            LiftrixResult.success(emptyList<String>()) andThen LiftrixResult.success(nextPageIds)
+        coEvery { feedCacheService.updateFeedCache(testUserId, false) } returns LiftrixResult.success(Unit)
+
+        // When
+        val result = feedRemoteMediator.load(loadType, pagingState)
+
+        // Then
+        assertTrue("Append should succeed", result is MediatorResult.Success)
+        val successResult = result as MediatorResult.Success
+        assertFalse("Should indicate more data available", successResult.endOfPaginationReached)
+        
+        // Verify cache update was called for APPEND
+        coVerify { feedCacheService.updateFeedCache(testUserId, false) }
+        // Verify invalidate was NOT called for APPEND
+        coVerify(exactly = 0) { feedCacheService.invalidateUserCache(testUserId) }
+    }
+
+    // ==========================================
+    // Helper Methods
+    // ==========================================
+
+    private fun createWorkoutPostEntity(
+        id: String,
+        userId: String,
+        caption: String
+    ): WorkoutPostEntity {
+        return WorkoutPostEntity(
             id = id,
             userId = userId,
             workoutId = "workout-$id",
             caption = caption,
-            likeCount = 5,
-            commentCount = 2,
-            shareCount = 1,
-            saveCount = 3,
+            mediaUrls = null,
+            mediaThumbnails = null,
+            workoutDuration = 45,
+            totalVolume = 5000.0,
+            exercisesCount = 5,
+            prsCount = 0,
+            likeCount = 0,
+            commentCount = 0,
+            shareCount = 0,
+            saveCount = 0,
+            visibility = "FOLLOWERS",
             createdAt = System.currentTimeMillis(),
-            isFromFeed = true,
-            lastSyncTimestamp = System.currentTimeMillis()
-        )
-
-    private fun WorkoutPostEntity.toApiModel() = 
-        // Convert to API model - would normally use proper mapper
-        mapOf(
-            "id" to id,
-            "userId" to userId,
-            "caption" to caption,
-            "likeCount" to likeCount
-        )
-
-    private fun createPagingState(
-        lastItem: WorkoutPostEntity? = null,
-        offset: Int = 0
-    ): PagingState<Int, WorkoutPostEntity> {
-        return PagingState(
-            pages = if (lastItem != null) listOf(
-                PagingSource.LoadResult.Page(
-                    data = listOf(lastItem),
-                    prevKey = if (offset > 0) offset - 20 else null,
-                    nextKey = offset + 20
-                )
-            ) else emptyList(),
-            anchorPosition = offset,
-            config = PagingConfig(pageSize = 20),
-            leadingPlaceholderCount = 0
+            updatedAt = System.currentTimeMillis(),
+            isSynced = true,
+            syncVersion = 1
         )
     }
 }

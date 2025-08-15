@@ -17,6 +17,7 @@ import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.repository.workout.ExercisePerformanceData
+import com.example.liftrix.domain.usecase.analytics.WorkoutData
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
@@ -29,6 +30,7 @@ import timber.log.Timber
 import kotlinx.datetime.LocalDate as KotlinxLocalDate
 import java.time.LocalDate
 import java.time.Duration
+import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -877,6 +879,45 @@ class WorkoutRepositoryImpl @Inject constructor(
         return streak
     }
     
+    /**
+     * Calculates workout duration in minutes from start and end time
+     */
+    private fun calculateDurationMinutes(startTime: Instant?, endTime: Instant?): Int {
+        return if (startTime != null && endTime != null) {
+            Duration.between(startTime, endTime).toMinutes().toInt().coerceAtLeast(0)
+        } else {
+            0
+        }
+    }
+    
+    /**
+     * Calculates exercise count from exercisesJson field
+     * This is a simplified calculation - in reality, you'd want to parse the JSON
+     */
+    private fun calculateExerciseCount(exercisesJson: String): Int {
+        return try {
+            // Simple heuristic: count occurrences of exercise objects in JSON
+            // This is not perfect but avoids full JSON parsing for performance
+            if (exercisesJson.isBlank() || exercisesJson == "[]") {
+                0
+            } else {
+                // Count the number of exercise objects by counting opening braces after array start
+                // This is a rough estimate that works for simple JSON structures
+                val trimmed = exercisesJson.trim()
+                if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                    // Count commas + 1 for a simple array, but ensure at least 1 if not empty
+                    val commaCount = exercisesJson.count { it == ',' }
+                    if (trimmed == "[]") 0 else (commaCount + 1).coerceAtLeast(1)
+                } else {
+                    1 // Single exercise object
+                }
+            }
+        } catch (e: Exception) {
+            Timber.w("Failed to calculate exercise count from JSON: ${e.message}")
+            0
+        }
+    }
+    
     override suspend fun getExercisePerformanceData(
         userId: String,
         startDate: KotlinxLocalDate,
@@ -902,5 +943,42 @@ class WorkoutRepositoryImpl @Inject constructor(
             Timber.d("Getting exercise performance data for user $userId from $startDate to $endDate")
             emptyList<ExercisePerformanceData>()
         }
+    }
+    
+    override suspend fun getWorkoutsInDateRange(
+        userId: String,
+        startDate: kotlinx.datetime.LocalDate,
+        endDate: kotlinx.datetime.LocalDate
+    ): List<WorkoutData> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.DatabaseError(
+                    errorMessage = "Failed to get workouts in date range",
+                    operation = "READ",
+                    table = "workouts",
+                    analyticsContext = mapOf("user_id" to userId)
+                )
+            }
+        ) {
+            val startDateString = startDate.toString()
+            val endDateString = endDate.toString()
+            
+            val workoutEntities = workoutDao.getWorkoutsInDateRangeForUser(userId, startDateString, endDateString)
+            
+            workoutEntities.map { entity ->
+                WorkoutData(
+                    id = entity.id,
+                    date = kotlinx.datetime.LocalDate.parse(entity.date.toString()),
+                    durationMinutes = calculateDurationMinutes(entity.startTime, entity.endTime),
+                    exerciseCount = calculateExerciseCount(entity.exercisesJson)
+                )
+            }
+        }.fold(
+            onSuccess = { it },
+            onFailure = { 
+                Timber.e("Failed to get workouts in date range: $it")
+                emptyList()
+            }
+        )
     }
 }

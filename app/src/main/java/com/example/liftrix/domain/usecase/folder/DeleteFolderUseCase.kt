@@ -1,6 +1,9 @@
 package com.example.liftrix.domain.usecase.folder
 
 import com.example.liftrix.domain.model.FolderId
+import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.model.common.liftrixCatching
+import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
 import com.example.liftrix.data.local.LiftrixDatabase
@@ -39,8 +42,23 @@ class DeleteFolderUseCase @Inject constructor(
      * @param input The deletion input containing userId and folderId
      * @return Result indicating success or failure
      */
-    suspend operator fun invoke(input: DeleteFolderInput): Result<Unit> {
-        return try {
+    suspend operator fun invoke(input: DeleteFolderInput): LiftrixResult<Unit> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                when (throwable) {
+                    is IllegalArgumentException -> LiftrixError.ValidationError(
+                        field = "folderId",
+                        violations = listOf(throwable.message ?: "Invalid folder ID"),
+                        analyticsContext = mapOf("operation" to "DELETE_FOLDER")
+                    )
+                    else -> LiftrixError.BusinessLogicError(
+                        code = "FOLDER_DELETION_FAILED",
+                        errorMessage = "Failed to delete folder: ${throwable.message}",
+                        analyticsContext = mapOf("operation" to "DELETE_FOLDER", "userId" to input.userId)
+                    )
+                }
+            }
+        ) {
             validateInput(input)
             
             // 🔥 CRITICAL FIX: Use database transaction for atomic folder deletion + template preservation
@@ -52,7 +70,7 @@ class DeleteFolderUseCase @Inject constructor(
                         throw (folderResult.exceptionOrNull() ?: RuntimeException("Failed to access folder"))
                     }
                     folderResult.getOrNull() == null -> {
-                        throw IllegalArgumentException("Folder not found or not owned by user: ${input.folderId.value}")
+                        throw IllegalArgumentException("Folder not found or not owned by user")
                     }
                     else -> folderResult.getOrThrow()!! // Safe to use !! here since we checked for null above
                 }
@@ -105,9 +123,7 @@ class DeleteFolderUseCase @Inject constructor(
                 }
             }
             
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
+            Unit
         }
     }
     

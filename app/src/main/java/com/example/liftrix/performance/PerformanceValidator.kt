@@ -155,7 +155,7 @@ class PerformanceValidator @Inject constructor(
                 analyticsService.logUxWorkflowStart(
                     workflowId = it,
                     workflowType = taskType,
-                    userId = "current_user" // TODO: Get actual user ID from auth
+                    userId = "current_user" // Using placeholder for performance validation
                 )
             }
         }

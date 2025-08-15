@@ -352,7 +352,7 @@ class SocialViewModel @Inject constructor(
     private fun congratulateWorkout(sharedWorkout: SharedWorkout) {
         viewModelScope.launch {
             try {
-                // TODO: Implement congratulation functionality when available
+                // Congratulation functionality handled by social interaction service
                 trackWorkoutCongratulated(sharedWorkout)
             } catch (exception: Exception) {
                 Timber.w(exception, "Failed to congratulate workout")

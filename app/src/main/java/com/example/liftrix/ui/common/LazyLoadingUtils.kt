@@ -3,6 +3,7 @@ package com.example.liftrix.ui.common
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
@@ -80,7 +81,17 @@ fun LazyItemScope.optimizedItem(
     val stableKey = remember(key) { key.toString() }
     
     // Track composition performance for this item
-    // TODO: Implement performance tracking
+    val compositionStartTime = remember { System.currentTimeMillis() }
+    
+    DisposableEffect(stableKey) {
+        onDispose {
+            val compositionTime = System.currentTimeMillis() - compositionStartTime
+            if (compositionTime > 16) { // Log if composition takes more than 16ms (60fps threshold)
+                Timber.w("LazyLoadingPerformance: Slow composition for item $stableKey: ${compositionTime}ms")
+            }
+        }
+    }
+    
     content()
 }
 
@@ -138,8 +149,15 @@ fun OptimizedPaginationHandler(
             listState.isScrolledToEndAdvanced(stableThreshold, enableLogging = true)
         }.distinctUntilChanged().collect { isScrolledToEnd ->
             if (isScrolledToEnd && hasMoreData && !isLoading) {
-                // TODO: Implement performance logging
+                // Log performance metrics for pagination
+                val loadStartTime = System.currentTimeMillis()
+                Timber.d("LazyLoadingPerformance: Triggering pagination at item ${listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index}")
+                
                 stableOnLoadMore()
+                
+                // Log completion time in a coroutine to avoid blocking
+                kotlinx.coroutines.delay(100) // Small delay to allow load to start
+                Timber.d("LazyLoadingPerformance: Pagination triggered in ${System.currentTimeMillis() - loadStartTime}ms")
             }
         }
     }

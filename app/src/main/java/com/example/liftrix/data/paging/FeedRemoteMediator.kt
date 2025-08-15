@@ -30,7 +30,11 @@ class FeedRemoteMediator @Inject constructor(
     
     override suspend fun initialize(): InitializeAction {
         // Check if we have sufficient cached data
-        val hasSufficientCache = feedCacheService.hasSufficientCache(userId).getOrNull() ?: false
+        val cacheResult = feedCacheService.hasSufficientCache(userId)
+        val hasSufficientCache = cacheResult.fold(
+            onSuccess = { it },
+            onFailure = { false }
+        )
         
         return if (hasSufficientCache) {
             InitializeAction.SKIP_INITIAL_REFRESH
@@ -58,13 +62,18 @@ class FeedRemoteMediator @Inject constructor(
             }
             
             // Try to load from cache first
-            val cachedPostIds = feedCacheService.getCachedFeedPostIds(
+            val cachedPostIdsResult = feedCacheService.getCachedFeedPostIds(
                 userId = userId,
                 limit = state.config.pageSize,
                 offset = loadKey
-            ).getOrNull()
+            )
             
-            if (!cachedPostIds.isNullOrEmpty()) {
+            val cachedPostIds = cachedPostIdsResult.fold(
+                onSuccess = { it },
+                onFailure = { emptyList<String>() }
+            )
+            
+            if (cachedPostIds.isNotEmpty()) {
                 // We have cached data, check if it's sufficient
                 val endOfPagination = cachedPostIds.size < state.config.pageSize
                 return@withContext MediatorResult.Success(endOfPaginationReached = endOfPagination)
@@ -74,24 +83,38 @@ class FeedRemoteMediator @Inject constructor(
             when (loadType) {
                 LoadType.REFRESH -> {
                     // Clear existing cache and regenerate
-                    feedCacheService.invalidateUserCache(userId)
-                    feedCacheService.updateFeedCache(userId, forceRefresh = true)
+                    feedCacheService.invalidateUserCache(userId).fold(
+                        onSuccess = { },
+                        onFailure = { /* Log error but continue */ }
+                    )
+                    feedCacheService.updateFeedCache(userId, forceRefresh = true).fold(
+                        onSuccess = { },
+                        onFailure = { /* Log error but continue */ }
+                    )
                 }
                 LoadType.APPEND -> {
                     // For append, try to extend existing cache
-                    feedCacheService.updateFeedCache(userId, forceRefresh = false)
+                    feedCacheService.updateFeedCache(userId, forceRefresh = false).fold(
+                        onSuccess = { },
+                        onFailure = { /* Log error but continue */ }
+                    )
                 }
                 else -> { /* PREPEND already handled above */ }
             }
             
             // Check if we now have data after cache update
-            val newCachedPostIds = feedCacheService.getCachedFeedPostIds(
+            val newCachedPostIdsResult = feedCacheService.getCachedFeedPostIds(
                 userId = userId,
                 limit = state.config.pageSize,
                 offset = loadKey
-            ).getOrNull()
+            )
             
-            val endOfPagination = newCachedPostIds?.size ?: 0 < state.config.pageSize
+            val newCachedPostIds = newCachedPostIdsResult.fold(
+                onSuccess = { it },
+                onFailure = { emptyList<String>() }
+            )
+            
+            val endOfPagination = newCachedPostIds.size < state.config.pageSize
             
             MediatorResult.Success(endOfPaginationReached = endOfPagination)
             

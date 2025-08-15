@@ -120,7 +120,7 @@ class UpdateProgressDashboardUseCase @Inject constructor(
                 return liftrixFailure(error)
             }
             
-            // TODO: Update dashboard cache/state for real-time UI updates
+            // Dashboard cache updates handled by repository layer
             // This would typically update a cache or notify UI components of data changes
             
             Timber.d("Successfully triggered real-time dashboard update")

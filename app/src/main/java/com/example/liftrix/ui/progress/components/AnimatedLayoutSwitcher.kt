@@ -39,7 +39,8 @@ fun AnimatedLayoutSwitcher(
     isLoading: Boolean = false,
     enableDragAndDrop: Boolean = false,
     windowSizeClass: WindowSizeClass,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onSaveCustomLayout: ((List<String>) -> Unit)? = null
 ) {
     // Animation configuration
     val transitionDuration = remember(widgets.size) {
@@ -212,7 +213,11 @@ fun AnimatedLayoutSwitcher(
                             isLoading = isLoading,
                             isCustomLayoutMode = enableDragAndDrop,
                             onLayoutSave = { customLayout ->
-                                // TODO: Implement custom layout persistence
+                                // Extract widget order from custom layout and pass to parent
+                                val widgetOrder = customLayout.items.map { item ->
+                                    widgets.find { it.id == item.widgetId }?.id ?: item.widgetId
+                                }
+                                onSaveCustomLayout?.invoke(widgetOrder)
                             }
                         )
                     }

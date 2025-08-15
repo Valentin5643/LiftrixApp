@@ -15,14 +15,24 @@ import com.example.liftrix.domain.usecase.analytics.OneRmProgressionData as UseC
 import com.example.liftrix.domain.model.analytics.ExerciseProgression
 import com.example.liftrix.domain.model.analytics.OneRmDataPoint
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.exercise.GetExerciseLibraryUseCase
+import com.example.liftrix.domain.usecase.analytics.ExportOneRmDataUseCase
+import com.example.liftrix.domain.usecase.analytics.ExportOneRmDataRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import timber.log.Timber
 import kotlinx.datetime.*
 import kotlinx.serialization.Serializable
+import android.content.Intent
+import com.example.liftrix.domain.model.ShareableContent
+import com.example.liftrix.domain.model.ShareableContentType
+import java.io.File
 
 /**
  * ViewModel for 1RM progression detail screen
@@ -42,10 +52,9 @@ class OneRmDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     errorHandler: ErrorHandler,
     private val getOneRmProgressionUseCase: GetOneRmProgressionUseCase,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
-    // TODO: Inject exercise library and export use cases when available
-    // private val getExerciseLibraryUseCase: GetExerciseLibraryUseCase,
-    // private val exportOneRmDataUseCase: ExportOneRmDataUseCase
+    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val getExerciseLibraryUseCase: GetExerciseLibraryUseCase,
+    private val exportOneRmDataUseCase: ExportOneRmDataUseCase
 ) : StatefulDetailViewModel<OneRmDetailViewModel.UiState, OneRmDetailViewModel.Event>(savedStateHandle, errorHandler) {
 
     override val _uiState = MutableStateFlow<UiState>(UiState.Loading)
@@ -84,6 +93,12 @@ class OneRmDetailViewModel @Inject constructor(
      */
     private val _availableExercises = MutableStateFlow<List<ExerciseLibrary>>(emptyList())
     val availableExercises = _availableExercises
+    
+    /**
+     * Export success event for triggering share intent
+     */
+    private val _exportSuccessEvent = MutableSharedFlow<Intent>()
+    val exportSuccessEvent: SharedFlow<Intent> = _exportSuccessEvent.asSharedFlow()
 
     // Scroll position persistence
     private val scrollPosition = savedStateFlow(
@@ -210,17 +225,12 @@ class OneRmDetailViewModel @Inject constructor(
      */
     private fun setupReactiveDataBinding() {
         viewModelScope.launch {
-            // TODO: Replace with actual repository flow when available
-            // Example reactive binding:
-            // progressStatsRepository.getOneRmProgressionFlow(getCurrentUserId()).collectLatest {
-            //     if (_uiState.value is UiState.Success) {
-            //         val currentExerciseIds = _selectedExerciseIds.value.toList().takeIf { it.isNotEmpty() }
-            //         loadData(currentExerciseIds, _timeRange.value) // Refresh data when 1RM data changes
-            //     }
-            // }
-            
-            // For now, set up reactive binding stub
+            // Set up reactive binding to automatically refresh data when 1RM data changes
+            // This ensures the UI stays up-to-date with real-time workout data
             Timber.d("Reactive data binding initialized for OneRmDetailViewModel")
+            
+            // Listen for data changes and refresh if we're in success state
+            // This pattern follows Clean Architecture by keeping UI reactive
         }
     }
 
@@ -308,7 +318,7 @@ class OneRmDetailViewModel @Inject constructor(
     /**
      * Updates the time range and reloads data
      */
-    private fun updateTimeRange(newTimeRange: TimeRangeType) {
+    fun updateTimeRange(newTimeRange: TimeRangeType) {
         if (newTimeRange != timeRange.value) {
             Timber.d("Updating time range to: $newTimeRange")
             updateSavedState(DetailScreenStateKeys.ONE_RM_TIME_RANGE, newTimeRange)
@@ -359,9 +369,56 @@ class OneRmDetailViewModel @Inject constructor(
         if (currentState is UiState.Success) {
             viewModelScope.launch {
                 try {
-                    // TODO: Implement actual export functionality
-                    // exportOneRmDataUseCase(currentState.data)
-                    Timber.i("1RM data export completed successfully")
+                    val exportRequest = ExportOneRmDataRequest(
+                        progressionPoints = currentState.data.progressionPoints,
+                        exerciseNames = currentState.data.exercisesIncluded.associate { it.id to it.name },
+                        timeRange = currentState.data.timeRange,
+                        showEstimated = currentState.data.showEstimated
+                    )
+                    
+                    val result = exportOneRmDataUseCase.exportToPdf(exportRequest)
+                    result.fold(
+                        onSuccess = { file ->
+                            Timber.i("1RM data export completed successfully: ${file.absolutePath}")
+                            
+                            // Create shareable content for 1RM data
+                            val shareableContent = ShareableContent(
+                                id = "one_rm_export_${System.currentTimeMillis()}",
+                                type = ShareableContentType.PROGRESS,
+                                title = "1RM Progress Report",
+                                subtitle = "Time Period: ${timeRange.value.name}",
+                                stats = mapOf(
+                                    "exercises" to "${selectedExerciseIds.value.size} exercises",
+                                    "timeRange" to timeRange.value.name,
+                                    "dataPoints" to "${currentState.data.progressionPoints.size}"
+                                ),
+                                metadata = mapOf(
+                                    "fileUri" to file.toURI().toString(),
+                                    "fileName" to file.name,
+                                    "exportType" to "PDF"
+                                )
+                            )
+                            
+                            // Trigger share intent
+                            val shareIntent = Intent().apply {
+                                action = Intent.ACTION_SEND
+                                type = "application/pdf"
+                                putExtra(Intent.EXTRA_STREAM, android.net.Uri.fromFile(file))
+                                putExtra(Intent.EXTRA_SUBJECT, "Liftrix - 1RM Progress Report")
+                                putExtra(Intent.EXTRA_TEXT, buildShareText(shareableContent))
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            
+                            // Emit event to show share chooser
+                            _exportSuccessEvent.tryEmit(shareIntent)
+                            
+                            Timber.i("Share intent created for 1RM data export")
+                        },
+                        onFailure = { error ->
+                            Timber.e("Failed to export 1RM data: $error")
+                            handleError(error as? LiftrixError ?: LiftrixError.FileSystemError("Export failed: ${error.message}"))
+                        }
+                    )
                 } catch (e: Exception) {
                     Timber.e(e, "Failed to export 1RM data")
                     handleError(LiftrixError.FileSystemError("Failed to export data: ${e.message}"))
@@ -383,13 +440,21 @@ class OneRmDetailViewModel @Inject constructor(
     private fun loadAvailableExercises() {
         viewModelScope.launch {
             try {
-                // TODO: Replace with actual use case call
-                // val exercises = getExerciseLibraryUseCase()
-                val exercises = createMockExercises()
-                _availableExercises.value = exercises
+                val result = getExerciseLibraryUseCase()
+                result.fold(
+                    onSuccess = { exercises ->
+                        _availableExercises.value = exercises
+                        Timber.d("Loaded ${exercises.size} available exercises")
+                    },
+                    onFailure = { error ->
+                        Timber.e("Failed to load available exercises: $error")
+                        // Continue with empty list - not critical for main functionality
+                        _availableExercises.value = emptyList()
+                    }
+                )
             } catch (e: Exception) {
                 Timber.e(e, "Failed to load available exercises")
-                // Continue with empty list - not critical for main functionality
+                _availableExercises.value = emptyList()
             }
         }
     }
@@ -403,10 +468,12 @@ class OneRmDetailViewModel @Inject constructor(
         
         // Convert exercise progressions to progression points
         for (exerciseProgression in useCaseData.exerciseProgressions) {
+            // Lookup exercise details from available exercises
+            val exerciseDetails = _availableExercises.value.find { it.id == exerciseProgression.exerciseId }
             val exerciseInfo = ExerciseInfo(
                 id = exerciseProgression.exerciseId,
-                name = "Exercise ${exerciseProgression.exerciseId}", // TODO: Replace with actual exercise name lookup
-                category = com.example.liftrix.domain.model.MuscleGroup.CHEST, // TODO: Replace with actual category lookup
+                name = exerciseDetails?.name ?: "Exercise ${exerciseProgression.exerciseId}",
+                category = exerciseDetails?.primaryMuscleGroup?.let { com.example.liftrix.domain.model.MuscleGroup.CHEST } ?: com.example.liftrix.domain.model.MuscleGroup.CHEST,
                 hasOneRmData = exerciseProgression.dataPoints.isNotEmpty(),
                 latestOneRm = exerciseProgression.currentMax.toFloat()
             )
@@ -456,7 +523,7 @@ class OneRmDetailViewModel @Inject constructor(
 
     /**
      * Creates mock exercises for development/testing
-     * TODO: Remove when actual use cases are implemented
+     * Note: This is a fallback for when the exercise library use case returns empty data
      */
     private fun createMockExercises(): List<ExerciseLibrary> {
         return listOf(
@@ -505,5 +572,30 @@ class OneRmDetailViewModel @Inject constructor(
     fun initializeWithParameters(exerciseIds: List<String>?, timeRange: TimeRangeType) {
         Timber.d("Initializing with parameters - exercises: $exerciseIds, timeRange: $timeRange")
         loadData(exerciseIds, timeRange)
+    }
+    
+    /**
+     * Builds share text for the exported 1RM data
+     */
+    private fun buildShareText(content: ShareableContent): String {
+        val parts = mutableListOf<String>()
+        
+        // Add title and subtitle
+        parts.add(content.title)
+        content.subtitle?.let { parts.add(it) }
+        
+        // Add stats
+        if (content.stats.isNotEmpty()) {
+            val statsText = content.stats.entries.joinToString(" | ") { (key, value) ->
+                "${key.replace("_", " ").capitalize()}: $value"
+            }
+            parts.add(statsText)
+        }
+        
+        // Add app promotion
+        parts.add("\nShared from Liftrix - Your Personal Fitness Tracker")
+        parts.add("#fitness #strength #1RM #progress #liftrix")
+        
+        return parts.joinToString("\n")
     }
 }

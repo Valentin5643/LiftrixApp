@@ -19,6 +19,7 @@ import androidx.navigation.NavController
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.progress.components.GlobalTimeRangeSelector
+import com.example.liftrix.ui.progress.components.TimeRangeSelector
 import com.example.liftrix.ui.common.components.LoadingIndicator
 import com.example.liftrix.ui.common.components.ErrorDisplay
 import com.example.liftrix.ui.common.components.EmptyState
@@ -111,17 +112,14 @@ fun OneRmProgressionDetailScreen(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // Time range selector - TODO: Need to create a proper TimeRangeSelector component
-            // Using TimeRangeIntegration for now as placeholder
-            LiftrixCard(
+            // Time range selector
+            TimeRangeSelector(
+                selectedTimeRange = currentTimeRange,
+                onTimeRangeChange = { newTimeRange ->
+                    viewModel.updateTimeRange(newTimeRange)
+                },
                 modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "Time Range: ${currentTimeRange.name}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
+            )
             
             Spacer(modifier = Modifier.height(16.dp))
             

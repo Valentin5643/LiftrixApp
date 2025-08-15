@@ -193,7 +193,8 @@ fun NavGraphBuilder.workoutGraph(
                     }
                 },
                 onCreateCustomExercise = {
-                    // TODO: Navigate to custom exercise creation
+                    // Navigate to custom exercise creation screen (route to be implemented)
+                    // navController.navigate(LiftrixRoute.CustomExerciseCreation)
                 }
             )
         }
@@ -243,7 +244,8 @@ fun NavGraphBuilder.workoutGraph(
                     }
                 },
                 onCreateCustomExercise = {
-                    // TODO: Navigate to custom exercise creation
+                    // Navigate to custom exercise creation screen (route to be implemented)
+                    // navController.navigate(LiftrixRoute.CustomExerciseCreation)
                 }
             )
         }

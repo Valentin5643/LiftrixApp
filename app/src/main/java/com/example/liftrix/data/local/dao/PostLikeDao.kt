@@ -55,6 +55,17 @@ interface PostLikeDao {
     """)
     suspend fun getPostLikersWithProfiles(postId: String, limit: Int = 20): List<PostLikeWithProfile>
     
+    @Query("""
+        SELECT pl.id, pl.post_id, pl.user_id, pl.created_at, pl.is_synced, 
+               sp.username, sp.display_name, sp.profile_photo_url
+        FROM post_likes pl
+        INNER JOIN social_profiles sp ON pl.user_id = sp.user_id
+        WHERE pl.post_id = :postId
+        ORDER BY pl.created_at DESC
+        LIMIT :limit OFFSET :offset
+    """)
+    suspend fun getPostLikersWithProfiles(postId: String, limit: Int, offset: Int): List<PostLikeWithProfile>
+    
     @Query("SELECT * FROM post_likes WHERE user_id = :userId ORDER BY created_at DESC")
     fun getUserLikes(userId: String): Flow<List<PostLikeEntity>>
     

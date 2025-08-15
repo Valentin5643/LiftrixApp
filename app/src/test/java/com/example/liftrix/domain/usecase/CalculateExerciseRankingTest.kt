@@ -7,10 +7,11 @@ import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.usecase.analytics.CalculateExerciseRankingUseCase
 import com.example.liftrix.domain.usecase.analytics.ExerciseRankingRequest
+import com.example.liftrix.domain.usecase.analytics.ExercisePerformanceData
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
-import com.example.liftrix.domain.repository.workout.ExercisePerformanceData
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
-import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.model.analytics.VolumeDataPoint
+import com.example.liftrix.domain.model.analytics.OneRmDataPoint
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.Clock
@@ -20,6 +21,7 @@ import org.junit.Before
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.fail
 
 /**
  * Unit Tests for Exercise Performance Calculation and Ranking
@@ -234,9 +236,9 @@ class CalculateExerciseRankingTest {
     @Test
     fun test_time_range_filtering() = runTest {
         // Given: Mock authenticated user
-        coEvery { getCurrentUserIdUseCase() } returns "test_user_123"
+        coEvery { getCurrentUserIdUseCase.invoke() } returns "test_user_123"
         coEvery { workoutRepository.getExercisePerformanceData(any(), any(), any()) } returns 
-            LiftrixResult.success(emptyList<ExercisePerformanceData>())
+            Result.success(emptyList<ExercisePerformanceData>())
         
         val request = ExerciseRankingRequest(
             metric = RankingMetric.PERFORMANCE_SCORE,
@@ -250,7 +252,7 @@ class CalculateExerciseRankingTest {
         // Then: Should return success (even with empty data)
         result.fold(
             onSuccess = { data ->
-                assertTrue("Should return valid result", data.rankings.isEmpty())
+                assertTrue(data.rankings.isEmpty())
             },
             onFailure = {
                 fail("Should not fail with valid parameters")
@@ -261,9 +263,9 @@ class CalculateExerciseRankingTest {
     @Test
     fun test_insufficient_data_handling() = runTest {
         // Given: Mock authenticated user but no data
-        coEvery { getCurrentUserIdUseCase() } returns "test_user_123"
+        coEvery { getCurrentUserIdUseCase.invoke() } returns "test_user_123"
         coEvery { workoutRepository.getExercisePerformanceData(any(), any(), any()) } returns 
-            LiftrixResult.success(emptyList<ExercisePerformanceData>())
+            Result.success(emptyList<ExercisePerformanceData>())
 
         // When: Attempt to calculate performance score
         val result = calculateExerciseRankingUseCase(
@@ -278,12 +280,12 @@ class CalculateExerciseRankingTest {
         result.fold(
             onSuccess = { data ->
                 // Should return empty list for insufficient data
-                assertTrue("Should return empty rankings for no data", data.rankings.isEmpty())
+                assertTrue(data.rankings.isEmpty())
             },
             onFailure = { error ->
                 // Should provide meaningful error message
                 val errorMsg = error.message ?: "Unknown error"
-                assertTrue("Error message should be meaningful", errorMsg.contains("calculation") ||
+                assertTrue(errorMsg.contains("calculation") ||
                           errorMsg.contains("ranking"))
             }
         )
@@ -343,7 +345,7 @@ class CalculateExerciseRankingTest {
         exerciseId: String,
         volumeGrowth: Float,
         oneRmGrowth: Float
-    ) = ExercisePerformanceData(
+    ) = TestExercisePerformanceData(
         exerciseId = exerciseId,
         volumeGrowth = volumeGrowth,
         oneRmGrowth = oneRmGrowth,
@@ -381,9 +383,9 @@ class CalculateExerciseRankingTest {
     }
 
     private fun rankExercises(
-        exercises: List<ExercisePerformanceData>,
+        exercises: List<TestExercisePerformanceData>,
         metric: RankingMetric
-    ): List<ExercisePerformanceData> {
+    ): List<TestExercisePerformanceData> {
         return when (metric) {
             RankingMetric.PERFORMANCE_SCORE -> exercises.sortedByDescending { it.performanceScore }
             RankingMetric.VOLUME_GROWTH -> exercises.sortedByDescending { it.volumeGrowth }
@@ -406,7 +408,7 @@ class CalculateExerciseRankingTest {
         return emptyList()
     }
 
-    private fun createExerciseWithInsufficientData(): ExercisePerformanceData {
+    private fun createExerciseWithInsufficientData(): TestExercisePerformanceData {
         return createExercisePerformanceData("insufficient-data", 0f, 0f)
     }
 
@@ -417,7 +419,7 @@ class CalculateExerciseRankingTest {
         val category: ExerciseCategory
     )
 
-    data class ExercisePerformanceData(
+    data class TestExercisePerformanceData(
         val exerciseId: String,
         val volumeGrowth: Float,
         val oneRmGrowth: Float,

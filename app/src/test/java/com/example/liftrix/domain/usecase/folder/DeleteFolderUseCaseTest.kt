@@ -1,6 +1,8 @@
 package com.example.liftrix.domain.usecase.folder
 
 import com.example.liftrix.domain.model.*
+import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
 import com.example.liftrix.data.local.LiftrixDatabase
@@ -13,6 +15,7 @@ import org.junit.Test
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.fail
 
 /**
  * Unit tests for DeleteFolderUseCase
@@ -143,10 +146,13 @@ class DeleteFolderUseCaseTest {
         
         // Assert
         assertTrue(result.isFailure)
-        result.onFailure { exception ->
-            assertTrue(exception is IllegalArgumentException)
-            assertTrue(exception.message?.contains("User ID cannot be blank") == true)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                assertTrue(error is LiftrixError.ValidationError)
+                assertTrue(error.toString().contains("User ID cannot be blank"))
+            }
+        )
         
         // Verify no repository interactions
         coVerify(exactly = 0) { folderRepository.getFolderByIdDirect(any(), any()) }
@@ -185,10 +191,13 @@ class DeleteFolderUseCaseTest {
         
         // Assert
         assertTrue(result.isFailure)
-        result.onFailure { exception ->
-            assertTrue(exception is IllegalArgumentException)
-            assertTrue(exception.message?.contains("Folder not found or not owned by user") == true)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                assertTrue(error is LiftrixError.ValidationError)
+                assertTrue(error.toString().contains("Folder not found or not owned by user"))
+            }
+        )
         
         // Verify folder lookup but no deletion
         coVerify(exactly = 1) { folderRepository.getFolderByIdDirect(nonExistentFolderId, validUserId) }
@@ -208,10 +217,13 @@ class DeleteFolderUseCaseTest {
         
         // Assert
         assertTrue(result.isFailure)
-        result.onFailure { exception ->
-            assertTrue(exception is IllegalArgumentException)
-            assertTrue(exception.message?.contains("Cannot delete the default 'Uncategorized' folder") == true)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                assertTrue(error is LiftrixError.ValidationError)
+                assertTrue(error.toString().contains("Cannot delete the default 'Uncategorized' folder"))
+            }
+        )
         
         // Verify protection prevented deletion
         coVerify(exactly = 1) { folderRepository.getFolderByIdDirect(defaultFolderWithId.id, validUserId) }
@@ -232,9 +244,13 @@ class DeleteFolderUseCaseTest {
         
         // Assert
         assertTrue(result.isFailure)
-        result.onFailure { exception ->
-            assertEquals(defaultFolderError, exception)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                assertTrue(error is LiftrixError.BusinessLogicError)
+                assertTrue(error.toString().contains("Default folder creation failed"))
+            }
+        )
         
         // Verify deletion was not attempted
         coVerify(exactly = 0) { folderRepository.deleteFolder(any(), any()) }
@@ -255,9 +271,13 @@ class DeleteFolderUseCaseTest {
         
         // Assert
         assertTrue(result.isFailure)
-        result.onFailure { exception ->
-            assertEquals(templateError, exception)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                assertTrue(error is LiftrixError.BusinessLogicError)
+                assertTrue(error.toString().contains("Template retrieval failed"))
+            }
+        )
         
         // Verify deletion was not attempted
         coVerify(exactly = 0) { folderRepository.deleteFolder(any(), any()) }
@@ -280,9 +300,13 @@ class DeleteFolderUseCaseTest {
         
         // Assert
         assertTrue(result.isFailure)
-        result.onFailure { exception ->
-            assertEquals(moveError, exception)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                assertTrue(error is LiftrixError.BusinessLogicError)
+                assertTrue(error.toString().contains("Template move failed"))
+            }
+        )
         
         // Verify deletion was not attempted
         coVerify(exactly = 0) { folderRepository.deleteFolder(any(), any()) }
@@ -328,10 +352,13 @@ class DeleteFolderUseCaseTest {
         
         // Assert
         assertTrue(result.isFailure)
-        result.onFailure { exception ->
-            assertTrue(exception is IllegalArgumentException)
-            assertTrue(exception.message?.contains("Folder not found or not owned by user") == true)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                assertTrue(error is LiftrixError.ValidationError)
+                assertTrue(error.toString().contains("Folder not found or not owned by user"))
+            }
+        )
         
         // Verify user scoping prevented unauthorized access
         coVerify(exactly = 1) { folderRepository.getFolderByIdDirect(validFolderId, differentUserId) }

@@ -1,5 +1,8 @@
 package com.example.liftrix.ui.common
 
+import android.content.Context
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityManager
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -20,6 +23,8 @@ import androidx.compose.ui.unit.sp
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.components.buttons.LiftrixButton
 import com.example.liftrix.ui.theme.LiftrixColors
+import com.example.liftrix.ui.theme.AccessibilityColors.luminance
+import com.example.liftrix.ui.common.AccessibilityUtils.ensureMinimumTouchTarget
 
 /**
  * Accessibility-enhanced component wrappers ensuring WCAG 2.1 AA compliance.
@@ -42,7 +47,7 @@ fun AccessibleLiftrixCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val systemAccessibility = rememberSystemAccessibilityState()
-    val context = LocalContext.current
+    val cardContext = LocalContext.current
     
     // Validate contrast ratio for accessibility
     val containerColor = colors.containerColor
@@ -94,7 +99,7 @@ fun AccessibleLiftrixButton(
     announcement: String? = null
 ) {
     val systemAccessibility = rememberSystemAccessibilityState()
-    val context = LocalContext.current
+    val buttonContext = LocalContext.current
     
     // Validate contrast ratio
     val containerColor = colors.containerColor
@@ -112,13 +117,24 @@ fun AccessibleLiftrixButton(
         colors
     }
     
+    val accessibilityManager = remember { 
+        buttonContext.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager 
+    }
+    
     Button(
         onClick = {
             onClick()
             // Announce action completion if specified
-            announcement?.let { 
-                // TODO: Implement screen reader announcement
-                // AccessibilityUtils.announceToScreenReader(context, it)
+            announcement?.let { announcementText ->
+                // Announce to screen reader using AccessibilityEvent
+                if (accessibilityManager?.isEnabled == true) {
+                    val event = AccessibilityEvent.obtain(AccessibilityEvent.TYPE_ANNOUNCEMENT).apply {
+                        this.text.add(announcementText)
+                        className = "com.example.liftrix"
+                        packageName = buttonContext.packageName
+                    }
+                    accessibilityManager.sendAccessibilityEvent(event)
+                }
             }
         },
         modifier = modifier
@@ -317,7 +333,7 @@ fun AccessibleSwitch(
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
-    val context = LocalContext.current
+    val switchContext = LocalContext.current
     
     Row(
         modifier = modifier
@@ -331,13 +347,24 @@ fun AccessibleSwitch(
             },
         verticalAlignment = Alignment.CenterVertically
     ) {
+        val accessibilityManager = remember { 
+            switchContext.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager 
+        }
+        
         Switch(
             checked = checked,
             onCheckedChange = { newValue ->
                 onCheckedChange(newValue)
-                // TODO: Announce state change to screen reader
-                // val announcement = "$label ${if (newValue) "enabled" else "disabled"}"
-                // AccessibilityUtils.announceToScreenReader(context, announcement)
+                // Announce state change to screen reader
+                val announcement = "$label ${if (newValue) "enabled" else "disabled"}"
+                if (accessibilityManager?.isEnabled == true) {
+                    val event = AccessibilityEvent.obtain(AccessibilityEvent.TYPE_ANNOUNCEMENT).apply {
+                        this.text.add(announcement)
+                        className = "com.example.liftrix"
+                        packageName = switchContext.packageName
+                    }
+                    accessibilityManager.sendAccessibilityEvent(event)
+                }
             },
             enabled = enabled
         )
@@ -364,7 +391,7 @@ fun AccessibleProgressIndicator(
     label: String,
     showPercentage: Boolean = true
 ) {
-    val context = LocalContext.current
+    val progressContext = LocalContext.current
     val percentage = (progress * 100).toInt()
     
     Column(
@@ -390,29 +417,8 @@ fun AccessibleProgressIndicator(
     }
 }
 
-/**
- * Data class for accessibility state management
- */
-data class AccessibilityState(
-    val contentDescription: String,
-    val stateDescription: String?,
-    val role: Role?,
-    val enabled: Boolean
-)
 
-/**
- * Extension function to ensure minimum touch target size
- */
-fun Modifier.ensureMinimumTouchTarget(minSize: androidx.compose.ui.unit.Dp = 44.dp): Modifier {
-    return this.sizeIn(minWidth = minSize, minHeight = minSize)
-}
 
-/**
- * Extension function to get luminance of a color
- */
-fun Color.luminance(): Float {
-    return (0.299 * red + 0.587 * green + 0.114 * blue).toFloat()
-}
 
 /**
  * Accessibility-enhanced icon with proper content description and touch targets.

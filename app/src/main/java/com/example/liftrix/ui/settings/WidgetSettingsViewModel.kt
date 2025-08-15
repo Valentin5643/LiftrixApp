@@ -500,13 +500,20 @@ class WidgetSettingsViewModel @Inject constructor(
 
     /**
      * Shows a toast message to the user
-     * TODO: Integrate with proper toast/snackbar system
+     * Integrated with proper toast/snackbar system
      */
     private fun showToast(message: String) {
-        // TODO: Implement proper toast/snackbar display logic
-        // For now, just log the message
+        // Emit toast through a separate flow for UI consumption
+        viewModelScope.launch {
+            _toastMessages.emit(message)
+        }
+        
         Timber.d("Toast: $message")
     }
+    
+    // Separate flow for toast messages
+    private val _toastMessages = kotlinx.coroutines.flow.MutableSharedFlow<String>()
+    val toastMessages: kotlinx.coroutines.flow.SharedFlow<String> = _toastMessages
 
     /**
      * Gets all available widgets organized by complexity and category

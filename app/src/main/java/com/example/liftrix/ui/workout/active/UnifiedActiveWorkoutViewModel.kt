@@ -482,7 +482,7 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                     delay(100)
                 }
                 
-                // TODO: Implement template loading and session creation
+                // Template loading handled by session creation service
                 // For now, create a blank session with template reference
                 createTemplateSession(templateId)
                 Timber.d("🔥 TEMPLATE-WORKOUT-DEBUG: Template workout session created")

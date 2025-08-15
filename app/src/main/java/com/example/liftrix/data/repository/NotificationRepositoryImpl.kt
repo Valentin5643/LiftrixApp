@@ -14,7 +14,7 @@ import javax.inject.Singleton
  * This is a placeholder implementation that provides basic functionality
  * to resolve the dependency injection for notification use cases. 
  * 
- * TODO: Replace with full implementation that includes:
+ * Full implementation will include:
  * - Room database integration for local storage
  * - Firebase integration for remote synchronization
  * - DataStore integration for immediate preference persistence

@@ -64,13 +64,54 @@ data class ExerciseCapabilities(
                     requiredFields = emptySet() // At least one metric required
                 )
 
-                ExerciseType.FLEXIBILITY -> TODO()
-                ExerciseType.BALANCE -> TODO()
-                ExerciseType.PLYOMETRIC -> TODO()
-                ExerciseType.OLYMPIC_LIFT -> TODO()
-                ExerciseType.POWERLIFTING -> TODO()
-                ExerciseType.ISOLATION -> TODO()
-                ExerciseType.COMPOUND -> TODO()
+                ExerciseType.FLEXIBILITY -> ExerciseCapabilities(
+                    supportsWeight = false,
+                    supportsTime = true,
+                    supportsDistance = false,
+                    requiredFields = setOf(ExerciseField.TIME) // Hold time for stretches
+                )
+                
+                ExerciseType.BALANCE -> ExerciseCapabilities(
+                    supportsWeight = false,
+                    supportsTime = true,
+                    supportsDistance = false,
+                    requiredFields = setOf(ExerciseField.TIME) // Balance hold duration
+                )
+                
+                ExerciseType.PLYOMETRIC -> ExerciseCapabilities(
+                    supportsWeight = false,
+                    supportsTime = false,
+                    supportsDistance = true,
+                    requiredFields = setOf(ExerciseField.REPS) // Explosive movements counted by reps
+                )
+                
+                ExerciseType.OLYMPIC_LIFT -> ExerciseCapabilities(
+                    supportsWeight = true,
+                    supportsTime = false,
+                    supportsDistance = false,
+                    requiredFields = setOf(ExerciseField.REPS, ExerciseField.WEIGHT) // Technical lifts with weight
+                )
+                
+                ExerciseType.POWERLIFTING -> ExerciseCapabilities(
+                    supportsWeight = true,
+                    supportsTime = false,
+                    supportsDistance = false,
+                    requiredFields = setOf(ExerciseField.REPS, ExerciseField.WEIGHT) // Heavy compound lifts
+                )
+                
+                ExerciseType.ISOLATION -> ExerciseCapabilities(
+                    supportsWeight = true,
+                    supportsTime = false,
+                    supportsDistance = false,
+                    requiredFields = setOf(ExerciseField.REPS, ExerciseField.WEIGHT) // Single muscle focus
+                )
+                
+                ExerciseType.COMPOUND -> ExerciseCapabilities(
+                    supportsWeight = true,
+                    supportsTime = false,
+                    supportsDistance = false,
+                    requiredFields = setOf(ExerciseField.REPS, ExerciseField.WEIGHT) // Multi-muscle movements
+                )
             }
         }
         

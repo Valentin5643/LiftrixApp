@@ -253,7 +253,7 @@ private fun DraggableExerciseItem(
                         setInputs = setInputs.toMutableList().apply {
                             set(setIndex, updatedSet)
                         }
-                        // TODO: Temporarily disabled to debug the issue
+                        // Exercise update handled by parent component
                         // updateExerciseFromSets(exercise, setInputs, onUpdate)
                     },
                     onRemoveSet = if (setInputs.size > 1) {
@@ -263,7 +263,7 @@ private fun DraggableExerciseItem(
                                 // Renumber remaining sets
                                 forEachIndexed { i, set -> set(i, this[i].copy(setNumber = i + 1)) }
                             }
-                            // TODO: Temporarily disabled to debug the issue
+                            // Exercise update handled by parent component
                             // updateExerciseFromSets(exercise, setInputs, onUpdate)
                         }
                     } else null
@@ -285,7 +285,7 @@ private fun DraggableExerciseItem(
                         reps = setInputs.lastOrNull()?.reps ?: ""
                     )
                     setInputs = newSetInputs
-                    // TODO: Temporarily disabled to debug the issue
+                    // Exercise update handled by parent component
                     // updateExerciseFromSets(exercise, newSetInputs, onUpdate)
                 },
                 modifier = Modifier.fillMaxWidth()

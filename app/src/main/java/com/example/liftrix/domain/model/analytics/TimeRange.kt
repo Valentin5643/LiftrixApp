@@ -2,6 +2,12 @@ package com.example.liftrix.domain.model.analytics
 
 import java.util.Date
 import java.util.Calendar
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.minus
+import kotlinx.datetime.DatePeriod
 
 /**
  * Time range model for analytics queries and exports
@@ -96,5 +102,53 @@ data class TimeRange(
             val startDate = Date(0L) // Epoch time
             return TimeRange(startDate, endDate, TimeRangeType.ALL_TIME)
         }
+        
+        /**
+         * Creates a TimeRange with LocalDate for analytics from TimeRangeType
+         */
+        fun fromType(timeRangeType: TimeRangeType): AnalyticsTimeRange {
+            val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+            
+            return when (timeRangeType) {
+                TimeRangeType.MONTH -> AnalyticsTimeRange(
+                    startDate = now.minus(DatePeriod(days = 30)),
+                    endDate = now,
+                    type = timeRangeType
+                )
+                TimeRangeType.SIX_MONTHS -> AnalyticsTimeRange(
+                    startDate = now.minus(DatePeriod(months = 6)),
+                    endDate = now,
+                    type = timeRangeType
+                )
+                TimeRangeType.ALL_TIME -> AnalyticsTimeRange(
+                    startDate = LocalDate(2020, 1, 1), // Reasonable start date for workout tracking
+                    endDate = now,
+                    type = timeRangeType
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Analytics-specific time range using kotlinx.datetime.LocalDate
+ */
+data class AnalyticsTimeRange(
+    val startDate: LocalDate,
+    val endDate: LocalDate,
+    val type: TimeRangeType
+) {
+    /**
+     * Validates that the time range is valid
+     */
+    fun isValid(): Boolean {
+        return startDate <= endDate
+    }
+    
+    /**
+     * Returns the duration of the time range in days
+     */
+    fun getDurationInDays(): Int {
+        return endDate.toEpochDays() - startDate.toEpochDays()
     }
 }

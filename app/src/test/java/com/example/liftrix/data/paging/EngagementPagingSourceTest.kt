@@ -1,12 +1,16 @@
 package com.example.liftrix.data.paging
 
 import androidx.paging.PagingSource
-import androidx.paging.PagingSource.*
+import androidx.paging.PagingSource.LoadParams
+import androidx.paging.PagingSource.LoadResult
+import androidx.paging.PagingState
 import com.example.liftrix.data.local.dao.PostLikeDao
 import com.example.liftrix.data.local.dao.SavedPostDao
-import com.example.liftrix.domain.model.social.PostLike
-import com.example.liftrix.domain.model.social.SavedPost
+import com.example.liftrix.data.local.dto.PostLikeWithProfile
+import com.example.liftrix.data.local.dto.SavedPostWithDetails
 import io.mockk.*
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
@@ -14,6 +18,7 @@ import org.junit.Assert.*
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import java.io.IOException
+import kotlin.math.min
 
 /**
  * Comprehensive tests for engagement PagingSource implementations
@@ -46,10 +51,10 @@ class EngagementPagingSourceTest {
         val postLikes = createTestPostLikes(20) // Full page
         val pagingSource = PostLikesPagingSource(postLikeDao, testPostId)
         
-        coEvery { postLikeDao.getPostLikesWithProfiles(testPostId, 0, 20) } returns postLikes
+        coEvery { postLikeDao.getPostLikersWithProfiles(testPostId, 20, 0) } returns postLikes
 
         // When
-        val loadParams = LoadParams.Refresh(
+        val loadParams = LoadParams.Refresh<Int>(
             key = null,
             loadSize = 20,
             placeholdersEnabled = false
@@ -72,10 +77,11 @@ class EngagementPagingSourceTest {
         val postLikes = createTestPostLikes(15) // Partial page
         val pagingSource = PostLikesPagingSource(postLikeDao, testPostId)
         
-        coEvery { postLikeDao.getPostLikesWithProfiles(testPostId, 20, 20) } returns postLikes
+        // For pagination test, simulate getting fewer results
+        coEvery { postLikeDao.getPostLikersWithProfiles(testPostId, 20, 20) } returns postLikes
 
         // When
-        val loadParams = LoadParams.Append(
+        val loadParams = LoadParams.Append<Int>(
             key = 20,
             loadSize = 20,
             placeholdersEnabled = false
@@ -96,10 +102,11 @@ class EngagementPagingSourceTest {
         // Given - empty result indicates end
         val pagingSource = PostLikesPagingSource(postLikeDao, testPostId)
         
-        coEvery { postLikeDao.getPostLikesWithProfiles(testPostId, 40, 20) } returns emptyList()
+        // Simulate end of data
+        coEvery { postLikeDao.getPostLikersWithProfiles(testPostId, 20, 40) } returns emptyList()
 
         // When
-        val loadParams = LoadParams.Append(
+        val loadParams = LoadParams.Append<Int>(
             key = 40,
             loadSize = 20,
             placeholdersEnabled = false
@@ -121,10 +128,10 @@ class EngagementPagingSourceTest {
         val pagingSource = PostLikesPagingSource(postLikeDao, testPostId)
         val dbException = IOException("Database connection failed")
         
-        coEvery { postLikeDao.getPostLikesWithProfiles(any(), any(), any()) } throws dbException
+        coEvery { postLikeDao.getPostLikersWithProfiles(any(), any(), any()) } throws dbException
 
         // When
-        val loadParams = LoadParams.Refresh(
+        val loadParams = LoadParams.Refresh<Int>(
             key = null,
             loadSize = 20,
             placeholdersEnabled = false
@@ -141,10 +148,10 @@ class EngagementPagingSourceTest {
     fun `PostLikesPagingSource should calculate refresh key correctly`() = runTest {
         // Given
         val pagingSource = PostLikesPagingSource(postLikeDao, testPostId)
-        val state = mockk<PagingState<Int, PostLike>>()
+        val state = mockk<PagingState<Int, PostLikeWithProfile>>()
         
         every { state.anchorPosition } returns 25
-        every { state.closestPageToPosition(25) } returns mockk<PagingSource.LoadResult.Page<Int, PostLike>> {
+        every { state.closestPageToPosition(25) } returns mockk<LoadResult.Page<Int, PostLikeWithProfile>> {
             every { prevKey } returns 20
             every { nextKey } returns 40
         }
@@ -166,10 +173,10 @@ class EngagementPagingSourceTest {
         val savedPosts = createTestSavedPosts(15)
         val pagingSource = SavedPostsPagingSource(savedPostDao, testUserId)
         
-        coEvery { savedPostDao.getUserSavedPostsWithDetails(testUserId, 0, 20) } returns savedPosts
+        coEvery { savedPostDao.getUserSavedPostsWithDetails(testUserId) } returns flow { emit(savedPosts) }
 
         // When
-        val loadParams = LoadParams.Refresh(
+        val loadParams = LoadParams.Refresh<Int>(
             key = null,
             loadSize = 20,
             placeholdersEnabled = false
@@ -190,10 +197,10 @@ class EngagementPagingSourceTest {
         // Given
         val pagingSource = SavedPostsPagingSource(savedPostDao, testUserId)
         
-        coEvery { savedPostDao.getUserSavedPostsWithDetails(testUserId, 0, 20) } returns emptyList()
+        coEvery { savedPostDao.getUserSavedPostsWithDetails(testUserId) } returns flow { emit(emptyList()) }
 
         // When
-        val loadParams = LoadParams.Refresh(
+        val loadParams = LoadParams.Refresh<Int>(
             key = null,
             loadSize = 20,
             placeholdersEnabled = false
@@ -215,10 +222,10 @@ class EngagementPagingSourceTest {
         val savedPosts = createTestSavedPosts(10)
         val pagingSource = SavedPostsPagingSource(savedPostDao, testUserId)
         
-        coEvery { savedPostDao.getUserSavedPostsWithDetails(testUserId, 0, 20) } returns savedPosts
+        coEvery { savedPostDao.getUserSavedPostsWithDetails(testUserId) } returns flow { emit(savedPosts) }
 
         // When
-        val loadParams = LoadParams.Prepend(
+        val loadParams = LoadParams.Prepend<Int>(
             key = 20,
             loadSize = 20,
             placeholdersEnabled = false
@@ -244,10 +251,10 @@ class EngagementPagingSourceTest {
         val pagingSource = PostLikesPagingSource(postLikeDao, testPostId)
         
         // First call fails, second succeeds
-        coEvery { postLikeDao.getPostLikesWithProfiles(testPostId, 0, 20) } throws 
+        coEvery { postLikeDao.getPostLikersWithProfiles(testPostId, 20, 0) } throws 
             IOException("Temporary database issue") andThen createTestPostLikes(10)
 
-        val loadParams = LoadParams.Refresh(
+        val loadParams = LoadParams.Refresh<Int>(
             key = null,
             loadSize = 20,
             placeholdersEnabled = false
@@ -273,10 +280,10 @@ class EngagementPagingSourceTest {
         // Given
         val pagingSource = PostLikesPagingSource(postLikeDao, "") // Invalid post ID
         
-        coEvery { postLikeDao.getPostLikesWithProfiles("", any(), any()) } returns emptyList()
+        coEvery { postLikeDao.getPostLikersWithProfiles("", any(), any()) } returns emptyList()
 
         // When
-        val loadParams = LoadParams.Refresh(
+        val loadParams = LoadParams.Refresh<Int>(
             key = null,
             loadSize = 20,
             placeholdersEnabled = false
@@ -300,10 +307,10 @@ class EngagementPagingSourceTest {
         val pagingSource = PostLikesPagingSource(postLikeDao, testPostId)
         val largePage = createTestPostLikes(largePageSize)
         
-        coEvery { postLikeDao.getPostLikesWithProfiles(testPostId, 0, largePageSize) } returns largePage
+        coEvery { postLikeDao.getPostLikersWithProfiles(testPostId, largePageSize, 0) } returns largePage
 
         // When
-        val loadParams = LoadParams.Refresh(
+        val loadParams = LoadParams.Refresh<Int>(
             key = null,
             loadSize = largePageSize,
             placeholdersEnabled = false
@@ -320,95 +327,38 @@ class EngagementPagingSourceTest {
     // Helper Methods
     // ==========================================
 
-    private fun createTestPostLikes(count: Int): List<PostLike> {
+    private fun createTestPostLikes(count: Int): List<PostLikeWithProfile> {
         return (1..count).map { i ->
-            PostLike(
+            PostLikeWithProfile(
                 id = "like-$i",
                 postId = testPostId,
                 userId = "user-$i",
-                username = "user$i",
-                displayName = "User $i",
-                profilePhotoUrl = "https://example.com/photo$i.jpg",
-                createdAt = System.currentTimeMillis() - (i * 60000L) // Staggered timestamps
+                createdAt = System.currentTimeMillis() - (i * 60000L), // Staggered timestamps
+                isSynced = true,
+                username = "user$i", // Nullable in actual DTO
+                displayName = "User $i", // Nullable in actual DTO  
+                profilePhotoUrl = "https://example.com/photo$i.jpg" // Nullable in actual DTO
             )
         }
     }
 
-    private fun createTestSavedPosts(count: Int): List<SavedPost> {
+    private fun createTestSavedPosts(count: Int): List<SavedPostWithDetails> {
         return (1..count).map { i ->
-            SavedPost(
+            SavedPostWithDetails(
                 id = "saved-$i",
-                postId = "post-$i",
                 userId = testUserId,
-                workoutId = "workout-$i",
+                postId = "post-$i",
                 savedAt = System.currentTimeMillis() - (i * 3600000L), // Staggered by hours
-                postCaption = "Saved workout $i",
-                postAuthorUsername = "author$i",
-                workoutName = "Workout $i",
-                totalExercises = 5 + (i % 3),
-                estimatedDuration = 45 + (i % 20)
+                caption = "Saved workout $i", // Nullable in actual DTO
+                authorUsername = "author$i", // Nullable in actual DTO
+                authorDisplayName = "Author $i", // Nullable in actual DTO
+                authorProfilePhotoUrl = "https://example.com/author$i.jpg", // Nullable in actual DTO
+                workoutDuration = 45 + (i % 20), // Nullable in actual DTO
+                exercisesCount = 5 + (i % 3), // Nullable in actual DTO
+                prsCount = i % 3,
+                createdAt = System.currentTimeMillis() - (i * 7200000L)
             )
         }
     }
 
-    // Inner class for testing - would normally be separate files
-    private class PostLikesPagingSource(
-        private val postLikeDao: PostLikeDao,
-        private val postId: String
-    ) : PagingSource<Int, PostLike>() {
-
-        override suspend fun load(params: LoadParams<Int>): LoadResult<Int, PostLike> {
-            return try {
-                val offset = params.key ?: 0
-                val limit = params.loadSize
-
-                val likes = postLikeDao.getPostLikesWithProfiles(postId, offset, limit)
-
-                LoadResult.Page(
-                    data = likes,
-                    prevKey = if (offset == 0) null else (offset - limit).coerceAtLeast(0),
-                    nextKey = if (likes.isEmpty()) null else offset + likes.size
-                )
-            } catch (e: Exception) {
-                LoadResult.Error(e)
-            }
-        }
-
-        override fun getRefreshKey(state: PagingState<Int, PostLike>): Int? {
-            return state.anchorPosition?.let { anchorPosition ->
-                state.closestPageToPosition(anchorPosition)?.prevKey?.plus(1)
-                    ?: state.closestPageToPosition(anchorPosition)?.nextKey?.minus(1)
-            }
-        }
-    }
-
-    private class SavedPostsPagingSource(
-        private val savedPostDao: SavedPostDao,
-        private val userId: String
-    ) : PagingSource<Int, SavedPost>() {
-
-        override suspend fun load(params: LoadParams<Int>): LoadResult<Int, SavedPost> {
-            return try {
-                val offset = params.key ?: 0
-                val limit = params.loadSize
-
-                val savedPosts = savedPostDao.getUserSavedPostsWithDetails(userId, offset, limit)
-
-                LoadResult.Page(
-                    data = savedPosts,
-                    prevKey = if (offset == 0) null else (offset - limit).coerceAtLeast(0),
-                    nextKey = if (savedPosts.isEmpty()) null else offset + savedPosts.size
-                )
-            } catch (e: Exception) {
-                LoadResult.Error(e)
-            }
-        }
-
-        override fun getRefreshKey(state: PagingState<Int, SavedPost>): Int? {
-            return state.anchorPosition?.let { anchorPosition ->
-                state.closestPageToPosition(anchorPosition)?.prevKey?.plus(1)
-                    ?: state.closestPageToPosition(anchorPosition)?.nextKey?.minus(1)
-            }
-        }
-    }
 }

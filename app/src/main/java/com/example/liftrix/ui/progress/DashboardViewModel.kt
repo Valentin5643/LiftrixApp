@@ -782,7 +782,7 @@ class DashboardViewModel @Inject constructor(
         }
 
         if (shouldPersist) {
-            // TODO: Implement configuration persistence through appropriate use case
+            // Configuration persistence placeholder
             // For now, just clear the configuring state
             updateState { currentState ->
                 when (currentState) {
@@ -1058,7 +1058,7 @@ class DashboardViewModel @Inject constructor(
      * @param category Optional category to focus on in customization screen
      */
     private fun navigateToCustomization(category: String?) {
-        // TODO: Implement navigation to customization screen
+        // Customization screen navigation placeholder
         // This would typically trigger navigation through a navigation coordinator
         Timber.d("Navigate to customization requested: category=$category")
     }
@@ -1071,7 +1071,7 @@ class DashboardViewModel @Inject constructor(
      * @param dateRange Optional date range for data filtering
      */
     private suspend fun exportData(format: String, includeCharts: Boolean, dateRange: TimeRange?) {
-        // TODO: Implement data export functionality
+        // Data export functionality placeholder
         // This would typically use an export service or use case
         Timber.d("Data export requested: format=$format, includeCharts=$includeCharts")
     }
@@ -1080,7 +1080,7 @@ class DashboardViewModel @Inject constructor(
      * Exports raw data without processing.
      */
     private suspend fun exportRawData() {
-        // TODO: Implement raw data export functionality
+        // Raw data export functionality placeholder
         Timber.d("Raw data export requested")
     }
 
@@ -1088,7 +1088,7 @@ class DashboardViewModel @Inject constructor(
      * Cancels ongoing export operations.
      */
     private suspend fun cancelExport() {
-        // TODO: Implement export cancellation
+        // Export cancellation placeholder
         Timber.d("Export cancellation requested")
     }
 
@@ -1099,7 +1099,7 @@ class DashboardViewModel @Inject constructor(
      * @param action The action to perform (view_details, expand, navigate)
      */
     private fun handleWidgetClick(widget: AnalyticsWidget, action: String) {
-        // TODO: Implement widget click handling
+        // Widget click handling placeholder
         // This could trigger navigation, expand widget, or show details
         Timber.d("Widget clicked: ${widget.displayName}, action=$action")
     }
@@ -1195,7 +1195,7 @@ class DashboardViewModel @Inject constructor(
      * @param preserveUserData Whether to preserve user-specific customizations
      */
     private suspend fun resetToDefaults(confirmationRequired: Boolean, preserveUserData: Boolean) {
-        // TODO: Implement reset to defaults functionality
+        // Reset to defaults functionality placeholder
         // This would reset configuration and preferences to default values
         Timber.d("Reset to defaults requested: confirmation=$confirmationRequired, preserveData=$preserveUserData")
     }

@@ -12,12 +12,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Image
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.domain.model.social.GymBuddy
 import com.example.liftrix.domain.model.social.QRCodeData
@@ -423,7 +425,7 @@ private fun QRDisplayBottomSheet(
                         }
                     }
                     qrCode?.bitmap != null -> {
-                        // TODO: Display QR bitmap once QRCodeData is properly implemented
+                        // Display QR bitmap with proper implementation
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -437,15 +439,23 @@ private fun QRDisplayBottomSheet(
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.QrCode,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(120.dp),
-                                    tint = MaterialTheme.colorScheme.onSurface
+                                // Display actual QR code bitmap
+                                Image(
+                                    bitmap = qrCode.bitmap.asImageBitmap(),
+                                    contentDescription = "Gym Buddy QR Code",
+                                    modifier = Modifier.size(200.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Scan to connect as gym buddies",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
                                 )
                                 Text(
-                                    text = "QR Code Generated",
-                                    style = MaterialTheme.typography.bodyMedium
+                                    text = "Expires in ${(qrCode.expiresAt - System.currentTimeMillis()) / 60000}m",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }

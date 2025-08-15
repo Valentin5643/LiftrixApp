@@ -59,9 +59,13 @@ sealed class LiftrixRoute {
      * Public profile display screen showing privacy-aware user information
      * 
      * @param userId Unique identifier for the user whose profile to display
+     * @param initialAction Optional action to trigger on screen load (e.g., "follow", "message")
      */
     @Serializable
-    data class PublicProfile(val userId: String) : LiftrixRoute()
+    data class PublicProfile(
+        val userId: String,
+        val initialAction: String? = null
+    ) : LiftrixRoute()
     
     /**
      * QR code display screen for profile sharing

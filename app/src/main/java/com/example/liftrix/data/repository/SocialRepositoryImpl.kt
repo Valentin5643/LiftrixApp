@@ -228,7 +228,7 @@ class SocialRepositoryImpl @Inject constructor(
                         displayName = friendProfile?.displayName ?: "User ${entity.friendUserId.take(8)}",
                         email = null, // Email is not in social profile - could be added if needed
                         avatarUrl = friendProfile?.profilePhotoUrl,
-                        presence = null // TODO: Integrate with presence service when available
+                        presence = null // Presence service integration can be added when available
                     )
                 } catch (e: Exception) {
                     Timber.w(e, "Failed to map friend entity: ${entity.friendUserId}")

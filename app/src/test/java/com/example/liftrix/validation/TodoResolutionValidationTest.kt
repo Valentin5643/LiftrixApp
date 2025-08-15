@@ -72,7 +72,7 @@ class TodoResolutionValidationTest {
         val projectRoot = findProjectRoot()
         assertNotNull("Project root should be found", projectRoot)
 
-        val srcDir = File(projectRoot, "app/src/main")
+        val srcDir = File(projectRoot!!, "app/src/main")
         assertTrue("Source directory should exist: ${srcDir.absolutePath}", srcDir.exists())
 
         // When: Scanning for TODO comments
@@ -90,7 +90,7 @@ class TodoResolutionValidationTest {
                 appendLine()
                 
                 unresolved.groupBy { it.file }.forEach { (file, todos) ->
-                    val relativePath = file.relativeTo(projectRoot).path
+                    val relativePath = projectRoot?.let { file.relativeTo(it).path } ?: file.absolutePath
                     appendLine("📁 $relativePath")
                     todos.forEach { todo ->
                         appendLine("   Line ${todo.lineNumber}: ${todo.todoText.trim()}")
@@ -116,8 +116,8 @@ class TodoResolutionValidationTest {
         assertNotNull("Project root should be found", projectRoot)
 
         val testDirs = listOf(
-            File(projectRoot, "app/src/test"),
-            File(projectRoot, "app/src/androidTest")
+            File(projectRoot!!, "app/src/test"),
+            File(projectRoot!!, "app/src/androidTest")
         )
 
         // When: Scanning test directories
@@ -128,7 +128,7 @@ class TodoResolutionValidationTest {
         if (testTodos.isNotEmpty()) {
             println("ℹ️ Found ${testTodos.size} TODO comment(s) in test files (allowed):")
             testTodos.take(5).forEach { todo ->
-                val relativePath = todo.file.relativeTo(projectRoot!!).path
+                val relativePath = projectRoot?.let { todo.file.relativeTo(it).path } ?: todo.file.absolutePath
                 println("   $relativePath:${todo.lineNumber} - ${todo.todoText.trim()}")
             }
             if (testTodos.size > 5) {
@@ -160,7 +160,7 @@ class TodoResolutionValidationTest {
         val criticalTodos = mutableListOf<TodoInstance>()
         
         criticalFiles.forEach { filePath ->
-            val file = File(projectRoot, filePath)
+            val file = File(projectRoot!!, filePath)
             if (file.exists()) {
                 criticalTodos.addAll(scanFileForTodos(file))
             }
@@ -173,7 +173,7 @@ class TodoResolutionValidationTest {
                 appendLine()
                 
                 criticalTodos.groupBy { it.file }.forEach { (file, todos) ->
-                    val relativePath = file.relativeTo(projectRoot!!).path
+                    val relativePath = projectRoot?.let { file.relativeTo(it).path } ?: file.absolutePath
                     appendLine("🚨 $relativePath")
                     todos.forEach { todo ->
                         appendLine("   Line ${todo.lineNumber}: ${todo.todoText.trim()}")

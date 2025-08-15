@@ -1,6 +1,8 @@
 package com.example.liftrix.domain.usecase.folder
 
 import com.example.liftrix.domain.model.*
+import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.repository.ProfileRepository
 import io.mockk.*
@@ -11,6 +13,7 @@ import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import kotlin.test.fail
 
 /**
  * Unit tests for CreateFolderUseCase
@@ -30,7 +33,7 @@ class CreateFolderUseCaseTest {
     private val existingFolderName = "Existing Folder"
     private val invalidUserId = ""
     private val blankFolderNameString = ""  // For validation testing
-    private val tooLongFolderName = "a".repeat(51) // Assuming max length is 50
+    private val tooLongFolderName = "a".repeat(31) // Actual max length is 30
     private val tooShortFolderName = "ab" // Assuming min length is 3
     
     @Before
@@ -69,11 +72,14 @@ class CreateFolderUseCaseTest {
         
         // Assert
         assertTrue(result.isSuccess)
-        result.onSuccess { folder ->
-            assertEquals(validUserId, folder.userId)
-            assertEquals(validFolderName, folder.name.value)
-            assertEquals(0, folder.templateCount)
-        }
+        result.fold(
+            onSuccess = { folder ->
+                assertEquals(validUserId, folder.userId)
+                assertEquals(validFolderName, folder.name.value)
+                assertEquals(0, folder.templateCount)
+            },
+            onFailure = { fail("Expected success but got failure: $it") }
+        )
         
         // Verify interactions
         coVerify(exactly = 1) { profileRepository.hasProfile(validUserId) }
@@ -89,10 +95,13 @@ class CreateFolderUseCaseTest {
         // Act & Assert
         val result = createFolderUseCase(input)
         assertTrue(result.isFailure)
-        result.onFailure { exception ->
-            assertTrue(exception is IllegalArgumentException)
-            assertTrue(exception.message?.contains("User ID cannot be blank") == true)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                assertTrue(error is LiftrixError.ValidationError)
+                assertTrue(error.toString().contains("User ID cannot be blank"))
+            }
+        )
         
         // Verify no repository interactions for invalid input
         coVerify(exactly = 0) { folderRepository.createFolder(any()) }
@@ -125,10 +134,13 @@ class CreateFolderUseCaseTest {
         // Act & Assert
         val result = createFolderUseCase(input)
         assertTrue(result.isFailure)
-        result.onFailure { exception ->
-            assertTrue(exception is IllegalArgumentException)
-            assertTrue(exception.message?.contains("must be between") == true)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                assertTrue(error is LiftrixError.ValidationError)
+                assertTrue(error.toString().contains("must be between") || error.toString().contains("must be 3-30 characters"))
+            }
+        )
         
         // Verify no repository interactions for invalid input
         coVerify(exactly = 0) { folderRepository.createFolder(any()) }
@@ -142,10 +154,13 @@ class CreateFolderUseCaseTest {
         // Act & Assert
         val result = createFolderUseCase(input)
         assertTrue(result.isFailure)
-        result.onFailure { exception ->
-            assertTrue(exception is IllegalArgumentException)
-            assertTrue(exception.message?.contains("must be between") == true)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                assertTrue(error is LiftrixError.ValidationError)
+                assertTrue(error.toString().contains("must be between") || error.toString().contains("must be 3-30 characters"))
+            }
+        )
         
         // Verify no repository interactions for invalid input
         coVerify(exactly = 0) { folderRepository.createFolder(any()) }
@@ -163,10 +178,13 @@ class CreateFolderUseCaseTest {
         
         // Assert
         assertTrue(result.isFailure)
-        result.onFailure { exception ->
-            assertTrue(exception is IllegalArgumentException)
-            assertTrue(exception.message?.contains("already exists") == true)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                assertTrue(error is LiftrixError.ValidationError)
+                assertTrue(error.toString().contains("already exists"))
+            }
+        )
         
         // Verify repository interactions
         coVerify(exactly = 1) { profileRepository.hasProfile(validUserId) }
@@ -220,9 +238,13 @@ class CreateFolderUseCaseTest {
         
         // Assert
         assertTrue(result.isFailure)
-        result.onFailure { exception ->
-            assertEquals(profileError, exception)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                assertTrue(error is LiftrixError.BusinessLogicError)
+                assertTrue(error.toString().contains("Profile creation failed"))
+            }
+        )
         
         // Verify folder creation was not attempted
         coVerify(exactly = 0) { folderRepository.createFolder(any()) }
@@ -243,10 +265,13 @@ class CreateFolderUseCaseTest {
         
         // Assert
         assertTrue(result.isFailure)
-        result.onFailure { exception ->
-            assertTrue(exception is IllegalStateException)
-            assertTrue(exception.message?.contains("Unable to ensure user profile exists") == true)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                assertTrue(error is LiftrixError.BusinessLogicError)
+                assertTrue(error.toString().contains("Unable to ensure user profile exists"))
+            }
+        )
         
         // Verify folder creation was not attempted
         coVerify(exactly = 0) { folderRepository.createFolder(any()) }
@@ -266,9 +291,13 @@ class CreateFolderUseCaseTest {
         
         // Assert
         assertTrue(result.isFailure)
-        result.onFailure { exception ->
-            assertEquals(repositoryError, exception)
-        }
+        result.fold(
+            onSuccess = { fail("Expected failure but got success") },
+            onFailure = { error ->
+                assertTrue(error is LiftrixError.BusinessLogicError)
+                assertTrue(error.toString().contains("Database error"))
+            }
+        )
         
         // Verify all expected interactions occurred
         coVerify(exactly = 1) { profileRepository.hasProfile(validUserId) }
@@ -299,9 +328,12 @@ class CreateFolderUseCaseTest {
         
         // Assert
         assertTrue(result.isSuccess)
-        result.onSuccess { folder ->
-            assertEquals(trimmedName, folder.name.value)
-        }
+        result.fold(
+            onSuccess = { folder ->
+                assertEquals(trimmedName, folder.name.value)
+            },
+            onFailure = { fail("Expected success but got failure: $it") }
+        )
         
         // Verify trimmed name was used for uniqueness check
         coVerify(exactly = 1) { folderRepository.doesFolderNameExist(validUserId, trimmedName) }

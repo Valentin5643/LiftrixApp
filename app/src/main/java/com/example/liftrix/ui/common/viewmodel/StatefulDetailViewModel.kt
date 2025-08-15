@@ -89,23 +89,18 @@ abstract class StatefulDetailViewModel<S, E : ViewModelEvent>(
         initialValue: T,
         validator: (T) -> Boolean = { true }
     ): StateFlow<T> {
-        return savedStateHandle.getStateFlow(key, initialValue)
-            .map { value ->
-                if (validator(value)) {
-                    Timber.d("State restored for key '$key': $value")
-                    value
-                } else {
-                    Timber.w("Invalid state for key '$key', using initial value: $initialValue")
-                    // Reset invalid state to initial value
-                    updateSavedState(key, initialValue)
-                    initialValue
-                }
-            }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.Eagerly,
-                initialValue = savedStateHandle[key] ?: initialValue
-            )
+        // Initialize with saved value or initial value
+        val savedValue = savedStateHandle.get<T>(key) ?: initialValue
+        val validatedValue = if (validator(savedValue)) {
+            savedValue
+        } else {
+            Timber.w("Invalid saved state for key '$key', using initial value: $initialValue")
+            updateSavedState(key, initialValue)
+            initialValue
+        }
+        
+        // Return the SavedStateHandle's StateFlow directly to ensure immediate updates
+        return savedStateHandle.getStateFlow(key, validatedValue)
     }
 
     /**

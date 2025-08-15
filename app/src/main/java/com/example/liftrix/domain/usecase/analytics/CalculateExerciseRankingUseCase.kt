@@ -1,6 +1,7 @@
 package com.example.liftrix.domain.usecase.analytics
 
 import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.analytics.OneRmDataPoint
 import com.example.liftrix.domain.model.analytics.RankingMetric
@@ -46,11 +47,23 @@ class CalculateExerciseRankingUseCase @Inject constructor(
      * @return LiftrixResult containing ranked exercises or error
      */
     suspend operator fun invoke(request: ExerciseRankingRequest): LiftrixResult<ExerciseRankingResult> {
-        return try {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.BusinessLogicError(
+                    code = "EXERCISE_RANKING_FAILED",
+                    errorMessage = "Failed to calculate exercise rankings: ${throwable.message}",
+                    analyticsContext = mapOf(
+                        "operation" to "calculateExerciseRanking",
+                        "metric" to request.metric.name,
+                        "timeRange" to request.timeRange.name
+                    )
+                )
+            }
+        ) {
             Timber.d("Calculating exercise rankings for metric: ${request.metric}")
             
-            val userId = getCurrentUserIdUseCase() 
-                ?: return LiftrixResult.failure(LiftrixError.AuthenticationError("User not authenticated"))
+            val userId = getCurrentUserIdUseCase.invoke() 
+                ?: throw IllegalStateException("User not authenticated")
             val now = Clock.System.now()
             val timeZone = TimeZone.currentSystemDefault()
             
@@ -67,11 +80,14 @@ class CalculateExerciseRankingUseCase @Inject constructor(
                 userId = userId,
                 startDate = startDate,
                 endDate = endDate
-            ).getOrThrow()
+            ).fold(
+                onSuccess = { it },
+                onFailure = { error -> throw RuntimeException(error.message) }
+            )
             
             if (performanceData.isEmpty()) {
                 Timber.d("No performance data found for user $userId in range $startDate to $endDate")
-                return LiftrixResult.success(ExerciseRankingResult(emptyList(), request))
+                return@liftrixCatching ExerciseRankingResult(emptyList(), request)
             }
             
             // Calculate rankings based on the requested metric
@@ -88,17 +104,7 @@ class CalculateExerciseRankingUseCase @Inject constructor(
             val limitedRankings = rankings.take(request.limit)
             
             Timber.d("Calculated ${limitedRankings.size} exercise rankings")
-            LiftrixResult.success(ExerciseRankingResult(limitedRankings, request))
-            
-        } catch (e: Exception) {
-            val error = when (e) {
-                is LiftrixError -> e
-                else -> LiftrixError.CalculationError(
-                    "Failed to calculate exercise rankings: ${e.message}"
-                )
-            }
-            Timber.e(e, "Error calculating exercise rankings")
-            LiftrixResult.failure(error)
+            ExerciseRankingResult(limitedRankings, request)
         }
     }
 

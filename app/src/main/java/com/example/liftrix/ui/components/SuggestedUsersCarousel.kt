@@ -371,6 +371,7 @@ class SuggestedUsersCarouselViewModel @javax.inject.Inject constructor(
     private val followRepository: com.example.liftrix.domain.repository.social.FollowRepository,
     private val followUserUseCase: com.example.liftrix.domain.usecase.social.FollowUserUseCase,
     private val getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase,
+    private val userSearchRepository: com.example.liftrix.domain.repository.UserSearchRepository,
     errorHandler: com.example.liftrix.domain.usecase.common.ErrorHandler
 ) : com.example.liftrix.ui.common.viewmodel.BaseViewModel<SuggestedUsersCarouselUiState, SuggestedUsersCarouselEvent>(
     errorHandler = errorHandler
@@ -406,18 +407,34 @@ class SuggestedUsersCarouselViewModel @javax.inject.Inject constructor(
                 
                 if (result.isSuccess) {
                     val userIds = result.getOrThrow()
-                    // TODO: Convert user IDs to full SuggestedUser objects with profile info
-                    // For now, create mock SuggestedUser objects
-                    val suggestedUsers = userIds.map { userId ->
-                        SuggestedUser(
-                            userId = userId,
-                            displayName = "User $userId",
-                            bio = "Fitness enthusiast",
-                            profileImageUrl = null,
-                            mutualConnections = (0..5).random(),
-                            suggestionReason = "Popular in your area",
-                            isFollowing = false
-                        )
+                    // Fetch full profile data for each suggested user
+                    val suggestedUsers = userIds.mapNotNull { userId ->
+                        try {
+                            val profileResult = userSearchRepository.getPublicProfile(
+                                userId = userId,
+                                viewerId = currentUserId
+                            )
+                            
+                            profileResult.getOrNull()?.let { profile ->
+                                SuggestedUser(
+                                    userId = profile.userId,
+                                    displayName = profile.displayName ?: profile.username,
+                                    bio = profile.bio ?: "Fitness enthusiast",
+                                    profileImageUrl = profile.profileImageUrl,
+                                    mutualConnections = profile.mutualConnectionsCount,
+                                    suggestionReason = when {
+                                        profile.mutualConnectionsCount > 0 -> "${profile.mutualConnectionsCount} mutual connections"
+                                        profile.location != null -> "Popular in ${profile.location}"
+                                        profile.fitnessLevel != null -> "Similar fitness level"
+                                        else -> "Recommended for you"
+                                    },
+                                    isFollowing = false
+                                )
+                            }
+                        } catch (e: Exception) {
+                            Timber.w(e, "Failed to fetch profile for user: $userId")
+                            null
+                        }
                     }
                     
                     updateState { 
@@ -426,7 +443,7 @@ class SuggestedUsersCarouselViewModel @javax.inject.Inject constructor(
                             suggestedUsers = suggestedUsers
                         )
                     }
-                    Timber.i("Loaded ${suggestedUsers.size} suggested users")
+                    Timber.i("Loaded ${suggestedUsers.size} suggested users with full profiles")
                 } else {
                     val error = result.exceptionOrNull()
                     updateState { 

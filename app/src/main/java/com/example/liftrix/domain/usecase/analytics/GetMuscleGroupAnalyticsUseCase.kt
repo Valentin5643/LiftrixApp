@@ -67,9 +67,15 @@ class GetMuscleGroupAnalyticsUseCase @Inject constructor(
     ): LiftrixResult<MuscleGroupAnalyticsData> = withContext(Dispatchers.IO) {
         return@withContext liftrixCatching(
             errorMapper = { throwable ->
-                LiftrixError.CalculationError(
+                LiftrixError.BusinessLogicError(
+                    code = "MUSCLE_GROUP_ANALYTICS_FAILED",
                     errorMessage = "Failed to retrieve muscle group analytics for user $userId, muscleGroup $muscleGroup, timeRange $timeRange: ${throwable.message}",
-                    operation = "getMuscleGroupAnalytics"
+                    analyticsContext = mapOf(
+                        "operation" to "getMuscleGroupAnalytics",
+                        "userId" to userId,
+                        "muscleGroup" to (muscleGroup?.displayName ?: "ALL"),
+                        "timeRange" to timeRange.name
+                    )
                 )
             }
         ) {

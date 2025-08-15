@@ -69,7 +69,8 @@ fun ResponsiveDashboardLayout(
     enableSmoothTransitions: Boolean = true,
     windowSizeClass: WindowSizeClass = rememberWindowSizeClass(),
     emptyStateMessage: String = "No widgets to display",
-    onAddWidgets: (() -> Unit)? = null
+    onAddWidgets: (() -> Unit)? = null,
+    onSaveCustomLayout: ((List<String>) -> Unit)? = null
 ) {
     // Determine optimal layout mode considering widget categories (FR-003)
     val effectiveLayoutMode = if (layoutMode == DomainDashboardLayoutMode.AUTO) {
@@ -192,8 +193,11 @@ fun ResponsiveDashboardLayout(
                     isLoading = isLoading,
                     isCustomLayoutMode = true, // Always enable custom mode features
                     onLayoutSave = { customLayout ->
-                        // TODO: Implement custom layout persistence
-                        // This would typically be handled by a ViewModel or UseCase
+                        // Extract widget order from custom layout and pass to parent
+                        val widgetOrder = customLayout.items.map { item ->
+                            widgets.find { it.id == item.widgetId }?.id ?: item.widgetId
+                        }
+                        onSaveCustomLayout?.invoke(widgetOrder)
                     },
                     modifier = modifier
                 )

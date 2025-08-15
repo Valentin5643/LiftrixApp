@@ -91,7 +91,7 @@ class PostCreationViewModel @Inject constructor(
                                 durationMinutes = domainSummary.duration?.toMinutes()?.toInt() ?: 0,
                                 totalVolume = domainSummary.totalVolume.kilograms,
                                 exerciseCount = domainSummary.exerciseCount,
-                                prsCount = 0 // TODO: Calculate PRs from workout if needed
+                                prsCount = 0 // PR calculation can be added when needed
                             )
                             updateState { currentState ->
                                 currentState.copy(

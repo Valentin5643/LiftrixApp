@@ -73,9 +73,17 @@ fun FullWidthWidgetCard(
             contentAlignment = Alignment.Center
         ) {
             // Use SimpleWidgetRenderer to render the appropriate widget content
+            val displayData = widgetData.getDisplayData()
+            val primaryValue = when (displayData) {
+                is com.example.liftrix.domain.model.analytics.DisplayData.Metric -> displayData.primaryValue
+                is com.example.liftrix.domain.model.analytics.DisplayData.Chart -> "${displayData.dataPoints.size} data points"
+                is com.example.liftrix.domain.model.analytics.DisplayData.Progress -> "${displayData.progressPercentage.toInt()}%"
+                is com.example.liftrix.domain.model.analytics.DisplayData.Analytics -> displayData.metrics.values.firstOrNull() ?: "No data"
+            }
+            
             SimpleWidgetRenderer(
                 widget = widget,
-                primaryValue = "Loading...", // TODO: Extract from widgetData
+                primaryValue = primaryValue,
                 isLoading = isLoading
             )
         }
