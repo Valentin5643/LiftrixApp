@@ -80,8 +80,8 @@ fun ResponsiveDashboardLayout(
             userPreference = null
         )
     } else {
-        // Convert domain enum to UI enum
-        UiDashboardLayoutMode.fromDomain(layoutMode) ?: UiDashboardLayoutMode.DEFAULT
+        // Convert domain enum to UI enum (now 1:1 mapping)
+        UiDashboardLayoutMode.fromDomain(layoutMode) ?: UiDashboardLayoutMode.AUTO
     }
     
     // Enable drag-and-drop only for CUSTOM mode
@@ -112,7 +112,7 @@ fun ResponsiveDashboardLayout(
     } else {
         // Direct layout switching without animations (for performance-critical scenarios)
         when (effectiveLayoutMode) {
-            UiDashboardLayoutMode.DEFAULT -> {
+            UiDashboardLayoutMode.AUTO -> {
                 if (effectiveEnableDragAndDrop) {
                     DragAndDropGrid(
                         widgets = widgets,
@@ -167,7 +167,7 @@ fun ResponsiveDashboardLayout(
                 )
             }
             
-            UiDashboardLayoutMode.LIST -> {
+            UiDashboardLayoutMode.GRID -> {
                 WidgetContainer(
                     widgets = widgets,
                     configuration = configuration,
@@ -226,7 +226,7 @@ fun ResponsiveDashboardLayout(
                 }
             }
             
-            UiDashboardLayoutMode.LIST -> {
+            UiDashboardLayoutMode.GRID -> {
                 WidgetContainer(
                     widgets = widgets,
                     configuration = configuration,
@@ -257,7 +257,7 @@ fun ResponsiveDashboardLayout(
                 )
             }
             
-            UiDashboardLayoutMode.DEFAULT -> {
+            UiDashboardLayoutMode.AUTO -> {
                 if (effectiveEnableDragAndDrop) {
                     DragAndDropGrid(
                         widgets = widgets,
