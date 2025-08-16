@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.liftrix.domain.model.SessionExercise
+import androidx.compose.material3.MaterialTheme
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.workout.components.*
 import com.example.liftrix.ui.workout.components.SaveQuickWorkoutAsTemplateDialog
@@ -39,6 +40,7 @@ fun RedesignedActiveWorkoutScreen(
     onNavigateBack: () -> Unit,
     onNavigateToExerciseLibrary: (() -> Unit)? = null,
     onNavigateToPostCreation: ((String) -> Unit)? = null,
+    onNavigateToPostWorkoutSummary: ((String) -> Unit)? = null,
     isBlankWorkout: Boolean = false,
     templateId: String? = null
 ) {
@@ -67,7 +69,7 @@ fun RedesignedActiveWorkoutScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(LiftrixColorsV2.Dark.BackgroundPrimary)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         when (uiState) {
             is UnifiedActiveWorkoutUiState.Loading -> {
@@ -75,7 +77,7 @@ fun RedesignedActiveWorkoutScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = LiftrixColorsV2.Teal)
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
             }
             
@@ -93,13 +95,25 @@ fun RedesignedActiveWorkoutScreen(
             }
             
             is UnifiedActiveWorkoutUiState.WorkoutCompleted -> {
-                WorkoutCompletedContent(
-                    workoutId = (uiState as UnifiedActiveWorkoutUiState.WorkoutCompleted).workoutId,
-                    onNavigateBack = onNavigateBack,
-                    onNavigateToPostCreation = onNavigateToPostCreation ?: { _ -> 
-                        // Fallback if navigation not provided
+                val workoutId = (uiState as UnifiedActiveWorkoutUiState.WorkoutCompleted).workoutId
+                
+                // Navigate to the enhanced post-workout summary screen if available
+                if (onNavigateToPostWorkoutSummary != null) {
+                    LaunchedEffect(workoutId) {
+                        onNavigateToPostWorkoutSummary(workoutId)
+                        // Clear the saved workout ID after navigation
+                        viewModel.clearSavedWorkoutId()
                     }
-                )
+                } else {
+                    // Fallback to simple completion screen
+                    WorkoutCompletedContent(
+                        workoutId = workoutId,
+                        onNavigateBack = onNavigateBack,
+                        onNavigateToPostCreation = onNavigateToPostCreation ?: { _ -> 
+                            // Fallback if navigation not provided
+                        }
+                    )
+                }
             }
             
             is UnifiedActiveWorkoutUiState.Error -> {
@@ -139,7 +153,7 @@ private fun ActiveWorkoutContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(LiftrixColorsV2.Dark.BackgroundPrimary)
+                .background(MaterialTheme.colorScheme.background)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -147,7 +161,7 @@ private fun ActiveWorkoutContent(
             Text(
                 text = session.name,
                 style = TextStyle(
-                    color = LiftrixColorsV2.Dark.TextPrimary,
+                    color = MaterialTheme.colorScheme.onBackground,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -157,7 +171,7 @@ private fun ActiveWorkoutContent(
             Text(
                 text = formatTime(elapsedTime.toInt()),
                 style = TextStyle(
-                    color = LiftrixColorsV2.Teal,
+                    color = MaterialTheme.colorScheme.primary,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -170,7 +184,7 @@ private fun ActiveWorkoutContent(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             colors = CardDefaults.cardColors(
-                containerColor = LiftrixColorsV2.Teal.copy(alpha = 0.1f)
+                containerColor = MaterialTheme.colorScheme.primaryContainer
             ),
             shape = RoundedCornerShape(8.dp)
         ) {
@@ -184,14 +198,14 @@ private fun ActiveWorkoutContent(
                     Text(
                         text = "Exercises",
                         style = TextStyle(
-                            color = LiftrixColorsV2.Dark.TextTertiary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 12.sp
                         )
                     )
                     Text(
                         text = "${session.exercises.size}",
                         style = TextStyle(
-                            color = LiftrixColorsV2.Dark.TextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -202,14 +216,14 @@ private fun ActiveWorkoutContent(
                     Text(
                         text = "Sets",
                         style = TextStyle(
-                            color = LiftrixColorsV2.Dark.TextTertiary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 12.sp
                         )
                     )
                     Text(
                         text = "${session.exercises.sumOf { it.sets.size }}",
                         style = TextStyle(
-                            color = LiftrixColorsV2.Dark.TextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -220,14 +234,14 @@ private fun ActiveWorkoutContent(
                     Text(
                         text = "Volume",
                         style = TextStyle(
-                            color = LiftrixColorsV2.Dark.TextTertiary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 12.sp
                         )
                     )
                     Text(
                         text = "${calculateTotalVolume(session.exercises)} kg",
                         style = TextStyle(
-                            color = LiftrixColorsV2.Dark.TextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -247,13 +261,13 @@ private fun ActiveWorkoutContent(
                 Box(
                     modifier = Modifier
                         .size(8.dp)
-                        .background(LiftrixColorsV2.Teal, shape = androidx.compose.foundation.shape.CircleShape)
+                        .background(MaterialTheme.colorScheme.primary, shape = androidx.compose.foundation.shape.CircleShape)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "Active",
                     style = TextStyle(
-                        color = LiftrixColorsV2.Teal,
+                        color = MaterialTheme.colorScheme.primary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
                     )
@@ -347,7 +361,7 @@ private fun ActiveWorkoutContent(
                         title = {
                             Text(
                                 "Exercise Notes",
-                                color = LiftrixColorsV2.Dark.TextPrimary
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         },
                         text = {
@@ -356,10 +370,10 @@ private fun ActiveWorkoutContent(
                                 onValueChange = { notesText = it },
                                 label = { Text("Notes") },
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = LiftrixColorsV2.Dark.TextPrimary,
-                                    unfocusedTextColor = LiftrixColorsV2.Dark.TextPrimary,
-                                    focusedBorderColor = LiftrixColorsV2.Teal,
-                                    unfocusedBorderColor = LiftrixColorsV2.Dark.Outline
+                                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
                                 ),
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -371,15 +385,15 @@ private fun ActiveWorkoutContent(
                                     showNotesDialog = false
                                 }
                             ) {
-                                Text("Save", color = LiftrixColorsV2.Teal)
+                                Text("Save", color = MaterialTheme.colorScheme.primary)
                             }
                         },
                         dismissButton = {
                             TextButton(onClick = { showNotesDialog = false }) {
-                                Text("Cancel", color = LiftrixColorsV2.Dark.TextSecondary)
+                                Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         },
-                        containerColor = LiftrixColorsV2.Dark.BackgroundSecondary
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                 }
             }
@@ -389,10 +403,10 @@ private fun ActiveWorkoutContent(
                 OutlinedButton(
                     onClick = { onNavigateToExerciseLibrary?.invoke() },
                     colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = LiftrixColorsV2.Teal
+                        contentColor = MaterialTheme.colorScheme.primary
                     ),
                     border = ButtonDefaults.outlinedButtonBorder.copy(
-                        brush = androidx.compose.ui.graphics.SolidColor(LiftrixColorsV2.Teal)
+                        brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary)
                     ),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier
@@ -425,7 +439,7 @@ private fun ActiveWorkoutContent(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(LiftrixColorsV2.Dark.BackgroundPrimary)
+                .background(MaterialTheme.colorScheme.background)
                 .padding(16.dp)
         ) {
             RedesignedPrimaryButton(
@@ -481,7 +495,7 @@ private fun NoSessionContent(onNavigateBack: () -> Unit) {
         Text(
             text = "No Active Session",
             style = TextStyle(
-                color = LiftrixColorsV2.Dark.TextPrimary,
+                color = MaterialTheme.colorScheme.onBackground,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -490,7 +504,7 @@ private fun NoSessionContent(onNavigateBack: () -> Unit) {
         Text(
             text = "Start a new workout from the main screen",
             style = TextStyle(
-                color = LiftrixColorsV2.Dark.TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 14.sp
             )
         )
@@ -519,7 +533,7 @@ private fun WorkoutCompletedContent(
         Text(
             text = "Workout Completed!",
             style = TextStyle(
-                color = LiftrixColorsV2.Teal,
+                color = MaterialTheme.colorScheme.primary,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -528,7 +542,7 @@ private fun WorkoutCompletedContent(
         Text(
             text = "Great job on finishing your session",
             style = TextStyle(
-                color = LiftrixColorsV2.Dark.TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 14.sp
             )
         )
@@ -548,9 +562,9 @@ private fun WorkoutCompletedContent(
             onClick = onNavigateBack,
             modifier = Modifier.fillMaxWidth(0.8f),
             colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = LiftrixColorsV2.Teal
+                contentColor = MaterialTheme.colorScheme.primary
             ),
-            border = androidx.compose.foundation.BorderStroke(1.dp, LiftrixColorsV2.Teal)
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
         ) {
             Text(
                 text = "Back to Home",
@@ -579,7 +593,7 @@ private fun ErrorContent(
         Text(
             text = "Error",
             style = TextStyle(
-                color = LiftrixColorsV2.Dark.Error,
+                color = MaterialTheme.colorScheme.error,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -588,7 +602,7 @@ private fun ErrorContent(
         Text(
             text = error,
             style = TextStyle(
-                color = LiftrixColorsV2.Dark.TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 14.sp
             )
         )
@@ -599,7 +613,7 @@ private fun ErrorContent(
             OutlinedButton(
                 onClick = onNavigateBack,
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = LiftrixColorsV2.Dark.TextSecondary
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             ) {
                 Text("Go Back")

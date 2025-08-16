@@ -22,7 +22,7 @@ import javax.inject.Inject
  * Manages the state and business logic for configuring anomaly detection settings.
  * Follows the BaseViewModel pattern with UiState for consistent state management.
  */
-@HiltViewModel
+// @HiltViewModel
 class AnomalySettingsViewModel @Inject constructor(
     private val detectAnomaliesUseCase: DetectWorkoutAnomaliesUseCase,
     private val authRepository: AuthRepository,

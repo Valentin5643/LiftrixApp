@@ -66,12 +66,16 @@ class EditWorkoutViewModel @Inject constructor(
     // Store original workout for change tracking
     private var originalWorkout: Workout? = null
     private var currentUserId: String? = null
+    
+    // Track if user ID has been initialized
+    private var isUserIdInitialized = false
 
     init {
         // Get current user ID
         viewModelScope.launch {
             Timber.d("🔥 EDIT-WORKOUT-DEBUG: EditWorkoutViewModel init - Getting current user ID")
             currentUserId = getCurrentUserIdUseCase()
+            isUserIdInitialized = true
             Timber.d("🔥 EDIT-WORKOUT-DEBUG: EditWorkoutViewModel init - Retrieved userId: $currentUserId")
         }
     }
@@ -113,8 +117,31 @@ class EditWorkoutViewModel @Inject constructor(
     fun loadWorkout(workoutId: WorkoutId) {
         Timber.d("🔥 EDIT-WORKOUT-DEBUG: Starting loadWorkout - workoutId: ${workoutId.value}")
         
+        // If user ID is not yet initialized, wait for it
+        if (!isUserIdInitialized) {
+            Timber.d("🔥 EDIT-WORKOUT-DEBUG: User ID not yet initialized, fetching...")
+            viewModelScope.launch {
+                // Fetch user ID synchronously if not yet available
+                if (currentUserId == null) {
+                    currentUserId = getCurrentUserIdUseCase()
+                    isUserIdInitialized = true
+                    Timber.d("🔥 EDIT-WORKOUT-DEBUG: User ID fetched in loadWorkout: $currentUserId")
+                }
+                // Retry loading workout with the user ID now available
+                loadWorkoutInternal(workoutId)
+            }
+            return
+        }
+        
+        loadWorkoutInternal(workoutId)
+    }
+    
+    /**
+     * Internal method to load workout after ensuring user ID is available
+     */
+    private fun loadWorkoutInternal(workoutId: WorkoutId) {
         val userId = currentUserId
-        Timber.d("🔥 EDIT-WORKOUT-DEBUG: Current userId: $userId")
+        Timber.d("🔥 EDIT-WORKOUT-DEBUG: loadWorkoutInternal - Current userId: $userId")
         
         if (userId == null) {
             Timber.e("🔥 EDIT-WORKOUT-DEBUG: User authentication failed - userId is null")

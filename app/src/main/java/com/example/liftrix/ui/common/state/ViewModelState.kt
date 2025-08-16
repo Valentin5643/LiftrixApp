@@ -240,6 +240,7 @@ sealed class HomeUiState : UiState<HomeScreenData>() {
 /**
  * Data class for workout template creation state.
  * Contains all business data for creating and editing workout templates.
+ * 🔥 FIXED: Added template metadata to prevent data loss during state transitions
  */
 data class WorkoutTemplateCreationData(
     val exercises: List<com.example.liftrix.domain.model.TemplateExercise> = emptyList(),
@@ -250,7 +251,11 @@ data class WorkoutTemplateCreationData(
     val template: com.example.liftrix.domain.model.WorkoutTemplate? = null,
     val availableFolders: List<com.example.liftrix.domain.model.Folder> = emptyList(),
     val selectedFolderId: com.example.liftrix.domain.model.FolderId? = null,
-    val defaultFolderId: com.example.liftrix.domain.model.FolderId? = null
+    val defaultFolderId: com.example.liftrix.domain.model.FolderId? = null,
+    // 🔥 NEW: Template metadata in ViewModel state to prevent loss
+    val templateName: String = "",
+    val templateDescription: String = "",
+    val targetFolderId: com.example.liftrix.domain.model.FolderId? = null // 🔥 NEW: Explicit target folder context
 ) {
     /**
      * Indicates whether the template has exercises
@@ -281,10 +286,11 @@ data class WorkoutTemplateCreationData(
         }
     
     /**
-     * Gets the folder that will be used for template creation (selected or default)
+     * Gets the folder that will be used for template creation (target -> selected -> default)
+     * 🔥 ENHANCED: Added targetFolderId priority for explicit folder context
      */
     val effectiveFolderId: com.example.liftrix.domain.model.FolderId?
-        get() = selectedFolderId ?: defaultFolderId
+        get() = targetFolderId ?: selectedFolderId ?: defaultFolderId
     
     /**
      * Gets the display name of the selected folder or a default message
@@ -300,12 +306,18 @@ data class WorkoutTemplateCreationData(
      * Indicates whether the template creation is valid
      * 🔥 FIXED: Allow creation with just name and folder (exercises can be added later)
      */
-    fun isValidForCreation(name: String): Boolean {
+    fun isValidForCreation(name: String = templateName): Boolean {
         return name.isNotBlank() && 
                name.length <= 50 && // Reasonable template name limit
                effectiveFolderId != null // Only require name and folder
         // Note: exercises check removed - users can create empty templates and add exercises later
     }
+    
+    /**
+     * 🔥 NEW: Indicates whether template data is valid using internal state
+     */
+    val isValidForCreation: Boolean
+        get() = isValidForCreation(templateName)
 }
 
 /**

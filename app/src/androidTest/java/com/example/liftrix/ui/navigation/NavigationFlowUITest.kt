@@ -40,7 +40,7 @@ class NavigationFlowUITest {
     fun bottomNavigation_displaysAllTabs() {
         composeTestRule.setContent {
             LiftrixTheme {
-                UnifiedMainNavigationContainer()
+                UnifiedNavigationContainer()
             }
         }
 
@@ -56,7 +56,7 @@ class NavigationFlowUITest {
     fun bottomNavigation_switchesBetweenScreens() {
         composeTestRule.setContent {
             LiftrixTheme {
-                UnifiedMainNavigationContainer()
+                UnifiedNavigationContainer()
             }
         }
 
@@ -87,7 +87,7 @@ class NavigationFlowUITest {
     fun navigation_preservesStateOnTabSwitch() {
         composeTestRule.setContent {
             LiftrixTheme {
-                UnifiedMainNavigationContainer()
+                UnifiedNavigationContainer()
             }
         }
 
@@ -125,7 +125,7 @@ class NavigationFlowUITest {
     fun navigation_handlesBackPressCorrectly() {
         composeTestRule.setContent {
             LiftrixTheme {
-                UnifiedMainNavigationContainer()
+                UnifiedNavigationContainer()
             }
         }
 
@@ -146,7 +146,7 @@ class NavigationFlowUITest {
     fun navigation_supportsAccessibility() {
         composeTestRule.setContent {
             LiftrixTheme {
-                UnifiedMainNavigationContainer()
+                UnifiedNavigationContainer()
             }
         }
 
@@ -172,7 +172,7 @@ class NavigationFlowUITest {
     fun navigation_handlesScreenRotation() {
         composeTestRule.setContent {
             LiftrixTheme {
-                UnifiedMainNavigationContainer()
+                UnifiedNavigationContainer()
             }
         }
 
@@ -186,7 +186,7 @@ class NavigationFlowUITest {
         // When: Screen rotation occurs (simulated configuration change)
         composeTestRule.setContent {
             LiftrixTheme {
-                UnifiedMainNavigationContainer()
+                UnifiedNavigationContainer()
             }
         }
 
@@ -346,7 +346,7 @@ class NavigationFlowUITest {
     fun navigation_socialScreensFromFriendsTab() {
         composeTestRule.setContent {
             LiftrixTheme {
-                UnifiedMainNavigationContainer()
+                UnifiedNavigationContainer()
             }
         }
 

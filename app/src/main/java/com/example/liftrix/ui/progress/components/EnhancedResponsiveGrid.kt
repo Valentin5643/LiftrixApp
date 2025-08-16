@@ -268,6 +268,7 @@ private fun MobileWidgetColumn(
 /**
  * Responsive grid layout optimized for tablet+ screens (≥600dp)
  * Removes artificial height constraints for seamless scrolling
+ * Uses non-scrollable layout when nested inside LazyColumn to prevent crash
  */
 @Composable
 private fun ResponsiveGridLayout(
@@ -275,7 +276,8 @@ private fun ResponsiveGridLayout(
     windowSizeClass: WindowSizeClass,
     onWidgetClick: (AnalyticsWidget) -> Unit,
     widgetDataProvider: (AnalyticsWidget) -> WidgetData,
-    isLoading: Boolean
+    isLoading: Boolean,
+    isInsideScrollableParent: Boolean = true // Default to true since we're always in LazyColumn
 ) {
     // Fixed 2 columns for consistent tablet experience
     val columns = if (windowSizeClass.widthDp < 905.dp) 2 else 3
@@ -293,25 +295,87 @@ private fun ResponsiveGridLayout(
         vertical = 8.dp
     )
     
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
-        modifier = Modifier.fillMaxWidth(),
-        // REMOVED: .heightIn(max = 800.dp) for seamless scrolling
-        contentPadding = contentPadding,
-        horizontalArrangement = Arrangement.spacedBy(spacing),
+    // When inside a scrollable parent (LazyColumn), use non-lazy layout to prevent crash
+    if (isInsideScrollableParent) {
+        // Use a non-scrollable grid layout when nested
+        NonScrollableGrid(
+            widgets = widgets,
+            columns = columns,
+            spacing = spacing,
+            contentPadding = contentPadding,
+            onWidgetClick = onWidgetClick,
+            widgetDataProvider = widgetDataProvider,
+            isLoading = isLoading
+        )
+    } else {
+        // Use LazyVerticalGrid when not nested
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(columns),
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = contentPadding,
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+            verticalArrangement = Arrangement.spacedBy(spacing)
+        ) {
+            items(
+                items = widgets,
+                key = { widget -> widget.id }
+            ) { widget ->
+                val widgetData = widgetDataProvider(widget)
+                WidgetRenderer(
+                    widget = widget,
+                    widgetData = widgetData,
+                    onClick = { onWidgetClick(widget) },
+                    isLoading = isLoading
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Non-scrollable grid layout for use inside scrollable containers
+ * Prevents the "infinite height constraints" crash when nested in LazyColumn
+ */
+@Composable
+private fun NonScrollableGrid(
+    widgets: List<AnalyticsWidget>,
+    columns: Int,
+    spacing: androidx.compose.ui.unit.Dp,
+    contentPadding: PaddingValues,
+    onWidgetClick: (AnalyticsWidget) -> Unit,
+    widgetDataProvider: (AnalyticsWidget) -> WidgetData,
+    isLoading: Boolean
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(contentPadding),
         verticalArrangement = Arrangement.spacedBy(spacing)
     ) {
-        items(
-            items = widgets,
-            key = { widget -> widget.id }
-        ) { widget ->
-            val widgetData = widgetDataProvider(widget)
-            WidgetRenderer(
-                widget = widget,
-                widgetData = widgetData,
-                onClick = { onWidgetClick(widget) },
-                isLoading = isLoading
-            )
+        // Group widgets into rows based on column count
+        widgets.chunked(columns).forEach { rowWidgets ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(spacing)
+            ) {
+                rowWidgets.forEach { widget ->
+                    val widgetData = widgetDataProvider(widget)
+                    Box(
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        WidgetRenderer(
+                            widget = widget,
+                            widgetData = widgetData,
+                            onClick = { onWidgetClick(widget) },
+                            isLoading = isLoading
+                        )
+                    }
+                }
+                // Fill remaining columns with spacers if row is incomplete
+                repeat(columns - rowWidgets.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
         }
     }
 }

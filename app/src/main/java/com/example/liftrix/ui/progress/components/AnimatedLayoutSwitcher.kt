@@ -118,7 +118,7 @@ fun AnimatedLayoutSwitcher(
             label = "layout_mode_transition"
         ) { currentLayoutMode ->
             when (currentLayoutMode) {
-                DashboardLayoutMode.DEFAULT -> {
+                DashboardLayoutMode.AUTO -> {
                     StaggeredAnimationWrapper(
                         widgets = widgets,
                         animationDelay = 50L
@@ -165,25 +165,6 @@ fun AnimatedLayoutSwitcher(
                     StaggeredAnimationWrapper(
                         widgets = widgets,
                         animationDelay = 100L
-                    ) {
-                        WidgetContainer(
-                            widgets = widgets,
-                            configuration = configuration,
-                            layoutMode = WidgetLayoutMode.LIST,
-                            onWidgetClick = onWidgetClick,
-                            onWidgetReorder = onWidgetReorder,
-                            widgetDataProvider = widgetDataProvider,
-                            isLoading = isLoading,
-                            enableDragAndDrop = false,
-                            windowSizeClass = windowSizeClass
-                        )
-                    }
-                }
-                
-                DashboardLayoutMode.LIST -> {
-                    StaggeredAnimationWrapper(
-                        widgets = widgets,
-                        animationDelay = 75L
                     ) {
                         WidgetContainer(
                             widgets = widgets,
@@ -249,25 +230,6 @@ fun AnimatedLayoutSwitcher(
                     }
                 }
                 
-                DashboardLayoutMode.LIST -> {
-                    StaggeredAnimationWrapper(
-                        widgets = widgets,
-                        animationDelay = 80L
-                    ) {
-                        WidgetContainer(
-                            widgets = widgets,
-                            configuration = configuration,
-                            layoutMode = WidgetLayoutMode.LIST,
-                            onWidgetClick = onWidgetClick,
-                            onWidgetReorder = onWidgetReorder,
-                            widgetDataProvider = widgetDataProvider,
-                            isLoading = isLoading,
-                            enableDragAndDrop = enableDragAndDrop,
-                            windowSizeClass = windowSizeClass
-                        )
-                    }
-                }
-                
                 DashboardLayoutMode.SECTIONS -> {
                     StaggeredAnimationWrapper(
                         widgets = widgets,
@@ -285,32 +247,6 @@ fun AnimatedLayoutSwitcher(
                             enableCollapsibleSections = true,
                             windowSizeClass = windowSizeClass
                         )
-                    }
-                }
-                
-                DashboardLayoutMode.DEFAULT -> {
-                    StaggeredAnimationWrapper(
-                        widgets = widgets,
-                        animationDelay = 50L
-                    ) {
-                        if (enableDragAndDrop) {
-                            DragAndDropGrid(
-                                widgets = widgets,
-                                windowSizeClass = windowSizeClass,
-                                onReorder = onWidgetReorder,
-                                onWidgetClick = onWidgetClick,
-                                widgetDataProvider = widgetDataProvider,
-                                isLoading = isLoading
-                            )
-                        } else {
-                            AdaptiveWidgetGrid(
-                                widgets = widgets,
-                                windowSizeClass = windowSizeClass,
-                                onWidgetClick = onWidgetClick,
-                                widgetDataProvider = widgetDataProvider,
-                                isLoading = isLoading
-                            )
-                        }
                     }
                 }
             }

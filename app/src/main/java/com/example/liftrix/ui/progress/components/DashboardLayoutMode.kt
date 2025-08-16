@@ -6,20 +6,27 @@ import com.example.liftrix.domain.model.analytics.DashboardLayoutMode as DomainD
 /**
  * UI layer enum for dashboard layout modes in the Progress Dashboard.
  * 
- * This enum provides UI-specific presentation logic and adaptive layout selection
- * based on screen size and widget count. It maps to domain layer DashboardLayoutMode
- * while adding UI-specific optimization logic.
+ * Aligned with domain layer to provide 4 core layout modes with UI-specific
+ * presentation logic and adaptive layout selection based on screen size.
  */
 enum class DashboardLayoutMode(
     val displayName: String,
     val description: String
 ) {
     /**
-     * Default/automatic layout - determines optimal mode based on content and screen
+     * Automatic adaptive layout - determines optimal mode based on content and screen
      */
-    DEFAULT(
+    AUTO(
         displayName = "Auto",
-        description = "Automatically selects optimal layout"
+        description = "Smart adaptive layout"
+    ),
+    
+    /**
+     * Custom layout with full user control and drag-and-drop
+     */
+    CUSTOM(
+        displayName = "Custom",
+        description = "Fully customizable with drag-and-drop"
     ),
     
     /**
@@ -27,7 +34,7 @@ enum class DashboardLayoutMode(
      */
     GRID(
         displayName = "Grid",
-        description = "Grid layout with responsive columns"
+        description = "Responsive grid layout"
     ),
     
     /**
@@ -36,22 +43,6 @@ enum class DashboardLayoutMode(
     SECTIONS(
         displayName = "Sections",
         description = "Organized sections with categories"
-    ),
-    
-    /**
-     * List layout for vertical scrolling
-     */
-    LIST(
-        displayName = "List",
-        description = "Vertical list layout"
-    ),
-    
-    /**
-     * Custom layout with drag-and-drop
-     */
-    CUSTOM(
-        displayName = "Custom",
-        description = "Fully customizable layout"
     );
     
     companion object {
@@ -70,7 +61,7 @@ enum class DashboardLayoutMode(
         ): DashboardLayoutMode {
             // Honor user preference if explicitly set
             userPreference?.let { preference ->
-                if (preference != DEFAULT) return preference
+                if (preference != AUTO) return preference
             }
             
             return when {
@@ -102,7 +93,7 @@ enum class DashboardLayoutMode(
         ): DashboardLayoutMode {
             // Honor user preference if explicitly set
             userPreference?.let { preference ->
-                if (preference != DEFAULT) return preference
+                if (preference != AUTO) return preference
             }
             
             val widgetCount = widgets.size
@@ -130,31 +121,28 @@ enum class DashboardLayoutMode(
         
         /**
          * Maps domain DashboardLayoutMode to UI DashboardLayoutMode
+         * Now a 1:1 mapping since both layers use the same 4 modes
          */
         fun fromDomain(domainMode: DomainDashboardLayoutMode?): DashboardLayoutMode? {
             return when (domainMode) {
-                DomainDashboardLayoutMode.AUTO -> DEFAULT
+                DomainDashboardLayoutMode.AUTO -> AUTO
                 DomainDashboardLayoutMode.CUSTOM -> CUSTOM
-                DomainDashboardLayoutMode.COMPACT -> SECTIONS
-                DomainDashboardLayoutMode.EXPANDED -> GRID
                 DomainDashboardLayoutMode.GRID -> GRID
-                DomainDashboardLayoutMode.LIST -> LIST
                 DomainDashboardLayoutMode.SECTIONS -> SECTIONS
-                DomainDashboardLayoutMode.DEFAULT -> DEFAULT
                 null -> null
             }
         }
         
         /**
          * Maps UI DashboardLayoutMode to domain DashboardLayoutMode
+         * Now a 1:1 mapping since both layers use the same 4 modes
          */
         fun toDomain(uiMode: DashboardLayoutMode): DomainDashboardLayoutMode {
             return when (uiMode) {
-                DEFAULT -> DomainDashboardLayoutMode.AUTO
-                GRID -> DomainDashboardLayoutMode.EXPANDED
-                SECTIONS -> DomainDashboardLayoutMode.COMPACT
-                LIST -> DomainDashboardLayoutMode.COMPACT
+                AUTO -> DomainDashboardLayoutMode.AUTO
                 CUSTOM -> DomainDashboardLayoutMode.CUSTOM
+                GRID -> DomainDashboardLayoutMode.GRID
+                SECTIONS -> DomainDashboardLayoutMode.SECTIONS
             }
         }
     }

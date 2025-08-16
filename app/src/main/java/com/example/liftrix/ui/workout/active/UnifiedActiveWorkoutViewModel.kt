@@ -106,11 +106,20 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                             )
                         }
                         session != null -> {
-                            _uiState.value = UnifiedActiveWorkoutUiState.Success(session)
+                            // Don't override WorkoutCompleted state when session is completed
+                            val currentState = _uiState.value
+                            if (currentState is UnifiedActiveWorkoutUiState.WorkoutCompleted && 
+                                session.sessionStatus == UnifiedWorkoutSession.SessionStatus.COMPLETED) {
+                                // Keep the WorkoutCompleted state - user needs to navigate away
+                                Timber.d("🔥 OBSERVE-SESSION: Keeping WorkoutCompleted state for completed session")
+                            } else {
+                                _uiState.value = UnifiedActiveWorkoutUiState.Success(session)
+                            }
                         }
                         else -> {
                             // No session exists - show appropriate state based on context
-                            if (_uiState.value !is UnifiedActiveWorkoutUiState.Loading) {
+                            if (_uiState.value !is UnifiedActiveWorkoutUiState.Loading &&
+                                _uiState.value !is UnifiedActiveWorkoutUiState.WorkoutCompleted) {
                                 _uiState.value = UnifiedActiveWorkoutUiState.NoSession
                             }
                         }
@@ -235,35 +244,41 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
      * 🔥 NEW: Directly completes the session without showing dialogs
      */
     private suspend fun completeSessionDirectly() {
-        // Get workout ID before completion
-        val currentSession = sessionManager.currentSession.value
-        val workoutId = currentSession?.templateId ?: currentSession?.id?.value ?: "unknown"
-        
         val success = sessionManager.completeSession()
         if (success) {
             Timber.i("Workout completion initiated")
             
-            // Show completion state briefly
+            // Wait for the save to complete and get the saved workout ID
+            delay(200) // Small delay to ensure save completes
+            
+            // 🔥 FIX: Get the saved workout ID from the session manager after completion
+            val savedWorkoutId = sessionManager.savedWorkoutId.value
+            val workoutId = if (!savedWorkoutId.isNullOrEmpty()) {
+                Timber.d("🔥 COMPLETE-WORKOUT: Using saved workout ID: $savedWorkoutId")
+                savedWorkoutId
+            } else {
+                // Fallback to session ID if saved workout ID is not available
+                val currentSession = sessionManager.currentSession.value
+                val fallbackId = currentSession?.id?.value ?: "unknown"
+                Timber.w("🔥 COMPLETE-WORKOUT: No saved workout ID, using fallback: $fallbackId")
+                fallbackId
+            }
+            
+            // Show completion state - user will navigate away via UI buttons
             _uiState.value = UnifiedActiveWorkoutUiState.WorkoutCompleted(workoutId)
+            Timber.d("🔥 COMPLETE-WORKOUT: Workout completed successfully with ID: $workoutId")
             
-            // Give user a moment to see completion state
-            delay(1500)
-            
-            // Check if session is in failed state and offer retry
-            val currentSession = sessionManager.currentSession.value
-            if (currentSession?.sessionStatus == UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE) {
+            // Check if session is in failed state after a delay
+            delay(300) // Additional delay to ensure session state is updated
+            val updatedSession = sessionManager.currentSession.value
+            if (updatedSession?.sessionStatus == UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE) {
                 Timber.w("🔥 COMPLETE-WORKOUT: Session failed to save, showing retry option")
                 _uiState.value = UnifiedActiveWorkoutUiState.Error(
                     message = "Workout completed but failed to save. Tap to retry.",
                     isRetryable = true
                 )
-            } else {
-                // Workout completed successfully
-                Timber.d("🔥 COMPLETE-WORKOUT: Workout completed successfully")
-                
-                // Transition to NoSession state
-                _uiState.value = UnifiedActiveWorkoutUiState.NoSession
             }
+            // Do NOT transition to NoSession - let user navigate via UI buttons
         } else {
             Timber.w("🔥 COMPLETE-WORKOUT: Failed to complete workout")
             _uiState.value = UnifiedActiveWorkoutUiState.Error(
@@ -735,10 +750,12 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                     val updatedSession = sessionManager.currentSession.value
                     if (updatedSession?.sessionStatus == UnifiedWorkoutSession.SessionStatus.COMPLETED) {
                         Timber.i("🔥 RETRY-SAVE: Session save retry successful")
-                        val workoutId = updatedSession.templateId ?: updatedSession.id.value
+                        // 🔥 FIX: Use the saved workout ID from session manager
+                        val savedWorkoutId = sessionManager.savedWorkoutId.value
+                        val workoutId = savedWorkoutId ?: updatedSession.id.value
+                        Timber.d("🔥 RETRY-SAVE: Using workout ID: $workoutId")
                         _uiState.value = UnifiedActiveWorkoutUiState.WorkoutCompleted(workoutId)
-                        delay(1000)
-                        _uiState.value = UnifiedActiveWorkoutUiState.NoSession
+                        // Do NOT transition to NoSession - let user navigate via UI buttons
                     } else {
                         Timber.w("🔥 RETRY-SAVE: Session save retry failed")
                         _uiState.value = UnifiedActiveWorkoutUiState.Error(
@@ -886,13 +903,24 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
      */
     private fun finishWorkoutCompletion() {
         viewModelScope.launch {
-            // Get workout ID from current session
-            val currentSession = sessionManager.currentSession.value
-            val workoutId = currentSession?.templateId ?: currentSession?.id?.value ?: "unknown"
+            // 🔥 FIX: Get the saved workout ID from the session manager
+            val savedWorkoutId = sessionManager.savedWorkoutId.value
+            
+            // Use the saved workout ID if available, otherwise fall back to session ID
+            val workoutId = if (!savedWorkoutId.isNullOrEmpty()) {
+                Timber.d("🔥 WORKOUT-COMPLETION: Using saved workout ID: $savedWorkoutId")
+                savedWorkoutId
+            } else {
+                // Fallback to session ID if saved workout ID is not available (shouldn't happen)
+                val currentSession = sessionManager.currentSession.value
+                val fallbackId = currentSession?.id?.value ?: "unknown"
+                Timber.w("🔥 WORKOUT-COMPLETION: No saved workout ID, using fallback: $fallbackId")
+                fallbackId
+            }
             
             // Show completion state - navigation will be triggered by the screen
             _uiState.value = UnifiedActiveWorkoutUiState.WorkoutCompleted(workoutId)
-            Timber.d("🔥 WORKOUT-COMPLETION: Set state to WorkoutCompleted - navigation should trigger")
+            Timber.d("🔥 WORKOUT-COMPLETION: Set state to WorkoutCompleted with ID: $workoutId")
             
             // 🔥 FIXED: Don't transition to NoSession - let the navigation handle the state change
             // The UnifiedActiveWorkoutScreen will call onNavigateToHome() when it sees WorkoutCompleted
@@ -1026,6 +1054,13 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
      */
     fun clearError() {
         sessionManager.clearRecoveryError()
+    }
+    
+    /**
+     * 🔥 FIX: Clears the saved workout ID after navigation
+     */
+    fun clearSavedWorkoutId() {
+        sessionManager.clearSavedWorkoutId()
     }
 }
 

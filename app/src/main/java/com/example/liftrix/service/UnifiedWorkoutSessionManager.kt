@@ -80,6 +80,10 @@ class UnifiedWorkoutSessionManager @Inject constructor(
     // 🔥 SIMPLIFIED: Single state flow for session recovery
     private val _recoveryState = MutableStateFlow<RecoveryState>(RecoveryState.NoRecovery)
     val recoveryState: StateFlow<RecoveryState> = _recoveryState.asStateFlow()
+    
+    // 🔥 FIX: Track the saved workout ID after successful completion
+    private val _savedWorkoutId = MutableStateFlow<String?>(null)
+    val savedWorkoutId: StateFlow<String?> = _savedWorkoutId.asStateFlow()
 
     init {
         // 🔥 KEY FIX: Ensure session recovery happens immediately
@@ -222,6 +226,9 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                     onSuccess = { savedWorkout ->
                         Timber.d("WORKOUT-DEBUG: Session completed successfully - ID: ${savedWorkout.id.value}")
                         
+                        // 🔥 FIX: Store the saved workout ID for navigation
+                        _savedWorkoutId.value = savedWorkout.id.value
+                        
                         // Add small delay to ensure database transaction is fully committed
                         kotlinx.coroutines.delay(100)
                         
@@ -318,6 +325,9 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                 saveResult.fold(
                     onSuccess = { savedWorkout ->
                         Timber.i("🔥 SESSION-RETRY: Workout saved successfully on retry with ID: ${savedWorkout.id.value}")
+                        
+                        // 🔥 FIX: Store the saved workout ID for navigation
+                        _savedWorkoutId.value = savedWorkout.id.value
                         
                         // 🔥 CRITICAL FIX: Add delay for transaction commit
                         kotlinx.coroutines.delay(100)
@@ -701,11 +711,20 @@ class UnifiedWorkoutSessionManager @Inject constructor(
     private fun clearSession() {
         val currentSession = _currentSession.value
         _currentSession.value = null
+        // Don't clear the saved workout ID here - it's needed for navigation
         sharedPrefs.edit {
             remove(KEY_CURRENT_SESSION)
             remove(KEY_LAST_UPDATED)
         }
         Timber.d("🔥 SESSION-CLEAR: Session cleared${currentSession?.let { ": ${it.name}" } ?: ""}")
+    }
+    
+    /**
+     * 🔥 FIX: Clears the saved workout ID after navigation
+     */
+    fun clearSavedWorkoutId() {
+        _savedWorkoutId.value = null
+        Timber.d("🔥 SESSION-CLEAR: Saved workout ID cleared")
     }
 
     /**

@@ -54,6 +54,7 @@ import com.example.liftrix.domain.model.ExerciseSet
 import com.example.liftrix.ui.workout.create.WorkoutTemplateCreationViewModel
 import com.example.liftrix.ui.workout.creation.components.DragDropExerciseList
 import com.example.liftrix.ui.common.state.dataOrNull
+import timber.log.Timber
 
 /**
  * Template creation screen for building workout templates without timer.
@@ -76,13 +77,28 @@ fun WorkoutTemplateScreen(
     onAddExercise: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: WorkoutTemplateCreationViewModel = hiltViewModel(),
-    savedStateHandle: SavedStateHandle? = null
+    savedStateHandle: SavedStateHandle? = null,
+    initialFolderId: String? = null  // 🔥 NEW: Accept folder ID for initialization
 ) {
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     
-    var templateName by remember { mutableStateOf("") }
-    var templateDescription by remember { mutableStateOf("") }
+    // 🔥 FIXED: Use ViewModel state instead of local state to prevent data loss
+    val templateName = uiState.dataOrNull()?.templateName ?: ""
+    val templateDescription = uiState.dataOrNull()?.templateDescription ?: ""
+    
+    // 🔥 NEW: Initialize ViewModel with folder context if provided
+    LaunchedEffect(initialFolderId) {
+        if (initialFolderId != null) {
+            Timber.d("🔥 TEMPLATE-INIT: Initializing ViewModel with folder context: $initialFolderId")
+            viewModel.createWorkoutInFolder(
+                folderId = initialFolderId,
+                name = "",  // Let user fill in name
+                description = null,
+                exercises = emptyList()
+            )
+        }
+    }
     
     // Handle selected exercise from navigation
     val selectedExercise = savedStateHandle?.get<com.example.liftrix.domain.model.ExerciseLibrary>("selected_exercise")
@@ -190,8 +206,8 @@ fun WorkoutTemplateScreen(
                 TemplateInfoCard(
                     templateName = templateName,
                     templateDescription = templateDescription,
-                    onNameChange = { templateName = it },
-                    onDescriptionChange = { templateDescription = it }
+                    onNameChange = { viewModel.updateTemplateName(it) },
+                    onDescriptionChange = { viewModel.updateTemplateDescription(it) }
                 )
             }
             

@@ -407,27 +407,46 @@ private fun EmptyDiscoveryState(
     modifier: Modifier = Modifier
 ) {
     UnifiedWorkoutCard(
-        title = "No new people to discover right now",
-        subtitle = "Check back later or explore your existing connections",
-        modifier = modifier,
-        actions = {
-            PrimaryActionButton(
-                text = "View Friends",
-                onClick = onViewAllFriends,
-                leadingIcon = Icons.Default.People
-            )
-        }
+        title = "",  // Empty title since we're rendering custom content
+        modifier = modifier
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(GridSystem.spacing2),
+            horizontalArrangement = Arrangement.Start,
+            verticalAlignment = Alignment.Top
         ) {
+            // Icon on the left
             Icon(
                 imageVector = Icons.Default.People,
-                contentDescription = "Person icon",
-                modifier = Modifier.size(24.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                contentDescription = "No people to discover",
+                modifier = Modifier
+                    .size(48.dp)
+                    .padding(end = GridSystem.spacing3),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
+            
+            // Text content on the right
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // Main title
+                Text(
+                    text = "No new people to discover right now",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                
+                // Subtitle
+                Text(
+                    text = "Check back later or explore your existing connections",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }

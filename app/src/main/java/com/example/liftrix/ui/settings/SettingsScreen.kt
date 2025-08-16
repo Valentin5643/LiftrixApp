@@ -60,6 +60,7 @@ fun SettingsScreen(
     onNavigateToAnomalyDetection: (() -> Unit)? = null,
     onNavigateToAnomalyDashboard: (() -> Unit)? = null,
     onNavigateToWidgetSettings: (() -> Unit)? = null,
+    onNavigateToNotifications: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -78,6 +79,7 @@ fun SettingsScreen(
         val stableOnNavigateToAnomalyDetection = remember(onNavigateToAnomalyDetection) { onNavigateToAnomalyDetection }
         val stableOnNavigateToAnomalyDashboard = remember(onNavigateToAnomalyDashboard) { onNavigateToAnomalyDashboard }
         val stableOnNavigateToWidgetSettings = remember(onNavigateToWidgetSettings) { onNavigateToWidgetSettings }
+        val stableOnNavigateToNotifications = remember(onNavigateToNotifications) { onNavigateToNotifications }
         
         // Optimized LaunchedEffect with stable key
         LaunchedEffect(uiState.isSigningOut, uiState.error) {
@@ -128,6 +130,7 @@ fun SettingsScreen(
                             onNavigateToAnomalyDetection = stableOnNavigateToAnomalyDetection,
                             onNavigateToAnomalyDashboard = stableOnNavigateToAnomalyDashboard,
                             onNavigateToWidgetSettings = stableOnNavigateToWidgetSettings,
+                            onNavigateToNotifications = stableOnNavigateToNotifications,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -175,11 +178,13 @@ private fun SettingsContent(
     onNavigateToAnomalyDetection: (() -> Unit)? = null,
     onNavigateToAnomalyDashboard: (() -> Unit)? = null,
     onNavigateToWidgetSettings: (() -> Unit)? = null,
+    onNavigateToNotifications: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     // Stable callbacks and data to prevent unnecessary recompositions
     val stableOnEvent = remember(onEvent) { onEvent }
     val stableOnNavigateToProfile = remember(onNavigateToProfile) { onNavigateToProfile }
+    val stableOnNavigateToNotifications = remember(onNavigateToNotifications) { onNavigateToNotifications }
     val stableSettingsCategories = remember { settingsCategories }
     
     LazyColumn(
@@ -230,7 +235,8 @@ private fun SettingsContent(
                     onEvent = stableOnEvent,
                     onNavigateToAnomalyDetection = onNavigateToAnomalyDetection,
                     onNavigateToAnomalyDashboard = onNavigateToAnomalyDashboard,
-                    onNavigateToWidgetSettings = onNavigateToWidgetSettings
+                    onNavigateToWidgetSettings = onNavigateToWidgetSettings,
+                    onNavigateToNotifications = stableOnNavigateToNotifications
                 )
             }
         }
@@ -273,7 +279,8 @@ private fun SettingsCategoryContent(
     onEvent: (SettingsEvent) -> Unit,
     onNavigateToAnomalyDetection: (() -> Unit)? = null,
     onNavigateToAnomalyDashboard: (() -> Unit)? = null,
-    onNavigateToWidgetSettings: (() -> Unit)? = null
+    onNavigateToWidgetSettings: (() -> Unit)? = null,
+    onNavigateToNotifications: (() -> Unit)? = null
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -285,7 +292,8 @@ private fun SettingsCategoryContent(
                     onEvent = onEvent,
                     onNavigateToAnomalyDetection = onNavigateToAnomalyDetection,
                     onNavigateToAnomalyDashboard = onNavigateToAnomalyDashboard,
-                    onNavigateToWidgetSettings = onNavigateToWidgetSettings
+                    onNavigateToWidgetSettings = onNavigateToWidgetSettings,
+                    onNavigateToNotifications = onNavigateToNotifications
                 )
             }
             
@@ -322,10 +330,12 @@ private fun GeneralSettings(
     onEvent: (SettingsEvent) -> Unit,
     onNavigateToAnomalyDetection: (() -> Unit)? = null,
     onNavigateToAnomalyDashboard: (() -> Unit)? = null,
-    onNavigateToWidgetSettings: (() -> Unit)? = null
+    onNavigateToWidgetSettings: (() -> Unit)? = null,
+    onNavigateToNotifications: (() -> Unit)? = null
 ) {
     // Stable callback to prevent unnecessary recompositions
     val stableOnEvent = remember(onEvent) { onEvent }
+    val stableOnNavigateToNotifications = remember(onNavigateToNotifications) { onNavigateToNotifications }
     
     Column(
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -360,7 +370,8 @@ private fun GeneralSettings(
             onClick = { 
                 // Trigger analytics event
                 stableOnEvent(SettingsEvent.NavigateToNotifications)
-                // Navigate to notification settings (callback would be passed from navigation)
+                // Navigate to notification settings
+                stableOnNavigateToNotifications?.invoke()
             }
         )
         

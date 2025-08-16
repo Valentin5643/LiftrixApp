@@ -55,13 +55,9 @@ fun WidgetPreviewGrid(
     // Calculate grid columns based on layout mode
     val columns = when (layoutMode) {
         DashboardLayoutMode.AUTO -> 3
-        DashboardLayoutMode.COMPACT -> 2
-        DashboardLayoutMode.EXPANDED -> 1
         DashboardLayoutMode.CUSTOM -> 3
         DashboardLayoutMode.GRID -> 3
-        DashboardLayoutMode.LIST -> 1
         DashboardLayoutMode.SECTIONS -> 2
-        DashboardLayoutMode.DEFAULT -> 3
     }
     
     // Stable callback
@@ -104,13 +100,9 @@ private fun PreviewWidgetCard(
     // Calculate card height based on layout mode
     val cardHeight = when (layoutMode) {
         DashboardLayoutMode.AUTO -> 80.dp
-        DashboardLayoutMode.COMPACT -> 90.dp
-        DashboardLayoutMode.EXPANDED -> 60.dp
         DashboardLayoutMode.CUSTOM -> 85.dp
         DashboardLayoutMode.GRID -> 80.dp
-        DashboardLayoutMode.LIST -> 60.dp
         DashboardLayoutMode.SECTIONS -> 90.dp
-        DashboardLayoutMode.DEFAULT -> 80.dp
     }
     
     val stableOnClick = remember(onClick) { onClick }
@@ -135,13 +127,9 @@ private fun PreviewWidgetCard(
     ) {
         when (layoutMode) {
             DashboardLayoutMode.AUTO -> GridPreviewContent(widget)
-            DashboardLayoutMode.COMPACT -> SectionPreviewContent(widget)
-            DashboardLayoutMode.EXPANDED -> ListPreviewContent(widget)
             DashboardLayoutMode.CUSTOM -> CustomPreviewContent(widget)
             DashboardLayoutMode.GRID -> GridPreviewContent(widget)
-            DashboardLayoutMode.LIST -> ListPreviewContent(widget)
             DashboardLayoutMode.SECTIONS -> SectionPreviewContent(widget)
-            DashboardLayoutMode.DEFAULT -> GridPreviewContent(widget)
         }
     }
 }
@@ -502,7 +490,7 @@ private fun WidgetPreviewGridPreview() {
             
             WidgetPreviewGrid(
                 widgets = sampleWidgets.take(3),
-                layoutMode = DashboardLayoutMode.COMPACT,
+                layoutMode = DashboardLayoutMode.SECTIONS,
                 onWidgetClick = { }
             )
         }

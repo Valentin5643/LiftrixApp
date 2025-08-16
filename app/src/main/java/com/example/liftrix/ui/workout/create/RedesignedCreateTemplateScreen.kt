@@ -20,7 +20,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
 import com.example.liftrix.ui.common.state.WorkoutTemplateCreationUiState
+import com.example.liftrix.ui.common.state.dataOrNull
+import androidx.compose.material3.MaterialTheme
 import com.example.liftrix.ui.theme.LiftrixColorsV2
+import com.example.liftrix.ui.workout.create.NavigationEvent
 import com.example.liftrix.ui.workout.components.*
 import timber.log.Timber
 
@@ -33,11 +36,42 @@ fun RedesignedCreateTemplateScreen(
     onNavigateToExerciseSelection: () -> Unit = {},
     editTemplateId: String? = null,
     viewModel: WorkoutTemplateCreationViewModel = hiltViewModel(),
-    navBackStackEntry: NavBackStackEntry? = null
+    navBackStackEntry: NavBackStackEntry? = null,
+    initialFolderId: String? = null  // 🔥 NEW: Accept folder ID for initialization
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var templateName by remember { mutableStateOf("") }
-    var templateDescription by remember { mutableStateOf("") }
+    
+    // Observe navigation events
+    LaunchedEffect(viewModel) {
+        viewModel.navigationEvents.collect { event ->
+            when (event) {
+                is NavigationEvent.NavigateBack -> {
+                    onNavigateBack()
+                }
+                is NavigationEvent.NavigateToWorkout -> {
+                    // Could navigate to specific workout if needed
+                    onNavigateBack()
+                }
+            }
+        }
+    }
+    
+    // 🔥 FIXED: Use ViewModel state instead of local state to prevent data loss
+    val templateName = uiState.dataOrNull()?.templateName ?: ""
+    val templateDescription = uiState.dataOrNull()?.templateDescription ?: ""
+    
+    // 🔥 NEW: Initialize ViewModel with folder context if provided
+    LaunchedEffect(initialFolderId) {
+        if (initialFolderId != null) {
+            Timber.d("🔥 REDESIGNED-TEMPLATE-INIT: Initializing ViewModel with folder context: $initialFolderId")
+            viewModel.createWorkoutInFolder(
+                folderId = initialFolderId,
+                name = "",  // Let user fill in name
+                description = null,
+                exercises = emptyList()
+            )
+        }
+    }
     
     // Track exercise menu states
     val exerciseMenuStates = remember { mutableStateMapOf<String, Boolean>() }
@@ -64,7 +98,7 @@ fun RedesignedCreateTemplateScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(LiftrixColorsV2.Dark.BackgroundPrimary)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // Content
@@ -85,7 +119,7 @@ fun RedesignedCreateTemplateScreen(
                         Text(
                             text = "Workout Name",
                             style = TextStyle(
-                                color = LiftrixColorsV2.Dark.TextSecondary,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium
                             )
@@ -94,16 +128,16 @@ fun RedesignedCreateTemplateScreen(
                         // Template Name Input
                         BasicTextField(
                             value = templateName,
-                            onValueChange = { templateName = it },
+                            onValueChange = { viewModel.updateTemplateName(it) },
                             textStyle = TextStyle(
-                                color = LiftrixColorsV2.Dark.TextPrimary,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontSize = 16.sp
                             ),
-                            cursorBrush = SolidColor(LiftrixColorsV2.Teal),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(
-                                    LiftrixColorsV2.Dark.BackgroundSecondary,
+                                    MaterialTheme.colorScheme.surfaceVariant,
                                     RoundedCornerShape(8.dp)
                                 )
                                 .padding(16.dp),
@@ -113,7 +147,7 @@ fun RedesignedCreateTemplateScreen(
                                         Text(
                                             text = "Enter workout name",
                                             style = TextStyle(
-                                                color = LiftrixColorsV2.Dark.TextTertiary,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                                 fontSize = 16.sp
                                             )
                                         )
@@ -127,7 +161,7 @@ fun RedesignedCreateTemplateScreen(
                         Text(
                             text = "Description (Optional)",
                             style = TextStyle(
-                                color = LiftrixColorsV2.Dark.TextSecondary,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium
                             )
@@ -136,18 +170,18 @@ fun RedesignedCreateTemplateScreen(
                         // Description Input
                         BasicTextField(
                             value = templateDescription,
-                            onValueChange = { templateDescription = it },
+                            onValueChange = { viewModel.updateTemplateDescription(it) },
                             textStyle = TextStyle(
-                                color = LiftrixColorsV2.Dark.TextPrimary,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontSize = 14.sp,
                                 lineHeight = 20.sp
                             ),
-                            cursorBrush = SolidColor(LiftrixColorsV2.Teal),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(100.dp)
                                 .background(
-                                    LiftrixColorsV2.Dark.BackgroundSecondary,
+                                    MaterialTheme.colorScheme.surfaceVariant,
                                     RoundedCornerShape(8.dp)
                                 )
                                 .padding(16.dp),
@@ -157,7 +191,7 @@ fun RedesignedCreateTemplateScreen(
                                         Text(
                                             text = "Add workout description",
                                             style = TextStyle(
-                                                color = LiftrixColorsV2.Dark.TextTertiary,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                                 fontSize = 14.sp
                                             )
                                         )
@@ -238,7 +272,7 @@ fun RedesignedCreateTemplateScreen(
                                     title = {
                                         Text(
                                             "Exercise Notes",
-                                            color = LiftrixColorsV2.Dark.TextPrimary
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                     },
                                     text = {
@@ -250,10 +284,10 @@ fun RedesignedCreateTemplateScreen(
                                             onValueChange = { notes = it },
                                             label = { Text("Notes") },
                                             colors = OutlinedTextFieldDefaults.colors(
-                                                focusedTextColor = LiftrixColorsV2.Dark.TextPrimary,
-                                                unfocusedTextColor = LiftrixColorsV2.Dark.TextPrimary,
-                                                focusedBorderColor = LiftrixColorsV2.Teal,
-                                                unfocusedBorderColor = LiftrixColorsV2.Dark.Outline
+                                                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
                                             ),
                                             modifier = Modifier.fillMaxWidth()
                                         )
@@ -266,15 +300,15 @@ fun RedesignedCreateTemplateScreen(
                                                 showNotesDialog = false
                                             }
                                         ) {
-                                            Text("Save", color = LiftrixColorsV2.Teal)
+                                            Text("Save", color = MaterialTheme.colorScheme.primary)
                                         }
                                     },
                                     dismissButton = {
                                         TextButton(onClick = { showNotesDialog = false }) {
-                                            Text("Cancel", color = LiftrixColorsV2.Dark.TextSecondary)
+                                            Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                     },
-                                    containerColor = LiftrixColorsV2.Dark.BackgroundSecondary
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
                                 )
                             }
                         }
@@ -289,10 +323,10 @@ fun RedesignedCreateTemplateScreen(
                     OutlinedButton(
                         onClick = onNavigateToExerciseSelection,
                         colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = LiftrixColorsV2.Teal
+                            contentColor = MaterialTheme.colorScheme.primary
                         ),
                         border = ButtonDefaults.outlinedButtonBorder.copy(
-                            brush = SolidColor(LiftrixColorsV2.Teal)
+                            brush = SolidColor(MaterialTheme.colorScheme.primary)
                         ),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier
@@ -325,7 +359,7 @@ fun RedesignedCreateTemplateScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(LiftrixColorsV2.Dark.BackgroundPrimary)
+                    .background(MaterialTheme.colorScheme.background)
                     .padding(16.dp)
             ) {
                 RedesignedPrimaryButton(
@@ -344,6 +378,7 @@ fun RedesignedCreateTemplateScreen(
                                 exercises = exercises
                             )
                         } else {
+                            // 🔥 FIXED: Use ViewModel state for template creation
                             viewModel.createTemplate(
                                 name = templateName,
                                 description = templateDescription.takeIf { it.isNotBlank() },

@@ -330,6 +330,14 @@ sealed class LiftrixRoute {
     data class ShareWorkout(val workoutId: String) : LiftrixRoute()
     
     /**
+     * Post-workout summary screen showing comprehensive workout statistics
+     * 
+     * @param workoutId Unique identifier for the completed workout
+     */
+    @Serializable
+    data class PostWorkoutSummary(val workoutId: String) : LiftrixRoute()
+    
+    /**
      * Progress comparison screen for comparing workout progress between users
      * 
      * @param comparisonId Unique identifier for the comparison to display

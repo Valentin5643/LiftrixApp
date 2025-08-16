@@ -24,6 +24,8 @@ import com.example.liftrix.service.PreferencesService
 import com.example.liftrix.service.PreferencesServiceImpl
 import com.example.liftrix.service.ProgressDataService
 import com.example.liftrix.service.ProgressDataServiceImpl
+import com.example.liftrix.domain.service.PRDetectionService
+import com.example.liftrix.service.PRDetectionServiceImpl
 import com.example.liftrix.ui.progress.components.AnalyticsWidgetManager
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import dagger.Binds
@@ -93,6 +95,17 @@ abstract class ServiceModule {
     abstract fun bindSyncService(
         syncServiceImpl: SyncServiceImpl
     ): SyncService
+    
+    /**
+     * Binds PRDetectionService interface to its implementation.
+     * 
+     * Provides personal record detection for workout achievements.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindPRDetectionService(
+        prDetectionServiceImpl: PRDetectionServiceImpl
+    ): PRDetectionService
     
     companion object {
         

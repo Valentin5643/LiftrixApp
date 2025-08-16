@@ -3,125 +3,78 @@ package com.example.liftrix.domain.model.analytics
 /**
  * Dashboard layout modes for customizable analytics display.
  * 
- * Defines different ways users can organize and view their analytics widgets
- * on the dashboard, from automatic level-based layouts to fully custom arrangements.
+ * Defines 4 core ways users can organize and view their analytics widgets
+ * on the dashboard, from automatic adaptive layouts to fully custom arrangements.
  */
 enum class DashboardLayoutMode(
     val displayName: String,
     val description: String
 ) {
     /**
-     * Automatic layout based on user level
-     * Widgets selected and arranged automatically based on user experience
+     * Automatic adaptive layout based on user level and screen size
+     * Intelligently selects and arranges widgets based on context
      */
     AUTO(
         displayName = "Automatic",
-        description = "Smart layout based on your experience level"
+        description = "Smart adaptive layout based on your screen and experience"
     ),
     
     /**
-     * Grid layout with user-customizable widget selection
-     * Users can choose which widgets to display and their positions
+     * Fully customizable layout with drag-and-drop
+     * Users have complete control over widget selection and positioning
      */
     CUSTOM(
         displayName = "Custom",
-        description = "Choose your own widgets and arrangement"
+        description = "Full control with drag-and-drop arrangement"
     ),
     
     /**
-     * Compact layout for smaller screens or minimal view
-     * Fewer widgets with optimized spacing for limited screen real estate
-     */
-    COMPACT(
-        displayName = "Compact",
-        description = "Minimal view with essential widgets only"
-    ),
-    
-    /**
-     * Expanded layout showing maximum widgets
-     * All available widgets displayed for comprehensive overview
-     */
-    EXPANDED(
-        displayName = "Expanded", 
-        description = "Maximum widgets for comprehensive view"
-    ),
-    
-    /**
-     * Traditional grid layout with equal-sized widgets
-     * Best for users who prefer consistent visual hierarchy
+     * Responsive grid layout with equal-sized widgets
+     * Adapts column count based on screen size for optimal viewing
      */
     GRID(
         displayName = "Grid",
-        description = "Traditional grid layout with equal-sized widgets"
-    ),
-    
-    /**
-     * Vertical list layout optimized for scrolling
-     * Ideal for mobile devices and users who prefer linear information flow
-     */
-    LIST(
-        displayName = "List",
-        description = "Vertical list layout optimized for scrolling"
+        description = "Responsive grid layout with smart column adaptation"
     ),
     
     /**
      * Organized sections with collapsible categories
-     * Provides the most organizational flexibility with grouping capabilities
+     * Groups widgets by category with expand/collapse functionality
      */
     SECTIONS(
         displayName = "Sections",
-        description = "Organized sections with collapsible categories"
-    ),
-    
-    /**
-     * Default layout mode
-     * Fallback layout mode for backward compatibility
-     */
-    DEFAULT(
-        displayName = "Default",
-        description = "Default dashboard layout"
+        description = "Organized categories with collapsible sections"
     );
     
     /**
      * Gets the maximum number of widgets for this layout mode
      */
     fun getMaxWidgets(): Int = when (this) {
-        AUTO -> 7        // Based on intermediate level
-        CUSTOM -> 10     // User-controlled maximum
-        COMPACT -> 4     // Minimal set
-        EXPANDED -> 12   // Show everything available
-        GRID -> 8        // Grid layout standard
-        LIST -> 6        // List layout optimized
-        SECTIONS -> 10   // Section-based layout
-        DEFAULT -> 7     // Default fallback
+        AUTO -> 8        // Adaptive based on screen/level
+        CUSTOM -> 12     // User-controlled maximum
+        GRID -> 10       // Grid layout standard
+        SECTIONS -> 10   // Section-based layout with categories
     }
     
     /**
-     * Gets the number of columns for grid layout
+     * Gets the default number of columns for grid layout
+     * Note: This adapts based on screen size in actual implementation
      */
     fun getColumns(): Int = when (this) {
-        AUTO -> 2
-        CUSTOM -> 2
-        COMPACT -> 1
-        EXPANDED -> 3
-        GRID -> 2
-        LIST -> 1
-        SECTIONS -> 1
-        DEFAULT -> 2
+        AUTO -> 2        // Adapts: 1-3 based on screen
+        CUSTOM -> 2      // User-configurable
+        GRID -> 2        // Adapts: 2-4 based on screen  
+        SECTIONS -> 1    // Single column with expandable sections
     }
     
     /**
      * Checks if this layout supports widget reordering
      */
     fun supportsReordering(): Boolean = when (this) {
-        AUTO -> false      // Fixed arrangement
-        CUSTOM -> true     // Full customization
-        COMPACT -> false   // Fixed minimal layout
-        EXPANDED -> true   // User can organize
+        AUTO -> false      // Automatic arrangement
+        CUSTOM -> true     // Full drag-and-drop support
         GRID -> true       // Grid supports reordering
-        LIST -> true       // List supports reordering
-        SECTIONS -> true   // Sections support reordering
-        DEFAULT -> false   // Fixed arrangement
+        SECTIONS -> true   // Sections support category reordering
     }
     
     /**
@@ -129,13 +82,9 @@ enum class DashboardLayoutMode(
      */
     fun supportsVisibilityToggle(): Boolean = when (this) {
         AUTO -> false      // Automatic selection
-        CUSTOM -> true     // User controls visibility
-        COMPACT -> false   // Fixed minimal set
-        EXPANDED -> false  // Shows all widgets
-        GRID -> true       // Grid supports visibility toggle
-        LIST -> true       // List supports visibility toggle
-        SECTIONS -> true   // Sections support visibility toggle
-        DEFAULT -> false   // Fixed set
+        CUSTOM -> true     // Full user control
+        GRID -> true       // Can hide/show widgets
+        SECTIONS -> true   // Can collapse/expand sections
     }
     
     companion object {
@@ -143,24 +92,33 @@ enum class DashboardLayoutMode(
          * Gets the recommended layout mode for user level
          */
         fun getRecommendedForLevel(userLevel: UserLevel): DashboardLayoutMode = when (userLevel) {
-            UserLevel.BEGINNER -> COMPACT
-            UserLevel.INTERMEDIATE -> AUTO
-            UserLevel.ADVANCED -> CUSTOM
+            UserLevel.BEGINNER -> AUTO      // Automatic adaptive for beginners
+            UserLevel.INTERMEDIATE -> GRID  // Grid layout for intermediate
+            UserLevel.ADVANCED -> CUSTOM    // Full customization for advanced
         }
         
         /**
          * Gets layout mode by name (case-insensitive)
+         * Includes legacy name mappings for backward compatibility
          */
         fun fromName(name: String): DashboardLayoutMode? = when (name.lowercase()) {
-            "auto", "automatic" -> AUTO
+            "auto", "automatic", "default" -> AUTO
             "custom" -> CUSTOM
-            "compact" -> COMPACT
-            "expanded" -> EXPANDED
-            "grid" -> GRID
-            "list" -> LIST
-            "sections" -> SECTIONS
-            "default" -> DEFAULT
+            "grid", "expanded" -> GRID  // Map expanded to grid
+            "sections", "compact", "list" -> SECTIONS  // Map compact/list to sections
             else -> null
+        }
+        
+        /**
+         * Maps legacy layout modes to new consolidated modes
+         * Used for migration and backward compatibility
+         */
+        fun migrateLegacyMode(legacyName: String): DashboardLayoutMode = when (legacyName.lowercase()) {
+            "default" -> AUTO
+            "compact" -> AUTO  // Compact becomes AUTO (adaptive for small screens)
+            "expanded" -> GRID  // Expanded becomes GRID
+            "list" -> SECTIONS  // List becomes SECTIONS (single column)
+            else -> fromName(legacyName) ?: AUTO
         }
     }
 }

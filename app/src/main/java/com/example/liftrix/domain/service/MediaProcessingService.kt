@@ -70,6 +70,29 @@ interface MediaProcessingService {
         uri: Uri,
         mediaType: MediaType
     ): Result<ProcessingEstimate>
+    
+    /**
+     * Generates a summary image for a completed workout.
+     * Creates a branded image with workout statistics suitable for sharing.
+     * 
+     * @param workout The completed workout to generate summary for
+     * @return Path to the generated image file, or null if generation fails
+     */
+    suspend fun generateWorkoutSummaryImage(
+        workout: com.example.liftrix.domain.model.Workout
+    ): String?
+    
+    /**
+     * Saves an image to the device gallery.
+     * 
+     * @param imageUrl Path or URL to the image to save
+     * @param fileName Name for the saved file
+     * @return URI of the saved image in the gallery
+     */
+    suspend fun saveImageToGallery(
+        imageUrl: String,
+        fileName: String
+    ): com.example.liftrix.domain.model.common.LiftrixResult<Uri>
 }
 
 /**

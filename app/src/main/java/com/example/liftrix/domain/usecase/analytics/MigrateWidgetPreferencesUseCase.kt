@@ -151,8 +151,8 @@ class MigrateWidgetPreferencesUseCase @Inject constructor(
         // Apply legacy layout mode if available
         legacyPreferences["dashboardLayout"]?.let { layout ->
             val layoutMode = when (layout.toString().lowercase()) {
-                "grid" -> com.example.liftrix.domain.model.analytics.DashboardLayoutMode.AUTO
-                "list" -> com.example.liftrix.domain.model.analytics.DashboardLayoutMode.COMPACT
+                "grid" -> com.example.liftrix.domain.model.analytics.DashboardLayoutMode.GRID
+                "list" -> com.example.liftrix.domain.model.analytics.DashboardLayoutMode.SECTIONS
                 "custom" -> com.example.liftrix.domain.model.analytics.DashboardLayoutMode.CUSTOM
                 else -> com.example.liftrix.domain.model.analytics.DashboardLayoutMode.AUTO
             }

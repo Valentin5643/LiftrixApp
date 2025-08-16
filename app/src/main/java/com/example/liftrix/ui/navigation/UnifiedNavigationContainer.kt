@@ -327,6 +327,9 @@ fun UnifiedNavigationContainer(
                         onNavigateToPostCreation = { workoutId ->
                             navController.navigate(LiftrixRoute.PostCreation(workoutId))
                         },
+                        onNavigateToPostWorkoutSummary = { workoutId ->
+                            navController.navigate(LiftrixRoute.PostWorkoutSummary(workoutId))
+                        },
                         isBlankWorkout = route.isBlankWorkout,
                         templateId = route.templateId
                     )
@@ -334,6 +337,9 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.TemplateCreation> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.TemplateCreation>()
+                    // 🔥 FIXED: Extract and log folderId from route
+                    timber.log.Timber.d("🔥 UNIFIED-NAV: TemplateCreation route folderId='${route.folderId}'")
+                    
                     com.example.liftrix.ui.workout.create.RedesignedCreateTemplateScreen(
                         onNavigateBack = {
                             navController.popBackStackSafely()
@@ -342,7 +348,8 @@ fun UnifiedNavigationContainer(
                             navController.navigateToExerciseSelection(isForTemplate = true)
                         },
                         editTemplateId = null,
-                        navBackStackEntry = backStackEntry
+                        navBackStackEntry = backStackEntry,
+                        initialFolderId = route.folderId  // 🔥 NEW: Pass folder ID for initialization
                     )
                 }
                 
@@ -385,6 +392,9 @@ fun UnifiedNavigationContainer(
                         },
                         onNavigateToWidgetSettings = {
                             navController.navigate(LiftrixRoute.WidgetSettings)
+                        },
+                        onNavigateToNotifications = {
+                            navController.navigate(LiftrixRoute.NotificationSettings)
                         }
                     )
                 }
@@ -618,6 +628,24 @@ fun UnifiedNavigationContainer(
                 }
                 
                 // Social System Routes (Added for social system completion)
+                
+                // Post-workout summary screen
+                composable<LiftrixRoute.PostWorkoutSummary> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.PostWorkoutSummary>()
+                    com.example.liftrix.ui.workout.completion.PostWorkoutSummaryScreen(
+                        workoutId = route.workoutId,
+                        navController = navController
+                    )
+                }
+                
+                // Workout details screen  
+                composable<LiftrixRoute.WorkoutDetails> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.WorkoutDetails>()
+                    com.example.liftrix.ui.workout.details.WorkoutDetailsScreen(
+                        workoutId = route.workoutId,
+                        navController = navController
+                    )
+                }
                 
                 // TODO: ShareWorkout route disabled - ShareWorkoutViewModel not implemented
                 /*
@@ -856,8 +884,7 @@ private fun BottomNavigationBar(
         BottomNavItem(LiftrixRoute.Home, "Home", Icons.Default.Home),
         BottomNavItem(LiftrixRoute.Workout, "Workout", Icons.Default.FitnessCenter),
         BottomNavItem(LiftrixRoute.Progress, "Progress", Icons.Default.TrendingUp),
-        BottomNavItem(LiftrixRoute.Coach, "Coach", Icons.Default.Psychology),
-        BottomNavItem(LiftrixRoute.Friends, "Social", Icons.Default.People)
+        BottomNavItem(LiftrixRoute.Coach, "Coach", Icons.Default.Psychology)
     )
     
     NavigationBar {
@@ -1090,8 +1117,7 @@ private fun NavigationAwareTopAppBar(
     val isMainTab = currentRoute?.contains("Home") == true ||
                    currentRoute?.contains("Workout") == true ||
                    currentRoute?.contains("Progress") == true ||
-                   currentRoute?.contains("Coach") == true ||
-                   currentRoute?.contains("Friends") == true
+                   currentRoute?.contains("Coach") == true
     
     // Check if current route should show back navigation
     val shouldShowBackNavigation = routeTitles.keys.any { 
@@ -1164,6 +1190,24 @@ private fun NavigationAwareTopAppBar(
                     navController.navigateToGuestDashboard()
                 }
             )
+            
+            // Show social button on all screens EXCEPT when already in social
+            if (currentRoute?.contains("Friends") != true) {
+                IconButton(
+                    onClick = {
+                        navController.navigate(LiftrixRoute.Friends)
+                    },
+                    modifier = Modifier.semantics {
+                        contentDescription = "Open social"
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.People,
+                        contentDescription = "Social",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
             
             // Show settings button on all screens EXCEPT when already in settings
             if (currentRoute?.contains("Settings") != true) {

@@ -93,15 +93,15 @@ class WidgetResolverTest {
     }
 
     @Test
-    fun `resolveWidgets uses resolveStandardWidgets for LIST layout mode`() {
+    fun `resolveWidgets uses resolveStandardWidgets for SECTIONS layout mode with advanced user`() {
         // When
         val widgets = widgetResolver.resolveWidgets(
             userLevel = UserLevel.ADVANCED,
-            layoutMode = DashboardLayoutMode.COMPACT
+            layoutMode = DashboardLayoutMode.SECTIONS
         )
 
         // Then
-        assertEquals("LIST mode should return 11 widgets for advanced", 11, widgets.size)
+        assertEquals("SECTIONS mode should return 11 widgets for advanced", 11, widgets.size)
     }
 
     @Test

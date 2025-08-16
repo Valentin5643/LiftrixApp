@@ -200,7 +200,20 @@ fun NavGraphBuilder.workoutGraph(
         }
         
         // Create Template
-        composable(WorkoutDestinations.CREATE_TEMPLATE) { backStackEntry ->
+        composable(
+            route = WorkoutDestinations.CREATE_TEMPLATE,
+            arguments = listOf(
+                navArgument("folderId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            // 🔥 FIXED: Extract folderId parameter and initialize ViewModel with folder context
+            val folderId = backStackEntry.arguments?.getString("folderId")
+            Timber.d("🔥 CREATE-TEMPLATE-NAV: Extracted folderId='$folderId' from navigation arguments")
+            
             WorkoutTemplateScreen(
                 onNavigateBack = {
                     navController.navigateUp()
@@ -208,7 +221,8 @@ fun NavGraphBuilder.workoutGraph(
                 onAddExercise = {
                     navController.navigate(WorkoutDestinations.EXERCISE_SELECTION_FOR_TEMPLATE)
                 },
-                savedStateHandle = backStackEntry.savedStateHandle
+                savedStateHandle = backStackEntry.savedStateHandle,
+                initialFolderId = folderId  // 🔥 NEW: Pass folder ID to initialize context
             )
         }
         
@@ -260,7 +274,7 @@ object WorkoutDestinations {
     const val ACTIVE_SESSION = "active_session?templateId={templateId}"
     const val BLANK_WORKOUT_SESSION = "blank_workout_session"
     const val ADD_EXERCISE_TO_SESSION = "add_exercise_to_session"
-    const val CREATE_TEMPLATE = "create_template"
+    const val CREATE_TEMPLATE = "create_template?folderId={folderId}"
     const val EXERCISE_SELECTION_FOR_TEMPLATE = "exercise_selection_for_template"
     
     fun createActiveSessionRoute(templateId: String): String {

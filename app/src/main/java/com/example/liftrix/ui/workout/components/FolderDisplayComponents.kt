@@ -125,9 +125,12 @@ fun LazyItemScope.InlineFolderSection(
                     verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.listItemSpacing),
                     modifier = Modifier.padding(start = LiftrixSpacing.cardPadding)
                 ) {
-                    if (workouts.isEmpty() && !folder.isDefault()) {
+                    if (workouts.isEmpty()) {
                         EmptyFolderContent(
-                            onCreateWorkout = { onCreateWorkout(folder.id.value) }
+                            onCreateWorkout = { 
+                                // 🔥 FIXED: Pass folder ID to create workout in specific folder
+                                onCreateWorkout(folder.id.value) 
+                            }
                         )
                     } else {
                         workouts.forEach { workout ->

@@ -304,6 +304,55 @@ private fun FolderWorkoutCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .onGloballyPositioned { coordinates ->
+                cardPosition = coordinates.positionInRoot()
+            }
+            .offset { 
+                IntOffset(
+                    x = if (isDragActive) dragOffset.x.roundToInt() else 0,
+                    y = if (isDragActive) dragOffset.y.roundToInt() else 0
+                )
+            }
+            .graphicsLayer {
+                alpha = if (isDragActive) 0.8f else 1f
+                scaleX = if (isDragActive) 1.05f else 1f
+                scaleY = if (isDragActive) 1.05f else 1f
+                shadowElevation = if (isDragActive) 8.dp.toPx() else 0f
+            }
+            .then(
+                if (onMoveWorkout != null) {
+                    Modifier.pointerInput(workout.id) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = { offset ->
+                                isDragActive = true
+                                dragOffset = Offset.Zero
+                                totalDragDistance = 0f
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            },
+                            onDragEnd = {
+                                isDragActive = false
+                                
+                                // Only move if dragged far enough (indicates intentional move)
+                                if (totalDragDistance >= minDragDistancePx) {
+                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    // Calculate absolute drop position: card position + drag offset
+                                    val absoluteDropPosition = cardPosition + dragOffset
+                                    onMoveWorkout?.invoke(workout, absoluteDropPosition)
+                                }
+                                
+                                dragOffset = Offset.Zero
+                                totalDragDistance = 0f
+                            },
+                            onDrag = { change, dragAmount ->
+                                dragOffset += dragAmount
+                                totalDragDistance += kotlin.math.sqrt(
+                                    dragAmount.x * dragAmount.x + dragAmount.y * dragAmount.y
+                                )
+                            }
+                        )
+                    }
+                } else Modifier
+            )
             .clip(RoundedCornerShape(16.dp)),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -321,11 +370,26 @@ private fun FolderWorkoutCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Workout info on the left
-            Column(
+            Row(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                // Drag handle (only show if move functionality is available)
+                if (onMoveWorkout != null) {
+                    Icon(
+                        imageVector = Icons.Filled.DragHandle,
+                        contentDescription = "Drag to move to different folder",
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                // Workout info
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                 Text(
                     text = workout.name,
                     style = MaterialTheme.typography.titleMedium,
@@ -355,6 +419,7 @@ private fun FolderWorkoutCard(
                         label = "Used",
                         value = "${workout.usageCount}x"
                     )
+                }
                 }
             }
             

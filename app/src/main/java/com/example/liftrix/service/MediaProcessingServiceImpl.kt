@@ -1,10 +1,17 @@
 package com.example.liftrix.service
 
+import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Typeface
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import com.example.liftrix.domain.model.ImageFormat
 import com.example.liftrix.domain.model.MediaDimensions
 import com.example.liftrix.domain.model.MediaProcessingOptions
@@ -20,6 +27,7 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.ByteArrayOutputStream
 import java.io.File
+import com.example.liftrix.domain.model.common.liftrixCatching
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.min
@@ -408,5 +416,111 @@ class MediaProcessingServiceImpl @Inject constructor(
         val sizeTime = sizeMB * 200
         val durationTime = (duration ?: 10) * 50
         return (sizeTime + durationTime + 500).toLong().coerceAtLeast(500).coerceAtMost(30000)
+    }
+    
+    override suspend fun generateWorkoutSummaryImage(workout: com.example.liftrix.domain.model.Workout): String? {
+        return withContext(Dispatchers.IO) {
+            try {
+                // Create a bitmap for the workout summary
+                val width = 1080
+                val height = 1350 // Instagram story aspect ratio
+                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bitmap)
+                
+                // Draw gradient background
+                val paint = Paint().apply {
+                    isAntiAlias = true
+                }
+                
+                // Draw background gradient (Teal to Indigo)
+                val gradientPaint = Paint().apply {
+                    shader = android.graphics.LinearGradient(
+                        0f, 0f, width.toFloat(), height.toFloat(),
+                        Color.parseColor("#20C9B7"), // Teal
+                        Color.parseColor("#2A3B7D"), // Indigo
+                        android.graphics.Shader.TileMode.CLAMP
+                    )
+                }
+                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), gradientPaint)
+                
+                // Draw Liftrix branding
+                paint.apply {
+                    color = Color.WHITE
+                    textSize = 48f
+                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                    textAlign = Paint.Align.CENTER
+                }
+                canvas.drawText("LIFTRIX", width / 2f, 120f, paint)
+                
+                // Draw workout name
+                paint.apply {
+                    textSize = 72f
+                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                }
+                canvas.drawText(workout.name, width / 2f, 300f, paint)
+                
+                // Draw date
+                paint.apply {
+                    textSize = 36f
+                    typeface = Typeface.DEFAULT
+                    alpha = 230
+                }
+                val dateText = workout.date.toString()
+                canvas.drawText(dateText, width / 2f, 380f, paint)
+                
+                // Save bitmap to cache
+                val fileName = "workout_summary_${workout.id}.png"
+                val file = File(context.cacheDir, fileName)
+                val outputStream = java.io.FileOutputStream(file)
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+                outputStream.close()
+                
+                file.absolutePath
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to generate workout summary image")
+                null
+            }
+        }
+    }
+    
+    override suspend fun saveImageToGallery(
+        imageUrl: String,
+        fileName: String
+    ): com.example.liftrix.domain.model.common.LiftrixResult<Uri> {
+        return com.example.liftrix.domain.model.common.liftrixCatching(
+            errorMapper = { exception ->
+                com.example.liftrix.domain.model.error.LiftrixError.BusinessLogicError(
+                    code = "SAVE_IMAGE_FAILED",
+                    errorMessage = "Failed to save image to gallery: ${exception.message}",
+                    analyticsContext = mapOf("fileName" to fileName)
+                )
+            }
+        ) {
+            val file = File(imageUrl)
+            if (!file.exists()) {
+                throw IllegalArgumentException("Image file not found: $imageUrl")
+            }
+            
+            // Save to MediaStore
+            val resolver = context.contentResolver
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, "$fileName.png")
+                put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/Liftrix")
+                }
+            }
+            
+            val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                ?: throw IllegalStateException("Failed to create MediaStore entry")
+            
+            resolver.openOutputStream(uri)?.use { outputStream ->
+                file.inputStream().use { inputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+            }
+            
+            uri
+        }
     }
 }

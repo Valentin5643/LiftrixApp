@@ -24,6 +24,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.MaterialTheme
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.domain.model.SessionSet
 
@@ -53,7 +54,7 @@ fun RedesignedExerciseCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(LiftrixColorsV2.Dark.BackgroundSecondary, RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
             .padding(16.dp)
     ) {
         // Exercise header with name and menu
@@ -69,7 +70,7 @@ fun RedesignedExerciseCard(
                 Icon(
                     imageVector = Icons.Default.FitnessCenter,
                     contentDescription = null,
-                    tint = LiftrixColorsV2.Dark.TextPrimary,
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -77,7 +78,7 @@ fun RedesignedExerciseCard(
                     Text(
                         text = exerciseName,
                         style = TextStyle(
-                            color = LiftrixColorsV2.Dark.TextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -86,7 +87,7 @@ fun RedesignedExerciseCard(
                         Text(
                             text = it,
                             style = TextStyle(
-                                color = LiftrixColorsV2.Dark.TextTertiary,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp
                             )
                         )
@@ -102,7 +103,7 @@ fun RedesignedExerciseCard(
                 Icon(
                     imageVector = Icons.Default.MoreVert,
                     contentDescription = "Exercise options",
-                    tint = LiftrixColorsV2.Dark.TextSecondary,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -118,7 +119,7 @@ fun RedesignedExerciseCard(
             Text(
                 text = "SET",
                 style = TextStyle(
-                    color = LiftrixColorsV2.Dark.TextTertiary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium
                 ),
@@ -127,7 +128,7 @@ fun RedesignedExerciseCard(
             Text(
                 text = "PREVIOUS",
                 style = TextStyle(
-                    color = LiftrixColorsV2.Dark.TextTertiary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium
                 ),
@@ -137,7 +138,7 @@ fun RedesignedExerciseCard(
             Text(
                 text = "KG",
                 style = TextStyle(
-                    color = LiftrixColorsV2.Dark.TextTertiary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium
                 ),
@@ -147,7 +148,7 @@ fun RedesignedExerciseCard(
             Text(
                 text = "REPS",
                 style = TextStyle(
-                    color = LiftrixColorsV2.Dark.TextTertiary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium
                 ),
@@ -183,7 +184,7 @@ fun RedesignedExerciseCard(
                 .clip(RoundedCornerShape(8.dp))
                 .border(
                     width = 1.dp,
-                    color = LiftrixColorsV2.Teal,
+                    color = MaterialTheme.colorScheme.primary,
                     shape = RoundedCornerShape(8.dp)
                 )
                 .clickable { onAddSet() }
@@ -194,14 +195,14 @@ fun RedesignedExerciseCard(
             Icon(
                 imageVector = Icons.Default.Add,
                 contentDescription = null,
-                tint = LiftrixColorsV2.Teal,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "Add Set",
                 style = TextStyle(
-                    color = LiftrixColorsV2.Teal,
+                    color = MaterialTheme.colorScheme.primary,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -215,7 +216,7 @@ fun RedesignedExerciseCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
-                    .background(LiftrixColorsV2.Dark.BackgroundTertiary.copy(alpha = 0.5f))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                     .clickable { it() }
                     .padding(12.dp),
                 horizontalArrangement = Arrangement.Center,
@@ -224,14 +225,14 @@ fun RedesignedExerciseCard(
                 Icon(
                     imageVector = Icons.Default.Edit,
                     contentDescription = null,
-                    tint = LiftrixColorsV2.Dark.TextSecondary,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "Add Notes",
                     style = TextStyle(
-                        color = LiftrixColorsV2.Dark.TextSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 14.sp
                     )
                 )
@@ -258,7 +259,7 @@ private fun RedesignedSetRow(
         Text(
             text = "$setNumber",
             style = TextStyle(
-                color = LiftrixColorsV2.Dark.TextPrimary,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium
             ),
@@ -271,7 +272,7 @@ private fun RedesignedSetRow(
                 .width(90.dp)
                 .height(36.dp)
                 .background(
-                    LiftrixColorsV2.Dark.BackgroundTertiary.copy(alpha = 0.5f),
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
                     RoundedCornerShape(6.dp)
                 ),
             contentAlignment = Alignment.Center
@@ -279,7 +280,7 @@ private fun RedesignedSetRow(
             Text(
                 text = setData.previousValue ?: "-",
                 style = TextStyle(
-                    color = LiftrixColorsV2.Dark.TextTertiary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp
                 ),
                 textAlign = TextAlign.Center
@@ -316,9 +317,9 @@ private fun RedesignedSetRow(
                 checked = setData.isCompleted,
                 onCheckedChange = { onUpdateSet(setData.copy(isCompleted = it)) },
                 colors = CheckboxDefaults.colors(
-                    checkedColor = LiftrixColorsV2.Teal,
-                    uncheckedColor = LiftrixColorsV2.Dark.TextTertiary,
-                    checkmarkColor = LiftrixColorsV2.Dark.BackgroundPrimary
+                    checkedColor = MaterialTheme.colorScheme.primary,
+                    uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    checkmarkColor = MaterialTheme.colorScheme.background
                 ),
                 modifier = Modifier.size(24.dp)
             )
@@ -344,18 +345,18 @@ private fun RedesignedInputField(
         value = value,
         onValueChange = onValueChange,
         textStyle = TextStyle(
-            color = LiftrixColorsV2.Dark.TextPrimary,
+            color = MaterialTheme.colorScheme.onSurface,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center
         ),
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         singleLine = true,
-        cursorBrush = SolidColor(LiftrixColorsV2.Teal),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         modifier = modifier
             .height(36.dp)
             .background(
-                LiftrixColorsV2.Dark.BackgroundTertiary,
+                MaterialTheme.colorScheme.surfaceVariant,
                 RoundedCornerShape(6.dp)
             )
             .padding(horizontal = 8.dp),
@@ -368,7 +369,7 @@ private fun RedesignedInputField(
                     Text(
                         text = placeholder,
                         style = TextStyle(
-                            color = LiftrixColorsV2.Dark.TextTertiary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 14.sp,
                             textAlign = TextAlign.Center
                         )
@@ -394,7 +395,7 @@ fun RedesignedWorkoutHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(LiftrixColorsV2.Dark.BackgroundPrimary)
+            .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -405,7 +406,7 @@ fun RedesignedWorkoutHeader(
             Icon(
                 imageVector = Icons.Default.ArrowBack,
                 contentDescription = "Back",
-                tint = LiftrixColorsV2.Dark.TextPrimary,
+                tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(24.dp)
             )
         }
@@ -416,7 +417,7 @@ fun RedesignedWorkoutHeader(
             Text(
                 text = title,
                 style = TextStyle(
-                    color = LiftrixColorsV2.Dark.TextPrimary,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -425,7 +426,7 @@ fun RedesignedWorkoutHeader(
                 Text(
                     text = it,
                     style = TextStyle(
-                        color = LiftrixColorsV2.Dark.TextTertiary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp
                     )
                 )
@@ -440,7 +441,7 @@ fun RedesignedWorkoutHeader(
                 Icon(
                     imageVector = Icons.Default.Settings,
                     contentDescription = "Settings",
-                    tint = LiftrixColorsV2.Dark.TextSecondary,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -462,10 +463,10 @@ fun RedesignedPrimaryButton(
         onClick = onClick,
         enabled = enabled,
         colors = ButtonDefaults.buttonColors(
-            containerColor = LiftrixColorsV2.Teal,
-            contentColor = Color.White,
-            disabledContainerColor = LiftrixColorsV2.Dark.BackgroundTertiary,
-            disabledContentColor = LiftrixColorsV2.Dark.TextTertiary
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
         ),
         shape = RoundedCornerShape(8.dp),
         modifier = modifier
@@ -496,7 +497,7 @@ fun ExerciseOptionsMenu(
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
-        modifier = Modifier.background(LiftrixColorsV2.Dark.BackgroundTertiary)
+        modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant)
     ) {
         DropdownMenuItem(
             text = {
@@ -504,13 +505,13 @@ fun ExerciseOptionsMenu(
                     Icon(
                         imageVector = Icons.Default.SwapVert,
                         contentDescription = null,
-                        tint = LiftrixColorsV2.Dark.TextPrimary,
+                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         "Reorder Exercise",
-                        color = LiftrixColorsV2.Dark.TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             },
@@ -525,13 +526,13 @@ fun ExerciseOptionsMenu(
                     Icon(
                         imageVector = Icons.Default.SwapHoriz,
                         contentDescription = null,
-                        tint = LiftrixColorsV2.Dark.TextPrimary,
+                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         "Change Exercise",
-                        color = LiftrixColorsV2.Dark.TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             },
@@ -540,20 +541,20 @@ fun ExerciseOptionsMenu(
                 onDismiss()
             }
         )
-        Divider(color = LiftrixColorsV2.Dark.Outline)
+        Divider(color = MaterialTheme.colorScheme.outline)
         DropdownMenuItem(
             text = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.Delete,
                         contentDescription = null,
-                        tint = LiftrixColorsV2.Dark.Error,
+                        tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         "Remove Exercise",
-                        color = LiftrixColorsV2.Dark.Error
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
             },
@@ -581,7 +582,7 @@ fun ExerciseReorderDialog(
         title = {
             Text(
                 "Reorder Exercises",
-                color = LiftrixColorsV2.Dark.TextPrimary,
+                color = MaterialTheme.colorScheme.onSurface,
                 style = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Medium)
             )
         },
@@ -597,7 +598,7 @@ fun ExerciseReorderDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(
-                                LiftrixColorsV2.Dark.BackgroundTertiary,
+                                MaterialTheme.colorScheme.surfaceVariant,
                                 RoundedCornerShape(8.dp)
                             )
                             .padding(12.dp),
@@ -606,7 +607,7 @@ fun ExerciseReorderDialog(
                         // Exercise name
                         Text(
                             text = "${index + 1}. ${exercise.second}",
-                            color = LiftrixColorsV2.Dark.TextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             style = TextStyle(fontSize = 14.sp),
                             modifier = Modifier.weight(1f)
                         )
@@ -625,7 +626,7 @@ fun ExerciseReorderDialog(
                                 Icon(
                                     imageVector = Icons.Default.KeyboardArrowUp,
                                     contentDescription = "Move up",
-                                    tint = LiftrixColorsV2.Teal
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
@@ -644,7 +645,7 @@ fun ExerciseReorderDialog(
                                 Icon(
                                     imageVector = Icons.Default.KeyboardArrowDown,
                                     contentDescription = "Move down",
-                                    tint = LiftrixColorsV2.Teal
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
@@ -659,15 +660,15 @@ fun ExerciseReorderDialog(
                     onDismiss()
                 }
             ) {
-                Text("Apply", color = LiftrixColorsV2.Teal)
+                Text("Apply", color = MaterialTheme.colorScheme.primary)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = LiftrixColorsV2.Dark.TextSecondary)
+                Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
-        containerColor = LiftrixColorsV2.Dark.BackgroundSecondary
+        containerColor = MaterialTheme.colorScheme.surfaceVariant
     )
 }
 
