@@ -41,6 +41,31 @@ interface WorkoutPostDao {
     
     @Query("""
         SELECT * FROM workout_posts 
+        WHERE user_id = :userId 
+        ORDER BY created_at DESC
+        LIMIT :limit
+    """)
+    fun getRecentUserPosts(userId: String, limit: Int): Flow<List<WorkoutPostEntity>>
+    
+    @Query("""
+        SELECT * FROM workout_posts 
+        WHERE user_id IN (:userIds)
+        AND visibility IN ('PUBLIC', 'FOLLOWERS')
+        ORDER BY created_at DESC
+        LIMIT :limit
+    """)
+    fun getRecentPostsFromUsers(userIds: List<String>, limit: Int): Flow<List<WorkoutPostEntity>>
+    
+    @Query("""
+        SELECT * FROM workout_posts 
+        WHERE visibility = 'PUBLIC'
+        ORDER BY created_at DESC
+        LIMIT :limit
+    """)
+    fun getRecentPublicPosts(limit: Int): Flow<List<WorkoutPostEntity>>
+    
+    @Query("""
+        SELECT * FROM workout_posts 
         WHERE user_id IN (:followedUserIds) 
         AND visibility IN ('PUBLIC', 'FOLLOWERS')
         ORDER BY created_at DESC

@@ -351,9 +351,11 @@ sealed class LiftrixRoute {
     
     /**
      * Social feed screen showing workout posts and social interactions
+     * @deprecated Feed has been integrated into the Home screen. Use LiftrixRoute.Home instead.
      * 
      * @param initialTab Initial tab to display in the feed (default: "HOME")
      */
+    @Deprecated("Feed has been integrated into the Home screen", ReplaceWith("LiftrixRoute.Home"))
     @Serializable
     data class SocialFeed(
         val initialTab: String = "HOME"

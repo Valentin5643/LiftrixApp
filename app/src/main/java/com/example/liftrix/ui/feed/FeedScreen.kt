@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -30,24 +31,28 @@ import eu.bambooapps.material3.pullrefresh.pullRefresh
 import eu.bambooapps.material3.pullrefresh.rememberPullRefreshState
 
 /**
- * Main social feed screen with tabs for Home and Discovery feeds
+ * Main social feed screen with tabs for Following and Explore feeds
+ * Following shows posts from people you follow, Explore shows all public posts
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeedScreen(
     navController: NavController,
-    viewModel: FeedViewModel = hiltViewModel()
+    feedViewModel: FeedViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val posts = viewModel.posts.collectAsLazyPagingItems()
+    val feedUiState by feedViewModel.uiState.collectAsState()
+    val posts = feedViewModel.posts.collectAsLazyPagingItems()
     val context = LocalContext.current
+    
+    // Create a local UI state for feed-specific functionality
+    var selectedTab by remember { mutableStateOf(FeedTab.HOME) }
 
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
         // Tab selector
         TabRow(
-            selectedTabIndex = uiState.selectedTab.ordinal,
+            selectedTabIndex = selectedTab.ordinal,
             containerColor = LiftrixColorsV2.surface,
             contentColor = LiftrixColorsV2.onSurface,
             divider = {
@@ -57,11 +62,14 @@ fun FeedScreen(
             }
         ) {
             Tab(
-                selected = uiState.selectedTab == FeedTab.HOME,
-                onClick = { viewModel.onEvent(FeedEvent.SelectTab(FeedTab.HOME)) },
+                selected = selectedTab == FeedTab.HOME,
+                onClick = { 
+                    selectedTab = FeedTab.HOME
+                    feedViewModel.onEvent(FeedEvent.SelectTab(FeedTab.HOME))
+                },
                 text = { 
                     Text(
-                        text = stringResource(R.string.feed_tab_home),
+                        text = "Following",
                         style = MaterialTheme.typography.titleSmall
                     )
                 },
@@ -69,11 +77,14 @@ fun FeedScreen(
                 unselectedContentColor = LiftrixColorsV2.onSurfaceVariant
             )
             Tab(
-                selected = uiState.selectedTab == FeedTab.DISCOVERY,
-                onClick = { viewModel.onEvent(FeedEvent.SelectTab(FeedTab.DISCOVERY)) },
+                selected = selectedTab == FeedTab.DISCOVERY,
+                onClick = { 
+                    selectedTab = FeedTab.DISCOVERY
+                    feedViewModel.onEvent(FeedEvent.SelectTab(FeedTab.DISCOVERY))
+                },
                 text = { 
                     Text(
-                        text = stringResource(R.string.feed_tab_discovery),
+                        text = "Explore",
                         style = MaterialTheme.typography.titleSmall
                     )
                 },
@@ -95,9 +106,12 @@ fun FeedScreen(
         ) {
             FeedContent(
                 posts = posts,
-                uiState = uiState,
+                selectedTab = selectedTab,
+                likedPosts = feedUiState.likedPosts,
+                savedPosts = feedUiState.savedPosts,
                 onPostInteraction = { interaction ->
-                    viewModel.onEvent(FeedEvent.HandlePostInteraction(interaction))
+                    // Map feed interactions to social events
+                    feedViewModel.onEvent(FeedEvent.HandlePostInteraction(interaction))
                 },
                 navController = navController
             )
@@ -114,7 +128,9 @@ fun FeedScreen(
 @Composable
 private fun FeedContent(
     posts: LazyPagingItems<WorkoutPost>,
-    uiState: FeedUiState,
+    selectedTab: FeedTab,
+    likedPosts: Set<String>,
+    savedPosts: Set<String>,
     onPostInteraction: (PostInteraction) -> Unit,
     navController: NavController
 ) {
@@ -129,7 +145,10 @@ private fun FeedContent(
         if (posts.itemCount == 0 && posts.loadState.refresh !is LoadState.Loading) {
             item {
                 EmptyFeedState(
-                    feedType = uiState.selectedTab,
+                    feedType = selectedTab,
+                    onDiscoverPeople = {
+                        navController.navigate(LiftrixRoute.UserSearch)
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(LiftrixSpacing.large)
@@ -140,13 +159,22 @@ private fun FeedContent(
         // Post items
         items(
             count = posts.itemCount,
-            key = posts.itemKey()
+            key = { index -> 
+                // Use index-based key to guarantee uniqueness even with duplicate posts
+                // This prevents crashes when the same post ID appears multiple times
+                val post = posts[index]
+                if (post != null) {
+                    "${post.id}_${index}"
+                } else {
+                    "placeholder_$index"
+                }
+            }
         ) { index ->
             posts[index]?.let { post ->
                 WorkoutPostCard(
                     post = post,
-                    isLiked = uiState.likedPosts.contains(post.id),
-                    isSaved = uiState.savedPosts.contains(post.id),
+                    isLiked = post.isLikedByViewer || likedPosts.contains(post.id),
+                    isSaved = post.isSavedByViewer || savedPosts.contains(post.id),
                     onLikeClick = { 
                         onPostInteraction(PostInteraction.Like(post.id))
                     },
@@ -230,6 +258,7 @@ private fun convertThrowableToLiftrixError(throwable: Throwable): LiftrixError {
 @Composable
 private fun EmptyFeedState(
     feedType: FeedTab,
+    onDiscoverPeople: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -239,8 +268,8 @@ private fun EmptyFeedState(
     ) {
         Text(
             text = when (feedType) {
-                FeedTab.HOME -> stringResource(R.string.feed_empty_home_title)
-                FeedTab.DISCOVERY -> stringResource(R.string.feed_empty_discovery_title)
+                FeedTab.HOME -> "No posts from people you follow"
+                FeedTab.DISCOVERY -> "No posts to explore"
             },
             style = MaterialTheme.typography.headlineSmall,
             color = LiftrixColorsV2.onSurface
@@ -250,11 +279,27 @@ private fun EmptyFeedState(
         
         Text(
             text = when (feedType) {
-                FeedTab.HOME -> stringResource(R.string.feed_empty_home_description)
-                FeedTab.DISCOVERY -> stringResource(R.string.feed_empty_discovery_description)
+                FeedTab.HOME -> "Follow people to see their workout posts here"
+                FeedTab.DISCOVERY -> "Start exploring the community to discover new workouts"
             },
             style = MaterialTheme.typography.bodyMedium,
             color = LiftrixColorsV2.onSurfaceVariant
         )
+        
+        Spacer(modifier = Modifier.height(LiftrixSpacing.large))
+        
+        // Add "Discover People" CTA button
+        Button(
+            onClick = onDiscoverPeople,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = LiftrixColorsV2.primary,
+                contentColor = LiftrixColorsV2.onPrimary
+            )
+        ) {
+            Text(
+                text = "Discover People",
+                style = MaterialTheme.typography.labelLarge
+            )
+        }
     }
 }

@@ -152,6 +152,7 @@ fun UnifiedNavigationContainer(
                         )
                         
                         HomeScreen(
+                            navController = navController,
                             onNavigateToWorkout = {
                                 navController.navigateToWorkout()
                             },
@@ -205,6 +206,9 @@ fun UnifiedNavigationContainer(
                     com.example.liftrix.ui.social.FriendsScreen(
                         onNavigateBack = {
                             navController.popBackStackSafely()
+                        },
+                        onNavigateToUserSearch = {
+                            navController.navigate(LiftrixRoute.UserSearch)
                         }
                     )
                 }
@@ -674,12 +678,8 @@ fun UnifiedNavigationContainer(
                 }
                 */
                 
-                composable<LiftrixRoute.SocialFeed> { backStackEntry ->
-                    val route = backStackEntry.toRoute<LiftrixRoute.SocialFeed>()
-                    com.example.liftrix.ui.feed.FeedScreen(
-                        navController = navController
-                    )
-                }
+                // SocialFeed route removed - feed is now integrated into Home screen
+                // If you need to navigate to the feed, use LiftrixRoute.Home instead
                 
                 composable<LiftrixRoute.NotificationSettings> {
                     com.example.liftrix.ui.settings.NotificationSettingsScreen(
@@ -699,9 +699,18 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.PostCreation> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.PostCreation>()
-                    com.example.liftrix.ui.feed.PostCreationScreen(
+                    com.example.liftrix.ui.workout.completion.PostCreationScreen(
                         workoutId = route.workoutId,
-                        navController = navController
+                        onNavigateBack = { navController.popBackStackSafely() },
+                        onPostCreated = { postId ->
+                            // Navigate to home screen where the social feed is now displayed
+                            navController.navigate(LiftrixRoute.Home) {
+                                // Clear back to home to avoid complex back stack
+                                popUpTo(LiftrixRoute.Home) {
+                                    inclusive = true
+                                }
+                            }
+                        }
                     )
                 }
                 

@@ -11,11 +11,15 @@ import java.io.Serializable
  * @property workout The workout session data
  * @property isPersonal True if this is the current user's workout, false for friends' workouts
  * @property user User information for friends' workouts, null for personal workouts
+ * @property mediaUrls List of media URLs associated with this workout post
+ * @property mediaThumbnails List of thumbnail URLs for the media
  */
 data class FeedWorkout(
     val workout: Workout,
     val isPersonal: Boolean,
-    val user: User? = null
+    val user: User? = null,
+    val mediaUrls: List<String> = emptyList(),
+    val mediaThumbnails: List<String> = emptyList()
 ) : Serializable {
     
     init {
@@ -93,19 +97,32 @@ data class FeedWorkout(
         /**
          * Creates a FeedWorkout for the current user's workout
          */
-        fun forPersonalWorkout(workout: Workout): FeedWorkout = FeedWorkout(
+        fun forPersonalWorkout(
+            workout: Workout,
+            mediaUrls: List<String> = emptyList(),
+            mediaThumbnails: List<String> = emptyList()
+        ): FeedWorkout = FeedWorkout(
             workout = workout,
             isPersonal = true,
-            user = null
+            user = null,
+            mediaUrls = mediaUrls,
+            mediaThumbnails = mediaThumbnails
         )
         
         /**
          * Creates a FeedWorkout for a friend's workout
          */
-        fun forFriendWorkout(workout: Workout, friendUser: User): FeedWorkout = FeedWorkout(
+        fun forFriendWorkout(
+            workout: Workout,
+            friendUser: User,
+            mediaUrls: List<String> = emptyList(),
+            mediaThumbnails: List<String> = emptyList()
+        ): FeedWorkout = FeedWorkout(
             workout = workout,
             isPersonal = false,
-            user = friendUser
+            user = friendUser,
+            mediaUrls = mediaUrls,
+            mediaThumbnails = mediaThumbnails
         )
     }
 }

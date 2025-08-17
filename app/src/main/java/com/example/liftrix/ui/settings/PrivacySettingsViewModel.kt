@@ -70,6 +70,7 @@ class PrivacySettingsViewModel @Inject constructor(
             is PrivacySettingsEvent.ToggleHideFromSuggestions -> toggleHideFromSuggestions(event.hide)
             is PrivacySettingsEvent.ToggleHideFromSearch -> toggleHideFromSearch(event.hide)
             is PrivacySettingsEvent.ToggleGymBuddies -> toggleGymBuddies(event.enabled)
+            is PrivacySettingsEvent.NavigateToBlockedUsers -> { /* Navigation handled by parent */ }
             is PrivacySettingsEvent.ShowDisableSocialConfirmation -> showDisableSocialConfirmation()
             is PrivacySettingsEvent.DismissDisableSocialConfirmation -> dismissDisableSocialConfirmation()
             is PrivacySettingsEvent.ConfirmDisableSocial -> confirmDisableSocial()
@@ -343,6 +344,7 @@ sealed class PrivacySettingsEvent : ViewModelEvent {
     data class ToggleHideFromSuggestions(val hide: Boolean) : PrivacySettingsEvent()
     data class ToggleHideFromSearch(val hide: Boolean) : PrivacySettingsEvent()
     data class ToggleGymBuddies(val enabled: Boolean) : PrivacySettingsEvent()
+    data object NavigateToBlockedUsers : PrivacySettingsEvent()
     data object ShowDisableSocialConfirmation : PrivacySettingsEvent()
     data object DismissDisableSocialConfirmation : PrivacySettingsEvent()
     data object ConfirmDisableSocial : PrivacySettingsEvent()

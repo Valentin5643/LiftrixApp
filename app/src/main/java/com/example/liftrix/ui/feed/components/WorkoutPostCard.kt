@@ -47,7 +47,10 @@ fun WorkoutPostCard(
     onSaveClick: () -> Unit,
     onProfileClick: () -> Unit,
     onWorkoutCopyClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onBlockUser: () -> Unit = {},
+    onReportPost: () -> Unit = {},
+    isOwnPost: Boolean = false
 ) {
     val hapticFeedback = LocalHapticFeedback.current
 
@@ -63,6 +66,9 @@ fun WorkoutPostCard(
             PostHeader(
                 post = post,
                 onProfileClick = onProfileClick,
+                onBlockUser = onBlockUser,
+                onReportPost = onReportPost,
+                isOwnPost = isOwnPost,
                 modifier = Modifier.fillMaxWidth()
             )
             
@@ -121,44 +127,58 @@ fun WorkoutPostCard(
 private fun PostHeader(
     post: WorkoutPost,
     onProfileClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onBlockUser: () -> Unit = {},
+    onReportPost: () -> Unit = {},
+    isOwnPost: Boolean = false
 ) {
+    var showOptionsMenu by remember { mutableStateOf(false) }
+    
     Row(
-        modifier = modifier.clickable { onProfileClick() },
+        modifier = modifier,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Profile image
-        AsyncImage(
-            model = post.authorProfilePhotoUrl ?: "",
-            contentDescription = "Profile picture of ${post.authorDisplayName}",
+        // Profile section (clickable)
+        Row(
             modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape),
-            contentScale = ContentScale.Crop
-        )
-        
-        Spacer(modifier = Modifier.width(LiftrixSpacing.small))
-        
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = post.authorDisplayName,
-                style = MaterialTheme.typography.titleSmall,
-                color = LiftrixColorsV2.onSurface,
-                fontWeight = FontWeight.SemiBold
+                .weight(1f)
+                .clickable { onProfileClick() },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Profile image
+            AsyncImage(
+                model = post.authorProfilePhotoUrl ?: "",
+                contentDescription = "Profile picture of ${post.authorDisplayName}",
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape),
+                contentScale = ContentScale.Crop
             )
             
-            Text(
-                text = formatTimestamp(post.createdAt),
-                style = MaterialTheme.typography.bodySmall,
-                color = LiftrixColorsV2.onSurfaceVariant
-            )
+            Spacer(modifier = Modifier.width(LiftrixSpacing.small))
+            
+            Column {
+                Text(
+                    text = post.authorDisplayName,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = LiftrixColorsV2.onSurface,
+                    fontWeight = FontWeight.SemiBold
+                )
+                
+                Text(
+                    text = formatTimestamp(post.createdAt),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LiftrixColorsV2.onSurfaceVariant
+                )
+            }
         }
         
         // PR badge if applicable
         if (post.prsCount > 0) {
             Surface(
                 color = LiftrixColorsV2.primary,
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.padding(end = 8.dp)
             ) {
                 Text(
                     text = "PR",
@@ -168,6 +188,43 @@ private fun PostHeader(
                         horizontal = 8.dp,
                         vertical = 4.dp
                     )
+                )
+            }
+        }
+        
+        // More options menu (only for other users' posts)
+        if (!isOwnPost) {
+            IconButton(onClick = { showOptionsMenu = true }) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "More options",
+                    tint = LiftrixColorsV2.onSurfaceVariant
+                )
+            }
+            
+            DropdownMenu(
+                expanded = showOptionsMenu,
+                onDismissRequest = { showOptionsMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Block User") },
+                    leadingIcon = { 
+                        Icon(Icons.Default.Block, contentDescription = null) 
+                    },
+                    onClick = {
+                        onBlockUser()
+                        showOptionsMenu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Report Post") },
+                    leadingIcon = { 
+                        Icon(Icons.Default.Flag, contentDescription = null) 
+                    },
+                    onClick = {
+                        onReportPost()
+                        showOptionsMenu = false
+                    }
                 )
             }
         }

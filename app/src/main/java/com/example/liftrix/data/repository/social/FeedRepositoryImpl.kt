@@ -11,6 +11,7 @@ import com.example.liftrix.data.local.dao.SavedPostDao
 import com.example.liftrix.data.local.dao.SocialProfileDao
 import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.local.dao.FeedCacheDao
+import com.example.liftrix.data.local.dao.FollowRelationshipDao
 import com.example.liftrix.data.mapper.WorkoutPostMapper
 import com.example.liftrix.data.paging.FeedRemoteMediator
 import com.example.liftrix.domain.repository.social.FeedRepository
@@ -24,6 +25,8 @@ import com.example.liftrix.domain.service.FeedCacheService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.withContext
 import java.util.UUID
 import javax.inject.Inject
@@ -42,7 +45,8 @@ class FeedRepositoryImpl @Inject constructor(
     private val workoutDao: WorkoutDao,
     private val workoutPostMapper: WorkoutPostMapper,
     private val feedCacheService: FeedCacheService,
-    private val feedCacheDao: FeedCacheDao
+    private val feedCacheDao: FeedCacheDao,
+    private val followRelationshipDao: FollowRelationshipDao
 ) : FeedRepository {
     
     @OptIn(ExperimentalPagingApi::class)
@@ -51,10 +55,18 @@ class FeedRepositoryImpl @Inject constructor(
         feedType: FeedType,
         targetUserId: String?,
         pageSize: Int
-    ): Flow<PagingData<WorkoutPost>> {
+    ): Flow<PagingData<WorkoutPost>> = flow {
         
         val pager = when (feedType) {
             FeedType.HOME -> {
+                // Get the list of users that the current user follows
+                // Include the current user's own posts in their home feed
+                val followedUserIds = withContext(Dispatchers.IO) {
+                    val followedIds = followRelationshipDao.getFollowingUserIds(userId)
+                    // Include the current user's own posts in their home feed
+                    followedIds + userId
+                }
+                
                 Pager(
                     config = PagingConfig(
                         pageSize = pageSize,
@@ -68,11 +80,18 @@ class FeedRepositoryImpl @Inject constructor(
                         userId,
                         FeedType.HOME
                     ),
-                    pagingSourceFactory = { workoutPostDao.getHomeFeedPosts(emptyList()) }
+                    pagingSourceFactory = { workoutPostDao.getHomeFeedPosts(followedUserIds) }
                 )
             }
             
             FeedType.DISCOVERY -> {
+                // Get followed users to potentially exclude them from discovery
+                val followedUserIds = withContext(Dispatchers.IO) {
+                    val followedIds = followRelationshipDao.getFollowingUserIds(userId)
+                    // Exclude the current user and their followed users from discovery
+                    followedIds + userId
+                }
+                
                 Pager(
                     config = PagingConfig(
                         pageSize = pageSize,
@@ -86,7 +105,7 @@ class FeedRepositoryImpl @Inject constructor(
                         userId,
                         FeedType.DISCOVERY
                     ),
-                    pagingSourceFactory = { workoutPostDao.getDiscoveryFeedPosts(listOf(userId)) }
+                    pagingSourceFactory = { workoutPostDao.getDiscoveryFeedPosts(followedUserIds) }
                 )
             }
             
@@ -102,11 +121,11 @@ class FeedRepositoryImpl @Inject constructor(
             }
         }
         
-        return pager.flow.map { pagingData ->
+        emitAll(pager.flow.map { pagingData ->
             pagingData.map { entity ->
                 enhanceWithUserData(entity, userId)
             }
-        }
+        })
     }
     
     override suspend fun createPost(

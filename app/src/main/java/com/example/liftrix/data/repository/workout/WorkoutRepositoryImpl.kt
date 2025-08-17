@@ -1,16 +1,22 @@
 package com.example.liftrix.data.repository.workout
 
 import com.example.liftrix.data.local.dao.WorkoutDao
+import com.example.liftrix.data.local.dao.WorkoutPostDao
+import com.example.liftrix.data.local.dao.FollowRelationshipDao
 import com.example.liftrix.data.local.dao.ExerciseDao
 import com.example.liftrix.data.local.dao.ExerciseSetDao
 import com.example.liftrix.data.local.entity.ExerciseSetEntity
 import com.example.liftrix.data.mapper.WorkoutMapper
+import com.example.liftrix.data.mapper.WorkoutPostMapper
 import com.example.liftrix.data.mapper.ExerciseMapper
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.model.WorkoutSummary
 import com.example.liftrix.domain.model.WorkoutStats
 import com.example.liftrix.domain.model.FeedWorkout
+import com.example.liftrix.domain.model.User
+import com.example.liftrix.domain.model.SubscriptionTier
+import com.example.liftrix.domain.model.SubscriptionStatus
 import com.example.liftrix.domain.model.toSummary
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
@@ -22,10 +28,17 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 import timber.log.Timber
 import kotlinx.datetime.LocalDate as KotlinxLocalDate
 import java.time.LocalDate
@@ -51,9 +64,12 @@ import javax.inject.Singleton
 @Singleton
 class WorkoutRepositoryImpl @Inject constructor(
     private val workoutDao: WorkoutDao,
+    private val workoutPostDao: WorkoutPostDao,
+    private val followRelationshipDao: FollowRelationshipDao,
     private val exerciseDao: ExerciseDao,
     private val exerciseSetDao: ExerciseSetDao,
     private val workoutMapper: WorkoutMapper,
+    private val workoutPostMapper: WorkoutPostMapper,
     private val exerciseMapper: ExerciseMapper
 ) : WorkoutRepository {
 
@@ -782,6 +798,217 @@ class WorkoutRepositoryImpl @Inject constructor(
                     )
                 )
             }
+    }
+    
+    override fun getRecentActivityFeed(userId: String, includeOthers: Boolean, limit: Int): Flow<LiftrixResult<List<FeedWorkout>>> {
+        Timber.d("🔥 RECENT-ACTIVITY-DEBUG: Setting up recent activity feed for user: $userId, includeOthers: $includeOthers, limit: $limit")
+        
+        val json = Json { ignoreUnknownKeys = true }
+        
+        return if (includeOthers) {
+            // EXPLORE TAB: Get all public workout posts
+            workoutPostDao.getRecentPublicPosts(limit)
+                .map { postEntities ->
+                    try {
+                        val feedWorkouts = postEntities.mapNotNull { postEntity ->
+                            // Get the workout for this post
+                            val workoutEntity = workoutDao.getWorkoutById(postEntity.workoutId)
+                            if (workoutEntity != null) {
+                                val workout = workoutMapper.toDomain(workoutEntity)
+                                
+                                // Parse media URLs from JSON
+                                val mediaUrls = postEntity.mediaUrls?.let { 
+                                    try {
+                                        json.decodeFromString(ListSerializer(String.serializer()), it)
+                                    } catch (e: Exception) {
+                                        Timber.e(e, "Failed to parse media URLs")
+                                        emptyList()
+                                    }
+                                } ?: emptyList()
+                                
+                                val mediaThumbnails = postEntity.mediaThumbnails?.let {
+                                    try {
+                                        json.decodeFromString(ListSerializer(String.serializer()), it)
+                                    } catch (e: Exception) {
+                                        Timber.e(e, "Failed to parse media thumbnails")
+                                        emptyList()
+                                    }
+                                } ?: emptyList()
+                                
+                                // Create FeedWorkout with media - determine if it's personal
+                                val isPersonal = postEntity.userId == userId
+                                if (isPersonal) {
+                                    FeedWorkout.forPersonalWorkout(
+                                        workout = workout,
+                                        mediaUrls = mediaUrls,
+                                        mediaThumbnails = mediaThumbnails
+                                    )
+                                } else {
+                                    // For non-personal workouts, we need user info
+                                    // For now, create a placeholder User object
+                                    val user = User(
+                                        uid = postEntity.userId,
+                                        email = "",
+                                        displayName = "User", // TODO: Query from social_profiles
+                                        photoUrl = null,
+                                        isAnonymous = false,
+                                        subscriptionTier = SubscriptionTier.FREE,
+                                        subscriptionStatus = SubscriptionStatus.ACTIVE,
+                                        subscriptionExpiresAt = null,
+                                        premiumFeaturesEnabled = false,
+                                        onboardingCompleted = true,
+                                        profileVersion = 1L,
+                                        createdAt = java.time.LocalDateTime.now(),
+                                        lastSignInAt = java.time.LocalDateTime.now(),
+                                        updatedAt = java.time.LocalDateTime.now()
+                                    )
+                                    FeedWorkout.forFriendWorkout(
+                                        workout = workout,
+                                        friendUser = user,
+                                        mediaUrls = mediaUrls,
+                                        mediaThumbnails = mediaThumbnails
+                                    )
+                                }
+                            } else {
+                                null
+                            }
+                        }
+                        
+                        Timber.d("🔥 RECENT-ACTIVITY-DEBUG: Explore tab - mapped ${feedWorkouts.size} public posts with media")
+                        LiftrixResult.success(feedWorkouts)
+                    } catch (throwable: Throwable) {
+                        Timber.e(throwable, "🔥 RECENT-ACTIVITY-DEBUG: Error mapping explore feed")
+                        LiftrixResult.failure(
+                            LiftrixError.DatabaseError(
+                                errorMessage = "Failed to map explore feed",
+                                operation = "READ",
+                                table = "workout_posts",
+                                analyticsContext = mapOf(
+                                    "user_id" to userId,
+                                    "include_others" to includeOthers.toString(),
+                                    "limit" to limit.toString()
+                                )
+                            )
+                        )
+                    }
+                }
+        } else {
+            // FOLLOWING TAB: Get posts from user and people they follow
+            // First get the followed user IDs, then query posts
+            flow {
+                try {
+                    // Get list of followed user IDs
+                    val followedUserIds = followRelationshipDao.getFollowingUserIds(userId)
+                    
+                    // Include the current user in the list
+                    val allUserIds = followedUserIds + userId
+                    
+                    Timber.d("🔥 RECENT-ACTIVITY-DEBUG: Following tab - querying posts from ${allUserIds.size} users")
+                    
+                    // Get posts from all these users
+                    workoutPostDao.getRecentPostsFromUsers(allUserIds, limit)
+                        .collect { postEntities ->
+                            val feedWorkouts = postEntities.mapNotNull { postEntity ->
+                                // Get the workout for this post
+                                val workoutEntity = workoutDao.getWorkoutById(postEntity.workoutId)
+                                if (workoutEntity != null) {
+                                    val workout = workoutMapper.toDomain(workoutEntity)
+                                    
+                                    // Parse media URLs from JSON
+                                    val mediaUrls = postEntity.mediaUrls?.let { 
+                                        try {
+                                            json.decodeFromString(ListSerializer(String.serializer()), it)
+                                        } catch (e: Exception) {
+                                            Timber.e(e, "Failed to parse media URLs")
+                                            emptyList()
+                                        }
+                                    } ?: emptyList()
+                                    
+                                    val mediaThumbnails = postEntity.mediaThumbnails?.let {
+                                        try {
+                                            json.decodeFromString(ListSerializer(String.serializer()), it)
+                                        } catch (e: Exception) {
+                                            Timber.e(e, "Failed to parse media thumbnails")
+                                            emptyList()
+                                        }
+                                    } ?: emptyList()
+                                    
+                                    // Determine if it's a personal workout
+                                    val isPersonal = postEntity.userId == userId
+                                    if (isPersonal) {
+                                        FeedWorkout.forPersonalWorkout(
+                                            workout = workout,
+                                            mediaUrls = mediaUrls,
+                                            mediaThumbnails = mediaThumbnails
+                                        )
+                                    } else {
+                                        // For friend workouts, create user info
+                                        val user = User(
+                                            uid = postEntity.userId,
+                                            email = "",
+                                            displayName = "Friend", // TODO: Query from social_profiles
+                                            photoUrl = null,
+                                            isAnonymous = false,
+                                            subscriptionTier = SubscriptionTier.FREE,
+                                            subscriptionStatus = SubscriptionStatus.ACTIVE,
+                                            subscriptionExpiresAt = null,
+                                            premiumFeaturesEnabled = false,
+                                            onboardingCompleted = true,
+                                            profileVersion = 1L,
+                                            createdAt = java.time.LocalDateTime.now(),
+                                            lastSignInAt = java.time.LocalDateTime.now(),
+                                            updatedAt = java.time.LocalDateTime.now()
+                                        )
+                                        FeedWorkout.forFriendWorkout(
+                                            workout = workout,
+                                            friendUser = user,
+                                            mediaUrls = mediaUrls,
+                                            mediaThumbnails = mediaThumbnails
+                                        )
+                                    }
+                                } else {
+                                    null
+                                }
+                            }
+                            
+                            Timber.d("🔥 RECENT-ACTIVITY-DEBUG: Following tab - mapped ${feedWorkouts.size} posts with media")
+                            emit(LiftrixResult.success(feedWorkouts))
+                        }
+                } catch (throwable: Throwable) {
+                    Timber.e(throwable, "🔥 RECENT-ACTIVITY-DEBUG: Error getting following feed")
+                    emit(
+                        LiftrixResult.failure(
+                            LiftrixError.DatabaseError(
+                                errorMessage = "Failed to get following feed",
+                                operation = "READ",
+                                table = "workout_posts",
+                                analyticsContext = mapOf(
+                                    "user_id" to userId,
+                                    "include_others" to includeOthers.toString(),
+                                    "limit" to limit.toString()
+                                )
+                            )
+                        )
+                    )
+                }
+            }
+        }.catch { throwable ->
+            Timber.e(throwable, "🔥 RECENT-ACTIVITY-DEBUG: Database flow error for recent activity")
+            emit(
+                LiftrixResult.failure(
+                    LiftrixError.DatabaseError(
+                        errorMessage = "Database connection error while retrieving recent activity",
+                        operation = "READ",
+                        table = "workout_posts",
+                        analyticsContext = mapOf(
+                            "user_id" to userId,
+                            "include_others" to includeOthers.toString(),
+                            "limit" to limit.toString()
+                        )
+                    )
+                )
+            )
+        }
     }
 
     override suspend fun getWorkoutStats(userId: String): LiftrixResult<WorkoutStats> {

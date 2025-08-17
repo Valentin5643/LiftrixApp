@@ -9,6 +9,13 @@ import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SocialRepository
 import com.example.liftrix.domain.service.AnalyticsService
+import com.example.liftrix.domain.usecase.social.SearchUsersUseCase
+import com.example.liftrix.domain.usecase.social.SearchUsersRequest
+import com.example.liftrix.domain.usecase.social.FeedGeneratorUseCase
+import com.example.liftrix.domain.model.social.SearchFilters
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
+import com.example.liftrix.domain.model.social.WorkoutPost
 import com.example.liftrix.service.FirebasePresenceService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -34,11 +41,22 @@ class SocialViewModel @Inject constructor(
     private val socialRepository: SocialRepository,
     private val presenceService: FirebasePresenceService,
     private val authRepository: AuthRepository,
-    private val analyticsService: AnalyticsService
+    private val analyticsService: AnalyticsService,
+    private val searchUsersUseCase: SearchUsersUseCase,
+    private val feedGeneratorUseCase: FeedGeneratorUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SocialUiState())
     val uiState: StateFlow<SocialUiState> = _uiState.asStateFlow()
+
+    // Add Paging3 support for social feed
+    val feedPagingData: Flow<PagingData<WorkoutPost>> = 
+        authRepository.currentUser
+            .filterNotNull()
+            .flatMapLatest { user ->
+                feedGeneratorUseCase(userId = user.uid, includeDiscovery = false)
+            }
+            .cachedIn(viewModelScope)
 
     companion object {
         private const val FRIEND_FEED_LIMIT = 10
@@ -98,6 +116,9 @@ class SocialViewModel @Inject constructor(
             }
             is SocialEvent.ErrorDismissed -> {
                 updateState { copy(error = null) }
+            }
+            is SocialEvent.ToggleFollow -> {
+                handleFollowAction(event.targetUserId)
             }
         }
     }
@@ -221,23 +242,58 @@ class SocialViewModel @Inject constructor(
      */
     private fun searchFriends(query: String) {
         // Immediately update search query to prevent text input issues
-        updateState { copy(searchQuery = query) }
+        _uiState.value = _uiState.value.copy(searchQuery = query)
         
         viewModelScope.launch {
-            try {
-                if (query.isBlank()) {
-                    updateState { copy(searchResults = emptyList()) }
-                    return@launch
-                }
-                
-                // Simple mock search for now - in real implementation would call repository
-                val mockSearchResults = listOf<User>() // Empty for now
-                updateState { copy(searchResults = mockSearchResults) }
-                
-            } catch (exception: Exception) {
-                Timber.e(exception, "Error searching friends")
-                updateState { copy(searchResults = emptyList()) }
+            if (query.isBlank()) {
+                _uiState.value = _uiState.value.copy(searchResults = emptyList(), isSearching = false)
+                return@launch
             }
+            
+            _uiState.value = _uiState.value.copy(isSearching = true)
+            
+            val request = SearchUsersRequest(
+                query = query,
+                filters = SearchFilters(),
+                limit = 20,
+                useCache = true
+            )
+            
+            searchUsersUseCase(request).fold(
+                onSuccess = { result ->
+                    val users = result.users.map { searchResult ->
+                        User(
+                            uid = searchResult.userId,
+                            email = "", // Email not available in search results for privacy
+                            displayName = searchResult.displayName,
+                            photoUrl = searchResult.profileImageUrl,
+                            isAnonymous = false, // Search results are for registered users
+                            subscriptionTier = com.example.liftrix.domain.model.SubscriptionTier.FREE, // Default tier
+                            subscriptionStatus = com.example.liftrix.domain.model.SubscriptionStatus.EXPIRED, // Default status
+                            subscriptionExpiresAt = null,
+                            premiumFeaturesEnabled = false,
+                            onboardingCompleted = true, // Assume completed for search results
+                            profileVersion = 1L,
+                            createdAt = java.time.LocalDateTime.now().minusDays(30), // Placeholder
+                            lastSignInAt = java.time.LocalDateTime.now().minusDays(1), // Placeholder
+                            updatedAt = java.time.LocalDateTime.now() // Placeholder
+                        )
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        searchResults = users, 
+                        isSearching = false,
+                        error = null
+                    )
+                },
+                onFailure = { error ->
+                    Timber.e("Search failed: $error")
+                    _uiState.value = _uiState.value.copy(
+                        searchResults = emptyList(),
+                        isSearching = false,
+                        error = error.message
+                    )
+                }
+            )
         }
     }
 
@@ -358,6 +414,53 @@ class SocialViewModel @Inject constructor(
                 Timber.w(exception, "Failed to congratulate workout")
             }
         }
+    }
+
+    /**
+     * Handles follow/unfollow actions with optimistic UI updates
+     */
+    fun handleFollowAction(targetUserId: String) {
+        viewModelScope.launch {
+            val currentUserId = authRepository.getCurrentUserId() ?: return@launch
+            
+            socialRepository.followUser(targetUserId).fold(
+                onSuccess = { 
+                    // Update UI optimistically
+                    updateFollowStatus(targetUserId, true)
+                    // Track analytics
+                    analyticsService.logSocialFeedEvent(
+                        userId = currentUserId,
+                        eventType = "follow_action",
+                        additionalData = mapOf(
+                            "target_user_id" to targetUserId,
+                            "action" to "follow",
+                            "timestamp" to System.currentTimeMillis()
+                        )
+                    )
+                },
+                onFailure = { error ->
+                    _uiState.value = _uiState.value.copy(error = "Failed to update follow status")
+                    Timber.e("Follow action failed: $error")
+                }
+            )
+        }
+    }
+
+    /**
+     * Updates follow status in the UI state optimistically
+     */
+    private fun updateFollowStatus(targetUserId: String, isNowFollowing: Boolean) {
+        _uiState.value = _uiState.value.copy(
+            searchResults = _uiState.value.searchResults.map { user ->
+                if (user.uid == targetUserId) {
+                    // In a real implementation, we'd track follow status
+                    // For now, this is a placeholder for optimistic updates
+                    user
+                } else {
+                    user
+                }
+            }
+        )
     }
 
     /**
@@ -656,6 +759,7 @@ data class SocialUiState(
     val pendingRequests: List<Friend> = emptyList(),
     val searchQuery: String = "",
     val searchResults: List<User> = emptyList(),
+    val isSearching: Boolean = false,
     val isEmpty: Boolean = true,
     val error: String? = null
 )
@@ -677,6 +781,7 @@ sealed class SocialEvent {
     object ViewAllFriends : SocialEvent()
     data class ViewWorkout(val sharedWorkout: SharedWorkout) : SocialEvent()
     data class CongratulateWorkout(val sharedWorkout: SharedWorkout) : SocialEvent()
+    data class ToggleFollow(val targetUserId: String) : SocialEvent()
     object ErrorDismissed : SocialEvent()
 }
 

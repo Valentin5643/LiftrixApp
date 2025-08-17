@@ -67,6 +67,9 @@ fun PublicProfileScreen(
             onNavigateBack = onNavigateBack,
             onQRCodeClick = { onNavigateToQRCode(userId) },
             isLoading = uiState.isLoading,
+            onBlockUser = { viewModel.handleEvent(PublicProfileEvent.BlockUser) },
+            onReportProfile = { viewModel.handleEvent(PublicProfileEvent.ReportProfile) },
+            isOwnProfile = uiState.profile?.userId == uiState.currentUserId,
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -119,8 +122,13 @@ private fun ProfileTopBar(
     onNavigateBack: () -> Unit,
     onQRCodeClick: () -> Unit,
     isLoading: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onBlockUser: () -> Unit = {},
+    onReportProfile: () -> Unit = {},
+    isOwnProfile: Boolean = false
 ) {
+    var showOptionsMenu by remember { mutableStateOf(false) }
+    
     TopAppBar(
         title = { Text("Profile") },
         navigationIcon = {
@@ -138,6 +146,42 @@ private fun ProfileTopBar(
                         imageVector = Icons.Default.QrCode,
                         contentDescription = "Show QR code"
                     )
+                }
+                
+                // More options menu (only for other users' profiles)
+                if (!isOwnProfile) {
+                    IconButton(onClick = { showOptionsMenu = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "More options"
+                        )
+                    }
+                    
+                    DropdownMenu(
+                        expanded = showOptionsMenu,
+                        onDismissRequest = { showOptionsMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Block User") },
+                            leadingIcon = { 
+                                Icon(Icons.Default.Block, contentDescription = null) 
+                            },
+                            onClick = {
+                                onBlockUser()
+                                showOptionsMenu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Report Profile") },
+                            leadingIcon = { 
+                                Icon(Icons.Default.Flag, contentDescription = null) 
+                            },
+                            onClick = {
+                                onReportProfile()
+                                showOptionsMenu = false
+                            }
+                        )
+                    }
                 }
             }
         },

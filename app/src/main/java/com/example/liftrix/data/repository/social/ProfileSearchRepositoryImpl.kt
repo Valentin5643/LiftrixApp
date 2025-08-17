@@ -18,7 +18,16 @@ import com.example.liftrix.domain.model.social.ConnectionStatus
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.FitnessGoal
 import com.example.liftrix.domain.repository.social.ProfileSearchRepository
-import com.example.liftrix.domain.repository.social.*
+import com.example.liftrix.domain.repository.social.SearchFilters
+import com.example.liftrix.domain.repository.social.FilteredProfileData
+import com.example.liftrix.domain.repository.social.BasicProfileInfo
+import com.example.liftrix.domain.repository.social.DetailedProfileInfo
+import com.example.liftrix.domain.repository.social.SocialStats
+import com.example.liftrix.domain.repository.social.FitnessData
+import com.example.liftrix.domain.repository.social.PopularQuery
+import com.example.liftrix.domain.repository.social.SearchHistoryItem
+import com.example.liftrix.domain.repository.social.SearchPreferences
+import com.example.liftrix.domain.service.PrivacyEnforcementService
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
@@ -47,6 +56,7 @@ class ProfileSearchRepositoryImpl @Inject constructor(
     private val blockedUserDao: BlockedUserDao,
     private val profileViewDao: ProfileViewDao,
     private val userSearchCacheDao: UserSearchCacheDao,
+    private val privacyEnforcementService: PrivacyEnforcementService,
     private val firestore: FirebaseFirestore
 ) : ProfileSearchRepository {
 
@@ -123,8 +133,8 @@ class ProfileSearchRepositoryImpl @Inject constructor(
             val profileEntity = socialProfileDao.getSocialProfileByUserId(profileUserId)
                 ?: return@liftrixCatching null
             
-            // Check visibility permissions
-            val isVisible = isProfileVisibleToViewer(profileUserId, viewerId).getOrElse { false }
+            // Check visibility permissions using centralized privacy service
+            val isVisible = privacyEnforcementService.canViewProfile(profileUserId, viewerId)
             if (!isVisible) {
                 return@liftrixCatching null
             }
@@ -162,8 +172,8 @@ class ProfileSearchRepositoryImpl @Inject constructor(
                 exactMatch?.let { listOf(it) } ?: emptyList()
             }
             
-            // Filter by privacy and blocked users
-            val filteredProfiles = filterProfilesByPrivacy(profiles, viewerId)
+            // Filter by privacy and blocked users using centralized privacy service
+            val filteredProfiles = filterProfilesByPrivacyEnforcement(profiles, viewerId)
             
             // Map to search results
             filteredProfiles.mapNotNull { profile ->
@@ -187,7 +197,7 @@ class ProfileSearchRepositoryImpl @Inject constructor(
         ) {
             val normalizedName = displayName.lowercase().trim()
             val profiles = socialProfileDao.searchProfilesByDisplayName(normalizedName, limit)
-            val filteredProfiles = filterProfilesByPrivacy(profiles, viewerId)
+            val filteredProfiles = filterProfilesByPrivacyEnforcement(profiles, viewerId)
             
             filteredProfiles.mapNotNull { profile ->
                 mapEntityToSearchResult(profile, viewerId)
@@ -280,10 +290,10 @@ class ProfileSearchRepositoryImpl @Inject constructor(
             val maxWorkouts = userProfile.workoutCount + 50
             
             val similarUsers = socialProfileDao.getProfilesByWorkoutRange(minWorkouts, maxWorkouts, limit * 2)
-            val filteredUsers = filterProfilesByPrivacy(similarUsers, userId)
+            val filteredUsers = filterProfilesByPrivacyEnforcement(similarUsers, userId)
             
-            filteredUsers.filter { it.userId != userId }
-                .mapNotNull { mapEntityToSearchResult(it, userId) }
+            filteredUsers.filter { profile -> profile.userId != userId }
+                .mapNotNull { profile -> mapEntityToSearchResult(profile, userId) }
                 .take(limit)
         }
     }
@@ -325,7 +335,7 @@ class ProfileSearchRepositoryImpl @Inject constructor(
             
             // Get users with high recent activity or view counts
             val recentlyActiveUsers = socialProfileDao.getRecentlyActiveProfiles(timeThreshold, limit * 2)
-            val filteredUsers = filterProfilesByPrivacy(recentlyActiveUsers, viewerId)
+            val filteredUsers = filterProfilesByPrivacyEnforcement(recentlyActiveUsers, viewerId)
             
             filteredUsers.mapNotNull { mapEntityToSearchResult(it, viewerId) }
                 .take(limit)
@@ -347,7 +357,7 @@ class ProfileSearchRepositoryImpl @Inject constructor(
         ) {
             val joinThreshold = System.currentTimeMillis() - (joinedWithinDays * 24 * 60 * 60 * 1000L)
             val newUsers = socialProfileDao.getNewUsers(joinThreshold, limit * 2)
-            val filteredUsers = filterProfilesByPrivacy(newUsers, viewerId)
+            val filteredUsers = filterProfilesByPrivacyEnforcement(newUsers, viewerId)
             
             filteredUsers.mapNotNull { mapEntityToSearchResult(it, viewerId) }
                 .take(limit)
@@ -474,28 +484,8 @@ class ProfileSearchRepositoryImpl @Inject constructor(
                 )
             }
         ) {
-            // Self-view is always allowed
-            if (profileUserId == viewerId) {
-                return@liftrixCatching true
-            }
-            
-            // Check if viewer is blocked
-            val isBlocked = blockedUserDao.isUserBlocked(profileUserId, viewerId)
-            if (isBlocked) {
-                return@liftrixCatching false
-            }
-            
-            val profile = socialProfileDao.getSocialProfileByUserId(profileUserId)
-                ?: return@liftrixCatching false
-            
-            // Public profiles are visible to all non-blocked users
-            if (!profile.isPrivate) {
-                return@liftrixCatching true
-            }
-            
-            // Private profiles require accepted follow relationship
-            val isFollowing = followRelationshipDao.isFollowing(viewerId, profileUserId)
-            isFollowing
+            // Use centralized privacy enforcement service
+            privacyEnforcementService.canViewProfile(profileUserId, viewerId)
         }
     }
 
@@ -514,7 +504,7 @@ class ProfileSearchRepositoryImpl @Inject constructor(
             val profile = socialProfileDao.getSocialProfileByUserId(profileUserId)
                 ?: throw IllegalArgumentException("Profile not found")
             
-            val canViewDetails = isProfileVisibleToViewer(profileUserId, viewerId).getOrElse { false }
+            val canViewDetails = privacyEnforcementService.canViewProfile(profileUserId, viewerId)
             val isFollowing = followRelationshipDao.isFollowing(viewerId, profileUserId)
             val mutualCount = calculateMutualConnections(profileUserId, viewerId)
             
@@ -682,24 +672,13 @@ class ProfileSearchRepositoryImpl @Inject constructor(
         }
     }
 
-    private suspend fun filterProfilesByPrivacy(
+    private suspend fun filterProfilesByPrivacyEnforcement(
         profiles: List<SocialProfileEntity>,
         viewerId: String
     ): List<SocialProfileEntity> {
         return profiles.filter { profile ->
-            // Skip self
-            if (profile.userId == viewerId) return@filter false
-            
-            // Check if blocked
-            val isBlocked = blockedUserDao.isUserBlocked(profile.userId, viewerId)
-            if (isBlocked) return@filter false
-            
-            // Public profiles are visible
-            if (!profile.isPrivate) return@filter true
-            
-            // Private profiles require follow relationship
-            val isFollowing = followRelationshipDao.isFollowing(viewerId, profile.userId)
-            isFollowing
+            // Use centralized privacy enforcement service
+            privacyEnforcementService.canViewProfile(profile.userId, viewerId)
         }
     }
 
@@ -735,7 +714,7 @@ class ProfileSearchRepositoryImpl @Inject constructor(
         viewerId: String
     ): SocialProfile? {
         return try {
-            val canViewDetails = isProfileVisibleToViewer(entity.userId, viewerId).getOrElse { false }
+            val canViewDetails = privacyEnforcementService.canViewProfile(entity.userId, viewerId)
             
             SocialProfile(
                 userId = entity.userId,

@@ -14,6 +14,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.service.AnalyticsTracker
+import com.example.liftrix.domain.service.PrivacyEnforcementService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -36,6 +37,7 @@ class EngagementRepositoryImpl @Inject constructor(
     private val socialProfileDao: SocialProfileDao,
     private val engagementMapper: EngagementMapper,
     private val workoutPostMapper: WorkoutPostMapper,
+    private val privacyEnforcementService: PrivacyEnforcementService,
     private val analyticsTracker: AnalyticsTracker
 ) : EngagementRepository {
     
@@ -57,6 +59,16 @@ class EngagementRepositoryImpl @Inject constructor(
         }
     ) {
         withContext(Dispatchers.IO) {
+            // Check if user can view this post before allowing engagement
+            val post = workoutPostDao.getPostById(postId)
+                ?: throw IllegalArgumentException("Post not found: $postId")
+            
+            val workoutPost = workoutPostMapper.toDomain(post)
+            val canViewPost = privacyEnforcementService.canViewPost(userId, workoutPost)
+            if (!canViewPost) {
+                throw IllegalStateException("User cannot engage with post due to privacy restrictions")
+            }
+            
             val isCurrentlyLiked = postLikeDao.isPostLikedByUser(postId, userId)
             
             if (isCurrentlyLiked) {
@@ -119,6 +131,16 @@ class EngagementRepositoryImpl @Inject constructor(
         }
     ) {
         withContext(Dispatchers.IO) {
+            // Check if user can view this post before checking like status
+            val post = workoutPostDao.getPostById(postId)
+                ?: throw IllegalArgumentException("Post not found: $postId")
+            
+            val workoutPost = workoutPostMapper.toDomain(post)
+            val canViewPost = privacyEnforcementService.canViewPost(userId, workoutPost)
+            if (!canViewPost) {
+                return@withContext false // Can't check like status for posts they can't view
+            }
+            
             postLikeDao.isPostLikedByUser(postId, userId)
         }
     }
@@ -203,6 +225,16 @@ class EngagementRepositoryImpl @Inject constructor(
         }
     ) {
         withContext(Dispatchers.IO) {
+            // Check if user can view and comment on this post
+            val post = workoutPostDao.getPostById(request.postId)
+                ?: throw IllegalArgumentException("Post not found: ${request.postId}")
+            
+            val workoutPost = workoutPostMapper.toDomain(post)
+            val canViewPost = privacyEnforcementService.canViewPost(userId, workoutPost)
+            if (!canViewPost) {
+                throw IllegalStateException("User cannot comment on post due to privacy restrictions")
+            }
+            
             val commentEntity = engagementMapper.createCommentEntity(userId, request)
             postCommentDao.insertComment(commentEntity)
             

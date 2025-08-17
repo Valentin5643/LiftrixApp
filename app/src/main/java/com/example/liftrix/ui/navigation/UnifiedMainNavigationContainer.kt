@@ -157,6 +157,7 @@ fun UnifiedMainNavigationContainer(
                         )
                         
                         HomeScreen(
+                            navController = navController,
                             onNavigateToWorkout = {
                                 // 🔄 MIGRATION: Using migration helper for backward compatibility
                                 migrationHelper.navigateViaString(navController, "workout")

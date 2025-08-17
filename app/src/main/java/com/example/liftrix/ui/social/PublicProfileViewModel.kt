@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.PublicUserProfile
 import com.example.liftrix.domain.usecase.common.ErrorHandler
+import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.domain.usecase.social.GetPublicProfileUseCase
 import com.example.liftrix.domain.usecase.social.GetPublicProfileRequest
 import com.example.liftrix.domain.usecase.social.FollowUserUseCase
@@ -29,6 +30,7 @@ import javax.inject.Inject
 class PublicProfileViewModel @Inject constructor(
     private val getPublicProfileUseCase: GetPublicProfileUseCase,
     private val followUserUseCase: FollowUserUseCase,
+    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<PublicProfileUiState, PublicProfileEvent>(errorHandler) {
 
@@ -40,6 +42,10 @@ class PublicProfileViewModel @Inject constructor(
             isConnectionLoading = false
         )
     )
+
+    init {
+        loadCurrentUserId()
+    }
 
     override fun handleEvent(event: PublicProfileEvent) {
         when (event) {
@@ -54,6 +60,12 @@ class PublicProfileViewModel @Inject constructor(
             }
             is PublicProfileEvent.RefreshProfile -> {
                 refreshProfile()
+            }
+            is PublicProfileEvent.BlockUser -> {
+                blockUser()
+            }
+            is PublicProfileEvent.ReportProfile -> {
+                reportProfile()
             }
         }
     }
@@ -261,6 +273,32 @@ class PublicProfileViewModel @Inject constructor(
             )
         }
     }
+
+    /**
+     * Load current user ID
+     */
+    private fun loadCurrentUserId() {
+        viewModelScope.launch {
+            val currentUserId = getCurrentUserIdUseCase()
+            updateState { it.copy(currentUserId = currentUserId) }
+        }
+    }
+
+    /**
+     * Block the user
+     */
+    private fun blockUser() {
+        // TODO: Implement block user functionality
+        Timber.d("Block user action triggered")
+    }
+
+    /**
+     * Report the profile
+     */
+    private fun reportProfile() {
+        // TODO: Implement report profile functionality
+        Timber.d("Report profile action triggered")
+    }
 }
 
 /**
@@ -270,7 +308,8 @@ data class PublicProfileUiState(
     val profile: PublicUserProfile?,
     val isLoading: Boolean,
     val error: LiftrixError?,
-    val isConnectionLoading: Boolean
+    val isConnectionLoading: Boolean,
+    val currentUserId: String? = null
 ) {
     
     /**
@@ -316,4 +355,14 @@ sealed class PublicProfileEvent : ViewModelEvent {
      * Refresh profile data
      */
     object RefreshProfile : PublicProfileEvent()
+    
+    /**
+     * Block the user
+     */
+    object BlockUser : PublicProfileEvent()
+    
+    /**
+     * Report the profile
+     */
+    object ReportProfile : PublicProfileEvent()
 }

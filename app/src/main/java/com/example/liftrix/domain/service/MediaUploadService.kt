@@ -94,4 +94,19 @@ interface MediaUploadService {
      * Cancels ongoing upload
      */
     suspend fun cancelUpload(uploadId: String): LiftrixResult<Unit>
+    
+    /**
+     * Simple image upload method with automatic compression
+     * Used by PostCreationViewModel for post media uploads
+     * 
+     * @param uri Image URI to upload
+     * @param path Storage path for the image
+     * @param maxSizeKb Maximum file size in KB
+     * @return Download URL of uploaded image
+     */
+    suspend fun uploadImage(
+        uri: Uri,
+        path: String,
+        maxSizeKb: Int = 5000
+    ): LiftrixResult<String>
 }

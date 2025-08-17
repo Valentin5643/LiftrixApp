@@ -242,6 +242,19 @@ interface WorkoutRepository {
     fun getFeedWorkoutsReactive(userId: String, limit: Int = 10): Flow<LiftrixResult<List<FeedWorkout>>>
     
     /**
+     * Get recent activity feed showing all users' workouts with media.
+     * 
+     * Returns a Flow of completed workouts from all followed users and the current user.
+     * Includes media URLs from social posts when available.
+     * 
+     * @param userId The current user ID
+     * @param includeOthers If true, includes workouts from followed users. If false, only current user
+     * @param limit Maximum number of workouts to return
+     * @return Flow of LiftrixResult with list of feed workouts with media
+     */
+    fun getRecentActivityFeed(userId: String, includeOthers: Boolean = true, limit: Int = 20): Flow<LiftrixResult<List<FeedWorkout>>>
+    
+    /**
      * Get workout statistics for a user (legacy method for compatibility).
      * 
      * @param userId The user ID for data scoping

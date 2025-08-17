@@ -64,13 +64,20 @@ service firebase.storage {
       allow write, delete: if false;
     }
     
-    // Workout images (for future workout photo features)
+    // Workout images - Owner has full access (read/write/delete)
+    // CRITICAL: Both read AND write permissions needed for downloadUrl to work
     match /workout_images/{userId}/{workoutId}/{fileName} {
-      allow read, write: if isAuthenticated() && 
-                           isOwner(userId) && 
-                           isValidImageFile() && 
-                           isValidImageFormat();
+      // Write permission for uploading images
+      allow write: if isAuthenticated() && 
+                      isOwner(userId) && 
+                      isValidImageFile() && 
+                      isValidImageFormat();
       
+      // Read permission REQUIRED for downloadUrl() after upload
+      allow read: if isAuthenticated() && 
+                     isOwner(userId);
+      
+      // Delete permission for cleanup
       allow delete: if isAuthenticated() && 
                        isOwner(userId);
     }

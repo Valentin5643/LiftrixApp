@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
@@ -116,13 +117,15 @@ private fun WorkoutFeedContent(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Workout feed items with optimized keys and content types
-        items(
+        itemsIndexed(
             items = feedState.workouts,
-            key = { feedWorkout -> 
-                "workout_${feedWorkout.workout.id.value}"
+            key = { index, feedWorkout -> 
+                // Use index as part of the key to absolutely guarantee uniqueness
+                // This handles cases where the exact same workout appears multiple times
+                "workout_${feedWorkout.workout.id.value}_${index}"
             },
-            contentType = { "workout_feed_item" }
-        ) { feedWorkout ->
+            contentType = { _, _ -> "workout_feed_item" }
+        ) { _, feedWorkout ->
             WorkoutFeedItem(
                 feedWorkout = feedWorkout,
                 modifier = Modifier.testTag("workout_feed_item")

@@ -66,4 +66,10 @@ sealed class HomeEvent : ViewModelEvent {
      * User dismissed a recommendations-specific error.
      */
     object RecommendationsErrorDismissed : HomeEvent()
+    
+    /**
+     * User toggled between Following and Explore feed tabs.
+     * @param showFollowing true for Following (people you follow), false for Explore (all users)
+     */
+    data class ToggleFeedFilter(val showFollowing: Boolean) : HomeEvent()
 }

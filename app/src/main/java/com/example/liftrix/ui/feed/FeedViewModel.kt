@@ -36,6 +36,9 @@ class FeedViewModel @Inject constructor(
     private val _likedPosts = MutableStateFlow<Set<String>>(emptySet())
     private val _savedPosts = MutableStateFlow<Set<String>>(emptySet())
     
+    // Track posts that have been loaded to initialize engagement state
+    private val _loadedPosts = MutableStateFlow<List<WorkoutPost>>(emptyList())
+    
     private val _viewModelEvents = MutableSharedFlow<FeedViewModelEvent>()
     val viewModelEvents: SharedFlow<FeedViewModelEvent> = _viewModelEvents.asSharedFlow()
     
@@ -338,10 +341,15 @@ class FeedViewModel @Inject constructor(
         viewModelScope.launch {
             val userId = getCurrentUserIdUseCase()
             if (userId != null) {
+                // Clear engagement state before refresh to ensure fresh state
+                _likedPosts.value = emptySet()
+                _savedPosts.value = emptySet()
+                
                 val result = feedRepository.refreshFeed(userId)
                 result.fold(
                     onSuccess = {
                         Timber.d("Feed refreshed successfully")
+                        // The new posts will repopulate engagement state via the posts flow
                     },
                     onFailure = { error ->
                         val liftrixError = if (error is LiftrixError) {
@@ -384,10 +392,12 @@ sealed class FeedEvent : ViewModelEvent {
 
 /**
  * Available feed tabs
+ * HOME - Following tab: shows posts from people you follow and yourself
+ * DISCOVERY - Explore tab: shows all public posts from the community
  */
 enum class FeedTab {
-    HOME,
-    DISCOVERY
+    HOME,      // Following tab
+    DISCOVERY  // Explore tab
 }
 
 /**

@@ -57,6 +57,7 @@ import com.example.liftrix.data.local.dao.ProgressPhotoDao
 import com.example.liftrix.data.local.dao.QRCodeSessionDao
 import com.example.liftrix.data.local.dao.PRNotificationDao
 import com.example.liftrix.data.local.dao.GymBuddyActivityDao
+import com.example.liftrix.data.local.dao.ContentReportsDao
 
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.data.local.entity.FolderEntity
@@ -107,6 +108,7 @@ import com.example.liftrix.data.local.entity.ProgressPhotoEntity
 import com.example.liftrix.data.local.entity.QRCodeSessionEntity
 import com.example.liftrix.data.local.entity.PRNotificationEntity
 import com.example.liftrix.data.local.entity.GymBuddyActivityEntity
+import com.example.liftrix.data.local.entity.ContentReportEntity
 
 
 
@@ -161,8 +163,9 @@ import com.example.liftrix.data.local.entity.GymBuddyActivityEntity
         QRCodeSessionEntity::class,
         PRNotificationEntity::class,
         GymBuddyActivityEntity::class,
+        ContentReportEntity::class,
     ],
-    version = 49,
+    version = 50,
     exportSchema = true
 )
 @TypeConverters(
@@ -223,4 +226,5 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun qrCodeSessionDao(): QRCodeSessionDao
     abstract fun prNotificationDao(): PRNotificationDao
     abstract fun gymBuddyActivityDao(): GymBuddyActivityDao
+    abstract fun contentReportsDao(): ContentReportsDao
 }

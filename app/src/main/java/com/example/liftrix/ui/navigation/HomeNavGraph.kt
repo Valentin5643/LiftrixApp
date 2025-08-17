@@ -44,6 +44,7 @@ fun NavGraphBuilder.homeGraph(
     ) {
         composable(HomeRoutes.HOME_MAIN) {
             HomeScreen(
+                navController = navController,
                 onNavigateToWorkout = { workoutId ->
                     // Legacy navigation - replaced by type-safe LiftrixRoute.WorkoutDetails
                     onNavigateToWorkout()

@@ -40,6 +40,12 @@ interface FollowRelationshipDao {
         status: String = FollowRelationshipEntity.STATUS_ACCEPTED,
         limit: Int = 100
     ): List<FollowRelationshipEntity>
+    
+    @Query("""
+        SELECT following_id FROM follow_relationships 
+        WHERE follower_id = :userId AND status = 'ACCEPTED'
+    """)
+    suspend fun getFollowingUserIds(userId: String): List<String>
 
     @Query("""
         SELECT fr.* FROM follow_relationships fr

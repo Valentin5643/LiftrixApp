@@ -41,6 +41,7 @@ import com.example.liftrix.data.mapper.EngagementMapper
 import com.example.liftrix.data.mapper.WorkoutPostMapper
 import com.example.liftrix.domain.service.QRCodeService
 import com.example.liftrix.service.QRCodeServiceImpl
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.analytics.FirebaseAnalytics
@@ -164,9 +165,10 @@ abstract class SocialModule {
             workoutDao: com.example.liftrix.data.local.dao.WorkoutDao,
             workoutPostMapper: WorkoutPostMapper,
             feedCacheService: FeedCacheService,
-            feedCacheDao: FeedCacheDao
+            feedCacheDao: FeedCacheDao,
+            followRelationshipDao: FollowRelationshipDao
             ): FeedRepository {
-                return FeedRepositoryImpl(workoutPostDao, postLikeDao, savedPostDao, socialProfileDao, workoutDao, workoutPostMapper, feedCacheService, feedCacheDao)
+                return FeedRepositoryImpl(workoutPostDao, postLikeDao, savedPostDao, socialProfileDao, workoutDao, workoutPostMapper, feedCacheService, feedCacheDao, followRelationshipDao)
             }
 
         @Provides
@@ -179,9 +181,10 @@ abstract class SocialModule {
             socialProfileDao: SocialProfileDao,
             engagementMapper: EngagementMapper,
             workoutPostMapper: WorkoutPostMapper,
+            privacyEnforcementService: PrivacyEnforcementService,
             analyticsTracker: com.example.liftrix.domain.service.AnalyticsTracker
             ): EngagementRepository {
-                return EngagementRepositoryImpl(postLikeDao, postCommentDao, savedPostDao, workoutPostDao, socialProfileDao, engagementMapper, workoutPostMapper, analyticsTracker)
+                return EngagementRepositoryImpl(postLikeDao, postCommentDao, savedPostDao, workoutPostDao, socialProfileDao, engagementMapper, workoutPostMapper, privacyEnforcementService, analyticsTracker)
             }
 
         @Provides
@@ -333,9 +336,10 @@ abstract class SocialModule {
         @Singleton
         fun provideMediaUploadService(
             @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
-            firebaseStorage: FirebaseStorage
+            firebaseStorage: FirebaseStorage,
+            firebaseAuth: FirebaseAuth
         ): MediaUploadService {
-            return MediaUploadServiceImpl(context, firebaseStorage)
+            return MediaUploadServiceImpl(context, firebaseStorage, firebaseAuth)
         }
 
         @Provides

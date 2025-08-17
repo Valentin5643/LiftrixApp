@@ -57,6 +57,7 @@ class HomeViewModel @Inject constructor(
 
     private var currentFeedOffset = 0
     private var currentRecommendationsOffset = 0
+    private var showAllUsersInRecentActivity = false // Default to Following (only people you follow)
 
     init {
         observeUserDataAndLoadHome()
@@ -114,6 +115,20 @@ class HomeViewModel @Inject constructor(
                     })
                 }
                 loadRecommendations()
+            }
+            is HomeEvent.ToggleFeedFilter -> {
+                // Following tab: show only people you follow (includeOthers = false)
+                // Explore tab: show all users (includeOthers = true)
+                if (event.showFollowing) {
+                    // Following selected - only show people you follow
+                    showAllUsersInRecentActivity = false
+                    Timber.d("🔥 HOME-FILTER: Switched to Following (only people you follow)")
+                } else {
+                    // Explore selected - show all users
+                    showAllUsersInRecentActivity = true
+                    Timber.d("🔥 HOME-FILTER: Switched to Explore (all users)")
+                }
+                loadFeedWorkouts()
             }
         }
     }
@@ -198,13 +213,17 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val userId = getAuthenticatedUserIdUseCase()
-                Timber.d("🔥 HOME-FEED-DEBUG: Setting up reactive feed observation for user: $userId")
+                Timber.d("🔥 HOME-FEED-DEBUG: Loading feed for user: $userId, showAllUsers: $showAllUsersInRecentActivity")
 
                 updateHomeScreenData { it.copy(workoutFeedState = FeedState.Loading) }
                 currentFeedOffset = 0
 
-                // Observe feed workouts reactively
-                workoutRepository.getFeedWorkoutsReactive(userId, FEED_LIMIT)
+                // Load feed based on filter (Following vs Explore)
+                workoutRepository.getRecentActivityFeed(
+                    userId = userId,
+                    includeOthers = showAllUsersInRecentActivity,
+                    limit = FEED_LIMIT
+                )
                     .catch { throwable ->
                         Timber.e(throwable, "🔥 HOME-FEED-DEBUG: Error in feed workouts flow")
                         updateHomeScreenData { 
@@ -509,29 +528,46 @@ class HomeViewModel @Inject constructor(
     /**
      * 🔥 NEW: Reactively observes workout data changes
      * This ensures Home screen updates automatically when workouts are completed
+     * Now includes media URLs from social posts when available
      */
     private fun observeWorkoutDataReactively(userId: String) {
         viewModelScope.launch {
-            // Observe recent workouts reactively
-            workoutRepository.getRecentWorkouts(userId, RECENT_WORKOUTS_LIMIT)
+            // Observe recent activity feed with all users' workouts (includes media)
+            workoutRepository.getRecentActivityFeed(
+                userId = userId,
+                includeOthers = showAllUsersInRecentActivity,
+                limit = RECENT_WORKOUTS_LIMIT
+            )
                 .catch { throwable ->
-                    Timber.e(throwable, "Error observing recent workouts")
+                    Timber.e(throwable, "Error observing recent activity feed")
                     updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.DataRetrievalError(
-                        "Failed to load workout data: ${throwable.message}"
+                        "Failed to load recent activity: ${throwable.message}"
                     ))
                 }
                 .collect { result ->
                     result.fold(
-                        onSuccess = { recentWorkouts ->
-                            Timber.d("🔥 HOME-REACTIVE: Received ${recentWorkouts.size} recent workouts")
+                        onSuccess = { feedWorkouts ->
+                            Timber.d("🔥 HOME-REACTIVE: Received ${feedWorkouts.size} feed workouts with media")
+                            
+                            // Convert FeedWorkout to Workout for compatibility with current UI
+                            val workouts = feedWorkouts.map { it.workout }
+                            
                             updateHomeScreenData {
-                                it.copy(recentWorkouts = recentWorkouts)
+                                it.copy(
+                                    recentWorkouts = workouts,
+                                    // Store the full FeedWorkout data for media display
+                                    workoutFeedState = FeedState.Success(
+                                        workouts = feedWorkouts,
+                                        hasMore = false,
+                                        isLoadingMore = false
+                                    )
+                                )
                             }
                         },
                         onFailure = { throwable ->
-                            Timber.e(throwable, "Error in reactive workout observation")
+                            Timber.e(throwable, "Error in reactive activity feed observation")
                             updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.DataRetrievalError(
-                                throwable.message ?: "Failed to load workouts"
+                                throwable.message ?: "Failed to load recent activity"
                             ))
                             updateHomeScreenData {
                                 it.copy(recentWorkouts = emptyList())
@@ -539,6 +575,25 @@ class HomeViewModel @Inject constructor(
                         }
                     )
                 }
+        }
+    }
+    
+    /**
+     * Toggles between showing all users' workouts or just current user's workouts
+     * in the Recent Activity section
+     */
+    fun toggleRecentActivityFilter() {
+        showAllUsersInRecentActivity = !showAllUsersInRecentActivity
+        Timber.d("🔥 HOME-FILTER: Toggled recent activity filter to: ${if (showAllUsersInRecentActivity) "All Users" else "My Workouts Only"}")
+        
+        // Get current user ID and refresh the feed
+        viewModelScope.launch {
+            try {
+                val userId = getAuthenticatedUserIdUseCase()
+                observeWorkoutDataReactively(userId)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to toggle recent activity filter")
+            }
         }
     }
 

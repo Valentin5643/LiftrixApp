@@ -48,6 +48,9 @@ class RefactoredHomeViewModel @Inject constructor(
     
     private val _recommendationsState = MutableStateFlow<RecommendationsState>(RecommendationsState.Loading)
     val recommendationsState: StateFlow<RecommendationsState> = _recommendationsState.asStateFlow()
+    
+    // Feed filter state (true = show all users/Explore, false = show only following)
+    private val _showAllUsersInFeed = MutableStateFlow(false) // Default to Following
 
     init {
         observeUserDataAndLoadHome()
@@ -95,6 +98,20 @@ class RefactoredHomeViewModel @Inject constructor(
             is HomeEvent.RecommendationsErrorDismissed -> {
                 _recommendationsState.value = RecommendationsState.Loading
                 loadRecommendations()
+            }
+            is HomeEvent.ToggleFeedFilter -> {
+                // Following tab: show only people you follow (includeOthers = false)
+                // Explore tab: show all users (includeOthers = true)
+                if (event.showFollowing) {
+                    // Following selected - only show people you follow
+                    _showAllUsersInFeed.value = false
+                    Timber.d("🔥 HOME-FILTER: Switched to Following (only people you follow)")
+                } else {
+                    // Explore selected - show all users
+                    _showAllUsersInFeed.value = true
+                    Timber.d("🔥 HOME-FILTER: Switched to Explore (all users)")
+                }
+                loadFeedWorkouts()
             }
         }
     }
@@ -197,6 +214,12 @@ class RefactoredHomeViewModel @Inject constructor(
                 if (userId.isNotEmpty()) {
                     _feedState.value = FeedState.Loading
                     
+                    // Load feed with proper filtering based on Following/Explore selection
+                    val includeOthers = _showAllUsersInFeed.value
+                    Timber.d("🔥 HOME-FEED: Loading feed - includeOthers: $includeOthers")
+                    
+                    // For now, use the homeFeedManager as-is but log the filter state
+                    // TODO: Update HomeFeedManager to accept includeOthers parameter
                     homeFeedManager.loadFeedWorkouts(userId).collect { result ->
                         result.fold(
                             onSuccess = { feedState ->

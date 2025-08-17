@@ -84,8 +84,20 @@ class AuthRepositoryImpl @Inject constructor(
             
             val user = UserMapper.fromFirebaseUser(firebaseUser)
             
-            // Update last sign in time in Firestore
-            updateLastSignInTime(user.uid)
+            // Check if user profile exists in Firestore
+            val profileExists = checkUserProfileExists(user.uid)
+            
+            if (!profileExists) {
+                // Create profile if it doesn't exist (handles users created before fix)
+                Timber.w("User profile not found, creating one for uid: ${user.uid}")
+                createUserProfile(user).fold(
+                    onSuccess = { Timber.d("Successfully created missing user profile") },
+                    onFailure = { error -> Timber.e("Failed to create missing user profile: $error") }
+                )
+            } else {
+                // Update last sign in time in Firestore
+                updateLastSignInTime(user.uid)
+            }
             
             user
         }
@@ -107,8 +119,34 @@ class AuthRepositoryImpl @Inject constructor(
 
             val user = UserMapper.fromFirebaseUser(firebaseUser).copy(displayName = displayName)
             
-            // Create user profile in Firestore
-            createUserProfile(user).getOrThrow()
+            // Create user profile in Firestore with retry logic
+            var retries = 3
+            var profileCreated = false
+            var lastError: Exception? = null
+            
+            while (retries > 0 && !profileCreated) {
+                val result = createUserProfile(user)
+                result.fold(
+                    onSuccess = {
+                        profileCreated = true
+                    },
+                    onFailure = { error ->
+                        lastError = Exception(error.toString())
+                        retries--
+                        if (retries > 0) {
+                            // Wait before retrying
+                            delay(500)
+                            Timber.w("Retrying user profile creation, attempts remaining: $retries")
+                        }
+                    }
+                )
+            }
+            
+            if (!profileCreated) {
+                // If profile creation failed after retries, log the error but still return the user
+                // The profile will be created on next sign-in attempt
+                Timber.e(lastError, "Failed to create user profile after 3 attempts, but auth account exists")
+            }
             
             user
         }
@@ -190,6 +228,34 @@ class AuthRepositoryImpl @Inject constructor(
     override suspend fun getCurrentUserId(): String? {
         return firebaseAuth.currentUser?.uid
     }
+    
+    /**
+     * Ensures the current user has a valid, non-expired authentication token.
+     * This is critical for Firebase Storage operations which don't auto-refresh tokens.
+     * 
+     * @param forceRefresh If true, forces a token refresh even if current token hasn't expired
+     * @return The current authenticated user's ID if successful, null otherwise
+     */
+    suspend fun ensureValidAuthToken(forceRefresh: Boolean = false): String? {
+        return try {
+            val currentUser = firebaseAuth.currentUser ?: return null
+            
+            // Force token refresh to ensure it's valid for Storage operations
+            // This is crucial for preventing 403 errors in long-running sessions
+            val tokenResult = currentUser.getIdToken(forceRefresh).await()
+            
+            if (tokenResult?.token.isNullOrBlank()) {
+                Timber.w("Failed to get valid auth token for user ${currentUser.uid}")
+                return null
+            }
+            
+            Timber.d("Auth token refreshed for user ${currentUser.uid}")
+            currentUser.uid
+        } catch (e: Exception) {
+            Timber.e(e, "Error refreshing auth token")
+            null
+        }
+    }
 
     override suspend fun createUserProfile(user: User): LiftrixResult<Unit> {
         return liftrixCatching(
@@ -197,11 +263,30 @@ class AuthRepositoryImpl @Inject constructor(
         ) {
             val userDto = UserMapper.toUserDto(user)
             
+            // Convert userDto to a map and ensure it has userId field for security rules
+            val userMap = hashMapOf(
+                "userId" to user.uid,  // Add userId field that security rules expect
+                "uid" to user.uid,     // Keep uid for backward compatibility
+                "email" to userDto.email,
+                "display_name" to userDto.displayName,
+                "photo_url" to userDto.photoUrl,
+                "is_anonymous" to userDto.isAnonymous,
+                "subscription_tier" to userDto.subscriptionTier,
+                "subscription_status" to userDto.subscriptionStatus,
+                "subscription_expires_at" to userDto.subscriptionExpiresAt,
+                "premium_features_enabled" to userDto.premiumFeaturesEnabled,
+                "onboarding_completed" to userDto.onboardingCompleted,
+                "profile_version" to userDto.profileVersion,
+                "created_at" to userDto.createdAt,
+                "last_sign_in_at" to userDto.lastSignInAt,
+                "updated_at" to userDto.updatedAt
+            )
+            
             // Use a batch write to ensure atomicity
             val batch = firestore.batch()
             
             val userRef = firestore.collection("users").document(user.uid)
-            batch.set(userRef, userDto)
+            batch.set(userRef, userMap)
             
             // Create initial user settings
             val settingsRef = firestore.collection("user_settings").document(user.uid)
@@ -273,6 +358,19 @@ class AuthRepositoryImpl @Inject constructor(
                 .await()
         } catch (exception: Exception) {
             Timber.e(exception, "Failed to update last sign in time")
+        }
+    }
+    
+    private suspend fun checkUserProfileExists(uid: String): Boolean {
+        return try {
+            val document = firestore.collection("users")
+                .document(uid)
+                .get()
+                .await()
+            document.exists()
+        } catch (exception: Exception) {
+            Timber.e(exception, "Failed to check if user profile exists")
+            false
         }
     }
 } 

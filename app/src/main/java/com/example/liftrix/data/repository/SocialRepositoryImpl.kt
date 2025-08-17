@@ -3,12 +3,15 @@ package com.example.liftrix.data.repository
 import com.example.liftrix.data.cache.RecommendationCache
 import com.example.liftrix.data.local.dao.FriendDao
 import com.example.liftrix.data.local.dao.PrivacySettingsDao
+import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.mapper.FriendMapper
 import com.example.liftrix.domain.model.Friend
 import com.example.liftrix.domain.model.FriendStatus
 import com.example.liftrix.domain.model.RecommendedUser
 import com.example.liftrix.domain.model.SharedWorkout
 import com.example.liftrix.domain.model.User
+import com.example.liftrix.domain.model.WorkoutStatus
+import java.time.Duration
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SocialRepository
 import com.example.liftrix.domain.usecase.social.GetSocialProfileUseCase
@@ -33,6 +36,7 @@ import javax.inject.Singleton
 class SocialRepositoryImpl @Inject constructor(
     private val friendDao: FriendDao,
     private val privacySettingsDao: PrivacySettingsDao,
+    private val workoutDao: WorkoutDao,
     private val friendMapper: FriendMapper,
     private val authRepository: AuthRepository,
     private val firestore: FirebaseFirestore,
@@ -264,9 +268,88 @@ class SocialRepositoryImpl @Inject constructor(
     }
 
     override fun getFriendWorkoutFeed(userId: String): Flow<List<SharedWorkout>> = flow {
-        // Placeholder implementation - will be integrated with workout sharing in future tasks
-        emit(emptyList<SharedWorkout>())
-        Timber.d("Friend workout feed requested for user: $userId (placeholder implementation)")
+        try {
+            // Get user's friends
+            val friends = friendDao.getFriends(userId).map { friendEntities ->
+                friendEntities.filter { it.status == FriendStatus.ACCEPTED.name }
+                    .map { it.friendUserId }
+            }.catch { 
+                Timber.w("Failed to get friends for user: $userId")
+                emit(emptyList()) 
+            }
+            
+            friends.collect { friendIds ->
+                if (friendIds.isEmpty()) {
+                    emit(emptyList())
+                    return@collect
+                }
+                
+                // Get recent completed workouts from friends
+                val sharedWorkouts = mutableListOf<SharedWorkout>()
+                
+                for (friendId in friendIds.take(10)) { // Limit to 10 friends for performance
+                    try {
+                        val friendWorkouts = workoutDao.getRecentCompletedWorkouts(friendId, 5).map { workouts ->
+                            workouts.filter { it.status == WorkoutStatus.COMPLETED }
+                        }.catch { emit(emptyList()) }
+                        
+                        friendWorkouts.collect { workouts ->
+                            for (workout in workouts) {
+                                try {
+                                    // Get friend's display name
+                                    val friendProfile = getSocialProfileUseCase(friendId).getOrNull()
+                                    val friendName = friendProfile?.displayName ?: "Friend"
+                                    
+                                    // Calculate duration
+                                    val duration = if (workout.startTime != null && workout.endTime != null) {
+                                        Duration.between(workout.startTime, workout.endTime)
+                                    } else {
+                                        Duration.ZERO
+                                    }
+                                    
+                                    // Parse exercise count from JSON (simplified)
+                                    val exerciseCount = try {
+                                        // This is a simplified implementation - in a real scenario, we'd properly parse the JSON
+                                        workout.exercisesJson.count { it == '{' }.coerceAtLeast(1)
+                                    } catch (e: Exception) {
+                                        1 // Default to 1 exercise if parsing fails
+                                    }
+                                    
+                                    val sharedWorkout = SharedWorkout(
+                                        id = workout.id,
+                                        friendUserId = friendId,
+                                        friendDisplayName = friendName,
+                                        workoutName = workout.name,
+                                        completedAt = workout.endTime ?: workout.updatedAt,
+                                        duration = duration,
+                                        exerciseCount = exerciseCount,
+                                        sharedAt = workout.updatedAt
+                                    )
+                                    
+                                    sharedWorkouts.add(sharedWorkout)
+                                } catch (e: Exception) {
+                                    Timber.w(e, "Failed to map workout to shared workout: ${workout.id}")
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Timber.w(e, "Failed to get workouts for friend: $friendId")
+                    }
+                }
+                
+                // Sort by completion time (most recent first) and limit to 50 workouts
+                val sortedWorkouts = sharedWorkouts
+                    .sortedByDescending { it.completedAt }
+                    .take(50)
+                
+                emit(sortedWorkouts)
+                Timber.d("Friend workout feed loaded: ${sortedWorkouts.size} workouts for user: $userId")
+            }
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get friend workout feed for user: $userId")
+            emit(emptyList())
+        }
     }.catch { e ->
         Timber.e(e, "Failed to get friend workout feed for user: $userId")
         emit(emptyList())

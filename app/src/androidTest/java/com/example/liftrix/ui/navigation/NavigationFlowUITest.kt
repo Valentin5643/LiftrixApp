@@ -245,7 +245,7 @@ class NavigationFlowUITest {
         composeTestRule.setContent {
             LiftrixTheme {
                 UnifiedMainNavigationContainer(
-                    startDestination = LiftrixRoute.SocialFeed
+                    startDestination = LiftrixRoute.Home // Feed is now integrated into Home
                 )
             }
         }

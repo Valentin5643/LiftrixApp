@@ -37,6 +37,7 @@ import com.example.liftrix.ui.theme.LiftrixTheme
 @Composable
 fun FriendsScreen(
     onNavigateBack: () -> Unit, // Kept for backward compatibility, but navigation handled by global TopAppBar
+    onNavigateToUserSearch: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SocialViewModel = hiltViewModel()
 ) {
@@ -115,6 +116,7 @@ fun FriendsScreen(
             0 -> FriendsTab(
                 uiState = uiState,
                 onEvent = viewModel::onEvent,
+                onNavigateToUserSearch = onNavigateToUserSearch,
                 modifier = Modifier.fillMaxSize()
             )
             1 -> RequestsTab(
@@ -133,6 +135,7 @@ fun FriendsScreen(
 private fun FriendsTab(
     uiState: SocialUiState,
     onEvent: (SocialEvent) -> Unit,
+    onNavigateToUserSearch: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -143,6 +146,7 @@ private fun FriendsTab(
             searchQuery = uiState.searchQuery,
             searchResults = uiState.searchResults,
             onEvent = onEvent,
+            onNavigateToUserSearch = onNavigateToUserSearch,
             modifier = Modifier.padding(16.dp)
         )
         
@@ -183,6 +187,7 @@ private fun SearchFriends(
     searchQuery: String,
     searchResults: List<User>,
     onEvent: (SocialEvent) -> Unit,
+    onNavigateToUserSearch: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -191,34 +196,49 @@ private fun SearchFriends(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = { onEvent(SocialEvent.SearchFriends(it)) },
-            placeholder = { Text("Search friends by name or email") },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = null
-                )
-            },
-            trailingIcon = if (searchQuery.isNotEmpty()) {
-                {
-                    IconButton(
-                        onClick = { onEvent(SocialEvent.SearchFriends("")) }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Clear,
-                            contentDescription = "Clear search"
-                        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { onEvent(SocialEvent.SearchFriends(it)) },
+                placeholder = { Text("Search friends by name or email") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null
+                    )
+                },
+                trailingIcon = if (searchQuery.isNotEmpty()) {
+                    {
+                        IconButton(
+                            onClick = { onEvent(SocialEvent.SearchFriends("")) }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Clear,
+                                contentDescription = "Clear search"
+                            )
+                        }
                     }
-                }
-            } else null,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(
-                onSearch = { keyboardController?.hide() }
-            ),
-            modifier = Modifier.fillMaxWidth()
-        )
+                } else null,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(
+                    onSearch = { keyboardController?.hide() }
+                ),
+                modifier = Modifier.weight(1f)
+            )
+            
+            // Add navigation button
+            IconButton(
+                onClick = onNavigateToUserSearch
+            ) {
+                Icon(
+                    Icons.Default.OpenInNew,
+                    contentDescription = "Advanced search"
+                )
+            }
+        }
         
         // Search Results
         if (searchQuery.isNotEmpty() && searchResults.isNotEmpty()) {

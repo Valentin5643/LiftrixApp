@@ -3,17 +3,27 @@ package com.example.liftrix.ui.home
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -21,7 +31,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavController
+import androidx.paging.LoadState
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
 import com.example.liftrix.domain.model.*
+import com.example.liftrix.domain.model.social.WorkoutPost
 import com.example.liftrix.ui.home.components.*
 import com.example.liftrix.ui.common.FeedItemShimmer
 import com.example.liftrix.ui.common.ContextualColorOverlay
@@ -31,12 +47,22 @@ import com.example.liftrix.ui.common.state.FeedState
 import com.example.liftrix.ui.common.state.RecommendationsState
 import com.example.liftrix.ui.common.ColorContext
 import com.example.liftrix.ui.common.calculateWorkoutIntensity
+import com.example.liftrix.ui.common.components.ErrorDisplay
+import com.example.liftrix.ui.common.components.LoadingIndicator
+import com.example.liftrix.ui.feed.FeedViewModel
+import com.example.liftrix.ui.feed.FeedEvent
+import com.example.liftrix.ui.feed.FeedTab
+import com.example.liftrix.ui.feed.PostInteraction
+import com.example.liftrix.ui.feed.components.WorkoutPostCard
+import com.example.liftrix.ui.navigation.LiftrixRoute
 import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
 import com.example.liftrix.ui.workout.components.PrimaryActionButton
 import com.example.liftrix.ui.workout.components.SecondaryActionButton
 import com.example.liftrix.ui.workout.components.TertiaryActionButton
 import com.example.liftrix.ui.components.layouts.GridSystem
 import com.example.liftrix.ui.theme.LiftrixTheme
+import com.example.liftrix.ui.theme.LiftrixColorsV2
+import com.example.liftrix.ui.theme.LiftrixSpacing
 import eu.bambooapps.material3.pullrefresh.PullRefreshIndicator
 import eu.bambooapps.material3.pullrefresh.pullRefresh
 import eu.bambooapps.material3.pullrefresh.rememberPullRefreshState
@@ -53,20 +79,24 @@ import eu.bambooapps.material3.pullrefresh.rememberPullRefreshState
  * - Enhanced HomeViewModel integration with MVI pattern
  * - Analytics tracking for user interactions and performance metrics
  * 
+ * @param navController Navigation controller for navigating between screens
  * @param onNavigateToWorkout Callback to navigate to workout details screen
  * @param onNavigateToFriends Callback to navigate to friends screen
  * @param onNavigateToMyWorkouts Callback to navigate to personal workouts screen
  * @param modifier Modifier for styling the screen
  * @param viewModel HomeViewModel for state management (injectable for testing)
+ * @param feedViewModel FeedViewModel for social feed management
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
+    navController: NavController,
     onNavigateToWorkout: (String) -> Unit,
     onNavigateToFriends: () -> Unit,
     onNavigateToMyWorkouts: () -> Unit = {},
     modifier: Modifier = Modifier,
-    viewModel: HomeViewModel = hiltViewModel()
+    viewModel: HomeViewModel = hiltViewModel(),
+    feedViewModel: FeedViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     
@@ -97,11 +127,13 @@ fun HomeScreen(
                     else -> {
                         // Enhanced home content with modern card-based layout
                         EnhancedHomeContent(
+                            navController = navController,
                             screenData = screenData,
                             onNavigateToWorkout = onNavigateToWorkout,
                             onNavigateToFriends = onNavigateToFriends,
                             onNavigateToMyWorkouts = onNavigateToMyWorkouts,
                             onEvent = { event -> viewModel.handleEvent(event) },
+                            feedViewModel = feedViewModel,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -140,13 +172,21 @@ fun HomeScreen(
  */
 @Composable
 private fun EnhancedHomeContent(
+    navController: NavController,
     screenData: HomeScreenData,
     onNavigateToWorkout: (String) -> Unit,
     onNavigateToFriends: () -> Unit,
     onNavigateToMyWorkouts: () -> Unit,
     onEvent: (HomeEvent) -> Unit,
+    feedViewModel: FeedViewModel,
     modifier: Modifier = Modifier
 ) {
+    // Get feed state from FeedViewModel
+    val feedUiState by feedViewModel.uiState.collectAsState()
+    val posts = feedViewModel.posts.collectAsLazyPagingItems()
+    
+    // Create a local UI state for feed tab selection
+    var selectedTab by remember { mutableStateOf(FeedTab.HOME) }
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -185,98 +225,223 @@ private fun EnhancedHomeContent(
             )
         }
         
-        // Workout Feed Header
+        // Workout Feed Header with Dropdown Selector and View All
         item {
-            SectionHeader(
-                title = "Recent Activity",
-                onViewAllClick = onNavigateToMyWorkouts,
-                modifier = Modifier.padding(
-                    start = GridSystem.spacing3,
-                    end = GridSystem.spacing3,
-                    top = GridSystem.spacing2
-                )
-            )
-        }
-        
-        // Enhanced Workout Feed Items
-        when (screenData.workoutFeedState) {
-            is FeedState.Loading -> {
-                items(5) {
-                    FeedItemShimmer(
-                        modifier = Modifier.padding(horizontal = GridSystem.spacing3)
-                    )
-                }
-            }
+            var showDropdown by remember { mutableStateOf(false) }
             
-            is FeedState.Success -> {
-                if (screenData.workoutFeedState.hasData) {
-                    items(
-                        items = screenData.workoutFeedState.workouts,
-                        key = { feedWorkout -> feedWorkout.workout.id.value }
-                    ) { feedWorkout ->
-                        val workoutIntensity = calculateWorkoutIntensityFromFeedWorkout(feedWorkout)
-                        ContextualColorOverlay(
-                            context = ColorContext.WorkoutIntensity(
-                                intensity = workoutIntensity,
-                                workoutType = com.example.liftrix.ui.common.WorkoutType.GENERAL
-                            ),
-                            alpha = 0.03f
-                        ) {
-                            WorkoutFeedItem(
-                                feedWorkout = feedWorkout,
-                                onClick = {
-                                    onEvent(HomeEvent.FeedWorkoutOpened(feedWorkout))
-                                    onNavigateToWorkout(feedWorkout.workout.id.value)
-                                },
-                                modifier = Modifier.padding(horizontal = GridSystem.spacing3)
-                            )
-                        }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = GridSystem.spacing3,
+                        vertical = GridSystem.spacing2
+                    ),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Left side: Dropdown selector for Following/Explore
+                Box {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { showDropdown = !showDropdown }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (selectedTab == FeedTab.HOME) "Following" else "Explore",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = if (showDropdown) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Toggle dropdown",
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                     
-                    // Loading more items
-                    if (screenData.workoutFeedState.isLoadingMore) {
-                        items(3) {
-                            FeedItemShimmer(
-                                modifier = Modifier.padding(horizontal = GridSystem.spacing3)
-                            )
-                        }
-                    }
-                    
-                    // End of feed message
-                    if (screenData.showEndOfFeedMessage) {
-                        item {
-                            FeedEndMessage(
-                                modifier = Modifier.padding(horizontal = GridSystem.spacing3)
-                            )
-                        }
-                    }
-                    
-                    // Load more trigger (invisible item for pagination)
-                    if (screenData.workoutFeedState.hasMore && !screenData.workoutFeedState.isLoadingMore) {
-                        item {
-                            LaunchedEffect(Unit) {
-                                onEvent(HomeEvent.LoadMoreWorkouts)
-                            }
-                        }
-                    }
-                } else {
-                    item {
-                        EmptyWorkoutFeedState(
-                            modifier = Modifier.padding(horizontal = GridSystem.spacing3)
+                    // Dropdown menu
+                    DropdownMenu(
+                        expanded = showDropdown,
+                        onDismissRequest = { showDropdown = false },
+                        modifier = Modifier.width(150.dp)
+                    ) {
+                        DropdownMenuItem(
+                            text = { 
+                                Text(
+                                    "Following",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = if (selectedTab == FeedTab.HOME) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            onClick = {
+                                selectedTab = FeedTab.HOME
+                                showDropdown = false
+                                feedViewModel.onEvent(FeedEvent.SelectTab(FeedTab.HOME))
+                            },
+                            leadingIcon = if (selectedTab == FeedTab.HOME) {
+                                {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Selected",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            } else null
+                        )
+                        DropdownMenuItem(
+                            text = { 
+                                Text(
+                                    "Explore",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = if (selectedTab == FeedTab.DISCOVERY) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            onClick = {
+                                selectedTab = FeedTab.DISCOVERY
+                                showDropdown = false
+                                feedViewModel.onEvent(FeedEvent.SelectTab(FeedTab.DISCOVERY))
+                            },
+                            leadingIcon = if (selectedTab == FeedTab.DISCOVERY) {
+                                {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Selected",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            } else null
                         )
                     }
                 }
-            }
-            
-            is FeedState.Error -> {
-                item {
-                    WorkoutFeedErrorState(
-                        message = screenData.workoutFeedState.message,
-                        onRetry = { onEvent(HomeEvent.LoadMoreWorkouts) },
-                        onDismiss = { onEvent(HomeEvent.FeedErrorDismissed) },
-                        modifier = Modifier.padding(horizontal = GridSystem.spacing3)
+                
+                // Right side: View All button
+                TextButton(
+                    onClick = onNavigateToMyWorkouts,
+                    contentPadding = PaddingValues(
+                        horizontal = GridSystem.spacing2,
+                        vertical = GridSystem.spacing1
+                    )
+                ) {
+                    Text(
+                        text = "View All",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.ArrowForward,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
+            }
+        }
+        
+        // Social Feed Posts (from FeedViewModel - exactly like Feed screen)
+        // Handle empty state for home feed
+        if (posts.itemCount == 0 && posts.loadState.refresh !is LoadState.Loading) {
+            item {
+                EmptyFeedState(
+                    feedType = selectedTab,
+                    onDiscoverPeople = {
+                        navController.navigate(LiftrixRoute.UserSearch)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(LiftrixSpacing.large)
+                )
+            }
+        }
+
+        // Post items
+        items(
+            count = posts.itemCount,
+            key = { index -> 
+                // Use index-based key to guarantee uniqueness even with duplicate posts
+                val post = posts[index]
+                if (post != null) {
+                    "${post.id}_${index}"
+                } else {
+                    "placeholder_$index"
+                }
+            }
+        ) { index ->
+            posts[index]?.let { post ->
+                WorkoutPostCard(
+                    post = post,
+                    isLiked = feedUiState.likedPosts.contains(post.id),
+                    isSaved = feedUiState.savedPosts.contains(post.id),
+                    onLikeClick = { 
+                        feedViewModel.onEvent(FeedEvent.HandlePostInteraction(PostInteraction.Like(post.id)))
+                    },
+                    onCommentClick = { 
+                        navController.navigate(LiftrixRoute.PostComments(post.id))
+                    },
+                    onShareClick = { 
+                        feedViewModel.onEvent(FeedEvent.HandlePostInteraction(PostInteraction.Share(post)))
+                    },
+                    onSaveClick = { 
+                        feedViewModel.onEvent(FeedEvent.HandlePostInteraction(PostInteraction.Save(post.id)))
+                    },
+                    onProfileClick = { 
+                        navController.navigate(LiftrixRoute.PublicProfile(post.userId))
+                    },
+                    onWorkoutCopyClick = {
+                        feedViewModel.onEvent(FeedEvent.HandlePostInteraction(PostInteraction.CopyWorkout(post)))
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = LiftrixSpacing.medium)
+                )
+            }
+        }
+        
+        // Loading state
+        when (posts.loadState.append) {
+            is LoadState.Loading -> {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(LiftrixSpacing.medium),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        LoadingIndicator()
+                    }
+                }
+            }
+            is LoadState.Error -> {
+                item {
+                    ErrorDisplay(
+                        error = convertThrowableToLiftrixError((posts.loadState.append as LoadState.Error).error),
+                        onRetry = { posts.retry() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(LiftrixSpacing.medium)
+                    )
+                }
+            }
+            else -> {}
+        }
+
+        // Initial loading error
+        if (posts.loadState.refresh is LoadState.Error && posts.itemCount == 0) {
+            item {
+                ErrorDisplay(
+                    error = convertThrowableToLiftrixError((posts.loadState.refresh as LoadState.Error).error),
+                    onRetry = { posts.refresh() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(LiftrixSpacing.medium)
+                )
             }
         }
     }
@@ -487,6 +652,70 @@ private fun DiscoveryErrorState(
                 contentDescription = "Error icon",
                 tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Converts a generic Throwable to LiftrixError for consistent error handling
+ */
+private fun convertThrowableToLiftrixError(throwable: Throwable): com.example.liftrix.domain.model.error.LiftrixError {
+    return when (throwable) {
+        is com.example.liftrix.domain.model.error.LiftrixError -> throwable
+        else -> com.example.liftrix.domain.model.error.LiftrixError.NetworkError(
+            errorMessage = throwable.message ?: "An unknown error occurred"
+        )
+    }
+}
+
+/**
+ * Empty state for feed sections
+ */
+@Composable
+private fun EmptyFeedState(
+    feedType: FeedTab,
+    onDiscoverPeople: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = when (feedType) {
+                FeedTab.HOME -> "No posts from people you follow"
+                FeedTab.DISCOVERY -> "No posts to explore"
+            },
+            style = MaterialTheme.typography.headlineSmall,
+            color = LiftrixColorsV2.onSurface
+        )
+        
+        Spacer(modifier = Modifier.height(LiftrixSpacing.small))
+        
+        Text(
+            text = when (feedType) {
+                FeedTab.HOME -> "Follow people to see their workout posts here"
+                FeedTab.DISCOVERY -> "Start exploring the community to discover new workouts"
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = LiftrixColorsV2.onSurfaceVariant
+        )
+        
+        Spacer(modifier = Modifier.height(LiftrixSpacing.large))
+        
+        // Add "Discover People" CTA button
+        Button(
+            onClick = onDiscoverPeople,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = LiftrixColorsV2.primary,
+                contentColor = LiftrixColorsV2.onPrimary
+            )
+        ) {
+            Text(
+                text = "Discover People",
+                style = MaterialTheme.typography.labelLarge
             )
         }
     }
@@ -730,9 +959,11 @@ private fun HomeEmptyScreen(
 @Composable
 private fun HomeScreenPreview() {
     LiftrixTheme {
-        HomeScreen(
-            onNavigateToWorkout = {},
-            onNavigateToFriends = {}
-        )
+        // Preview doesn't need actual navigation
+        // HomeScreen(
+        //     navController = rememberNavController(),
+        //     onNavigateToWorkout = {},
+        //     onNavigateToFriends = {}
+        // )
     }
 }

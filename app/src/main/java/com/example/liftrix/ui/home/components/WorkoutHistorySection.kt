@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.home.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.model.Workout
+import com.example.liftrix.domain.model.FeedWorkout
 import com.example.liftrix.domain.model.WorkoutStats
 import com.example.liftrix.domain.model.WorkoutStatus
 import java.time.format.DateTimeFormatter
@@ -43,14 +45,16 @@ import java.time.temporal.ChronoUnit
 
 /**
  * Section component displaying workout history and recent activity.
- * This replaces template management in the Home tab.
+ * Now includes support for displaying media from workout posts.
  */
 @Composable
 fun WorkoutHistorySection(
     recentWorkouts: List<Workout>,
+    feedWorkouts: List<FeedWorkout>? = null, // Optional feed workouts with media
     workoutStats: WorkoutStats,
     onViewAllWorkouts: () -> Unit,
     onWorkoutClick: (Workout) -> Unit,
+    showingAllUsers: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -64,14 +68,21 @@ fun WorkoutHistorySection(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Recent Workouts",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold
-            )
+            Column {
+                Text(
+                    text = "Recent Activity",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = if (showingAllUsers) "Everyone's workouts" else "My workouts only",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             
             TertiaryActionButton(
-                text = "View All",
+                text = if (showingAllUsers) "View Mine" else "View All",
                 onClick = onViewAllWorkouts
             )
         }
@@ -130,11 +141,22 @@ fun WorkoutHistorySection(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(recentWorkouts) { workout ->
-                    WorkoutHistoryCard(
-                        workout = workout,
-                        onClick = { onWorkoutClick(workout) }
-                    )
+                // If we have feed workouts with media, use those
+                if (feedWorkouts != null) {
+                    items(feedWorkouts) { feedWorkout ->
+                        WorkoutHistoryCardWithMedia(
+                            feedWorkout = feedWorkout,
+                            onClick = { onWorkoutClick(feedWorkout.workout) }
+                        )
+                    }
+                } else {
+                    // Otherwise fall back to regular workout display
+                    items(recentWorkouts) { workout ->
+                        WorkoutHistoryCard(
+                            workout = workout,
+                            onClick = { onWorkoutClick(workout) }
+                        )
+                    }
                 }
             }
         }
@@ -159,6 +181,134 @@ private fun QuickStatCard(
         leadingIcon = icon
     ) {
         // Empty content since title and subtitle handle the display
+    }
+}
+
+/**
+ * Individual workout history card with media support using UnifiedWorkoutCard
+ */
+@Composable
+private fun WorkoutHistoryCardWithMedia(
+    feedWorkout: FeedWorkout,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val workout = feedWorkout.workout
+    val subtitle = buildString {
+        // Show user name if not personal workout
+        if (!feedWorkout.isPersonal && feedWorkout.user != null) {
+            append("${feedWorkout.user.displayName} • ")
+        }
+        append("${workout.exercises.size} exercises")
+        val completedSets = workout.getCompletedSets()
+        if (completedSets > 0) {
+            append(" • $completedSets sets")
+        }
+        workout.getDuration()?.toMinutes()?.let { duration ->
+            append(" • ${duration}min")
+        }
+    }
+    
+    UnifiedWorkoutCard(
+        title = workout.name,
+        subtitle = subtitle,
+        modifier = modifier,
+        onClick = onClick
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Display media thumbnail if available
+            if (feedWorkout.mediaThumbnails.isNotEmpty() || feedWorkout.mediaUrls.isNotEmpty()) {
+                val imageUrl = feedWorkout.mediaThumbnails.firstOrNull() ?: feedWorkout.mediaUrls.firstOrNull()
+                imageUrl?.let { url ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        // In a real implementation, you'd use Coil or similar to load the image
+                        // For now, we'll just show a placeholder
+                        Icon(
+                            imageVector = Icons.Default.FitnessCenter,
+                            contentDescription = "Workout image",
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .size(48.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        
+                        // Image count badge if multiple images
+                        if (feedWorkout.mediaUrls.size > 1) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(8.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                                        RoundedCornerShape(12.dp)
+                                    )
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = "+${feedWorkout.mediaUrls.size - 1}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Workout info row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Time info
+                Column(modifier = Modifier.weight(1f)) {
+                    workout.endTime?.let { endTime ->
+                        val endDate = endTime.atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                        val daysAgo = java.time.temporal.ChronoUnit.DAYS.between(endDate, java.time.LocalDate.now())
+                        val timeText = when {
+                            daysAgo == 0L -> "Today"
+                            daysAgo == 1L -> "Yesterday"
+                            daysAgo < 7 -> "$daysAgo days ago"
+                            else -> endTime.atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy"))
+                        }
+                        
+                        Text(
+                            text = timeText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                
+                // Workout metrics
+                Column(
+                    horizontalAlignment = Alignment.End
+                ) {
+                    workout.calculateTotalVolume()?.let { volume ->
+                        Text(
+                            text = "${String.format("%.0f", volume)}kg",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "volume",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
