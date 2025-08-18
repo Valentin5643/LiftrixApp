@@ -199,6 +199,22 @@ abstract class AnalyticsModule {
         }
 
         /**
+         * Provides RemoteConfigManager for centralized Remote Config operations
+         * 
+         * @param remoteConfig Firebase Remote Config instance
+         * @return Configured RemoteConfigManager instance
+         */
+        @Provides
+        @Singleton
+        fun provideRemoteConfigManager(
+            remoteConfig: FirebaseRemoteConfig
+        ): com.example.liftrix.data.remote.config.RemoteConfigManager {
+            return com.example.liftrix.data.remote.config.RemoteConfigManager(
+                remoteConfig = remoteConfig
+            )
+        }
+
+        /**
          * Provides AnalyticsFeatureFlags with proper dependency injection
          * 
          * @param remoteConfig Firebase Remote Config instance

@@ -266,14 +266,7 @@ sealed class GoalType(
     }
 }
 
-/**
- * Goal priority levels for display ordering and motivation
- */
-enum class GoalPriority(val displayName: String, val sortOrder: Int) {
-    HIGH("High Priority", 1),
-    NORMAL("Normal", 2),
-    LOW("Low Priority", 3)
-}
+// GoalPriority moved to its own file - GoalPriority.kt
 
 /**
  * Achievement status for progress motivation and UI feedback

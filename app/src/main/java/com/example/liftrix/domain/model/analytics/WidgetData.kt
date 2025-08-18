@@ -361,16 +361,7 @@ data class Recommendation(
     val actionSteps: List<String> = emptyList()
 )
 
-/**
- * Insight categorization for organization
- */
-enum class InsightCategory(val displayName: String) {
-    PERFORMANCE("Performance"),
-    CONSISTENCY("Consistency"),
-    RECOVERY("Recovery"),
-    GOAL_PROGRESS("Goal Progress"),
-    TREND_ANALYSIS("Trend Analysis")
-}
+// InsightCategory moved to its own file - InsightCategory.kt
 
 /**
  * Recommendation priority levels

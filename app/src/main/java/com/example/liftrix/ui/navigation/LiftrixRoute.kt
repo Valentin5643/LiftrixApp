@@ -388,4 +388,78 @@ sealed class LiftrixRoute {
      */
     @Serializable
     data class PostComments(val postId: String) : LiftrixRoute()
+    
+    // Account Management Routes (Added for SPEC-20250116-account-management)
+    
+    /**
+     * Email change screen for updating user email address
+     */
+    @Serializable
+    data object EmailChange : LiftrixRoute()
+    
+    /**
+     * Password change screen for updating user password with strength indicator
+     */
+    @Serializable
+    data object PasswordChange : LiftrixRoute()
+    
+    /**
+     * Username change screen for updating username with availability checking
+     */
+    @Serializable
+    data object UsernameChange : LiftrixRoute()
+    
+    /**
+     * Account deletion flow for permanently deleting user account
+     */
+    @Serializable
+    data object AccountDeletion : LiftrixRoute()
+    
+    // Help and Support System Routes (Added for SPEC-20250116-app-information)
+    
+    /**
+     * Help center screen with search and categories
+     */
+    @Serializable
+    data object HelpCenter : LiftrixRoute()
+    
+    /**
+     * Help article detail screen for viewing specific help articles
+     * 
+     * @param articleId Unique identifier for the help article to display
+     */
+    @Serializable
+    data class HelpArticle(val articleId: String) : LiftrixRoute()
+    
+    /**
+     * Contact support screen for creating support tickets
+     */
+    @Serializable
+    data object ContactSupport : LiftrixRoute()
+    
+    /**
+     * Support ticket detail screen for viewing specific support tickets
+     * 
+     * @param ticketId Unique identifier for the support ticket to display
+     */
+    @Serializable
+    data class SupportTicket(val ticketId: String) : LiftrixRoute()
+    
+    /**
+     * About screen with app information, version details, and credits
+     */
+    @Serializable
+    data object About : LiftrixRoute()
+    
+    /**
+     * Privacy policy screen for viewing legal documents
+     */
+    @Serializable
+    data object PrivacyPolicy : LiftrixRoute()
+    
+    /**
+     * Terms of service screen for viewing legal documents
+     */
+    @Serializable
+    data object TermsOfService : LiftrixRoute()
 }

@@ -6,6 +6,7 @@ import com.example.liftrix.domain.model.Friend
 import com.example.liftrix.domain.model.PresenceStatus
 import com.example.liftrix.domain.model.SharedWorkout
 import com.example.liftrix.domain.model.User
+import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SocialRepository
 import com.example.liftrix.domain.service.AnalyticsService
@@ -767,7 +768,7 @@ data class SocialUiState(
 /**
  * Events that can be triggered from the social screen UI
  */
-sealed class SocialEvent {
+sealed class SocialEvent : ViewModelEvent {
     object LoadData : SocialEvent()
     object RefreshData : SocialEvent()
     object Refresh : SocialEvent() // Added alias for RefreshData

@@ -33,6 +33,7 @@ import com.example.liftrix.data.local.dao.UserSearchCacheDao
 import com.example.liftrix.data.local.dao.QRCodeMappingDao
 import com.example.liftrix.data.local.dao.SocialProfileDao
 import com.example.liftrix.data.local.dao.FollowRelationshipDao
+import com.example.liftrix.data.local.dao.FollowRequestDao
 import com.example.liftrix.data.local.dao.GymBuddyDao
 import com.example.liftrix.data.local.dao.SocialPrivacySettingsDao
 import com.example.liftrix.data.local.dao.BlockedUserDao
@@ -41,6 +42,10 @@ import com.example.liftrix.data.local.dao.NotificationPreferenceDao
 import com.example.liftrix.data.local.dao.NotificationQueueDao
 import com.example.liftrix.data.local.dao.NotificationMuteDao
 import com.example.liftrix.data.local.dao.NotificationHistoryDao
+import com.example.liftrix.data.local.dao.UserAccountDao
+import com.example.liftrix.data.local.dao.HelpArticleDao
+import com.example.liftrix.data.local.dao.SupportTicketDao
+import com.example.liftrix.data.local.dao.AppConfigDao
 import com.example.liftrix.data.local.seed.ExerciseLibrarySeedData
 import com.example.liftrix.data.local.seed.MetDataSeedService
 import com.example.liftrix.data.local.migration.MIGRATION_27_28
@@ -63,6 +68,12 @@ import com.example.liftrix.data.local.migration.MIGRATION_43_44
 import com.example.liftrix.data.local.migration.MIGRATION_44_45
 import com.example.liftrix.data.local.migration.MIGRATION_45_46
 import com.example.liftrix.data.local.migration.MIGRATION_46_47
+import com.example.liftrix.data.local.migration.MIGRATION_47_48
+import com.example.liftrix.data.local.migration.MIGRATION_48_49
+import com.example.liftrix.data.local.migration.MIGRATION_49_50
+import com.example.liftrix.data.local.migration.MIGRATION_50_51
+import com.example.liftrix.data.local.migration.MIGRATION_51_52
+import com.example.liftrix.data.local.migration.MIGRATION_52_53
 
 import dagger.Module
 import dagger.Provides
@@ -104,7 +115,9 @@ object DatabaseModule {
                 MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35, 
                 MIGRATION_35_36, MIGRATION_36_37, MIGRATION_37_38, MIGRATION_38_39, 
                 MIGRATION_39_40, MIGRATION_40_41, MIGRATION_41_42, MIGRATION_42_43, 
-                MIGRATION_43_44, MIGRATION_44_45, MIGRATION_45_46, MIGRATION_46_47
+                MIGRATION_43_44, MIGRATION_44_45, MIGRATION_45_46, MIGRATION_46_47,
+                MIGRATION_47_48, MIGRATION_48_49, MIGRATION_49_50, MIGRATION_50_51,
+                MIGRATION_51_52, MIGRATION_52_53
             )
             // ✅ PERSISTENCE FIX: Removed destructive migration to preserve user data
             // Only allow destructive migration on downgrade to handle edge cases
@@ -322,6 +335,11 @@ object DatabaseModule {
     }
 
     @Provides
+    fun provideFollowRequestDao(database: LiftrixDatabase): FollowRequestDao {
+        return database.followRequestDao()
+    }
+
+    @Provides
     fun provideGymBuddyDao(database: LiftrixDatabase): GymBuddyDao {
         return database.gymBuddyDao()
     }
@@ -363,5 +381,29 @@ object DatabaseModule {
     @Provides
     fun provideNotificationHistoryDao(database: LiftrixDatabase): NotificationHistoryDao {
         return database.notificationHistoryDao()
+    }
+
+    @Provides
+    fun provideUserAccountDao(database: LiftrixDatabase): UserAccountDao {
+        return database.userAccountDao()
+    }
+
+    // ========================================
+    // Help and Support System DAOs
+    // ========================================
+
+    @Provides
+    fun provideHelpArticleDao(database: LiftrixDatabase): HelpArticleDao {
+        return database.helpArticleDao()
+    }
+
+    @Provides
+    fun provideSupportTicketDao(database: LiftrixDatabase): SupportTicketDao {
+        return database.supportTicketDao()
+    }
+
+    @Provides
+    fun provideAppConfigDao(database: LiftrixDatabase): AppConfigDao {
+        return database.appConfigDao()
     }
 }

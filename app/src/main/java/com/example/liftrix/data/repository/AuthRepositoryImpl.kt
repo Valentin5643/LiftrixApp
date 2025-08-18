@@ -8,6 +8,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.AuthRepository
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
@@ -371,6 +372,295 @@ class AuthRepositoryImpl @Inject constructor(
         } catch (exception: Exception) {
             Timber.e(exception, "Failed to check if user profile exists")
             false
+        }
+    }
+
+    // Account Management Methods Implementation
+
+    override suspend fun reauthenticate(password: String): LiftrixResult<Unit> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                when {
+                    throwable.message?.contains("INVALID_PASSWORD") == true ||
+                    throwable.message?.contains("wrong-password") == true -> {
+                        LiftrixError.AuthenticationError(
+                            errorMessage = "Current password is incorrect",
+                            authProvider = "email",
+                            errorCode = "INVALID_PASSWORD",
+                            analyticsContext = mapOf("operation" to "REAUTHENTICATE")
+                        )
+                    }
+                    throwable.message?.contains("user-not-found") == true -> {
+                        LiftrixError.AuthenticationError(
+                            errorMessage = "User not found",
+                            authProvider = "email",
+                            errorCode = "USER_NOT_FOUND",
+                            analyticsContext = mapOf("operation" to "REAUTHENTICATE")
+                        )
+                    }
+                    throwable.message?.contains("too-many-requests") == true -> {
+                        LiftrixError.AuthenticationError(
+                            errorMessage = "Too many failed attempts. Please try again later.",
+                            authProvider = "email",
+                            errorCode = "TOO_MANY_REQUESTS",
+                            isRecoverable = true,
+                            retryAfter = 300_000L, // 5 minutes
+                            analyticsContext = mapOf("operation" to "REAUTHENTICATE")
+                        )
+                    }
+                    else -> FirebaseErrorMapper.handleFirebaseError(throwable)
+                }
+            }
+        ) {
+            val user = firebaseAuth.currentUser ?: throw LiftrixError.AuthenticationError(
+                errorMessage = "No authenticated user found",
+                errorCode = "NO_USER",
+                analyticsContext = mapOf("operation" to "REAUTHENTICATE")
+            )
+            
+            val email = user.email ?: throw LiftrixError.AuthenticationError(
+                errorMessage = "User email not available for reauthentication",
+                errorCode = "NO_EMAIL",
+                analyticsContext = mapOf("operation" to "REAUTHENTICATE")
+            )
+            
+            val credential = EmailAuthProvider.getCredential(email, password)
+            user.reauthenticate(credential).await()
+            
+            Timber.d("User reauthenticated successfully: ${user.uid}")
+        }
+    }
+
+    override suspend fun updateEmail(newEmail: String): LiftrixResult<Unit> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                when {
+                    throwable.message?.contains("email-already-in-use") == true -> {
+                        LiftrixError.ValidationError(
+                            field = "email",
+                            violations = listOf("Email address is already in use by another account"),
+                            analyticsContext = mapOf("operation" to "UPDATE_EMAIL")
+                        )
+                    }
+                    throwable.message?.contains("invalid-email") == true -> {
+                        LiftrixError.ValidationError(
+                            field = "email",
+                            violations = listOf("Email address format is invalid"),
+                            analyticsContext = mapOf("operation" to "UPDATE_EMAIL")
+                        )
+                    }
+                    throwable.message?.contains("requires-recent-login") == true -> {
+                        LiftrixError.AuthenticationError(
+                            errorMessage = "This operation requires recent authentication. Please reauthenticate first.",
+                            errorCode = "REQUIRES_RECENT_LOGIN",
+                            analyticsContext = mapOf("operation" to "UPDATE_EMAIL")
+                        )
+                    }
+                    else -> FirebaseErrorMapper.handleFirebaseError(throwable)
+                }
+            }
+        ) {
+            val user = firebaseAuth.currentUser ?: throw LiftrixError.AuthenticationError(
+                errorMessage = "No authenticated user found",
+                errorCode = "NO_USER",
+                analyticsContext = mapOf("operation" to "UPDATE_EMAIL")
+            )
+            
+            val oldEmail = user.email
+            
+            // Update email in Firebase Auth
+            user.updateEmail(newEmail).await()
+            
+            // Send verification email to new address
+            user.sendEmailVerification().await()
+            
+            // Update email in Firestore user profile
+            try {
+                firestore.collection("users")
+                    .document(user.uid)
+                    .set(
+                        mapOf(
+                            "email" to newEmail,
+                            "updated_at" to com.google.firebase.Timestamp.now()
+                        ),
+                        com.google.firebase.firestore.SetOptions.merge()
+                    )
+                    .await()
+            } catch (firestoreError: Exception) {
+                Timber.w(firestoreError, "Failed to update email in Firestore, but Firebase Auth was updated")
+                // Don't fail the entire operation if Firestore update fails
+            }
+            
+            Timber.d("Email updated successfully from '$oldEmail' to '$newEmail' for user: ${user.uid}")
+        }
+    }
+
+    override suspend fun updatePassword(currentPassword: String, newPassword: String): LiftrixResult<Unit> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                when {
+                    throwable.message?.contains("INVALID_PASSWORD") == true ||
+                    throwable.message?.contains("wrong-password") == true -> {
+                        LiftrixError.AuthenticationError(
+                            errorMessage = "Current password is incorrect",
+                            authProvider = "email",
+                            errorCode = "INVALID_PASSWORD",
+                            analyticsContext = mapOf("operation" to "UPDATE_PASSWORD")
+                        )
+                    }
+                    throwable.message?.contains("weak-password") == true -> {
+                        LiftrixError.ValidationError(
+                            field = "newPassword",
+                            violations = listOf("Password is too weak. Must be at least 6 characters."),
+                            analyticsContext = mapOf("operation" to "UPDATE_PASSWORD")
+                        )
+                    }
+                    throwable.message?.contains("requires-recent-login") == true -> {
+                        LiftrixError.AuthenticationError(
+                            errorMessage = "This operation requires recent authentication. Please reauthenticate first.",
+                            errorCode = "REQUIRES_RECENT_LOGIN",
+                            analyticsContext = mapOf("operation" to "UPDATE_PASSWORD")
+                        )
+                    }
+                    else -> FirebaseErrorMapper.handleFirebaseError(throwable)
+                }
+            }
+        ) {
+            val user = firebaseAuth.currentUser ?: throw LiftrixError.AuthenticationError(
+                errorMessage = "No authenticated user found",
+                errorCode = "NO_USER",
+                analyticsContext = mapOf("operation" to "UPDATE_PASSWORD")
+            )
+            
+            val email = user.email ?: throw LiftrixError.AuthenticationError(
+                errorMessage = "User email not available for password update",
+                errorCode = "NO_EMAIL",
+                analyticsContext = mapOf("operation" to "UPDATE_PASSWORD")
+            )
+            
+            // Validate that new password is different from current
+            if (currentPassword == newPassword) {
+                throw LiftrixError.ValidationError(
+                    field = "newPassword",
+                    violations = listOf("New password must be different from current password"),
+                    analyticsContext = mapOf("operation" to "UPDATE_PASSWORD")
+                )
+            }
+            
+            // First reauthenticate with current password
+            val credential = EmailAuthProvider.getCredential(email, currentPassword)
+            user.reauthenticate(credential).await()
+            
+            // Update to new password
+            user.updatePassword(newPassword).await()
+            
+            // Update password change timestamp in Firestore
+            try {
+                firestore.collection("users")
+                    .document(user.uid)
+                    .set(
+                        mapOf(
+                            "last_password_change" to com.google.firebase.Timestamp.now(),
+                            "updated_at" to com.google.firebase.Timestamp.now()
+                        ),
+                        com.google.firebase.firestore.SetOptions.merge()
+                    )
+                    .await()
+            } catch (firestoreError: Exception) {
+                Timber.w(firestoreError, "Failed to update password timestamp in Firestore")
+                // Don't fail the entire operation if Firestore update fails
+            }
+            
+            Timber.d("Password updated successfully for user: ${user.uid}")
+        }
+    }
+
+    override suspend fun deleteAccount(): LiftrixResult<Unit> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                when {
+                    throwable.message?.contains("requires-recent-login") == true -> {
+                        LiftrixError.AuthenticationError(
+                            errorMessage = "Account deletion requires recent authentication. Please reauthenticate first.",
+                            errorCode = "REQUIRES_RECENT_LOGIN",
+                            analyticsContext = mapOf("operation" to "DELETE_ACCOUNT")
+                        )
+                    }
+                    else -> FirebaseErrorMapper.handleFirebaseError(throwable)
+                }
+            }
+        ) {
+            val user = firebaseAuth.currentUser ?: throw LiftrixError.AuthenticationError(
+                errorMessage = "No authenticated user found",
+                errorCode = "NO_USER",
+                analyticsContext = mapOf("operation" to "DELETE_ACCOUNT")
+            )
+            
+            val userId = user.uid
+            
+            // Create a batch to delete all user data atomically
+            val batch = firestore.batch()
+            
+            // List of collections to delete user data from
+            val collectionsToClean = listOf(
+                "users",
+                "user_settings", 
+                "subscriptions",
+                "workouts",
+                "workout_templates",
+                "custom_exercises",
+                "user_profiles",
+                "analytics_cache",
+                "social_profiles",
+                "follow_relationships",
+                "workout_posts",
+                "notifications"
+            )
+            
+            // Delete user documents from all collections
+            for (collection in collectionsToClean) {
+                try {
+                    val documents = firestore.collection(collection)
+                        .whereEqualTo("userId", userId)
+                        .get()
+                        .await()
+                    
+                    for (document in documents) {
+                        batch.delete(document.reference)
+                    }
+                    
+                    // Also check for user_id field (different naming convention)
+                    val documentsAlt = firestore.collection(collection)
+                        .whereEqualTo("user_id", userId)
+                        .get()
+                        .await()
+                    
+                    for (document in documentsAlt) {
+                        batch.delete(document.reference)
+                    }
+                } catch (e: Exception) {
+                    Timber.w(e, "Failed to query collection $collection for user deletion")
+                    // Continue with other collections
+                }
+            }
+            
+            // Also delete the main user document
+            val userRef = firestore.collection("users").document(userId)
+            batch.delete(userRef)
+            
+            try {
+                // Commit the batch delete
+                batch.commit().await()
+                Timber.d("Successfully deleted Firestore data for user: $userId")
+            } catch (firestoreError: Exception) {
+                Timber.e(firestoreError, "Failed to delete Firestore data, but proceeding with auth account deletion")
+                // Don't fail the entire operation if Firestore cleanup fails
+            }
+            
+            // Finally, delete the Firebase Auth account
+            user.delete().await()
+            
+            Timber.d("Account deleted successfully for user: $userId")
         }
     }
 } 

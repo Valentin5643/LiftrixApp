@@ -50,6 +50,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.example.liftrix.ui.navigation.LiftrixRoute
 import com.example.liftrix.ui.common.LiveSessionBar
 import com.example.liftrix.domain.model.ShareableContent
 import com.example.liftrix.domain.model.ShareableContentType
@@ -66,12 +67,42 @@ import com.example.liftrix.ui.workout.edit.RedesignedEditWorkoutScreen
 import com.example.liftrix.ui.progress.ProgressDashboardScreen
 import com.example.liftrix.ui.progress.detail.WorkoutFrequencyDetailScreen
 import com.example.liftrix.ui.coach.CoachScreen
+import com.example.liftrix.ui.settings.account.EmailChangeScreen
+import com.example.liftrix.ui.settings.account.PasswordChangeScreen
+import com.example.liftrix.ui.settings.account.UsernameChangeScreen
+import com.example.liftrix.ui.settings.account.AccountDeletionFlow
+import com.example.liftrix.ui.help.HelpScreen
+import com.example.liftrix.ui.help.HelpArticleScreen
+import com.example.liftrix.ui.support.ContactSupportScreen
+import com.example.liftrix.ui.support.SupportTicketScreen
+import com.example.liftrix.ui.settings.about.AboutScreen
+import com.example.liftrix.ui.settings.legal.PrivacyPolicyScreen
+import com.example.liftrix.ui.settings.legal.TermsOfServiceScreen
 import com.example.liftrix.ui.social.SocialViewModel
 import com.example.liftrix.ui.social.SocialEvent
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
 import com.example.liftrix.ui.components.ConditionalWorkoutFab
 import com.example.liftrix.ui.components.WorkoutCreationModal
 import com.example.liftrix.ui.navigation.navigateToEditWorkout
+import com.example.liftrix.ui.navigation.navigateToWorkout
+import com.example.liftrix.ui.navigation.navigateToProfile
+import com.example.liftrix.ui.navigation.navigateToProfileEdit
+import com.example.liftrix.ui.navigation.navigateToSettings
+import com.example.liftrix.ui.navigation.navigateToAnomalySettings
+import com.example.liftrix.ui.navigation.navigateToAnomalyDashboard
+import com.example.liftrix.ui.navigation.navigateToActiveWorkout
+import com.example.liftrix.ui.navigation.navigateToExerciseSelection
+import com.example.liftrix.ui.navigation.navigateToImageCrop
+import com.example.liftrix.ui.navigation.navigateToGuestDashboard
+import com.example.liftrix.ui.navigation.navigateToGuestConversion
+import com.example.liftrix.ui.navigation.navigateToAuthSignUp
+import com.example.liftrix.ui.navigation.navigateToAuthSignIn
+import com.example.liftrix.ui.navigation.navigateToPublicProfile
+import com.example.liftrix.ui.navigation.navigateToQRCodeDisplay
+import com.example.liftrix.ui.navigation.navigateToFriends
+import com.example.liftrix.ui.navigation.navigateAndReplace
+import com.example.liftrix.ui.navigation.clearBackStackAndNavigate
+import com.example.liftrix.ui.navigation.popBackStackSafely
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import androidx.lifecycle.ViewModel
@@ -399,12 +430,145 @@ fun UnifiedNavigationContainer(
                         },
                         onNavigateToNotifications = {
                             navController.navigate(LiftrixRoute.NotificationSettings)
+                        },
+                        onNavigateToHelpCenter = {
+                            navController.navigate(LiftrixRoute.HelpCenter)
+                        },
+                        onNavigateToContactSupport = {
+                            navController.navigate(LiftrixRoute.ContactSupport)
+                        },
+                        onNavigateToAbout = {
+                            navController.navigate(LiftrixRoute.About)
+                        },
+                        onNavigateToPrivacyPolicy = {
+                            navController.navigate(LiftrixRoute.PrivacyPolicy)
+                        },
+                        onNavigateToTermsOfService = {
+                            navController.navigate(LiftrixRoute.TermsOfService)
                         }
                     )
                 }
                 
                 composable<LiftrixRoute.WidgetSettings> {
                     com.example.liftrix.ui.settings.WidgetSettingsScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+                
+                // Account Management Routes (Added for SPEC-20250116-account-management)
+                composable<LiftrixRoute.EmailChange> {
+                    EmailChangeScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.PasswordChange> {
+                    PasswordChangeScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.UsernameChange> {
+                    UsernameChangeScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.AccountDeletion> {
+                    AccountDeletionFlow(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        },
+                        onDeletionCompleted = {
+                            // Navigate to auth/onboarding after successful account deletion
+                            navController.clearBackStackAndNavigate(LiftrixRoute.AuthSignIn)
+                        }
+                    )
+                }
+                
+                // Help and Support System Routes (Added for SPEC-20250116-app-information)
+                composable<LiftrixRoute.HelpCenter> {
+                    com.example.liftrix.ui.help.HelpScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        },
+                        onNavigateToArticle = { articleId ->
+                            navController.navigate(LiftrixRoute.HelpArticle(articleId))
+                        },
+                        onNavigateToSupport = {
+                            navController.navigate(LiftrixRoute.ContactSupport)
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.HelpArticle> { backStackEntry ->
+                    val articleRoute = backStackEntry.toRoute<LiftrixRoute.HelpArticle>()
+                    com.example.liftrix.ui.help.HelpArticleScreen(
+                        articleId = articleRoute.articleId,
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.ContactSupport> {
+                    com.example.liftrix.ui.support.ContactSupportScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        },
+                        onNavigateToTicket = { ticketId ->
+                            navController.navigate(LiftrixRoute.SupportTicket(ticketId))
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.SupportTicket> { backStackEntry ->
+                    val ticketRoute = backStackEntry.toRoute<LiftrixRoute.SupportTicket>()
+                    com.example.liftrix.ui.support.SupportTicketScreen(
+                        ticketId = ticketRoute.ticketId,
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.About> {
+                    com.example.liftrix.ui.settings.about.AboutScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        },
+                        onNavigateToPrivacy = {
+                            navController.navigate(LiftrixRoute.PrivacyPolicy)
+                        },
+                        onNavigateToTerms = {
+                            navController.navigate(LiftrixRoute.TermsOfService)
+                        },
+                        onNavigateToLicenses = {
+                            // Since there's no specific licenses route, navigate to Help Center
+                            // or implement a simple dialog/bottom sheet for licenses
+                            navController.navigate(LiftrixRoute.HelpCenter)
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.PrivacyPolicy> {
+                    com.example.liftrix.ui.settings.legal.PrivacyPolicyScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.TermsOfService> {
+                    com.example.liftrix.ui.settings.legal.TermsOfServiceScreen(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         }

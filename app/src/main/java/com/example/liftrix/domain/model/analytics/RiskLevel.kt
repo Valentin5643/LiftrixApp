@@ -98,10 +98,10 @@ enum class RiskLevel(
     /**
      * Gets urgency level for addressing this risk
      */
-    fun getUrgencyLevel(): UrgencyLevel = when (this) {
-        LOW -> UrgencyLevel.NONE
-        MEDIUM -> UrgencyLevel.MODERATE
-        HIGH -> UrgencyLevel.URGENT
+    fun getUrgencyLevel(): RiskUrgencyLevel = when (this) {
+        LOW -> RiskUrgencyLevel.NONE
+        MEDIUM -> RiskUrgencyLevel.MODERATE
+        HIGH -> RiskUrgencyLevel.URGENT
     }
     
     /**
@@ -146,7 +146,7 @@ enum class RiskLevel(
 /**
  * Enum representing different urgency levels for risk response
  */
-enum class UrgencyLevel(val displayName: String, val description: String) {
+enum class RiskUrgencyLevel(val displayName: String, val description: String) {
     NONE("None", "No urgent action required"),
     MODERATE("Moderate", "Action recommended within a few days"),
     URGENT("Urgent", "Immediate action required")

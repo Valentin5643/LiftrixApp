@@ -1,6 +1,7 @@
 package com.example.liftrix.ui.settings
 
 import com.example.liftrix.domain.model.WeightUnit
+import com.example.liftrix.ui.common.event.ViewModelEvent
 
 /**
  * Sealed class representing all possible events that can occur in the settings screen.
@@ -12,7 +13,7 @@ import com.example.liftrix.domain.model.WeightUnit
  * Events are grouped by functionality and include both user-initiated actions and
  * system-triggered events for comprehensive state management.
  */
-sealed class SettingsEvent {
+sealed class SettingsEvent : ViewModelEvent {
     
     // Data loading events
     /**
@@ -103,6 +104,31 @@ sealed class SettingsEvent {
      * Should navigate to notification settings screen.
      */
     object NavigateToNotifications : SettingsEvent()
+    
+    // Account Management Navigation Events (Added for SPEC-20250116-account-management)
+    /**
+     * Triggered when user taps on email change option.
+     * Should navigate to email change screen.
+     */
+    object NavigateToEmailChange : SettingsEvent()
+    
+    /**
+     * Triggered when user taps on password change option.
+     * Should navigate to password change screen.
+     */
+    object NavigateToPasswordChange : SettingsEvent()
+    
+    /**
+     * Triggered when user taps on username change option.
+     * Should navigate to username change screen.
+     */
+    object NavigateToUsernameChange : SettingsEvent()
+    
+    /**
+     * Triggered when user taps on account deletion option.
+     * Should navigate to account deletion flow.
+     */
+    object NavigateToAccountDeletion : SettingsEvent()
     
     // Authentication events
     /**

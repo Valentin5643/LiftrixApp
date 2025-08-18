@@ -216,6 +216,17 @@ class LegacyNavigationWrapper @Inject constructor(
                 is LiftrixRoute.PostWorkoutSummary -> "Replace with: navController.navigate(LiftrixRoute.PostWorkoutSummary(workoutId))"
                 LiftrixRoute.NotificationSettings -> "Replace with: navController.navigate(LiftrixRoute.NotificationSettings)"
                 LiftrixRoute.GymBuddy -> "Replace with: navController.navigate(LiftrixRoute.GymBuddy)"
+                LiftrixRoute.AccountDeletion -> "Replace with: navController.navigate(LiftrixRoute.AccountDeletion)"
+                LiftrixRoute.EmailChange -> "Replace with: navController.navigate(LiftrixRoute.EmailChange)"
+                LiftrixRoute.PasswordChange -> "Replace with: navController.navigate(LiftrixRoute.PasswordChange)"
+                LiftrixRoute.UsernameChange -> "Replace with: navController.navigate(LiftrixRoute.UsernameChange)"
+                LiftrixRoute.HelpCenter -> "Replace with: navController.navigate(LiftrixRoute.HelpCenter)"
+                is LiftrixRoute.HelpArticle -> "Replace with: navController.navigate(LiftrixRoute.HelpArticle(articleId))"
+                LiftrixRoute.ContactSupport -> "Replace with: navController.navigate(LiftrixRoute.ContactSupport)"
+                is LiftrixRoute.SupportTicket -> "Replace with: navController.navigate(LiftrixRoute.SupportTicket(ticketId))"
+                LiftrixRoute.About -> "Replace with: navController.navigate(LiftrixRoute.About)"
+                LiftrixRoute.PrivacyPolicy -> "Replace with: navController.navigate(LiftrixRoute.PrivacyPolicy)"
+                LiftrixRoute.TermsOfService -> "Replace with: navController.navigate(LiftrixRoute.TermsOfService)"
             }
         } else {
             null

@@ -1,0 +1,51 @@
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/legal/LegalDocumentViewModel.kt:72:52 Argument type mismatch: actual type is 'java.time.Instant', but 'kotlin.String?' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/legal/LegalDocumentViewModel.kt:83:62 Argument type mismatch: actual type is 'kotlin.Throwable', but 'com.example.liftrix.domain.model.error.LiftrixError' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/legal/LegalDocumentViewModel.kt:102:53 Argument type mismatch: actual type is 'java.time.Instant', but 'kotlin.String?' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/legal/LegalDocumentViewModel.kt:113:62 Argument type mismatch: actual type is 'kotlin.Throwable', but 'com.example.liftrix.domain.model.error.LiftrixError' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/legal/LegalDocumentViewModel.kt:140:44 Argument type mismatch: actual type is 'java.time.Instant?', but 'kotlin.String?' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/legal/LegalDocumentViewModel.kt:141:45 Argument type mismatch: actual type is 'java.time.Instant?', but 'kotlin.String?' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/legal/LegalDocumentViewModel.kt:185:48 Argument type mismatch: actual type is 'java.time.Instant?', but 'kotlin.String?' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/legal/LegalDocumentViewModel.kt:186:49 Argument type mismatch: actual type is 'java.time.Instant?', but 'kotlin.String?' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/legal/LegalDocumentViewModel.kt:369:34 Unresolved reference 'data'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/legal/LegalDocumentViewModel.kt:430:59 Unresolved reference 'data'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/support/ContactSupportScreen.kt:200:28 Argument type mismatch: actual type is 'com.example.liftrix.ui.settings.support.SupportUiState.Data?', but 'com.example.liftrix.ui.settings.support.SupportUiState.Data' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/support/SupportViewModel.kt:75:55 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'kotlin.String?'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/support/SupportViewModel.kt:75:56 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/support/SupportViewModel.kt:76:21 No parameter with name 'onSuccess' found.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/support/SupportViewModel.kt:76:33 Unresolved reference 'it'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/support/SupportViewModel.kt:76:35 Unresolved reference 'it'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/support/SupportViewModel.kt:77:21 No parameter with name 'onFailure' found.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/support/SupportViewModel.kt:77:21 No value passed for parameter 'initial'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/support/SupportViewModel.kt:77:21 No value passed for parameter 'operation'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/support/SupportViewModel.kt:372:34 Unresolved reference 'data'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/support/SupportViewModel.kt:377:38 Unresolved reference 'data'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/support/SupportViewModel.kt:398:53 Unresolved reference 'data'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/ContactSupportScreen.kt:162:28 Smart cast to 'com.example.liftrix.ui.settings.support.SupportUiState.Success' is impossible, because 'uiState' is a delegated property.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/ContactSupportScreen.kt:198:29 Smart cast to 'com.example.liftrix.ui.settings.support.SupportUiState.Error' is impossible, because 'uiState' is a delegated property.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/ContactSupportScreen.kt:199:28 Smart cast to 'com.example.liftrix.ui.settings.support.SupportUiState.Error' is impossible, because 'uiState' is a delegated property.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/ContactSupportScreen.kt:199:28 Argument type mismatch: actual type is 'com.example.liftrix.ui.settings.support.SupportUiState.Data?', but 'com.example.liftrix.ui.settings.support.SupportUiState.Data' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportTicketScreen.kt:150:73 Unresolved reference 'format'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportTicketScreen.kt:170:58 Unresolved reference 'attachments'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportTicketScreen.kt:174:42 Unresolved reference 'messages'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportTicketScreen.kt:176:55 Unresolved reference 'content'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportTicketScreen.kt:177:61 Unresolved reference 'isFromSupport'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportTicketScreen.kt:178:57 Unresolved reference 'timestamp'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportTicketScreen.kt:179:59 Unresolved reference 'attachments'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportTicketScreen.kt:185:87 Unresolved reference 'SupportTicketStatus'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportTicketScreen.kt:186:87 Unresolved reference 'SupportTicketStatus'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportTicketScreen.kt:215:70 Unresolved reference 'AddReply'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportTicketScreen.kt:292:54 Unresolved reference 'SupportTicketStatus'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportTicketScreen.kt:294:49 'when' expression must be exhaustive. Add an 'else' branch.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportTicketScreen.kt:295:50 Unresolved reference 'SupportTicketStatus'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportTicketScreen.kt:300:50 Unresolved reference 'SupportTicketStatus'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportTicketScreen.kt:305:50 Unresolved reference 'SupportTicketStatus'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportTicketScreen.kt:310:50 Unresolved reference 'SupportTicketStatus'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportTicketScreen.kt:367:38 Unresolved reference 'format'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportViewModel.kt:79:42 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'kotlin.String?'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportViewModel.kt:79:43 No value passed for parameter 'index'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportViewModel.kt:90:54 Argument type mismatch: actual type is 'kotlin.Char', but 'kotlin.String' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportViewModel.kt:96:35 Argument type mismatch: actual type is 'kotlin.Unit', but 'com.example.liftrix.ui.settings.support.SupportUiState' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportViewModel.kt:96:50 Classifier 'data class Empty : SupportUiState' does not have a companion object, so it cannot be used as an expression.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportViewModel.kt:354:34 Unresolved reference 'data'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportViewModel.kt:359:38 Unresolved reference 'data'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/support/SupportViewModel.kt:380:53 Unresolved reference 'data'.

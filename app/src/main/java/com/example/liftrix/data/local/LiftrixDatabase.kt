@@ -58,8 +58,15 @@ import com.example.liftrix.data.local.dao.QRCodeSessionDao
 import com.example.liftrix.data.local.dao.PRNotificationDao
 import com.example.liftrix.data.local.dao.GymBuddyActivityDao
 import com.example.liftrix.data.local.dao.ContentReportsDao
+import com.example.liftrix.data.local.dao.DataExportDao
+import com.example.liftrix.data.local.dao.DataImportDao
+import com.example.liftrix.data.local.dao.UserAccountDao
+import com.example.liftrix.data.local.dao.HelpArticleDao
+import com.example.liftrix.data.local.dao.SupportTicketDao
+import com.example.liftrix.data.local.dao.AppConfigDao
 
 import com.example.liftrix.data.local.entity.UserProfileEntity
+import com.example.liftrix.data.local.entity.UserAccountEntity
 import com.example.liftrix.data.local.entity.FolderEntity
 import com.example.liftrix.data.local.entity.SettingsEntity
 import com.example.liftrix.data.local.entity.SubscriptionEntity
@@ -109,6 +116,11 @@ import com.example.liftrix.data.local.entity.QRCodeSessionEntity
 import com.example.liftrix.data.local.entity.PRNotificationEntity
 import com.example.liftrix.data.local.entity.GymBuddyActivityEntity
 import com.example.liftrix.data.local.entity.ContentReportEntity
+import com.example.liftrix.data.local.entity.DataExportEntity
+import com.example.liftrix.data.local.entity.DataImportEntity
+import com.example.liftrix.data.local.entity.HelpArticleEntity
+import com.example.liftrix.data.local.entity.SupportTicketEntity
+import com.example.liftrix.data.local.entity.AppConfigEntity
 
 
 
@@ -116,6 +128,7 @@ import com.example.liftrix.data.local.entity.ContentReportEntity
     entities = [
         WorkoutEntity::class,
         UserProfileEntity::class,
+        UserAccountEntity::class,
         CustomExerciseEntity::class,
         WorkoutTemplateEntity::class,
         ExerciseLibraryEntity::class,
@@ -164,8 +177,13 @@ import com.example.liftrix.data.local.entity.ContentReportEntity
         PRNotificationEntity::class,
         GymBuddyActivityEntity::class,
         ContentReportEntity::class,
+        DataExportEntity::class,
+        DataImportEntity::class,
+        HelpArticleEntity::class,
+        SupportTicketEntity::class,
+        AppConfigEntity::class,
     ],
-    version = 50,
+    version = 53,
     exportSchema = true
 )
 @TypeConverters(
@@ -180,6 +198,7 @@ abstract class LiftrixDatabase : RoomDatabase() {
     
     abstract fun workoutDao(): WorkoutDao
     abstract fun userProfileDao(): UserProfileDao
+    abstract fun userAccountDao(): UserAccountDao
     abstract fun customExerciseDao(): CustomExerciseDao
     abstract fun workoutTemplateDao(): WorkoutTemplateDao
     abstract fun exerciseLibraryDao(): ExerciseLibraryDao
@@ -227,4 +246,9 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun prNotificationDao(): PRNotificationDao
     abstract fun gymBuddyActivityDao(): GymBuddyActivityDao
     abstract fun contentReportsDao(): ContentReportsDao
+    abstract fun dataExportDao(): DataExportDao
+    abstract fun dataImportDao(): DataImportDao
+    abstract fun helpArticleDao(): HelpArticleDao
+    abstract fun supportTicketDao(): SupportTicketDao
+    abstract fun appConfigDao(): AppConfigDao
 }

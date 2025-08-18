@@ -228,22 +228,4 @@ data class Exercise(
     )
 }
 
-/**
- * Enum representing different exercise categories
- */
-@Parcelize
-@Serializable
-enum class ExerciseCategory(val displayName: String) : Parcelable {
-    CHEST("Chest"),
-    BACK("Back"),
-    SHOULDERS("Shoulders"),
-    ARMS("Arms"),
-    TRICEPS("Triceps"),
-    BICEPS("Biceps"),
-    LEGS("Legs"),
-    GLUTES("Glutes"),
-    CORE("Core"),
-    CARDIO("Cardio"),
-    FULL_BODY("Full Body"),
-    OTHER("Other")
-}
+// ExerciseCategory moved to its own file - ExerciseCategory.kt

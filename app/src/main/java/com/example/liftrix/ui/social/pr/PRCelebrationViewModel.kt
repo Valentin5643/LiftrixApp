@@ -6,6 +6,7 @@ import com.example.liftrix.domain.model.social.PRNotification
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.domain.repository.PRNotificationRepository
+import com.example.liftrix.ui.common.event.ViewModelEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -267,7 +268,7 @@ data class PRCelebrationUiState(
 /**
  * Events that can be triggered from the PR celebration dialog UI
  */
-sealed class PRCelebrationEvent {
+sealed class PRCelebrationEvent : ViewModelEvent {
     data class LoadNotification(val notification: PRNotification) : PRCelebrationEvent()
     data class AddReaction(val reaction: String) : PRCelebrationEvent()
     object ViewWorkout : PRCelebrationEvent()

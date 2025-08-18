@@ -44,10 +44,20 @@ import java.time.LocalDateTime
  * - Navigation integration with proper callbacks
  * - Logout confirmation dialog
  * - Analytics tracking for user interactions
+ * - Account management navigation (SPEC-20250116-account-management)
  * 
  * @param onNavigateBack Callback to navigate back to previous screen
  * @param onNavigateToProfile Callback to navigate to profile editing screen
  * @param onNavigateToAuth Callback to navigate to authentication screen after logout
+ * @param onNavigateToEmailChange Callback to navigate to email change screen
+ * @param onNavigateToPasswordChange Callback to navigate to password change screen
+ * @param onNavigateToUsernameChange Callback to navigate to username change screen
+ * @param onNavigateToAccountDeletion Callback to navigate to account deletion flow
+ * @param onNavigateToHelpCenter Callback to navigate to help center screen
+ * @param onNavigateToContactSupport Callback to navigate to contact support screen
+ * @param onNavigateToAbout Callback to navigate to about screen
+ * @param onNavigateToPrivacyPolicy Callback to navigate to privacy policy screen
+ * @param onNavigateToTermsOfService Callback to navigate to terms of service screen
  * @param modifier Modifier for styling the screen
  * @param viewModel SettingsViewModel for state management (injectable for testing)
  */
@@ -61,6 +71,15 @@ fun SettingsScreen(
     onNavigateToAnomalyDashboard: (() -> Unit)? = null,
     onNavigateToWidgetSettings: (() -> Unit)? = null,
     onNavigateToNotifications: (() -> Unit)? = null,
+    onNavigateToEmailChange: (() -> Unit)? = null,
+    onNavigateToPasswordChange: (() -> Unit)? = null,
+    onNavigateToUsernameChange: (() -> Unit)? = null,
+    onNavigateToAccountDeletion: (() -> Unit)? = null,
+    onNavigateToHelpCenter: (() -> Unit)? = null,
+    onNavigateToContactSupport: (() -> Unit)? = null,
+    onNavigateToAbout: (() -> Unit)? = null,
+    onNavigateToPrivacyPolicy: (() -> Unit)? = null,
+    onNavigateToTermsOfService: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -80,6 +99,15 @@ fun SettingsScreen(
         val stableOnNavigateToAnomalyDashboard = remember(onNavigateToAnomalyDashboard) { onNavigateToAnomalyDashboard }
         val stableOnNavigateToWidgetSettings = remember(onNavigateToWidgetSettings) { onNavigateToWidgetSettings }
         val stableOnNavigateToNotifications = remember(onNavigateToNotifications) { onNavigateToNotifications }
+        val stableOnNavigateToEmailChange = remember(onNavigateToEmailChange) { onNavigateToEmailChange }
+        val stableOnNavigateToPasswordChange = remember(onNavigateToPasswordChange) { onNavigateToPasswordChange }
+        val stableOnNavigateToUsernameChange = remember(onNavigateToUsernameChange) { onNavigateToUsernameChange }
+        val stableOnNavigateToAccountDeletion = remember(onNavigateToAccountDeletion) { onNavigateToAccountDeletion }
+        val stableOnNavigateToHelpCenter = remember(onNavigateToHelpCenter) { onNavigateToHelpCenter }
+        val stableOnNavigateToContactSupport = remember(onNavigateToContactSupport) { onNavigateToContactSupport }
+        val stableOnNavigateToAbout = remember(onNavigateToAbout) { onNavigateToAbout }
+        val stableOnNavigateToPrivacyPolicy = remember(onNavigateToPrivacyPolicy) { onNavigateToPrivacyPolicy }
+        val stableOnNavigateToTermsOfService = remember(onNavigateToTermsOfService) { onNavigateToTermsOfService }
         
         // Optimized LaunchedEffect with stable key
         LaunchedEffect(uiState.isSigningOut, uiState.error) {
@@ -131,6 +159,10 @@ fun SettingsScreen(
                             onNavigateToAnomalyDashboard = stableOnNavigateToAnomalyDashboard,
                             onNavigateToWidgetSettings = stableOnNavigateToWidgetSettings,
                             onNavigateToNotifications = stableOnNavigateToNotifications,
+                            onNavigateToEmailChange = stableOnNavigateToEmailChange,
+                            onNavigateToPasswordChange = stableOnNavigateToPasswordChange,
+                            onNavigateToUsernameChange = stableOnNavigateToUsernameChange,
+                            onNavigateToAccountDeletion = stableOnNavigateToAccountDeletion,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -168,6 +200,10 @@ fun SettingsScreen(
  * @param uiState Current settings UI state
  * @param onEvent Event handler for settings actions
  * @param onNavigateToProfile Callback to navigate to profile editing
+ * @param onNavigateToEmailChange Callback to navigate to email change screen
+ * @param onNavigateToPasswordChange Callback to navigate to password change screen
+ * @param onNavigateToUsernameChange Callback to navigate to username change screen
+ * @param onNavigateToAccountDeletion Callback to navigate to account deletion flow
  * @param modifier Modifier for styling the content
  */
 @Composable
@@ -179,6 +215,10 @@ private fun SettingsContent(
     onNavigateToAnomalyDashboard: (() -> Unit)? = null,
     onNavigateToWidgetSettings: (() -> Unit)? = null,
     onNavigateToNotifications: (() -> Unit)? = null,
+    onNavigateToEmailChange: (() -> Unit)? = null,
+    onNavigateToPasswordChange: (() -> Unit)? = null,
+    onNavigateToUsernameChange: (() -> Unit)? = null,
+    onNavigateToAccountDeletion: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     // Stable callbacks and data to prevent unnecessary recompositions
@@ -236,7 +276,11 @@ private fun SettingsContent(
                     onNavigateToAnomalyDetection = onNavigateToAnomalyDetection,
                     onNavigateToAnomalyDashboard = onNavigateToAnomalyDashboard,
                     onNavigateToWidgetSettings = onNavigateToWidgetSettings,
-                    onNavigateToNotifications = stableOnNavigateToNotifications
+                    onNavigateToNotifications = stableOnNavigateToNotifications,
+                    onNavigateToEmailChange = onNavigateToEmailChange,
+                    onNavigateToPasswordChange = onNavigateToPasswordChange,
+                    onNavigateToUsernameChange = onNavigateToUsernameChange,
+                    onNavigateToAccountDeletion = onNavigateToAccountDeletion
                 )
             }
         }
@@ -271,6 +315,10 @@ private fun SettingsContent(
  * @param category The settings category to display
  * @param uiState Current settings UI state
  * @param onEvent Event handler for settings actions
+ * @param onNavigateToEmailChange Callback to navigate to email change screen
+ * @param onNavigateToPasswordChange Callback to navigate to password change screen
+ * @param onNavigateToUsernameChange Callback to navigate to username change screen
+ * @param onNavigateToAccountDeletion Callback to navigate to account deletion flow
  */
 @Composable
 private fun SettingsCategoryContent(
@@ -280,7 +328,11 @@ private fun SettingsCategoryContent(
     onNavigateToAnomalyDetection: (() -> Unit)? = null,
     onNavigateToAnomalyDashboard: (() -> Unit)? = null,
     onNavigateToWidgetSettings: (() -> Unit)? = null,
-    onNavigateToNotifications: (() -> Unit)? = null
+    onNavigateToNotifications: (() -> Unit)? = null,
+    onNavigateToEmailChange: (() -> Unit)? = null,
+    onNavigateToPasswordChange: (() -> Unit)? = null,
+    onNavigateToUsernameChange: (() -> Unit)? = null,
+    onNavigateToAccountDeletion: (() -> Unit)? = null
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -307,7 +359,11 @@ private fun SettingsCategoryContent(
             "privacy" -> {
                 PrivacySettings(
                     uiState = uiState,
-                    onEvent = onEvent
+                    onEvent = onEvent,
+                    onNavigateToEmailChange = onNavigateToEmailChange,
+                    onNavigateToPasswordChange = onNavigateToPasswordChange,
+                    onNavigateToUsernameChange = onNavigateToUsernameChange,
+                    onNavigateToAccountDeletion = onNavigateToAccountDeletion
                 )
             }
             
@@ -482,38 +538,107 @@ private fun SubscriptionSettings(
 }
 
 /**
- * Privacy settings category content.
+ * Privacy settings category content with account management options.
+ * Updated for SPEC-20250116-account-management implementation.
  */
 @Composable
 private fun PrivacySettings(
     uiState: SettingsState,
-    onEvent: (SettingsEvent) -> Unit
+    onEvent: (SettingsEvent) -> Unit,
+    onNavigateToEmailChange: (() -> Unit)? = null,
+    onNavigateToPasswordChange: (() -> Unit)? = null,
+    onNavigateToUsernameChange: (() -> Unit)? = null,
+    onNavigateToAccountDeletion: (() -> Unit)? = null
 ) {
-    // Stable callback to prevent unnecessary recompositions
+    // Stable callbacks to prevent unnecessary recompositions
     val stableOnEvent = remember(onEvent) { onEvent }
+    val stableOnNavigateToEmailChange = remember(onNavigateToEmailChange) { onNavigateToEmailChange }
+    val stableOnNavigateToPasswordChange = remember(onNavigateToPasswordChange) { onNavigateToPasswordChange }
+    val stableOnNavigateToUsernameChange = remember(onNavigateToUsernameChange) { onNavigateToUsernameChange }
+    val stableOnNavigateToAccountDeletion = remember(onNavigateToAccountDeletion) { onNavigateToAccountDeletion }
     
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // Account Management Section
+        Text(
+            text = "Account Management",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(vertical = 4.dp)
+        )
+        
+        SettingsNavigationItem(
+            title = "Change Email",
+            subtitle = "Update your email address",
+            icon = Icons.Default.Email,
+            onClick = { 
+                stableOnEvent(SettingsEvent.NavigateToEmailChange)
+                stableOnNavigateToEmailChange?.invoke()
+            }
+        )
+        
+        SettingsNavigationItem(
+            title = "Change Password",
+            subtitle = "Update your account password",
+            icon = Icons.Default.Lock,
+            onClick = { 
+                stableOnEvent(SettingsEvent.NavigateToPasswordChange)
+                stableOnNavigateToPasswordChange?.invoke()
+            }
+        )
+        
+        SettingsNavigationItem(
+            title = "Change Username",
+            subtitle = "Update your username",
+            icon = Icons.Default.Person,
+            onClick = { 
+                stableOnEvent(SettingsEvent.NavigateToUsernameChange)
+                stableOnNavigateToUsernameChange?.invoke()
+            }
+        )
+        
+        // Privacy & Data Section
+        Text(
+            text = "Privacy & Data",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
+        )
+        
         SettingsNavigationItem(
             title = "Privacy Policy",
             subtitle = "View our privacy policy",
-            icon = Icons.Default.Policy,
+            icon = Icons.Default.Info,
             onClick = { stableOnEvent(SettingsEvent.NavigateToPrivacy) }
         )
         
         SettingsNavigationItem(
             title = "Export Data",
             subtitle = "Download your workout data",
-            icon = Icons.Default.Download,
+            icon = Icons.Default.Assignment,
             onClick = { stableOnEvent(SettingsEvent.ExportDataRequested) }
+        )
+        
+        // Danger Zone Section
+        Text(
+            text = "Danger Zone",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
         )
         
         SettingsNavigationItem(
             title = "Delete Account",
             subtitle = "Permanently delete your account",
             icon = Icons.Default.Delete,
-            onClick = { stableOnEvent(SettingsEvent.DeleteAccountRequested) }
+            onClick = { 
+                stableOnEvent(SettingsEvent.NavigateToAccountDeletion)
+                stableOnNavigateToAccountDeletion?.invoke()
+            }
         )
     }
 }

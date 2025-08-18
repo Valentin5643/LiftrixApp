@@ -1,0 +1,3 @@
+@echo off
+echo Running quick Kotlin compilation check...
+gradlew.bat compileDebugKotlin --no-daemon --console=plain 2>&1

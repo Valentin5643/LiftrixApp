@@ -713,3 +713,74 @@ fun NavController.getCurrentLiftrixRoute(): LiftrixRoute? {
         else -> null // For parameterized routes like Profile(userId), EditWorkout(workoutId), EditSession(sessionId), would need more complex logic
     } as LiftrixRoute?
 }
+
+// MARK: - Account Management Navigation (Added for SPEC-20250116-account-management)
+
+/**
+ * Navigate to email change screen
+ */
+fun NavController.navigateToEmailChange() {
+    navigate(LiftrixRoute.EmailChange)
+}
+
+/**
+ * Navigate to password change screen
+ */
+fun NavController.navigateToPasswordChange() {
+    navigate(LiftrixRoute.PasswordChange)
+}
+
+/**
+ * Navigate to username change screen
+ */
+fun NavController.navigateToUsernameChange() {
+    navigate(LiftrixRoute.UsernameChange)
+}
+
+/**
+ * Navigate to account deletion flow
+ */
+fun NavController.navigateToAccountDeletion() {
+    navigate(LiftrixRoute.AccountDeletion)
+}
+
+/**
+ * Navigate to email change screen with vertical transition animation
+ */
+fun NavController.navigateToEmailChangeAnimated() {
+    navigateAnimated(
+        route = LiftrixRoute.EmailChange,
+        transitionType = TransitionType.VERTICAL
+    )
+}
+
+/**
+ * Navigate to password change screen with vertical transition animation
+ */
+fun NavController.navigateToPasswordChangeAnimated() {
+    navigateAnimated(
+        route = LiftrixRoute.PasswordChange,
+        transitionType = TransitionType.VERTICAL
+    )
+}
+
+/**
+ * Navigate to username change screen with vertical transition animation
+ */
+fun NavController.navigateToUsernameChangeAnimated() {
+    navigateAnimated(
+        route = LiftrixRoute.UsernameChange,
+        transitionType = TransitionType.VERTICAL
+    )
+}
+
+/**
+ * Navigate to account deletion flow with modal transition animation
+ * Modal animation emphasizes the serious nature of account deletion
+ */
+fun NavController.navigateToAccountDeletionAnimated() {
+    navigateAnimated(
+        route = LiftrixRoute.AccountDeletion,
+        transitionType = TransitionType.MODAL
+    )
+}

@@ -11,6 +11,7 @@ import com.example.liftrix.domain.repository.social.GymBuddyRepository
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.domain.service.QRCodeService
 import com.example.liftrix.domain.usecase.social.GetSocialProfileUseCase
+import com.example.liftrix.ui.common.event.ViewModelEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -634,7 +635,7 @@ data class GymBuddyUiState(
 /**
  * Events that can be triggered from the gym buddy screen UI
  */
-sealed class GymBuddyEvent {
+sealed class GymBuddyEvent : ViewModelEvent {
     object LoadGymBuddies : GymBuddyEvent()
     object RefreshData : GymBuddyEvent()
     object GenerateQrCode : GymBuddyEvent()

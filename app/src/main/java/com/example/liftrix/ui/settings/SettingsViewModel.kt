@@ -127,6 +127,10 @@ class SettingsViewModel @Inject constructor(
             is SettingsEvent.NavigateToAnomalyDashboard -> handleAnomalyDashboardNavigation()
             is SettingsEvent.NavigateToWidgetSettings -> handleWidgetSettingsNavigation()
             is SettingsEvent.NavigateToNotifications -> handleNotificationsNavigation()
+            is SettingsEvent.NavigateToEmailChange -> handleEmailChangeNavigation()
+            is SettingsEvent.NavigateToPasswordChange -> handlePasswordChangeNavigation()
+            is SettingsEvent.NavigateToUsernameChange -> handleUsernameChangeNavigation()
+            is SettingsEvent.NavigateToAccountDeletion -> handleAccountDeletionNavigation()
             is SettingsEvent.SignOutRequested -> requestSignOut()
             is SettingsEvent.SignOutConfirmed -> confirmSignOut()
             is SettingsEvent.SignOutCancelled -> cancelSignOut()
@@ -416,6 +420,44 @@ class SettingsViewModel @Inject constructor(
      */
     private fun handleNotificationsNavigation() {
         trackNavigationEvent("notifications")
+        // Navigation will be handled by the UI layer
+    }
+
+    // Account Management Navigation Handlers (Added for SPEC-20250116-account-management)
+    
+    /**
+     * Handles navigation to email change screen.
+     * Tracks analytics event for navigation tracking.
+     */
+    private fun handleEmailChangeNavigation() {
+        trackNavigationEvent("email_change")
+        // Navigation will be handled by the UI layer
+    }
+
+    /**
+     * Handles navigation to password change screen.
+     * Tracks analytics event for navigation tracking.
+     */
+    private fun handlePasswordChangeNavigation() {
+        trackNavigationEvent("password_change")
+        // Navigation will be handled by the UI layer
+    }
+
+    /**
+     * Handles navigation to username change screen.
+     * Tracks analytics event for navigation tracking.
+     */
+    private fun handleUsernameChangeNavigation() {
+        trackNavigationEvent("username_change")
+        // Navigation will be handled by the UI layer
+    }
+
+    /**
+     * Handles navigation to account deletion flow.
+     * Tracks analytics event for navigation tracking.
+     */
+    private fun handleAccountDeletionNavigation() {
+        trackNavigationEvent("account_deletion")
         // Navigation will be handled by the UI layer
     }
 
