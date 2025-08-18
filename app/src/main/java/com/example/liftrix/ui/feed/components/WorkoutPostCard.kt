@@ -26,8 +26,10 @@ import com.example.liftrix.R
 import com.example.liftrix.domain.model.social.MediaItem
 import com.example.liftrix.domain.model.social.MediaType
 import com.example.liftrix.domain.model.social.WorkoutPost
+import com.example.liftrix.domain.model.WeightUnit
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.theme.LiftrixSpacing
+import com.example.liftrix.ui.theme.rememberWeightUnitManager
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import java.text.SimpleDateFormat
 import java.util.*
@@ -260,9 +262,16 @@ private fun WorkoutSummaryCard(
                         icon = Icons.Outlined.Schedule
                     )
                     
+                    val weightUnitManager = rememberWeightUnitManager()
+                    val volumeText = post.totalVolume?.let { volume ->
+                        // Assuming totalVolume is stored in the posting user's preferred unit
+                        // For social posts, we might want to show in viewer's preferred unit
+                        weightUnitManager?.formatWeightCompact(volume, WeightUnit.POUNDS) ?: "${volume.toInt()} lbs"
+                    } ?: "0"
+                    
                     WorkoutStat(
                         label = "Volume",
-                        value = "${post.totalVolume?.toInt() ?: 0} lbs",
+                        value = volumeText,
                         icon = Icons.Outlined.FitnessCenter
                     )
                     

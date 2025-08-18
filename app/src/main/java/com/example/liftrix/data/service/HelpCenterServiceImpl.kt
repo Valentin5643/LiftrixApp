@@ -2,6 +2,7 @@ package com.example.liftrix.data.service
 
 import com.example.liftrix.data.local.dao.HelpArticleDao
 import com.example.liftrix.data.local.dao.AppConfigDao
+import com.example.liftrix.data.local.entity.HelpArticleEntity
 import com.example.liftrix.data.mapper.HelpArticleMapper.toDomainModel
 import com.example.liftrix.data.mapper.HelpArticleMapper.toDomainModels
 import com.example.liftrix.data.remote.config.RemoteConfigManager
@@ -14,6 +15,8 @@ import com.example.liftrix.domain.service.HelpCenterService
 import com.example.liftrix.domain.service.HelpContentStatistics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONException
+import org.json.JSONObject
 import timber.log.Timber
 import java.time.Instant
 import javax.inject.Inject
@@ -347,15 +350,49 @@ class HelpCenterServiceImpl @Inject constructor(
      * Updates help articles from JSON content
      */
     private suspend fun updateHelpArticlesFromJson(contentJson: String) {
-        // In a real implementation, this would parse the JSON and update articles
-        // For now, we'll just log that we received content
-        Timber.d("Received help content JSON: ${contentJson.length} characters")
-        
-        // TODO: Implement JSON parsing and article updates
-        // This would involve:
-        // 1. Parse JSON to article objects
-        // 2. Clear existing articles or update individually
-        // 3. Insert new articles into database
+        try {
+            Timber.d("Parsing help content JSON: ${contentJson.length} characters")
+            
+            // Parse JSON to article objects
+            val jsonObject = JSONObject(contentJson)
+            val articlesArray = jsonObject.optJSONArray("articles") ?: return
+            
+            val parsedArticles = mutableListOf<HelpArticleEntity>()
+            
+            for (i in 0 until articlesArray.length()) {
+                val articleJson = articlesArray.getJSONObject(i)
+                
+                val article = HelpArticleEntity(
+                    articleId = articleJson.getString("id"),
+                    category = articleJson.getString("category"),
+                    title = articleJson.getString("title"),
+                    content = articleJson.getString("content"),
+                    keywords = articleJson.optString("keywords", ""),
+                    viewCount = 0,
+                    helpfulCount = 0,
+                    notHelpfulCount = 0,
+                    lastUpdated = Instant.now(),
+                    version = articleJson.optInt("version", 1),
+                    isFeatured = articleJson.optBoolean("featured", false),
+                    sortOrder = articleJson.optInt("sortOrder", 0)
+                )
+                
+                parsedArticles.add(article)
+            }
+            
+            // Update database with new articles
+            withContext(Dispatchers.IO) {
+                // Use transaction to ensure atomic update
+                helpArticleDao.updateArticlesFromRemote(parsedArticles)
+            }
+            
+            Timber.d("Successfully updated ${parsedArticles.size} help articles from remote")
+            
+        } catch (e: JSONException) {
+            Timber.e(e, "Error parsing help content JSON")
+        } catch (e: Exception) {
+            Timber.e(e, "Error updating help content from remote")
+        }
     }
     
     /**

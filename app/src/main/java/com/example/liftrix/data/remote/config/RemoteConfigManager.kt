@@ -74,7 +74,9 @@ class RemoteConfigManager @Inject constructor(
             SUPPORT_CATEGORIES_JSON to "[]",
             SUPPORT_FAQ_JSON to "[]",
             PRIVACY_POLICY_VERSION to "1.0",
-            TERMS_VERSION to "1.0"
+            TERMS_VERSION to "1.0",
+            PRIVACY_POLICY_URL to "",
+            TERMS_OF_SERVICE_URL to ""
         )
     }
     

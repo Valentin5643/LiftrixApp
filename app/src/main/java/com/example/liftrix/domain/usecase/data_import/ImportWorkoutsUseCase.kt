@@ -1,4 +1,4 @@
-package com.example.liftrix.domain.usecase.import
+package com.example.liftrix.domain.usecase.data_import
 
 import android.net.Uri
 import com.example.liftrix.data.local.dao.DataImportDao

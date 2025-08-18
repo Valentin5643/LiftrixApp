@@ -3,6 +3,11 @@ package com.example.liftrix.di
 import com.example.liftrix.data.export.AnalyticsExporter
 import com.example.liftrix.data.export.CsvExporter
 import com.example.liftrix.data.export.PdfExporter
+import com.example.liftrix.data.local.dao.DataExportDao
+import com.example.liftrix.data.local.dao.DataImportDao
+import com.example.liftrix.data.local.dao.WorkoutDao
+import com.example.liftrix.domain.usecase.export.ExportWorkoutsUseCase
+import com.example.liftrix.domain.usecase.data_import.ImportWorkoutsUseCase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -63,4 +68,60 @@ object ExportModule {
         pdfExporter: PdfExporter,
         csvExporter: CsvExporter
     ): AnalyticsExporter = AnalyticsExporter(pdfExporter, csvExporter)
+    
+    /**
+     * Provides ExportWorkoutsUseCase for exporting workout data
+     * 
+     * @param workoutDao DAO for accessing workout data
+     * @param dataExportDao DAO for managing export records
+     * @return ExportWorkoutsUseCase instance for handling exports
+     */
+    @Provides
+    @Singleton
+    fun provideExportWorkoutsUseCase(
+        workoutDao: WorkoutDao,
+        dataExportDao: DataExportDao
+    ): ExportWorkoutsUseCase = ExportWorkoutsUseCase(workoutDao, dataExportDao)
+    
+    /**
+     * Provides ValidateImportUseCase for validating import data
+     * 
+     * @param exerciseMappingService Service for mapping exercises
+     * @return ValidateImportUseCase instance for validation
+     */
+    @Provides
+    @Singleton
+    fun provideValidateImportUseCase(
+        exerciseMappingService: com.example.liftrix.domain.service.ExerciseMappingService
+    ): com.example.liftrix.domain.usecase.data_import.ValidateImportUseCase = 
+        com.example.liftrix.domain.usecase.data_import.ValidateImportUseCase(exerciseMappingService)
+    
+    /**
+     * Provides ImportWorkoutsUseCase for importing workout data
+     * 
+     * @param formatDetector Service for detecting file formats
+     * @param parserFactory Factory for creating workout parsers
+     * @param validateImportUseCase Use case for validating imports
+     * @param exerciseMappingService Service for mapping exercises
+     * @param workoutDao DAO for storing imported workout data
+     * @param dataImportDao DAO for managing import records
+     * @return ImportWorkoutsUseCase instance for handling imports
+     */
+    @Provides
+    @Singleton
+    fun provideImportWorkoutsUseCase(
+        formatDetector: com.example.liftrix.domain.service.parser.FormatDetector,
+        parserFactory: com.example.liftrix.domain.service.parser.WorkoutParserFactory,
+        validateImportUseCase: com.example.liftrix.domain.usecase.data_import.ValidateImportUseCase,
+        exerciseMappingService: com.example.liftrix.domain.service.ExerciseMappingService,
+        workoutDao: WorkoutDao,
+        dataImportDao: DataImportDao
+    ): ImportWorkoutsUseCase = ImportWorkoutsUseCase(
+        formatDetector = formatDetector,
+        parserFactory = parserFactory,
+        validateImportUseCase = validateImportUseCase,
+        exerciseMappingService = exerciseMappingService,
+        workoutDao = workoutDao,
+        dataImportDao = dataImportDao
+    )
 }

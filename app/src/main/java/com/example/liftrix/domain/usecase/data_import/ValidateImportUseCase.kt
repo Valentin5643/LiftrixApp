@@ -1,4 +1,4 @@
-package com.example.liftrix.domain.usecase.import
+package com.example.liftrix.domain.usecase.data_import
 
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching

@@ -20,22 +20,35 @@ class HomeFeedManager @Inject constructor() {
     
     /**
      * Loads feed workouts.
+     * @param userId The current user's ID
+     * @param includeOthers Whether to include workouts from other users (not just the current user)
      */
-    fun loadFeedWorkouts(userId: String): Flow<LiftrixResult<FeedState>> = flow {
+    fun loadFeedWorkouts(userId: String, includeOthers: Boolean = true): Flow<LiftrixResult<FeedState>> = flow {
+        // In a real implementation, this would filter based on includeOthers
+        // For now, returning empty feed to maintain compatibility
         emit(LiftrixResult.success(FeedState.Success(workouts = emptyList(), hasMore = false)))
     }
     
     /**
      * Loads more feed workouts for pagination.
+     * @param userId The current user's ID
+     * @param currentWorkouts The currently loaded workouts
+     * @param includeOthers Whether to include workouts from other users
      */
-    fun loadMoreFeedWorkouts(userId: String, currentWorkouts: List<FeedWorkout>): Flow<LiftrixResult<FeedState>> = flow {
+    fun loadMoreFeedWorkouts(
+        userId: String, 
+        currentWorkouts: List<FeedWorkout>,
+        includeOthers: Boolean = true
+    ): Flow<LiftrixResult<FeedState>> = flow {
         emit(LiftrixResult.success(FeedState.Success(workouts = currentWorkouts, hasMore = false)))
     }
     
     /**
      * Refreshes the feed.
+     * @param userId The current user's ID
+     * @param includeOthers Whether to include workouts from other users
      */
-    fun refreshFeed(userId: String): Flow<LiftrixResult<FeedState>> = flow {
+    fun refreshFeed(userId: String, includeOthers: Boolean = true): Flow<LiftrixResult<FeedState>> = flow {
         emit(LiftrixResult.success(FeedState.Success(workouts = emptyList(), hasMore = false)))
     }
     

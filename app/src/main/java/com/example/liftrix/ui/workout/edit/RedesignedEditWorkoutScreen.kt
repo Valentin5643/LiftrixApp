@@ -22,8 +22,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.model.Exercise
+import com.example.liftrix.domain.model.WeightUnit
 import com.example.liftrix.ui.common.state.EditWorkoutUiState
+import com.example.liftrix.ui.common.components.WeightDisplay
 import com.example.liftrix.ui.theme.LiftrixColorsV2
+import com.example.liftrix.ui.theme.rememberWeightUnitManager
+import com.example.liftrix.ui.theme.rememberFormattedWeight
 import com.example.liftrix.ui.workout.components.*
 import timber.log.Timber
 import java.time.format.DateTimeFormatter
@@ -292,14 +296,28 @@ private fun EditWorkoutContent(
                 var showMenu by remember { mutableStateOf(false) }
                 var showNotesDialog by remember { mutableStateOf(false) }
                 
+                val weightUnitManager = rememberWeightUnitManager()
+                
                 RedesignedExerciseCard(
                     exerciseName = exercise.libraryExercise.name,
                     exerciseSubtitle = exercise.libraryExercise.primaryMuscleGroup.name,
                     sets = exercise.sets.map { set ->
+                        // Use reactive weight display that respects user preferences
+                        val weightValue = set.weight?.kilograms ?: 0.0
+                        val displayWeight = weightUnitManager?.convertForDisplay(weightValue, WeightUnit.KILOGRAMS) ?: weightValue
+                        val weightSymbol = weightUnitManager?.getCurrentUnitSymbol() ?: "kg"
+                        val previousValueText = if (set.weight != null) {
+                            weightUnitManager?.formatWeightCompact(weightValue, WeightUnit.KILOGRAMS)
+                                ?.let { "$it x ${set.reps?.count ?: 0}" }
+                                ?: "${weightValue.toInt()} kg x ${set.reps?.count ?: 0}"
+                        } else {
+                            "0 $weightSymbol x ${set.reps?.count ?: 0}"
+                        }
+                        
                         RedesignedSetData(
-                            weight = set.weight?.kilograms?.toString() ?: "",
+                            weight = if (weightValue > 0) displayWeight.toString() else "",
                             reps = set.reps?.count?.toString() ?: "",
-                            previousValue = "${set.weight?.kilograms ?: 0} x ${set.reps?.count ?: 0}",
+                            previousValue = previousValueText,
                             isCompleted = set.completedAt != null
                         )
                     },

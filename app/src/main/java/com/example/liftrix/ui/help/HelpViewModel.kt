@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.help.HelpArticle
 import com.example.liftrix.domain.model.help.HelpCategory
+import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.ui.common.state.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
@@ -34,6 +35,7 @@ import javax.inject.Inject
 @OptIn(FlowPreview::class)
 @HiltViewModel
 class HelpViewModel @Inject constructor(
+    private val analyticsService: AnalyticsService
     // Add use cases here when they're available
 ) : ViewModel() {
     
@@ -73,6 +75,7 @@ class HelpViewModel @Inject constructor(
             is HelpEvent.ViewArticle -> navigateToArticle(event.articleId)
             is HelpEvent.ViewTicket -> navigateToSupport()
             is HelpEvent.MarkArticleHelpful -> markArticleHelpful(event.articleId, event.helpful)
+            is HelpEvent.ShareArticle -> trackArticleShare(event.articleId)
             is HelpEvent.Retry -> retry()
         }
     }
@@ -310,6 +313,27 @@ _uiState.value = UiState.Error(error)
             } catch (e: Exception) {
                 emitSideEffect(HelpSideEffect.ShowError("Failed to submit feedback"))
                 Timber.e(e, "Failed to mark article $articleId as helpful")
+            }
+        }
+    }
+    
+    /**
+     * Tracks when an article is shared
+     */
+    private fun trackArticleShare(articleId: String) {
+        viewModelScope.launch {
+            try {
+                // Track analytics event for article sharing
+                analyticsService.logEvent(
+                    eventName = "help_article_shared",
+                    parameters = mapOf(
+                        "article_id" to articleId,
+                        "timestamp" to System.currentTimeMillis()
+                    )
+                )
+                Timber.d("Tracked share event for article $articleId")
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to track article share for $articleId")
             }
         }
     }

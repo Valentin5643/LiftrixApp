@@ -26,6 +26,9 @@ import com.example.liftrix.service.ProgressDataService
 import com.example.liftrix.service.ProgressDataServiceImpl
 import com.example.liftrix.domain.service.PRDetectionService
 import com.example.liftrix.service.PRDetectionServiceImpl
+import com.example.liftrix.domain.service.WeightUnitManager
+import com.example.liftrix.domain.service.SettingsPersistenceManager
+import com.example.liftrix.domain.service.SettingsValidator
 import com.example.liftrix.ui.progress.components.AnalyticsWidgetManager
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import dagger.Binds
@@ -106,6 +109,61 @@ abstract class ServiceModule {
     abstract fun bindPRDetectionService(
         prDetectionServiceImpl: PRDetectionServiceImpl
     ): PRDetectionService
+
+    /**
+     * Binds HelpCenterService interface to its implementation.
+     * 
+     * Provides help center article management functionality.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindHelpCenterService(
+        helpCenterServiceImpl: com.example.liftrix.data.service.HelpCenterServiceImpl
+    ): com.example.liftrix.domain.service.HelpCenterService
+
+    /**
+     * Binds LegalDocumentService interface to its implementation.
+     * 
+     * Provides legal document management functionality.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindLegalDocumentService(
+        legalDocumentServiceImpl: com.example.liftrix.data.service.LegalDocumentServiceImpl
+    ): com.example.liftrix.domain.service.LegalDocumentService
+
+    /**
+     * Binds SupportService interface to its implementation.
+     * 
+     * Provides support ticket and issue tracking functionality.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindSupportService(
+        supportServiceImpl: com.example.liftrix.data.service.SupportServiceImpl
+    ): com.example.liftrix.domain.service.SupportService
+
+    /**
+     * Binds AppInfoService interface to its implementation.
+     * 
+     * Provides application information and version management.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindAppInfoService(
+        appInfoServiceImpl: com.example.liftrix.data.service.AppInfoServiceImpl
+    ): com.example.liftrix.domain.service.AppInfoService
+
+    /**
+     * Binds ExerciseMappingService interface to its implementation.
+     * 
+     * Provides exercise mapping functionality for data import/export.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindExerciseMappingService(
+        exerciseMappingServiceImpl: com.example.liftrix.domain.service.ExerciseMappingServiceImpl
+    ): com.example.liftrix.domain.service.ExerciseMappingService
     
     companion object {
         
@@ -242,5 +300,158 @@ abstract class ServiceModule {
             firebaseRemoteConfig = firebaseRemoteConfig,
             dispatcher = ioDispatcher
         )
+        
+        /**
+         * Provides WeightUnitManager for centralized weight unit conversion and formatting.
+         * 
+         * The WeightUnitManager provides reactive weight unit management with caching
+         * and Compose integration for consistent weight displays across all screens.
+         * 
+         * @param settingsRepository Repository for settings data access
+         * @param getCurrentUserIdUseCase Use case for getting current user ID
+         * @return WeightUnitManager singleton instance
+         */
+        @Provides
+        @Singleton
+        fun provideWeightUnitManager(
+            settingsRepository: com.example.liftrix.domain.repository.SettingsRepository,
+            getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+        ): WeightUnitManager = WeightUnitManager(
+            settingsRepository = settingsRepository,
+            getCurrentUserIdUseCase = getCurrentUserIdUseCase
+        )
+        
+        /**
+         * Provides SettingsPersistenceManager for reliable settings persistence.
+         * 
+         * The SettingsPersistenceManager implements triple-store persistence
+         * (DataStore + Room + Firebase) with audit tracking for debugging
+         * settings persistence issues.
+         * 
+         * @param dataStore DataStore for immediate persistence
+         * @param settingsDao Room DAO for offline storage
+         * @param firestore Firebase Firestore for cloud sync
+         * @param auditDao Audit DAO for tracking changes
+         * @return SettingsPersistenceManager singleton instance
+         */
+        @Provides
+        @Singleton
+        fun provideSettingsPersistenceManager(
+            dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>,
+            settingsDao: com.example.liftrix.data.local.dao.SettingsDao,
+            firestore: com.google.firebase.firestore.FirebaseFirestore,
+            auditDao: com.example.liftrix.data.local.dao.SettingsAuditDao
+        ): SettingsPersistenceManager = SettingsPersistenceManager(
+            dataStore = dataStore,
+            settingsDao = settingsDao,
+            firestore = firestore,
+            auditDao = auditDao
+        )
+        
+        /**
+         * Provides SettingsValidator for settings integrity validation.
+         * 
+         * The SettingsValidator provides comprehensive validation for user settings
+         * including corruption detection and cross-field validation to ensure
+         * data integrity across all storage layers.
+         * 
+         * @return SettingsValidator singleton instance
+         */
+        @Provides
+        @Singleton
+        fun provideSettingsValidator(): SettingsValidator = SettingsValidator()
+
+        /**
+         * Provides FormatDetector for import/export format detection.
+         * 
+         * The FormatDetector provides automatic format detection for various
+         * workout data import formats including CSV, JSON, and proprietary formats.
+         * 
+         * @return FormatDetector singleton instance
+         */
+        @Provides
+        @Singleton
+        fun provideFormatDetector(): com.example.liftrix.domain.service.parser.FormatDetector = 
+            com.example.liftrix.domain.service.parser.FormatDetectorImpl()
+        
+        /**
+         * Provides JsonParser for parsing JSON workout data.
+         * 
+         * @return JsonParser singleton instance
+         */
+        @Provides
+        @Singleton
+        fun provideJsonParser(): com.example.liftrix.domain.service.parser.JsonParser = 
+            com.example.liftrix.domain.service.parser.JsonParser()
+        
+        /**
+         * Provides CsvParser for parsing CSV workout data.
+         * 
+         * @return CsvParser singleton instance
+         */
+        @Provides
+        @Singleton
+        fun provideCsvParser(): com.example.liftrix.domain.service.parser.CsvParser = 
+            com.example.liftrix.domain.service.parser.CsvParser()
+        
+        /**
+         * Provides TcxParser for parsing TCX workout data.
+         * 
+         * @return TcxParser singleton instance
+         */
+        @Provides
+        @Singleton
+        fun provideTcxParser(): com.example.liftrix.domain.service.parser.TcxParser = 
+            com.example.liftrix.domain.service.parser.TcxParser()
+        
+        /**
+         * Provides GpxParser for parsing GPX workout data.
+         * 
+         * @return GpxParser singleton instance
+         */
+        @Provides
+        @Singleton
+        fun provideGpxParser(): com.example.liftrix.domain.service.parser.GpxParser = 
+            com.example.liftrix.domain.service.parser.GpxParser()
+        
+        /**
+         * Provides FitParser for parsing FIT workout data.
+         * 
+         * @return FitParser singleton instance
+         */
+        @Provides
+        @Singleton
+        fun provideFitParser(): com.example.liftrix.domain.service.parser.FitParser = 
+            com.example.liftrix.domain.service.parser.FitParser()
+        
+        /**
+         * Provides WorkoutParserFactory for managing workout parsers.
+         * 
+         * The WorkoutParserFactory provides centralized access to all supported
+         * workout format parsers for seamless import/export operations.
+         * 
+         * @param jsonParser Parser for JSON format
+         * @param csvParser Parser for CSV format
+         * @param tcxParser Parser for TCX format
+         * @param gpxParser Parser for GPX format
+         * @param fitParser Parser for FIT format
+         * @return WorkoutParserFactory singleton instance
+         */
+        @Provides
+        @Singleton
+        fun provideWorkoutParserFactory(
+            jsonParser: com.example.liftrix.domain.service.parser.JsonParser,
+            csvParser: com.example.liftrix.domain.service.parser.CsvParser,
+            tcxParser: com.example.liftrix.domain.service.parser.TcxParser,
+            gpxParser: com.example.liftrix.domain.service.parser.GpxParser,
+            fitParser: com.example.liftrix.domain.service.parser.FitParser
+        ): com.example.liftrix.domain.service.parser.WorkoutParserFactory = 
+            com.example.liftrix.domain.service.parser.WorkoutParserFactory(
+                jsonParser = jsonParser,
+                csvParser = csvParser,
+                tcxParser = tcxParser,
+                gpxParser = gpxParser,
+                fitParser = fitParser
+            )
     }
 } 

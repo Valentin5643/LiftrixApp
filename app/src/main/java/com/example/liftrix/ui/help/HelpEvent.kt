@@ -58,6 +58,11 @@ sealed class HelpEvent : ViewModelEvent {
     data class MarkArticleHelpful(val articleId: String, val helpful: Boolean) : HelpEvent()
     
     /**
+     * Share an article via external apps
+     */
+    data class ShareArticle(val articleId: String) : HelpEvent()
+    
+    /**
      * Retry failed operations
      */
     data object Retry : HelpEvent()

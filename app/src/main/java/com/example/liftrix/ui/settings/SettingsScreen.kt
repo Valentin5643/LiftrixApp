@@ -80,6 +80,7 @@ fun SettingsScreen(
     onNavigateToAbout: (() -> Unit)? = null,
     onNavigateToPrivacyPolicy: (() -> Unit)? = null,
     onNavigateToTermsOfService: (() -> Unit)? = null,
+    onNavigateToDataPortability: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -108,6 +109,7 @@ fun SettingsScreen(
         val stableOnNavigateToAbout = remember(onNavigateToAbout) { onNavigateToAbout }
         val stableOnNavigateToPrivacyPolicy = remember(onNavigateToPrivacyPolicy) { onNavigateToPrivacyPolicy }
         val stableOnNavigateToTermsOfService = remember(onNavigateToTermsOfService) { onNavigateToTermsOfService }
+        val stableOnNavigateToDataPortability = remember(onNavigateToDataPortability) { onNavigateToDataPortability }
         
         // Optimized LaunchedEffect with stable key
         LaunchedEffect(uiState.isSigningOut, uiState.error) {
@@ -163,6 +165,10 @@ fun SettingsScreen(
                             onNavigateToPasswordChange = stableOnNavigateToPasswordChange,
                             onNavigateToUsernameChange = stableOnNavigateToUsernameChange,
                             onNavigateToAccountDeletion = stableOnNavigateToAccountDeletion,
+                            onNavigateToPrivacyPolicy = stableOnNavigateToPrivacyPolicy,
+                            onNavigateToDataPortability = stableOnNavigateToDataPortability,
+                            onNavigateToHelpCenter = stableOnNavigateToHelpCenter,
+                            onNavigateToAbout = stableOnNavigateToAbout,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -219,12 +225,20 @@ private fun SettingsContent(
     onNavigateToPasswordChange: (() -> Unit)? = null,
     onNavigateToUsernameChange: (() -> Unit)? = null,
     onNavigateToAccountDeletion: (() -> Unit)? = null,
+    onNavigateToPrivacyPolicy: (() -> Unit)? = null,
+    onNavigateToDataPortability: (() -> Unit)? = null,
+    onNavigateToHelpCenter: (() -> Unit)? = null,
+    onNavigateToAbout: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     // Stable callbacks and data to prevent unnecessary recompositions
     val stableOnEvent = remember(onEvent) { onEvent }
     val stableOnNavigateToProfile = remember(onNavigateToProfile) { onNavigateToProfile }
     val stableOnNavigateToNotifications = remember(onNavigateToNotifications) { onNavigateToNotifications }
+    val stableOnNavigateToPrivacyPolicy = remember(onNavigateToPrivacyPolicy) { onNavigateToPrivacyPolicy }
+    val stableOnNavigateToDataPortability = remember(onNavigateToDataPortability) { onNavigateToDataPortability }
+    val stableOnNavigateToHelpCenter = remember(onNavigateToHelpCenter) { onNavigateToHelpCenter }
+    val stableOnNavigateToAbout = remember(onNavigateToAbout) { onNavigateToAbout }
     val stableSettingsCategories = remember { settingsCategories }
     
     LazyColumn(
@@ -280,7 +294,11 @@ private fun SettingsContent(
                     onNavigateToEmailChange = onNavigateToEmailChange,
                     onNavigateToPasswordChange = onNavigateToPasswordChange,
                     onNavigateToUsernameChange = onNavigateToUsernameChange,
-                    onNavigateToAccountDeletion = onNavigateToAccountDeletion
+                    onNavigateToAccountDeletion = onNavigateToAccountDeletion,
+                    onNavigateToPrivacyPolicy = stableOnNavigateToPrivacyPolicy,
+                    onNavigateToDataPortability = stableOnNavigateToDataPortability,
+                    onNavigateToHelpCenter = stableOnNavigateToHelpCenter,
+                    onNavigateToAbout = stableOnNavigateToAbout
                 )
             }
         }
@@ -332,7 +350,11 @@ private fun SettingsCategoryContent(
     onNavigateToEmailChange: (() -> Unit)? = null,
     onNavigateToPasswordChange: (() -> Unit)? = null,
     onNavigateToUsernameChange: (() -> Unit)? = null,
-    onNavigateToAccountDeletion: (() -> Unit)? = null
+    onNavigateToAccountDeletion: (() -> Unit)? = null,
+    onNavigateToPrivacyPolicy: (() -> Unit)? = null,
+    onNavigateToDataPortability: (() -> Unit)? = null,
+    onNavigateToHelpCenter: (() -> Unit)? = null,
+    onNavigateToAbout: (() -> Unit)? = null
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -363,14 +385,18 @@ private fun SettingsCategoryContent(
                     onNavigateToEmailChange = onNavigateToEmailChange,
                     onNavigateToPasswordChange = onNavigateToPasswordChange,
                     onNavigateToUsernameChange = onNavigateToUsernameChange,
-                    onNavigateToAccountDeletion = onNavigateToAccountDeletion
+                    onNavigateToAccountDeletion = onNavigateToAccountDeletion,
+                    onNavigateToPrivacyPolicy = onNavigateToPrivacyPolicy,
+                    onNavigateToDataPortability = onNavigateToDataPortability
                 )
             }
             
             "support" -> {
                 SupportSettings(
                     uiState = uiState,
-                    onEvent = onEvent
+                    onEvent = onEvent,
+                    onNavigateToHelpCenter = onNavigateToHelpCenter,
+                    onNavigateToAbout = onNavigateToAbout
                 )
             }
         }
@@ -548,7 +574,9 @@ private fun PrivacySettings(
     onNavigateToEmailChange: (() -> Unit)? = null,
     onNavigateToPasswordChange: (() -> Unit)? = null,
     onNavigateToUsernameChange: (() -> Unit)? = null,
-    onNavigateToAccountDeletion: (() -> Unit)? = null
+    onNavigateToAccountDeletion: (() -> Unit)? = null,
+    onNavigateToPrivacyPolicy: (() -> Unit)? = null,
+    onNavigateToDataPortability: (() -> Unit)? = null
 ) {
     // Stable callbacks to prevent unnecessary recompositions
     val stableOnEvent = remember(onEvent) { onEvent }
@@ -556,6 +584,8 @@ private fun PrivacySettings(
     val stableOnNavigateToPasswordChange = remember(onNavigateToPasswordChange) { onNavigateToPasswordChange }
     val stableOnNavigateToUsernameChange = remember(onNavigateToUsernameChange) { onNavigateToUsernameChange }
     val stableOnNavigateToAccountDeletion = remember(onNavigateToAccountDeletion) { onNavigateToAccountDeletion }
+    val stableOnNavigateToPrivacyPolicy = remember(onNavigateToPrivacyPolicy) { onNavigateToPrivacyPolicy }
+    val stableOnNavigateToDataPortability = remember(onNavigateToDataPortability) { onNavigateToDataPortability }
     
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -612,14 +642,20 @@ private fun PrivacySettings(
             title = "Privacy Policy",
             subtitle = "View our privacy policy",
             icon = Icons.Default.Info,
-            onClick = { stableOnEvent(SettingsEvent.NavigateToPrivacy) }
+            onClick = { 
+                stableOnEvent(SettingsEvent.NavigateToPrivacy)
+                stableOnNavigateToPrivacyPolicy?.invoke()
+            }
         )
         
         SettingsNavigationItem(
             title = "Export Data",
             subtitle = "Download your workout data",
             icon = Icons.Default.Assignment,
-            onClick = { stableOnEvent(SettingsEvent.ExportDataRequested) }
+            onClick = { 
+                stableOnEvent(SettingsEvent.NavigateToDataPortability)
+                stableOnNavigateToDataPortability?.invoke()
+            }
         )
         
         // Danger Zone Section
@@ -649,10 +685,14 @@ private fun PrivacySettings(
 @Composable
 private fun SupportSettings(
     uiState: SettingsState,
-    onEvent: (SettingsEvent) -> Unit
+    onEvent: (SettingsEvent) -> Unit,
+    onNavigateToHelpCenter: (() -> Unit)? = null,
+    onNavigateToAbout: (() -> Unit)? = null
 ) {
-    // Stable callback to prevent unnecessary recompositions
+    // Stable callbacks to prevent unnecessary recompositions
     val stableOnEvent = remember(onEvent) { onEvent }
+    val stableOnNavigateToHelpCenter = remember(onNavigateToHelpCenter) { onNavigateToHelpCenter }
+    val stableOnNavigateToAbout = remember(onNavigateToAbout) { onNavigateToAbout }
     
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -661,14 +701,20 @@ private fun SupportSettings(
             title = "Help & Support",
             subtitle = "Get help with using the app",
             icon = Icons.Default.Help,
-            onClick = { stableOnEvent(SettingsEvent.NavigateToHelp) }
+            onClick = { 
+                stableOnEvent(SettingsEvent.NavigateToHelp)
+                stableOnNavigateToHelpCenter?.invoke()
+            }
         )
         
         SettingsNavigationItem(
             title = "About",
             subtitle = "App version and information",
             icon = Icons.Default.Info,
-            onClick = { stableOnEvent(SettingsEvent.NavigateToAbout) }
+            onClick = { 
+                stableOnEvent(SettingsEvent.NavigateToAbout)
+                stableOnNavigateToAbout?.invoke()
+            }
         )
     }
 }

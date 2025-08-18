@@ -190,6 +190,30 @@ interface HelpArticleDao {
     suspend fun deleteAllArticles()
     
     /**
+     * Updates articles from remote configuration
+     * Replaces existing articles with the same ID
+     * @param articles List of articles from remote
+     */
+    @androidx.room.Transaction
+    suspend fun updateArticlesFromRemote(articles: List<HelpArticleEntity>) {
+        // First, mark all existing articles as outdated
+        // Then insert or replace with new articles
+        articles.forEach { article ->
+            val existing = getArticleSync(article.articleId)
+            if (existing != null) {
+                // Preserve engagement data
+                insertArticle(article.copy(
+                    viewCount = existing.viewCount,
+                    helpfulCount = existing.helpfulCount,
+                    notHelpfulCount = existing.notHelpfulCount
+                ))
+            } else {
+                insertArticle(article)
+            }
+        }
+    }
+    
+    /**
      * Gets the total number of help articles
      * @return Total count of articles
      */

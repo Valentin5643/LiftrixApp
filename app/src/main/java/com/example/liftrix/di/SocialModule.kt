@@ -23,6 +23,7 @@ import com.example.liftrix.data.repository.social.FollowRepositoryImpl
 import com.example.liftrix.domain.repository.social.FollowRepository
 import com.example.liftrix.data.repository.social.SocialPrivacySettingsRepositoryImpl
 import com.example.liftrix.domain.repository.social.SocialPrivacySettingsRepository
+import com.example.liftrix.domain.repository.SettingsRepository
 import com.example.liftrix.domain.service.PrivacyEnforcementService
 import com.example.liftrix.domain.usecase.social.CheckUsernameAvailabilityUseCase
 import com.example.liftrix.domain.usecase.social.CreateSocialProfileUseCase
@@ -96,13 +97,7 @@ abstract class SocialModule {
         // Social DAOs
         // ========================================
 
-        // SocialProfileDao and FollowRelationshipDao provided by DatabaseModule
-
-        @Provides
-        @Singleton
-        fun provideFollowRequestDao(database: LiftrixDatabase): FollowRequestDao {
-            return database.followRequestDao()
-        }
+        // SocialProfileDao, FollowRelationshipDao, and FollowRequestDao provided by DatabaseModule
 
         @Provides
         @Singleton
@@ -319,9 +314,10 @@ abstract class SocialModule {
         @Provides
         @Singleton
         fun provideNotificationService(
-            firebaseMessaging: FirebaseMessaging
+            firebaseMessaging: FirebaseMessaging,
+            settingsRepository: SettingsRepository
         ): com.example.liftrix.domain.service.NotificationService {
-            return com.example.liftrix.data.service.NotificationServiceImpl(firebaseMessaging)
+            return com.example.liftrix.data.service.NotificationServiceImpl(firebaseMessaging, settingsRepository)
         }
     
         @Provides

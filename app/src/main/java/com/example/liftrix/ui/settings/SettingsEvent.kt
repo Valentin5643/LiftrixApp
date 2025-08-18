@@ -218,6 +218,12 @@ sealed class SettingsEvent : ViewModelEvent {
     object ExportDataRequested : SettingsEvent()
     
     /**
+     * Triggered when user wants to navigate to data portability screen.
+     * Should navigate to data import/export screen.
+     */
+    object NavigateToDataPortability : SettingsEvent()
+    
+    /**
      * Triggered when user requests account deletion.
      * Should show account deletion confirmation.
      */

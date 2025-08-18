@@ -10,11 +10,14 @@ import com.example.liftrix.domain.usecase.account.GetAccountInfoUseCase
 import com.example.liftrix.domain.usecase.account.UpdateEmailUseCase
 import com.example.liftrix.domain.usecase.account.UpdatePasswordUseCase
 import com.example.liftrix.domain.usecase.account.UpdateUsernameUseCase
+import com.example.liftrix.domain.repository.AuthRepository
+import com.example.liftrix.domain.repository.UserAccountRepository
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -32,6 +35,8 @@ class AccountManagementViewModel @Inject constructor(
     private val deleteAccountUseCase: DeleteAccountUseCase,
     private val getAccountInfoUseCase: GetAccountInfoUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authRepository: AuthRepository,
+    private val userAccountRepository: UserAccountRepository,
     private val analyticsService: AnalyticsService
 ) : ViewModel() {
 
@@ -407,22 +412,33 @@ class AccountManagementViewModel @Inject constructor(
                 
                 updateState { copy(usernameValidation = UsernameValidation.Checking) }
                 
+                // Debounce to avoid excessive API calls
+                kotlinx.coroutines.delay(500)
+                
                 // Check availability through repository
-                // Implementation would depend on UserAccountRepository having a checkUsernameAvailability method
-                // For now, we'll simulate this
-                kotlinx.coroutines.delay(500) // Debounce simulation
+                val availabilityResult = userAccountRepository.checkUsernameAvailability(username)
                 
-                val isAvailable = true // Placeholder - would call actual availability check
-                
-                updateState {
-                    copy(
-                        usernameValidation = if (isAvailable) {
-                            UsernameValidation.Available
-                        } else {
-                            UsernameValidation.Invalid("Username is already taken")
+                availabilityResult.fold(
+                    onSuccess = { isAvailable ->
+                        updateState {
+                            copy(
+                                usernameValidation = if (isAvailable) {
+                                    UsernameValidation.Available
+                                } else {
+                                    UsernameValidation.Invalid("Username is already taken")
+                                }
+                            )
                         }
-                    )
-                }
+                    },
+                    onFailure = { error ->
+                        Timber.e("Failed to check username availability: $error")
+                        updateState {
+                            copy(
+                                usernameValidation = UsernameValidation.Invalid("Failed to check availability")
+                            )
+                        }
+                    }
+                )
             } catch (exception: Exception) {
                 Timber.e(exception, "Error checking username availability")
                 updateState { 
@@ -485,11 +501,24 @@ class AccountManagementViewModel @Inject constructor(
     private fun observeAuthenticationState() {
         viewModelScope.launch {
             try {
-                // We need to import authRepository to observe user changes
-                // For now, we'll disable authentication observation since the current implementation
-                // is incorrect. The getCurrentUserIdUseCase is a suspend function, not a Flow.
-                // TODO: Add authRepository injection and observe authRepository.currentUser flow
-                Timber.d("Authentication state observation disabled - requires authRepository injection")
+                // Observe authentication state changes from the repository
+                authRepository.currentUser.collectLatest { user ->
+                    if (user == null) {
+                        // User has been logged out, clear state
+                        Timber.d("User logged out - clearing account management state")
+                        updateState { 
+                            AccountManagementUiState() // Reset to initial state
+                        }
+                        currentUserId = null
+                    } else {
+                        // User state changed, reload account info if user ID changed
+                        if (currentUserId != user.uid) {
+                            Timber.d("User changed from $currentUserId to ${user.uid} - reloading account info")
+                            currentUserId = user.uid
+                            loadAccountInfo()
+                        }
+                    }
+                }
             } catch (exception: Exception) {
                 Timber.e(exception, "Error observing authentication state")
             }

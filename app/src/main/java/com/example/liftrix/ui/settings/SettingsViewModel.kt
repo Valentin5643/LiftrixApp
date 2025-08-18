@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.service.AnalyticsService
+import com.example.liftrix.domain.service.SettingsPersistenceManager
+import com.example.liftrix.domain.service.SettingsValidator
 import com.example.liftrix.domain.usecase.settings.EnhancedSignOutUseCase
 import com.example.liftrix.domain.usecase.settings.GetSubscriptionStatusUseCase
 import com.example.liftrix.domain.usecase.settings.GetUserSettingsUseCase
@@ -13,6 +15,7 @@ import com.example.liftrix.domain.usecase.settings.UpdateWeightUnitPreferenceUse
 import com.example.liftrix.domain.usecase.profile.UploadProfileImageUseCase
 import com.example.liftrix.domain.usecase.GetProfileUseCase
 import com.example.liftrix.domain.model.WeightUnit
+import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.ui.theme.ThemeManager
 import com.example.liftrix.ui.theme.ThemeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -26,6 +29,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import timber.log.Timber
 import javax.inject.Inject
@@ -59,6 +63,8 @@ class SettingsViewModel @Inject constructor(
     private val uploadProfileImageUseCase: UploadProfileImageUseCase,
     private val authRepository: AuthRepository,
     private val analyticsService: AnalyticsService,
+    private val settingsPersistenceManager: SettingsPersistenceManager,
+    private val settingsValidator: SettingsValidator,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -87,6 +93,8 @@ class SettingsViewModel @Inject constructor(
                 if (currentUserId == null) { // Only set if not already set by Flow
                     currentUserId = currentUser.uid
                     loadSettings()
+                    // Validate settings integrity on startup
+                    validateAndRepairSettings(currentUser.uid)
                 }
             } else {
                 // Give the Flow more time, but set a hard timeout
@@ -103,6 +111,36 @@ class SettingsViewModel @Inject constructor(
         }
         
         trackSettingsScreenViewed()
+    }
+    
+    /**
+     * Validates settings integrity on app startup and repairs if needed.
+     */
+    private suspend fun validateAndRepairSettings(userId: String) {
+        Timber.d("Validating settings integrity for user $userId")
+        
+        val validationResult = settingsPersistenceManager.validateSettingsIntegrity(userId)
+        validationResult.fold(
+            onSuccess = { isValid: Boolean ->
+                if (!isValid) {
+                    Timber.w("Settings integrity validation failed, attempting repair")
+                    val repairResult = settingsPersistenceManager.repairCorruptedSettings(userId)
+                    repairResult.fold(
+                        onSuccess = {
+                            Timber.i("Settings successfully repaired for user $userId")
+                        },
+                        onFailure = { exception ->
+                            Timber.e(exception, "Failed to repair settings for user $userId")
+                        }
+                    )
+                } else {
+                    Timber.d("Settings integrity validated successfully for user $userId")
+                }
+            },
+            onFailure = { exception ->
+                Timber.e(exception, "Failed to validate settings integrity for user $userId")
+            }
+        )
     }
 
     /**
@@ -144,6 +182,7 @@ class SettingsViewModel @Inject constructor(
             is SettingsEvent.ManageSubscription -> handleSubscriptionManagement()
             is SettingsEvent.SubscriptionPurchaseCompleted -> handleSubscriptionPurchaseCompleted()
             is SettingsEvent.ExportDataRequested -> handleDataExport()
+            is SettingsEvent.NavigateToDataPortability -> handleDataPortabilityNavigation()
             is SettingsEvent.DeleteAccountRequested -> handleAccountDeletion()
             is SettingsEvent.SystemThemeChanged -> handleSystemThemeChanged()
             is SettingsEvent.SubscriptionStatusChanged -> handleSubscriptionStatusChanged()
@@ -222,7 +261,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Updates the dark mode setting.
+     * Updates the dark mode setting with persistence verification and retry logic.
      * 
      * @param enabled New dark mode state
      */
@@ -239,16 +278,79 @@ class SettingsViewModel @Inject constructor(
                 val themeMode = if (enabled) ThemeMode.DARK else ThemeMode.LIGHT
                 themeManager.switchTheme(themeMode)
                 
-                val result = updateSettingsUseCase.updateDarkMode(userId, enabled)
+                // Use persistence manager for reliable settings update
+                val persistenceResult = settingsPersistenceManager.persistSetting(
+                    userId = userId,
+                    key = "dark_mode",
+                    value = enabled
+                )
                 
-                result.fold(
+                persistenceResult.fold(
                     onSuccess = {
-                        Timber.d("Dark mode updated successfully")
-                        trackSettingChanged("dark_mode", enabled)
-                        // State will be updated through the reactive flow
+                        // Verify the setting was actually persisted
+                        val verificationResult = settingsValidator.verifySetting(
+                            userId = userId,
+                            key = "dark_mode",
+                            expectedValue = enabled
+                        )
+                        
+                        verificationResult.fold(
+                            onSuccess = { isVerified: Boolean ->
+                                if (isVerified) {
+                                    Timber.d("Dark mode updated and verified successfully")
+                                    trackSettingChanged("dark_mode", enabled)
+                                    updateState { copy(isUpdatingSettings = false) }
+                                } else {
+                                    // Setting didn't persist correctly, try again
+                                    Timber.w("Dark mode setting not verified, retrying...")
+                                    viewModelScope.launch {
+                                        retrySettingUpdate("dark_mode", enabled)
+                                    }
+                                }
+                            },
+                            onFailure = { exception: Throwable ->
+                                Timber.e(exception, "Failed to verify dark mode setting")
+                                // Continue with fallback to use case
+                                viewModelScope.launch {
+                                    fallbackToUseCase(userId, enabled, "dark_mode")
+                                }
+                            }
+                        )
                     },
                     onFailure = { exception ->
-                        Timber.e(exception, "Failed to update dark mode")
+                        Timber.e(exception, "Failed to persist dark mode setting")
+                        // Fallback to original use case method
+                        viewModelScope.launch {
+                            fallbackToUseCase(userId, enabled, "dark_mode")
+                        }
+                    }
+                )
+            } catch (exception: Exception) {
+                Timber.e(exception, "Exception updating dark mode")
+                viewModelScope.launch {
+                    fallbackToUseCase(userId, enabled, "dark_mode")
+                }
+            }
+        }
+    }
+    
+    /**
+     * Fallback method that uses the original use case when persistence manager fails.
+     */
+    private suspend fun fallbackToUseCase(userId: String, enabled: Boolean, settingType: String) {
+        Timber.d("Using fallback use case for $settingType")
+        
+        when (settingType) {
+            "dark_mode" -> {
+                val result = updateSettingsUseCase.updateDarkMode(userId, enabled)
+                result.fold(
+                    onSuccess = {
+                        Timber.d("Dark mode updated successfully via fallback")
+                        trackSettingChanged("dark_mode", enabled)
+                        updateState { copy(isUpdatingSettings = false) }
+                    },
+                    onFailure = { exception ->
+                        Timber.e(exception, "Fallback failed for dark mode")
                         // Revert theme manager change if settings update failed
                         val revertMode = if (enabled) ThemeMode.LIGHT else ThemeMode.DARK
                         themeManager.switchTheme(revertMode)
@@ -259,22 +361,86 @@ class SettingsViewModel @Inject constructor(
                         lastFailedEvent = SettingsEvent.UpdateDarkMode(enabled)
                     }
                 )
-            } catch (exception: Exception) {
-                Timber.e(exception, "Exception updating dark mode")
-                // Revert theme manager change if exception occurred
-                val revertMode = if (enabled) ThemeMode.LIGHT else ThemeMode.DARK
-                themeManager.switchTheme(revertMode)
-                
-                updateState { 
-                    withError("Failed to update dark mode")
-                }
-                lastFailedEvent = SettingsEvent.UpdateDarkMode(enabled)
             }
+            "notifications_enabled" -> {
+                val result = updateSettingsUseCase.updateNotifications(userId, enabled)
+                result.fold(
+                    onSuccess = {
+                        Timber.d("Notifications updated successfully via fallback")
+                        trackSettingChanged("notifications", enabled)
+                        updateState { copy(isUpdatingSettings = false) }
+                    },
+                    onFailure = { exception ->
+                        Timber.e(exception, "Fallback failed for notifications")
+                        updateState { 
+                            withError("Failed to update notifications: ${exception.message}")
+                        }
+                        lastFailedEvent = SettingsEvent.UpdateNotifications(enabled)
+                    }
+                )
+            }
+        }
+    }
+    
+    /**
+     * Retries a setting update with exponential backoff.
+     */
+    private suspend fun retrySettingUpdate(key: String, value: Any, maxRetries: Int = 3) {
+        val userId = currentUserId ?: return
+        
+        for (attempt in 1..maxRetries) {
+            Timber.d("Retry attempt $attempt for setting $key")
+            
+            delay(1000L * attempt) // Exponential backoff
+            
+            val retryResult = settingsPersistenceManager.persistSetting(
+                userId = userId,
+                key = key,
+                value = value
+            )
+            
+            retryResult.fold(
+                onSuccess = {
+                    val verificationResult = settingsValidator.verifySetting(
+                        userId = userId,
+                        key = key,
+                        expectedValue = value
+                    )
+                    
+                    verificationResult.fold(
+                        onSuccess = { isVerified ->
+                            if (isVerified) {
+                                Timber.i("Setting $key verified after retry attempt $attempt")
+                                updateState { copy(isUpdatingSettings = false) }
+                                return
+                            }
+                        },
+                        onFailure = { 
+                            Timber.w("Verification failed on retry attempt $attempt for $key")
+                        }
+                    )
+                },
+                onFailure = { exception ->
+                    Timber.w(exception, "Retry attempt $attempt failed for setting $key")
+                }
+            )
+        }
+        
+        // All retries failed
+        Timber.e("All retry attempts failed for setting $key")
+        updateState { 
+            withError("Settings update failed after multiple attempts. Please try again.")
+        }
+        
+        when (key) {
+            "dark_mode" -> lastFailedEvent = SettingsEvent.UpdateDarkMode(value as Boolean)
+            "weight_unit" -> lastFailedEvent = SettingsEvent.UpdateWeightUnit(value as WeightUnit)
+            "notifications_enabled" -> lastFailedEvent = SettingsEvent.UpdateNotifications(value as Boolean)
         }
     }
 
     /**
-     * Updates the notification setting.
+     * Updates the notification setting with persistence verification and retry logic.
      * 
      * @param enabled New notification state
      */
@@ -287,34 +453,80 @@ class SettingsViewModel @Inject constructor(
             try {
                 Timber.d("Updating notifications for user $userId to: $enabled")
                 
-                val result = updateSettingsUseCase.updateNotifications(userId, enabled)
+                // Use persistence manager for reliable settings update
+                val persistenceResult = settingsPersistenceManager.persistSetting(
+                    userId = userId,
+                    key = "notifications_enabled",
+                    value = enabled
+                )
                 
-                result.fold(
+                persistenceResult.fold(
                     onSuccess = {
-                        Timber.d("Notifications updated successfully")
-                        trackSettingChanged("notifications", enabled)
-                        // State will be updated through the reactive flow
+                        // Verify the setting was actually persisted
+                        val verificationResult = settingsValidator.verifySetting(
+                            userId = userId,
+                            key = "notifications_enabled",
+                            expectedValue = enabled
+                        )
+                        
+                        verificationResult.fold(
+                            onSuccess = { isVerified ->
+                                if (isVerified) {
+                                    Timber.d("Notifications updated and verified successfully")
+                                    trackSettingChanged("notifications", enabled)
+                                    updateState { copy(isUpdatingSettings = false) }
+                                } else {
+                                    // Setting didn't persist correctly, try again
+                                    Timber.w("Notifications setting not verified, retrying...")
+                                    retrySettingUpdate("notifications_enabled", enabled)
+                                }
+                            },
+                            onFailure = { exception ->
+                                Timber.e(exception, "Failed to verify notifications setting")
+                                // Continue with fallback to use case
+                                fallbackToUseCaseNotifications(userId, enabled)
+                            }
+                        )
                     },
                     onFailure = { exception ->
-                        Timber.e(exception, "Failed to update notifications")
-                        updateState { 
-                            withError("Failed to update notifications: ${exception.message}")
-                        }
-                        lastFailedEvent = SettingsEvent.UpdateNotifications(enabled)
+                        Timber.e(exception, "Failed to persist notifications setting")
+                        // Fallback to original use case method
+                        fallbackToUseCaseNotifications(userId, enabled)
                     }
                 )
             } catch (exception: Exception) {
                 Timber.e(exception, "Exception updating notifications")
-                updateState { 
-                    withError("Failed to update notifications")
-                }
-                lastFailedEvent = SettingsEvent.UpdateNotifications(enabled)
+                fallbackToUseCaseNotifications(userId, enabled)
             }
         }
     }
+    
+    /**
+     * Fallback method for notifications when persistence manager fails.
+     */
+    private suspend fun fallbackToUseCaseNotifications(userId: String, enabled: Boolean) {
+        Timber.d("Using fallback use case for notifications")
+        
+        val result = updateSettingsUseCase.updateNotifications(userId, enabled)
+        result.fold(
+            onSuccess = {
+                Timber.d("Notifications updated successfully via fallback")
+                trackSettingChanged("notifications", enabled)
+                updateState { copy(isUpdatingSettings = false) }
+            },
+            onFailure = { exception ->
+                Timber.e(exception, "Fallback failed for notifications")
+                updateState { 
+                    withError("Failed to update notifications: ${exception.message}")
+                }
+                lastFailedEvent = SettingsEvent.UpdateNotifications(enabled)
+            }
+        )
+    }
 
     /**
-     * Updates the user's weight unit preference.
+     * Updates the user's weight unit preference with persistence verification and retry logic.
+     * This is critical for fixing the weight unit persistence bug.
      */
     private fun updateWeightUnit(weightUnit: WeightUnit) {
         val userId = currentUserId ?: return
@@ -325,30 +537,75 @@ class SettingsViewModel @Inject constructor(
             try {
                 Timber.d("Updating weight unit for user $userId to: ${weightUnit.symbol}")
                 
-                val result = updateWeightUnitPreferenceUseCase(userId, weightUnit)
+                // Use persistence manager for reliable weight unit update
+                val persistenceResult = settingsPersistenceManager.persistSetting(
+                    userId = userId,
+                    key = "weight_unit",
+                    value = weightUnit
+                )
                 
-                result.fold(
+                persistenceResult.fold(
                     onSuccess = {
-                        Timber.d("Weight unit updated successfully")
-                        trackSettingChanged("weight_unit", weightUnit.symbol)
-                        // State will be updated through the reactive flow
+                        // Verify the weight unit was actually persisted - critical for this bug fix
+                        val verificationResult = settingsValidator.verifySetting(
+                            userId = userId,
+                            key = "weight_unit",
+                            expectedValue = weightUnit
+                        )
+                        
+                        verificationResult.fold(
+                            onSuccess = { isVerified ->
+                                if (isVerified) {
+                                    Timber.d("Weight unit updated and verified successfully")
+                                    trackSettingChanged("weight_unit", weightUnit.symbol)
+                                    updateState { copy(isUpdatingSettings = false) }
+                                } else {
+                                    // Weight unit didn't persist correctly - this is the bug we're fixing
+                                    Timber.w("Weight unit setting not verified, retrying...")
+                                    retrySettingUpdate("weight_unit", weightUnit)
+                                }
+                            },
+                            onFailure = { exception ->
+                                Timber.e(exception, "Failed to verify weight unit setting")
+                                // Continue with fallback to use case
+                                fallbackToUseCaseWeightUnit(userId, weightUnit)
+                            }
+                        )
                     },
                     onFailure = { exception ->
-                        Timber.e(exception, "Failed to update weight unit")
-                        updateState { 
-                            withError("Failed to update weight unit: ${exception.message}")
-                        }
-                        lastFailedEvent = SettingsEvent.UpdateWeightUnit(weightUnit)
+                        Timber.e(exception, "Failed to persist weight unit setting")
+                        // Fallback to original use case method
+                        fallbackToUseCaseWeightUnit(userId, weightUnit)
                     }
                 )
             } catch (exception: Exception) {
                 Timber.e(exception, "Exception updating weight unit")
+                fallbackToUseCaseWeightUnit(userId, weightUnit)
+            }
+        }
+    }
+    
+    /**
+     * Fallback method for weight unit when persistence manager fails.
+     */
+    private suspend fun fallbackToUseCaseWeightUnit(userId: String, weightUnit: WeightUnit) {
+        Timber.d("Using fallback use case for weight unit")
+        
+        val result = updateWeightUnitPreferenceUseCase(userId, weightUnit)
+        result.fold(
+            onSuccess = {
+                Timber.d("Weight unit updated successfully via fallback")
+                trackSettingChanged("weight_unit", weightUnit.symbol)
+                updateState { copy(isUpdatingSettings = false) }
+            },
+            onFailure = { exception ->
+                Timber.e(exception, "Fallback failed for weight unit")
                 updateState { 
-                    withError("Failed to update weight unit")
+                    withError("Failed to update weight unit: ${exception.message}")
                 }
                 lastFailedEvent = SettingsEvent.UpdateWeightUnit(weightUnit)
             }
-        }
+        )
     }
 
     /**
@@ -673,6 +930,14 @@ class SettingsViewModel @Inject constructor(
     private fun handleDataExport() {
         trackDataAction("export_requested")
         // Data export logic will be handled by the UI layer
+    }
+    
+    /**
+     * Handles navigation to data portability screen.
+     */
+    private fun handleDataPortabilityNavigation() {
+        trackDataAction("navigate_to_data_portability")
+        // Navigation will be handled by the UI layer through callbacks
     }
 
     /**

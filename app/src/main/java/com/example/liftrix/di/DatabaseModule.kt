@@ -46,6 +46,7 @@ import com.example.liftrix.data.local.dao.UserAccountDao
 import com.example.liftrix.data.local.dao.HelpArticleDao
 import com.example.liftrix.data.local.dao.SupportTicketDao
 import com.example.liftrix.data.local.dao.AppConfigDao
+import com.example.liftrix.data.local.dao.SettingsAuditDao
 import com.example.liftrix.data.local.seed.ExerciseLibrarySeedData
 import com.example.liftrix.data.local.seed.MetDataSeedService
 import com.example.liftrix.data.local.migration.MIGRATION_27_28
@@ -74,6 +75,7 @@ import com.example.liftrix.data.local.migration.MIGRATION_49_50
 import com.example.liftrix.data.local.migration.MIGRATION_50_51
 import com.example.liftrix.data.local.migration.MIGRATION_51_52
 import com.example.liftrix.data.local.migration.MIGRATION_52_53
+import com.example.liftrix.data.local.migration.MIGRATION_53_54
 
 import dagger.Module
 import dagger.Provides
@@ -117,7 +119,7 @@ object DatabaseModule {
                 MIGRATION_39_40, MIGRATION_40_41, MIGRATION_41_42, MIGRATION_42_43, 
                 MIGRATION_43_44, MIGRATION_44_45, MIGRATION_45_46, MIGRATION_46_47,
                 MIGRATION_47_48, MIGRATION_48_49, MIGRATION_49_50, MIGRATION_50_51,
-                MIGRATION_51_52, MIGRATION_52_53
+                MIGRATION_51_52, MIGRATION_52_53, MIGRATION_53_54
             )
             // ✅ PERSISTENCE FIX: Removed destructive migration to preserve user data
             // Only allow destructive migration on downgrade to handle edge cases
@@ -405,5 +407,24 @@ object DatabaseModule {
     @Provides
     fun provideAppConfigDao(database: LiftrixDatabase): AppConfigDao {
         return database.appConfigDao()
+    }
+
+    @Provides
+    fun provideSettingsAuditDao(database: LiftrixDatabase): SettingsAuditDao {
+        return database.settingsAuditDao()
+    }
+
+    // ========================================
+    // Data Export/Import DAOs
+    // ========================================
+
+    @Provides
+    fun provideDataExportDao(database: LiftrixDatabase): com.example.liftrix.data.local.dao.DataExportDao {
+        return database.dataExportDao()
+    }
+
+    @Provides
+    fun provideDataImportDao(database: LiftrixDatabase): com.example.liftrix.data.local.dao.DataImportDao {
+        return database.dataImportDao()
     }
 }

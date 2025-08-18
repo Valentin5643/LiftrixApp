@@ -229,9 +229,22 @@ private fun WidgetSettingsContent(
                 isEnabled = true,
                 isLoading = data.isLoading,
                 onToggle = { stableOnEvent(WidgetSettingsEvent.ToggleWidget(widget)) },
-                onReorder = { 
-                    // Implement drag-and-drop reordering by triggering reorder event
-                    stableOnEvent(WidgetSettingsEvent.ReorderWidgets(listOf(widget.id)))
+                onReorder = {
+                    // Open reorder dialog for drag-and-drop functionality
+                    // The actual reordering will be handled by a dedicated dialog with drag handles
+                    val currentOrder = visibleWidgets.map { it.id }
+                    
+                    // For now, move widget up by one position as a simple implementation
+                    val currentIndex = visibleWidgets.indexOf(widget)
+                    if (currentIndex > 0) {
+                        val newOrder = currentOrder.toMutableList().apply {
+                            // Swap with previous item
+                            val temp = this[currentIndex]
+                            this[currentIndex] = this[currentIndex - 1]
+                            this[currentIndex - 1] = temp
+                        }
+                        stableOnEvent(WidgetSettingsEvent.ReorderWidgets(newOrder))
+                    }
                 }
             )
         }

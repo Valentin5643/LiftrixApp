@@ -28,8 +28,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.domain.model.portability.ParsedWorkout
-import com.example.liftrix.domain.usecase.import.ImportValidation
-import com.example.liftrix.domain.usecase.import.ConflictStrategy
+import com.example.liftrix.domain.usecase.data_import.ImportValidation
+import com.example.liftrix.domain.usecase.data_import.ConflictStrategy
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.theme.LiftrixColorsV2
@@ -796,7 +796,7 @@ private fun ImportProgressCard(
 
 @Composable
 private fun ImportResultCard(
-    importResult: com.example.liftrix.domain.usecase.import.ImportResult,
+    importResult: com.example.liftrix.domain.usecase.data_import.ImportResult,
     modifier: Modifier = Modifier
 ) {
     LiftrixCard(modifier = modifier) {

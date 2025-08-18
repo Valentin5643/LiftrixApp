@@ -462,4 +462,10 @@ sealed class LiftrixRoute {
      */
     @Serializable
     data object TermsOfService : LiftrixRoute()
+    
+    /**
+     * Data portability screen for importing and exporting workout data
+     */
+    @Serializable
+    data object DataPortability : LiftrixRoute()
 }

@@ -431,6 +431,18 @@ fun UnifiedNavigationContainer(
                         onNavigateToNotifications = {
                             navController.navigate(LiftrixRoute.NotificationSettings)
                         },
+                        onNavigateToEmailChange = {
+                            navController.navigate(LiftrixRoute.EmailChange)
+                        },
+                        onNavigateToPasswordChange = {
+                            navController.navigate(LiftrixRoute.PasswordChange)
+                        },
+                        onNavigateToUsernameChange = {
+                            navController.navigate(LiftrixRoute.UsernameChange)
+                        },
+                        onNavigateToAccountDeletion = {
+                            navController.navigate(LiftrixRoute.AccountDeletion)
+                        },
                         onNavigateToHelpCenter = {
                             navController.navigate(LiftrixRoute.HelpCenter)
                         },
@@ -445,6 +457,9 @@ fun UnifiedNavigationContainer(
                         },
                         onNavigateToTermsOfService = {
                             navController.navigate(LiftrixRoute.TermsOfService)
+                        },
+                        onNavigateToDataPortability = {
+                            navController.navigate(LiftrixRoute.DataPortability)
                         }
                     )
                 }
@@ -569,6 +584,14 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.TermsOfService> {
                     com.example.liftrix.ui.settings.legal.TermsOfServiceScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.DataPortability> {
+                    com.example.liftrix.ui.settings.data.DataPortabilityScreen(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         }

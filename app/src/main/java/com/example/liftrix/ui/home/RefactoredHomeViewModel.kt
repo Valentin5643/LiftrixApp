@@ -218,9 +218,8 @@ class RefactoredHomeViewModel @Inject constructor(
                     val includeOthers = _showAllUsersInFeed.value
                     Timber.d("🔥 HOME-FEED: Loading feed - includeOthers: $includeOthers")
                     
-                    // For now, use the homeFeedManager as-is but log the filter state
-                    // TODO: Update HomeFeedManager to accept includeOthers parameter
-                    homeFeedManager.loadFeedWorkouts(userId).collect { result ->
+                    // Pass the includeOthers parameter to filter feed content
+                    homeFeedManager.loadFeedWorkouts(userId, includeOthers).collect { result ->
                         result.fold(
                             onSuccess = { feedState ->
                                 _feedState.value = feedState
@@ -256,7 +255,8 @@ class RefactoredHomeViewModel @Inject constructor(
                 if (userId.isNotEmpty() && currentState is FeedState.Success && currentState.hasMore && !currentState.isLoadingMore) {
                     _feedState.value = FeedState.Loading
                     
-                    homeFeedManager.loadMoreFeedWorkouts(userId, currentWorkouts).collect { result ->
+                    val includeOthers = _showAllUsersInFeed.value
+                    homeFeedManager.loadMoreFeedWorkouts(userId, currentWorkouts, includeOthers).collect { result ->
                         result.fold(
                             onSuccess = { feedState ->
                                 _feedState.value = feedState
@@ -289,7 +289,8 @@ class RefactoredHomeViewModel @Inject constructor(
                 if (userId.isNotEmpty()) {
                     _feedState.value = FeedState.Loading
                     
-                    homeFeedManager.refreshFeed(userId).collect { result ->
+                    val includeOthers = _showAllUsersInFeed.value
+                    homeFeedManager.refreshFeed(userId, includeOthers).collect { result ->
                         result.fold(
                             onSuccess = { feedState ->
                                 _feedState.value = feedState

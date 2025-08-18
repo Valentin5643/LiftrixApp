@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.help
 
+import android.content.Intent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -12,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -39,6 +41,7 @@ fun HelpArticleScreen(
     viewModel: HelpViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
     
     LaunchedEffect(articleId) {
         viewModel.handleEvent(HelpEvent.LoadArticle(articleId))
@@ -56,12 +59,44 @@ fun HelpArticleScreen(
                 }
             },
             actions = {
-                IconButton(
-                    onClick = {
-                        // TODO: Implement article sharing
+                // Only show share button when article is loaded
+                val currentState = uiState
+                if (currentState is UiState.Success && currentState.data.selectedArticle != null) {
+                    val article = currentState.data.selectedArticle
+                    IconButton(
+                        onClick = {
+                            // Create share intent with article details
+                            val shareIntent = Intent().apply {
+                                action = Intent.ACTION_SEND
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, "Liftrix Help: ${article.title}")
+                                putExtra(
+                                    Intent.EXTRA_TEXT,
+                                    buildString {
+                                        appendLine("Liftrix Help Article")
+                                        appendLine()
+                                        appendLine("${article.title}")
+                                        appendLine()
+                                        appendLine(article.content.take(200))
+                                        if (article.content.length > 200) {
+                                            appendLine("...")
+                                        }
+                                        appendLine()
+                                        appendLine("Read more in the Liftrix app!")
+                                    }
+                                )
+                            }
+                            
+                            // Launch share chooser
+                            val chooserIntent = Intent.createChooser(shareIntent, "Share Help Article")
+                            context.startActivity(chooserIntent)
+                            
+                            // Track sharing event
+                            viewModel.handleEvent(HelpEvent.ShareArticle(articleId))
+                        }
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = "Share")
                     }
-                ) {
-                    Icon(Icons.Default.Share, contentDescription = "Share")
                 }
             }
         )

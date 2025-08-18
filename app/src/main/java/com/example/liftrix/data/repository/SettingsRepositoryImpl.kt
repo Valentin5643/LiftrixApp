@@ -14,12 +14,14 @@ import com.example.liftrix.domain.model.UserSettings
 import com.example.liftrix.domain.model.WeightUnit
 import com.example.liftrix.domain.repository.SettingsRepository
 import com.example.liftrix.sync.SettingsSyncWorker
+import com.example.liftrix.domain.service.SettingsPersistenceManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -45,7 +47,8 @@ class SettingsRepositoryImpl @Inject constructor(
     private val settingsDao: SettingsDao,
     private val settingsMapper: SettingsMapper,
     private val dataStore: DataStore<Preferences>,
-    private val workManager: WorkManager
+    private val workManager: WorkManager,
+    private val persistenceManager: SettingsPersistenceManager
 ) : SettingsRepository {
     
     // Separate coroutine scope for async sync operations to prevent circular dependencies
@@ -104,24 +107,19 @@ class SettingsRepositoryImpl @Inject constructor(
     
     override suspend fun updateDarkMode(userId: String, enabled: Boolean): Result<Unit> {
         return try {
-            val updatedAt = Instant.now()
+            // Use SettingsPersistenceManager for reliable triple-store persistence
+            val result = persistenceManager.persistSetting(userId, "dark_mode", enabled)
             
-            // Update DataStore immediately for UI reactivity
-            dataStore.edit { preferences ->
-                preferences[DARK_MODE_KEY] = enabled
-                preferences[USER_ID_KEY] = userId
-                preferences[UPDATED_AT_KEY] = updatedAt.toString()
-            }
-            
-            // Update Room for offline persistence
-            settingsDao.updateDarkMode(userId, enabled, updatedAt)
-            
-            // Schedule Firebase sync
-            scheduleFirebaseSync(userId)
-            
-            Timber.d("Dark mode updated successfully: $enabled for user: $userId")
-            Result.success(Unit)
-            
+            result.fold(
+                onSuccess = {
+                    Timber.d("Dark mode updated successfully: $enabled for user: $userId")
+                    Result.success(Unit)
+                },
+                onFailure = { error ->
+                    Timber.e(error, "Failed to update dark mode for user: $userId")
+                    Result.failure(error)
+                }
+            )
         } catch (e: Exception) {
             Timber.e(e, "Failed to update dark mode for user: $userId")
             Result.failure(e)
@@ -130,24 +128,19 @@ class SettingsRepositoryImpl @Inject constructor(
     
     override suspend fun updateNotifications(userId: String, enabled: Boolean): Result<Unit> {
         return try {
-            val updatedAt = Instant.now()
+            // Use SettingsPersistenceManager for reliable triple-store persistence
+            val result = persistenceManager.persistSetting(userId, "notifications_enabled", enabled)
             
-            // Update DataStore immediately for UI reactivity
-            dataStore.edit { preferences ->
-                preferences[NOTIFICATIONS_ENABLED_KEY] = enabled
-                preferences[USER_ID_KEY] = userId
-                preferences[UPDATED_AT_KEY] = updatedAt.toString()
-            }
-            
-            // Update Room for offline persistence
-            settingsDao.updateNotifications(userId, enabled, updatedAt)
-            
-            // Schedule Firebase sync
-            scheduleFirebaseSync(userId)
-            
-            Timber.d("Notifications updated successfully: $enabled for user: $userId")
-            Result.success(Unit)
-            
+            result.fold(
+                onSuccess = {
+                    Timber.d("Notifications updated successfully: $enabled for user: $userId")
+                    Result.success(Unit)
+                },
+                onFailure = { error ->
+                    Timber.e(error, "Failed to update notifications for user: $userId")
+                    Result.failure(error)
+                }
+            )
         } catch (e: Exception) {
             Timber.e(e, "Failed to update notifications for user: $userId")
             Result.failure(e)
@@ -156,24 +149,19 @@ class SettingsRepositoryImpl @Inject constructor(
     
     override suspend fun updateWeightUnit(userId: String, weightUnit: WeightUnit): Result<Unit> {
         return try {
-            val updatedAt = Instant.now()
+            // Use SettingsPersistenceManager for reliable triple-store persistence
+            val result = persistenceManager.persistSetting(userId, "weight_unit", weightUnit)
             
-            // Update DataStore immediately for UI reactivity
-            dataStore.edit { preferences ->
-                preferences[WEIGHT_UNIT_KEY] = weightUnit.symbol
-                preferences[USER_ID_KEY] = userId
-                preferences[UPDATED_AT_KEY] = updatedAt.toString()
-            }
-            
-            // Update Room for offline persistence
-            settingsDao.updateWeightUnit(userId, weightUnit, updatedAt)
-            
-            // Schedule Firebase sync
-            scheduleFirebaseSync(userId)
-            
-            Timber.d("Weight unit updated successfully: ${weightUnit.symbol} for user: $userId")
-            Result.success(Unit)
-            
+            result.fold(
+                onSuccess = {
+                    Timber.d("Weight unit updated successfully: ${weightUnit.name} for user: $userId")
+                    Result.success(Unit)
+                },
+                onFailure = { error ->
+                    Timber.e(error, "Failed to update weight unit for user: $userId")
+                    Result.failure(error)
+                }
+            )
         } catch (e: Exception) {
             Timber.e(e, "Failed to update weight unit for user: $userId")
             Result.failure(e)
@@ -185,24 +173,35 @@ class SettingsRepositoryImpl @Inject constructor(
         return try {
             settings.validate()
             
-            // Save to DataStore for immediate persistence
-            dataStore.edit { preferences ->
-                preferences[DARK_MODE_KEY] = settings.darkMode
-                preferences[NOTIFICATIONS_ENABLED_KEY] = settings.notificationsEnabled
-                preferences[WEIGHT_UNIT_KEY] = settings.weightUnit.symbol
-                preferences[USER_ID_KEY] = settings.userId
-                preferences[UPDATED_AT_KEY] = settings.updatedAt.toString()
+            // Use SettingsPersistenceManager for complete settings save
+            // Save each setting individually to ensure audit tracking
+            var hasError = false
+            var lastError: Throwable? = null
+            
+            val settingsMap = mapOf(
+                "dark_mode" to settings.darkMode,
+                "notifications_enabled" to settings.notificationsEnabled,
+                "weight_unit" to settings.weightUnit,
+                "terminology_preference" to settings.terminologyPreference,
+                "migration_completed" to settings.migrationCompleted,
+                "migration_explanation_seen" to settings.migrationExplanationSeen
+            )
+            
+            settingsMap.forEach { (key, value) ->
+                val result = persistenceManager.persistSetting(settings.userId, key, value)
+                result.onFailure { error ->
+                    hasError = true
+                    lastError = error
+                    Timber.e(error, "Failed to save setting $key for user: ${settings.userId}")
+                }
             }
             
-            // Save to Room for offline storage
-            val entity = settingsMapper.toEntity(settings)
-            settingsDao.insertSettings(entity)
-            
-            // Schedule Firebase sync
-            scheduleFirebaseSync(settings.userId)
-            
-            Timber.d("Settings saved successfully for user: ${settings.userId}")
-            Result.success(Unit)
+            if (hasError) {
+                Result.failure(lastError ?: Exception("Unknown error during settings save"))
+            } else {
+                Timber.d("Settings saved successfully for user: ${settings.userId}")
+                Result.success(Unit)
+            }
             
         } catch (e: Exception) {
             Timber.e(e, "Failed to save settings for user: ${settings.userId}")
@@ -485,6 +484,90 @@ class SettingsRepositoryImpl @Inject constructor(
             Timber.e(e, "Failed to schedule Firebase sync for user: $userId")
         }
     }
+    
+    // New methods for enhanced settings persistence
+    
+    override suspend fun ensureSettingsPersisted(userId: String): Result<Unit> {
+        return try {
+            val settings = getUserSettingsSync(userId) ?: UserSettings.createDefault(userId)
+            
+            // Use SettingsPersistenceManager to ensure settings are in all stores
+            val result = persistenceManager.validateSettingsIntegrity(userId)
+            
+            result.fold(
+                onSuccess = { isValid ->
+                    if (!isValid) {
+                        // Repair corrupted settings
+                        persistenceManager.repairCorruptedSettings(userId)
+                    } else {
+                        Result.success(Unit)
+                    }
+                },
+                onFailure = { error ->
+                    Timber.e(error, "Failed to validate settings integrity for user: $userId")
+                    Result.failure(error)
+                }
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to ensure settings persisted for user: $userId")
+            Result.failure(e)
+        }
+    }
+    
+    override suspend fun validateSettingsIntegrity(userId: String): Result<Boolean> {
+        return try {
+            persistenceManager.validateSettingsIntegrity(userId)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to validate settings integrity for user: $userId")
+            Result.failure(e)
+        }
+    }
+    
+    override suspend fun repairCorruptedSettings(userId: String): Result<Unit> {
+        return try {
+            val result = persistenceManager.repairCorruptedSettings(userId)
+            
+            result.fold(
+                onSuccess = {
+                    Timber.i("Settings repaired successfully for user: $userId")
+                    Result.success(Unit)
+                },
+                onFailure = { error ->
+                    Timber.e(error, "Failed to repair corrupted settings for user: $userId")
+                    Result.failure(error)
+                }
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to repair corrupted settings for user: $userId")
+            Result.failure(e)
+        }
+    }
+    
+    override fun observeWeightUnit(userId: String): Flow<WeightUnit> {
+        return getUserSettings(userId)
+            .mapNotNull { it?.weightUnit }
+            .distinctUntilChanged()
+    }
+    
+    override suspend fun forceSettingsSync(userId: String): Result<Unit> {
+        return try {
+            val result = persistenceManager.forceSettingsSync(userId)
+            
+            result.fold(
+                onSuccess = {
+                    Timber.d("Settings force synced successfully for user: $userId")
+                    Result.success(Unit)
+                },
+                onFailure = { error ->
+                    Timber.e(error, "Failed to force sync settings for user: $userId")
+                    Result.failure(error)
+                }
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to force sync settings for user: $userId")
+            Result.failure(e)
+        }
+    }
 }
 
 /**
@@ -498,8 +581,14 @@ private fun Preferences.toUserSettings(userId: String): UserSettings? {
             userId = userId,
             darkMode = this[booleanPreferencesKey("dark_mode")] ?: false,
             notificationsEnabled = this[booleanPreferencesKey("notifications_enabled")] ?: true,
-            weightUnit = this[stringPreferencesKey("weight_unit")]?.let { 
-                WeightUnit.fromSymbol(it) 
+            weightUnit = this[stringPreferencesKey("weight_unit")]?.let { value ->
+                try {
+                    // Try to parse as enum name first (new format)
+                    WeightUnit.valueOf(value.uppercase())
+                } catch (e: IllegalArgumentException) {
+                    // Fallback to symbol parsing (legacy format)
+                    WeightUnit.fromSymbol(value) ?: WeightUnit.getSystemDefault()
+                }
             } ?: WeightUnit.getSystemDefault(),
             updatedAt = this[stringPreferencesKey("updated_at")]?.let { 
                 try { 

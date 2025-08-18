@@ -41,6 +41,12 @@ data class SettingsEntity(
     @ColumnInfo(name = "migration_explanation_seen", defaultValue = "0")
     val migrationExplanationSeen: Boolean = false,
     
+    @ColumnInfo(name = "settings_version", defaultValue = "1")
+    val settingsVersion: Int = 1,
+    
+    @ColumnInfo(name = "last_sync_timestamp")
+    val lastSyncTimestamp: Long? = null,
+    
     @ColumnInfo(name = "updated_at")
     val updatedAt: Instant = Instant.now()
 ) {
@@ -59,6 +65,8 @@ data class SettingsEntity(
             terminologyPreference = "NEW",
             migrationCompleted = false,
             migrationExplanationSeen = false,
+            settingsVersion = 1,
+            lastSyncTimestamp = null,
             updatedAt = Instant.now()
         )
     }

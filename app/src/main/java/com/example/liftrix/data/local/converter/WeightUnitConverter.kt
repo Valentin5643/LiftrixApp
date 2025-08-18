@@ -11,11 +11,17 @@ class WeightUnitConverter {
     
     @TypeConverter
     fun fromWeightUnit(weightUnit: WeightUnit): String {
-        return weightUnit.symbol
+        return weightUnit.name
     }
     
     @TypeConverter
-    fun toWeightUnit(symbol: String): WeightUnit {
-        return WeightUnit.fromSymbol(symbol) ?: WeightUnit.getSystemDefault()
+    fun toWeightUnit(value: String): WeightUnit {
+        return try {
+            // First try to parse as enum name (KILOGRAMS, POUNDS)
+            WeightUnit.valueOf(value.uppercase())
+        } catch (e: IllegalArgumentException) {
+            // Fallback for legacy symbol-based storage (kg, lbs)
+            WeightUnit.fromSymbol(value) ?: WeightUnit.getSystemDefault()
+        }
     }
 }

@@ -64,6 +64,7 @@ import com.example.liftrix.data.local.dao.UserAccountDao
 import com.example.liftrix.data.local.dao.HelpArticleDao
 import com.example.liftrix.data.local.dao.SupportTicketDao
 import com.example.liftrix.data.local.dao.AppConfigDao
+import com.example.liftrix.data.local.dao.SettingsAuditDao
 
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.data.local.entity.UserAccountEntity
@@ -121,6 +122,7 @@ import com.example.liftrix.data.local.entity.DataImportEntity
 import com.example.liftrix.data.local.entity.HelpArticleEntity
 import com.example.liftrix.data.local.entity.SupportTicketEntity
 import com.example.liftrix.data.local.entity.AppConfigEntity
+import com.example.liftrix.data.local.entity.SettingsAuditEntity
 
 
 
@@ -182,8 +184,9 @@ import com.example.liftrix.data.local.entity.AppConfigEntity
         HelpArticleEntity::class,
         SupportTicketEntity::class,
         AppConfigEntity::class,
+        SettingsAuditEntity::class,
     ],
-    version = 53,
+    version = 54,
     exportSchema = true
 )
 @TypeConverters(
@@ -251,4 +254,5 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun helpArticleDao(): HelpArticleDao
     abstract fun supportTicketDao(): SupportTicketDao
     abstract fun appConfigDao(): AppConfigDao
+    abstract fun settingsAuditDao(): SettingsAuditDao
 }

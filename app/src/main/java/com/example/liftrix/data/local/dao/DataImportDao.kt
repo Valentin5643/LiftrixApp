@@ -54,8 +54,8 @@ interface DataImportDao {
     suspend fun startImportProcessing(importId: String, userId: String, totalRecords: Int)
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertImport(import: DataImportEntity)
+    suspend fun insertImport(dataImport: DataImportEntity)
     
     @Update
-    suspend fun updateImport(import: DataImportEntity)
+    suspend fun updateImport(dataImport: DataImportEntity)
 }

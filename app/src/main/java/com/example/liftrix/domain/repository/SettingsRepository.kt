@@ -149,4 +149,46 @@ interface SettingsRepository {
      * @return UserSettings or null if no settings exist
      */
     suspend fun getUserSettingsSync(userId: String): UserSettings?
+    
+    // New methods for enhanced settings persistence (SPEC-20250116-settings-persistence)
+    
+    /**
+     * Ensures all user settings are properly persisted across all storage layers.
+     * 
+     * @param userId The ID of the user whose settings to ensure
+     * @return A Result indicating success or failure
+     */
+    suspend fun ensureSettingsPersisted(userId: String): Result<Unit>
+    
+    /**
+     * Validates settings integrity across DataStore, Room, and Firebase.
+     * 
+     * @param userId The ID of the user whose settings to validate
+     * @return A Result containing true if settings are consistent, false otherwise
+     */
+    suspend fun validateSettingsIntegrity(userId: String): Result<Boolean>
+    
+    /**
+     * Repairs corrupted or inconsistent settings using the most recent valid data.
+     * 
+     * @param userId The ID of the user whose settings to repair
+     * @return A Result indicating success or failure
+     */
+    suspend fun repairCorruptedSettings(userId: String): Result<Unit>
+    
+    /**
+     * Observes weight unit changes reactively for the WeightUnitManager.
+     * 
+     * @param userId The ID of the user whose weight unit to observe
+     * @return A Flow that emits weight unit changes
+     */
+    fun observeWeightUnit(userId: String): Flow<WeightUnit>
+    
+    /**
+     * Forces synchronization of settings to Firebase.
+     * 
+     * @param userId The ID of the user whose settings to sync
+     * @return A Result indicating success or failure
+     */
+    suspend fun forceSettingsSync(userId: String): Result<Unit>
 }

@@ -23,9 +23,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.liftrix.domain.model.Exercise
 import com.example.liftrix.domain.model.ExerciseSet
+import com.example.liftrix.domain.model.WeightUnit
+import com.example.liftrix.ui.common.components.WeightDisplay
 import com.example.liftrix.ui.navigation.LiftrixRoute
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.theme.LiftrixSpacing
+import com.example.liftrix.ui.theme.rememberWeightUnitManager
 import java.time.Duration
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -398,13 +401,19 @@ private fun ExerciseDetailCard(
                 
                 // Exercise Stats
                 Column(horizontalAlignment = Alignment.End) {
-                    val totalVolume = exercise.sets.sumOf { set ->
-                        val weight = set.weight?.kilograms?.toInt() ?: 0
+                    val weightUnitManager = rememberWeightUnitManager()
+                    val totalVolumeInKg = exercise.sets.sumOf { set ->
+                        val weight = set.weight?.kilograms ?: 0.0
                         val reps = set.reps?.count ?: 0
                         weight * reps
                     }
+                    
+                    // Use reactive weight display for volume
+                    val volumeText = weightUnitManager?.formatWeightCompact(totalVolumeInKg, WeightUnit.KILOGRAMS)
+                        ?: "${totalVolumeInKg.toInt()}kg"
+                    
                     Text(
-                        text = "${totalVolume}kg",
+                        text = volumeText,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         color = LiftrixColorsV2.Teal
@@ -558,9 +567,14 @@ private fun SetRow(
             textAlign = TextAlign.Center
         )
         
-        // Actual Weight
+        // Actual Weight - Use reactive weight display
+        val weightUnitManager = rememberWeightUnitManager()
+        val weightText = set.weight?.kilograms?.let { weightValue ->
+            weightUnitManager?.formatWeightCompact(weightValue, WeightUnit.KILOGRAMS) ?: "${weightValue.toInt()}kg"
+        } ?: "-"
+        
         Text(
-            text = set.weight?.let { "${it.kilograms}kg" } ?: "-",
+            text = weightText,
             fontSize = 14.sp,
             fontWeight = if (set.completedAt != null) FontWeight.Medium else FontWeight.Normal,
             color = if (set.completedAt != null) {

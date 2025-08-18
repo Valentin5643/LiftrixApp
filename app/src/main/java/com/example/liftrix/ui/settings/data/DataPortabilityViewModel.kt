@@ -13,19 +13,22 @@ import com.example.liftrix.domain.usecase.export.ExportResult
 import com.example.liftrix.domain.usecase.export.ExportProgress
 import com.example.liftrix.domain.usecase.export.DataType
 import com.example.liftrix.domain.usecase.export.DateRange
-import com.example.liftrix.domain.usecase.import.ImportWorkoutsUseCase
-import com.example.liftrix.domain.usecase.import.ImportValidation
-import com.example.liftrix.domain.usecase.import.ImportResult
-import com.example.liftrix.domain.usecase.import.ImportProgress
-import com.example.liftrix.domain.usecase.import.ImportOptions
-import com.example.liftrix.domain.usecase.import.ConflictStrategy
+import com.example.liftrix.domain.usecase.data_import.ImportWorkoutsUseCase
+import com.example.liftrix.domain.usecase.data_import.ImportValidation
+import com.example.liftrix.domain.usecase.data_import.ImportResult
+import com.example.liftrix.domain.usecase.data_import.ImportProgress
+import com.example.liftrix.domain.usecase.data_import.ImportOptions
+import com.example.liftrix.domain.usecase.data_import.ConflictStrategy
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.state.dataOrNull
 import com.example.liftrix.ui.common.state.isLoading
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -511,10 +514,69 @@ class DataPortabilityViewModel @Inject constructor(
     }
 
     private fun shareExport(exportResult: ExportResult) {
-        // Note: This would integrate with the sharing service
-        // Implementation will be done in the integration layer
-        Timber.d("Sharing export: ${exportResult.exportId}")
+        viewModelScope.launch {
+            try {
+                // Create a share intent for the exported file
+                val shareIntent = createShareIntent(exportResult)
+                
+                // Update state to indicate sharing is in progress
+                updateState { currentState ->
+                    val exportData = when (val state = currentState.exportState) {
+                        is UiState.Success -> state.data.copy(
+                            exportStatusMessage = "Opening share dialog..."
+                        )
+                        else -> ExportData(exportStatusMessage = "Opening share dialog...")
+                    }
+                    currentState.copy(exportState = UiState.Success(exportData))
+                }
+                
+                // Emit sharing event for the UI to handle
+                _shareExportEvent.emit(ShareExportEvent(exportResult, shareIntent))
+                
+                Timber.d("Share initiated for export: ${exportResult.exportId}")
+            } catch (exception: Exception) {
+                Timber.e(exception, "Failed to share export")
+                updateState { currentState ->
+                    currentState.copy(
+                        exportState = UiState.Error(
+                            error = LiftrixError.BusinessLogicError(
+                                code = "SHARE_FAILED",
+                                errorMessage = "Failed to share export: ${exception.message}",
+                                analyticsContext = mapOf("export_id" to exportResult.exportId)
+                            ),
+                            previousData = when (val state = currentState.exportState) {
+                                is UiState.Success -> state.data
+                                is UiState.Error -> state.previousData
+                                else -> null
+                            }
+                        )
+                    )
+                }
+            }
+        }
     }
+    
+    private fun createShareIntent(exportResult: ExportResult): ShareIntentData {
+        val mimeType = when (exportResult.format) {
+            ExportFormat.JSON -> "application/json"
+            ExportFormat.CSV -> "text/csv"
+            ExportFormat.FIT -> "application/octet-stream"
+            ExportFormat.TCX -> "application/xml"
+        }
+        
+        val fileName = "liftrix_export_${exportResult.exportId}.${exportResult.format.name.lowercase()}"
+        
+        return ShareIntentData(
+            fileUri = exportResult.file.absolutePath,
+            mimeType = mimeType,
+            fileName = fileName,
+            chooserTitle = "Share Liftrix Export"
+        )
+    }
+    
+    // Add a SharedFlow for share events that the UI can collect
+    private val _shareExportEvent = MutableSharedFlow<ShareExportEvent>()
+    val shareExportEvent: SharedFlow<ShareExportEvent> = _shareExportEvent.asSharedFlow()
 
     private fun dismissError() {
         updateState { currentState ->
@@ -633,6 +695,24 @@ sealed class DataPortabilityEvent : ViewModelEvent {
     object DismissError : DataPortabilityEvent()
     object Reset : DataPortabilityEvent()
 }
+
+/**
+ * Data class for share intent information.
+ */
+data class ShareIntentData(
+    val fileUri: String,
+    val mimeType: String,
+    val fileName: String,
+    val chooserTitle: String
+)
+
+/**
+ * Event for sharing an exported file.
+ */
+data class ShareExportEvent(
+    val exportResult: ExportResult,
+    val shareIntent: ShareIntentData
+)
 
 /**
  * ★ Insight ─────────────────────────────────────

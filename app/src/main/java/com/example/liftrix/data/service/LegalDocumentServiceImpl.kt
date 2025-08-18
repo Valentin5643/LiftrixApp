@@ -42,6 +42,137 @@ class LegalDocumentServiceImpl @Inject constructor(
         private const val DOCUMENT_VERSIONS_KEY = "legal_document_versions"
         private const val CACHE_TTL_HOURS = 24L
         
+        // Default fallback content for legal documents
+        private const val DEFAULT_PRIVACY_POLICY = """Privacy Policy for Liftrix
+
+Last Updated: January 2025
+
+1. Information We Collect
+We collect the following types of information:
+• Account information (email, username, profile data)
+• Workout data (exercises, sets, reps, weights)
+• Usage analytics (app interactions, feature usage)
+• Device information (for sync and notifications)
+
+2. How We Use Your Information
+Your data is used to:
+• Provide personalized workout tracking and analytics
+• Sync your data across devices
+• Send workout reminders and achievement notifications
+• Improve app features and user experience
+• Generate progress reports and insights
+
+3. Data Security & Storage
+• All data is encrypted in transit and at rest
+• Workout data is stored locally and synced to secure cloud servers
+• We use industry-standard security measures
+• Regular security audits are performed
+
+4. Data Sharing
+We do NOT:
+• Sell your personal data to third parties
+• Share your workout data without consent
+• Use your data for advertising
+
+We MAY share data:
+• With your explicit consent (e.g., social features)
+• To comply with legal obligations
+• In anonymized form for research
+
+5. Your Rights & Controls
+You have the right to:
+• Access all your personal data
+• Export your workout history
+• Delete your account and all associated data
+• Opt-out of analytics and notifications
+• Control privacy settings for social features
+
+6. Social Features & Privacy
+• Profile visibility settings (Public/Followers/Private)
+• Gym buddy connections require mutual consent
+• You control what workout data is shared
+• Block and report features available
+
+7. Contact Us
+For privacy concerns or data requests:
+• In-app: Settings > Help & Support
+• Email: privacy@liftrix.com"""
+        
+        private const val DEFAULT_TERMS_OF_SERVICE = """Terms of Service for Liftrix
+
+Last Updated: January 2025
+
+1. Acceptance of Terms
+By creating an account or using Liftrix, you agree to these Terms of Service and our Privacy Policy. If you disagree with any part, please do not use our service.
+
+2. Account Registration
+• You must be 13 years or older to use Liftrix
+• You must provide accurate account information
+• You are responsible for your account security
+• One person per account (no sharing)
+• You must notify us of any unauthorized access
+
+3. Acceptable Use
+You agree to:
+• Use Liftrix for personal fitness tracking only
+• Not interfere with the service operation
+• Not attempt to access other users' data
+• Not use automated systems or bots
+• Respect other users in social features
+• Not post inappropriate content
+
+4. Your Content & Data
+• You own your workout data and content
+• You grant us license to process and display your data for service operation
+• You can export your data at any time
+• You can delete your account and data
+• We backup data but are not liable for data loss
+
+5. Subscription & Payments
+• Free tier includes core features
+• Premium features require subscription
+• Subscriptions auto-renew unless cancelled
+• Refunds per platform policy (App Store/Google Play)
+• Prices may change with notice
+
+6. Intellectual Property
+• Liftrix name, logo, and design are our property
+• Exercise database is licensed content
+• You may not copy or redistribute app content
+• User-generated content remains yours
+
+7. Service Availability
+• We strive for 99.9% uptime but don't guarantee it
+• Maintenance windows will be announced
+• Features may be added or removed
+• Service may be discontinued with 30 days notice
+
+8. Limitation of Liability
+• Liftrix is not medical advice
+• Consult professionals before starting fitness programs
+• We are not liable for injuries from exercises
+• Maximum liability limited to subscription fees paid
+
+9. Termination
+We may terminate accounts that:
+• Violate these terms
+• Are inactive for 12+ months
+• Engage in fraudulent activity
+• Abuse social features
+
+10. Changes to Terms
+• We'll notify you of material changes
+• Continued use constitutes acceptance
+• Review terms periodically
+
+11. Governing Law
+These terms are governed by the laws of [Your Jurisdiction].
+
+12. Contact
+• In-app: Settings > Help & Support
+• Email: legal@liftrix.com
+• Response within 48 hours"""
+        
         private fun getDocumentCacheKey(type: LegalDocumentType): String = 
             "legal_document_${type.fileName}_cache"
         
@@ -347,18 +478,49 @@ class LegalDocumentServiceImpl @Inject constructor(
             try {
                 remoteConfigManager.initialize().getOrThrow()
                 remoteConfigManager.fetchAndActivate(forceRefresh).getOrThrow()
-                val documentJson = when (configKey) {
-                    PRIVACY_POLICY_CONFIG_KEY -> remoteConfigManager.getPrivacyPolicyUrl().getOrElse { "" }
-                    TERMS_CONFIG_KEY -> remoteConfigManager.getTermsOfServiceUrl().getOrElse { "" }
-                    else -> remoteConfigManager.getString(configKey).getOrElse { "" }
+                
+                // For now, we'll use default content since remote config returns URLs not JSON
+                // TODO: Implement URL fetching and content parsing when backend is ready
+                val document = when (type) {
+                    LegalDocumentType.PRIVACY_POLICY -> {
+                        LegalDocument(
+                            type = type,
+                            title = "Privacy Policy",
+                            content = DEFAULT_PRIVACY_POLICY,
+                            version = "1.0",
+                            effectiveDate = Instant.now(),
+                            lastModified = Instant.now()
+                        )
+                    }
+                    LegalDocumentType.TERMS_OF_SERVICE -> {
+                        LegalDocument(
+                            type = type,
+                            title = "Terms of Service",
+                            content = DEFAULT_TERMS_OF_SERVICE,
+                            version = "1.0",
+                            effectiveDate = Instant.now(),
+                            lastModified = Instant.now()
+                        )
+                    }
+                    else -> {
+                        // For EULA and DPA, check if remote config has content
+                        val documentJson = remoteConfigManager.getString(configKey).getOrElse { "" }
+                        if (documentJson.isNotBlank()) {
+                            try {
+                                json.decodeFromString<LegalDocument>(documentJson)
+                            } catch (e: Exception) {
+                                Timber.w(e, "Failed to decode document JSON for ${type.name}")
+                                null
+                            }
+                        } else {
+                            null
+                        }
+                    }
                 }
                 
-                if (documentJson.isNotBlank()) {
-                    val document = json.decodeFromString<LegalDocument>(documentJson)
-                    
+                if (document != null) {
                     // Cache the document
                     cacheDocument(type, document)
-                    
                     return@withContext document
                 }
                 
