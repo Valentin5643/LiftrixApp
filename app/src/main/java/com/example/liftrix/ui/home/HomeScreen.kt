@@ -54,6 +54,8 @@ import com.example.liftrix.ui.feed.FeedEvent
 import com.example.liftrix.ui.feed.FeedTab
 import com.example.liftrix.ui.feed.PostInteraction
 import com.example.liftrix.ui.feed.components.WorkoutPostCard
+import com.example.liftrix.ui.common.sync.SyncStatusIndicator
+import com.example.liftrix.ui.common.sync.SyncStatusViewModel
 import com.example.liftrix.ui.navigation.LiftrixRoute
 import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
 import com.example.liftrix.ui.workout.components.PrimaryActionButton
@@ -96,7 +98,8 @@ fun HomeScreen(
     onNavigateToMyWorkouts: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = hiltViewModel(),
-    feedViewModel: FeedViewModel = hiltViewModel()
+    feedViewModel: FeedViewModel = hiltViewModel(),
+    syncStatusViewModel: SyncStatusViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     
@@ -134,6 +137,7 @@ fun HomeScreen(
                             onNavigateToMyWorkouts = onNavigateToMyWorkouts,
                             onEvent = { event -> viewModel.handleEvent(event) },
                             feedViewModel = feedViewModel,
+                            syncStatusViewModel = syncStatusViewModel,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -179,6 +183,7 @@ private fun EnhancedHomeContent(
     onNavigateToMyWorkouts: () -> Unit,
     onEvent: (HomeEvent) -> Unit,
     feedViewModel: FeedViewModel,
+    syncStatusViewModel: SyncStatusViewModel,
     modifier: Modifier = Modifier
 ) {
     // Get feed state from FeedViewModel
@@ -196,9 +201,10 @@ private fun EnhancedHomeContent(
         verticalArrangement = Arrangement.spacedBy(GridSystem.spacing3),
         contentPadding = PaddingValues(vertical = GridSystem.spacing3)
     ) {
-        // Enhanced Header Section  
+        // Enhanced Header Section with Sync Status
         item {
             EnhancedHomeHeader(
+                syncStatusViewModel = syncStatusViewModel,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = GridSystem.spacing3)
@@ -448,19 +454,36 @@ private fun EnhancedHomeContent(
 }
 
 /**
- * Enhanced home screen header with modern typography and athletic branding
+ * Enhanced home screen header with modern typography, athletic branding, and sync status
  */
 @Composable
 private fun EnhancedHomeHeader(
+    syncStatusViewModel: SyncStatusViewModel,
     modifier: Modifier = Modifier
 ) {
-    Text(
-        text = "Track your progress and stay motivated with friends",
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Normal,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = modifier.padding(vertical = GridSystem.spacing2)
-    )
+    // Collect sync status for display
+    val syncStatus by syncStatusViewModel.syncStatus.collectAsState(initial = com.example.liftrix.sync.SyncStatus.Idle)
+    
+    Column(
+        modifier = modifier.padding(vertical = GridSystem.spacing2),
+        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
+    ) {
+        // Main header text
+        Text(
+            text = "Track your progress and stay motivated with friends",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Normal,
+            color = MaterialTheme.colorScheme.primary
+        )
+        
+        // Sync status indicator - only show when relevant
+        SyncStatusIndicator(
+            syncStatus = syncStatus,
+            showText = true,
+            autoHideSuccess = true,
+            contentDescription = "Firebase sync status"
+        )
+    }
 }
 
 /**

@@ -1,5 +1,0 @@
-This file has been moved to:
-C:\Users\Administrator\Liftrix\app\src\androidTest\java\com\example\liftrix\data\local\migration\Migration27To28Test.kt
-
-Migration tests must be instrumented tests since they require Android framework components.
-The original Migration27To28Test.kt in src/test/ was causing FileNotFoundException because it was trying to run instrumented test code as a unit test.

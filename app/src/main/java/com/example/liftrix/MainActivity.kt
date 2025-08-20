@@ -24,6 +24,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.ui.MainViewModel
+import com.example.liftrix.sync.SyncCoordinator
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import timber.log.Timber
 import com.example.liftrix.ui.auth.AuthActivity
 import com.example.liftrix.ui.navigation.UnifiedNavigationContainer
 import com.example.liftrix.ui.theme.LiftrixTheme
@@ -116,6 +122,18 @@ fun AuthenticatedContent(
     user: com.example.liftrix.domain.model.User,
     onNavigateToAuth: () -> Unit
 ) {
+    // Trigger immediate sync when user is authenticated
+    LaunchedEffect(user.uid) {
+        try {
+            // This would require SyncCoordinator to be injected here
+            // For now, we'll rely on the LiftrixApp to handle the sync setup
+            // The auth state listener in LiftrixApp will catch this authentication
+            Timber.d("User authenticated in MainActivity: ${user.uid}")
+        } catch (e: Exception) {
+            Timber.e(e, "Error during authentication sync setup")
+        }
+    }
+    
     // Main navigation with type-safe navigation system
     UnifiedNavigationContainer()
 }

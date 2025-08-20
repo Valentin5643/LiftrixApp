@@ -1,7 +1,0 @@
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/SettingsScreen.kt:593:33 None of the following candidates is applicable:
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/SettingsScreen.kt:616:33 None of the following candidates is applicable:
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/account/AccountManagementViewModel.kt:104:33 No parameter with name 'cause' found.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/account/AccountManagementViewModel.kt:159:33 No parameter with name 'cause' found.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/account/AccountManagementViewModel.kt:212:33 No parameter with name 'cause' found.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/account/AccountManagementViewModel.kt:273:33 No parameter with name 'cause' found.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/ui/settings/account/AccountManagementViewModel.kt:355:33 No parameter with name 'cause' found.

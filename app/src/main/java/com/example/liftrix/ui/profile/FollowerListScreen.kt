@@ -345,6 +345,10 @@ private fun FollowActionButton(
                 leadingIcon = Icons.Default.Star
             )
         }
+        ConnectionStatus.SELF -> {
+            // No action button for viewing own profile in follower list
+            // This case shouldn't normally appear in follower lists
+        }
     }
 }
 

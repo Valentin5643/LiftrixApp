@@ -1,5 +1,6 @@
 package com.example.liftrix.di
 
+import androidx.work.WorkManager
 import com.example.liftrix.data.local.dao.BlockedUserDao
 import com.example.liftrix.data.local.dao.FollowRelationshipDao
 import com.example.liftrix.data.local.dao.FollowRequestDao
@@ -13,6 +14,7 @@ import com.example.liftrix.data.local.dao.SavedPostDao
 import com.example.liftrix.data.local.dao.WorkoutPostDao
 import com.example.liftrix.data.local.dao.FeedCacheDao
 import com.example.liftrix.data.local.LiftrixDatabase
+import com.example.liftrix.data.local.dao.UserAccountDao
 import com.example.liftrix.data.repository.social.SocialProfileRepositoryImpl
 import com.example.liftrix.domain.repository.social.SocialProfileRepository
 import com.example.liftrix.data.repository.social.FeedRepositoryImpl
@@ -145,9 +147,11 @@ abstract class SocialModule {
         @Singleton
         fun provideSocialProfileRepository(
             socialProfileDao: SocialProfileDao,
-            blockedUserDao: BlockedUserDao
+            blockedUserDao: BlockedUserDao,
+            userAccountDao: UserAccountDao,
+            workManager: WorkManager
             ): SocialProfileRepository {
-                return SocialProfileRepositoryImpl(socialProfileDao, blockedUserDao)
+                return SocialProfileRepositoryImpl(socialProfileDao, blockedUserDao, userAccountDao, workManager)
             }
 
         @Provides

@@ -9,6 +9,9 @@ import com.example.liftrix.data.local.entity.ExerciseSetEntity
 import com.example.liftrix.data.mapper.WorkoutMapper
 import com.example.liftrix.data.mapper.WorkoutPostMapper
 import com.example.liftrix.data.mapper.ExerciseMapper
+import com.example.liftrix.data.sync.OfflineQueueManager
+import com.example.liftrix.sync.SyncCoordinator
+import androidx.work.WorkManager
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.model.WorkoutSummary
@@ -70,7 +73,10 @@ class WorkoutRepositoryImpl @Inject constructor(
     private val exerciseSetDao: ExerciseSetDao,
     private val workoutMapper: WorkoutMapper,
     private val workoutPostMapper: WorkoutPostMapper,
-    private val exerciseMapper: ExerciseMapper
+    private val exerciseMapper: ExerciseMapper,
+    private val syncCoordinator: SyncCoordinator,
+    private val offlineQueueManager: OfflineQueueManager,
+    private val workManager: WorkManager
 ) : WorkoutRepository {
 
     override suspend fun createWorkout(workout: Workout): LiftrixResult<Workout> {
@@ -162,6 +168,9 @@ class WorkoutRepositoryImpl @Inject constructor(
                 val verifyEntity = workoutDao.getWorkoutByIdForUser(workout.id.value, workout.userId)
                 if (verifyEntity == null) {
                 }
+                
+                // Queue workout for sync after successful creation
+                queueWorkoutForSync(workout)
                 
                 workout // Return original workout with preserved ID
             } else {
@@ -369,6 +378,9 @@ class WorkoutRepositoryImpl @Inject constructor(
                         exerciseSetDao.insertSet(setEntity)
                     }
                 }
+                
+                // Queue workout for sync after successful update
+                queueWorkoutForSync(workout)
                 
                 workout
             } else {
@@ -680,9 +692,24 @@ class WorkoutRepositoryImpl @Inject constructor(
                 )
             }
         ) {
-            // Placeholder implementation
-            // This should mark workout as needing sync
-            Timber.d("Queued workout ${workoutId.value} for sync")
+            // Get the workout to queue for sync
+            val workout = workoutDao.getWorkoutByIdForUser(workoutId.value, userId)
+            if (workout != null) {
+                offlineQueueManager.queueOperation(
+                    userId = userId,
+                    entityType = "WORKOUT",
+                    entityId = workoutId.value,
+                    operation = "UPSERT",
+                    data = workout
+                )
+                
+                // Also trigger sync coordinator for immediate sync attempt
+                syncCoordinator.triggerEntitySync(userId, "workout")
+                
+                Timber.d("Queued workout ${workoutId.value} for sync and triggered immediate sync")
+            } else {
+                throw IllegalArgumentException("Workout not found: ${workoutId.value}")
+            }
         }
     }
 
@@ -693,17 +720,39 @@ class WorkoutRepositoryImpl @Inject constructor(
     override suspend fun syncNowForUser(userId: String): LiftrixResult<Unit> {
         return liftrixCatching(
             errorMapper = { throwable ->
-                LiftrixError.DatabaseError(
-                    errorMessage = "Failed to trigger sync",
-                    operation = "SYNC",
-                    table = "workouts",
+                LiftrixError.BusinessLogicError(
+                    code = "SYNC_TRIGGER_FAILED",
+                    errorMessage = "Failed to trigger immediate sync: ${throwable.message}",
                     analyticsContext = mapOf("user_id" to userId)
                 )
             }
         ) {
-            // Placeholder implementation
-            // This should trigger immediate sync
-            Timber.d("Triggered sync for user: $userId")
+            // Trigger immediate sync through SyncCoordinator
+            val syncResult = syncCoordinator.triggerEntitySync(userId, "workout")
+            
+            when {
+                syncResult.isSuccess -> {
+                    Timber.d("Successfully triggered immediate workout sync for user: $userId")
+                }
+                syncResult.isFailure -> {
+                    val error = syncResult.exceptionOrNull()
+                    Timber.e("Sync coordinator failed to trigger sync: $error")
+                    throw Exception("Sync trigger failed: ${error?.message ?: "Unknown error"}")
+                }
+            }
+            
+            // Also process any pending offline queue items
+            val queueResult = offlineQueueManager.processPendingQueue(userId)
+            when {
+                queueResult.isSuccess -> {
+                    Timber.d("Processed pending queue items for user: $userId - ${queueResult.getOrNull()}")
+                }
+                queueResult.isFailure -> {
+                    val error = queueResult.exceptionOrNull()
+                    Timber.w("Failed to process pending queue: ${error?.message}")
+                    // Don't fail the entire operation for queue processing failure
+                }
+            }
         }
     }
 
@@ -1207,5 +1256,30 @@ class WorkoutRepositoryImpl @Inject constructor(
                 emptyList()
             }
         )
+    }
+    
+    /**
+     * Helper method to queue a workout for sync after creation or update
+     */
+    private suspend fun queueWorkoutForSync(workout: Workout) {
+        try {
+            offlineQueueManager.queueOperation(
+                userId = workout.userId,
+                entityType = "WORKOUT",
+                entityId = workout.id.value,
+                operation = "UPSERT",
+                data = workout
+            )
+            
+            // Trigger sync coordinator for background sync
+            CoroutineScope(Dispatchers.IO).launch {
+                syncCoordinator.triggerEntitySync(workout.userId, "workout")
+            }
+            
+            Timber.d("Queued workout ${workout.id.value} for sync")
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to queue workout ${workout.id.value} for sync")
+            // Don't fail the entire operation for sync queueing failure
+        }
     }
 }

@@ -14,6 +14,7 @@ import com.example.liftrix.domain.usecase.settings.UpdateSettingsUseCase
 import com.example.liftrix.domain.usecase.settings.UpdateWeightUnitPreferenceUseCase
 import com.example.liftrix.domain.usecase.profile.UploadProfileImageUseCase
 import com.example.liftrix.domain.usecase.GetProfileUseCase
+import com.example.liftrix.domain.usecase.social.GetSocialProfileUseCase
 import com.example.liftrix.domain.model.WeightUnit
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.ui.theme.ThemeManager
@@ -56,6 +57,7 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val getUserSettingsUseCase: GetUserSettingsUseCase,
     private val getProfileUseCase: GetProfileUseCase,
+    private val getSocialProfileUseCase: GetSocialProfileUseCase,
     private val updateSettingsUseCase: UpdateSettingsUseCase,
     private val updateWeightUnitPreferenceUseCase: UpdateWeightUnitPreferenceUseCase,
     private val getSubscriptionStatusUseCase: GetSubscriptionStatusUseCase,
@@ -72,6 +74,7 @@ class SettingsViewModel @Inject constructor(
     val uiState: StateFlow<SettingsState> = _uiState.asStateFlow()
 
     private var currentUserId: String? = null
+    private var cachedCurrentUser: com.example.liftrix.domain.model.User? = null
     private var lastFailedEvent: SettingsEvent? = null
     private var loadSettingsJob: kotlinx.coroutines.Job? = null
     private var lastLoadedUserId: String? = null
@@ -90,6 +93,7 @@ class SettingsViewModel @Inject constructor(
             
             val currentUser = authRepository.getCurrentUser()
             if (currentUser != null) {
+                cachedCurrentUser = currentUser // Cache the user object
                 if (currentUserId == null) { // Only set if not already set by Flow
                     currentUserId = currentUser.uid
                     loadSettings()
@@ -214,13 +218,24 @@ class SettingsViewModel @Inject constructor(
                 kotlinx.coroutines.withTimeout(10_000) { // 10 second timeout
                     // Use supervisorScope to prevent cascade failures
                     kotlinx.coroutines.supervisorScope {
-                        // Combine settings, profile, and subscription data loading
+                        // Combine settings, profile, social profile, and subscription data loading
                         combine(
                             getUserSettingsUseCase(userId),
                             getProfileUseCase(userId).map { Result.success(it) }.catch { emit(Result.failure(it)) },
+                            kotlinx.coroutines.flow.flow { 
+                                val socialProfileResult = getSocialProfileUseCase(userId)
+                                emit(socialProfileResult)
+                            }.catch { throwable ->
+                                val error = LiftrixError.BusinessLogicError(
+                                    code = "SOCIAL_PROFILE_FETCH_FAILED",
+                                    errorMessage = "Failed to fetch social profile: ${throwable.message}",
+                                    analyticsContext = mapOf("operation" to "FETCH_SOCIAL_PROFILE")
+                                )
+                                emit(com.example.liftrix.domain.model.common.liftrixFailure(error))
+                            },
                             getSubscriptionStatusUseCase(userId)
-                        ) { settingsResult, profileResult, subscriptionResult ->
-                            Triple(settingsResult, profileResult, subscriptionResult)
+                        ) { settingsResult, profileResult, socialProfileResult, subscriptionResult ->
+                            SettingsLoadResult(settingsResult, profileResult, socialProfileResult, subscriptionResult)
                         }
                         .catch { exception ->
                             when (exception) {
@@ -234,8 +249,8 @@ class SettingsViewModel @Inject constructor(
                                 }
                             }
                         }
-                        .collect { (settingsResult, profileResult, subscriptionResult) ->
-                            processSettingsResults(settingsResult, profileResult, subscriptionResult)
+                        .collect { loadResult ->
+                            processSettingsResults(loadResult)
                         }
                     }
                 }
@@ -971,22 +986,24 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             authRepository.currentUser
                 .distinctUntilChanged()
-                .map { it?.uid }
                 .catch { exception ->
                     Timber.e(exception, "Error observing authentication state")
                     updateState { withError("Authentication error") }
                 }
-                .collect { userId ->
-                    currentUserId = userId
-                    if (userId != null) {
+                .collect { user ->
+                    currentUserId = user?.uid
+                    cachedCurrentUser = user // Cache the full user object
+                    if (user != null) {
                         loadSettings()
                     } else {
+                        cachedCurrentUser = null // Clear cache when user signs out
                         updateState { 
                             copy(
                                 isLoading = false,
                                 error = "User not authenticated",
                                 userSettings = null,
                                 userProfile = null,
+                                currentUser = null,
                                 subscriptionStatus = null
                             )
                         }
@@ -1000,51 +1017,73 @@ class SettingsViewModel @Inject constructor(
      * Implements graceful degradation - shows content even if some data fails to load.
      */
     private fun processSettingsResults(
-        settingsResult: Result<com.example.liftrix.domain.model.UserSettings>,
-        profileResult: Result<com.example.liftrix.domain.model.UserProfile?>,
-        subscriptionResult: Result<com.example.liftrix.domain.model.SubscriptionStatus>
+        loadResult: SettingsLoadResult
     ) {
-        val settings = settingsResult.getOrNull()
-        val profile = profileResult.getOrNull()
-        val subscription = subscriptionResult.getOrNull()
-        
-        // Sync theme manager with user settings
-        settings?.let { userSettings ->
-            val themeMode = if (userSettings.darkMode) ThemeMode.DARK else ThemeMode.LIGHT
-            themeManager.switchTheme(themeMode)
-        }
-        
-        // Prioritize showing content over error state
-        // Only show error if critical data (settings) is missing
-        val errorMessage = when {
-            settingsResult.isFailure -> {
-                // Settings are critical - show error if they fail
-                "Failed to load user settings. Some features may not work correctly."
-            }
-            profileResult.isFailure && subscriptionResult.isFailure -> {
-                // Profile and subscription are non-critical
-                "Some profile and subscription information couldn't be loaded."
-            }
-            profileResult.isFailure -> {
-                "Profile information couldn't be loaded."
-            }
-            subscriptionResult.isFailure -> {
-                "Subscription information couldn't be loaded."
-            }
-            else -> null
-        }
-        
-        // Always update state to exit loading, even with partial data
-        val newState = _uiState.value.copy(
-            isLoading = false,
-            userSettings = settings,
-            userProfile = profile,
-            subscriptionStatus = subscription,
-            error = if (settings == null) errorMessage else null, // Only show error if critical data missing
-            isUpdatingSettings = false
+        val settings = loadResult.settingsResult.getOrNull()
+        val profile = loadResult.profileResult.getOrNull()
+        val socialProfile = loadResult.socialProfileResult.fold(
+            onSuccess = { it },
+            onFailure = { null }
         )
+        val subscription = loadResult.subscriptionResult.getOrNull()
         
-        _uiState.value = newState
+        // Load the actual Firebase Auth user to prevent "Welcome to Liftrix" fallback
+        // This is critical for proper username display in UserProfileCard
+        viewModelScope.launch {
+            // Try to get current user, use cached version if fetch fails
+            val currentUser = try {
+                val user = authRepository.getCurrentUser()
+                if (user != null) {
+                    cachedCurrentUser = user // Cache for future use
+                    user
+                } else {
+                    cachedCurrentUser // Use cached version if current fetch returns null
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to get current user for settings display, using cached")
+                cachedCurrentUser // Fall back to cached user on error
+            }
+            
+            // Sync theme manager with user settings
+            settings?.let { userSettings ->
+                val themeMode = if (userSettings.darkMode) ThemeMode.DARK else ThemeMode.LIGHT
+                themeManager.switchTheme(themeMode)
+            }
+            
+            // Prioritize showing content over error state
+            // Only show error if critical data (settings) is missing
+            val errorMessage = when {
+                loadResult.settingsResult.isFailure -> {
+                    // Settings are critical - show error if they fail
+                    "Failed to load user settings. Some features may not work correctly."
+                }
+                loadResult.profileResult.isFailure && loadResult.subscriptionResult.isFailure -> {
+                    // Profile and subscription are non-critical
+                    "Some profile and subscription information couldn't be loaded."
+                }
+                loadResult.profileResult.isFailure -> {
+                    "Profile information couldn't be loaded."
+                }
+                loadResult.subscriptionResult.isFailure -> {
+                    "Subscription information couldn't be loaded."
+                }
+                else -> null
+            }
+            
+            // Always update state to exit loading, even with partial data
+            val newState = _uiState.value.copy(
+                isLoading = false,
+                userSettings = settings,
+                userProfile = profile,
+                socialProfile = socialProfile,
+                currentUser = currentUser,
+                subscriptionStatus = subscription,
+                error = if (settings == null) errorMessage else null, // Only show error if critical data missing
+                isUpdatingSettings = false
+            )
+            
+            _uiState.value = newState
+        }
     }
     
     /**
@@ -1276,4 +1315,14 @@ class SettingsViewModel @Inject constructor(
         loadSettingsJob?.cancel()
         loadSettingsJob = null
     }
+    
+    /**
+     * Data class to hold all settings loading results.
+     */
+    private data class SettingsLoadResult(
+        val settingsResult: Result<com.example.liftrix.domain.model.UserSettings>,
+        val profileResult: Result<com.example.liftrix.domain.model.UserProfile?>,
+        val socialProfileResult: com.example.liftrix.domain.model.common.LiftrixResult<com.example.liftrix.domain.model.social.SocialProfile?>,
+        val subscriptionResult: Result<com.example.liftrix.domain.model.SubscriptionStatus>
+    )
 }

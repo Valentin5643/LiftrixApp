@@ -1,15 +1,20 @@
 package com.example.liftrix.data.repository.social
 
+import androidx.work.WorkManager
 import com.example.liftrix.data.local.dao.BlockedUserDao
 import com.example.liftrix.data.local.dao.SocialProfileDao
+import com.example.liftrix.data.local.dao.UserAccountDao
 import com.example.liftrix.data.local.entity.SocialProfileEntity
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.SocialProfile
 import com.example.liftrix.domain.repository.social.SocialProfileRepository
+import com.example.liftrix.sync.UserPublicSyncWorker
+import com.example.liftrix.sync.SocialProfileSyncWorker
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,7 +27,9 @@ import javax.inject.Singleton
 @Singleton
 class SocialProfileRepositoryImpl @Inject constructor(
     private val socialProfileDao: SocialProfileDao,
-    private val blockedUserDao: BlockedUserDao
+    private val blockedUserDao: BlockedUserDao,
+    private val userAccountDao: UserAccountDao,
+    private val workManager: WorkManager
 ) : SocialProfileRepository {
 
     // ========================================
@@ -124,6 +131,54 @@ class SocialProfileRepositoryImpl @Inject constructor(
             socialProfileDao.isUsernameAvailable(username)
         }
     }
+    
+    override suspend fun cleanupOrphanedUsername(username: String, currentUserId: String): LiftrixResult<Boolean> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.BusinessLogicError(
+                    code = "CLEANUP_ORPHANED_USERNAME_FAILED",
+                    errorMessage = "Failed to cleanup orphaned username",
+                    analyticsContext = mapOf("username" to username, "user_id" to currentUserId)
+                )
+            }
+        ) {
+            Timber.d("USER_SEARCH_DEBUG", "Cleanup: Attempting to cleanup username '$username' for user $currentUserId")
+            
+            // Check if there's an existing profile with this username
+            val existingProfile = socialProfileDao.getProfileByUsername("", username) // Empty viewerId for internal check
+            
+            if (existingProfile != null) {
+                Timber.d("USER_SEARCH_DEBUG", "Cleanup: Found existing profile with userId=${existingProfile.userId}")
+                
+                // Check if the existing profile belongs to a valid user account
+                val existingUserAccount = userAccountDao.getAccountForUserSuspend(existingProfile.userId)
+                
+                if (existingUserAccount == null) {
+                    // Orphaned profile - the user account no longer exists
+                    Timber.d("USER_SEARCH_DEBUG", "Cleanup: Profile is orphaned (no user account), deleting")
+                    
+                    socialProfileDao.deleteProfileForUser(existingProfile.userId)
+                    Timber.d("USER_SEARCH_DEBUG", "Cleanup: Successfully deleted orphaned profile")
+                    return@liftrixCatching true // Username is now available
+                } else {
+                    // Profile belongs to a valid user account
+                    if (existingUserAccount.userId == currentUserId) {
+                        // It's the current user's old profile - can reuse
+                        Timber.d("USER_SEARCH_DEBUG", "Cleanup: Profile belongs to current user, can reuse")
+                        return@liftrixCatching true
+                    } else {
+                        // Profile belongs to another valid user
+                        Timber.d("USER_SEARCH_DEBUG", "Cleanup: Profile belongs to another valid user, cannot cleanup")
+                        return@liftrixCatching false
+                    }
+                }
+            } else {
+                // No existing profile found - username should be available
+                Timber.d("USER_SEARCH_DEBUG", "Cleanup: No existing profile found, username should be available")
+                return@liftrixCatching true
+            }
+        }
+    }
 
     // ========================================
     // Profile Discovery
@@ -175,6 +230,20 @@ class SocialProfileRepositoryImpl @Inject constructor(
         ) {
             val entity = profile.toEntity()
             socialProfileDao.insertProfile(entity)
+            
+            // Also update the username in UserAccountEntity for consistency
+            userAccountDao.updateUsername(profile.userId, profile.username)
+            Timber.d("Updated username in UserAccountEntity for user: ${profile.userId}")
+            
+            // Trigger sync to make the profile searchable immediately
+            val userPublicSyncRequest = UserPublicSyncWorker.createWorkRequest(profile.userId, forceSync = true)
+            val socialProfileSyncRequest = SocialProfileSyncWorker.createWorkRequest(profile.userId, forceSync = true)
+            
+            workManager.enqueue(userPublicSyncRequest)
+            workManager.enqueue(socialProfileSyncRequest)
+            
+            Timber.d("Triggered sync workers after social profile creation for user: ${profile.userId}")
+            
             profile
         }
     }

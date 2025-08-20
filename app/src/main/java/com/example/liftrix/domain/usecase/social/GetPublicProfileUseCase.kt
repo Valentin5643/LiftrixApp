@@ -169,6 +169,7 @@ class GetPublicProfileUseCase @Inject constructor(
             com.example.liftrix.domain.model.social.ConnectionStatus.MUTUAL_FOLLOW -> true
             com.example.liftrix.domain.model.social.ConnectionStatus.GYM_BUDDY -> true
             com.example.liftrix.domain.model.social.ConnectionStatus.BLOCKED -> false
+            com.example.liftrix.domain.model.social.ConnectionStatus.SELF -> true // User can always see their own profile
         }
     }
     

@@ -1,5 +1,6 @@
 package com.example.liftrix.data.repository
 
+import androidx.work.WorkManager
 import com.example.liftrix.data.local.dao.UserAccountDao
 import com.example.liftrix.data.mapper.UserAccountMapper
 import com.example.liftrix.domain.model.UserAccount
@@ -7,6 +8,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.UserAccountRepository
+import com.example.liftrix.sync.UserPublicSyncWorker
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
@@ -23,7 +25,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class UserAccountRepositoryImpl @Inject constructor(
-    private val userAccountDao: UserAccountDao
+    private val userAccountDao: UserAccountDao,
+    private val workManager: WorkManager
 ) : UserAccountRepository {
 
     override fun getAccountInfo(userId: String): Flow<UserAccount?> {
@@ -93,6 +96,11 @@ class UserAccountRepositoryImpl @Inject constructor(
             }
             
             Timber.d("Username updated successfully for user: $userId to: $username")
+            
+            // Trigger sync to make the username searchable immediately
+            val syncRequest = UserPublicSyncWorker.createWorkRequest(userId, forceSync = true)
+            workManager.enqueue(syncRequest)
+            Timber.d("Triggered UserPublicSyncWorker to sync searchable profile for user: $userId")
         }
     }
 
@@ -132,6 +140,14 @@ class UserAccountRepositoryImpl @Inject constructor(
             
             userAccountDao.insertAccount(entity)
             Timber.d("Account info upserted for user: ${userAccount.userId}")
+            
+            // Small delay to ensure database transaction is committed before triggering sync
+            kotlinx.coroutines.delay(200L)
+            
+            // Trigger sync to make the account searchable
+            val syncRequest = UserPublicSyncWorker.createWorkRequest(userAccount.userId, forceSync = true)
+            workManager.enqueue(syncRequest)
+            Timber.d("Triggered UserPublicSyncWorker after account upsert for user: ${userAccount.userId}")
         }
     }
 
@@ -204,6 +220,11 @@ class UserAccountRepositoryImpl @Inject constructor(
             }
             
             Timber.d("Display name updated successfully for user: $userId")
+            
+            // Trigger sync to update searchable profile
+            val syncRequest = UserPublicSyncWorker.createWorkRequest(userId, forceSync = true)
+            workManager.enqueue(syncRequest)
+            Timber.d("Triggered UserPublicSyncWorker after display name update for user: $userId")
         }
     }
 

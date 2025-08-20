@@ -1,6 +1,8 @@
 package com.example.liftrix.data.repository
 
 import com.example.liftrix.data.local.dao.UserProfileDao
+import com.example.liftrix.data.local.dao.UserSearchCacheDao
+import com.example.liftrix.data.local.entity.UserSearchCacheEntity
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -41,6 +43,7 @@ import javax.inject.Singleton
 @Singleton
 class UserSearchRepositoryImpl @Inject constructor(
     private val userProfileDao: UserProfileDao,
+    private val userSearchCacheDao: UserSearchCacheDao,
     private val authRepository: AuthRepository,
     private val firestore: FirebaseFirestore,
     private val gson: Gson
@@ -65,28 +68,39 @@ class UserSearchRepositoryImpl @Inject constructor(
         return liftrixCatching(
             errorMapper = { throwable -> LiftrixError.NetworkError("Search failed: ${throwable.message}") }
         ) {
-            Timber.d("Searching users with query: '$query', filters: $filters")
+            Timber.d("USER_SEARCH_DEBUG", "=== SEARCH FLOW START ===")
+            Timber.d("USER_SEARCH_DEBUG", "Search: query='$query', currentUserId=$currentUserId")
             
             if (query.isBlank()) {
+                Timber.d("USER_SEARCH_DEBUG", "Search: Query is blank, returning empty")
                 return@liftrixCatching emptyList<UserSearchResult>()
             }
 
             // Check cache first for performance
+            Timber.d("USER_SEARCH_DEBUG", "Search: Checking cache")
             val cachedResults = getCachedSearchResults(currentUserId, query).getOrNull()
             if (cachedResults != null && cachedResults.isNotEmpty()) {
-                Timber.d("Returning ${cachedResults.size} cached search results")
+                Timber.d("USER_SEARCH_DEBUG", "Search: Found ${cachedResults.size} cached results")
                 return@liftrixCatching applyFilters(cachedResults, filters)
             }
+            Timber.d("USER_SEARCH_DEBUG", "Search: No cache hit")
 
             // Perform comprehensive Firebase search with tokenized indexing
+            Timber.d("USER_SEARCH_DEBUG", "Search: Calling searchFirebaseUsersWithTokens")
             val searchResults = searchFirebaseUsersWithTokens(query, currentUserId, filters)
             
             // Cache results for future queries
             if (searchResults.isNotEmpty()) {
                 cacheSearchResults(currentUserId, query, searchResults)
+                Timber.d("USER_SEARCH_DEBUG", "Search: Found ${searchResults.size} results")
+                searchResults.forEach { result ->
+                    Timber.d("USER_SEARCH_DEBUG", "  - ${result.displayName} (userId: ${result.userId})")
+                }
+            } else {
+                Timber.w("USER_SEARCH_DEBUG", "Search: NO RESULTS FOUND for query '$query'")
             }
             
-            Timber.d("User search completed: ${searchResults.size} results")
+            Timber.d("USER_SEARCH_DEBUG", "=== SEARCH FLOW END: ${searchResults.size} results ===")
             searchResults
         }
     }
@@ -142,7 +156,7 @@ class UserSearchRepositoryImpl @Inject constructor(
             
             PublicUserProfile(
                 userId = userId,
-                username = data["username"] as? String ?: "user_${userId.take(8)}",
+                username = data["username"] as? String ?: "",  // Don't generate temporary username
                 displayName = data["displayName"] as? String,
                 profileImageUrl = data["profileImageUrl"] as? String,
                 coverImageUrl = data["coverImageUrl"] as? String,
@@ -341,13 +355,25 @@ class UserSearchRepositoryImpl @Inject constructor(
             Timber.d("Getting cached search results for viewer: $viewerId, query: '$query'")
             
             // Simple cache key based on normalized query
-            val cacheKey = normalizeCacheKey(query)
-            val cacheExpiry = LocalDateTime.now().minusHours(SEARCH_CACHE_EXPIRY_HOURS.toLong())
+            val normalizedQuery = normalizeCacheKey(query)
             
-            // Check local Room cache first (if available)
-            // Note: Cache functionality is temporarily disabled for testing
-            // Re-enable when UserSearchCacheDao is added to database
-            Timber.d("Cache temporarily disabled for testing - searching directly")
+            // Check local Room cache first
+            val cachedResult = userSearchCacheDao.getCachedSearchResult(viewerId, normalizedQuery)
+            
+            if (cachedResult != null) {
+                Timber.d("Found cached search results for query: '$query'")
+                
+                // Deserialize cached results
+                val searchResults = try {
+                    gson.fromJson(cachedResult.searchResults, Array<UserSearchResult>::class.java).toList()
+                } catch (e: Exception) {
+                    Timber.w(e, "Failed to deserialize cached search results")
+                    return@liftrixCatching null
+                }
+                
+                Timber.d("Returning ${searchResults.size} cached search results")
+                return@liftrixCatching searchResults
+            }
             
             Timber.d("No valid cached results found")
             null
@@ -361,12 +387,14 @@ class UserSearchRepositoryImpl @Inject constructor(
             Timber.d("Clearing search cache for user: $userId")
             
             // Clear local Room cache
-            // Note: Cache clearing is temporarily disabled for testing
-            // Re-enable when UserSearchCacheDao is added to database
-            Timber.d("Cache clearing temporarily disabled for testing")
+            val deletedCount = userSearchCacheDao.deleteAllForUser(userId)
+            Timber.d("Cleared $deletedCount cached search results for user: $userId")
             
-            // Clear any Firebase-based cache if implemented
-            // This could be a scheduled cleanup function
+            // Also clear expired entries periodically
+            val expiredCount = userSearchCacheDao.deleteExpiredEntries()
+            if (expiredCount > 0) {
+                Timber.d("Cleaned up $expiredCount expired cache entries")
+            }
             
             Timber.d("Search cache cleared successfully for user: $userId")
         }
@@ -379,25 +407,34 @@ class UserSearchRepositoryImpl @Inject constructor(
         filters: SearchFilters
     ): List<UserSearchResult> {
         return try {
-            Timber.d("Performing Firebase search with tokens for query: '$query'")
+            Timber.d("USER_SEARCH_DEBUG", "FirebaseTokenSearch: Starting for query='$query'")
             
             // Use search cache collection for tokenized search
             val searchTokens = generateSearchTokensFromQuery(query)
+            Timber.d("USER_SEARCH_DEBUG", "FirebaseTokenSearch: Generated tokens=${searchTokens.joinToString()}")
+            
             val searchQuery = firestore.collection(USER_SEARCH_CACHE_COLLECTION)
                 .whereEqualTo("isPublic", true)
                 .whereArrayContainsAny("searchTokens", searchTokens)
                 .orderBy("lastActiveAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
                 .limit(MAX_SEARCH_RESULTS.toLong())
 
+            Timber.d("USER_SEARCH_DEBUG", "FirebaseTokenSearch: Executing Firestore query on $USER_SEARCH_CACHE_COLLECTION")
             val snapshot = searchQuery.get().await()
+            
+            Timber.d("USER_SEARCH_DEBUG", "FirebaseTokenSearch: Query returned ${snapshot.documents.size} documents")
             
             val results = snapshot.documents.mapNotNull { document ->
                 val data = document.data ?: return@mapNotNull null
                 val userId = data["userId"] as? String ?: return@mapNotNull null
                 val displayName = data["displayName"] as? String ?: return@mapNotNull null
+                val username = data["username"] as? String
                 
-                // Skip current user from search results
-                if (userId == viewerId) return@mapNotNull null
+                Timber.d("USER_SEARCH_DEBUG", "FirebaseTokenSearch: Processing doc - userId=$userId, username=$username, displayName=$displayName")
+                
+                // Allow self-account to appear in search results
+                // This enables users to find and view their own profile
+                // Note: We still calculate connection status even for self
                 
                 UserSearchResult(
                     userId = userId,
@@ -409,17 +446,22 @@ class UserSearchRepositoryImpl @Inject constructor(
                     memberSince = parseDateTime(data["memberSince"] as? String) ?: LocalDateTime.now(),
                     sharedEquipment = calculateSharedEquipment(data, viewerId),
                     sharedGoals = calculateSharedGoals(data, viewerId),
-                    connectionStatus = calculateConnectionStatus(userId, viewerId),
-                    mutualConnections = calculateMutualConnections(userId, viewerId)
+                    connectionStatus = if (userId == viewerId) ConnectionStatus.SELF else calculateConnectionStatus(userId, viewerId),
+                    mutualConnections = if (userId == viewerId) 0 else calculateMutualConnections(userId, viewerId)
                 )
             }
             
-            Timber.d("Firebase search completed: ${results.size} results")
+            if (results.isEmpty()) {
+                Timber.w("USER_SEARCH_DEBUG", "FirebaseTokenSearch: NO RESULTS for query='$query'")
+            } else {
+                Timber.d("USER_SEARCH_DEBUG", "FirebaseTokenSearch: Found ${results.size} results")
+            }
             results
             
         } catch (e: Exception) {
-            Timber.e(e, "Firebase search with tokens failed")
+            Timber.e("USER_SEARCH_DEBUG", "FirebaseTokenSearch: FAILED - ${e.message}", e)
             // Fallback to basic search
+            Timber.d("USER_SEARCH_DEBUG", "FirebaseTokenSearch: Falling back to basic search")
             searchFirebaseUsersBasic(query, viewerId, filters)
         }
     }
@@ -431,38 +473,64 @@ class UserSearchRepositoryImpl @Inject constructor(
         filters: SearchFilters
     ): List<UserSearchResult> {
         return try {
+            Timber.d("USER_SEARCH_DEBUG", "BasicSearch: Starting for query='$query'")
+            
             val searchQuery = firestore.collection(USERS_PUBLIC_COLLECTION)
                 .whereEqualTo("isPublic", true)
                 .limit(MAX_SEARCH_RESULTS.toLong())
 
+            Timber.d("USER_SEARCH_DEBUG", "BasicSearch: Executing query on $USERS_PUBLIC_COLLECTION")
             val snapshot = searchQuery.get().await()
             
-            snapshot.documents.mapNotNull { document ->
+            Timber.d("USER_SEARCH_DEBUG", "BasicSearch: Query returned ${snapshot.documents.size} documents")
+            
+            val results = snapshot.documents.mapNotNull { document ->
                 val data = document.data ?: return@mapNotNull null
                 val displayName = data["displayName"] as? String ?: return@mapNotNull null
+                val username = data["username"] as? String
                 val userId = document.id
                 
-                // Skip current user and apply text matching
-                if (userId == viewerId || !displayName.contains(query, ignoreCase = true)) {
+                Timber.d("USER_SEARCH_DEBUG", "BasicSearch: Checking doc - userId=$userId, username=$username, displayName=$displayName")
+                
+                // Allow self-account to appear in search results
+                // No longer filtering out the current user
+                
+                // Apply text matching on display name and username
+                val matchesDisplayName = displayName.contains(query, ignoreCase = true)
+                val matchesUsername = username?.contains(query, ignoreCase = true) ?: false
+                
+                Timber.d("USER_SEARCH_DEBUG", "BasicSearch: matchesDisplayName=$matchesDisplayName, matchesUsername=$matchesUsername")
+                
+                if (!matchesDisplayName && !matchesUsername) {
+                    Timber.d("USER_SEARCH_DEBUG", "BasicSearch: Skipping - no match")
                     return@mapNotNull null
                 }
+                
+                Timber.d("USER_SEARCH_DEBUG", "BasicSearch: Match found! Adding to results")
                 
                 UserSearchResult(
                     userId = userId,
                     displayName = displayName,
                     profileImageUrl = data["profileImageUrl"] as? String,
                     bio = data["bio"] as? String,
-                    fitnessLevel = FitnessLevel.INTERMEDIATE,
+                    fitnessLevel = determineFitnessLevelFromData(data),
                     totalWorkouts = (data["totalWorkouts"] as? Number)?.toInt() ?: 0,
-                    memberSince = LocalDateTime.now(),
+                    memberSince = parseDateTime(data["memberSince"] as? String) ?: LocalDateTime.now(),
                     sharedEquipment = emptyList(),
                     sharedGoals = emptyList(),
-                    connectionStatus = ConnectionStatus.NONE,
+                    connectionStatus = if (userId == viewerId) ConnectionStatus.SELF else ConnectionStatus.NONE,
                     mutualConnections = 0
                 )
             }
+            
+            if (results.isEmpty()) {
+                Timber.w("USER_SEARCH_DEBUG", "BasicSearch: NO RESULTS for query='$query'")
+            } else {
+                Timber.d("USER_SEARCH_DEBUG", "BasicSearch: Found ${results.size} results")
+            }
+            results
         } catch (e: Exception) {
-            Timber.e(e, "Basic Firebase search failed")
+            Timber.e("USER_SEARCH_DEBUG", "BasicSearch: FAILED - ${e.message}", e)
             emptyList()
         }
     }
@@ -623,11 +691,32 @@ class UserSearchRepositoryImpl @Inject constructor(
     
     private suspend fun cacheSearchResults(viewerId: String, query: String, results: List<UserSearchResult>) {
         try {
-            val cacheKey = normalizeCacheKey(query)
-            // Cache results locally - this would use Room database
-            Timber.d("Caching ${results.size} search results for query: '$query'")
+            val normalizedQuery = normalizeCacheKey(query)
+            val now = LocalDateTime.now()
+            val expiresAt = now.plusHours(SEARCH_CACHE_EXPIRY_HOURS.toLong())
+            
+            // Serialize results to JSON
+            val serializedResults = gson.toJson(results)
+            
+            // Create cache entity
+            val cacheEntity = UserSearchCacheEntity(
+                id = "cache_${viewerId}_${System.currentTimeMillis()}",
+                viewerUserId = viewerId,
+                searchQuery = normalizedQuery,
+                searchResults = serializedResults,
+                createdAt = now.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                expiresAt = expiresAt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+            )
+            
+            // Store in Room database
+            userSearchCacheDao.insertOrUpdate(cacheEntity)
+            
+            // Clean up old entries to prevent cache bloat
+            userSearchCacheDao.cleanupOldEntries(viewerId, MAX_CACHED_SEARCHES)
+            
+            Timber.d("Successfully cached ${results.size} search results for query: '$query'")
         } catch (e: Exception) {
-            Timber.e(e, "Error caching search results")
+            Timber.e(e, "Error caching search results for query: '$query'")
         }
     }
     

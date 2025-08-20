@@ -249,25 +249,9 @@ private fun SettingsContent(
         // User Profile Card
         item {
             UserProfileCard(
-                user = uiState.userProfile?.let { profile ->
-                    // Create a User object from actual profile data
-                    User(
-                        uid = profile.userId,
-                        email = profile.userId, // Use userId as fallback for email
-                        displayName = profile.displayName,
-                        photoUrl = profile.profileImageUrl, // Use actual profile image URL
-                        isAnonymous = false,
-                        subscriptionTier = if (uiState.hasPremiumAccess) SubscriptionTier.PREMIUM else SubscriptionTier.FREE,
-                        subscriptionStatus = SubscriptionStatus.ACTIVE,
-                        subscriptionExpiresAt = null,
-                        premiumFeaturesEnabled = uiState.hasPremiumAccess,
-                        onboardingCompleted = true,
-                        profileVersion = 1,
-                        createdAt = profile.memberSince,
-                        lastSignInAt = profile.lastActiveAt ?: profile.updatedAt,
-                        updatedAt = profile.updatedAt
-                    )
-                },
+                user = uiState.currentUser,
+                socialProfile = uiState.socialProfile,
+                userProfile = uiState.userProfile,
                 onEditProfile = stableOnNavigateToProfile,
                 onAvatarClick = { stableOnEvent(SettingsEvent.ProfileAvatarTapped) }
             )

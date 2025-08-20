@@ -174,9 +174,20 @@ class GymBuddyViewModel @Inject constructor(
                 }
 
                 val socialProfile = socialProfileResult.getOrNull()
+                if (socialProfile == null || socialProfile.username.isBlank()) {
+                    // User needs to complete social profile setup first
+                    updateState { 
+                        copy(
+                            isGeneratingQr = false,
+                            error = "Please complete your social profile setup to use Gym Buddy features"
+                        ) 
+                    }
+                    return@launch
+                }
+                
                 val userProfile = QRUserProfile(
-                    displayName = socialProfile?.displayName ?: currentUser.displayName ?: "User",
-                    username = socialProfile?.username ?: "user_${currentUser.uid.take(8)}"
+                    displayName = socialProfile.displayName.toString(),
+                    username = socialProfile.username
                 )
 
                 // Create gym buddy pairing token with expiration

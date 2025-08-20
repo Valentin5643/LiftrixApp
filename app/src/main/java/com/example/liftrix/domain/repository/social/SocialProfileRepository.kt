@@ -44,6 +44,12 @@ interface SocialProfileRepository {
      * Checks if username is available for registration
      */
     suspend fun checkUsernameAvailability(username: String): LiftrixResult<Boolean>
+    
+    /**
+     * Attempts to clean up orphaned username from failed signup attempts.
+     * Returns true if cleanup was successful and username is now available.
+     */
+    suspend fun cleanupOrphanedUsername(username: String, currentUserId: String): LiftrixResult<Boolean>
 
     // ========================================
     // Profile Discovery

@@ -391,7 +391,7 @@ private fun MediaThumbnail(
                 tint = Color.White,
                 modifier = Modifier
                     .background(
-                        Color.Black.copy(alpha = 0.6f),
+                        MaterialTheme.colorScheme.scrim.copy(alpha = 0.6f),
                         CircleShape
                     )
                     .padding(4.dp)

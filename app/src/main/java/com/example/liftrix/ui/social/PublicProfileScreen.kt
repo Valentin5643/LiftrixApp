@@ -594,6 +594,11 @@ private fun ConnectionActions(
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
             }
+            
+            ConnectionStatus.SELF -> {
+                // No action buttons when viewing own profile
+                // This should be handled at a higher level but adding for compilation
+            }
         }
     }
 }

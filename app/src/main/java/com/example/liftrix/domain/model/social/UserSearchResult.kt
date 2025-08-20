@@ -36,7 +36,8 @@ enum class ConnectionStatus {
     CONNECTED,         // Already connected/friends
     MUTUAL_FOLLOW,     // Both users follow each other
     GYM_BUDDY,         // Inner circle gym buddy relationship
-    BLOCKED            // User is blocked
+    BLOCKED,           // User is blocked
+    SELF               // The user is viewing their own profile
 }
 
 /**

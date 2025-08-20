@@ -10,7 +10,7 @@ sealed class AuthState {
 
 sealed class AuthEvent {
     data class EmailPasswordSignIn(val email: String, val password: String) : AuthEvent()
-    data class EmailPasswordSignUp(val email: String, val password: String, val displayName: String) : AuthEvent()
+    data class EmailPasswordSignUp(val email: String, val password: String, val username: String) : AuthEvent()
     data class ForgotPassword(val email: String) : AuthEvent()
     data object GoogleSignIn : AuthEvent()
     data object AnonymousSignIn : AuthEvent()

@@ -76,7 +76,7 @@ fun WorkoutDetailsScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = LiftrixColorsV2.Dark.Surface
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             )
         }
@@ -321,7 +321,7 @@ private fun StatChip(
             .height(60.dp), // Much smaller height
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF1C1C1E) // Dark background matching other cards
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
@@ -346,13 +346,13 @@ private fun StatChip(
                     text = value,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 18.sp
                 )
                 Text(
                     text = label,
                     fontSize = 11.sp,
-                    color = Color.White.copy(alpha = 0.6f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
             }
         }

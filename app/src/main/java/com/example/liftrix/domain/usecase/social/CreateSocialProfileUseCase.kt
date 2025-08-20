@@ -42,13 +42,23 @@ class CreateSocialProfileUseCase @Inject constructor(
         validator.validateDisplayName(displayName).getOrThrow()
         bio?.let { validator.validateBio(it).getOrThrow() }
 
-        // Check username availability
+        // Check username availability with cleanup
         val isUsernameAvailable = repository.checkUsernameAvailability(username).getOrThrow()
         if (!isUsernameAvailable) {
-            throw IllegalArgumentException("Username '$username' is already taken")
+            android.util.Log.d("USER_SEARCH_DEBUG", "CreateSocialProfile: Username '$username' taken, attempting cleanup")
+            
+            // Try to clean up orphaned username from previous failed signups
+            val cleanupResult = repository.cleanupOrphanedUsername(username, userId).getOrThrow()
+            if (cleanupResult) {
+                android.util.Log.d("USER_SEARCH_DEBUG", "CreateSocialProfile: Successfully cleaned up orphaned username")
+                // Username is now available, continue
+            } else {
+                android.util.Log.e("USER_SEARCH_DEBUG", "CreateSocialProfile: Username '$username' is legitimately taken")
+                throw IllegalArgumentException("Username '$username' is already taken")
+            }
         }
 
-        // Create profile with privacy-first defaults
+        // Create profile with searchability-first defaults
         val now = System.currentTimeMillis()
         val profile = SocialProfile(
             userId = userId,
@@ -56,8 +66,8 @@ class CreateSocialProfileUseCase @Inject constructor(
             displayName = displayName.trim(),
             bio = bio?.trim(),
             memberSince = now,
-            isPrivate = true, // Privacy by default
-            hideFromSuggestions = false, // Allow discovery by default once profile is complete
+            isPrivate = false, // Public by default to match UserProfile.isPublic default
+            hideFromSuggestions = false, // Allow discovery by default
             allowFriendRequests = true, // Allow friend requests by default
             createdAt = now,
             updatedAt = now

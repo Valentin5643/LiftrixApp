@@ -504,7 +504,7 @@ private fun InstagramPreview(
 ) {
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = Color.Black
+            containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
         Column(
@@ -523,14 +523,14 @@ private fun InstagramPreview(
                     .fillMaxWidth()
                     .height(300.dp)
                     .background(
-                        color = Color.Black,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
                         shape = RoundedCornerShape(8.dp)
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "Story preview would be generated here",
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
             }

@@ -89,12 +89,25 @@ object UserMapper {
     }
     
     fun fromUserDto(userDto: UserDto): User {
+        // Handle email validation based on user type (same as fromFirebaseUser)
+        val email = userDto.email
+        val isAnonymous = userDto.isAnonymous
+        
+        // For non-anonymous users, ensure email is not blank
+        // If email is missing for non-anonymous user, log warning and treat as anonymous
+        val effectiveIsAnonymous = if (!isAnonymous && email.isBlank()) {
+            timber.log.Timber.w("Non-anonymous UserDto has blank email: ${userDto.uid}. Treating as anonymous.")
+            true
+        } else {
+            isAnonymous
+        }
+        
         return User(
             uid = userDto.uid,
-            email = userDto.email,
+            email = if (effectiveIsAnonymous) "" else email,
             displayName = userDto.displayName,
             photoUrl = userDto.photoUrl,
-            isAnonymous = userDto.isAnonymous,
+            isAnonymous = effectiveIsAnonymous,
             subscriptionTier = try {
                 SubscriptionTier.valueOf(userDto.subscriptionTier.uppercase())
             } catch (e: IllegalArgumentException) {

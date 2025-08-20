@@ -290,6 +290,7 @@ class FollowerListViewModel @Inject constructor(
                     com.example.liftrix.domain.model.social.ConnectionStatus.MUTUAL_FOLLOW -> FollowAction.UNFOLLOW
                     com.example.liftrix.domain.model.social.ConnectionStatus.GYM_BUDDY -> FollowAction.UNFOLLOW
                     com.example.liftrix.domain.model.social.ConnectionStatus.BLOCKED -> return@launch
+                    com.example.liftrix.domain.model.social.ConnectionStatus.SELF -> return@launch // Cannot follow yourself
                 }
                 
                 Timber.d("Toggling follow status: $action for user: $userId")

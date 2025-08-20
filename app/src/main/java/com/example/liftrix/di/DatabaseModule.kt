@@ -47,35 +47,9 @@ import com.example.liftrix.data.local.dao.HelpArticleDao
 import com.example.liftrix.data.local.dao.SupportTicketDao
 import com.example.liftrix.data.local.dao.AppConfigDao
 import com.example.liftrix.data.local.dao.SettingsAuditDao
+import com.example.liftrix.data.local.dao.SyncQueueDao
 import com.example.liftrix.data.local.seed.ExerciseLibrarySeedData
 import com.example.liftrix.data.local.seed.MetDataSeedService
-import com.example.liftrix.data.local.migration.MIGRATION_27_28
-import com.example.liftrix.data.local.migration.MIGRATION_28_29
-import com.example.liftrix.data.local.migration.MIGRATION_29_30
-import com.example.liftrix.data.local.migration.MIGRATION_30_31
-import com.example.liftrix.data.local.migration.MIGRATION_31_32
-import com.example.liftrix.data.local.migration.MIGRATION_32_33
-import com.example.liftrix.data.local.migration.MIGRATION_33_34
-import com.example.liftrix.data.local.migration.MIGRATION_34_35
-import com.example.liftrix.data.local.migration.MIGRATION_35_36
-import com.example.liftrix.data.local.migration.MIGRATION_36_37
-import com.example.liftrix.data.local.migration.MIGRATION_37_38
-import com.example.liftrix.data.local.migration.MIGRATION_38_39
-import com.example.liftrix.data.local.migration.MIGRATION_39_40
-import com.example.liftrix.data.local.migration.MIGRATION_40_41
-import com.example.liftrix.data.local.migration.MIGRATION_41_42
-import com.example.liftrix.data.local.migration.MIGRATION_42_43
-import com.example.liftrix.data.local.migration.MIGRATION_43_44
-import com.example.liftrix.data.local.migration.MIGRATION_44_45
-import com.example.liftrix.data.local.migration.MIGRATION_45_46
-import com.example.liftrix.data.local.migration.MIGRATION_46_47
-import com.example.liftrix.data.local.migration.MIGRATION_47_48
-import com.example.liftrix.data.local.migration.MIGRATION_48_49
-import com.example.liftrix.data.local.migration.MIGRATION_49_50
-import com.example.liftrix.data.local.migration.MIGRATION_50_51
-import com.example.liftrix.data.local.migration.MIGRATION_51_52
-import com.example.liftrix.data.local.migration.MIGRATION_52_53
-import com.example.liftrix.data.local.migration.MIGRATION_53_54
 
 import dagger.Module
 import dagger.Provides
@@ -112,24 +86,6 @@ object DatabaseModule {
         )
             .setTransactionExecutor(Dispatchers.IO.asExecutor())
             .setQueryExecutor(Dispatchers.IO.asExecutor())
-            .addMigrations(
-                MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, 
-                MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35, 
-                MIGRATION_35_36, MIGRATION_36_37, MIGRATION_37_38, MIGRATION_38_39, 
-                MIGRATION_39_40, MIGRATION_40_41, MIGRATION_41_42, MIGRATION_42_43, 
-                MIGRATION_43_44, MIGRATION_44_45, MIGRATION_45_46, MIGRATION_46_47,
-                MIGRATION_47_48, MIGRATION_48_49, MIGRATION_49_50, MIGRATION_50_51,
-                MIGRATION_51_52, MIGRATION_52_53, MIGRATION_53_54
-            )
-            // ✅ PERSISTENCE FIX: Removed destructive migration to preserve user data
-            // Only allow destructive migration on downgrade to handle edge cases
-            .fallbackToDestructiveMigrationOnDowngrade()
-            // 🛡️ CORRUPTION HANDLING: In debug builds, allow destructive migration for corruption recovery
-            .apply {
-                if (BuildConfig.DEBUG) {
-                    fallbackToDestructiveMigration()
-                }
-            }
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING) // WAL mode for better data persistence
             // 🛡️ DATABASE LIFECYCLE: Add callback for database lifecycle events
             .addCallback(object : RoomDatabase.Callback() {
@@ -426,5 +382,14 @@ object DatabaseModule {
     @Provides
     fun provideDataImportDao(database: LiftrixDatabase): com.example.liftrix.data.local.dao.DataImportDao {
         return database.dataImportDao()
+    }
+
+    // ========================================
+    // Sync Infrastructure DAOs
+    // ========================================
+
+    @Provides
+    fun provideSyncQueueDao(database: LiftrixDatabase): com.example.liftrix.data.local.dao.SyncQueueDao {
+        return database.syncQueueDao()
     }
 }

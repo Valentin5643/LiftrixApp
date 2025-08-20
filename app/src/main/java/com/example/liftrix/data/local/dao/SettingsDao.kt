@@ -173,4 +173,48 @@ interface SettingsDao {
      */
     @Query("UPDATE user_settings SET migration_completed = :completed, updated_at = datetime('now') WHERE user_id = :userId")
     suspend fun updateMigrationCompleted(userId: String, completed: Boolean)
+    
+    // ========================================
+    // Sync Management
+    // ========================================
+    
+    /**
+     * Gets unsynced settings for a user
+     */
+    @Query("SELECT * FROM user_settings WHERE user_id = :userId AND is_synced = 0")
+    suspend fun getUnsyncedSettings(userId: String): SettingsEntity?
+    
+    /**
+     * Marks settings as synced
+     */
+    @Query("UPDATE user_settings SET is_synced = :isSynced, sync_version = :version WHERE user_id = :userId")
+    suspend fun markAsSynced(userId: String, isSynced: Boolean, version: Int): Int
+    
+    /**
+     * Gets settings for user (suspending version for sync worker)
+     */
+    @Query("SELECT * FROM user_settings WHERE user_id = :userId")
+    suspend fun getSettingsForUser(userId: String): SettingsEntity?
+    
+    // ========================================
+    // Additional Settings Updates
+    // ========================================
+    
+    /**
+     * Updates distance unit setting
+     */
+    @Query("UPDATE user_settings SET distance_unit = :distanceUnit, updated_at = datetime('now') WHERE user_id = :userId")
+    suspend fun updateDistanceUnit(userId: String, distanceUnit: String)
+    
+    /**
+     * Updates privacy settings
+     */
+    @Query("UPDATE user_settings SET private_profile = :privateProfile, hide_stats = :hideStats, updated_at = datetime('now') WHERE user_id = :userId")
+    suspend fun updatePrivacySettings(userId: String, privateProfile: Boolean, hideStats: Boolean)
+    
+    /**
+     * Updates communication settings
+     */
+    @Query("UPDATE user_settings SET allow_messages = :allowMessages, auto_play_videos = :autoPlayVideos, updated_at = datetime('now') WHERE user_id = :userId")
+    suspend fun updateCommunicationSettings(userId: String, allowMessages: Boolean, autoPlayVideos: Boolean)
 } 

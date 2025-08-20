@@ -8,9 +8,14 @@ import androidx.work.WorkManager
 import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.local.LiftrixDatabase
 import com.example.liftrix.data.mapper.UserProfileMapper
+import com.example.liftrix.data.sync.OfflineQueueManager
+import com.example.liftrix.sync.SyncCoordinator
 import com.example.liftrix.domain.model.StreakData
 import com.example.liftrix.domain.model.UserProfile
 import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.model.common.liftrixSuccess
+import com.example.liftrix.domain.model.common.liftrixFailure
+import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.ProfileRepository
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.sync.ProfileSyncWorker
@@ -32,7 +37,9 @@ class ProfileRepositoryImpl @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val workManager: WorkManager,
     private val workoutRepository: WorkoutRepository,
-    private val database: LiftrixDatabase
+    private val database: LiftrixDatabase,
+    private val syncCoordinator: SyncCoordinator,
+    private val offlineQueueManager: OfflineQueueManager
 ) : ProfileRepository {
 
     override fun getProfile(userId: String): Flow<UserProfile?> {
@@ -174,15 +181,38 @@ class ProfileRepositoryImpl @Inject constructor(
 
     override suspend fun queueSync(userId: String): Result<Unit> {
         return try {
-            val unsyncedCount = userProfileDao.getUnsyncedProfilesCount(userId)
-            if (unsyncedCount > 0) {
-                val syncRequest = OneTimeWorkRequestBuilder<ProfileSyncWorker>()
-                    .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-                    .build()
-                workManager.enqueueUniqueWork("${ProfileSyncWorker.WORK_NAME}_$userId", ExistingWorkPolicy.REPLACE, syncRequest)
-                Timber.d("Queued profile sync for user: $userId")
+            val profile = userProfileDao.getProfileForUserSuspend(userId)
+            if (profile != null && !profile.isSynced) {
+                // Queue in offline manager
+                val queueResult = offlineQueueManager.queueOperation(
+                    userId = userId,
+                    entityType = "PROFILE",
+                    entityId = userId,
+                    operation = "UPSERT",
+                    data = profile
+                )
+                
+                if (queueResult.isSuccess) {
+                    // Trigger sync coordinator
+                    val syncResult = syncCoordinator.triggerEntitySync(userId, "profile")
+                    
+                    if (syncResult.isSuccess) {
+                        Timber.d("Successfully queued and triggered profile sync for user: $userId")
+                        Result.success(Unit)
+                    } else {
+                        val error = syncResult.exceptionOrNull()
+                        Timber.w("Profile queued but sync trigger failed: ${error?.message}")
+                        Result.success(Unit) // Still success since queued
+                    }
+                } else {
+                    val error = queueResult.exceptionOrNull()
+                    Timber.e("Failed to queue profile for sync: ${error?.message}")
+                    Result.failure(error ?: Exception("Unknown queue error"))
+                }
+            } else {
+                Timber.d("Profile already synced or not found for user: $userId")
+                Result.success(Unit)
             }
-            Result.success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "Failed to queue profile sync for user: $userId")
             Result.failure(e)
@@ -191,13 +221,29 @@ class ProfileRepositoryImpl @Inject constructor(
 
     override suspend fun syncNow(userId: String): Result<Unit> {
         return try {
-            val unsyncedCount = userProfileDao.getUnsyncedProfilesCount(userId)
-            if (unsyncedCount > 0) {
-                val syncRequest = OneTimeWorkRequestBuilder<ProfileSyncWorker>().build()
-                workManager.enqueueUniqueWork("${ProfileSyncWorker.WORK_NAME}_immediate_$userId", ExistingWorkPolicy.REPLACE, syncRequest)
-                Timber.d("Initiated immediate profile sync for user: $userId")
+            // Trigger immediate sync through SyncCoordinator
+            val syncResult = syncCoordinator.triggerEntitySync(userId, "profile")
+            
+            if (syncResult.isSuccess) {
+                Timber.d("Successfully triggered immediate profile sync for user: $userId")
+                
+                // Also process any pending offline queue items
+                val queueResult = offlineQueueManager.processPendingQueue(userId)
+                if (queueResult.isSuccess) {
+                    val data = queueResult.getOrNull()
+                    Timber.d("Processed pending queue items for user: $userId - $data")
+                } else {
+                    val error = queueResult.exceptionOrNull()
+                    Timber.w("Failed to process pending queue: ${error?.message}")
+                    // Don't fail the entire operation for queue processing failure
+                }
+                
+                Result.success(Unit)
+            } else {
+                val error = syncResult.exceptionOrNull()
+                Timber.e("Sync coordinator failed to trigger sync: $error")
+                Result.failure(error ?: Exception("Sync trigger failed"))
             }
-            Result.success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "Failed to initiate immediate profile sync for user: $userId")
             Result.failure(e)
@@ -213,10 +259,16 @@ class ProfileRepositoryImpl @Inject constructor(
             
             val entity = userProfileDao.getProfileForUserSuspend(userId)
             val profile = entity?.let { userProfileMapper.toDomain(it) }
-            Result.success(profile)
+            liftrixSuccess(profile)
         } catch (e: Exception) {
             Timber.e(e, "Failed to get user profile: $userId")
-            Result.failure(e)
+            liftrixFailure(
+                LiftrixError.BusinessLogicError(
+                    code = "PROFILE_FETCH_FAILED",
+                    errorMessage = "Failed to get user profile: ${e.message}",
+                    analyticsContext = mapOf("userId" to userId)
+                )
+            )
         }
     }
 
@@ -251,29 +303,53 @@ class ProfileRepositoryImpl @Inject constructor(
             // Verify that profile was actually saved with correct data
             val savedProfile = userProfileDao.getProfileForUserSuspend(profile.userId)
             if (savedProfile == null) {
-                return Result.failure(IllegalStateException("Profile save verification failed - no profile found"))
+                return liftrixFailure(
+                    LiftrixError.BusinessLogicError(
+                        code = "PROFILE_SAVE_VERIFICATION_FAILED",
+                        errorMessage = "Profile save verification failed - no profile found",
+                        analyticsContext = mapOf("userId" to profile.userId)
+                    )
+                )
             }
             
             if (savedProfile.displayName != profile.displayName) {
-                return Result.failure(IllegalStateException("Profile save verification failed - wrong displayName"))
+                return liftrixFailure(
+                    LiftrixError.BusinessLogicError(
+                        code = "PROFILE_SAVE_VERIFICATION_FAILED",
+                        errorMessage = "Profile save verification failed - wrong displayName",
+                        analyticsContext = mapOf("userId" to profile.userId)
+                    )
+                )
             }
             
             // Queue sync in background
             queueSync(profile.userId)
             
             Timber.d("Enhanced user profile saved successfully: ${profile.userId} (${if (existingEntity != null) "updated" else "created"})")
-            Result.success(Unit)
+            liftrixSuccess(Unit)
             
         } catch (e: Exception) {
             Timber.e(e, "Failed to save enhanced user profile: ${profile.userId}")
-            Result.failure(e)
+            liftrixFailure(
+                LiftrixError.BusinessLogicError(
+                    code = "PROFILE_SAVE_FAILED",
+                    errorMessage = "Failed to save enhanced user profile: ${e.message}",
+                    analyticsContext = mapOf("userId" to profile.userId)
+                )
+            )
         }
     }
 
     override suspend fun updateProfileCompletion(userId: String): LiftrixResult<Int> {
         return try {
             val entity = userProfileDao.getProfileForUserSuspend(userId)
-                ?: return Result.failure(IllegalStateException("Profile not found for completion update"))
+                ?: return liftrixFailure(
+                    LiftrixError.BusinessLogicError(
+                        code = "PROFILE_NOT_FOUND",
+                        errorMessage = "Profile not found for completion update",
+                        analyticsContext = mapOf("userId" to userId)
+                    )
+                )
             
             val profile = userProfileMapper.toDomain(entity)
             
@@ -284,11 +360,17 @@ class ProfileRepositoryImpl @Inject constructor(
             userProfileDao.updateProfileCompletion(userId, completionPercentage)
             
             Timber.d("Profile completion updated for user $userId: $completionPercentage%")
-            Result.success(completionPercentage)
+            liftrixSuccess(completionPercentage)
             
         } catch (e: Exception) {
             Timber.e(e, "Failed to update profile completion for user: $userId")
-            Result.failure(e)
+            liftrixFailure(
+                LiftrixError.BusinessLogicError(
+                    code = "PROFILE_COMPLETION_UPDATE_FAILED",
+                    errorMessage = "Failed to update profile completion: ${e.message}",
+                    analyticsContext = mapOf("userId" to userId)
+                )
+            )
         }
     }
 
@@ -306,13 +388,19 @@ class ProfileRepositoryImpl @Inject constructor(
                     totalWorkouts = entity.totalWorkouts,
                     lastWorkoutDate = entity.lastActiveAt
                 )
-                Result.success(streakData)
+                liftrixSuccess(streakData)
             } else {
-                Result.success(StreakData(0, 0, 0, null))
+                liftrixSuccess(StreakData(0, 0, 0, null))
             }
         } catch (e: Exception) {
             Timber.e(e, "Failed to calculate streak data for user: $userId")
-            Result.failure(e)
+            liftrixFailure(
+                LiftrixError.BusinessLogicError(
+                    code = "STREAK_CALCULATION_FAILED",
+                    errorMessage = "Failed to calculate streak data: ${e.message}",
+                    analyticsContext = mapOf("userId" to userId)
+                )
+            )
         }
     }
 
@@ -322,13 +410,25 @@ class ProfileRepositoryImpl @Inject constructor(
             if (updateCount > 0) {
                 queueSync(userId)
                 Timber.d("Privacy settings updated for user $userId: public=$isPublic")
-                Result.success(Unit)
+                liftrixSuccess(Unit)
             } else {
-                Result.failure(IllegalStateException("Profile not found for privacy update"))
+                liftrixFailure(
+                    LiftrixError.BusinessLogicError(
+                        code = "PROFILE_NOT_FOUND",
+                        errorMessage = "Profile not found for privacy update",
+                        analyticsContext = mapOf("userId" to userId)
+                    )
+                )
             }
         } catch (e: Exception) {
             Timber.e(e, "Failed to update privacy settings for user: $userId")
-            Result.failure(e)
+            liftrixFailure(
+                LiftrixError.BusinessLogicError(
+                    code = "PRIVACY_UPDATE_FAILED",
+                    errorMessage = "Failed to update privacy settings: ${e.message}",
+                    analyticsContext = mapOf("userId" to userId)
+                )
+            )
         }
     }
 
@@ -336,10 +436,16 @@ class ProfileRepositoryImpl @Inject constructor(
         return try {
             val entities = userProfileDao.getPublicProfiles(limit)
             val profiles = entities.map { userProfileMapper.toDomain(it) }
-            Result.success(profiles)
+            liftrixSuccess(profiles)
         } catch (e: Exception) {
             Timber.e(e, "Failed to get public profiles")
-            Result.failure(e)
+            liftrixFailure(
+                LiftrixError.BusinessLogicError(
+                    code = "PUBLIC_PROFILES_FETCH_FAILED",
+                    errorMessage = "Failed to get public profiles: ${e.message}",
+                    analyticsContext = emptyMap()
+                )
+            )
         }
     }
 
@@ -347,10 +453,16 @@ class ProfileRepositoryImpl @Inject constructor(
         return try {
             val entity = userProfileDao.getPublicProfile(userId)
             val profile = entity?.let { userProfileMapper.toDomain(it) }
-            Result.success(profile)
+            liftrixSuccess(profile)
         } catch (e: Exception) {
             Timber.e(e, "Failed to get public profile for user: $userId")
-            Result.failure(e)
+            liftrixFailure(
+                LiftrixError.BusinessLogicError(
+                    code = "PUBLIC_PROFILE_FETCH_FAILED",
+                    errorMessage = "Failed to get public profile: ${e.message}",
+                    analyticsContext = mapOf("userId" to userId)
+                )
+            )
         }
     }
 
@@ -416,7 +528,7 @@ class ProfileRepositoryImpl @Inject constructor(
         if (profile.availableEquipment.isNotEmpty()) completedFields++
         if (!profile.bio.isNullOrBlank()) completedFields++
         if (profile.goalsPriority != null) completedFields++
-        if (profile.otherEquipment != null || !profile.availableEquipment.any { it.name.contains("Other", ignoreCase = true) }) completedFields++
+        if (profile.otherEquipment != null) completedFields++
 
         return ((completedFields.toFloat() / totalFields.toFloat()) * 100).toInt().coerceIn(0, 100)
     }

@@ -164,9 +164,9 @@ fun AuthScreen(
                 ) {
                     if (isSignUpMode) {
                         SignUpForm(
-                            onSignUp = { email, password, displayName ->
+                            onSignUp = { email, password, username ->
                                 viewModel.handleEvent(
-                                    AuthEvent.EmailPasswordSignUp(email, password, displayName)
+                                    AuthEvent.EmailPasswordSignUp(email, password, username)
                                 )
                             },
                             isLoading = authState is AuthState.Loading

@@ -79,7 +79,7 @@ class AuthViewModel @Inject constructor(
     fun handleEvent(event: AuthEvent) {
         when (event) {
             is AuthEvent.EmailPasswordSignIn -> signInWithEmail(event.email, event.password)
-            is AuthEvent.EmailPasswordSignUp -> signUpWithEmail(event.email, event.password, event.displayName)
+            is AuthEvent.EmailPasswordSignUp -> signUpWithEmail(event.email, event.password, event.username)
             is AuthEvent.ForgotPassword -> sendPasswordResetEmail(event.email)
             is AuthEvent.GoogleSignIn -> _authState.value = AuthState.Loading // Google Sign-In flow will be handled by UI
             is AuthEvent.AnonymousSignIn -> signInAnonymously()
@@ -113,11 +113,11 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    private fun signUpWithEmail(email: String, password: String, displayName: String) {
+    private fun signUpWithEmail(email: String, password: String, username: String) {
         viewModelScope.launch {
             _authState.value = AuthState.Loading
             
-            signUpWithEmailUseCase(email, password, displayName)
+            signUpWithEmailUseCase(email, password, username)
                 .onSuccess { user ->
                     _authState.value = AuthState.Authenticated(user)
                     Timber.d("Sign up successful for user: ${user.uid}")

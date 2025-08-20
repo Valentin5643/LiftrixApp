@@ -254,27 +254,33 @@ fun UsernameChangeScreen(
     var suggestions by remember { mutableStateOf<List<String>>(emptyList()) }
     var hasStartedEditing by remember { mutableStateOf(false) }
     
-    // Debounced availability checking
+    // Debounced availability checking through ViewModel
     LaunchedEffect(newUsername) {
-        if (newUsername.isNotEmpty()) {
-            val validation = UsernameValidator.validateUsername(newUsername)
-            availability = validation
-            
-            if (validation is UsernameAvailability.Checking) {
-                delay(1000) // Debounce for 1 second
-                if (newUsername.isNotEmpty()) { // Check if user hasn't cleared the field
-                    availability = UsernameValidator.checkAvailability(newUsername)
-                    
-                    // Generate suggestions if username is taken
-                    if (availability is UsernameAvailability.Unavailable) {
-                        suggestions = UsernameValidator.getUsernameSuggestions(newUsername)
-                    } else {
-                        suggestions = emptyList()
-                    }
-                }
+        if (newUsername.isNotEmpty() && newUsername != uiState.accountInfo?.username) {
+            hasStartedEditing = true
+            // Trigger username validation in ViewModel
+            delay(500) // Debounce for 500ms
+            if (newUsername.isNotEmpty()) {
+                viewModel.onEvent(AccountManagementEvent.CheckUsernameAvailability(newUsername))
             }
+        }
+    }
+    
+    // Update local availability state based on ViewModel state
+    LaunchedEffect(uiState.usernameValidation) {
+        val validation = uiState.usernameValidation
+        availability = when (validation) {
+            is com.example.liftrix.ui.settings.account.UsernameValidation.None -> UsernameAvailability.None
+            is com.example.liftrix.ui.settings.account.UsernameValidation.Checking -> UsernameAvailability.Checking
+            is com.example.liftrix.ui.settings.account.UsernameValidation.Available -> UsernameAvailability.Available
+            is com.example.liftrix.ui.settings.account.UsernameValidation.Invalid -> 
+                UsernameAvailability.Unavailable(validation.message)
+        }
+        
+        // Generate suggestions if username is taken
+        if (availability is UsernameAvailability.Unavailable) {
+            suggestions = UsernameValidator.getUsernameSuggestions(newUsername)
         } else {
-            availability = UsernameAvailability.None
             suggestions = emptyList()
         }
     }

@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.SubscriptionTier
 import com.example.liftrix.domain.model.SubscriptionStatus
+import com.example.liftrix.domain.model.social.SocialProfile
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.profile.components.ProfileImageDisplay
 import com.example.liftrix.ui.theme.LiftrixTheme
@@ -23,13 +24,16 @@ import java.time.LocalDateTime
  * 
  * This component provides a user profile card for the settings screen with:
  * - Circular avatar (60x60dp) with user initials fallback
- * - User display name with proper typography
+ * - User display name with proper typography prioritization
  * - Edit profile button with accessibility support
  * - Profile image upload functionality on avatar tap
  * - Consistent Material3 design with LiftrixCard base
  * - Proper loading and error state handling
+ * - Race condition protection for username display
  * 
- * @param user The user data to display, null for loading state
+ * @param user The Firebase Auth user data to display, null for loading state
+ * @param socialProfile The social profile data with username, null if not loaded
+ * @param userProfile The user profile data with display name, null if not loaded
  * @param onEditProfile Callback invoked when edit profile button is clicked
  * @param onAvatarClick Callback invoked when avatar is clicked for image upload
  * @param modifier Modifier for styling the component
@@ -37,6 +41,8 @@ import java.time.LocalDateTime
 @Composable
 fun UserProfileCard(
     user: User?,
+    socialProfile: SocialProfile? = null,
+    userProfile: com.example.liftrix.domain.model.UserProfile? = null,
     onEditProfile: () -> Unit,
     onAvatarClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -51,8 +57,8 @@ fun UserProfileCard(
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             ProfileImageDisplay(
-                imageUrl = user?.photoUrl,
-                displayName = user?.displayName,
+                imageUrl = userProfile?.profileImageUrl ?: user?.photoUrl,
+                displayName = userProfile?.displayName ?: user?.displayName,
                 userId = user?.uid,
                 size = 60.dp,
                 onClick = onAvatarClick,
@@ -63,8 +69,31 @@ fun UserProfileCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                // Prioritize display sources to prevent race conditions and invalid data
+                val displayText = when {
+                    // 1. Prefer social profile username if available and NOT a temporary username
+                    socialProfile?.username?.isNotBlank() == true && 
+                        !socialProfile.username.startsWith("user_") && 
+                        !socialProfile.username.contains("User ", ignoreCase = true) -> "@${socialProfile.username}"
+                    // 2. Use user profile display name if available and not a fallback
+                    userProfile?.displayName?.isNotBlank() == true && 
+                        !userProfile.displayName.startsWith("User ") -> userProfile.displayName
+                    // 3. Use social profile display name if available and not a fallback
+                    socialProfile?.displayName?.isNotBlank() == true && 
+                        !socialProfile.displayName.startsWith("User ") -> socialProfile.displayName
+                    // 4. Fall back to Firebase Auth display name if not a fallback
+                    user?.displayName?.isNotBlank() == true && 
+                        !user.displayName.startsWith("User ") -> user.displayName
+                    // 5. Use Firebase Auth email if valid
+                    user?.email?.isNotBlank() == true && 
+                        !user.email.startsWith("user_") && 
+                        !user.isAnonymous -> user.email.substringBefore("@")
+                    // 6. Default welcome message (avoids showing temporary usernames)
+                    else -> "Welcome to Liftrix"
+                }
+                
                 Text(
-                    text = user?.displayName ?: "Welcome to Liftrix",
+                    text = displayText,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -97,7 +126,7 @@ private fun UserProfileCardPreview() {
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Normal user profile
+            // Normal user profile with social profile
             UserProfileCard(
                 user = User(
                     uid = "user123",
@@ -115,6 +144,29 @@ private fun UserProfileCardPreview() {
                     lastSignInAt = LocalDateTime.now().minusHours(2),
                     updatedAt = LocalDateTime.now().minusHours(2)
                 ),
+                socialProfile = com.example.liftrix.domain.model.social.SocialProfile(
+                    userId = "user123",
+                    username = "johndoe",
+                    displayName = "John Doe",
+                    bio = null,
+                    profilePhotoUrl = null,
+                    coverPhotoUrl = null,
+                    workoutCount = 0,
+                    followerCount = 0,
+                    followingCount = 0,
+                    memberSince = System.currentTimeMillis(),
+                    lastActive = null,
+                    isVerified = false,
+                    isPrivate = true,
+                    hideFromSuggestions = false,
+                    allowFriendRequests = true,
+                    instagramHandle = null,
+                    youtubeChannel = null,
+                    personalWebsite = null,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                ),
+                userProfile = null, // Simplified preview - use null to test fallback logic
                 onEditProfile = { },
                 onAvatarClick = { }
             )
@@ -137,6 +189,7 @@ private fun UserProfileCardPreview() {
                     lastSignInAt = LocalDateTime.now().minusMinutes(30),
                     updatedAt = LocalDateTime.now().minusMinutes(30)
                 ),
+                userProfile = null, // Simplified preview - use null to test fallback logic
                 onEditProfile = { },
                 onAvatarClick = { }
             )

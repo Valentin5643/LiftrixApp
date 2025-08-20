@@ -183,6 +183,13 @@ class PublicProfileViewModel @Inject constructor(
                         }
                         return@launch
                     }
+                    ConnectionStatus.SELF -> {
+                        // Cannot follow yourself
+                        updateState { currentState ->
+                            currentState.copy(isConnectionLoading = false)
+                        }
+                        return@launch
+                    }
                 }
 
                 // Execute the follow action

@@ -23,24 +23,28 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun SignUpForm(
-    onSignUp: (email: String, password: String, displayName: String) -> Unit,
+    onSignUp: (email: String, password: String, username: String) -> Unit,
     isLoading: Boolean,
     modifier: Modifier = Modifier
 ) {
-    var displayName by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     
-    var displayNameError by remember { mutableStateOf<String?>(null) }
+    var usernameError by remember { mutableStateOf<String?>(null) }
     var emailError by remember { mutableStateOf<String?>(null) }
     var passwordError by remember { mutableStateOf<String?>(null) }
     var confirmPasswordError by remember { mutableStateOf<String?>(null) }
 
     fun validateInputs(): Boolean {
-        displayNameError = when {
-            displayName.isBlank() -> "Display name is required"
-            displayName.length < 2 -> "Display name must be at least 2 characters"
+        usernameError = when {
+            username.isBlank() -> "Username is required"
+            username.length < 3 -> "Username must be at least 3 characters"
+            username.length > 20 -> "Username must be 20 characters or less"
+            !username.matches(Regex("^[a-zA-Z0-9_]+$")) -> "Username can only contain letters, numbers, and underscores"
+            username.startsWith("_") || username.endsWith("_") -> "Username cannot start or end with underscore"
+            username.contains("__") -> "Username cannot contain consecutive underscores"
             else -> null
         }
         
@@ -62,7 +66,7 @@ fun SignUpForm(
             else -> null
         }
         
-        return displayNameError == null && emailError == null && 
+        return usernameError == null && emailError == null && 
                passwordError == null && confirmPasswordError == null
     }
 
@@ -77,19 +81,19 @@ fun SignUpForm(
         Spacer(modifier = Modifier.height(24.dp))
         
         OutlinedTextField(
-            value = displayName,
+            value = username,
             onValueChange = { 
-                displayName = it
-                displayNameError = null
+                username = it.lowercase().replace(" ", "")
+                usernameError = null
             },
-            label = { Text("Display Name") },
-            placeholder = { Text("Enter your name") },
+            label = { Text("Username") },
+            placeholder = { Text("Choose a unique username") },
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Text,
                 imeAction = ImeAction.Next
             ),
-            isError = displayNameError != null,
-            supportingText = displayNameError?.let { { Text(it) } },
+            isError = usernameError != null,
+            supportingText = usernameError?.let { { Text(it) } },
             enabled = !isLoading,
             modifier = Modifier.fillMaxWidth()
         )
@@ -170,7 +174,7 @@ fun SignUpForm(
         Button(
             onClick = {
                 if (validateInputs()) {
-                    onSignUp(email, password, displayName)
+                    onSignUp(email, password, username)
                 }
             },
             enabled = !isLoading,

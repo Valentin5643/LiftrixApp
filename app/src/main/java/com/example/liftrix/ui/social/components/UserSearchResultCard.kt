@@ -478,6 +478,10 @@ private fun ConnectionAction(
                     Text("Blocked")
                 }
             }
+            ConnectionStatus.SELF -> {
+                // No action button when viewing own result in search
+                // User shouldn't see themselves in search results normally
+            }
         }
     }
 }

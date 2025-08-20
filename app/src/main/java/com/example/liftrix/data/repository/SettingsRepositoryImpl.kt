@@ -14,6 +14,7 @@ import com.example.liftrix.domain.model.UserSettings
 import com.example.liftrix.domain.model.WeightUnit
 import com.example.liftrix.domain.repository.SettingsRepository
 import com.example.liftrix.sync.SettingsSyncWorker
+import com.example.liftrix.sync.SettingsSyncWorkerV2
 import com.example.liftrix.domain.service.SettingsPersistenceManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -465,23 +466,107 @@ class SettingsRepositoryImpl @Inject constructor(
     }
     
     /**
-     * Schedules Firebase sync for user settings.
+     * Schedules Firebase sync for user settings using enhanced sync worker.
      */
     private fun scheduleFirebaseSync(userId: String) {
         try {
-            val workRequest = OneTimeWorkRequestBuilder<SettingsSyncWorker>()
+            val workRequest = OneTimeWorkRequestBuilder<SettingsSyncWorkerV2>()
                 .setInputData(
                     Data.Builder()
-                        .putString(SettingsSyncWorker.KEY_USER_ID, userId)
+                        .putString("userId", userId)
+                        .putBoolean("forceSync", false)
                         .build()
                 )
+                .addTag("settings_sync_v2_$userId")
                 .build()
             
             workManager.enqueue(workRequest)
-            Timber.d("Firebase sync scheduled for user: $userId")
+            Timber.d("Enhanced Firebase sync scheduled for user: $userId")
             
         } catch (e: Exception) {
-            Timber.e(e, "Failed to schedule Firebase sync for user: $userId")
+            Timber.e(e, "Failed to schedule enhanced Firebase sync for user: $userId")
+        }
+    }
+    
+    /**
+     * Updates distance unit preference with sync
+     */
+    suspend fun updateDistanceUnit(userId: String, distanceUnit: String): Result<Unit> {
+        return try {
+            settingsDao.updateDistanceUnit(userId, distanceUnit)
+            
+            // Schedule Firebase sync
+            scheduleFirebaseSync(userId)
+            
+            Timber.d("Distance unit updated successfully: $distanceUnit for user: $userId")
+            Result.success(Unit)
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to update distance unit for user: $userId")
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * Updates privacy settings with sync
+     */
+    suspend fun updatePrivacySettings(userId: String, privateProfile: Boolean, hideStats: Boolean): Result<Unit> {
+        return try {
+            settingsDao.updatePrivacySettings(userId, privateProfile, hideStats)
+            
+            // Schedule Firebase sync
+            scheduleFirebaseSync(userId)
+            
+            Timber.d("Privacy settings updated successfully for user: $userId")
+            Result.success(Unit)
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to update privacy settings for user: $userId")
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * Updates communication settings with sync
+     */
+    suspend fun updateCommunicationSettings(userId: String, allowMessages: Boolean, autoPlayVideos: Boolean): Result<Unit> {
+        return try {
+            settingsDao.updateCommunicationSettings(userId, allowMessages, autoPlayVideos)
+            
+            // Schedule Firebase sync
+            scheduleFirebaseSync(userId)
+            
+            Timber.d("Communication settings updated successfully for user: $userId")
+            Result.success(Unit)
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to update communication settings for user: $userId")
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * Forces sync for all user settings (used when user preferences need immediate sync)
+     */
+    suspend fun forceSyncUserSettings(userId: String): Result<Unit> {
+        return try {
+            val workRequest = OneTimeWorkRequestBuilder<SettingsSyncWorkerV2>()
+                .setInputData(
+                    Data.Builder()
+                        .putString("userId", userId)
+                        .putBoolean("forceSync", true)
+                        .build()
+                )
+                .addTag("force_settings_sync_$userId")
+                .build()
+            
+            workManager.enqueue(workRequest)
+            Timber.d("Force sync scheduled for user settings: $userId")
+            Result.success(Unit)
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to schedule force sync for user: $userId")
+            Result.failure(e)
         }
     }
     

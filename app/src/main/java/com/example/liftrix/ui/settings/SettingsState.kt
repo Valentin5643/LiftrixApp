@@ -4,6 +4,7 @@ import com.example.liftrix.domain.model.SubscriptionStatus
 import com.example.liftrix.domain.model.UserSettings
 import com.example.liftrix.domain.model.UserProfile
 import com.example.liftrix.domain.model.WeightUnit
+import com.example.liftrix.domain.model.social.SocialProfile
 
 /**
  * Data class representing the UI state for the settings screen.
@@ -28,6 +29,8 @@ data class SettingsState(
     val isLoading: Boolean = false,
     val userSettings: UserSettings? = null,
     val userProfile: UserProfile? = null,
+    val socialProfile: SocialProfile? = null,
+    val currentUser: com.example.liftrix.domain.model.User? = null,
     val subscriptionStatus: SubscriptionStatus? = null,
     val error: String? = null,
     val isUpdatingSettings: Boolean = false,
@@ -130,6 +133,15 @@ data class SettingsState(
      */
     fun withUpdatedProfile(profile: UserProfile): SettingsState = copy(
         userProfile = profile,
+        error = null
+    )
+
+    /**
+     * Creates a copy of the state with updated social profile.
+     * Ensures proper state transition when social profile is updated.
+     */
+    fun withUpdatedSocialProfile(profile: SocialProfile): SettingsState = copy(
+        socialProfile = profile,
         error = null
     )
 

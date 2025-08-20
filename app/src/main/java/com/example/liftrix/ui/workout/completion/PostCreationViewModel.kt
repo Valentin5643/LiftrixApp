@@ -116,7 +116,7 @@ class PostCreationViewModel @Inject constructor(
 
     /**
      * Ensures a social profile exists for the user before post creation.
-     * Creates a basic profile if one doesn't exist yet.
+     * IMPORTANT: Only creates a profile if one doesn't exist, never replaces existing ones.
      */
     private suspend fun ensureSocialProfileExists(userId: String) {
         val existingProfile = socialProfileDao.getProfile(userId)
@@ -127,9 +127,10 @@ class PostCreationViewModel @Inject constructor(
             val currentUser = authRepository.currentUser.first()
             
             // Create a basic social profile with default values
+            // BUT use a flag to indicate this is temporary
             val newProfile = SocialProfileEntity(
                 userId = userId,
-                username = "user_${userId.take(8)}", // Temporary username
+                username = "", // Empty username indicates profile needs setup
                 displayName = currentUser?.displayName ?: "Liftrix User",
                 bio = null,
                 profilePhotoUrl = currentUser?.photoUrl,
@@ -159,6 +160,8 @@ class PostCreationViewModel @Inject constructor(
                 Timber.e(e, "Failed to create social profile, it might already exist")
                 // If insert fails due to conflict, that's okay - profile exists
             }
+        } else {
+            Timber.d("Social profile already exists for user: $userId with username: ${existingProfile.username}")
         }
     }
 
@@ -182,6 +185,7 @@ class PostCreationViewModel @Inject constructor(
         
         // CRITICAL: Ensure social profile exists before creating post
         // This prevents foreign key constraint failures
+        // But NEVER replaces existing profiles
         ensureSocialProfileExists(userId)
 
         updateState { UiState.Loading }

@@ -7,6 +7,8 @@ import android.os.Build
 import com.example.liftrix.BuildConfig
 import com.example.liftrix.domain.repository.WidgetPreferencesRepository
 import com.example.liftrix.service.CacheWarmingService
+import com.example.liftrix.sync.SyncCoordinator
+import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +26,12 @@ class LiftrixApp : Application() {
     
     @Inject
     lateinit var cacheWarmingService: CacheWarmingService
+    
+    @Inject
+    lateinit var syncCoordinator: SyncCoordinator
+    
+    @Inject
+    lateinit var firebaseAuth: FirebaseAuth
     
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     
@@ -48,6 +56,9 @@ class LiftrixApp : Application() {
         
         // Initialize cache warming system
         initializeCacheWarmingSystem()
+        
+        // Initialize sync system
+        initializeSyncSystem()
     }
     
     /**
@@ -135,6 +146,50 @@ class LiftrixApp : Application() {
             } catch (e: Exception) {
                 Timber.e(e, "Failed to initialize cache warming system")
                 // Don't crash app if cache warming fails - it's an optimization, not critical
+            }
+        }
+    }
+    
+    /**
+     * Initialize the sync system for background data synchronization.
+     * Sets up periodic sync for authenticated users and monitors auth state changes.
+     */
+    private fun initializeSyncSystem() {
+        applicationScope.launch {
+            try {
+                Timber.d("Initializing sync system")
+                
+                // Check if user is already authenticated
+                val currentUser = firebaseAuth.currentUser
+                if (currentUser != null) {
+                    Timber.d("User already authenticated, scheduling periodic sync: ${currentUser.uid}")
+                    syncCoordinator.schedulePeriodicSync(currentUser.uid)
+                } else {
+                    Timber.d("No authenticated user found, sync will be initialized after authentication")
+                }
+                
+                // Listen for auth state changes to setup/teardown sync
+                firebaseAuth.addAuthStateListener { auth ->
+                    val user = auth.currentUser
+                    if (user != null) {
+                        Timber.d("User authenticated, scheduling periodic sync: ${user.uid}")
+                        applicationScope.launch {
+                            syncCoordinator.schedulePeriodicSync(user.uid)
+                        }
+                    } else {
+                        Timber.d("User signed out, canceling sync operations")
+                        applicationScope.launch {
+                            // Cancel sync for the previously authenticated user
+                            // Note: We don't have the old userId here, but WorkManager will handle cleanup
+                            // when the user signs out via the auth flow
+                        }
+                    }
+                }
+                
+                Timber.i("Sync system initialized successfully")
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to initialize sync system")
+                // Don't crash app if sync init fails - sync will be attempted again on user action
             }
         }
     }

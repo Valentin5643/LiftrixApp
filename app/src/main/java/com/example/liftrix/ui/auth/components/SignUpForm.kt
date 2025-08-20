@@ -58,13 +58,13 @@ import com.example.liftrix.ui.theme.LiftrixColorsV2
  */
 @Composable
 fun SignUpForm(
-    onSignUp: (email: String, password: String, displayName: String) -> Unit,
+    onSignUp: (email: String, password: String, username: String) -> Unit,
     isLoading: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val isDarkTheme = isSystemInDarkTheme()
     
-    var displayName by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
@@ -73,7 +73,7 @@ fun SignUpForm(
     var agreeToTerms by remember { mutableStateOf(false) }
     
     // Validation states
-    var displayNameError by remember { mutableStateOf<String?>(null) }
+    var usernameError by remember { mutableStateOf<String?>(null) }
     var emailError by remember { mutableStateOf<String?>(null) }
     var passwordError by remember { mutableStateOf<String?>(null) }
     var confirmPasswordError by remember { mutableStateOf<String?>(null) }
@@ -83,15 +83,15 @@ fun SignUpForm(
     val keyboardController = LocalSoftwareKeyboardController.current
     
     // Validate form whenever inputs change
-    LaunchedEffect(displayName, email, password, confirmPassword, agreeToTerms) {
-        displayNameError = validateDisplayName(displayName)
+    LaunchedEffect(username, email, password, confirmPassword, agreeToTerms) {
+        usernameError = validateUsername(username)
         emailError = validateEmail(email)
         passwordError = validatePassword(password)
         confirmPasswordError = validateConfirmPassword(password, confirmPassword)
         
-        isFormValid = displayNameError == null && emailError == null && 
+        isFormValid = usernameError == null && emailError == null && 
                      passwordError == null && confirmPasswordError == null &&
-                     displayName.isNotBlank() && email.isNotBlank() && 
+                     username.isNotBlank() && email.isNotBlank() && 
                      password.isNotBlank() && confirmPassword.isNotBlank() && agreeToTerms
     }
     
@@ -126,21 +126,21 @@ fun SignUpForm(
         
         Spacer(modifier = Modifier.height(24.dp))
         
-        // Full Name field
+        // Username field
         Column {
             Text(
-                text = "Full Name",
+                text = "Username",
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
                 color = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
             OutlinedTextField(
-                value = displayName,
-                onValueChange = { displayName = it },
+                value = username,
+                onValueChange = { username = it },
                 placeholder = { 
                     Text(
-                        "Enter your full name",
+                        "Choose a username",
                         color = if (isDarkTheme) LiftrixColorsV2.Dark.TextTertiary else LiftrixColorsV2.Light.TextTertiary
                     ) 
                 },
@@ -152,7 +152,7 @@ fun SignUpForm(
                         modifier = Modifier.size(20.dp)
                     )
                 },
-                isError = displayNameError != null && displayName.isNotBlank(),
+                isError = usernameError != null && username.isNotBlank(),
                 enabled = !isLoading,
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
@@ -368,7 +368,7 @@ fun SignUpForm(
                     onDone = {
                         keyboardController?.hide()
                         if (isFormValid && !isLoading) {
-                            onSignUp(email, password, displayName)
+                            onSignUp(email, password, username)
                         }
                     }
                 ),
@@ -417,7 +417,7 @@ fun SignUpForm(
             onClick = {
                 keyboardController?.hide()
                 if (isFormValid) {
-                    onSignUp(email, password, displayName)
+                    onSignUp(email, password, username)
                 }
             },
             enabled = isFormValid && !isLoading,
@@ -461,11 +461,12 @@ fun SignUpForm(
     }
 }
 
-private fun validateDisplayName(displayName: String): String? {
+private fun validateUsername(username: String): String? {
     return when {
-        displayName.isBlank() -> null
-        displayName.length < 2 -> "Name must be at least 2 characters"
-        displayName.length > 50 -> "Name is too long"
+        username.isBlank() -> null
+        username.length < 3 -> "Username must be at least 3 characters"
+        username.length > 20 -> "Username must be 20 characters or less"
+        !username.matches(Regex("^[a-zA-Z0-9_]+$")) -> "Username can only contain letters, numbers, and underscores"
         else -> null
     }
 }

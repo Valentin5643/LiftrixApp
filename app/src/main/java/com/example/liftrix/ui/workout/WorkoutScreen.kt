@@ -41,6 +41,7 @@ import com.example.liftrix.ui.workout.components.SecondaryActionButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -67,6 +68,8 @@ import timber.log.Timber
 import com.example.liftrix.ui.workout.components.CreateFolderDialog
 import com.example.liftrix.ui.workout.components.FolderEditDialog
 import com.example.liftrix.ui.workout.components.QuickCreateFolderButton
+import com.example.liftrix.ui.common.sync.CompactSyncIndicator
+import com.example.liftrix.ui.common.sync.SyncStatusViewModel
 
 /**
  * Main workout screen - simplified entry point with unified visual design.
@@ -90,7 +93,8 @@ fun WorkoutScreen(
     onNavigateToWorkoutCreation: (folderId: String?) -> Unit,
     onNavigateToEditWorkout: (workoutId: String) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: WorkoutViewModel = hiltViewModel()
+    viewModel: WorkoutViewModel = hiltViewModel(),
+    syncStatusViewModel: SyncStatusViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val currentState = uiState
@@ -109,6 +113,7 @@ fun WorkoutScreen(
                     viewModel.handleEvent(WorkoutEvent.CreateFolder(folderName))
                 },
                 viewModel = viewModel,
+                syncStatusViewModel = syncStatusViewModel,
                 modifier = modifier
             )
         }
@@ -136,6 +141,7 @@ private fun WorkoutContent(
     onNavigateToEditWorkout: (workoutId: String) -> Unit,
     onCreateFolder: (String) -> Unit,
     viewModel: WorkoutViewModel,
+    syncStatusViewModel: SyncStatusViewModel,
     modifier: Modifier = Modifier
 ) {
     // State for folder expansion and creation
@@ -169,7 +175,8 @@ private fun WorkoutContent(
         item {
             InlineFolderSectionHeader(
                 title = stringResource(R.string.workflow_your_workouts),
-                onCreateFolder = { showCreateFolderDialog = true }
+                onCreateFolder = { showCreateFolderDialog = true },
+                syncStatusViewModel = syncStatusViewModel
             )
         }
         
@@ -309,45 +316,65 @@ private fun WorkoutContent(
 }
 
 /**
- * Inline folder section header with create folder access - modernized
+ * Inline folder section header with create folder access and sync status - modernized
  */
 @Composable
 private fun InlineFolderSectionHeader(
     title: String,
     onCreateFolder: () -> Unit,
+    syncStatusViewModel: SyncStatusViewModel,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        
-        // Subtle New Folder button
-        TextButton(
-            onClick = onCreateFolder,
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+        // Main header row with title and action
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = "New Folder",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
+            // Title with optional compact sync indicator
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                
+                // Compact sync indicator for templates
+                val syncStatus by syncStatusViewModel.syncStatus.collectAsState(initial = com.example.liftrix.sync.SyncStatus.Idle)
+                CompactSyncIndicator(
+                    syncStatus = syncStatus,
+                    modifier = Modifier
+                )
+            }
+            
+            // Subtle New Folder button
+            TextButton(
+                onClick = onCreateFolder,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "New Folder",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }

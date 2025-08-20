@@ -17,7 +17,19 @@ service cloud.firestore {
              request.resource.data.displayName is string &&
              request.resource.data.displayName.size() > 0 &&
              request.resource.data.displayName.size() <= 50 &&
-             request.resource.data.isPublic is bool;
+             request.resource.data.isPublic is bool &&
+             // Allow optional fields that EnsureSearchability writes
+             (!('username' in request.resource.data) || (request.resource.data.username is string && request.resource.data.username.size() <= 20)) &&
+             (!('isPrivate' in request.resource.data) || request.resource.data.isPrivate is bool) &&
+             (!('memberSince' in request.resource.data) || request.resource.data.memberSince is string) &&
+             (!('lastActiveAt' in request.resource.data) || request.resource.data.lastActiveAt is string) &&
+             (!('searchTokens' in request.resource.data) || request.resource.data.searchTokens is list) &&
+             (!('totalWorkouts' in request.resource.data) || request.resource.data.totalWorkouts is int) &&
+             (!('currentStreak' in request.resource.data) || request.resource.data.currentStreak is int) &&
+             (!('longestStreak' in request.resource.data) || request.resource.data.longestStreak is int) &&
+             (!('followersCount' in request.resource.data) || request.resource.data.followersCount is int) &&
+             (!('followingCount' in request.resource.data) || request.resource.data.followingCount is int) &&
+             (!('syncVersion' in request.resource.data) || request.resource.data.syncVersion is int);
     }
     
     function isValidBio() {
@@ -33,9 +45,97 @@ service cloud.firestore {
               request.resource.data.age <= 100);
     }
     
-    // Users collection - private user data
+    // ========================================
+    // FIREBASE SYNC INFRASTRUCTURE RULES
+    // Added by SPEC-20250118-firebase-sync-infrastructure
+    // ========================================
+    
+    // Helper functions for sync infrastructure
+    function isValidSyncMetadata() {
+      return request.resource.data.keys().hasAll(['syncVersion', 'lastModified', 'isSynced']) &&
+             request.resource.data.syncVersion is int &&
+             request.resource.data.syncVersion >= 0 &&
+             request.resource.data.lastModified is timestamp &&
+             request.resource.data.isSynced is bool;
+    }
+    
+    function isValidWorkout() {
+      return request.resource.data.keys().hasAll(['id', 'userId', 'name', 'date', 'exercises', 'status']) &&
+             request.resource.data.userId == request.auth.uid &&
+             request.resource.data.id is string &&
+             request.resource.data.name is string &&
+             request.resource.data.name.size() > 0 &&
+             request.resource.data.name.size() <= 100 &&
+             request.resource.data.date is timestamp &&
+             request.resource.data.exercises is list &&
+             request.resource.data.status in ['PLANNED', 'ACTIVE', 'COMPLETED', 'CANCELLED'];
+    }
+    
+    function isValidTemplate() {
+      return request.resource.data.keys().hasAll(['id', 'userId', 'name', 'exercises']) &&
+             request.resource.data.userId == request.auth.uid &&
+             request.resource.data.id is string &&
+             request.resource.data.name is string &&
+             request.resource.data.name.size() > 0 &&
+             request.resource.data.name.size() <= 100 &&
+             request.resource.data.exercises is list &&
+             (!('isPublic' in request.resource.data) || request.resource.data.isPublic is bool);
+    }
+    
+    function isValidAchievement() {
+      return request.resource.data.keys().hasAll(['id', 'userId', 'type', 'title', 'description', 'unlockedAt']) &&
+             request.resource.data.userId == request.auth.uid &&
+             request.resource.data.id is string &&
+             request.resource.data.type is string &&
+             request.resource.data.title is string &&
+             request.resource.data.title.size() > 0 &&
+             request.resource.data.title.size() <= 100 &&
+             request.resource.data.description is string &&
+             request.resource.data.unlockedAt is timestamp;
+    }
+    
+    // Users collection - user profile data with sync support
     match /users/{userId} {
-      allow read, write: if isAuthenticated() && isOwner(userId);
+      allow read, write: if isAuthenticated() && 
+                           isOwner(userId) && 
+                           isValidSyncMetadata();
+      allow read: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // Workouts subcollection - user workout data
+    match /users/{userId}/workouts/{workoutId} {
+      allow read, write: if isAuthenticated() && 
+                           isOwner(userId) && 
+                           isValidWorkout() && 
+                           isValidSyncMetadata();
+      allow read: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // Templates subcollection - user workout templates
+    match /users/{userId}/templates/{templateId} {
+      allow read, write: if isAuthenticated() && 
+                           isOwner(userId) && 
+                           isValidTemplate() && 
+                           isValidSyncMetadata();
+      allow read: if isAuthenticated() && isOwner(userId);
+      
+      // Allow public template reading if template is marked as public
+      allow read: if isAuthenticated() && 
+                     resource.data.isPublic == true &&
+                     !hasBlockRelationship(request.auth.uid, userId);
+    }
+    
+    // Achievements subcollection - user achievements
+    match /users/{userId}/achievements/{achievementId} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow write: if false; // Achievements are managed server-side only for data integrity
+      
+      // Server-side write access (for Cloud Functions)
+      allow write: if isAuthenticated() && 
+                      isOwner(userId) && 
+                      isValidAchievement() && 
+                      isValidSyncMetadata() &&
+                      request.auth.token.admin == true; // Only admin tokens can write achievements
     }
     
     // Users public profiles - publicly accessible profile data
@@ -79,6 +179,9 @@ service cloud.firestore {
       allow write: if isAuthenticated() && 
                       isOwner(userId) &&
                       request.resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && 
+                       isOwner(userId) &&
+                       request.resource.data.userId == request.auth.uid;
     }
     
     // Connection management (for future friend system)
@@ -298,6 +401,28 @@ DEPLOYMENT INSTRUCTIONS:
    Collection: qr_codes
    Fields: userId (Ascending), expiresAt (Ascending)
    
+   // Firebase Sync Infrastructure Indexes (added by SPEC-20250118-firebase-sync-infrastructure)
+   Collection: users
+   Fields: userId (Ascending), lastModified (Descending)
+   
+   Collection Group: workouts (users/{userId}/workouts/{workoutId})
+   Fields: userId (Ascending), status (Ascending), date (Descending)
+   
+   Collection Group: workouts (users/{userId}/workouts/{workoutId})
+   Fields: userId (Ascending), lastModified (Descending)
+   
+   Collection Group: templates (users/{userId}/templates/{templateId})
+   Fields: userId (Ascending), isPublic (Ascending), lastModified (Descending)
+   
+   Collection Group: templates (users/{userId}/templates/{templateId})
+   Fields: userId (Ascending), tags (Array), lastModified (Descending)
+   
+   Collection Group: achievements (users/{userId}/achievements/{achievementId})
+   Fields: userId (Ascending), type (Ascending), unlockedAt (Descending)
+   
+   Collection Group: achievements (users/{userId}/achievements/{achievementId})
+   Fields: userId (Ascending), unlockedAt (Descending)
+   
    // Social Infrastructure Indexes (added by SPEC-20250113-social-infrastructure)
    Collection: social_profiles
    Fields: username (Ascending)
@@ -327,4 +452,10 @@ DEPLOYMENT INSTRUCTIONS:
    - Gym buddy pairing
    - User blocking functionality
    - Shared workout visibility controls
+   - Sync infrastructure data operations:
+     * User profile sync (create/read/update with sync metadata)
+     * Workout data sync (CRUD operations with user scoping)
+     * Template sharing (public template visibility)
+     * Achievement creation (server-side only)
+     * Offline queue processing
 */

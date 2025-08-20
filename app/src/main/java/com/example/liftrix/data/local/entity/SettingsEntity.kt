@@ -48,7 +48,30 @@ data class SettingsEntity(
     val lastSyncTimestamp: Long? = null,
     
     @ColumnInfo(name = "updated_at")
-    val updatedAt: Instant = Instant.now()
+    val updatedAt: Instant = Instant.now(),
+    
+    // Additional settings fields for sync specification
+    @ColumnInfo(name = "distance_unit", defaultValue = "'KM'")
+    val distanceUnit: String = "KM", // KM or MILES
+    
+    @ColumnInfo(name = "private_profile", defaultValue = "0")
+    val privateProfile: Boolean = false,
+    
+    @ColumnInfo(name = "hide_stats", defaultValue = "0")
+    val hideStats: Boolean = false,
+    
+    @ColumnInfo(name = "allow_messages", defaultValue = "1")
+    val allowMessages: Boolean = true,
+    
+    @ColumnInfo(name = "auto_play_videos", defaultValue = "1")
+    val autoPlayVideos: Boolean = true,
+    
+    // Sync metadata
+    @ColumnInfo(name = "is_synced", defaultValue = "0")
+    val isSynced: Boolean = false,
+    
+    @ColumnInfo(name = "sync_version", defaultValue = "0")
+    val syncVersion: Int = 0
 ) {
     companion object {
         /**
@@ -67,7 +90,14 @@ data class SettingsEntity(
             migrationExplanationSeen = false,
             settingsVersion = 1,
             lastSyncTimestamp = null,
-            updatedAt = Instant.now()
+            updatedAt = Instant.now(),
+            distanceUnit = "KM",
+            privateProfile = false,
+            hideStats = false,
+            allowMessages = true,
+            autoPlayVideos = true,
+            isSynced = false,
+            syncVersion = 0
         )
     }
 } 

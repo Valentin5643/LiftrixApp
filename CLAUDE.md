@@ -15,6 +15,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Gradle sync issues**: Run `./gradlew --stop` then rebuild
 - **Compilation errors**: Check `./gradlew compileDebugKotlin` for detailed errors
 - **Run on device**: `./gradlew installDebug` after building
+- **Force sync**: Trigger immediate sync with `SyncCoordinator.triggerImmediateSync(userId)`
+- **Check sync queue**: Query `SELECT * FROM sync_queue WHERE user_id = ?` to see pending operations
 
 ## Project Architecture
 
@@ -30,9 +32,9 @@ Repository Layer (16 interfaces)
     ↓ Flow<Entity>
 DAO Layer (28 DAOs with user scoping)
     ↓ SQL
-Room Database (27 entities, v45)
-    ↓ Background sync
-Firebase (8 services)
+Room Database (29 entities, v1)
+    ↓ Background sync via WorkManager
+Firebase (8 services + Firestore sync)
 ```
 
 ### Critical Architectural Rules
@@ -136,10 +138,12 @@ sealed class LiftrixRoute {
 
 #### New Database Entity Checklist
 1. Create entity with `user_id` field (mandatory)
-2. Add `is_synced` and `sync_version` fields
-3. Create DAO with user-scoped queries
-4. Add migration to increment database version
+2. Implement `SyncableEntity` interface with `isSynced`, `syncVersion`, `lastModified`
+3. Create DAO with user-scoped queries and sync status methods
+4. Update database version if adding new entities (currently v1)
 5. Register in `LiftrixDatabase` and Hilt modules
+6. Create corresponding sync worker extending `CoroutineWorker`
+7. Add entity to `MasterSyncWorker` orchestration
 
 ## Known Issues & Workarounds
 
@@ -151,7 +155,7 @@ sealed class LiftrixRoute {
    - **Fix**: Remove Timber.d() calls from production code
 
 3. **Legacy Result<T> Methods**: Maintaining dual error handling
-   - **Migration**: Use LiftrixResult<T> for all new code
+   - **Fix**: Use LiftrixResult<T> for all new code
 
 ### Performance Bottlenecks
 - Some analytics calculations still on main thread (use Dispatchers.IO)
@@ -343,6 +347,112 @@ import com.example.liftrix.domain.model.common.LiftrixError  // Wrong path
 - User-level document ownership enforced
 - Privacy settings respected for social features
 - Server-side validation for all writes
+
+## Firebase Sync Architecture
+
+### Sync Infrastructure Overview
+```kotlin
+// Offline-first sync pattern
+Room Database (source of truth)
+    ↓ SyncQueueEntity (offline operations)
+SyncRepository & OfflineQueueManager
+    ↓ WorkManager (background sync)
+Sync Workers (entity-specific)
+    ↓ FirebaseDataSource
+Firestore (network persistence)
+    ↓ RealtimeSyncService (live updates)
+```
+
+### Core Sync Components
+
+#### 1. Sync Repository Pattern
+```kotlin
+// All entities implement SyncableEntity
+interface SyncableEntity {
+    val isSynced: Boolean
+    val syncVersion: Long
+    val lastModified: Long
+}
+
+// Repository provides sync operations
+interface SyncRepository {
+    suspend fun syncAll(userId: String): SyncResult
+    suspend fun syncWorkouts(userId: String): LiftrixResult<Unit>
+    fun observeRealtimeWorkout(workoutId: String): Flow<WorkoutUpdate>
+    fun observeSyncStatus(): Flow<SyncStatus>
+}
+```
+
+#### 2. Conflict Resolution
+```kotlin
+// Last-write-wins strategy
+ConflictResolver.resolve(local, remote) → 
+    if (local.lastModified > remote.lastModified) local else remote
+```
+
+#### 3. Sync Workers
+- **MasterSyncWorker**: Orchestrates periodic sync (every 15 min)
+- **WorkoutSyncWorker**: Batch processes workouts (20 per batch)
+- **TemplateSyncWorker**: Syncs workout templates
+- **AchievementSyncWorker**: Syncs unlocked achievements
+- **ProfileSyncWorker**: Syncs user profiles with goals priority
+- **SocialProfileSyncWorker**: Syncs social data
+- **FollowRelationshipSyncWorker**: Bidirectional follow sync
+- **WorkoutPostSyncWorker**: Feed posts with engagement
+- **GymBuddySyncWorker**: Buddy connections (5 max)
+- **SettingsSyncWorkerV2**: Unit preferences (kg/lbs)
+
+#### 4. Real-time Services
+```kotlin
+// Real-time workout updates during active sessions
+RealtimeSyncService.startRealtimeWorkoutSync(workoutId, userId)
+// Real-time engagement metrics
+EngagementRealtimeSyncService.startListeningToPost(postId)
+// Real-time follow counts
+FollowRealtimeService.observeProfileUpdates(userId)
+```
+
+### Sync Triggers & Scheduling
+```kotlin
+// Periodic sync (background)
+SyncCoordinator.schedulePeriodicSync(userId) // Every 15 minutes
+
+// Immediate sync (user-triggered)
+SyncCoordinator.triggerImmediateSync(userId)
+
+// Entity-specific sync
+workoutRepository.queueSync(userId)
+
+// Real-time sync (active sessions)
+syncCoordinator.enableRealtimeWorkoutSync(workoutId, userId)
+```
+
+### Firestore Collection Schema
+```
+/users/{userId}                     # User profile with goals priority
+  /workouts/{workoutId}             # Workout data with exercises
+  /templates/{templateId}           # Workout templates
+  /achievements/{achievementId}     # Unlocked achievements
+  /gym_buddies/{buddyId}           # Gym buddy connections (max 5)
+  /settings/preferences            # Unit preferences (kg/lbs)
+/social_profiles/{userId}          # Social profile data
+/follow_relationships/{id}         # Follow connections
+/workout_posts/{postId}           # Feed posts with engagement
+```
+
+### Sync Debug Points
+1. **Sync Queue**: Check `sync_queue` table for pending operations
+2. **Sync Status**: Monitor `SyncStatusRepository.syncStatus` flow
+3. **Worker Status**: Use WorkManager debug tools to check worker state
+4. **Conflict Resolution**: Debug in `LastWriteWinsResolver`
+5. **Real-time Issues**: Check listener lifecycle in `RealtimeSyncService`
+
+### Common Sync Issues & Solutions
+- **Sync not triggering**: Check WorkManager constraints (network, battery)
+- **Data not appearing**: Verify `isSynced` flag and `syncVersion`
+- **Conflicts**: Review `lastModified` timestamps
+- **Real-time delays**: Check Firestore listener registration
+- **Partial sync**: Review batch processing in sync workers
 
 ## Social Feed Engagement Architecture
 
@@ -632,6 +742,10 @@ fun ModernChart(
 8. **NEVER** read directly from Firebase in UI layer - always use Room as source of truth
 9. **ALWAYS** extend BaseViewModel<S, E> with UiState<T> pattern for ViewModels
 10. **USE** UnifiedWorkoutSessionManager for all session state management
+11. **IMPLEMENT** SyncableEntity interface for all new syncable entities
+12. **USE** SyncCoordinator for triggering sync operations, not direct Firebase calls
+13. **APPLY** optimistic updates for social interactions then revert on sync failure
+14. **BATCH** Firestore operations in sync workers (20 items max per batch)
 
 ## Redesigned Workout System Architecture
 
@@ -792,6 +906,15 @@ val chartData = processChartData(rawData, timeRange)
 - `UiState<T>` - UI state management (Loading/Success/Error/Empty)
 - `LiftrixRoute` - Type-safe navigation with @Serializable
 
+### Sync Infrastructure Classes
+- `SyncRepository` - Core sync operations contract
+- `SyncCoordinator` - Orchestrates all sync operations
+- `MasterSyncWorker` - Periodic sync coordinator (every 15 min)
+- `OfflineQueueManager` - Manages offline operations queue
+- `ConflictResolver` - Last-write-wins conflict resolution
+- `RealtimeSyncService` - Firestore real-time listeners
+- `FirebaseDataSource` - Firebase CRUD operations
+
 ### UI Components
 - `UnifiedWorkoutCard` - Foundation card component (12dp radius, haptic feedback)
 - `ModernActionButton` - Three-tier button system (Primary/Secondary/Tertiary)
@@ -807,6 +930,7 @@ val chartData = processChartData(rawData, timeRange)
 - `QRCodeService` - ZXing-based QR code generation
 - `CalculateAchievementsUseCase` - Automatic achievement detection
 - `ProfileImageManager` - Image upload, crop, and cache management
+- `UnitConversionService` - Dynamic kg/lbs and km/miles conversion based on user settings
 
 ### Social Feed & Engagement System
 - `FeedRepositoryImpl` - Paging3 integration with RemoteMediator for offline support
