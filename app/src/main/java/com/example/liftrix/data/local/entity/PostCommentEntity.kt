@@ -18,6 +18,7 @@ import androidx.room.PrimaryKey
     tableName = "post_comments",
     indices = [
         Index(value = ["post_id", "created_at"], name = "idx_post_comments_post"),
+        Index(value = ["user_id"], name = "idx_post_comments_user"),
         Index(value = ["reply_to_comment_id"])
     ],
     foreignKeys = [

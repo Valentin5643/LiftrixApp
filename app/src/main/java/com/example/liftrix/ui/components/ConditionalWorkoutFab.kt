@@ -15,6 +15,7 @@ import androidx.navigation.NavDestination
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
 import com.example.liftrix.ui.components.WorkoutCreationFab
 import com.example.liftrix.ui.components.QuickWorkoutFab
+import com.example.liftrix.ui.navigation.LiftrixRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -27,16 +28,19 @@ import kotlinx.coroutines.SupervisorJob
 import javax.inject.Inject
 
 /**
- * 🔥 KEY FIX: Conditional FAB that hides during active workout sessions and in settings screens
+ * 🔥 KEY FIX: Conditional FAB that hides during active workout sessions, in settings screens, and on Coach tab
  * 
  * This component wraps workout creation FABs and automatically hides them
  * when there's an active workout session to prevent multiple sessions
- * and UI confusion, or when the user is in settings screens where adding
- * workouts doesn't make contextual sense.
+ * and UI confusion, when the user is in settings screens where adding
+ * workouts doesn't make contextual sense, or when on the Coach tab
+ * where the focus is on AI chat interaction.
  * 
  * Features:
+ * - Type-safe route checking using sealed class hierarchy
  * - Automatic visibility based on session state
  * - Hide when in settings screens (Settings, WidgetSettings, etc.)
+ * - Hide when on Coach tab (AI chat interface)
  * - Smooth enter/exit animations
  * - Reusable across different screens
  * - Proper state management with Hilt injection
@@ -58,18 +62,8 @@ fun ConditionalWorkoutFab(
 ) {
     val hasActiveSession by viewModel.hasActiveSession.collectAsState()
     
-    // 🔥 KEY FIX: Hide FAB when there's an active session OR when in settings screens
-    val isInSettingsScreen = currentDestination?.route?.let { route ->
-        route.contains("Settings") || 
-        route.contains("settings") ||
-        route.contains("AnomalySettings") ||
-        route.contains("DashboardCustomization") ||
-        route.contains("dashboard_customization") ||
-        route.contains("WidgetSettings") ||
-        route.contains("widget_settings")
-    } ?: false
-    
-    val shouldHideFab = hasActiveSession || isInSettingsScreen
+    // Type-safe FAB visibility check
+    val shouldHideFab = hasActiveSession || shouldHideFabForRoute(currentDestination?.route)
     
     AnimatedVisibility(
         visible = !shouldHideFab,
@@ -99,6 +93,49 @@ fun ConditionalWorkoutFab(
 enum class FabType {
     CREATION,
     QUICK_WORKOUT
+}
+
+/**
+ * Type-safe route checking for FAB visibility.
+ * Determines if FAB should be hidden based on the current route.
+ * 
+ * This approach is more maintainable than string matching because:
+ * - It's centralized in one place
+ * - It's type-safe with the sealed class hierarchy
+ * - It's resilient to route refactoring
+ * 
+ * @param route The current navigation route
+ * @return true if FAB should be hidden, false otherwise
+ */
+private fun shouldHideFabForRoute(route: String?): Boolean {
+    if (route == null) return false
+    
+    // Define route patterns where FAB should be hidden
+    val routesToHideFab = setOf(
+        // Coach tab - AI chat interface doesn't need workout creation
+        LiftrixRoute.Coach::class.simpleName,
+        
+        // Settings screens - contextually inappropriate for workout creation
+        "Settings", "WidgetSettings", "AnomalySettings", 
+        "DashboardCustomization", "NotificationSettings",
+        "EmailChange", "PasswordChange", "UsernameChange",
+        "AccountDeletion", "PrivacySettings",
+        
+        // Help and legal screens
+        "HelpCenter", "ContactSupport", "About",
+        "PrivacyPolicy", "TermsOfService", "DataPortability",
+        
+        // Authentication screens
+        "AuthSignIn", "AuthSignUp", "AuthForgotPassword",
+        
+        // Active workout - already in a workout session
+        "ActiveWorkout", "ActiveWorkoutDetail"
+    )
+    
+    // Check if current route contains any of the patterns
+    return routesToHideFab.any { pattern ->
+        pattern?.let { route.contains(it, ignoreCase = true) } ?: false
+    }
 }
 
 /**

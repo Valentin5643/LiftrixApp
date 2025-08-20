@@ -18,7 +18,8 @@ import androidx.room.PrimaryKey
     tableName = "saved_posts",
     indices = [
         Index(value = ["user_id", "post_id"], unique = true, name = "idx_saved_posts_unique"),
-        Index(value = ["user_id", "saved_at"], name = "idx_saved_posts_user_date")
+        Index(value = ["user_id", "saved_at"], name = "idx_saved_posts_user_date"),
+        Index(value = ["post_id"], name = "idx_saved_posts_post")
     ],
     foreignKeys = [
         ForeignKey(

@@ -50,11 +50,10 @@ abstract class NetworkModule {
             }
         }
 
-        @Provides
-        @Singleton
-        fun provideWorkManager(@ApplicationContext context: Context): WorkManager {
-            return WorkManager.getInstance(context)
-        }
+        // REMOVED: WorkManager provider
+        // WorkManager MUST NOT be provided through Hilt to prevent early initialization.
+        // Components that need WorkManager should use WorkManagerProvider.getInstance()
+        // which ensures proper initialization with HiltWorkerFactory.
 
         @Provides
         @Singleton

@@ -1,0 +1,479 @@
+package com.example.liftrix.ui.chat
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+import com.example.liftrix.ui.theme.LiftrixColorsV2
+import com.example.liftrix.ui.theme.LiftrixSpacing
+import com.example.liftrix.ui.chat.components.TypingIndicator
+import com.example.liftrix.domain.model.chat.ChatMessage
+import com.example.liftrix.domain.model.chat.MessageType
+import com.example.liftrix.domain.model.chat.UsageLimits
+import java.text.SimpleDateFormat
+import java.util.*
+
+/**
+ * Chatbot screen providing AI-powered workout guidance interface.
+ * 
+ * Features:
+ * - Real-time chat interface with message bubbles
+ * - Typing indicators and smooth animations
+ * - Usage limit monitoring and warnings
+ * - Multi-language support (English/Romanian)
+ * - Auto-scroll to latest messages
+ * - Error handling with retry functionality
+ * 
+ * @param conversationId Optional conversation ID to resume existing chat
+ * @param initialWorkoutContext Optional workout context for AI responses
+ * @param onNavigateBack Callback for navigation back action
+ * @param viewModel Injected ChatbotViewModel
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChatbotScreen(
+    conversationId: String? = null,
+    initialWorkoutContext: String? = null,
+    onNavigateBack: () -> Unit,
+    viewModel: ChatbotViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    
+    Scaffold(
+        topBar = {
+            ChatbotTopBar(
+                onNavigateBack = onNavigateBack,
+                usageLimits = uiState.usageLimits,
+                currentLanguage = uiState.currentLanguage,
+                onLanguageToggle = { viewModel.handleEvent(ChatbotEvent.ToggleLanguage(it)) }
+            )
+        },
+        bottomBar = {
+            ChatInputBar(
+                text = uiState.currentInput,
+                onTextChange = { viewModel.handleEvent(ChatbotEvent.UpdateInput(it)) },
+                onSend = { viewModel.handleEvent(ChatbotEvent.SendMessage(it)) },
+                enabled = !uiState.isTyping && uiState.usageLimits?.canSendMessage() == true,
+                currentLanguage = uiState.currentLanguage
+            )
+        }
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            MessageList(
+                messages = uiState.messages,
+                isTyping = uiState.isTyping,
+                modifier = Modifier.fillMaxSize()
+            )
+            
+            // Usage warning overlay
+            AnimatedVisibility(
+                visible = uiState.showUsageWarning,
+                enter = slideInVertically(initialOffsetY = { -it }),
+                exit = slideOutVertically(targetOffsetY = { -it }),
+                modifier = Modifier.align(Alignment.TopCenter)
+            ) {
+                UsageWarningCard(
+                    limits = uiState.usageLimits,
+                    currentLanguage = uiState.currentLanguage,
+                    modifier = Modifier.padding(LiftrixSpacing.medium)
+                )
+            }
+            
+            // Error handling overlay
+            uiState.error?.let { error ->
+                ErrorCard(
+                    error = error,
+                    currentLanguage = uiState.currentLanguage,
+                    onRetry = { viewModel.handleEvent(ChatbotEvent.RetryLastMessage) },
+                    onDismiss = { viewModel.handleEvent(ChatbotEvent.DismissError) },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(LiftrixSpacing.medium)
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChatbotTopBar(
+    onNavigateBack: () -> Unit,
+    usageLimits: UsageLimits?,
+    currentLanguage: Language,
+    onLanguageToggle: (Language) -> Unit
+) {
+    TopAppBar(
+        title = { 
+            Text(
+                text = if (currentLanguage == Language.ROMANIAN) "Antrenor AI" else "AI Coach",
+                style = MaterialTheme.typography.headlineSmall
+            )
+        },
+        navigationIcon = {
+            IconButton(onClick = onNavigateBack) {
+                Icon(
+                    Icons.Default.ArrowBack, 
+                    contentDescription = if (currentLanguage == Language.ROMANIAN) "Înapoi" else "Back"
+                )
+            }
+        },
+        actions = {
+            // Language toggle
+            TextButton(
+                onClick = {
+                    val newLanguage = if (currentLanguage == Language.ENGLISH) 
+                        Language.ROMANIAN else Language.ENGLISH
+                    onLanguageToggle(newLanguage)
+                }
+            ) {
+                Text(
+                    text = if (currentLanguage == Language.ENGLISH) "RO" else "EN",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            
+            // Usage limits display
+            usageLimits?.let { limits ->
+                if (limits.dailyMessagesRemaining < 20) {
+                    Text(
+                        text = if (currentLanguage == Language.ROMANIAN)
+                            "${limits.dailyMessagesRemaining} rămase azi"
+                        else
+                            "${limits.dailyMessagesRemaining} left today",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (limits.dailyMessagesRemaining < 5) 
+                            MaterialTheme.colorScheme.error 
+                        else 
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(end = LiftrixSpacing.medium)
+                    )
+                }
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = LiftrixColorsV2.surface
+        )
+    )
+}
+
+@Composable
+private fun MessageList(
+    messages: List<ChatMessage>,
+    isTyping: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val listState = rememberLazyListState()
+    
+    // Auto-scroll to bottom when new message arrives
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
+    
+    LazyColumn(
+        state = listState,
+        modifier = modifier,
+        contentPadding = PaddingValues(LiftrixSpacing.medium),
+        verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.small)
+    ) {
+        items(
+            items = messages,
+            key = { it.id }
+        ) { message ->
+            MessageBubble(
+                message = message,
+                modifier = Modifier.animateItem()
+            )
+        }
+        
+        // Typing indicator
+        if (isTyping) {
+            item {
+                TypingIndicator(
+                    modifier = Modifier
+                        .padding(start = LiftrixSpacing.medium)
+                        .testTag("typing_indicator")
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MessageBubble(
+    message: ChatMessage,
+    modifier: Modifier = Modifier
+) {
+    val isUserMessage = message.type == MessageType.USER
+    
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = if (isUserMessage) Arrangement.End else Arrangement.Start
+    ) {
+        Surface(
+            color = if (isUserMessage) 
+                LiftrixColorsV2.primary 
+            else 
+                LiftrixColorsV2.surfaceVariant,
+            shape = RoundedCornerShape(
+                topStart = 16.dp,
+                topEnd = 16.dp,
+                bottomStart = if (isUserMessage) 16.dp else 4.dp,
+                bottomEnd = if (isUserMessage) 4.dp else 16.dp
+            ),
+            modifier = Modifier.widthIn(max = 280.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(LiftrixSpacing.cardPadding)
+            ) {
+                Text(
+                    text = message.content,
+                    color = if (isUserMessage) 
+                        LiftrixColorsV2.onPrimary 
+                    else 
+                        LiftrixColorsV2.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                
+                Row(
+                    modifier = Modifier.padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = formatTimestamp(message.createdAt),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (isUserMessage)
+                            LiftrixColorsV2.onPrimary.copy(alpha = 0.7f)
+                        else
+                            LiftrixColorsV2.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                    
+                    message.tokenCount?.let { tokens ->
+                        Text(
+                            text = "$tokens tokens",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isUserMessage)
+                                LiftrixColorsV2.onPrimary.copy(alpha = 0.7f)
+                            else
+                                LiftrixColorsV2.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChatInputBar(
+    text: String,
+    onTextChange: (String) -> Unit,
+    onSend: (String) -> Unit,
+    enabled: Boolean,
+    currentLanguage: Language,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        color = LiftrixColorsV2.surface,
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(LiftrixSpacing.medium),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = text,
+                onValueChange = onTextChange,
+                placeholder = { 
+                    Text(
+                        text = if (currentLanguage == Language.ROMANIAN)
+                            "Întreabă despre antrenamentul tău..."
+                        else
+                            "Ask about your workout...",
+                        color = LiftrixColorsV2.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                },
+                enabled = enabled,
+                keyboardOptions = KeyboardOptions(
+                    imeAction = ImeAction.Send,
+                    capitalization = KeyboardCapitalization.Sentences
+                ),
+                keyboardActions = KeyboardActions(
+                    onSend = { 
+                        if (text.isNotBlank()) {
+                            onSend(text)
+                        }
+                    }
+                ),
+                shape = RoundedCornerShape(24.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = LiftrixColorsV2.primary,
+                    unfocusedBorderColor = LiftrixColorsV2.outline
+                ),
+                modifier = Modifier.weight(1f)
+            )
+            
+            Spacer(modifier = Modifier.width(LiftrixSpacing.small))
+            
+            FilledIconButton(
+                onClick = { 
+                    if (text.isNotBlank()) {
+                        onSend(text)
+                    }
+                },
+                enabled = enabled && text.isNotBlank(),
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = LiftrixColorsV2.primary,
+                    contentColor = LiftrixColorsV2.onPrimary
+                )
+            ) {
+                Icon(
+                    Icons.Default.Send,
+                    contentDescription = if (currentLanguage == Language.ROMANIAN) 
+                        "Trimite mesaj" else "Send message"
+                )
+            }
+        }
+    }
+}
+
+// TypingIndicator component moved to separate file
+
+@Composable
+private fun UsageWarningCard(
+    limits: UsageLimits?,
+    currentLanguage: Language,
+    modifier: Modifier = Modifier
+) {
+    limits?.let {
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = if (it.dailyMessagesRemaining < 5)
+                    MaterialTheme.colorScheme.errorContainer
+                else
+                    MaterialTheme.colorScheme.secondaryContainer
+            ),
+            modifier = modifier
+        ) {
+            Row(
+                modifier = Modifier.padding(LiftrixSpacing.cardPadding),
+                horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.small)
+            ) {
+                Icon(
+                    Icons.Default.Info,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Column {
+                    Text(
+                        text = if (currentLanguage == Language.ROMANIAN) "Alertă Utilizare" else "Usage Alert",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = it.getWarningMessage(currentLanguage),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ErrorCard(
+    error: com.example.liftrix.domain.model.error.LiftrixError,
+    currentLanguage: Language,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        ),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(LiftrixSpacing.cardPadding)
+        ) {
+            Text(
+                text = if (currentLanguage == Language.ROMANIAN) "Eroare" else "Error",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Text(
+                text = error.message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
+            
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (error.isRecoverable) {
+                    TextButton(onClick = onRetry) {
+                        Text(
+                            text = if (currentLanguage == Language.ROMANIAN) "Reîncearcă" else "Retry",
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text(
+                        text = if (currentLanguage == Language.ROMANIAN) "Închide" else "Dismiss",
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Helper function to format timestamp for message display.
+ */
+private fun formatTimestamp(timestamp: Long): String {
+    val formatter = SimpleDateFormat("HH:mm", Locale.getDefault())
+    return formatter.format(Date(timestamp))
+}

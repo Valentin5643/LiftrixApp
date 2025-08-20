@@ -194,7 +194,7 @@ fun UnifiedMainNavigationContainer(
                     ProgressDashboardScreen()
                 }
                 composable("coach") {
-                    CoachScreen()
+                    CoachScreen(navController = navController)
                 }
                 composable("friends") {
                     com.example.liftrix.ui.social.FriendsScreen(

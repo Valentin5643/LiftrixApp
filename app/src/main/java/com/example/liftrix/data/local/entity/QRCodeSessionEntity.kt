@@ -29,7 +29,8 @@ import androidx.room.PrimaryKey
     indices = [
         Index(value = ["code_token"], unique = true),
         Index(value = ["expires_at"]),
-        Index(value = ["user_id"])
+        Index(value = ["user_id"]),
+        Index(value = ["used_by_user_id"])
     ]
 )
 data class QRCodeSessionEntity(

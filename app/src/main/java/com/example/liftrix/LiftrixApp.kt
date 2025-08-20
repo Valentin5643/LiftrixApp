@@ -7,6 +7,7 @@ import android.os.Build
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import androidx.work.WorkManager
+import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.BuildConfig
 import com.example.liftrix.domain.repository.WidgetPreferencesRepository
 import com.example.liftrix.service.CacheWarmingService
@@ -16,13 +17,14 @@ import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 
 @HiltAndroidApp
-class LiftrixApp : Application(), Configuration.Provider {
+class LiftrixApp : Application() {
     
     @Inject
     lateinit var widgetPreferencesRepository: WidgetPreferencesRepository
@@ -51,15 +53,15 @@ class LiftrixApp : Application(), Configuration.Provider {
         // Initialize Timber for logging
         Timber.plant(Timber.DebugTree())
         
-        // CRITICAL: Initialize WorkManager FIRST before any other systems
-        // This ensures HiltWorkerFactory is registered before any worker operations
-        initializeWorkManager()
-        
         // Initialize debug system
         initializeDebugSystem()
         
         // Create notification channels
         createNotificationChannels()
+        
+        // CRITICAL: Initialize WorkManager with HiltWorkerFactory
+        // This MUST happen after Hilt injection and before any WorkManager usage
+        initializeWorkManagerSafely()
         
         // Initialize widget migration system
         initializeWidgetMigration()
@@ -67,18 +69,42 @@ class LiftrixApp : Application(), Configuration.Provider {
         // Initialize cache warming system
         initializeCacheWarmingSystem()
         
-        // Initialize sync system
+        // Initialize sync system - WorkManager is now properly initialized
         initializeSyncSystem()
     }
     
-    override val workManagerConfiguration: Configuration
-        get() {
-            Timber.d("WorkManagerConfiguration: Creating configuration with HiltWorkerFactory")
-            return Configuration.Builder()
-                .setWorkerFactory(workerFactory)
-                .setMinimumLoggingLevel(if (BuildConfig.DEBUG) android.util.Log.DEBUG else android.util.Log.INFO)
-                .build()
+    /**
+     * Initialize WorkManager safely with HiltWorkerFactory.
+     * This replaces the Configuration.Provider approach to ensure controlled initialization.
+     */
+    private fun initializeWorkManagerSafely() {
+        Timber.d("Initializing WorkManager with controlled approach...")
+        
+        // Verify HiltWorkerFactory is injected
+        if (!::workerFactory.isInitialized) {
+            throw IllegalStateException(
+                "CRITICAL: HiltWorkerFactory not injected! " +
+                "This indicates a Hilt configuration problem. " +
+                "ProfileSyncWorker and all workers will fail."
+            )
         }
+        
+        // Initialize WorkManager using our controlled provider
+        val initialized = WorkManagerProvider.initialize(this, workerFactory)
+        
+        if (initialized) {
+            Timber.d("✅ WorkManager initialized successfully with HiltWorkerFactory")
+        } else {
+            Timber.w("WorkManager was already initialized - this might indicate a problem")
+        }
+        
+        // Verify initialization
+        if (!WorkManagerProvider.isInitialized()) {
+            throw IllegalStateException(
+                "WorkManager initialization failed! Workers will not function."
+            )
+        }
+    }
     
     /**
      * Initialize the debug system for the application
@@ -169,54 +195,17 @@ class LiftrixApp : Application(), Configuration.Provider {
         }
     }
     
-    /**
-     * Initialize WorkManager explicitly to ensure HiltWorkerFactory is properly registered.
-     * This prevents NoSuchMethodException when WorkManager tries to instantiate Hilt workers.
-     */
-    private fun initializeWorkManager() {
-        try {
-            Timber.d("Starting WorkManager initialization...")
-            Timber.d("HiltWorkerFactory available: ${::workerFactory.isInitialized}")
-            
-            // Ensure WorkManager is not already initialized
-            try {
-                WorkManager.getInstance(this)
-                Timber.d("WorkManager already initialized, checking configuration...")
-            } catch (e: IllegalStateException) {
-                Timber.d("WorkManager not yet initialized, proceeding with initialization")
-                
-                // Force WorkManager initialization with our configuration
-                val config = workManagerConfiguration
-                Timber.d("Created WorkManager configuration with factory: ${config.workerFactory?.javaClass?.simpleName}")
-                
-                WorkManager.initialize(this, config)
-                Timber.d("WorkManager.initialize() completed")
-            }
-            
-            // Verify WorkManager is properly configured
-            val workManager = WorkManager.getInstance(this)
-            Timber.d("WorkManager verification successful: ${workManager.javaClass.simpleName}")
-            
-            // Log the factory being used
-            val factoryField = workManager.javaClass.getDeclaredField("mWorkManagerImpl")
-            factoryField.isAccessible = true
-            val workManagerImpl = factoryField.get(workManager)
-            Timber.d("WorkManager implementation: ${workManagerImpl?.javaClass?.simpleName}")
-            
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to initialize WorkManager - this will cause worker instantiation failures")
-            // This is critical - if WorkManager fails to initialize, sync won't work
-        }
-    }
     
     /**
      * Initialize the sync system for background data synchronization.
      * Sets up periodic sync for authenticated users and monitors auth state changes.
+     * 
+     * WorkManager is guaranteed to be initialized with HiltWorkerFactory at this point.
      */
     private fun initializeSyncSystem() {
         applicationScope.launch {
             try {
-                Timber.d("Initializing sync system")
+                Timber.d("Initializing sync system...")
                 
                 // Check if user is already authenticated
                 val currentUser = firebaseAuth.currentUser
@@ -237,11 +226,6 @@ class LiftrixApp : Application(), Configuration.Provider {
                         }
                     } else {
                         Timber.d("User signed out, canceling sync operations")
-                        applicationScope.launch {
-                            // Cancel sync for the previously authenticated user
-                            // Note: We don't have the old userId here, but WorkManager will handle cleanup
-                            // when the user signs out via the auth flow
-                        }
                     }
                 }
                 

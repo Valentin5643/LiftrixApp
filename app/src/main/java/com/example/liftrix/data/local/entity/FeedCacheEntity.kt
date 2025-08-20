@@ -17,7 +17,8 @@ import androidx.room.Index
     tableName = "feed_cache",
     primaryKeys = ["user_id", "post_id"],
     indices = [
-        Index(value = ["user_id", "score"], name = "idx_feed_cache_user_score")
+        Index(value = ["user_id", "score"], name = "idx_feed_cache_user_score"),
+        Index(value = ["post_id"], name = "idx_feed_cache_post")
     ],
     foreignKeys = [
         ForeignKey(

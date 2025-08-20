@@ -784,3 +784,32 @@ fun NavController.navigateToAccountDeletionAnimated() {
         transitionType = TransitionType.MODAL
     )
 }
+
+// MARK: - AI Chatbot Navigation Functions
+
+/**
+ * Navigate to AI Chatbot screen for workout guidance
+ * 
+ * @param conversationId Optional conversation ID to resume existing chat
+ * @param workoutContext Optional workout context for AI responses
+ */
+fun NavController.navigateToAIChatbot(
+    conversationId: String? = null,
+    workoutContext: String? = null
+) {
+    navigate(LiftrixRoute.AIChatbot(conversationId, workoutContext))
+}
+
+/**
+ * Navigate to AI Chatbot screen with vertical transition animation
+ * Emphasizes the conversational nature of the AI interface
+ */
+fun NavController.navigateToAIChatbotAnimated(
+    conversationId: String? = null,
+    workoutContext: String? = null
+) {
+    navigateAnimated(
+        route = LiftrixRoute.AIChatbot(conversationId, workoutContext),
+        transitionType = TransitionType.VERTICAL
+    )
+}

@@ -172,6 +172,7 @@ class LegacyNavigationWrapper @Inject constructor(
                 is LiftrixRoute.Workout -> "Replace with: navController.navigate(LiftrixRoute.Workout)"
                 is LiftrixRoute.Progress -> "Replace with: navController.navigate(LiftrixRoute.Progress)"
                 is LiftrixRoute.Coach -> "Replace with: navController.navigate(LiftrixRoute.Coach)"
+                is LiftrixRoute.AIChatbot -> "Replace with: navController.navigate(LiftrixRoute.AIChatbot())"
                 is LiftrixRoute.Friends -> "Replace with: navController.navigate(LiftrixRoute.Friends)"
                 is LiftrixRoute.Settings -> "Replace with: navController.navigate(LiftrixRoute.Settings)"
                 is LiftrixRoute.WidgetSettings -> "Replace with: navController.navigate(LiftrixRoute.WidgetSettings)"

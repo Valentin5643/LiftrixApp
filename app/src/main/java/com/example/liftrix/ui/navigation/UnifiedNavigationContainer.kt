@@ -78,6 +78,7 @@ import com.example.liftrix.ui.support.SupportTicketScreen
 import com.example.liftrix.ui.settings.about.AboutScreen
 import com.example.liftrix.ui.settings.legal.PrivacyPolicyScreen
 import com.example.liftrix.ui.settings.legal.TermsOfServiceScreen
+import com.example.liftrix.ui.chat.ChatbotScreen
 import com.example.liftrix.ui.social.SocialViewModel
 import com.example.liftrix.ui.social.SocialEvent
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
@@ -230,7 +231,7 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.Coach> {
-                    CoachScreen()
+                    CoachScreen(navController = navController)
                 }
                 
                 composable<LiftrixRoute.Friends> {
@@ -353,6 +354,7 @@ fun UnifiedNavigationContainer(
                 composable<LiftrixRoute.ActiveWorkout> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.ActiveWorkout>()
                     com.example.liftrix.ui.workout.active.RedesignedActiveWorkoutScreen(
+                        navController = navController,
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         },
@@ -595,6 +597,15 @@ fun UnifiedNavigationContainer(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         }
+                    )
+                }
+                
+                composable<LiftrixRoute.AIChatbot> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.AIChatbot>()
+                    ChatbotScreen(
+                        conversationId = route.conversationId,
+                        initialWorkoutContext = route.workoutContext,
+                        onNavigateBack = { navController.popBackStackSafely() }
                     )
                 }
                 

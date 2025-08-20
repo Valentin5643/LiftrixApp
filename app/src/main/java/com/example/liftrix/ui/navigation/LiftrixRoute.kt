@@ -468,4 +468,18 @@ sealed class LiftrixRoute {
      */
     @Serializable
     data object DataPortability : LiftrixRoute()
+    
+    // AI Chatbot System Routes (Added for SPEC-20250119-ai-chatbot-frontend)
+    
+    /**
+     * AI Chatbot screen for AI-powered workout guidance
+     * 
+     * @param conversationId Optional conversation ID to resume existing chat
+     * @param workoutContext Optional workout context for AI responses (workout ID or session data)
+     */
+    @Serializable
+    data class AIChatbot(
+        val conversationId: String? = null,
+        val workoutContext: String? = null
+    ) : LiftrixRoute()
 }

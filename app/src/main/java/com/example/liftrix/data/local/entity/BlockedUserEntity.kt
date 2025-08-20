@@ -23,6 +23,7 @@ import androidx.room.PrimaryKey
     tableName = "blocked_users",
     indices = [
         Index(value = ["user_id"]),
+        Index(value = ["blocked_user_id"]),
         Index(value = ["user_id", "blocked_user_id"], unique = true)
     ],
     foreignKeys = [

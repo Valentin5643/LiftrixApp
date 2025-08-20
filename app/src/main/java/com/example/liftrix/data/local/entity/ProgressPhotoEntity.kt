@@ -19,6 +19,7 @@ import androidx.room.PrimaryKey
         Index(value = ["user_id", "taken_at"], name = "idx_progress_photos_user_taken"),
         Index(value = ["body_part", "photo_type"], name = "idx_progress_photos_category"),
         Index(value = ["comparison_group_id"], name = "idx_progress_photos_comparison"),
+        Index(value = ["media_id"], name = "idx_progress_photos_media"),
         Index(value = ["is_private"])
     ],
     foreignKeys = [

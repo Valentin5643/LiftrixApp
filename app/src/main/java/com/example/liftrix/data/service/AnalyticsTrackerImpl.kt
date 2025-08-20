@@ -269,6 +269,172 @@ class AnalyticsTrackerImpl @Inject constructor(
         }
     }
     
+    // AI Chat Analytics Implementation
+    
+    override fun trackAIChatResponse(
+        userId: String,
+        tokensUsed: Int,
+        processingTimeMs: Long,
+        modelVersion: String,
+        language: String,
+        hasWorkoutContext: Boolean,
+        additionalProperties: Map<String, Any>
+    ) {
+        try {
+            val params = mutableMapOf<String, Any>(
+                "user_id" to userId,
+                "tokens_used" to tokensUsed,
+                "processing_time_ms" to processingTimeMs,
+                "model_version" to modelVersion,
+                "language" to language,
+                "has_workout_context" to hasWorkoutContext
+            )
+            
+            params.putAll(additionalProperties)
+            
+            firebaseAnalytics.logEvent("ai_chat_response", params.toBundle())
+            
+            Timber.d("Analytics: AI chat response tracked - $userId used $tokensUsed tokens in ${processingTimeMs}ms")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to track AI chat response analytics")
+        }
+    }
+    
+    override fun trackAIChatUsage(
+        userId: String,
+        dailyMessagesUsed: Int,
+        monthlyTokensUsed: Int,
+        isNearLimit: Boolean,
+        additionalProperties: Map<String, Any>
+    ) {
+        try {
+            val params = mutableMapOf<String, Any>(
+                "user_id" to userId,
+                "daily_messages_used" to dailyMessagesUsed,
+                "monthly_tokens_used" to monthlyTokensUsed,
+                "is_near_limit" to isNearLimit
+            )
+            
+            params.putAll(additionalProperties)
+            
+            firebaseAnalytics.logEvent("ai_chat_usage", params.toBundle())
+            
+            Timber.d("Analytics: AI chat usage tracked - $userId has used $dailyMessagesUsed daily messages, $monthlyTokensUsed monthly tokens")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to track AI chat usage analytics")
+        }
+    }
+    
+    override fun trackAbuseDetection(
+        userId: String,
+        abuseType: String,
+        action: String,
+        confidence: Float,
+        messageLength: Int,
+        additionalProperties: Map<String, Any>
+    ) {
+        try {
+            val params = mutableMapOf<String, Any>(
+                "user_id" to userId,
+                "abuse_type" to abuseType,
+                "action" to action,
+                "confidence" to confidence.toDouble(),
+                "message_length" to messageLength
+            )
+            
+            params.putAll(additionalProperties)
+            
+            firebaseAnalytics.logEvent("ai_abuse_detection", params.toBundle())
+            
+            Timber.d("Analytics: Abuse detection tracked - $userId triggered $abuseType with action $action (confidence: $confidence)")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to track abuse detection analytics")
+        }
+    }
+    
+    override fun trackRateLimit(
+        userId: String,
+        limitType: String,
+        currentUsage: Int,
+        limit: Int,
+        timeToReset: Long,
+        additionalProperties: Map<String, Any>
+    ) {
+        try {
+            val params = mutableMapOf<String, Any>(
+                "user_id" to userId,
+                "limit_type" to limitType,
+                "current_usage" to currentUsage,
+                "limit" to limit,
+                "time_to_reset" to timeToReset,
+                "usage_percentage" to ((currentUsage.toDouble() / limit) * 100).toInt()
+            )
+            
+            params.putAll(additionalProperties)
+            
+            firebaseAnalytics.logEvent("ai_rate_limit", params.toBundle())
+            
+            Timber.d("Analytics: Rate limit tracked - $userId hit $limitType limit ($currentUsage/$limit)")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to track rate limit analytics")
+        }
+    }
+    
+    override fun trackAIChatError(
+        userId: String,
+        errorType: String,
+        errorMessage: String,
+        modelVersion: String,
+        tokensRequested: Int?,
+        additionalProperties: Map<String, Any>
+    ) {
+        try {
+            val params = mutableMapOf<String, Any>(
+                "user_id" to userId,
+                "error_type" to errorType,
+                "error_message" to errorMessage.take(200),
+                "model_version" to modelVersion
+            )
+            
+            tokensRequested?.let { params["tokens_requested"] = it }
+            params.putAll(additionalProperties)
+            
+            firebaseAnalytics.logEvent("ai_chat_error", params.toBundle())
+            
+            Timber.d("Analytics: AI chat error tracked - $userId encountered $errorType: $errorMessage")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to track AI chat error analytics")
+        }
+    }
+    
+    override fun trackAIChatCost(
+        userId: String,
+        estimatedCost: Double,
+        tokensUsed: Int,
+        timeWindow: String,
+        isNearThreshold: Boolean,
+        additionalProperties: Map<String, Any>
+    ) {
+        try {
+            val params = mutableMapOf<String, Any>(
+                "user_id" to userId,
+                "estimated_cost" to estimatedCost,
+                "tokens_used" to tokensUsed,
+                "time_window" to timeWindow,
+                "is_near_threshold" to isNearThreshold,
+                "cost_per_token" to if (tokensUsed > 0) estimatedCost / tokensUsed else 0.0
+            )
+            
+            params.putAll(additionalProperties)
+            
+            firebaseAnalytics.logEvent("ai_chat_cost", params.toBundle())
+            
+            Timber.d("Analytics: AI chat cost tracked - $userId incurred $estimatedCost cost for $tokensUsed tokens in $timeWindow")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to track AI chat cost analytics")
+        }
+    }
+    
     private fun Map<String, Any>.toBundle(): android.os.Bundle {
         val bundle = android.os.Bundle()
         this.forEach { (key, value) ->

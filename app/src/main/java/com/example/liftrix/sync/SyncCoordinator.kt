@@ -1,5 +1,6 @@
 package com.example.liftrix.sync
 
+import android.content.Context
 import androidx.work.WorkManager
 import androidx.work.ExistingWorkPolicy
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -9,12 +10,14 @@ import androidx.work.Constraints
 import androidx.work.NetworkType
 import androidx.work.BackoffPolicy
 import androidx.work.workDataOf
+import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.data.sync.RealtimeSyncService
 import com.example.liftrix.domain.repository.SyncStatusRepository
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixSuccess
 import com.example.liftrix.domain.model.common.liftrixFailure
 import com.example.liftrix.domain.model.error.LiftrixError
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -49,10 +52,13 @@ import javax.inject.Singleton
  */
 @Singleton
 class SyncCoordinator @Inject constructor(
-    private val workManager: WorkManager,
+    @ApplicationContext private val context: Context,
     private val realtimeSyncService: RealtimeSyncService,
     private val syncStatusRepository: SyncStatusRepository
 ) {
+    // Get WorkManager from the provider to ensure proper initialization
+    private val workManager: WorkManager
+        get() = WorkManagerProvider.getInstance(context)
     
     private val coordinatorScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     

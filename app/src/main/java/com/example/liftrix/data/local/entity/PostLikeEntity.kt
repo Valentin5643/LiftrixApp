@@ -17,6 +17,7 @@ import androidx.room.PrimaryKey
     tableName = "post_likes",
     indices = [
         Index(value = ["post_id"], name = "idx_post_likes_post"),
+        Index(value = ["user_id"], name = "idx_post_likes_user"),
         Index(value = ["post_id", "user_id"], unique = true, name = "idx_post_likes_unique")
     ],
     foreignKeys = [

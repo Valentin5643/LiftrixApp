@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,8 +19,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavController
 import com.example.liftrix.domain.model.SessionExercise
 import androidx.compose.material3.MaterialTheme
+import com.example.liftrix.ui.navigation.navigateToAIChatbot
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.workout.components.*
 import com.example.liftrix.ui.workout.components.SaveQuickWorkoutAsTemplateDialog
@@ -37,6 +40,7 @@ import timber.log.Timber
 @Composable
 fun RedesignedActiveWorkoutScreen(
     viewModel: UnifiedActiveWorkoutViewModel = hiltViewModel(),
+    navController: NavController,
     onNavigateBack: () -> Unit,
     onNavigateToExerciseLibrary: (() -> Unit)? = null,
     onNavigateToPostCreation: ((String) -> Unit)? = null,
@@ -85,6 +89,7 @@ fun RedesignedActiveWorkoutScreen(
                 ActiveWorkoutContent(
                     uiState = uiState as UnifiedActiveWorkoutUiState.Success,
                     viewModel = viewModel,
+                    navController = navController,
                     onNavigateBack = onNavigateBack,
                     onNavigateToExerciseLibrary = onNavigateToExerciseLibrary
                 )
@@ -131,6 +136,7 @@ fun RedesignedActiveWorkoutScreen(
 private fun ActiveWorkoutContent(
     uiState: UnifiedActiveWorkoutUiState.Success,
     viewModel: UnifiedActiveWorkoutViewModel,
+    navController: NavController,
     onNavigateBack: () -> Unit,
     onNavigateToExerciseLibrary: (() -> Unit)?
 ) {
@@ -149,7 +155,7 @@ private fun ActiveWorkoutContent(
     }
     
     Column(modifier = Modifier.fillMaxSize()) {
-        // Workout name and timer
+        // Workout name, AI coach button, and timer
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -164,8 +170,25 @@ private fun ActiveWorkoutContent(
                     color = MaterialTheme.colorScheme.onBackground,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Medium
-                )
+                ),
+                modifier = Modifier.weight(1f)
             )
+            
+            // AI Coach Button
+            IconButton(
+                onClick = {
+                    val workoutContext = "active_workout:${session.name}:${session.exercises.size}_exercises"
+                    navController.navigateToAIChatbot(workoutContext = workoutContext)
+                },
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Psychology,
+                    contentDescription = "AI Coach",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
             
             // Timer
             Text(

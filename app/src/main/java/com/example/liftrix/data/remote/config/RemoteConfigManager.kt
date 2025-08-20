@@ -62,6 +62,22 @@ class RemoteConfigManager @Inject constructor(
         const val MAX_SUPPORT_ATTACHMENTS = "max_support_attachments"
         const val HELP_FEEDBACK_ENABLED = "help_feedback_enabled"
         
+        // AI Chat configuration keys
+        const val AI_CHAT_ENABLED = "ai_chat_enabled"
+        const val AI_DAILY_MESSAGE_LIMIT = "ai_daily_message_limit"
+        const val AI_MONTHLY_TOKEN_LIMIT = "ai_monthly_token_limit"
+        const val AI_COST_THRESHOLD_PER_HOUR = "ai_cost_threshold_per_hour"
+        const val AI_JAILBREAK_THRESHOLD = "ai_jailbreak_threshold"
+        const val AI_FITNESS_CONTEXT_WEIGHT = "ai_fitness_context_weight"
+        const val AI_RATE_LIMIT_MULTIPLIER = "ai_rate_limit_multiplier"
+        const val AI_ENABLE_ABUSE_LOGGING = "ai_enable_abuse_logging"
+        const val AI_REVIEW_QUEUE_ENABLED = "ai_review_queue_enabled"
+        const val AI_MODEL_NAME = "ai_model_name"
+        const val AI_MAX_OUTPUT_TOKENS = "ai_max_output_tokens"
+        const val AI_TEMPERATURE = "ai_temperature"
+        const val AI_TOP_K = "ai_top_k"
+        const val AI_TOP_P = "ai_top_p"
+        
         // Default values
         private val DEFAULT_VALUES = mapOf(
             HELP_CONTENT_VERSION to "1.0",
@@ -76,7 +92,23 @@ class RemoteConfigManager @Inject constructor(
             PRIVACY_POLICY_VERSION to "1.0",
             TERMS_VERSION to "1.0",
             PRIVACY_POLICY_URL to "",
-            TERMS_OF_SERVICE_URL to ""
+            TERMS_OF_SERVICE_URL to "",
+            
+            // AI Chat defaults
+            AI_CHAT_ENABLED to true,
+            AI_DAILY_MESSAGE_LIMIT to 50,
+            AI_MONTHLY_TOKEN_LIMIT to 100000,
+            AI_COST_THRESHOLD_PER_HOUR to 1.0,
+            AI_JAILBREAK_THRESHOLD to 0.8,
+            AI_FITNESS_CONTEXT_WEIGHT to 0.5,
+            AI_RATE_LIMIT_MULTIPLIER to 10,
+            AI_ENABLE_ABUSE_LOGGING to true,
+            AI_REVIEW_QUEUE_ENABLED to false,
+            AI_MODEL_NAME to "gemini-2.5-flash-lite",
+            AI_MAX_OUTPUT_TOKENS to 500,
+            AI_TEMPERATURE to 0.7,
+            AI_TOP_K to 40,
+            AI_TOP_P to 0.95
         )
     }
     
@@ -232,6 +264,29 @@ class RemoteConfigManager @Inject constructor(
     }
     
     /**
+     * Gets a double value from Remote Config
+     */
+    suspend fun getDouble(key: String): LiftrixResult<Double> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.ConfigurationError(
+                errorMessage = "Failed to get Remote Config double value",
+                analyticsContext = mapOf(
+                    "operation" to "REMOTE_CONFIG_GET_DOUBLE",
+                    "key" to key,
+                    "error" to throwable.message.orEmpty()
+                )
+            )
+        }
+    ) {
+        withContext(Dispatchers.IO) {
+            ensureInitialized()
+            val value = remoteConfig.getDouble(key)
+            Timber.d("Remote Config getDouble($key) = $value")
+            value
+        }
+    }
+    
+    /**
      * Gets help articles JSON from Remote Config
      */
     suspend fun getHelpArticlesJson(): LiftrixResult<String> = getString(HELP_ARTICLES_JSON)
@@ -300,6 +355,78 @@ class RemoteConfigManager @Inject constructor(
      * Checks if help feedback is enabled
      */
     suspend fun isHelpFeedbackEnabled(): LiftrixResult<Boolean> = getBoolean(HELP_FEEDBACK_ENABLED)
+    
+    // AI Chat configuration methods
+    
+    /**
+     * Checks if AI chat is enabled
+     */
+    suspend fun isAiChatEnabled(): LiftrixResult<Boolean> = getBoolean(AI_CHAT_ENABLED)
+    
+    /**
+     * Gets daily message limit for AI chat
+     */
+    suspend fun getAiDailyMessageLimit(): LiftrixResult<Long> = getLong(AI_DAILY_MESSAGE_LIMIT)
+    
+    /**
+     * Gets monthly token limit for AI chat
+     */
+    suspend fun getAiMonthlyTokenLimit(): LiftrixResult<Long> = getLong(AI_MONTHLY_TOKEN_LIMIT)
+    
+    /**
+     * Gets cost threshold per hour for AI chat
+     */
+    suspend fun getAiCostThresholdPerHour(): LiftrixResult<Double> = getDouble(AI_COST_THRESHOLD_PER_HOUR)
+    
+    /**
+     * Gets jailbreak detection threshold
+     */
+    suspend fun getAiJailbreakThreshold(): LiftrixResult<Double> = getDouble(AI_JAILBREAK_THRESHOLD)
+    
+    /**
+     * Gets fitness context weight for abuse detection
+     */
+    suspend fun getAiFitnessContextWeight(): LiftrixResult<Double> = getDouble(AI_FITNESS_CONTEXT_WEIGHT)
+    
+    /**
+     * Gets rate limit multiplier for anomaly detection
+     */
+    suspend fun getAiRateLimitMultiplier(): LiftrixResult<Long> = getLong(AI_RATE_LIMIT_MULTIPLIER)
+    
+    /**
+     * Checks if abuse logging is enabled
+     */
+    suspend fun isAiAbuseLoggingEnabled(): LiftrixResult<Boolean> = getBoolean(AI_ENABLE_ABUSE_LOGGING)
+    
+    /**
+     * Checks if review queue is enabled
+     */
+    suspend fun isAiReviewQueueEnabled(): LiftrixResult<Boolean> = getBoolean(AI_REVIEW_QUEUE_ENABLED)
+    
+    /**
+     * Gets AI model name
+     */
+    suspend fun getAiModelName(): LiftrixResult<String> = getString(AI_MODEL_NAME)
+    
+    /**
+     * Gets maximum output tokens for AI responses
+     */
+    suspend fun getAiMaxOutputTokens(): LiftrixResult<Long> = getLong(AI_MAX_OUTPUT_TOKENS)
+    
+    /**
+     * Gets AI temperature setting
+     */
+    suspend fun getAiTemperature(): LiftrixResult<Double> = getDouble(AI_TEMPERATURE)
+    
+    /**
+     * Gets AI top-k setting
+     */
+    suspend fun getAiTopK(): LiftrixResult<Long> = getLong(AI_TOP_K)
+    
+    /**
+     * Gets AI top-p setting
+     */
+    suspend fun getAiTopP(): LiftrixResult<Double> = getDouble(AI_TOP_P)
     
     /**
      * Gets all Remote Config values as a map
