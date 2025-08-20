@@ -12,7 +12,12 @@
           "package_name": "com.example.liftrix"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "734273269747-ojaksa5nhir6re5sqskn7qlbflec2f94.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDIZeItBskzkEeiXYbzR87oyztYatwqt48"
@@ -20,7 +25,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "734273269747-ojaksa5nhir6re5sqskn7qlbflec2f94.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

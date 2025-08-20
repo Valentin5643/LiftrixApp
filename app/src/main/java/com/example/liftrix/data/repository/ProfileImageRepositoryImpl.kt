@@ -11,6 +11,8 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.ProfileImageRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.storage.FirebaseStorage
+import androidx.work.WorkManager
+import com.example.liftrix.sync.UserPublicSyncWorker
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import java.time.LocalDateTime
@@ -39,7 +41,8 @@ class ProfileImageRepositoryImpl @Inject constructor(
     private val firebaseStorage: FirebaseStorage,
     private val firebaseAuth: FirebaseAuth,
     private val userProfileDao: UserProfileDao,
-    private val dateTimeConverters: DateTimeConverters
+    private val dateTimeConverters: DateTimeConverters,
+    private val workManager: WorkManager
 ) : ProfileImageRepository {
     
     companion object {
@@ -164,6 +167,17 @@ class ProfileImageRepositoryImpl @Inject constructor(
         }
         
         Timber.d("✅ Profile image URL updated successfully: $updatedRows row(s) affected")
+        
+        // 🚀 CRITICAL FIX: Trigger sync to make profile image searchable immediately
+        // This ensures that when users upload profile images, they become visible to other users
+        try {
+            val syncRequest = UserPublicSyncWorker.createWorkRequest(userId, forceSync = true)
+            workManager.enqueue(syncRequest)
+            Timber.d("🔄 Triggered UserPublicSyncWorker after profile image update for user: $userId")
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to trigger sync after profile image update for user: $userId")
+            // Don't fail the operation - sync will eventually happen via periodic sync
+        }
     }
     
     override suspend fun hasCustomProfileImage(userId: String): LiftrixResult<Boolean> = liftrixCatching(

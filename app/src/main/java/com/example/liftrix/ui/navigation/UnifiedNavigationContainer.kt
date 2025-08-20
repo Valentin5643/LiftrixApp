@@ -413,7 +413,7 @@ fun UnifiedNavigationContainer(
                             navController.popBackStackSafely()
                         },
                         onNavigateToProfile = {
-                            navController.navigateToProfile()
+                            navController.navigateToProfileEdit()
                         },
                         onNavigateToAuth = {
                             // Authentication navigation placeholder

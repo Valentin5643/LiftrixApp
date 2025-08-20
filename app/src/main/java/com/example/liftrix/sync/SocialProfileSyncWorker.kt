@@ -117,6 +117,7 @@ class SocialProfileSyncWorker @AssistedInject constructor(
                 "instagramHandle" to profile.instagramHandle,
                 "youtubeChannel" to profile.youtubeChannel,
                 "personalWebsite" to profile.personalWebsite,
+                "createdAt" to profile.createdAt,  // Critical for discovery ordering
                 "syncVersion" to System.currentTimeMillis(),
                 "updatedAt" to FieldValue.serverTimestamp()
             )

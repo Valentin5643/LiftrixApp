@@ -77,45 +77,85 @@ fun AuthScreen(
     
     var isSignUpMode by remember { mutableStateOf(initialSignUpMode) }
     
-    // Google Sign-In launcher
+    // Setup Google Sign-In client outside of onClick - this ensures it's ready when needed
+    val googleSignInClient = remember {
+        try {
+            val clientId = com.example.liftrix.BuildConfig.GOOGLE_CLIENT_ID
+            Timber.d("Configuring Google Sign-In client with clientId: $clientId")
+            val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken(clientId)
+                .requestEmail()
+                .requestProfile()
+                .build()
+            val client = GoogleSignIn.getClient(context, gso)
+            Timber.d("Google Sign-In client configured successfully")
+            client
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to configure Google Sign-In client")
+            null
+        }
+    }
+    
+    // Google Sign-In launcher - properly registered at composable level
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
+        Timber.d("Google Sign-In launcher result received: resultCode=${result.resultCode}")
         try {
             val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
             val account = task.getResult(ApiException::class.java)
             val idToken = account?.idToken
+            Timber.d("Google Sign-In successful: account=${account?.email}, hasToken=${idToken != null}")
             viewModel.handleGoogleSignInResult(idToken)
         } catch (e: ApiException) {
+            Timber.e("Google Sign-In ApiException: statusCode=${e.statusCode}, message=${e.message}")
             when (e.statusCode) {
                 com.google.android.gms.common.api.CommonStatusCodes.SIGN_IN_REQUIRED -> {
-                    // User needs to sign in to Google account on device
+                    Timber.w("Google Sign-In: User needs to sign in to Google account on device")
                     viewModel.handleGoogleSignInResult(null)
                 }
                 com.google.android.gms.common.api.CommonStatusCodes.NETWORK_ERROR -> {
-                    // Network connectivity issue
+                    Timber.w("Google Sign-In: Network connectivity issue")
+                    viewModel.handleGoogleSignInResult(null)
+                }
+                com.google.android.gms.common.api.CommonStatusCodes.DEVELOPER_ERROR -> {
+                    Timber.e("Google Sign-In: DEVELOPER_ERROR - Check SHA-1 fingerprints and OAuth client configuration in Firebase Console")
+                    viewModel.handleGoogleSignInResult(null)
+                }
+                12501 -> { // SIGN_IN_CANCELLED
+                    Timber.w("Google Sign-In: User cancelled sign-in")
                     viewModel.handleGoogleSignInResult(null)
                 }
                 else -> {
-                    // Other errors (including DEVELOPER_ERROR for config issues)
+                    Timber.e("Google Sign-In: Unknown error with statusCode=${e.statusCode}")
                     viewModel.handleGoogleSignInResult(null)
                 }
             }
         }
     }
 
+    // Track the previous auth state to detect actual successful authentication
+    var previousAuthState by remember { mutableStateOf<AuthState?>(null) }
+    
     // Handle auth state changes
     LaunchedEffect(authState) {
         when (val currentState = authState) {
             is AuthState.Authenticated -> {
-                onAuthSuccess()
+                // Only navigate if we're transitioning from a non-authenticated state
+                // This prevents navigation when the state observer briefly shows authenticated
+                if (previousAuthState is AuthState.Loading || 
+                    previousAuthState is AuthState.Unauthenticated ||
+                    previousAuthState is AuthState.Initial) {
+                    onAuthSuccess()
+                }
             }
             is AuthState.Error -> {
                 snackbarHostState.showSnackbar(currentState.message)
-                viewModel.handleEvent(AuthEvent.ClearError)
+                // Don't clear error immediately - let user see it
             }
             else -> { /* No action needed */ }
         }
+        previousAuthState = authState
     }
 
     Surface(
@@ -181,7 +221,11 @@ fun AuthScreen(
                             onForgotPassword = { email ->
                                 viewModel.handleEvent(AuthEvent.ForgotPassword(email))
                             },
-                            isLoading = authState is AuthState.Loading
+                            isLoading = authState is AuthState.Loading,
+                            errorMessage = (authState as? AuthState.Error)?.message,
+                            onClearError = {
+                                viewModel.handleEvent(AuthEvent.ClearError)
+                            }
                         )
                     }
                     
@@ -203,22 +247,30 @@ fun AuthScreen(
                         // Google Sign-In
                         OutlinedButton(
                             onClick = {
-                                viewModel.handleEvent(AuthEvent.GoogleSignIn)
-                                try {
-                                    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-                                        .requestIdToken(com.example.liftrix.BuildConfig.GOOGLE_CLIENT_ID)
-                                        .requestEmail()
-                                        .requestProfile()
-                                        .build()
-                                    val googleSignInClient = GoogleSignIn.getClient(context, gso)
-                                    
-                                    // Sign out any existing account first to force account picker
-                                    googleSignInClient.signOut().addOnCompleteListener {
-                                        val signInIntent = googleSignInClient.signInIntent
-                                        googleSignInLauncher.launch(signInIntent)
+                                Timber.d("Google Sign-In button clicked")
+                                if (googleSignInClient != null) {
+                                    Timber.d("Google Sign-In client available, starting sign-in flow")
+                                    viewModel.handleEvent(AuthEvent.GoogleSignIn)
+                                    try {
+                                        // Force account selection by signing out first
+                                        // This clears any cached account selection and shows the account picker
+                                        googleSignInClient.signOut().addOnCompleteListener { signOutTask ->
+                                            Timber.d("Google Sign-In signOut completed: success=${signOutTask.isSuccessful}")
+                                            try {
+                                                val signInIntent = googleSignInClient.signInIntent
+                                                Timber.d("Launching Google Sign-In intent with account selection")
+                                                googleSignInLauncher.launch(signInIntent)
+                                            } catch (e: Exception) {
+                                                Timber.e(e, "Failed to launch Google Sign-In after signOut")
+                                                viewModel.handleGoogleSignInResult(null)
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        Timber.e(e, "Failed to initiate Google Sign-In flow")
+                                        viewModel.handleGoogleSignInResult(null)
                                     }
-                                } catch (e: Exception) {
-                                    Timber.e(e, "Failed to configure Google Sign-In")
+                                } else {
+                                    Timber.e("Google Sign-In client not initialized - cannot proceed")
                                     viewModel.handleGoogleSignInResult(null)
                                 }
                             },

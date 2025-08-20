@@ -19,12 +19,44 @@ data class UserSearchResult(
     val bio: String?,
     val fitnessLevel: FitnessLevel?,
     val totalWorkouts: Int,
-    val memberSince: LocalDateTime,
+    val memberSince: LocalDateTime?,
     val sharedEquipment: List<Equipment>,
     val sharedGoals: List<FitnessGoal>,
     val connectionStatus: ConnectionStatus,
     val mutualConnections: Int = 0
-)
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is UserSearchResult) return false
+
+        return userId == other.userId &&
+                displayName == other.displayName &&
+                profileImageUrl == other.profileImageUrl &&
+                bio == other.bio &&
+                fitnessLevel == other.fitnessLevel &&
+                totalWorkouts == other.totalWorkouts &&
+                memberSince?.isEqual(other.memberSince) ?: (other.memberSince == null) &&
+                sharedEquipment == other.sharedEquipment &&
+                sharedGoals == other.sharedGoals &&
+                connectionStatus == other.connectionStatus &&
+                mutualConnections == other.mutualConnections
+    }
+
+    override fun hashCode(): Int {
+        var result = userId.hashCode()
+        result = 31 * result + displayName.hashCode()
+        result = 31 * result + (profileImageUrl?.hashCode() ?: 0)
+        result = 31 * result + (bio?.hashCode() ?: 0)
+        result = 31 * result + (fitnessLevel?.hashCode() ?: 0)
+        result = 31 * result + totalWorkouts
+        result = 31 * result + (memberSince?.hashCode() ?: 0)
+        result = 31 * result + sharedEquipment.hashCode()
+        result = 31 * result + sharedGoals.hashCode()
+        result = 31 * result + connectionStatus.hashCode()
+        result = 31 * result + mutualConnections
+        return result
+    }
+}
 
 /**
  * Connection status between users for social interactions

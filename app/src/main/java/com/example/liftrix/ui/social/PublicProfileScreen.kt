@@ -5,7 +5,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -13,6 +16,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -23,9 +29,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.liftrix.ui.theme.LiftrixColorsV2
+import com.example.liftrix.ui.social.ModernCard
+import com.example.liftrix.ui.social.ModernStatCard
+import com.example.liftrix.ui.social.ModernStatItem
+import com.example.liftrix.ui.social.ModernConnectionActions
+import com.example.liftrix.ui.social.formatDuration
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.social.ConnectionStatus
 import com.example.liftrix.domain.model.FitnessLevel
@@ -39,10 +52,15 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 /**
- * Screen for displaying public user profiles with privacy-aware information
+ * Modern Public Profile Screen with premium fitness app experience
  * 
- * Shows user profile information based on their privacy settings, connection status,
- * and displays appropriate actions for connecting or interacting with the user.
+ * Features:
+ * - 80px avatar with gradient background
+ * - 2x2 grid stats layout with card system  
+ * - Elevated dark card surfaces (#2D2D2D)
+ * - Consistent 16px border radius
+ * - 24px major section gaps
+ * - Teal accent color (#00BCD4)
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,60 +73,88 @@ fun PublicProfileScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    // Use LiftrixColorsV2 design system
+    val backgroundColor = LiftrixColorsV2.Dark.BackgroundPrimary
+    val cardBackgroundColor = LiftrixColorsV2.Dark.BackgroundSecondary
+    val primaryTeal = LiftrixColorsV2.Teal
+    val textPrimary = LiftrixColorsV2.Dark.TextPrimary
+    val textSecondary = LiftrixColorsV2.Dark.TextSecondary
+
     LaunchedEffect(userId) {
         viewModel.handleEvent(PublicProfileEvent.LoadProfile(userId))
     }
 
-    Column(
-        modifier = modifier.fillMaxSize()
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(backgroundColor)
     ) {
-        // Top app bar
-        ProfileTopBar(
-            onNavigateBack = onNavigateBack,
-            onQRCodeClick = { onNavigateToQRCode(userId) },
-            isLoading = uiState.isLoading,
-            onBlockUser = { viewModel.handleEvent(PublicProfileEvent.BlockUser) },
-            onReportProfile = { viewModel.handleEvent(PublicProfileEvent.ReportProfile) },
-            isOwnProfile = uiState.profile?.userId == uiState.currentUserId,
-            modifier = Modifier.fillMaxWidth()
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+        ) {
+            // Top app bar
+            ProfileTopBar(
+                onNavigateBack = onNavigateBack,
+                onQRCodeClick = { onNavigateToQRCode(userId) },
+                isLoading = uiState.isLoading,
+                onBlockUser = { viewModel.handleEvent(PublicProfileEvent.BlockUser) },
+                onReportProfile = { viewModel.handleEvent(PublicProfileEvent.ReportProfile) },
+                isOwnProfile = uiState.profile?.userId == uiState.currentUserId,
+                modifier = Modifier.fillMaxWidth()
+            )
 
-        // Profile content
-        when {
-            uiState.isLoading -> {
-                LoadingProfileState(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .weight(1f)
-                )
+            // Profile content
+            when {
+                uiState.isLoading -> {
+                    LoadingProfileState(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .weight(1f)
+                    )
+                }
+
+                uiState.error != null -> {
+                    val error = uiState.error!!
+                    ErrorProfileState(
+                        error = error,
+                        onRetry = { viewModel.handleEvent(PublicProfileEvent.RetryLoad) },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .weight(1f)
+                    )
+                }
+
+                uiState.profile != null -> {
+                    val profile = uiState.profile!!
+                    ModernProfileContent(
+                        profile = profile,
+                        onConnectClick = {
+                            viewModel.handleEvent(PublicProfileEvent.ToggleConnection)
+                        }
+                    )
+                }
             }
-            
-            uiState.error != null -> {
-                val error = uiState.error!!
-                ErrorProfileState(
-                    error = error,
-                    onRetry = { viewModel.handleEvent(PublicProfileEvent.RetryLoad) },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .weight(1f)
-                )
-            }
-            
-            uiState.profile != null -> {
-                val profile = uiState.profile!!
-                ProfileContent(
-                    profile = profile,
-                    onConnectClick = { 
-                        viewModel.handleEvent(PublicProfileEvent.ToggleConnection)
-                    },
-                    onMessageClick = {
-                        // Handle message action
-                    },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .weight(1f)
-                )
-            }
+
+        }
+        
+        // Floating Action Button
+        FloatingActionButton(
+            onClick = { /* Handle action */ },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(20.dp)
+                .size(56.dp),
+            containerColor = primaryTeal,
+            contentColor = backgroundColor,
+            shape = CircleShape
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "Add",
+                modifier = Modifier.size(24.dp)
+            )
         }
     }
 }
@@ -118,126 +164,314 @@ fun PublicProfileScreen(
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ProfileTopBar(
-    onNavigateBack: () -> Unit,
-    onQRCodeClick: () -> Unit,
-    isLoading: Boolean,
-    modifier: Modifier = Modifier,
-    onBlockUser: () -> Unit = {},
-    onReportProfile: () -> Unit = {},
-    isOwnProfile: Boolean = false
-) {
-    var showOptionsMenu by remember { mutableStateOf(false) }
-    
-    TopAppBar(
-        title = { Text("Profile") },
-        navigationIcon = {
-            IconButton(onClick = onNavigateBack) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Go back"
-                )
-            }
-        },
-        actions = {
-            if (!isLoading) {
-                IconButton(onClick = onQRCodeClick) {
+fun ProfileTopBar(
+        onNavigateBack: () -> Unit,
+        onQRCodeClick: () -> Unit,
+        isLoading: Boolean,
+        modifier: Modifier = Modifier,
+        onBlockUser: () -> Unit = {},
+        onReportProfile: () -> Unit = {},
+        isOwnProfile: Boolean = false
+    ) {
+        var showOptionsMenu by remember { mutableStateOf(false) }
+
+        TopAppBar(
+            title = { Text("Profile") },
+            navigationIcon = {
+                IconButton(onClick = onNavigateBack) {
                     Icon(
-                        imageVector = Icons.Default.QrCode,
-                        contentDescription = "Show QR code"
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Go back"
                     )
                 }
-                
-                // More options menu (only for other users' profiles)
-                if (!isOwnProfile) {
-                    IconButton(onClick = { showOptionsMenu = true }) {
+            },
+            actions = {
+                if (!isLoading) {
+                    IconButton(onClick = onQRCodeClick) {
                         Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "More options"
+                            imageVector = Icons.Default.QrCode,
+                            contentDescription = "Show QR code"
                         )
                     }
-                    
-                    DropdownMenu(
-                        expanded = showOptionsMenu,
-                        onDismissRequest = { showOptionsMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Block User") },
-                            leadingIcon = { 
-                                Icon(Icons.Default.Block, contentDescription = null) 
-                            },
-                            onClick = {
-                                onBlockUser()
-                                showOptionsMenu = false
-                            }
+
+                    // More options menu (only for other users' profiles)
+                    if (!isOwnProfile) {
+                        IconButton(onClick = { showOptionsMenu = true }) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More options"
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = showOptionsMenu,
+                            onDismissRequest = { showOptionsMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Block User") },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Block, contentDescription = null)
+                                },
+                                onClick = {
+                                    onBlockUser()
+                                    showOptionsMenu = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Report Profile") },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Flag, contentDescription = null)
+                                },
+                                onClick = {
+                                    onReportProfile()
+                                    showOptionsMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
+            },
+            modifier = modifier
+        )
+    }
+
+/**
+ * Modern profile content with premium design
+ */
+@Composable
+fun ModernProfileContent(
+        profile: PublicUserProfile,
+        onConnectClick: () -> Unit
+    ) {
+        val cardBackgroundColor = LiftrixColorsV2.Dark.BackgroundSecondary
+        val primaryTeal = LiftrixColorsV2.Teal
+        val textPrimary = LiftrixColorsV2.Dark.TextPrimary
+        val textSecondary = LiftrixColorsV2.Dark.TextSecondary
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
+            // Profile Header Section with Gradient Background
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                primaryTeal.copy(alpha = 0.1f),
+                                Color.Transparent
+                            )
                         )
-                        DropdownMenuItem(
-                            text = { Text("Report Profile") },
-                            leadingIcon = { 
-                                Icon(Icons.Default.Flag, contentDescription = null) 
-                            },
-                            onClick = {
-                                onReportProfile()
-                                showOptionsMenu = false
-                            }
+                    )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Avatar - 80px diameter
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .background(primaryTeal),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (profile.profileImageUrl != null) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(profile.profileImageUrl)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Text(
+                                text = (profile.displayName ?: profile.username).take(2)
+                                    .uppercase(),
+                                color = LiftrixColorsV2.Dark.BackgroundPrimary,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // Profile Name
+                    Text(
+                        text = profile.displayName ?: profile.username,
+                        color = textPrimary,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    // Level Badge (smaller)
+                    profile.fitnessLevel?.let { level ->
+                        Surface(
+                            modifier = Modifier.padding(top = 4.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            color = primaryTeal
+                        ) {
+                            Text(
+                                text = level.name.lowercase().replaceFirstChar { it.uppercase() },
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                color = LiftrixColorsV2.Dark.BackgroundPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+
+                    // Stats Summary Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        ModernStatItem(
+                            icon = Icons.Default.FitnessCenter,
+                            value = "${profile.publicWorkoutStats?.totalWorkouts ?: 0}",
+                            label = "Workouts",
+                            inline = true
+                        )
+
+                        Spacer(modifier = Modifier.width(32.dp))
+
+                        ModernStatItem(
+                            icon = Icons.Default.CalendarToday,
+                            value = profile.memberSince?.format(DateTimeFormatter.ofPattern("MMM yyyy")) ?: "Unknown",
+                            label = "Member Since",
+                            inline = true
                         )
                     }
                 }
             }
-        },
-        modifier = modifier
-    )
-}
+
+            // Action Buttons Row
+            ModernConnectionActions(
+                connectionStatus = profile.connectionStatus,
+                onConnectClick = onConnectClick
+            )
+
+            // About Section Card
+            if (!profile.bio.isNullOrBlank()) {
+                ModernCard(title = "About") {
+                    Text(
+                        text = profile.bio,
+                        color = textSecondary,
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp
+                    )
+                }
+            }
+
+            // Fitness Overview - 2x2 Grid
+            if (profile.publicWorkoutStats != null) {
+                ModernCard(title = "Fitness Overview") {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            ModernStatCard(
+                                modifier = Modifier.weight(1f),
+                                icon = Icons.Default.Timer,
+                                value = formatDuration(profile.publicWorkoutStats.totalWorkoutTime.toInt()),
+                                label = "TOTAL TIME",
+                                iconColor = primaryTeal
+                            )
+                            ModernStatCard(
+                                modifier = Modifier.weight(1f),
+                                icon = Icons.Default.AvTimer,
+                                value = formatDuration(profile.publicWorkoutStats.averageWorkoutTime.toInt()),
+                                label = "AVG SESSION",
+                                iconColor = primaryTeal
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            ModernStatCard(
+                                modifier = Modifier.weight(1f),
+                                icon = Icons.Default.TrendingUp,
+                                value = "${profile.publicWorkoutStats.currentStreak} days",
+                                label = "CURRENT STREAK",
+                                iconColor = primaryTeal
+                            )
+                            ModernStatCard(
+                                modifier = Modifier.weight(1f),
+                                icon = Icons.Default.EmojiEvents,
+                                value = "${profile.publicWorkoutStats.longestStreak} days",
+                                label = "BEST STREAK",
+                                iconColor = primaryTeal
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Add bottom spacing for FAB
+            Spacer(modifier = Modifier.height(80.dp))
+        }
+    }
 
 /**
- * Main profile content with user information and actions
+ * Main profile content with user information and actions (Original - kept for compatibility)
  */
 @Composable
-private fun ProfileContent(
-    profile: PublicUserProfile,
-    onConnectClick: () -> Unit,
-    onMessageClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+fun ProfileContent(
+        profile: PublicUserProfile,
+        onConnectClick: () -> Unit,
+        modifier: Modifier = Modifier
     ) {
-        item {
-            ProfileHeader(
-                profile = profile,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-        
-        item {
-            ConnectionActions(
-                connectionStatus = profile.connectionStatus,
-                onConnectClick = onConnectClick,
-                onMessageClick = onMessageClick,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-        
-        if (!profile.bio.isNullOrBlank()) {
+        LazyColumn(
+            modifier = modifier,
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
             item {
-                ProfileBioSection(
-                    bio = profile.bio,
+                ProfileHeader(
+                    profile = profile,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-        }
-        
-        item {
-            FitnessInfoSection(
-                profile = profile,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-        
-        // Equipment section handled by enhanced profile model
-        /*if (!profile.availableEquipment.isNullOrEmpty()) {
+
+            item {
+                ConnectionActions(
+                    connectionStatus = profile.connectionStatus,
+                    onConnectClick = onConnectClick,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            if (!profile.bio.isNullOrBlank()) {
+                item {
+                    ProfileBioSection(
+                        bio = profile.bio,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            item {
+                FitnessInfoSection(
+                    profile = profile,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            // Equipment section handled by enhanced profile model
+            /*if (!profile.availableEquipment.isNullOrEmpty()) {
             item {
                 EquipmentSection(
                     equipment = profile.availableEquipment,
@@ -245,889 +479,835 @@ private fun ProfileContent(
                 )
             }
         }*/
-        
-        // Fitness goals section - Added fitness goals to profile model
-        if (!profile.fitnessGoals.isNullOrEmpty()) {
-            item {
-                GoalsSection(
-                    goals = profile.fitnessGoals,
-                    modifier = Modifier.fillMaxWidth()
-                )
+
+            // Fitness goals section - Added fitness goals to profile model
+            if (!profile.fitnessGoals.isNullOrEmpty()) {
+                item {
+                    GoalsSection(
+                        goals = profile.fitnessGoals,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
-        }
-        
-        if (profile.achievements.isNotEmpty()) {
-            item {
-                AchievementsSection(
-                    achievements = profile.achievements.map { it.title },
-                    modifier = Modifier.fillMaxWidth()
-                )
+
+            if (profile.achievements.isNotEmpty()) {
+                item {
+                    AchievementsSection(
+                        achievements = profile.achievements.map { it.title },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
-        }
-        
-        if (profile.publicWorkoutStats != null) {
-            item {
-                WorkoutStatsSection(
-                    stats = profile.publicWorkoutStats,
-                    modifier = Modifier.fillMaxWidth()
-                )
+
+            if (profile.publicWorkoutStats != null) {
+                item {
+                    WorkoutStatsSection(
+                        stats = profile.publicWorkoutStats,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         }
     }
-}
 
 /**
  * Profile header with avatar, name, and basic stats
  */
 @Composable
-private fun ProfileHeader(
-    profile: PublicUserProfile,
-    modifier: Modifier = Modifier
-) {
-    LiftrixCard(
-        modifier = modifier
+fun ProfileHeader(
+        profile: PublicUserProfile,
+        modifier: Modifier = Modifier
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        LiftrixCard(
+            modifier = modifier
         ) {
-            // Profile image
-            ProfileAvatar(
-                imageUrl = profile.profileImageUrl,
-                displayName = profile.displayName ?: profile.username,
-                modifier = Modifier.size(100.dp)
-            )
-            
-            // User name and level
             Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(
-                    text = profile.displayName ?: profile.username,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
+                // Profile image
+                ProfileAvatar(
+                    imageUrl = profile.profileImageUrl,
+                    displayName = profile.displayName ?: profile.username,
+                    modifier = Modifier.size(100.dp)
                 )
-                
-                profile.fitnessLevel?.let { level ->
-                    Badge(
-                        containerColor = getFitnessLevelColor(level),
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ) {
-                        Text(
-                            text = level.name.lowercase().replaceFirstChar { it.uppercase() },
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Medium
-                        )
+
+                // User name and level
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = profile.displayName ?: profile.username,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+
+                    profile.fitnessLevel?.let { level ->
+                        Badge(
+                            containerColor = getFitnessLevelColor(level),
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ) {
+                            Text(
+                                text = level.name.lowercase().replaceFirstChar { it.uppercase() },
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
-            }
-            
-            // Stats row
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(32.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                StatItem(
-                    value = "${profile.publicWorkoutStats?.totalWorkouts ?: 0}",
-                    label = "Workouts",
-                    icon = Icons.Default.FitnessCenter
-                )
-                
-                StatItem(
-                    value = profile.memberSince.format(DateTimeFormatter.ofPattern("MMM yyyy")),
-                    label = "Member Since",
-                    icon = Icons.Default.CalendarToday
-                )
+
+                // Stats row
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(32.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    StatItem(
+                        value = "${profile.publicWorkoutStats?.totalWorkouts ?: 0}",
+                        label = "Workouts",
+                        icon = Icons.Default.FitnessCenter
+                    )
+
+                    StatItem(
+                        value = profile.memberSince?.format(DateTimeFormatter.ofPattern("MMM yyyy")) ?: "Unknown",
+                        label = "Member Since",
+                        icon = Icons.Default.CalendarToday
+                    )
+                }
             }
         }
     }
-}
 
 /**
  * Profile avatar with fallback to initials
  */
 @Composable
-private fun ProfileAvatar(
-    imageUrl: String?,
-    displayName: String,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .clip(CircleShape)
-            .semantics {
-                contentDescription = "$displayName profile picture"
-            },
-        contentAlignment = Alignment.Center
+fun ProfileAvatar(
+        imageUrl: String?,
+        displayName: String,
+        modifier: Modifier = Modifier
     ) {
-        if (imageUrl != null) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(imageUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            // Fallback background
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center
-            ) {
-                val initials = displayName
-                    .split(' ')
-                    .take(2)
-                    .mapNotNull { it.firstOrNull() }
-                    .joinToString("")
-                    .uppercase()
-                
-                Text(
-                    text = initials,
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    fontWeight = FontWeight.Bold
+        Box(
+            modifier = modifier
+                .clip(CircleShape)
+                .semantics {
+                    contentDescription = "$displayName profile picture"
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            if (imageUrl != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(imageUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
                 )
+            } else {
+                // Fallback background
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val initials = displayName
+                        .split(' ')
+                        .take(2)
+                        .mapNotNull { it.firstOrNull() }
+                        .joinToString("")
+                        .uppercase()
+
+                    Text(
+                        text = initials,
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }
-}
 
 /**
  * Connection action buttons
  */
 @Composable
-private fun ConnectionActions(
-    connectionStatus: ConnectionStatus,
-    onConnectClick: () -> Unit,
-    onMessageClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+fun ConnectionActions(
+        connectionStatus: ConnectionStatus,
+        onConnectClick: () -> Unit,
+        modifier: Modifier = Modifier
     ) {
-        when (connectionStatus) {
-            ConnectionStatus.NONE -> {
-                LiftrixButton(
-                    onClick = onConnectClick,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PersonAdd,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Connect")
+        Row(
+            modifier = modifier,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            when (connectionStatus) {
+                ConnectionStatus.NONE -> {
+                    LiftrixButton(
+                        onClick = onConnectClick,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PersonAdd,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Connect")
+                    }
+
+                    // Message functionality removed
                 }
-                
-                OutlinedButton(
-                    onClick = onMessageClick,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Message,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Message")
+
+                ConnectionStatus.PENDING_SENT -> {
+                    OutlinedButton(
+                        onClick = onConnectClick,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Schedule,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Pending")
+                    }
+
+                    // Message functionality removed
                 }
-            }
-            
-            ConnectionStatus.PENDING_SENT -> {
-                OutlinedButton(
-                    onClick = onConnectClick,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Schedule,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Pending")
+
+                ConnectionStatus.PENDING_RECEIVED -> {
+                    LiftrixButton(
+                        onClick = onConnectClick,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Accept")
+                    }
+
+                    OutlinedButton(
+                        onClick = { /* Handle decline */ },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Decline")
+                    }
                 }
-                
-                OutlinedButton(
-                    onClick = onMessageClick,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Message,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Message")
+
+                ConnectionStatus.CONNECTED -> {
+                    // Connected users - message functionality removed
+
+                    OutlinedButton(
+                        onClick = { /* Handle view workouts */ },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FitnessCenter,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Workouts")
+                    }
                 }
-            }
-            
-            ConnectionStatus.PENDING_RECEIVED -> {
-                LiftrixButton(
-                    onClick = onConnectClick,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Accept")
+
+                ConnectionStatus.MUTUAL_FOLLOW -> {
+                    // Mutual followers - message functionality removed
+
+                    OutlinedButton(
+                        onClick = { /* Handle view workouts */ },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FitnessCenter,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Workouts")
+                    }
                 }
-                
-                OutlinedButton(
-                    onClick = { /* Handle decline */ },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Decline")
+
+                ConnectionStatus.GYM_BUDDY -> {
+                    // Gym buddies - message functionality removed
+
+                    OutlinedButton(
+                        onClick = { /* Handle gym buddy features */ },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Group,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Gym Buddy")
+                    }
                 }
-            }
-            
-            ConnectionStatus.CONNECTED -> {
-                LiftrixButton(
-                    onClick = onMessageClick,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Message,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+
+                ConnectionStatus.BLOCKED -> {
+                    Text(
+                        text = "This user has been blocked",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Message")
                 }
-                
-                OutlinedButton(
-                    onClick = { /* Handle view workouts */ },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.FitnessCenter,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Workouts")
+
+                ConnectionStatus.SELF -> {
+                    // No action buttons when viewing own profile
+                    // This should be handled at a higher level but adding for compilation
                 }
-            }
-            
-            ConnectionStatus.MUTUAL_FOLLOW -> {
-                LiftrixButton(
-                    onClick = onMessageClick,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Message,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Message")
-                }
-                
-                OutlinedButton(
-                    onClick = { /* Handle view workouts */ },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.FitnessCenter,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Workouts")
-                }
-            }
-            
-            ConnectionStatus.GYM_BUDDY -> {
-                LiftrixButton(
-                    onClick = onMessageClick,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Message,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Message")
-                }
-                
-                OutlinedButton(
-                    onClick = { /* Handle gym buddy features */ },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Group,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Gym Buddy")
-                }
-            }
-            
-            ConnectionStatus.BLOCKED -> {
-                Text(
-                    text = "This user has been blocked",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                )
-            }
-            
-            ConnectionStatus.SELF -> {
-                // No action buttons when viewing own profile
-                // This should be handled at a higher level but adding for compilation
             }
         }
     }
-}
 
 /**
  * Bio section
  */
 @Composable
-private fun ProfileBioSection(
-    bio: String,
-    modifier: Modifier = Modifier
-) {
-    LiftrixCard(
-        modifier = modifier
+fun ProfileBioSection(
+        bio: String,
+        modifier: Modifier = Modifier
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        LiftrixCard(
+            modifier = modifier
         ) {
-            Text(
-                text = "About",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            
-            Text(
-                text = bio,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "About",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Text(
+                    text = bio,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
-}
 
 /**
  * Fitness information section
  */
 @Composable
-private fun FitnessInfoSection(
-    profile: PublicUserProfile,
-    modifier: Modifier = Modifier
-) {
-    LiftrixCard(
-        modifier = modifier
+fun FitnessInfoSection(
+        profile: PublicUserProfile,
+        modifier: Modifier = Modifier
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        LiftrixCard(
+            modifier = modifier
         ) {
-            Text(
-                text = "Fitness Info",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                InfoItem(
-                    label = "Level",
-                    value = profile.fitnessLevel?.name?.lowercase()?.replaceFirstChar { it.uppercase() } ?: "Not specified",
-                    icon = Icons.Default.TrendingUp
+                Text(
+                    text = "Fitness Info",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
                 )
-                
-                InfoItem(
-                    label = "Workouts",
-                    value = "${profile.publicWorkoutStats?.totalWorkouts ?: 0}",
-                    icon = Icons.Default.FitnessCenter
-                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    InfoItem(
+                        label = "Level",
+                        value = profile.fitnessLevel?.name?.lowercase()
+                            ?.replaceFirstChar { it.uppercase() } ?: "Not specified",
+                        icon = Icons.Default.TrendingUp
+                    )
+
+                    InfoItem(
+                        label = "Workouts",
+                        value = "${profile.publicWorkoutStats?.totalWorkouts ?: 0}",
+                        icon = Icons.Default.FitnessCenter
+                    )
+                }
             }
         }
     }
-}
 
 /**
  * Equipment section
  */
 @Composable
-private fun EquipmentSection(
-    equipment: List<Equipment>,
-    modifier: Modifier = Modifier
-) {
-    LiftrixCard(
-        modifier = modifier
+fun EquipmentSection(
+        equipment: List<Equipment>,
+        modifier: Modifier = Modifier
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        LiftrixCard(
+            modifier = modifier
         ) {
-            Text(
-                text = "Equipment",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(equipment) { item ->
-                    AssistChip(
-                        onClick = { },
-                        label = {
-                            Text(
-                                text = item.name.lowercase().replaceFirstChar { it.uppercase() },
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.FitnessCenter,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    )
+                Text(
+                    text = "Equipment",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(equipment) { item ->
+                        AssistChip(
+                            onClick = { },
+                            label = {
+                                Text(
+                                    text = item.name.lowercase()
+                                        .replaceFirstChar { it.uppercase() },
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.FitnessCenter,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        )
+                    }
                 }
             }
         }
     }
-}
 
 /**
  * Goals section
  */
 @Composable
-private fun GoalsSection(
-    goals: List<String>,
-    modifier: Modifier = Modifier
-) {
-    LiftrixCard(
-        modifier = modifier
+fun GoalsSection(
+        goals: List<String>,
+        modifier: Modifier = Modifier
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        LiftrixCard(
+            modifier = modifier
         ) {
-            Text(
-                text = "Fitness Goals",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(goals) { goal ->
-                    AssistChip(
-                        onClick = { },
-                        label = {
-                            Text(
-                                text = goal,
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.TrendingUp,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    )
+                Text(
+                    text = "Fitness Goals",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(goals) { goal ->
+                        AssistChip(
+                            onClick = { },
+                            label = {
+                                Text(
+                                    text = goal,
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.TrendingUp,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        )
+                    }
                 }
             }
         }
     }
-}
 
 /**
  * Achievements section
  */
 @Composable
-private fun AchievementsSection(
-    achievements: List<String>,
-    modifier: Modifier = Modifier
-) {
-    LiftrixCard(
-        modifier = modifier
+fun AchievementsSection(
+        achievements: List<String>,
+        modifier: Modifier = Modifier
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        LiftrixCard(
+            modifier = modifier
         ) {
-            Text(
-                text = "Achievements",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            
             Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                achievements.take(5).forEach { achievement ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.EmojiEvents,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        
+                Text(
+                    text = "Achievements",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    achievements.take(5).forEach { achievement ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.EmojiEvents,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+
+                            Text(
+                                text = achievement,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+
+                    if (achievements.size > 5) {
                         Text(
-                            text = achievement,
-                            style = MaterialTheme.typography.bodyMedium
+                            text = "+${achievements.size - 5} more achievements",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(start = 28.dp)
                         )
                     }
-                }
-                
-                if (achievements.size > 5) {
-                    Text(
-                        text = "+${achievements.size - 5} more achievements",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        modifier = Modifier.padding(start = 28.dp)
-                    )
                 }
             }
         }
     }
-}
 
 /**
  * Workout stats section
  */
 @Composable
-private fun WorkoutStatsSection(
-    stats: PublicWorkoutStats,
-    modifier: Modifier = Modifier
-) {
-    LiftrixCard(
-        modifier = modifier
+fun WorkoutStatsSection(
+        stats: PublicWorkoutStats,
+        modifier: Modifier = Modifier
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        LiftrixCard(
+            modifier = modifier
         ) {
-            Text(
-                text = "Workout Stats",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            
-            // Primary stats
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                StatsItem(
-                    label = "Total Time",
-                    value = "${stats.totalWorkoutTime / 60}h ${stats.totalWorkoutTime % 60}m",
-                    icon = Icons.Default.Timer
+                Text(
+                    text = "Workout Stats",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
                 )
-                
-                StatsItem(
-                    label = "Avg Time",
-                    value = "${stats.averageWorkoutTime}min",
-                    icon = Icons.Default.Schedule
-                )
-            }
-            
-            // Streak stats
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                StatsItem(
-                    label = "Current Streak",
-                    value = "${stats.currentStreak} days",
-                    icon = Icons.Default.Whatshot
-                )
-                
-                StatsItem(
-                    label = "Best Streak",
-                    value = "${stats.longestStreak} days",
-                    icon = Icons.Default.EmojiEvents
-                )
-            }
-            
-            // Favorite exercises
-            if (stats.favoriteExercises.isNotEmpty()) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+
+                // Primary stats
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    Text(
-                        text = "Favorite Exercises",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium
+                    StatsItem(
+                        label = "Total Time",
+                        value = "${stats.totalWorkoutTime / 60}h ${stats.totalWorkoutTime % 60}m",
+                        icon = Icons.Default.Timer
                     )
-                    
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+
+                    StatsItem(
+                        label = "Avg Time",
+                        value = "${stats.averageWorkoutTime}min",
+                        icon = Icons.Default.Schedule
+                    )
+                }
+
+                // Streak stats
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    StatsItem(
+                        label = "Current Streak",
+                        value = "${stats.currentStreak} days",
+                        icon = Icons.Default.Whatshot
+                    )
+
+                    StatsItem(
+                        label = "Best Streak",
+                        value = "${stats.longestStreak} days",
+                        icon = Icons.Default.EmojiEvents
+                    )
+                }
+
+                // Favorite exercises
+                if (stats.favoriteExercises.isNotEmpty()) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(stats.favoriteExercises.take(5)) { exercise ->
-                            AssistChip(
-                                onClick = { },
-                                label = {
-                                    Text(
-                                        text = exercise,
-                                        style = MaterialTheme.typography.labelMedium
-                                    )
-                                }
-                            )
+                        Text(
+                            text = "Favorite Exercises",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Medium
+                        )
+
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(stats.favoriteExercises.take(5)) { exercise ->
+                                AssistChip(
+                                    onClick = { },
+                                    label = {
+                                        Text(
+                                            text = exercise,
+                                            style = MaterialTheme.typography.labelMedium
+                                        )
+                                    }
+                                )
+                            }
                         }
                     }
                 }
             }
         }
     }
-}
 
 /**
  * Stats item component
  */
 @Composable
-private fun StatsItem(
-    label: String,
-    value: String,
-    icon: ImageVector,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+fun StatsItem(
+        label: String,
+        value: String,
+        icon: ImageVector,
+        modifier: Modifier = Modifier
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(20.dp)
-        )
-        
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
-        
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center
-        )
+        Column(
+            modifier = modifier,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                textAlign = TextAlign.Center
+            )
+        }
     }
-}
 
 /**
  * Helper composables
  */
 @Composable
-private fun StatItem(
-    value: String,
-    label: String,
-    icon: ImageVector,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+fun StatItem(
+        value: String,
+        label: String,
+        icon: ImageVector,
+        modifier: Modifier = Modifier
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(20.dp)
-        )
-        
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
-        
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-        )
+        Column(
+            modifier = modifier,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+        }
     }
-}
 
 @Composable
-private fun InfoItem(
-    label: String,
-    value: String,
-    icon: ImageVector,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+fun InfoItem(
+        label: String,
+        value: String,
+        icon: ImageVector,
+        modifier: Modifier = Modifier
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            modifier = Modifier.size(18.dp)
-        )
-        
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            textAlign = TextAlign.Center
-        )
-        
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center
-        )
+        Column(
+            modifier = modifier,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                modifier = Modifier.size(18.dp)
+            )
+
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center
+            )
+
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                textAlign = TextAlign.Center
+            )
+        }
     }
-}
 
 /**
  * Loading state
  */
 @Composable
-private fun LoadingProfileState(
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center
+fun LoadingProfileState(
+        modifier: Modifier = Modifier
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        Box(
+            modifier = modifier,
+            contentAlignment = Alignment.Center
         ) {
-            CircularProgressIndicator()
-            Text(
-                text = "Loading profile...",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                CircularProgressIndicator()
+                Text(
+                    text = "Loading profile...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
-}
 
 /**
  * Error state
  */
 @Composable
-private fun ErrorProfileState(
-    error: com.example.liftrix.domain.model.error.LiftrixError,
-    onRetry: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+fun ErrorProfileState(
+        error: com.example.liftrix.domain.model.error.LiftrixError,
+        onRetry: () -> Unit,
+        modifier: Modifier = Modifier
     ) {
-        Icon(
-            imageVector = Icons.Default.Error,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.error,
-            modifier = Modifier.size(48.dp)
-        )
+        Column(
+            modifier = modifier,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Error,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(48.dp)
+            )
 
-        Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = "Failed to load profile",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
-        )
+            Text(
+                text = "Failed to load profile",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        Text(
-            text = error.message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 32.dp)
-        )
+            Text(
+                text = error.message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 32.dp)
+            )
 
-        Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-        PrimaryActionButton(
-            text = "Try Again",
-            onClick = onRetry
-        )
+            PrimaryActionButton(
+                text = "Try Again",
+                onClick = onRetry
+            )
+        }
     }
-}
 
 /**
  * Gets color for fitness level badge
  */
 @Composable
-private fun getFitnessLevelColor(level: FitnessLevel): androidx.compose.ui.graphics.Color {
-    return when (level) {
-        FitnessLevel.BEGINNER -> MaterialTheme.colorScheme.secondary
-        FitnessLevel.INTERMEDIATE -> MaterialTheme.colorScheme.primary
-        FitnessLevel.ADVANCED -> MaterialTheme.colorScheme.tertiary
-        FitnessLevel.EXPERT -> MaterialTheme.colorScheme.error
+fun getFitnessLevelColor(level: FitnessLevel): androidx.compose.ui.graphics.Color {
+        return when (level) {
+            FitnessLevel.BEGINNER -> MaterialTheme.colorScheme.secondary
+            FitnessLevel.INTERMEDIATE -> MaterialTheme.colorScheme.primary
+            FitnessLevel.ADVANCED -> MaterialTheme.colorScheme.tertiary
+            FitnessLevel.EXPERT -> MaterialTheme.colorScheme.error
+        }
     }
-}
 
 @Preview(showBackground = true)
 @Composable
 private fun PublicProfileScreenPreview() {
-    LiftrixTheme {
-        PublicProfileScreen(
-            userId = "1",
-            onNavigateBack = { },
-            onNavigateToQRCode = { }
-        )
+        LiftrixTheme {
+            PublicProfileScreen(
+                userId = "1",
+                onNavigateBack = { },
+                onNavigateToQRCode = { }
+            )
+        }
     }
-}

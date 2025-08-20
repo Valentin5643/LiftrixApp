@@ -50,7 +50,7 @@ fun UserSearchResultCard(
         modifier = modifier
             .fillMaxWidth()
             .semantics {
-                contentDescription = "User ${user.displayName}, ${user.totalWorkouts} workouts, member since ${user.memberSince.format(DateTimeFormatter.ofPattern("MMMM yyyy"))}"
+                contentDescription = "User ${user.displayName}, ${user.totalWorkouts} workouts, member since ${formatMemberSinceDate(user.memberSince)}"
             },
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
@@ -144,7 +144,7 @@ private fun UserHeader(
                 )
                 
                 Text(
-                    text = "Member since ${user.memberSince.format(DateTimeFormatter.ofPattern("MMM yyyy"))}",
+                    text = "Member since ${formatMemberSinceDate(user.memberSince)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
@@ -521,5 +521,18 @@ private fun UserSearchResultCardPreview() {
             onConnectClick = { },
             modifier = Modifier.padding(16.dp)
         )
+    }
+}
+
+/**
+ * Safe date formatting utility to prevent null crashes
+ */
+private fun formatMemberSinceDate(memberSince: LocalDateTime?): String {
+    return try {
+        memberSince?.let { date ->
+            date.format(DateTimeFormatter.ofPattern("MMM yyyy"))
+        } ?: "Unknown"
+    } catch (e: Exception) {
+        "Unknown"
     }
 }

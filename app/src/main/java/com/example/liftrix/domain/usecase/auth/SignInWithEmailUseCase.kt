@@ -15,17 +15,17 @@ class SignInWithEmailUseCase @Inject constructor(
     private val userAccountRepository: UserAccountRepository,
     private val workManager: WorkManager
 ) {
-    suspend operator fun invoke(email: String, password: String): Result<User> {
+    suspend operator fun invoke(email: String, password: String): LiftrixResult<User> {
         if (email.isBlank()) {
-            return Result.failure(IllegalArgumentException("Email cannot be blank"))
+            return LiftrixResult.failure(IllegalArgumentException("Email cannot be blank"))
         }
         
         if (password.isBlank()) {
-            return Result.failure(IllegalArgumentException("Password cannot be blank"))
+            return LiftrixResult.failure(IllegalArgumentException("Password cannot be blank"))
         }
         
         if (!isValidEmail(email)) {
-            return Result.failure(IllegalArgumentException("Invalid email format"))
+            return LiftrixResult.failure(IllegalArgumentException("Invalid email format"))
         }
         
         val signInResult = authRepository.signInWithEmail(email, password)
@@ -83,9 +83,9 @@ class SignInWithEmailUseCase @Inject constructor(
                     }
                 )
                 
-                Result.success(user)
+                LiftrixResult.success(user)
             },
-            onFailure = { Result.failure(it) }
+            onFailure = { LiftrixResult.failure(it) }
         )
     }
     

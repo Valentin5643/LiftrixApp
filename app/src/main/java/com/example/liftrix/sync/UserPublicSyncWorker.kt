@@ -89,12 +89,12 @@ class UserPublicSyncWorker @AssistedInject constructor(
             
             val forceSync = inputData.getBoolean("forceSync", false)
 
-            Timber.d("USER_SEARCH_DEBUG", "SyncWorker: Starting sync for userId=$userId (forceSync=$forceSync)")
+            Timber.i("UserPublicSyncWorker", "Starting user public sync for: $userId")
             
             // Get user account data (username, email, display name)
             val userAccount = userAccountDao.getAccountForUserSuspend(userId)
             if (userAccount == null) {
-                Timber.e("USER_SEARCH_DEBUG", "SyncWorker: No user account found for $userId")
+                Timber.e("UserPublicSyncWorker", "No user account found for: $userId")
                 return@withContext Result.failure(
                     Data.Builder()
                         .putString(KEY_ERROR_MESSAGE, "User account not found for user $userId")
@@ -102,7 +102,7 @@ class UserPublicSyncWorker @AssistedInject constructor(
                 )
             }
             
-            Timber.d("USER_SEARCH_DEBUG", "SyncWorker: Found account - username=${userAccount.username}, displayName=${userAccount.displayName}")
+            // Processing user account for sync
             
             // Get user profile data (bio, fitness level, etc.)
             val userProfile = userProfileDao.getProfileForUserSuspend(userId)
@@ -115,12 +115,11 @@ class UserPublicSyncWorker @AssistedInject constructor(
             val searchTokens = generateSearchTokens(userAccount, userProfile)
             val searchKeywords = generateSearchKeywords(userAccount, userProfile)
             
-            Timber.d("USER_SEARCH_DEBUG", "SyncWorker: Generated ${searchTokens.size} tokens: ${searchTokens.joinToString()}")
-            Timber.d("USER_SEARCH_DEBUG", "SyncWorker: Generated ${searchKeywords.size} keywords: ${searchKeywords.joinToString()}")
+            // Generated search tokens and keywords
             
             // Prepare public user data
             val isPublicProfile = userProfile?.isPublic ?: true
-            Timber.d("USER_SEARCH_DEBUG", "SyncWorker: isPublic=$isPublicProfile for username=${userAccount.username}")
+            // Determined profile visibility
             
             val publicUserData = mutableMapOf<String, Any?>(
                 "userId" to userId,
@@ -164,7 +163,7 @@ class UserPublicSyncWorker @AssistedInject constructor(
                 "updatedAt" to FieldValue.serverTimestamp()
             )
             
-            Timber.d("USER_SEARCH_DEBUG", "SyncWorker: Writing to $USERS_PUBLIC_COLLECTION")
+            // Writing to users_public collection
             
             // Sync to users_public collection
             val publicDocRef = firestore
@@ -173,7 +172,7 @@ class UserPublicSyncWorker @AssistedInject constructor(
             
             publicDocRef.set(publicUserData, SetOptions.merge()).await()
             
-            Timber.d("USER_SEARCH_DEBUG", "SyncWorker: Successfully wrote to $USERS_PUBLIC_COLLECTION")
+            // Successfully wrote to users_public
             
             // Also sync to user_search_cache collection for tokenized search
             val searchCacheData = mapOf(
@@ -192,7 +191,7 @@ class UserPublicSyncWorker @AssistedInject constructor(
                 "updatedAt" to FieldValue.serverTimestamp()
             )
             
-            Timber.d("USER_SEARCH_DEBUG", "SyncWorker: Writing to $USER_SEARCH_CACHE_COLLECTION")
+            // Writing to user_search_cache collection
             
             val searchCacheDocRef = firestore
                 .collection(USER_SEARCH_CACHE_COLLECTION)
@@ -200,8 +199,7 @@ class UserPublicSyncWorker @AssistedInject constructor(
                 
             searchCacheDocRef.set(searchCacheData, SetOptions.merge()).await()
             
-            Timber.d("USER_SEARCH_DEBUG", "SyncWorker: Successfully wrote to $USER_SEARCH_CACHE_COLLECTION")
-            Timber.d("USER_SEARCH_DEBUG", "SyncWorker: SYNC COMPLETE - User should be searchable now!")
+            Timber.i("UserPublicSyncWorker", "User public data sync completed successfully")
             
             return@withContext Result.success(
                 Data.Builder()

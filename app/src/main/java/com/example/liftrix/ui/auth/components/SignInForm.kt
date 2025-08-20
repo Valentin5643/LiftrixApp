@@ -13,6 +13,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -62,7 +63,9 @@ fun SignInForm(
     onSignIn: (email: String, password: String) -> Unit,
     onForgotPassword: (email: String) -> Unit = { },
     isLoading: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    errorMessage: String? = null,
+    onClearError: () -> Unit = { }
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -121,10 +124,46 @@ fun SignInForm(
                 
                 Spacer(modifier = Modifier.height(24.dp))
                 
+                // Error message display
+                if (errorMessage != null) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isDarkTheme) LiftrixColorsV2.Dark.Error.copy(alpha = 0.1f) else LiftrixColorsV2.Light.Error.copy(alpha = 0.1f)
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Error,
+                                contentDescription = "Error",
+                                tint = if (isDarkTheme) LiftrixColorsV2.Dark.Error else LiftrixColorsV2.Light.Error,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = errorMessage,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isDarkTheme) LiftrixColorsV2.Dark.Error else LiftrixColorsV2.Light.Error
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+                
                 // Email field
                 OutlinedTextField(
                     value = email,
-                    onValueChange = { email = it },
+                    onValueChange = { 
+                        email = it
+                        // Clear error when user starts typing
+                        if (errorMessage != null) {
+                            onClearError()
+                        }
+                    },
                     label = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
@@ -163,7 +202,13 @@ fun SignInForm(
                 // Password field
                 OutlinedTextField(
                     value = password,
-                    onValueChange = { password = it },
+                    onValueChange = { 
+                        password = it
+                        // Clear error when user starts typing
+                        if (errorMessage != null) {
+                            onClearError()
+                        }
+                    },
                     label = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(

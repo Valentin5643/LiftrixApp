@@ -227,7 +227,10 @@ private fun EnhancedHomeContent(
                 onLoadMore = { onEvent(HomeEvent.LoadMoreRecommendations) },
                 onFollowUser = { userId -> onEvent(HomeEvent.FollowUser(userId)) },
                 onViewAllFriends = onNavigateToFriends,
-                onErrorDismissed = { onEvent(HomeEvent.RecommendationsErrorDismissed) }
+                onErrorDismissed = { onEvent(HomeEvent.RecommendationsErrorDismissed) },
+                onUserClick = { userId -> 
+                    navController.navigate(LiftrixRoute.PublicProfile(userId))
+                }
             )
         }
         
@@ -543,6 +546,7 @@ private fun DiscoveryCarouselSection(
     onFollowUser: (String) -> Unit,
     onViewAllFriends: () -> Unit,
     onErrorDismissed: () -> Unit,
+    onUserClick: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     when (recommendationsState) {
@@ -553,6 +557,7 @@ private fun DiscoveryCarouselSection(
                 hasMore = false,
                 onLoadMore = onLoadMore,
                 onFollowUser = onFollowUser,
+                onUserClick = onUserClick,
                 modifier = modifier
             )
         }
@@ -565,6 +570,7 @@ private fun DiscoveryCarouselSection(
                     hasMore = recommendationsState.hasMore,
                     onLoadMore = onLoadMore,
                     onFollowUser = onFollowUser,
+                    onUserClick = onUserClick,
                     modifier = modifier
                 )
             } else {

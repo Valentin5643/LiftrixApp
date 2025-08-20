@@ -217,8 +217,11 @@ class RealtimeSyncManager @Inject constructor(
         val listenerKey = "${userId}_workout_sessions"
         
         try {
-            val listener = firestore.collection("workout_sessions")
-                .whereEqualTo("userId", userId)
+            // FIXED: Use user-scoped subcollection to avoid permission errors
+            // This matches the new Firestore security rule structure
+            val listener = firestore.collection("users")
+                .document(userId)
+                .collection("workout_sessions")
                 .whereIn("status", listOf("ACTIVE", "PAUSED", "COMPLETED"))
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {

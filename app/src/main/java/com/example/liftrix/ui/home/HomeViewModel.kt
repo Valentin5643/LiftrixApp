@@ -918,7 +918,7 @@ class HomeViewModel @Inject constructor(
     companion object {
         private const val RECENT_WORKOUTS_LIMIT = 7
         private const val FEED_LIMIT = 10
-        private const val RECOMMENDATIONS_LIMIT = 10
+        private const val RECOMMENDATIONS_LIMIT = 15  // Instagram-like discovery with 15 recent public accounts
         private const val MAX_FEED_WORKOUTS = 40
     }
 }

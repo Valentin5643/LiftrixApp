@@ -34,6 +34,9 @@ class AuthViewModel @Inject constructor(
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Initial)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
+    
+    // Track if we're in the middle of an authentication operation
+    private var isAuthOperationInProgress = false
 
     init {
         observeAuthState()
@@ -42,14 +45,25 @@ class AuthViewModel @Inject constructor(
     private fun observeAuthState() {
         viewModelScope.launch {
             authRepository.currentUser.collect { user ->
-                // Only update if we're not in a loading state from an active operation
-                if (_authState.value !is AuthState.Loading) {
+                // CRITICAL FIX: Don't update state if we're in the middle of an auth operation
+                // This prevents race conditions where Firebase Auth state updates override
+                // authentication errors before they can be displayed
+                if (isAuthOperationInProgress) {
+                    Timber.d("Auth state observer: Ignoring update during active operation (user=${user?.uid})")
+                    return@collect
+                }
+                
+                // Only update state if we're not in an error or loading state
+                // This prevents overriding error messages that should be shown to user
+                if (_authState.value !is AuthState.Error && _authState.value !is AuthState.Loading) {
                     _authState.value = if (user != null) {
                         AuthState.Authenticated(user)
                     } else {
                         AuthState.Unauthenticated
                     }
-                    Timber.d("Auth state updated: ${if (user != null) "Authenticated (${user.uid})" else "Unauthenticated"}")
+                    Timber.d("Auth state updated by observer: ${if (user != null) "Authenticated (${user.uid})" else "Unauthenticated"}")
+                } else {
+                    Timber.d("Auth state observer preserving current state: ${_authState.value}")
                 }
             }
         }
@@ -81,7 +95,10 @@ class AuthViewModel @Inject constructor(
             is AuthEvent.EmailPasswordSignIn -> signInWithEmail(event.email, event.password)
             is AuthEvent.EmailPasswordSignUp -> signUpWithEmail(event.email, event.password, event.username)
             is AuthEvent.ForgotPassword -> sendPasswordResetEmail(event.email)
-            is AuthEvent.GoogleSignIn -> _authState.value = AuthState.Loading // Google Sign-In flow will be handled by UI
+            is AuthEvent.GoogleSignIn -> {
+                // Mark operation as in progress when Google Sign-In starts
+                isAuthOperationInProgress = true
+            }
             is AuthEvent.AnonymousSignIn -> signInAnonymously()
             is AuthEvent.SignOut -> signOut()
             is AuthEvent.ClearError -> clearError()
@@ -92,63 +109,87 @@ class AuthViewModel @Inject constructor(
         if (idToken != null) {
             signInWithGoogle(idToken)
         } else {
-            _authState.value = AuthState.Error("Google Sign-In was cancelled or failed. Please ensure you have a Google account signed in on this device.")
+            viewModelScope.launch {
+                _authState.value = AuthState.Error("Google Sign-In was cancelled or failed. Please ensure you have a Google account signed in on this device.")
+                // Add small delay to ensure error state is properly set before allowing observer updates
+                kotlinx.coroutines.delay(100)
+                isAuthOperationInProgress = false
+            }
         }
     }
 
     private fun signInWithEmail(email: String, password: String) {
         viewModelScope.launch {
+            isAuthOperationInProgress = true
             _authState.value = AuthState.Loading
             
-            signInWithEmailUseCase(email, password)
-                .onSuccess { user ->
+            val result = signInWithEmailUseCase(email, password)
+            result.fold(
+                onSuccess = { user ->
                     _authState.value = AuthState.Authenticated(user)
                     Timber.d("Sign in successful for user: ${user.uid}")
-                }
-                .onFailure { exception ->
+                    isAuthOperationInProgress = false
+                },
+                onFailure = { exception ->
                     val errorMessage = getErrorMessage(exception)
                     _authState.value = AuthState.Error(errorMessage, exception)
                     Timber.e(exception, "Sign in failed")
+                    // Add small delay to ensure error state is properly set before allowing observer updates
+                    // This prevents race conditions where Firebase Auth state overrides the error
+                    kotlinx.coroutines.delay(100)
+                    isAuthOperationInProgress = false
                 }
+            )
         }
     }
 
     private fun signUpWithEmail(email: String, password: String, username: String) {
         viewModelScope.launch {
+            isAuthOperationInProgress = true
             _authState.value = AuthState.Loading
             
             signUpWithEmailUseCase(email, password, username)
                 .onSuccess { user ->
                     _authState.value = AuthState.Authenticated(user)
                     Timber.d("Sign up successful for user: ${user.uid}")
+                    isAuthOperationInProgress = false
                 }
                 .onFailure { exception ->
                     val errorMessage = getErrorMessage(exception)
                     _authState.value = AuthState.Error(errorMessage, exception)
                     Timber.e(exception, "Sign up failed")
+                    // Add small delay to ensure error state is properly set before allowing observer updates
+                    kotlinx.coroutines.delay(100)
+                    isAuthOperationInProgress = false
                 }
         }
     }
 
     private fun signInWithGoogle(idToken: String) {
         viewModelScope.launch {
+            isAuthOperationInProgress = true
             _authState.value = AuthState.Loading
             
             signInWithGoogleUseCase(idToken)
                 .onSuccess { user ->
                     _authState.value = AuthState.Authenticated(user)
                     Timber.d("Google sign in successful for user: ${user.uid}")
+                    isAuthOperationInProgress = false
                 }
                 .onFailure { exception ->
                     val errorMessage = getErrorMessage(exception)
                     _authState.value = AuthState.Error(errorMessage, exception)
                     Timber.e(exception, "Google sign in failed")
+                    // Add small delay to ensure error state is properly set before allowing observer updates
+                    kotlinx.coroutines.delay(100)
+                    isAuthOperationInProgress = false
                 }
         }
     }
 
     private fun signInAnonymously() {
         viewModelScope.launch {
+            isAuthOperationInProgress = true
             _authState.value = AuthState.Loading
             
             signInAnonymouslyUseCase()
@@ -166,11 +207,15 @@ class AuthViewModel @Inject constructor(
                     }
                     _authState.value = AuthState.Authenticated(user)
                     Timber.d("Anonymous sign in successful for user: ${user.uid}")
+                    isAuthOperationInProgress = false
                 }
                 .onFailure { exception ->
                     val errorMessage = getErrorMessage(exception)
                     _authState.value = AuthState.Error(errorMessage, exception)
                     Timber.e(exception, "Anonymous sign in failed")
+                    // Add small delay to ensure error state is properly set before allowing observer updates
+                    kotlinx.coroutines.delay(100)
+                    isAuthOperationInProgress = false
                 }
         }
     }
@@ -213,8 +258,8 @@ class AuthViewModel @Inject constructor(
     private fun clearError() {
         when (val currentState = _authState.value) {
             is AuthState.Error -> {
-                _authState.value = AuthState.Initial
-                Timber.d("Error cleared, returning to initial state")
+                _authState.value = AuthState.Unauthenticated
+                Timber.d("Error cleared, returning to unauthenticated state")
             }
             else -> { 
                 Timber.d("ClearError called but current state is not Error: $currentState")

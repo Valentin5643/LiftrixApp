@@ -1,6 +1,5 @@
 package com.example.liftrix.ui.social
 
-
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.PublicUserProfile
@@ -10,6 +9,9 @@ import com.example.liftrix.domain.usecase.social.GetPublicProfileUseCase
 import com.example.liftrix.domain.usecase.social.GetPublicProfileRequest
 import com.example.liftrix.domain.usecase.social.FollowUserUseCase
 import com.example.liftrix.domain.usecase.social.FollowAction
+import com.example.liftrix.domain.usecase.social.BlockUserUseCase
+import com.example.liftrix.domain.usecase.social.ReportUserUseCase
+import com.example.liftrix.domain.usecase.social.ReportReason
 import com.example.liftrix.domain.model.social.FollowStatus
 import com.example.liftrix.domain.model.social.ConnectionStatus
 import com.example.liftrix.ui.common.event.ViewModelEvent
@@ -30,6 +32,8 @@ import javax.inject.Inject
 class PublicProfileViewModel @Inject constructor(
     private val getPublicProfileUseCase: GetPublicProfileUseCase,
     private val followUserUseCase: FollowUserUseCase,
+    private val blockUserUseCase: BlockUserUseCase,
+    private val reportUserUseCase: ReportUserUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<PublicProfileUiState, PublicProfileEvent>(errorHandler) {
@@ -295,16 +299,88 @@ class PublicProfileViewModel @Inject constructor(
      * Block the user
      */
     private fun blockUser() {
-        // TODO: Implement block user functionality
-        Timber.d("Block user action triggered")
+        val profile = _uiState.value.profile ?: return
+        
+        viewModelScope.launch {
+            try {
+                updateState { it.copy(isConnectionLoading = true) }
+                
+                val result = blockUserUseCase(
+                    targetUserId = profile.userId,
+                    shouldBlock = true
+                )
+                
+                result.fold(
+                    onSuccess = {
+                        // Update the connection status to blocked
+                        updateState { currentState ->
+                            currentState.copy(
+                                profile = currentState.profile?.copy(
+                                    connectionStatus = ConnectionStatus.BLOCKED
+                                ),
+                                isConnectionLoading = false
+                            )
+                        }
+                        Timber.d("User blocked successfully: ${profile.userId}")
+                    },
+                    onFailure = { throwable ->
+                        val error = throwable as LiftrixError
+                        handleError(error)
+                        updateState { it.copy(isConnectionLoading = false) }
+                        Timber.e("Failed to block user: ${error.message}")
+                    }
+                )
+            } catch (exception: Exception) {
+                val error = LiftrixError.NetworkError(
+                    errorMessage = "Failed to block user: ${exception.message}"
+                )
+                handleError(error)
+                updateState { it.copy(isConnectionLoading = false) }
+                Timber.e(exception, "Failed to block user")
+            }
+        }
     }
 
     /**
      * Report the profile
      */
     private fun reportProfile() {
-        // TODO: Implement report profile functionality
-        Timber.d("Report profile action triggered")
+        val profile = _uiState.value.profile ?: return
+        
+        viewModelScope.launch {
+            try {
+                updateState { it.copy(isConnectionLoading = true) }
+                
+                // For now, we'll use INAPPROPRIATE_CONTENT as the default reason
+                // In a real app, you'd show a dialog to let the user select the reason
+                val result = reportUserUseCase(
+                    targetUserId = profile.userId,
+                    reason = ReportReason.INAPPROPRIATE_CONTENT,
+                    description = "Reported from profile view"
+                )
+                
+                result.fold(
+                    onSuccess = {
+                        updateState { it.copy(isConnectionLoading = false) }
+                        Timber.d("Profile reported successfully: ${profile.userId}")
+                        // You might want to show a success message to the user
+                    },
+                    onFailure = { throwable ->
+                        val error = throwable as LiftrixError
+                        handleError(error)
+                        updateState { it.copy(isConnectionLoading = false) }
+                        Timber.e("Failed to report profile: ${error.message}")
+                    }
+                )
+            } catch (exception: Exception) {
+                val error = LiftrixError.NetworkError(
+                    errorMessage = "Failed to report profile: ${exception.message}"
+                )
+                handleError(error)
+                updateState { it.copy(isConnectionLoading = false) }
+                Timber.e(exception, "Failed to report profile")
+            }
+        }
     }
 }
 

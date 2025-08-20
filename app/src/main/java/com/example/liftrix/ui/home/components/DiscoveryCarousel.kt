@@ -61,6 +61,7 @@ fun DiscoveryCarousel(
     hasMore: Boolean,
     onLoadMore: () -> Unit,
     onFollowUser: (String) -> Unit,
+    onUserClick: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
@@ -96,6 +97,7 @@ fun DiscoveryCarousel(
             RecommendedUserCard(
                 user = user,
                 onFollowUser = { onFollowUser(user.userId) },
+                onUserClick = onUserClick,
                 modifier = Modifier.testTag("recommended_user_card")
             )
         }
@@ -116,10 +118,13 @@ fun DiscoveryCarousel(
 private fun RecommendedUserCard(
     user: RecommendedUser,
     onFollowUser: () -> Unit,
+    onUserClick: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     LiftrixCard(
-        modifier = modifier.width(160.dp),
+        modifier = modifier
+            .width(160.dp)
+            .clickable { onUserClick?.invoke(user.userId) },
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface,

@@ -4,6 +4,9 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
+import androidx.hilt.work.HiltWorkerFactory
+import androidx.work.Configuration
+import androidx.work.WorkManager
 import com.example.liftrix.BuildConfig
 import com.example.liftrix.domain.repository.WidgetPreferencesRepository
 import com.example.liftrix.service.CacheWarmingService
@@ -19,7 +22,7 @@ import timber.log.Timber
 import javax.inject.Inject
 
 @HiltAndroidApp
-class LiftrixApp : Application() {
+class LiftrixApp : Application(), Configuration.Provider {
     
     @Inject
     lateinit var widgetPreferencesRepository: WidgetPreferencesRepository
@@ -33,6 +36,9 @@ class LiftrixApp : Application() {
     @Inject
     lateinit var firebaseAuth: FirebaseAuth
     
+    @Inject
+    lateinit var workerFactory: HiltWorkerFactory
+    
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     
     companion object {
@@ -44,6 +50,10 @@ class LiftrixApp : Application() {
         
         // Initialize Timber for logging
         Timber.plant(Timber.DebugTree())
+        
+        // CRITICAL: Initialize WorkManager FIRST before any other systems
+        // This ensures HiltWorkerFactory is registered before any worker operations
+        initializeWorkManager()
         
         // Initialize debug system
         initializeDebugSystem()
@@ -60,6 +70,15 @@ class LiftrixApp : Application() {
         // Initialize sync system
         initializeSyncSystem()
     }
+    
+    override val workManagerConfiguration: Configuration
+        get() {
+            Timber.d("WorkManagerConfiguration: Creating configuration with HiltWorkerFactory")
+            return Configuration.Builder()
+                .setWorkerFactory(workerFactory)
+                .setMinimumLoggingLevel(if (BuildConfig.DEBUG) android.util.Log.DEBUG else android.util.Log.INFO)
+                .build()
+        }
     
     /**
      * Initialize the debug system for the application
@@ -147,6 +166,46 @@ class LiftrixApp : Application() {
                 Timber.e(e, "Failed to initialize cache warming system")
                 // Don't crash app if cache warming fails - it's an optimization, not critical
             }
+        }
+    }
+    
+    /**
+     * Initialize WorkManager explicitly to ensure HiltWorkerFactory is properly registered.
+     * This prevents NoSuchMethodException when WorkManager tries to instantiate Hilt workers.
+     */
+    private fun initializeWorkManager() {
+        try {
+            Timber.d("Starting WorkManager initialization...")
+            Timber.d("HiltWorkerFactory available: ${::workerFactory.isInitialized}")
+            
+            // Ensure WorkManager is not already initialized
+            try {
+                WorkManager.getInstance(this)
+                Timber.d("WorkManager already initialized, checking configuration...")
+            } catch (e: IllegalStateException) {
+                Timber.d("WorkManager not yet initialized, proceeding with initialization")
+                
+                // Force WorkManager initialization with our configuration
+                val config = workManagerConfiguration
+                Timber.d("Created WorkManager configuration with factory: ${config.workerFactory?.javaClass?.simpleName}")
+                
+                WorkManager.initialize(this, config)
+                Timber.d("WorkManager.initialize() completed")
+            }
+            
+            // Verify WorkManager is properly configured
+            val workManager = WorkManager.getInstance(this)
+            Timber.d("WorkManager verification successful: ${workManager.javaClass.simpleName}")
+            
+            // Log the factory being used
+            val factoryField = workManager.javaClass.getDeclaredField("mWorkManagerImpl")
+            factoryField.isAccessible = true
+            val workManagerImpl = factoryField.get(workManager)
+            Timber.d("WorkManager implementation: ${workManagerImpl?.javaClass?.simpleName}")
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to initialize WorkManager - this will cause worker instantiation failures")
+            // This is critical - if WorkManager fails to initialize, sync won't work
         }
     }
     

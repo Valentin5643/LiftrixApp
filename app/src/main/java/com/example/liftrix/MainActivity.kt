@@ -77,6 +77,12 @@ fun MainContent(
 ) {
     val authState by viewModel.authState.collectAsState()
     
+    // Set explicit auth flow to false when MainActivity is active
+    // This allows MainViewModel to handle auth state normally
+    LaunchedEffect(Unit) {
+        viewModel.setExplicitAuthFlow(false)
+    }
+    
     when (val currentState = authState) {
         is MainViewModel.AuthenticationState.Loading -> {
             LoadingScreen()

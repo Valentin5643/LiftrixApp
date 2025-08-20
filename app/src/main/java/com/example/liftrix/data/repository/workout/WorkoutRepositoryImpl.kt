@@ -1274,9 +1274,13 @@ class WorkoutRepositoryImpl @Inject constructor(
             // Trigger sync coordinator for background sync
             CoroutineScope(Dispatchers.IO).launch {
                 syncCoordinator.triggerEntitySync(workout.userId, "workout")
+                
+                // 🚀 CRITICAL FIX: Also trigger public profile sync to update workout count
+                // This ensures that when users create/complete workouts, their workout stats become visible to other users
+                syncCoordinator.triggerEntitySync(workout.userId, "user_public")
             }
             
-            Timber.d("Queued workout ${workout.id.value} for sync")
+            Timber.d("Queued workout ${workout.id.value} for sync and triggered public profile update")
         } catch (e: Exception) {
             Timber.e(e, "Failed to queue workout ${workout.id.value} for sync")
             // Don't fail the entire operation for sync queueing failure

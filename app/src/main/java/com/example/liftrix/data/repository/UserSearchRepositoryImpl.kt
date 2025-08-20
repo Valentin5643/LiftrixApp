@@ -2,7 +2,9 @@ package com.example.liftrix.data.repository
 
 import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.local.dao.UserSearchCacheDao
+import com.example.liftrix.data.local.dao.FollowRelationshipDao
 import com.example.liftrix.data.local.entity.UserSearchCacheEntity
+import com.example.liftrix.data.local.entity.FollowRelationshipEntity
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -44,6 +46,7 @@ import javax.inject.Singleton
 class UserSearchRepositoryImpl @Inject constructor(
     private val userProfileDao: UserProfileDao,
     private val userSearchCacheDao: UserSearchCacheDao,
+    private val followRelationshipDao: FollowRelationshipDao,
     private val authRepository: AuthRepository,
     private val firestore: FirebaseFirestore,
     private val gson: Gson
@@ -68,39 +71,35 @@ class UserSearchRepositoryImpl @Inject constructor(
         return liftrixCatching(
             errorMapper = { throwable -> LiftrixError.NetworkError("Search failed: ${throwable.message}") }
         ) {
-            Timber.d("USER_SEARCH_DEBUG", "=== SEARCH FLOW START ===")
-            Timber.d("USER_SEARCH_DEBUG", "Search: query='$query', currentUserId=$currentUserId")
+            Timber.i("UserSearchRepository", "Starting user search for query: $query")
             
             if (query.isBlank()) {
-                Timber.d("USER_SEARCH_DEBUG", "Search: Query is blank, returning empty")
+                // Query is blank, return empty list
                 return@liftrixCatching emptyList<UserSearchResult>()
             }
 
             // Check cache first for performance
-            Timber.d("USER_SEARCH_DEBUG", "Search: Checking cache")
+            // Check cache first for performance
             val cachedResults = getCachedSearchResults(currentUserId, query).getOrNull()
             if (cachedResults != null && cachedResults.isNotEmpty()) {
-                Timber.d("USER_SEARCH_DEBUG", "Search: Found ${cachedResults.size} cached results")
+                Timber.i("UserSearchRepository", "Found ${cachedResults.size} cached results")
                 return@liftrixCatching applyFilters(cachedResults, filters)
             }
-            Timber.d("USER_SEARCH_DEBUG", "Search: No cache hit")
+            // No cache hit, perform Firebase search
 
             // Perform comprehensive Firebase search with tokenized indexing
-            Timber.d("USER_SEARCH_DEBUG", "Search: Calling searchFirebaseUsersWithTokens")
+            // Perform comprehensive Firebase search with tokenized indexing
             val searchResults = searchFirebaseUsersWithTokens(query, currentUserId, filters)
             
             // Cache results for future queries
             if (searchResults.isNotEmpty()) {
                 cacheSearchResults(currentUserId, query, searchResults)
-                Timber.d("USER_SEARCH_DEBUG", "Search: Found ${searchResults.size} results")
-                searchResults.forEach { result ->
-                    Timber.d("USER_SEARCH_DEBUG", "  - ${result.displayName} (userId: ${result.userId})")
-                }
+                Timber.i("UserSearchRepository", "Search completed with ${searchResults.size} results")
             } else {
-                Timber.w("USER_SEARCH_DEBUG", "Search: NO RESULTS FOUND for query '$query'")
+                Timber.w("UserSearchRepository", "No results found for query: $query")
             }
             
-            Timber.d("USER_SEARCH_DEBUG", "=== SEARCH FLOW END: ${searchResults.size} results ===")
+            // Search flow completed
             searchResults
         }
     }
@@ -407,11 +406,11 @@ class UserSearchRepositoryImpl @Inject constructor(
         filters: SearchFilters
     ): List<UserSearchResult> {
         return try {
-            Timber.d("USER_SEARCH_DEBUG", "FirebaseTokenSearch: Starting for query='$query'")
+            // Performing tokenized Firebase search
             
             // Use search cache collection for tokenized search
             val searchTokens = generateSearchTokensFromQuery(query)
-            Timber.d("USER_SEARCH_DEBUG", "FirebaseTokenSearch: Generated tokens=${searchTokens.joinToString()}")
+            // Generated search tokens for query matching
             
             val searchQuery = firestore.collection(USER_SEARCH_CACHE_COLLECTION)
                 .whereEqualTo("isPublic", true)
@@ -419,10 +418,10 @@ class UserSearchRepositoryImpl @Inject constructor(
                 .orderBy("lastActiveAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
                 .limit(MAX_SEARCH_RESULTS.toLong())
 
-            Timber.d("USER_SEARCH_DEBUG", "FirebaseTokenSearch: Executing Firestore query on $USER_SEARCH_CACHE_COLLECTION")
+            // Executing Firestore query
             val snapshot = searchQuery.get().await()
             
-            Timber.d("USER_SEARCH_DEBUG", "FirebaseTokenSearch: Query returned ${snapshot.documents.size} documents")
+            // Processing query results
             
             val results = snapshot.documents.mapNotNull { document ->
                 val data = document.data ?: return@mapNotNull null
@@ -430,7 +429,7 @@ class UserSearchRepositoryImpl @Inject constructor(
                 val displayName = data["displayName"] as? String ?: return@mapNotNull null
                 val username = data["username"] as? String
                 
-                Timber.d("USER_SEARCH_DEBUG", "FirebaseTokenSearch: Processing doc - userId=$userId, username=$username, displayName=$displayName")
+                // Processing document for user matching
                 
                 // Allow self-account to appear in search results
                 // This enables users to find and view their own profile
@@ -443,7 +442,7 @@ class UserSearchRepositoryImpl @Inject constructor(
                     bio = data["bio"] as? String,
                     fitnessLevel = determineFitnessLevelFromData(data),
                     totalWorkouts = (data["totalWorkouts"] as? Number)?.toInt() ?: 0,
-                    memberSince = parseDateTime(data["memberSince"] as? String) ?: LocalDateTime.now(),
+                    memberSince = parseDateTime(data["memberSince"] as? String),
                     sharedEquipment = calculateSharedEquipment(data, viewerId),
                     sharedGoals = calculateSharedGoals(data, viewerId),
                     connectionStatus = if (userId == viewerId) ConnectionStatus.SELF else calculateConnectionStatus(userId, viewerId),
@@ -452,16 +451,16 @@ class UserSearchRepositoryImpl @Inject constructor(
             }
             
             if (results.isEmpty()) {
-                Timber.w("USER_SEARCH_DEBUG", "FirebaseTokenSearch: NO RESULTS for query='$query'")
+                Timber.w("UserSearchRepository", "Tokenized search found no results for: $query")
             } else {
-                Timber.d("USER_SEARCH_DEBUG", "FirebaseTokenSearch: Found ${results.size} results")
+                Timber.i("UserSearchRepository", "Tokenized search found ${results.size} results")
             }
             results
             
         } catch (e: Exception) {
-            Timber.e("USER_SEARCH_DEBUG", "FirebaseTokenSearch: FAILED - ${e.message}", e)
+            Timber.e("UserSearchRepository", "Tokenized search failed: ${e.message}", e)
             // Fallback to basic search
-            Timber.d("USER_SEARCH_DEBUG", "FirebaseTokenSearch: Falling back to basic search")
+            Timber.w("UserSearchRepository", "Falling back to basic search")
             searchFirebaseUsersBasic(query, viewerId, filters)
         }
     }
@@ -473,16 +472,16 @@ class UserSearchRepositoryImpl @Inject constructor(
         filters: SearchFilters
     ): List<UserSearchResult> {
         return try {
-            Timber.d("USER_SEARCH_DEBUG", "BasicSearch: Starting for query='$query'")
+            // Performing basic Firebase search
             
             val searchQuery = firestore.collection(USERS_PUBLIC_COLLECTION)
                 .whereEqualTo("isPublic", true)
                 .limit(MAX_SEARCH_RESULTS.toLong())
 
-            Timber.d("USER_SEARCH_DEBUG", "BasicSearch: Executing query on $USERS_PUBLIC_COLLECTION")
+            // Executing basic search query
             val snapshot = searchQuery.get().await()
             
-            Timber.d("USER_SEARCH_DEBUG", "BasicSearch: Query returned ${snapshot.documents.size} documents")
+            // Processing basic search results
             
             val results = snapshot.documents.mapNotNull { document ->
                 val data = document.data ?: return@mapNotNull null
@@ -490,7 +489,7 @@ class UserSearchRepositoryImpl @Inject constructor(
                 val username = data["username"] as? String
                 val userId = document.id
                 
-                Timber.d("USER_SEARCH_DEBUG", "BasicSearch: Checking doc - userId=$userId, username=$username, displayName=$displayName")
+                // Checking document for query match
                 
                 // Allow self-account to appear in search results
                 // No longer filtering out the current user
@@ -499,14 +498,14 @@ class UserSearchRepositoryImpl @Inject constructor(
                 val matchesDisplayName = displayName.contains(query, ignoreCase = true)
                 val matchesUsername = username?.contains(query, ignoreCase = true) ?: false
                 
-                Timber.d("USER_SEARCH_DEBUG", "BasicSearch: matchesDisplayName=$matchesDisplayName, matchesUsername=$matchesUsername")
+                // Evaluating match criteria
                 
                 if (!matchesDisplayName && !matchesUsername) {
-                    Timber.d("USER_SEARCH_DEBUG", "BasicSearch: Skipping - no match")
+                    // No match found, skipping
                     return@mapNotNull null
                 }
                 
-                Timber.d("USER_SEARCH_DEBUG", "BasicSearch: Match found! Adding to results")
+                // Match found, adding to results
                 
                 UserSearchResult(
                     userId = userId,
@@ -515,7 +514,7 @@ class UserSearchRepositoryImpl @Inject constructor(
                     bio = data["bio"] as? String,
                     fitnessLevel = determineFitnessLevelFromData(data),
                     totalWorkouts = (data["totalWorkouts"] as? Number)?.toInt() ?: 0,
-                    memberSince = parseDateTime(data["memberSince"] as? String) ?: LocalDateTime.now(),
+                    memberSince = parseDateTime(data["memberSince"] as? String),
                     sharedEquipment = emptyList(),
                     sharedGoals = emptyList(),
                     connectionStatus = if (userId == viewerId) ConnectionStatus.SELF else ConnectionStatus.NONE,
@@ -524,13 +523,13 @@ class UserSearchRepositoryImpl @Inject constructor(
             }
             
             if (results.isEmpty()) {
-                Timber.w("USER_SEARCH_DEBUG", "BasicSearch: NO RESULTS for query='$query'")
+                Timber.w("UserSearchRepository", "Basic search found no results for: $query")
             } else {
-                Timber.d("USER_SEARCH_DEBUG", "BasicSearch: Found ${results.size} results")
+                Timber.i("UserSearchRepository", "Basic search found ${results.size} results")
             }
             results
         } catch (e: Exception) {
-            Timber.e("USER_SEARCH_DEBUG", "BasicSearch: FAILED - ${e.message}", e)
+            Timber.e("UserSearchRepository", "Basic search failed: ${e.message}", e)
             emptyList()
         }
     }
@@ -615,8 +614,34 @@ class UserSearchRepositoryImpl @Inject constructor(
     }
     
     private suspend fun calculateConnectionStatus(userId: String, viewerId: String): ConnectionStatus {
-        // For now, return NONE - this would be implemented with a connections collection
-        return ConnectionStatus.NONE
+        // Check if it's the same user
+        if (userId == viewerId) {
+            return ConnectionStatus.SELF
+        }
+        
+        try {
+            // Check the follow relationship from viewer to user
+            val followRelationship = followRelationshipDao.getFollowRelationship(viewerId, userId)
+            
+            return when {
+                followRelationship == null -> ConnectionStatus.NONE
+                followRelationship.status == FollowRelationshipEntity.STATUS_ACCEPTED -> {
+                    // Check if there's a mutual follow
+                    val reverseRelationship = followRelationshipDao.getFollowRelationship(userId, viewerId)
+                    if (reverseRelationship?.status == FollowRelationshipEntity.STATUS_ACCEPTED) {
+                        ConnectionStatus.MUTUAL_FOLLOW
+                    } else {
+                        ConnectionStatus.CONNECTED
+                    }
+                }
+                followRelationship.status == FollowRelationshipEntity.STATUS_PENDING -> ConnectionStatus.PENDING_SENT
+                followRelationship.status == FollowRelationshipEntity.STATUS_BLOCKED -> ConnectionStatus.BLOCKED
+                else -> ConnectionStatus.NONE
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Error calculating connection status between $viewerId and $userId")
+            return ConnectionStatus.NONE
+        }
     }
     
     private suspend fun calculateMutualConnections(userId: String, viewerId: String): Int {

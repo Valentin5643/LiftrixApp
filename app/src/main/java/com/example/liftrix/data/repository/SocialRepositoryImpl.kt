@@ -781,6 +781,7 @@ class SocialRepositoryImpl @Inject constructor(
 
     /**
      * Get general user recommendations from Firebase
+     * Now prioritizes recent public profiles for Instagram-like discovery
      */
     private suspend fun getGeneralRecommendations(
         currentUserId: String,
@@ -789,17 +790,61 @@ class SocialRepositoryImpl @Inject constructor(
         offset: Int
     ): List<RecommendedUser> {
         return try {
-            // Get random sample of users from Firebase
-            val generalQuery = firestore.collection(USERS_COLLECTION)
-                .whereEqualTo("onboardingCompleted", true)
+            // First, try to get recent public profiles from social_profiles collection
+            val socialProfilesQuery = firestore.collection("social_profiles")
+                .whereEqualTo("isPrivate", false)  // Only public profiles
+                .whereEqualTo("hideFromSuggestions", false)  // Not hidden from discovery
+                .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)  // Most recent first
                 .limit((limit * 2 + offset).toLong()) // Get extra to account for filtering
                 .get()
                 .await()
-                
+            
             val recommendations = mutableListOf<RecommendedUser>()
             
-            for (document in generalQuery.documents) {
-                val userId = document.id
+            // Process social profiles first
+            for (document in socialProfilesQuery.documents) {
+                val userId = document.getString("userId") ?: continue
+                
+                // Skip current user and excluded users
+                if (userId == currentUserId || userId in excludeUserIds) {
+                    continue
+                }
+                
+                try {
+                    val profileData = document.data ?: continue
+                    val username = profileData["username"] as? String ?: continue
+                    val displayName = profileData["displayName"] as? String
+                    val profilePhotoUrl = profileData["profilePhotoUrl"] as? String
+                    
+                    recommendations.add(
+                        RecommendedUser(
+                            userId = userId,
+                            username = displayName ?: username,
+                            profileImageUrl = profilePhotoUrl,
+                            isFollowing = false
+                        )
+                    )
+                    
+                    // Stop if we have enough recommendations
+                    if (recommendations.size >= limit) {
+                        break
+                    }
+                } catch (e: Exception) {
+                    Timber.w(e, "Failed to parse social profile for recommendations: $userId")
+                }
+            }
+            
+            // If we don't have enough from social profiles, fall back to users collection
+            if (recommendations.size < limit) {
+                val remainingLimit = limit - recommendations.size
+                val generalQuery = firestore.collection(USERS_COLLECTION)
+                    .whereEqualTo("onboardingCompleted", true)
+                    .limit((remainingLimit * 2).toLong())
+                    .get()
+                    .await()
+                    
+                for (document in generalQuery.documents) {
+                    val userId = document.id
                 
                 // Skip current user and existing friends
                 if (userId == currentUserId || userId in excludeUserIds) {
@@ -832,7 +877,13 @@ class SocialRepositoryImpl @Inject constructor(
                 } catch (e: Exception) {
                     Timber.w(e, "Failed to parse user for general recommendations: $userId")
                 }
+                
+                // Stop if we have enough recommendations
+                if (recommendations.size >= limit) {
+                    break
+                }
             }
+        }
             
             val finalRecommendations = recommendations.drop(offset).take(limit)
             Timber.d("Found ${finalRecommendations.size} general recommendations")

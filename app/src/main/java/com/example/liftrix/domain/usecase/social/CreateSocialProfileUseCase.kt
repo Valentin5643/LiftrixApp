@@ -45,15 +45,15 @@ class CreateSocialProfileUseCase @Inject constructor(
         // Check username availability with cleanup
         val isUsernameAvailable = repository.checkUsernameAvailability(username).getOrThrow()
         if (!isUsernameAvailable) {
-            android.util.Log.d("USER_SEARCH_DEBUG", "CreateSocialProfile: Username '$username' taken, attempting cleanup")
+            android.util.Log.i("CreateSocialProfileUseCase", "Username '$username' taken, attempting cleanup")
             
             // Try to clean up orphaned username from previous failed signups
             val cleanupResult = repository.cleanupOrphanedUsername(username, userId).getOrThrow()
             if (cleanupResult) {
-                android.util.Log.d("USER_SEARCH_DEBUG", "CreateSocialProfile: Successfully cleaned up orphaned username")
+                android.util.Log.i("CreateSocialProfileUseCase", "Successfully cleaned up orphaned username")
                 // Username is now available, continue
             } else {
-                android.util.Log.e("USER_SEARCH_DEBUG", "CreateSocialProfile: Username '$username' is legitimately taken")
+                android.util.Log.e("CreateSocialProfileUseCase", "Username '$username' is legitimately taken")
                 throw IllegalArgumentException("Username '$username' is already taken")
             }
         }

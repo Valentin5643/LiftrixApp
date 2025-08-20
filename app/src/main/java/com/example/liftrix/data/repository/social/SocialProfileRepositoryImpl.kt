@@ -142,39 +142,39 @@ class SocialProfileRepositoryImpl @Inject constructor(
                 )
             }
         ) {
-            Timber.d("USER_SEARCH_DEBUG", "Cleanup: Attempting to cleanup username '$username' for user $currentUserId")
+            Timber.i("SocialProfileRepository", "Attempting username cleanup for: $username")
             
             // Check if there's an existing profile with this username
             val existingProfile = socialProfileDao.getProfileByUsername("", username) // Empty viewerId for internal check
             
             if (existingProfile != null) {
-                Timber.d("USER_SEARCH_DEBUG", "Cleanup: Found existing profile with userId=${existingProfile.userId}")
+                // Found existing profile, checking validity
                 
                 // Check if the existing profile belongs to a valid user account
                 val existingUserAccount = userAccountDao.getAccountForUserSuspend(existingProfile.userId)
                 
                 if (existingUserAccount == null) {
                     // Orphaned profile - the user account no longer exists
-                    Timber.d("USER_SEARCH_DEBUG", "Cleanup: Profile is orphaned (no user account), deleting")
+                    Timber.i("SocialProfileRepository", "Deleting orphaned profile for username: $username")
                     
                     socialProfileDao.deleteProfileForUser(existingProfile.userId)
-                    Timber.d("USER_SEARCH_DEBUG", "Cleanup: Successfully deleted orphaned profile")
+                    Timber.i("SocialProfileRepository", "Successfully deleted orphaned profile")
                     return@liftrixCatching true // Username is now available
                 } else {
                     // Profile belongs to a valid user account
                     if (existingUserAccount.userId == currentUserId) {
                         // It's the current user's old profile - can reuse
-                        Timber.d("USER_SEARCH_DEBUG", "Cleanup: Profile belongs to current user, can reuse")
+                        // Profile belongs to current user, can reuse
                         return@liftrixCatching true
                     } else {
                         // Profile belongs to another valid user
-                        Timber.d("USER_SEARCH_DEBUG", "Cleanup: Profile belongs to another valid user, cannot cleanup")
+                        // Profile belongs to another valid user, cannot cleanup
                         return@liftrixCatching false
                     }
                 }
             } else {
                 // No existing profile found - username should be available
-                Timber.d("USER_SEARCH_DEBUG", "Cleanup: No existing profile found, username should be available")
+                // No existing profile found, username available
                 return@liftrixCatching true
             }
         }

@@ -196,8 +196,17 @@ class ProfileRepositoryImpl @Inject constructor(
                     // Trigger sync coordinator
                     val syncResult = syncCoordinator.triggerEntitySync(userId, "profile")
                     
+                    // 🚀 CRITICAL FIX: Also trigger public profile sync to make profile changes searchable
+                    // This ensures that when users update bio, fitness level, etc., they become visible to other users
+                    val publicSyncResult = syncCoordinator.triggerEntitySync(userId, "user_public")
+                    
                     if (syncResult.isSuccess) {
                         Timber.d("Successfully queued and triggered profile sync for user: $userId")
+                        if (publicSyncResult.isSuccess) {
+                            Timber.d("Also triggered public profile sync for searchability")
+                        } else {
+                            Timber.w("Profile sync succeeded but public sync failed: ${publicSyncResult.exceptionOrNull()?.message}")
+                        }
                         Result.success(Unit)
                     } else {
                         val error = syncResult.exceptionOrNull()

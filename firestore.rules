@@ -367,6 +367,83 @@ service cloud.firestore {
                        request.resource.data.visibility in ['PUBLIC', 'FOLLOWERS', 'PRIVATE'];
     }
     
+    // ========================================
+    // REAL-TIME SYNC INFRASTRUCTURE RULES
+    // Added for workout sessions and personal records
+    // ========================================
+    
+    // Workout sessions - real-time workout tracking
+    // ARCHITECTURAL FIX: Using subcollections for proper user scoping
+    match /users/{userId}/workout_sessions/{sessionId} {
+      allow read, write: if isAuthenticated() && 
+                           isOwner(userId) &&
+                           request.resource.data.keys().hasAll(['userId', 'status', 'lastModified']) &&
+                           request.resource.data.status in ['ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED'];
+      
+      allow create: if isAuthenticated() && 
+                       isOwner(userId) &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.keys().hasAll(['userId', 'status', 'lastModified']) &&
+                       request.resource.data.status in ['ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED'];
+    }
+    
+    // TEMPORARY: Legacy workout_sessions collection for backward compatibility
+    // TODO: Migrate to subcollections and remove this rule
+    match /workout_sessions/{sessionId} {
+      // Read: Allow if session document exists and user owns it
+      allow read: if isAuthenticated() && 
+                     resource.data.userId == request.auth.uid;
+      
+      // Write: Validate session structure and ownership
+      allow write: if isAuthenticated() && 
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.keys().hasAll(['userId', 'status', 'lastModified']) &&
+                      request.resource.data.status in ['ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED'];
+      
+      // Create: Ensure proper session creation with user ownership
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.keys().hasAll(['userId', 'status', 'lastModified']) &&
+                       request.resource.data.status in ['ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED'];
+    }
+    
+    // Personal records - real-time PR tracking and achievements
+    match /personal_records/{recordId} {
+      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      
+      allow write: if isAuthenticated() && 
+                      isOwner(request.resource.data.userId) &&
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.keys().hasAll(['userId', 'exerciseId', 'recordType', 'achievedAt']) &&
+                      request.resource.data.recordType in ['ONE_RM', 'VOLUME', 'REPS', 'MAX_WEIGHT'];
+      
+      allow create: if isAuthenticated() && 
+                       isOwner(request.resource.data.userId) &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.keys().hasAll(['userId', 'exerciseId', 'recordType', 'achievedAt']) &&
+                       request.resource.data.recordType in ['ONE_RM', 'VOLUME', 'REPS', 'MAX_WEIGHT'];
+    }
+    
+    // User presence - real-time status tracking for gym buddy system
+    match /user_presence/{userId} {
+      allow read: if isAuthenticated() && 
+                     (isOwner(userId) || 
+                      exists(/databases/$(database)/documents/gym_buddies/$(request.auth.uid + '_' + userId)) ||
+                      exists(/databases/$(database)/documents/gym_buddies/$(userId + '_' + request.auth.uid)));
+      
+      allow write: if isAuthenticated() && 
+                      isOwner(userId) &&
+                      request.resource.data.keys().hasAll(['user_id', 'status', 'last_active']) &&
+                      request.resource.data.user_id == request.auth.uid &&
+                      request.resource.data.status in ['ONLINE', 'OFFLINE', 'WORKING_OUT'];
+      
+      allow create: if isAuthenticated() && 
+                       isOwner(userId) &&
+                       request.resource.data.keys().hasAll(['user_id', 'status', 'last_active']) &&
+                       request.resource.data.user_id == request.auth.uid &&
+                       request.resource.data.status in ['ONLINE', 'OFFLINE', 'WORKING_OUT'];
+    }
+    
     // Default deny all other paths
     match /{document=**} {
       allow read, write: if false;
@@ -441,6 +518,19 @@ DEPLOYMENT INSTRUCTIONS:
    
    Collection: shared_workouts
    Fields: userId (Ascending), visibility (Ascending), createdAt (Descending)
+   
+   // Real-time Sync Infrastructure Indexes (added for workout sessions and presence)
+   Collection: workout_sessions
+   Fields: userId (Ascending), status (Ascending), lastModified (Descending)
+   
+   Collection: personal_records
+   Fields: userId (Ascending), recordType (Ascending), achievedAt (Descending)
+   
+   Collection: personal_records
+   Fields: userId (Ascending), achievedAt (Descending)
+   
+   Collection: user_presence
+   Fields: user_id (Ascending), status (Ascending), last_active (Descending)
 
 5. Verify deployment by testing:
    - Profile creation and updates
@@ -458,4 +548,8 @@ DEPLOYMENT INSTRUCTIONS:
      * Template sharing (public template visibility)
      * Achievement creation (server-side only)
      * Offline queue processing
+   - Real-time sync operations:
+     * Workout session tracking (ACTIVE/PAUSED/COMPLETED status)
+     * Personal record listener (PR detection and achievements)
+     * Presence tracking (online/offline/working out status)
 */

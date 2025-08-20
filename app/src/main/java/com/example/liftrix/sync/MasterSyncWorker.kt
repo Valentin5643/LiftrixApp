@@ -54,12 +54,40 @@ class MasterSyncWorker @AssistedInject constructor(
     private val syncStatusRepository: SyncStatusRepository
 ) : CoroutineWorker(context, params) {
 
+    // Fallback constructor for non-Hilt instantiation (emergency backup)
+    constructor(context: Context, params: WorkerParameters) : this(
+        context = context,
+        params = params,
+        workManager = WorkManager.getInstance(context),
+        syncStatusRepository = createFallbackSyncStatusRepository(context)
+    ) {
+        Timber.w("MasterSyncWorker: Using fallback constructor - Hilt DI failed!")
+        Timber.w("This indicates a WorkManager configuration issue that should be investigated")
+    }
+
+    init {
+        Timber.d("MasterSyncWorker: Constructor called successfully with Hilt DI")
+        Timber.d("MasterSyncWorker: WorkManager instance: ${workManager.javaClass.simpleName}")
+        Timber.d("MasterSyncWorker: SyncStatusRepository instance: ${syncStatusRepository.javaClass.simpleName}")
+    }
+
     companion object {
         const val WORK_NAME = "master_sync_work"
         const val KEY_SYNC_SUMMARY = "sync_summary"
         const val KEY_ERROR_MESSAGE = "error_message"
         private const val MAX_RETRY_COUNT = 3
         private const val SYNC_DELAY_MS = 1000L // Delay between entity syncs to prevent rate limiting
+        
+        /**
+         * Creates a fallback SyncStatusRepository when Hilt injection fails.
+         * This is an emergency measure to prevent total sync system failure.
+         */
+        private fun createFallbackSyncStatusRepository(context: Context): SyncStatusRepository {
+            Timber.w("Creating fallback SyncStatusRepository - this should not happen in production")
+            // Since SyncStatusRepository is a concrete class with @Inject, 
+            // we create a normal instance that will work but won't persist state
+            return SyncStatusRepository()
+        }
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
