@@ -1,7 +1,7 @@
 package com.example.liftrix.design
 
 import androidx.compose.ui.graphics.Color
-import com.example.liftrix.ui.theme.LiftrixColors
+import com.example.liftrix.ui.theme.LiftrixColorsV2
 import kotlin.math.abs
 
 /**
@@ -55,10 +55,10 @@ object GreyUsageAnalyzer {
      * Excludes Snow/Night as they can be detected as grey due to similar RGB values
      */
     fun getThemeColors(): List<Color> = listOf(
-        LiftrixColors.PersianGreen,       // #339989 - clearly teal
-        LiftrixColors.TiffanyBlue,        // #7DE2D1 - clearly blue-teal
-        LiftrixColors.Primary,            // Same as PersianGreen
-        LiftrixColors.Error,              // Red exception color - clearly not grey
+        LiftrixColorsV2.Teal,             // #00BCD4 - clearly teal
+        LiftrixColorsV2.TealLight,        // #67E8F9 - clearly blue-teal
+        LiftrixColorsV2.Teal,             // Primary color
+        LiftrixColorsV2.Light.Error,      // Red exception color - clearly not grey
         Color.Red,                        // Pure red for validation coverage
         Color.Blue,                       // Pure blue for validation coverage
         Color.Green,                      // Pure green for validation coverage

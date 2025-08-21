@@ -6,7 +6,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
-import com.example.liftrix.ui.theme.LiftrixColors
+import com.example.liftrix.ui.theme.LiftrixColorsV2
 // Chart theming for custom Canvas-based charts
 
 /**
@@ -36,9 +36,9 @@ object ChartThemeProvider {
         
         return remember(colorScheme) {
             LiftrixChartTheme(
-                primaryColor = LiftrixColors.Primary,
-                secondaryColor = LiftrixColors.Secondary,
-                tertiaryColor = LiftrixColors.TiffanyBlue,
+                primaryColor = LiftrixColorsV2.Teal,
+                secondaryColor = LiftrixColorsV2.TealHover,
+                tertiaryColor = LiftrixColorsV2.TealLight,
                 surfaceColor = colorScheme.surface,
                 onSurfaceColor = colorScheme.onSurface,
                 outlineColor = colorScheme.outline,
@@ -56,11 +56,11 @@ object ChartThemeProvider {
     @Composable
     fun createLineLayerTheme(): LineChartTheme {
         return LineChartTheme(
-            lineColor = LiftrixColors.Primary,
+            lineColor = LiftrixColorsV2.Teal,
             lineWidth = 3.dp,
-            pointColor = LiftrixColors.Primary,
+            pointColor = LiftrixColorsV2.Teal,
             pointSize = 8.dp,
-            areaFillColor = LiftrixColors.Primary.copy(alpha = 0.2f)
+            areaFillColor = LiftrixColorsV2.Teal.copy(alpha = 0.2f)
         )
     }
     
@@ -70,7 +70,7 @@ object ChartThemeProvider {
     @Composable
     fun createColumnLayerTheme(): ColumnChartTheme {
         return ColumnChartTheme(
-            columnColor = LiftrixColors.Primary,
+            columnColor = LiftrixColorsV2.Teal,
             columnWidth = 16.dp,
             cornerRadius = 6.dp
         )
@@ -95,14 +95,14 @@ object ChartThemeProvider {
      * Creates LiftrixColors gradient shader for line charts
      */
     private fun createLiftrixGradientShader(): Color {
-        return LiftrixColors.Primary
+        return LiftrixColorsV2.Teal
     }
     
     /**
      * Creates LiftrixColors area gradient shader for filled areas
      */
     private fun createLiftrixAreaGradientShader(): Color {
-        return LiftrixColors.Primary.copy(alpha = 0.2f)
+        return LiftrixColorsV2.Teal.copy(alpha = 0.2f)
     }
     
     /**
@@ -112,9 +112,9 @@ object ChartThemeProvider {
     fun createHeatMapColorScheme(): HeatMapColorScheme {
         return HeatMapColorScheme(
             noDataColor = MaterialTheme.colorScheme.surface,
-            lowIntensityColor = LiftrixColors.Primary.copy(alpha = 0.2f),
-            mediumIntensityColor = LiftrixColors.Primary.copy(alpha = 0.6f),
-            highIntensityColor = LiftrixColors.Primary,
+            lowIntensityColor = LiftrixColorsV2.Teal.copy(alpha = 0.2f),
+            mediumIntensityColor = LiftrixColorsV2.Teal.copy(alpha = 0.6f),
+            highIntensityColor = LiftrixColorsV2.Teal,
             strokeColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
             textColor = MaterialTheme.colorScheme.onSurface
         )
@@ -128,7 +128,7 @@ object ChartThemeProvider {
         val colorScheme = MaterialTheme.colorScheme
         
         return RadialProgressTheme(
-            progressColor = LiftrixColors.Primary,
+            progressColor = LiftrixColorsV2.Teal,
             trackColor = colorScheme.outline.copy(alpha = 0.2f),
             backgroundColor = colorScheme.surface,
             strokeWidth = 8.dp,
@@ -144,9 +144,9 @@ object ChartThemeProvider {
     @Composable
     fun createMultiLineChartTheme(): MultiLineChartTheme {
         return MultiLineChartTheme(
-            primaryLineColor = LiftrixColors.Primary,
-            secondaryLineColor = LiftrixColors.Secondary,
-            tertiaryLineColor = LiftrixColors.TiffanyBlue,
+            primaryLineColor = LiftrixColorsV2.Teal,
+            secondaryLineColor = LiftrixColorsV2.TealHover,
+            tertiaryLineColor = LiftrixColorsV2.TealLight,
             strokeWidth = 2.5f,
             pointSize = 6f,
             animationDuration = 800,

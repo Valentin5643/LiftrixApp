@@ -47,11 +47,12 @@ fun SimplifiedLiftrixTheme(
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
+    val context = LocalContext.current
+    
     // GUARANTEED color scheme - no state dependencies, no race conditions
     val colorScheme = remember(darkTheme, dynamicColor) {
         when {
             dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-                val context = LocalContext.current
                 if (darkTheme) {
                     dynamicDarkColorScheme(context)
                 } else {
@@ -94,7 +95,7 @@ fun SimplifiedLiftrixTheme(
  * Direct access to guaranteed LiftrixColorsV2 colors
  * Use these functions instead of MaterialTheme.colorScheme for critical components
  */
-object LiftrixColors {
+object SimplifiedLiftrixColors {
     
     @Composable
     fun current() = LocalLiftrixColors.current
@@ -137,22 +138,22 @@ object LiftrixColors {
  * Extension functions for guaranteed color access in any component
  */
 @Composable
-fun guaranteedPrimary() = LiftrixColors.primary()
+fun guaranteedPrimary() = SimplifiedLiftrixColors.primary()
 
 @Composable
-fun guaranteedBackground() = LiftrixColors.background()
+fun guaranteedBackground() = SimplifiedLiftrixColors.background()
 
 @Composable
-fun guaranteedSurface() = LiftrixColors.surface()
+fun guaranteedSurface() = SimplifiedLiftrixColors.surface()
 
 @Composable
-fun guaranteedOnSurface() = LiftrixColors.onSurface()
+fun guaranteedOnSurface() = SimplifiedLiftrixColors.onSurface()
 
 @Composable
-fun guaranteedOutline() = LiftrixColors.outline()
+fun guaranteedOutline() = SimplifiedLiftrixColors.outline()
 
 /**
  * Migration helper - use this to replace MaterialTheme.colorScheme usage
  */
 @Composable
-fun safeColorScheme() = LiftrixColors.current()
+fun safeColorScheme() = SimplifiedLiftrixColors.current()

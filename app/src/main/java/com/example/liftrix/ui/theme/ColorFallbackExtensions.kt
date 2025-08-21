@@ -26,14 +26,8 @@ import androidx.compose.ui.graphics.Color
 @Composable
 fun getStablePrimary(): Color {
     val isDarkTheme = isSystemInDarkTheme()
-    return remember(isDarkTheme) {
-        try {
-            MaterialTheme.colorScheme.primary
-        } catch (exception: Exception) {
-            StableColorProvider.logColorFallback("primary_access_failed", "getStablePrimary")
-            StableColorProvider.getStablePrimary(isDarkTheme)
-        }
-    }
+    return MaterialTheme.colorScheme.primary.takeIf { it != Color.Unspecified }
+        ?: StableColorProvider.getStablePrimary(isDarkTheme)
 }
 
 /**
@@ -43,14 +37,8 @@ fun getStablePrimary(): Color {
 @Composable
 fun getStableBackground(): Color {
     val isDarkTheme = isSystemInDarkTheme()
-    return remember(isDarkTheme) {
-        try {
-            MaterialTheme.colorScheme.background
-        } catch (exception: Exception) {
-            StableColorProvider.logColorFallback("background_access_failed", "getStableBackground")
-            StableColorProvider.getStableBackground(isDarkTheme)
-        }
-    }
+    return MaterialTheme.colorScheme.background.takeIf { it != Color.Unspecified }
+        ?: StableColorProvider.getStableBackground(isDarkTheme)
 }
 
 /**
@@ -60,14 +48,8 @@ fun getStableBackground(): Color {
 @Composable
 fun getStableSurface(): Color {
     val isDarkTheme = isSystemInDarkTheme()
-    return remember(isDarkTheme) {
-        try {
-            MaterialTheme.colorScheme.surface
-        } catch (exception: Exception) {
-            StableColorProvider.logColorFallback("surface_access_failed", "getStableSurface")
-            StableColorProvider.getStableSurface(isDarkTheme)
-        }
-    }
+    return MaterialTheme.colorScheme.surface.takeIf { it != Color.Unspecified }
+        ?: StableColorProvider.getStableSurface(isDarkTheme)
 }
 
 /**
@@ -77,14 +59,8 @@ fun getStableSurface(): Color {
 @Composable
 fun getStableOnSurface(): Color {
     val isDarkTheme = isSystemInDarkTheme()
-    return remember(isDarkTheme) {
-        try {
-            MaterialTheme.colorScheme.onSurface
-        } catch (exception: Exception) {
-            StableColorProvider.logColorFallback("onSurface_access_failed", "getStableOnSurface")
-            StableColorProvider.getStableOnSurface(isDarkTheme)
-        }
-    }
+    return MaterialTheme.colorScheme.onSurface.takeIf { it != Color.Unspecified }
+        ?: StableColorProvider.getStableOnSurface(isDarkTheme)
 }
 
 /**
@@ -94,14 +70,8 @@ fun getStableOnSurface(): Color {
 @Composable
 fun getStableOutline(): Color {
     val isDarkTheme = isSystemInDarkTheme()
-    return remember(isDarkTheme) {
-        try {
-            MaterialTheme.colorScheme.outline
-        } catch (exception: Exception) {
-            StableColorProvider.logColorFallback("outline_access_failed", "getStableOutline")
-            StableColorProvider.getStableOutline(isDarkTheme)
-        }
-    }
+    return MaterialTheme.colorScheme.outline.takeIf { it != Color.Unspecified }
+        ?: StableColorProvider.getStableOutline(isDarkTheme)
 }
 
 /**
@@ -182,19 +152,14 @@ object DirectV2Colors {
 @Composable
 fun DebugColorState(component: String) {
     val isDarkTheme = isSystemInDarkTheme()
+    val currentPrimary = MaterialTheme.colorScheme.primary
     
     // This will log information about the current color state
-    remember(isDarkTheme) {
-        val currentPrimary = try {
-            MaterialTheme.colorScheme.primary
-        } catch (e: Exception) {
-            null
-        }
-        
+    remember(isDarkTheme, currentPrimary) {
         val fallbackReport = buildString {
             appendLine("=== Color Debug: $component ===")
             appendLine("Dark theme: $isDarkTheme")
-            appendLine("MaterialTheme.colorScheme.primary: ${currentPrimary ?: "NULL"}")
+            appendLine("MaterialTheme.colorScheme.primary: $currentPrimary")
             appendLine("LiftrixColorsV2.Teal: ${LiftrixColorsV2.Teal}")
             appendLine("Fallback report: ${StableColorProvider.getFallbackReport()}")
         }

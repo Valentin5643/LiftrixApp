@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.components.buttons.LiftrixButton
-import com.example.liftrix.ui.theme.LiftrixColors
+import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.theme.AccessibilityColors.luminance
 import com.example.liftrix.ui.common.AccessibilityUtils.ensureMinimumTouchTarget
 
@@ -110,7 +110,7 @@ fun AccessibleLiftrixButton(
     val accessibleColors = if (systemAccessibility.isHighContrastEnabled && 
         contrastRatio < AccessibilityUtils.ContrastRatios.NORMAL_TEXT_AA) {
         ButtonDefaults.buttonColors(
-            containerColor = LiftrixColors.Primary,
+            containerColor = LiftrixColorsV2.Teal,
             contentColor = Color.White
         )
     } else {

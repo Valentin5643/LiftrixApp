@@ -231,9 +231,9 @@ object ThemeMigrationUtils {
         var successfulMappings = 0
         val totalColors = 24 // Standard Material 3 color count
         
-        // Validate primary colors
+        // Validate primary colors - all map to V2 colors
         val expectedPrimary = when (targetVersion) {
-            ThemeVersion.V1 -> LiftrixColors.PersianGreen
+            ThemeVersion.V1 -> LiftrixColorsV2.Teal  // V1 mapped to V2 Teal
             ThemeVersion.V2 -> LiftrixColorsV2.Teal
         }
         
@@ -243,9 +243,9 @@ object ThemeMigrationUtils {
             successfulMappings++
         }
         
-        // Validate background colors
+        // Validate background colors - all map to V2 colors
         val expectedBackground = when (targetVersion) {
-            ThemeVersion.V1 -> LiftrixColors.Snow
+            ThemeVersion.V1 -> LiftrixColorsV2.Light.BackgroundPrimary  // V1 mapped to V2 Light
             ThemeVersion.V2 -> LiftrixColorsV2.Light.BackgroundPrimary
         }
         
@@ -282,10 +282,11 @@ object ThemeMigrationUtils {
     ): ColorScheme {
         return when (themeVersion) {
             ThemeVersion.V1 -> {
+                // V1 now maps to V2 color system
                 ColorSystemOptimizations.getColorScheme(isDarkTheme)
             }
             ThemeVersion.V2 -> {
-                ColorSystemOptimizations.getColorSchemeV2(isDarkTheme)
+                ColorSystemOptimizations.getColorScheme(isDarkTheme)
             }
         }
     }

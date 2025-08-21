@@ -18,7 +18,7 @@ import com.example.liftrix.domain.model.analytics.MetricWidgetData
 import com.example.liftrix.domain.model.analytics.TrendDirection
 import com.example.liftrix.ui.common.AccessibilityUtils as CommonAccessibilityUtils
 import com.example.liftrix.ui.common.AccessibilityUtils.ensureMinimumTouchTarget
-import com.example.liftrix.ui.theme.LiftrixColors
+import com.example.liftrix.ui.theme.LiftrixColorsV2
 import kotlinx.coroutines.delay
 
 /**
@@ -349,18 +349,18 @@ object AccessibilityUtils {
         val results = mutableMapOf<String, Float>()
         
         // Light theme combinations
-        results["Night on Snow (light)"] = HighContrastColors.getContrastRatio(LiftrixColors.Night, LiftrixColors.Snow)
-        results["Jet on Snow (light)"] = HighContrastColors.getContrastRatio(LiftrixColors.Jet, LiftrixColors.Snow)
-        results["Persian Green on Snow (light)"] = HighContrastColors.getContrastRatio(LiftrixColors.PersianGreen, LiftrixColors.Snow)
-        results["White on Persian Green (light)"] = HighContrastColors.getContrastRatio(Color.White, LiftrixColors.PersianGreen)
-        results["Night on Tiffany Blue (light)"] = HighContrastColors.getContrastRatio(LiftrixColors.Night, LiftrixColors.TiffanyBlue)
+        results["Dark on Light (light)"] = HighContrastColors.getContrastRatio(LiftrixColorsV2.Dark.BackgroundPrimary, LiftrixColorsV2.Light.BackgroundPrimary)
+        results["Text on Light (light)"] = HighContrastColors.getContrastRatio(LiftrixColorsV2.Light.TextPrimary, LiftrixColorsV2.Light.BackgroundPrimary)
+        results["Teal on Light (light)"] = HighContrastColors.getContrastRatio(LiftrixColorsV2.Teal, LiftrixColorsV2.Light.BackgroundPrimary)
+        results["White on Teal (light)"] = HighContrastColors.getContrastRatio(Color.White, LiftrixColorsV2.Teal)
+        results["Dark on Teal Light (light)"] = HighContrastColors.getContrastRatio(LiftrixColorsV2.Dark.BackgroundPrimary, LiftrixColorsV2.TealLight)
         
         // Dark theme combinations
-        results["Snow on Night (dark)"] = HighContrastColors.getContrastRatio(LiftrixColors.Snow, LiftrixColors.Night)
-        results["Snow on Jet (dark)"] = HighContrastColors.getContrastRatio(LiftrixColors.Snow, LiftrixColors.Jet)
-        results["Tiffany Blue on Night (dark)"] = HighContrastColors.getContrastRatio(LiftrixColors.TiffanyBlue, LiftrixColors.Night)
-        results["Tiffany Blue on Jet (dark)"] = HighContrastColors.getContrastRatio(LiftrixColors.TiffanyBlue, LiftrixColors.Jet)
-        results["Persian Green on Night (dark)"] = HighContrastColors.getContrastRatio(LiftrixColors.PersianGreen, LiftrixColors.Night)
+        results["Light on Dark (dark)"] = HighContrastColors.getContrastRatio(LiftrixColorsV2.Light.BackgroundPrimary, LiftrixColorsV2.Dark.BackgroundPrimary)
+        results["Light Text on Dark (dark)"] = HighContrastColors.getContrastRatio(LiftrixColorsV2.Dark.TextPrimary, LiftrixColorsV2.Dark.BackgroundPrimary)
+        results["Teal Light on Dark (dark)"] = HighContrastColors.getContrastRatio(LiftrixColorsV2.TealLight, LiftrixColorsV2.Dark.BackgroundPrimary)
+        results["Teal Light on Secondary (dark)"] = HighContrastColors.getContrastRatio(LiftrixColorsV2.TealLight, LiftrixColorsV2.Dark.BackgroundSecondary)
+        results["Teal on Dark (dark)"] = HighContrastColors.getContrastRatio(LiftrixColorsV2.Teal, LiftrixColorsV2.Dark.BackgroundPrimary)
         
         return results
     }
@@ -463,13 +463,13 @@ object AccessibilityUtils {
  * High contrast color system for enhanced accessibility using 5-color palette
  */
 object HighContrastColors {
-    // Enhanced contrast combinations for accessibility using 5-color system
-    val HighContrastPrimary = LiftrixColors.PersianGreen  // Same color, higher contrast context
-    val HighContrastSecondary = LiftrixColors.TiffanyBlue  // Same color, higher contrast context
+    // Enhanced contrast combinations for accessibility using LiftrixColorsV2
+    val HighContrastPrimary = LiftrixColorsV2.Teal         // Same color, higher contrast context
+    val HighContrastSecondary = LiftrixColorsV2.TealLight  // Same color, higher contrast context
     val HighContrastBackground = Color.Black               // True black for maximum contrast
     val HighContrastOnBackground = Color.White             // True white for maximum contrast
-    val HighContrastSurface = LiftrixColors.Night          // Dark surface using Night
-    val HighContrastOnSurface = LiftrixColors.Snow         // Light text using Snow
+    val HighContrastSurface = LiftrixColorsV2.Dark.BackgroundPrimary     // Dark surface
+    val HighContrastOnSurface = LiftrixColorsV2.Light.BackgroundPrimary  // Light text
     
     /**
      * Gets high contrast color scheme for enhanced accessibility
@@ -547,10 +547,10 @@ object HighContrastColors {
     fun getBestContrastPair(isDarkBackground: Boolean): Pair<Color, Color> {
         return if (isDarkBackground) {
             // For dark backgrounds, use Snow text on Night background (16.8:1 ratio)
-            LiftrixColors.Snow to LiftrixColors.Night
+            LiftrixColorsV2.Light.BackgroundPrimary to LiftrixColorsV2.Dark.BackgroundPrimary
         } else {
             // For light backgrounds, use Night text on Snow background (16.8:1 ratio)
-            LiftrixColors.Night to LiftrixColors.Snow
+            LiftrixColorsV2.Dark.BackgroundPrimary to LiftrixColorsV2.Light.BackgroundPrimary
         }
     }
     

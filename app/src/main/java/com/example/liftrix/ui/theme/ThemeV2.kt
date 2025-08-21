@@ -43,15 +43,15 @@ fun LiftrixThemeV2(
 ) {
     val colorScheme = when (themeConfig.version) {
         ThemeVersion.V1 -> {
-            // Use original 5-color system
+            // V1 now maps to V2 color system for consistency
             if (darkTheme) {
-                ColorSystemOptimizations.getColorScheme(true)
+                LiftrixColorsV2.darkColorScheme
             } else {
-                ColorSystemOptimizations.getColorScheme(false)
+                LiftrixColorsV2.lightColorScheme
             }
         }
         ThemeVersion.V2 -> {
-            // Use new V2 color system
+            // Use V2 color system
             if (darkTheme) {
                 LiftrixColorsV2.darkColorScheme
             } else {

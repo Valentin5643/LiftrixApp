@@ -23,10 +23,11 @@ import timber.log.Timber
 import java.util.Calendar
 
 /**
- * Theme version enumeration - V2 only
+ * Theme version enumeration - maintained for backward compatibility
  */
 enum class ThemeVersion {
-    V2   // Modern Teal-based system (only option)
+    V1,  // Legacy 5-color system (mapped to V2 colors)
+    V2   // Modern Teal-based system
 }
 
 // Performance-optimized color scheme creation with V2 system optimizations

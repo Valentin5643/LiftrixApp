@@ -35,7 +35,7 @@ object LiftrixChartStyle {
      */
     @Stable
     object ChartColors {
-        // V1 Colors (Legacy - Persian Green/Tiffany Blue system)
+        // V1 Colors (Legacy - now mapped to V2 colors)
         object V1 {
             val primaryLine: Color = LiftrixColors.PersianGreen
             val secondaryLine: Color = LiftrixColors.TiffanyBlue
