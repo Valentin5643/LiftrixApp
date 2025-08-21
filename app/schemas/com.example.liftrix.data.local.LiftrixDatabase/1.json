@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "f384a51a4f27dfa32ec29f4b8f0cb203",
+    "identityHash": "dbca3fda78998e5f3db8999adfb45fce",
     "entities": [
       {
         "tableName": "workouts",
@@ -6945,7 +6945,7 @@
       },
       {
         "tableName": "chat_preferences",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `preferred_language` TEXT NOT NULL DEFAULT 'en', `auto_detect_language` INTEGER NOT NULL DEFAULT 1, `chat_notifications_enabled` INTEGER NOT NULL DEFAULT 1, `conversation_history_enabled` INTEGER NOT NULL DEFAULT 1, `workout_context_sharing` INTEGER NOT NULL DEFAULT 1, `max_messages_per_day` INTEGER NOT NULL DEFAULT 100, `max_tokens_per_month` INTEGER NOT NULL DEFAULT 10000, `auto_clear_days` INTEGER NOT NULL DEFAULT 30, `user_context_prompt` TEXT, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`user_id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `preferred_language` TEXT NOT NULL DEFAULT 'en', `auto_detect_language` INTEGER NOT NULL DEFAULT 1, `chat_notifications_enabled` INTEGER NOT NULL DEFAULT 1, `conversation_history_enabled` INTEGER NOT NULL DEFAULT 1, `workout_context_sharing` INTEGER NOT NULL DEFAULT 1, `max_messages_per_day` INTEGER NOT NULL DEFAULT 100, `max_tokens_per_month` INTEGER NOT NULL DEFAULT 10000, `auto_clear_days` INTEGER NOT NULL DEFAULT 30, `user_context_prompt` TEXT, `ai_response_style` TEXT NOT NULL DEFAULT 'balanced', `include_workout_history` INTEGER NOT NULL DEFAULT 1, `include_exercise_form_tips` INTEGER NOT NULL DEFAULT 1, `usage_notifications_threshold` INTEGER NOT NULL DEFAULT 80, `conversation_save_enabled` INTEGER NOT NULL DEFAULT 1, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`user_id`))",
         "fields": [
           {
             "fieldPath": "userId",
@@ -7014,6 +7014,41 @@
             "columnName": "user_context_prompt",
             "affinity": "TEXT",
             "notNull": false
+          },
+          {
+            "fieldPath": "aiResponseStyle",
+            "columnName": "ai_response_style",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'balanced'"
+          },
+          {
+            "fieldPath": "includeWorkoutHistory",
+            "columnName": "include_workout_history",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          },
+          {
+            "fieldPath": "includeExerciseFormTips",
+            "columnName": "include_exercise_form_tips",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          },
+          {
+            "fieldPath": "usageNotificationsThreshold",
+            "columnName": "usage_notifications_threshold",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "80"
+          },
+          {
+            "fieldPath": "conversationSaveEnabled",
+            "columnName": "conversation_save_enabled",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
           },
           {
             "fieldPath": "isSynced",
@@ -7168,7 +7203,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f384a51a4f27dfa32ec29f4b8f0cb203')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'dbca3fda78998e5f3db8999adfb45fce')"
     ]
   }
 }

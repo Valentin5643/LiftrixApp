@@ -4,10 +4,12 @@ import com.example.liftrix.core.cache.EnhancedCacheManager
 import com.example.liftrix.core.cache.CacheKeyGenerator
 import com.example.liftrix.core.cache.AnalyticsCacheKeys
 import com.example.liftrix.domain.model.analytics.TimeRange
+import com.example.liftrix.domain.model.analytics.VolumeCalendarData
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.ProgressStatsRepository
+import com.example.liftrix.domain.usecase.analytics.GenerateVolumeCalendarUseCase
 import com.example.liftrix.domain.repository.VolumeDataPoint
 import com.example.liftrix.domain.repository.DurationDataPoint
 import com.example.liftrix.domain.repository.FrequencyDataPoint
@@ -46,6 +48,7 @@ import kotlin.time.Duration.Companion.minutes
 class ProgressDataServiceImpl @Inject constructor(
     private val progressStatsRepository: ProgressStatsRepository,
     private val cacheManager: EnhancedCacheManager,
+    private val generateVolumeCalendarUseCase: GenerateVolumeCalendarUseCase,
     @com.example.liftrix.di.IoDispatcher private val ioDispatcher: CoroutineDispatcher
 ) : ProgressDataService {
     
@@ -227,6 +230,48 @@ class ProgressDataServiceImpl @Inject constructor(
             }
             
             data
+        }
+    }
+    
+    override suspend fun getVolumeCalendarData(
+        userId: String
+    ): LiftrixResult<VolumeCalendarData> = withContext(ioDispatcher) {
+        liftrixCatching(
+            errorMapper = { throwable ->
+                Timber.e(throwable, "$TAG: Failed to get volume calendar data for user: $userId")
+                LiftrixError.DatabaseError(
+                    errorMessage = "Failed to retrieve volume calendar data: ${throwable.message}",
+                    operation = "getVolumeCalendarData",
+                    analyticsContext = mapOf(
+                        "userId" to userId,
+                        "error_type" to (throwable::class.simpleName ?: "Unknown")
+                    )
+                )
+            }
+        ) {
+            Timber.d("$TAG: getVolumeCalendarData() starting for userId=$userId")
+            
+            // Use existing GenerateVolumeCalendarUseCase to get current month data
+            val result = generateVolumeCalendarUseCase.generateCurrentMonth(userId)
+            
+            if (result.isSuccess) {
+                val calendarData = result.getOrThrow()
+                Timber.d("$TAG: Successfully retrieved volume calendar data with ${calendarData.dailyVolumes.size} days")
+                
+                // DEBUG: Log volume data details
+                calendarData.dailyVolumes.forEach { (date, volume) ->
+                    if (volume.kilograms > 0.0) {
+                        Timber.d("$TAG: Volume data - $date: ${volume.kilograms}kg")
+                    }
+                }
+                Timber.d("$TAG: Max volume: ${calendarData.maxVolume.kilograms}kg, Average: ${calendarData.averageVolume.kilograms}kg")
+                
+                calendarData
+            } else {
+                val error = result.exceptionOrNull() as? LiftrixError
+                    ?: LiftrixError.UnknownError("Failed to generate volume calendar data")
+                throw error
+            }
         }
     }
     

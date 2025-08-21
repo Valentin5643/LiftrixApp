@@ -2,7 +2,6 @@ package com.example.liftrix.sync
 
 import android.content.Context
 import androidx.hilt.work.HiltWorker
-import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequest
@@ -20,8 +19,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.gson.Gson
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
@@ -35,18 +33,17 @@ class ProfileSyncWorker @AssistedInject constructor(
     private val firestore: FirebaseFirestore,
     private val auth: FirebaseAuth,
     private val gson: Gson
-) : CoroutineWorker(context, params) {
+) : BaseSyncWorker(context, params) {
 
+    override val workerName: String = "ProfileSyncWorker"
+    
     companion object {
         const val WORK_NAME = "profile_sync_work"
-        const val KEY_SYNC_COUNT = "sync_count"
-        const val KEY_ERROR_MESSAGE = "error_message"
-        private const val MAX_RETRY_COUNT = 3
         
         fun createWorkRequest(userId: String, forceSync: Boolean = false): OneTimeWorkRequest {
             return OneTimeWorkRequestBuilder<ProfileSyncWorker>()
                 .setInputData(workDataOf(
-                    "userId" to userId,
+                    KEY_USER_ID to userId,
                     "forceSync" to forceSync
                 ))
                 .setConstraints(
@@ -64,18 +61,15 @@ class ProfileSyncWorker @AssistedInject constructor(
         }
     }
 
-    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+    override suspend fun performSync(userId: String): Result {
         try {
-            val userId = inputData.getString("userId") ?: return@withContext Result.failure(
-                Data.Builder()
-                    .putString(KEY_ERROR_MESSAGE, "User ID not provided")
-                    .build()
-            )
+            // Check cancellation before starting
+            checkCancellation()
             
             val forceSync = inputData.getBoolean("forceSync", false)
 
             val profile = userProfileDao.getProfileForUserSuspend(userId) 
-                ?: return@withContext Result.failure(
+                ?: return Result.failure(
                     Data.Builder()
                         .putString(KEY_ERROR_MESSAGE, "Profile not found for user $userId")
                         .build()
@@ -83,7 +77,7 @@ class ProfileSyncWorker @AssistedInject constructor(
             
             if (profile.isSynced && !forceSync) {
                 Timber.d("Profile already synced for user $userId")
-                return@withContext Result.success(
+                return Result.success(
                     Data.Builder()
                         .putInt(KEY_SYNC_COUNT, 0)
                         .build()
@@ -91,6 +85,9 @@ class ProfileSyncWorker @AssistedInject constructor(
             }
 
             Timber.d("Syncing profile for user $userId (forceSync: $forceSync)")
+            
+            // Check cancellation before network operation
+            checkCancellation()
             
             val docRef = firestore
                 .collection("users")
@@ -116,6 +113,7 @@ class ProfileSyncWorker @AssistedInject constructor(
             }
             
             // Complete profile data including new fields
+            // IMPORTANT: Include all required sync metadata fields for Firestore rules validation
             val profileData = mapOf(
                 "userId" to userId,
                 "displayName" to profile.displayName,
@@ -138,7 +136,10 @@ class ProfileSyncWorker @AssistedInject constructor(
                 "lastActiveAt" to profile.lastActiveAt,
                 "isPublic" to profile.isPublic,
                 "profileCompletionPercentage" to profile.profileCompletionPercentage,
+                // Required sync metadata fields (isValidSyncMetadata in firestore.rules)
                 "syncVersion" to System.currentTimeMillis(),
+                "lastModified" to FieldValue.serverTimestamp(), // Required by security rules
+                "isSynced" to true, // Required by security rules
                 "updatedAt" to FieldValue.serverTimestamp()
             )
             
@@ -152,24 +153,18 @@ class ProfileSyncWorker @AssistedInject constructor(
             
             Timber.d("Successfully synced profile for user $userId")
             
-            return@withContext Result.success(
+            return Result.success(
                 Data.Builder()
                     .putInt(KEY_SYNC_COUNT, 1)
                     .build()
             )
             
+        } catch (e: CancellationException) {
+            // Re-throw cancellation to maintain cancellation chain
+            throw e
         } catch (e: Exception) {
-            Timber.e(e, "ProfileSyncWorker failed for user ${inputData.getString("userId")}")
-            
-            if (runAttemptCount < MAX_RETRY_COUNT) {
-                Result.retry()
-            } else {
-                Result.failure(
-                    Data.Builder()
-                        .putString(KEY_ERROR_MESSAGE, e.message ?: "Unknown error")
-                        .build()
-                )
-            }
+            // Let base class handle the error
+            throw e
         }
     }
 } 

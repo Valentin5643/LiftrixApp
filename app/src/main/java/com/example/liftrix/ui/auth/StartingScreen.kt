@@ -35,6 +35,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.ui.theme.LiftrixTheme
+import com.example.liftrix.ui.theme.LiftrixColorsV2
+import androidx.compose.foundation.isSystemInDarkTheme
+import com.example.liftrix.ui.theme.getStableBackground
+import com.example.liftrix.ui.theme.DirectV2Colors
 
 @Composable
 fun StartingScreen(
@@ -42,9 +46,10 @@ fun StartingScreen(
     onSignIn: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isDarkTheme = isSystemInDarkTheme()
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+        color = getStableBackground() // FIXED: Use stable background color to prevent fallbacks during auth
     ) {
         Column(
             modifier = Modifier
@@ -63,7 +68,7 @@ fun StartingScreen(
                     text = "Liftrix",
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = DirectV2Colors.getPrimary(), // FIXED: Direct V2 color access prevents fallbacks
                     modifier = Modifier.semantics {
                         contentDescription = "Liftrix app logo"
                     }
@@ -74,7 +79,7 @@ fun StartingScreen(
                 Text(
                     text = "AI-Powered Gym Companion",
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = DirectV2Colors.getTextSecondary(), // FIXED: Direct V2 color access
                     textAlign = TextAlign.Center,
                     modifier = Modifier.semantics {
                         contentDescription = "AI-Powered Gym Companion tagline"
@@ -112,8 +117,8 @@ fun StartingScreen(
                             contentDescription = "Get started with creating your account"
                         },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
+                        containerColor = LiftrixColorsV2.Teal,
+                        contentColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundPrimary else LiftrixColorsV2.Light.BackgroundPrimary
                     )
                 ) {
                     Text(
@@ -134,7 +139,7 @@ fun StartingScreen(
                     Text(
                         text = "Already have an account? Log in",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.primary
+                        color = LiftrixColorsV2.Teal
                     )
                 }
                 
@@ -148,9 +153,9 @@ fun StartingScreen(
 private fun FitnessIllustration(
     modifier: Modifier = Modifier
 ) {
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val secondaryColor = MaterialTheme.colorScheme.secondary
-    val accentColor = MaterialTheme.colorScheme.tertiary
+    val primaryColor = LiftrixColorsV2.Teal
+    val secondaryColor = LiftrixColorsV2.TealHover
+    val accentColor = LiftrixColorsV2.DataViz.Series3
     
     Canvas(modifier = modifier) {
         val canvasWidth = size.width

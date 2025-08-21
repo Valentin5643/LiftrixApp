@@ -22,7 +22,7 @@ import javax.inject.Inject
  * Manages the state and business logic for viewing and managing workout anomalies.
  * Follows the BaseViewModel pattern with UiState for consistent state management.
  */
-// @HiltViewModel
+@HiltViewModel
 class AnomalyDashboardViewModel @Inject constructor(
     private val detectAnomaliesUseCase: DetectWorkoutAnomaliesUseCase,
     private val authRepository: AuthRepository,

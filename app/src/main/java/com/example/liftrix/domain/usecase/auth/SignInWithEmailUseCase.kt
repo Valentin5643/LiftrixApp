@@ -1,20 +1,25 @@
 package com.example.liftrix.domain.usecase.auth
 
+import android.content.Context
+import androidx.work.WorkManager
+import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.UserAccount
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.UserAccountRepository
 import com.example.liftrix.sync.UserPublicSyncWorker
 import com.example.liftrix.domain.model.common.LiftrixResult
-import androidx.work.WorkManager
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.LocalDateTime
 import javax.inject.Inject
 
 class SignInWithEmailUseCase @Inject constructor(
     private val authRepository: AuthRepository,
     private val userAccountRepository: UserAccountRepository,
-    private val workManager: WorkManager
+    @ApplicationContext private val context: Context
 ) {
+    private val workManager: WorkManager
+        get() = WorkManagerProvider.getInstance(context)
     suspend operator fun invoke(email: String, password: String): LiftrixResult<User> {
         if (email.isBlank()) {
             return LiftrixResult.failure(IllegalArgumentException("Email cannot be blank"))

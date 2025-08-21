@@ -97,9 +97,16 @@ fun OnboardingNavigation(
             }
         }
         is OnboardingState.Error -> {
-            // Handle error state - could show error dialog or retry
+            // Handle error state - navigate to completion screen or allow retry
             val errorState = state as OnboardingState.Error
             Timber.e("Onboarding error: ${errorState.exception.message}")
+            
+            // If this was a save error during completion, still proceed to auth
+            // The user has completed onboarding, so we shouldn't block them
+            LaunchedEffect(errorState) {
+                Timber.w("Onboarding save failed, but allowing user to proceed to authentication")
+                onComplete()
+            }
         }
     }
     

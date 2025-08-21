@@ -1,6 +1,6 @@
 package com.example.liftrix.di
 
-import androidx.work.WorkManager
+import android.content.Context
 import com.example.liftrix.data.local.dao.BlockedUserDao
 import com.example.liftrix.data.local.dao.FollowRelationshipDao
 import com.example.liftrix.data.local.dao.FollowRequestDao
@@ -52,6 +52,7 @@ import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
@@ -149,9 +150,9 @@ abstract class SocialModule {
             socialProfileDao: SocialProfileDao,
             blockedUserDao: BlockedUserDao,
             userAccountDao: UserAccountDao,
-            workManager: WorkManager
+            @ApplicationContext context: Context
             ): SocialProfileRepository {
-                return SocialProfileRepositoryImpl(socialProfileDao, blockedUserDao, userAccountDao, workManager)
+                return SocialProfileRepositoryImpl(socialProfileDao, blockedUserDao, userAccountDao, context)
             }
 
         @Provides

@@ -10,6 +10,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -22,14 +23,13 @@ import timber.log.Timber
 import java.util.Calendar
 
 /**
- * Theme version enumeration for gradual rollout
+ * Theme version enumeration - V2 only
  */
 enum class ThemeVersion {
-    V1,  // Original 5-color system
-    V2   // Modern Teal-based system
+    V2   // Modern Teal-based system (only option)
 }
 
-// Performance-optimized color scheme creation with 5-color system optimizations
+// Performance-optimized color scheme creation with V2 system optimizations
 // Uses ColorSystemOptimizations for 20%+ performance improvement in theme switching
 private val LightColorScheme = ColorSystemOptimizations.getColorScheme(false)
 private val DarkColorScheme = ColorSystemOptimizations.getColorScheme(true)
@@ -39,6 +39,8 @@ private val DarkColorScheme = ColorSystemOptimizations.getColorScheme(true)
 /**
  * Enhanced Liftrix theme with performance optimization, fast transitions, and production rollout support
  * Now supports theme state management with persistence, 60fps monitoring, and feature flag integration
+ * 
+ * FIXED: Resolves intermittent color fallback issues during auth/settings navigation
  */
 @Composable
 fun LiftrixTheme(
@@ -90,7 +92,20 @@ fun LiftrixTheme(
         
         // Use ThemeManager if provided, otherwise use defaults
         val effectiveThemeManager = themeManager ?: ThemeManager.getInstance(context)
-        val themeState = effectiveThemeManager.getCurrentThemeState()
+        
+        // Observe theme state changes reactively
+        val themeMode by effectiveThemeManager.themeMode.collectAsState()
+        val timeBasedEnabled by effectiveThemeManager.timeBasedEnabled.collectAsState()
+        val fastTransitionsEnabled by effectiveThemeManager.fastTransitionsEnabled.collectAsState()
+        val themeVersionFromManager by effectiveThemeManager.themeVersion.collectAsState()
+        
+        // Create theme state from observed values
+        val themeState = ThemeState(
+            mode = themeMode,
+            timeBasedEnabled = timeBasedEnabled,
+            fastTransitionsEnabled = fastTransitionsEnabled,
+            themeVersion = themeVersionFromManager
+        )
         
         // Determine if dark theme should be used
         val shouldUseDarkTheme = when (themeState.mode) {
@@ -105,48 +120,31 @@ fun LiftrixTheme(
             ColorSystemOptimizations.ThemePerformanceMonitor.startThemeSwitching()
         }
         
-        // Performance-optimized color scheme selection with theme version support
-        val targetColorScheme = when {
-            dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-                val dynamicKey = "dynamic_${if (shouldUseDarkTheme) "dark" else "light"}_${themeVersion}_redesign_${uiRedesignEnabled}"
-                PerformanceOptimizations.ThemeLoadingOptimizer.getCachedColorScheme(dynamicKey) {
-                    if (shouldUseDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        // FIXED: Stable V2 color scheme selection with guaranteed fallback safety
+        val targetColorScheme = try {
+            when {
+                dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+                    val dynamicKey = "dynamic_${if (shouldUseDarkTheme) "dark" else "light"}_V2_redesign_${uiRedesignEnabled}"
+                    PerformanceOptimizations.ThemeLoadingOptimizer.getCachedColorScheme(dynamicKey) {
+                        if (shouldUseDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+                    }
+                }
+                
+                else -> {
+                    // Always use V2 color system with stable fallback
+                    val baseColorScheme = StableColorProvider.getStableColorScheme(shouldUseDarkTheme)
+                    if (uiRedesignEnabled && featureFlagEvaluated) {
+                        enhanceColorSchemeForRedesignV2(baseColorScheme, shouldUseDarkTheme)
+                    } else {
+                        baseColorScheme
+                    }
                 }
             }
-            
-            themeVersion == ThemeVersion.V2 -> {
-                // Use V2 color system
-                val baseColorScheme = if (shouldUseDarkTheme) {
-                    LiftrixColorsV2.darkColorScheme
-                } else {
-                    LiftrixColorsV2.lightColorScheme
-                }
-                if (uiRedesignEnabled && featureFlagEvaluated) {
-                    enhanceColorSchemeForRedesignV2(baseColorScheme, shouldUseDarkTheme)
-                } else {
-                    baseColorScheme
-                }
-            }
-            
-            themeState.mode == ThemeMode.TIME_BASED || themeState.timeBasedEnabled -> {
-                // Use optimized color schemes with feature flag enhancements
-                val baseColorScheme = ColorSystemOptimizations.getColorScheme(shouldUseDarkTheme)
-                if (uiRedesignEnabled && featureFlagEvaluated) {
-                    enhanceColorSchemeForRedesign(baseColorScheme, shouldUseDarkTheme)
-                } else {
-                    baseColorScheme
-                }
-            }
-            
-            else -> {
-                // Use optimized V1 5-color system for maximum performance
-                val baseColorScheme = ColorSystemOptimizations.getColorScheme(shouldUseDarkTheme)
-                if (uiRedesignEnabled && featureFlagEvaluated) {
-                    enhanceColorSchemeForRedesign(baseColorScheme, shouldUseDarkTheme)
-                } else {
-                    baseColorScheme
-                }
-            }
+        } catch (exception: Exception) {
+            // CRITICAL FIX: Always provide stable V2 fallback for any theme resolution failures
+            Timber.e(exception, "Theme resolution failed, using stable V2 fallback")
+            StableColorProvider.logColorFallback("theme_resolution_exception", "LiftrixTheme")
+            StableColorProvider.getStableColorScheme(shouldUseDarkTheme)
         }
         
         // End theme switching performance monitoring
@@ -231,46 +229,8 @@ fun getLightColorSchemeV2() = LiftrixColorsV2.lightColorScheme
 fun getDarkColorSchemeV2() = LiftrixColorsV2.darkColorScheme
 
 
-/**
- * Enhance color scheme for UI redesign with improved accessibility and visual hierarchy.
- * This function applies the redesigned color enhancements when the UI redesign feature flag is active.
- * 
- * @param baseColorScheme The base color scheme to enhance
- * @param isDarkTheme Whether this is for dark theme
- * @return Enhanced color scheme with redesign improvements
- */
-private fun enhanceColorSchemeForRedesign(
-    baseColorScheme: androidx.compose.material3.ColorScheme,
-    isDarkTheme: Boolean
-): androidx.compose.material3.ColorScheme {
-    return baseColorScheme.copy(
-        // Enhanced primary colors with Persian Green consistency
-        primary = LiftrixColors.PersianGreen,
-        onPrimary = LiftrixColors.Snow,
-        primaryContainer = if (isDarkTheme) LiftrixColors.PrimaryContainerDark else LiftrixColors.PrimaryContainer,
-        onPrimaryContainer = if (isDarkTheme) LiftrixColors.OnPrimaryContainerDark else LiftrixColors.OnPrimaryContainer,
-        
-        // Enhanced secondary colors with proper container handling
-        secondary = LiftrixColors.TiffanyBlue,
-        onSecondary = if (isDarkTheme) LiftrixColors.Night else LiftrixColors.Night,
-        secondaryContainer = if (isDarkTheme) LiftrixColors.SecondaryContainerDark else LiftrixColors.SecondaryContainer,
-        onSecondaryContainer = if (isDarkTheme) LiftrixColors.OnSecondaryContainerDark else LiftrixColors.OnSecondaryContainer,
-        
-        // Enhanced tertiary system using Persian Green
-        tertiary = LiftrixColors.PersianGreen,
-        onTertiary = LiftrixColors.Snow,
-        
-        // Improved surface colors for better component distinction using Night/Jet system
-        surface = if (isDarkTheme) LiftrixColors.Jet else LiftrixColors.Snow,
-        onSurface = if (isDarkTheme) LiftrixColors.Snow else LiftrixColors.Night,
-        surfaceVariant = if (isDarkTheme) LiftrixColors.Jet else LiftrixColors.Snow.copy(alpha = 0.95f),
-        onSurfaceVariant = if (isDarkTheme) LiftrixColors.Snow else LiftrixColors.Jet,
-        
-        // Enhanced outline colors using Persian Green for brand consistency
-        outline = LiftrixColors.PersianGreen.copy(alpha = if (isDarkTheme) 0.60f else 0.38f),
-        outlineVariant = LiftrixColors.PersianGreen.copy(alpha = if (isDarkTheme) 0.24f else 0.12f)
-    )
-}
+// REMOVED: Old V1 enhancement function (enhanceColorSchemeForRedesign)
+// Only V2 enhancement function remains
 
 /**
  * Enhance V2 color scheme for UI redesign with improved accessibility and visual hierarchy.

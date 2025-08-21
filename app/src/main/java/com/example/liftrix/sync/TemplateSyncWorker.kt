@@ -1,7 +1,6 @@
 package com.example.liftrix.sync
 
 import android.content.Context
-import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.OneTimeWorkRequest
@@ -11,17 +10,21 @@ import androidx.work.NetworkType
 import androidx.work.BackoffPolicy
 import androidx.work.workDataOf
 import com.example.liftrix.data.local.dao.WorkoutTemplateDao
+import androidx.hilt.work.HiltWorker
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedInject
 import com.example.liftrix.service.sync.ConflictResolver
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.decodeFromString
 
 /**
  * WorkManager worker for syncing workout templates to Firebase Firestore.
@@ -44,8 +47,11 @@ class TemplateSyncWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val templateDao: WorkoutTemplateDao,
     private val firestore: FirebaseFirestore,
-    private val conflictResolver: ConflictResolver
-) : CoroutineWorker(context, params) {
+    private val conflictResolver: ConflictResolver,
+    private val auth: FirebaseAuth
+) : BaseSyncWorker(context, params) {
+
+    override val workerName: String = "TemplateSyncWorker"
 
     companion object {
         const val WORK_NAME = "template_sync_work"
@@ -72,18 +78,24 @@ class TemplateSyncWorker @AssistedInject constructor(
         }
     }
 
-    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        try {
-            val userId = inputData.getString("userId") ?: return@withContext Result.failure()
+    override suspend fun performSync(userId: String): Result = withContext(Dispatchers.IO) {
+        // Verify authentication before attempting sync
+        val currentUser = auth.currentUser
+        if (currentUser == null || currentUser.uid != userId) {
+            Timber.e("TemplateSyncWorker: User not authenticated or user ID mismatch. Current: ${currentUser?.uid}, Expected: $userId")
+            return@withContext Result.failure(
+                workDataOf(KEY_ERROR_MESSAGE to "Authentication failed - user not signed in or ID mismatch")
+            )
+        }
+        
+        val unsyncedTemplates = templateDao.getUnsyncedTemplates(userId)
+        
+        if (unsyncedTemplates.isEmpty()) {
+            Timber.d("No unsynced templates found for user $userId")
+            return@withContext Result.success()
+        }
 
-            val unsyncedTemplates = templateDao.getUnsyncedTemplates(userId)
-            
-            if (unsyncedTemplates.isEmpty()) {
-                Timber.d("No unsynced templates found for user $userId")
-                return@withContext Result.success()
-            }
-
-            Timber.d("Found ${unsyncedTemplates.size} unsynced templates for user $userId")
+        Timber.d("Found ${unsyncedTemplates.size} unsynced templates for user $userId")
             
             var successCount = 0
             var failureCount = 0
@@ -133,12 +145,21 @@ class TemplateSyncWorker @AssistedInject constructor(
                     }
                     
                     if (shouldSync) {
+                        // Parse the JSON exercises string into a proper list for Firestore validation
+                        val exercisesList = try {
+                            Json.decodeFromString<List<Any>>(template.templateExercisesJson)
+                        } catch (e: Exception) {
+                            Timber.w(e, "Failed to parse template exercises JSON, using empty list")
+                            emptyList<Any>()
+                        }
+                        
+                        // Create template data that complies with Firestore security rules
                         val templateData = mapOf(
                             "id" to template.id,
                             "userId" to userId,
                             "name" to template.name,
                             "description" to template.description,
-                            "exercises" to template.templateExercisesJson,
+                            "exercises" to exercisesList, // Security rule expects this as 'exercises' list
                             "estimatedDurationMinutes" to template.estimatedDurationMinutes,
                             "difficultyLevel" to template.difficultyLevel,
                             // "category" field not available in entity
@@ -146,8 +167,10 @@ class TemplateSyncWorker @AssistedInject constructor(
                             "lastUsedAt" to template.lastUsedAt?.epochSecond,
                             "folderId" to template.folderId,
                             "createdAt" to template.createdAt.epochSecond,
-                            "syncVersion" to System.currentTimeMillis(),
-                            "updatedAt" to FieldValue.serverTimestamp()
+                            // Add all required sync metadata fields
+                            "syncVersion" to template.syncVersion,
+                            "lastModified" to FieldValue.serverTimestamp(),
+                            "isSynced" to true
                         )
                         
                         docRef.set(templateData, SetOptions.merge()).await()
@@ -160,35 +183,36 @@ class TemplateSyncWorker @AssistedInject constructor(
                     Timber.d("Successfully synced template: ${template.id}")
                     
                 } catch (e: Exception) {
-                    Timber.e(e, "Failed to sync template: ${template.id}")
+                    when {
+                        e.message?.contains("PERMISSION_DENIED") == true -> {
+                            Timber.e(e, "Permission denied syncing template: ${template.id}. Check Firestore security rules.")
+                        }
+                        e.message?.contains("INVALID_ARGUMENT") == true -> {
+                            Timber.e(e, "Invalid data syncing template: ${template.id}. Check field types and validation.")
+                        }
+                        else -> {
+                            Timber.e(e, "Failed to sync template: ${template.id}")
+                        }
+                    }
                     failureCount++
                 }
             }
             
             Timber.d("Template sync complete - Success: $successCount, Failed: $failureCount")
             
-            return@withContext when {
-                failureCount > 0 && successCount == 0 -> {
-                    // All failed
-                    if (runAttemptCount < MAX_RETRY_COUNT) {
-                        Result.retry()
-                    } else {
-                        Result.failure()
-                    }
-                }
-                else -> {
-                    // Some or all succeeded
-                    Result.success()
-                }
+        return@withContext when {
+            failureCount > 0 && successCount == 0 -> {
+                // All failed - let BaseSyncWorker handle retry logic
+                throw Exception("All template syncs failed. Success: $successCount, Failed: $failureCount")
             }
-            
-        } catch (e: Exception) {
-            Timber.e(e, "TemplateSyncWorker failed with exception")
-            
-            if (runAttemptCount < MAX_RETRY_COUNT) {
-                Result.retry()
-            } else {
-                Result.failure()
+            else -> {
+                // Some or all succeeded
+                Result.success(
+                    workDataOf(
+                        KEY_SYNC_COUNT to successCount,
+                        "failed_count" to failureCount
+                    )
+                )
             }
         }
     }

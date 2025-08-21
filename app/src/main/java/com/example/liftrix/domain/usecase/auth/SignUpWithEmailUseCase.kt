@@ -1,5 +1,8 @@
 package com.example.liftrix.domain.usecase.auth
 
+import android.content.Context
+import androidx.work.WorkManager
+import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.UserAccount
 import com.example.liftrix.domain.model.UserProfile
@@ -8,11 +11,12 @@ import com.example.liftrix.domain.repository.UserAccountRepository
 import com.example.liftrix.domain.usecase.social.CreateSocialProfileUseCase
 import com.example.liftrix.domain.usecase.profile.SaveUserProfileUseCase
 import com.example.liftrix.sync.UserPublicSyncWorker
-import androidx.work.WorkManager
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.tasks.await
+import timber.log.Timber
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
@@ -22,9 +26,11 @@ class SignUpWithEmailUseCase @Inject constructor(
     private val userAccountRepository: UserAccountRepository,
     private val createSocialProfileUseCase: CreateSocialProfileUseCase,
     private val saveUserProfileUseCase: SaveUserProfileUseCase,
-    private val workManager: WorkManager,
+    @ApplicationContext private val context: Context,
     private val firestore: FirebaseFirestore
 ) {
+    private val workManager: WorkManager
+        get() = WorkManagerProvider.getInstance(context)
     suspend operator fun invoke(email: String, password: String, username: String): Result<User> {
         android.util.Log.i("SignUpWithEmailUseCase", "Starting signup for username: $username")
         
@@ -83,14 +89,6 @@ class SignUpWithEmailUseCase @Inject constructor(
                 
                 // Save UserAccount to local database
                 val accountResult = userAccountRepository.upsertAccountInfo(userAccount)
-                accountResult.fold(
-                    onSuccess = { 
-                        android.util.Log.i("SignUpWithEmailUseCase", "UserAccount saved successfully")
-                    },
-                    onFailure = { error -> 
-                        android.util.Log.e("SignUpWithEmailUseCase", "UserAccount save failed: $error")
-                    }
-                )
                 
                 // Create UserProfile with username as displayName
                 val userProfile = UserProfile(
@@ -131,20 +129,20 @@ class SignUpWithEmailUseCase @Inject constructor(
                 
                 // Log any profile creation failures but still return success for auth
                 userProfileResult.fold(
-                    onSuccess = { 
-                        android.util.Log.i("SignUpWithEmailUseCase", "UserProfile saved successfully")
+                    onSuccess = { _: Unit -> 
+                        Timber.d("UserProfile saved successfully for user: ${user.uid}")
                     },
-                    onFailure = { 
-                        android.util.Log.e("SignUpWithEmailUseCase", "UserProfile save failed: ${it.message}")
+                    onFailure = { error: Throwable -> 
+                        Timber.e(error, "UserProfile save failed for user: ${user.uid}")
                     }
                 )
                 
                 socialProfileResult.fold(
-                    onSuccess = { 
-                        android.util.Log.i("SignUpWithEmailUseCase", "SocialProfile created successfully")
+                    onSuccess = { socialProfile ->
+                        Timber.d("SocialProfile created successfully for user: ${user.uid}, username: ${socialProfile.username}")
                     },
-                    onFailure = { 
-                        android.util.Log.e("SignUpWithEmailUseCase", "SocialProfile creation failed: ${it.message}")
+                    onFailure = { error: Throwable -> 
+                        Timber.e(error, "SocialProfile creation failed for user: ${user.uid}")
                     }
                 )
                 
@@ -164,7 +162,7 @@ class SignUpWithEmailUseCase @Inject constructor(
                 try {
                     ensureImmediateSearchability(user.uid, username, userProfile)
                 } catch (e: Exception) {
-                    android.util.Log.w("SignUpWithEmailUseCase", "Immediate searchability failed, relying on WorkManager sync: ${e.message}")
+                    Timber.e(e, "Immediate searchability failed for user: ${user.uid}, relying on WorkManager sync")
                     // Don't fail signup - WorkManager will eventually make user searchable
                 }
                 
@@ -260,12 +258,10 @@ class SignUpWithEmailUseCase @Inject constructor(
                 .set(searchCacheData, SetOptions.merge())
                 .await()
             
-            android.util.Log.i("SignUpWithEmailUseCase", "User searchability setup completed successfully")
             
         } catch (e: Exception) {
             // Don't fail signup if immediate searchability fails
             // The background sync will eventually make the user searchable
-            android.util.Log.e("SignUpWithEmailUseCase", "Failed to setup immediate searchability: ${e.message}", e)
             throw e
         }
     }

@@ -7,8 +7,12 @@ import com.example.liftrix.data.remote.ProcessResult
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.SyncResult
+import com.example.liftrix.data.model.SyncPayload
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
 import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
@@ -56,14 +60,14 @@ class OfflineQueueManager @Inject constructor(
      * @param entityType The type of entity (WORKOUT, TEMPLATE, PROFILE, ACHIEVEMENT)
      * @param entityId The ID of the specific entity
      * @param operation The operation type (CREATE, UPDATE, DELETE)
-     * @param data The entity data to be synced
+     * @param data The entity data to be synced (type-safe sealed class)
      */
     suspend fun queueOperation(
         userId: String,
         entityType: String,
         entityId: String,
         operation: String,
-        data: Any
+        data: SyncPayload
     ): LiftrixResult<Unit> {
         return try {
             Timber.d("OfflineQueueManager: Queuing $operation for $entityType:$entityId")
@@ -293,16 +297,115 @@ class OfflineQueueManager @Inject constructor(
     
     /**
      * Processes a single queue item by delegating to the FirebaseDataSource.
+     * Deserializes the type-safe SyncPayload and extracts the appropriate data structure.
      */
     private suspend fun processQueueItem(item: SyncQueueEntity): ProcessResult {
         return try {
+            // Deserialize the type-safe payload
+            val payload = json.decodeFromString<SyncPayload>(item.data)
+            
+            // Extract the actual data based on payload type
+            val dataForFirebase = when (payload) {
+                is SyncPayload.WorkoutPayload -> {
+                    // Convert WorkoutSyncDto to Firebase-compatible format
+                    val workout = payload.workout
+                    mapOf(
+                        "id" to workout.id,
+                        "userId" to workout.userId,
+                        "name" to workout.name,
+                        "date" to workout.date,
+                        "status" to workout.status,
+                        "startTime" to workout.startTime,
+                        "endTime" to workout.endTime,
+                        "exercises" to workout.exercises.map { exercise ->
+                            mapOf(
+                                "id" to exercise.id,
+                                "name" to exercise.name,
+                                "muscleGroup" to exercise.muscleGroup,
+                                "orderIndex" to exercise.orderIndex,
+                                "notes" to exercise.notes,
+                                "sets" to exercise.sets.map { set ->
+                                    mapOf(
+                                        "setNumber" to set.setNumber,
+                                        "targetReps" to set.targetReps,
+                                        "actualReps" to set.actualReps,
+                                        "targetWeight" to set.targetWeight,
+                                        "actualWeight" to set.actualWeight,
+                                        "completed" to set.completed,
+                                        "rpe" to set.rpe
+                                    )
+                                }
+                            )
+                        },
+                        "notes" to workout.notes,
+                        "templateId" to workout.templateId,
+                        "createdAt" to workout.createdAt,
+                        "updatedAt" to workout.updatedAt,
+                        "syncVersion" to workout.syncVersion,
+                        "isSynced" to workout.isSynced
+                    )
+                }
+                is SyncPayload.ProfilePayload -> {
+                    mapOf(
+                        "userId" to payload.userId,
+                        "displayName" to payload.displayName,
+                        "email" to payload.email,
+                        "profileImageUrl" to payload.profileImageUrl,
+                        "goals" to payload.goals,
+                        "preferences" to payload.preferences,
+                        "syncVersion" to payload.syncVersion,
+                        "lastModified" to payload.lastModified
+                    )
+                }
+                is SyncPayload.TemplatePayload -> {
+                    mapOf(
+                        "templateId" to payload.templateId,
+                        "userId" to payload.userId,
+                        "name" to payload.name,
+                        "description" to payload.description,
+                        "exercises" to payload.exercises,
+                        "isPublic" to payload.isPublic,
+                        "syncVersion" to payload.syncVersion,
+                        "lastModified" to payload.lastModified
+                    )
+                }
+                is SyncPayload.AchievementPayload -> {
+                    mapOf(
+                        "achievementId" to payload.achievementId,
+                        "userId" to payload.userId,
+                        "type" to payload.type,
+                        "title" to payload.title,
+                        "description" to payload.description,
+                        "unlockedAt" to payload.unlockedAt,
+                        "syncVersion" to payload.syncVersion
+                    )
+                }
+                is SyncPayload.SocialProfilePayload -> {
+                    mapOf(
+                        "userId" to payload.userId,
+                        "username" to payload.username,
+                        "displayName" to payload.displayName,
+                        "bio" to payload.bio,
+                        "isPrivate" to payload.isPrivate,
+                        "followerCount" to payload.followerCount,
+                        "followingCount" to payload.followingCount,
+                        "syncVersion" to payload.syncVersion,
+                        "lastModified" to payload.lastModified
+                    )
+                }
+            }
+            
+            // Convert map to JSON string for FirebaseDataSource
+            val jsonData = json.encodeToString(dataForFirebase)
+            
             when (item.operation) {
-                "CREATE" -> firebaseDataSource.create(item.userId, item.entityType, item.entityId, item.data)
-                "UPDATE" -> firebaseDataSource.update(item.userId, item.entityType, item.entityId, item.data)
+                "CREATE", "UPSERT" -> firebaseDataSource.create(item.userId, item.entityType, item.entityId, jsonData)
+                "UPDATE" -> firebaseDataSource.update(item.userId, item.entityType, item.entityId, jsonData)
                 "DELETE" -> firebaseDataSource.delete(item.userId, item.entityType, item.entityId)
                 else -> ProcessResult.Failure(Exception("Unknown operation: ${item.operation}"))
             }
         } catch (e: Exception) {
+            Timber.e(e, "Failed to process queue item ${item.id}: ${e.message}")
             ProcessResult.Failure(e)
         }
     }

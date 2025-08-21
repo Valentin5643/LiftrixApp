@@ -1,6 +1,8 @@
 package com.example.liftrix.data.repository
 
+import android.content.Context
 import androidx.work.WorkManager
+import com.example.liftrix.core.workmanager.WorkManagerProvider
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.workDataOf
 import com.example.liftrix.data.local.dao.SocialProfileDao
@@ -23,6 +25,7 @@ import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 /**
  * Enhanced social repository implementation with sync queuing for all social operations.
@@ -37,9 +40,12 @@ class SocialRepositoryImplEnhanced @Inject constructor(
     private val followDao: FollowRelationshipDao,
     private val postDao: WorkoutPostDao,
     private val gymBuddyDao: GymBuddyDao,
-    private val workManager: WorkManager,
+    @ApplicationContext private val context: Context,
     private val engagementSyncService: EngagementRealtimeSyncService
 ) {
+    
+    private val workManager: WorkManager
+        get() = WorkManagerProvider.getInstance(context)
 
     // ========================================
     // Follow Operations with Sync

@@ -1,6 +1,7 @@
 package com.example.liftrix.service
 
 import com.example.liftrix.domain.model.analytics.TimeRange
+import com.example.liftrix.domain.model.analytics.VolumeCalendarData
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.repository.VolumeDataPoint
 import com.example.liftrix.domain.repository.DurationDataPoint
@@ -53,6 +54,16 @@ interface ProgressDataService {
         userId: String,
         timeRange: TimeRange
     ): LiftrixResult<List<FrequencyDataPoint>>
+    
+    /**
+     * Retrieves volume calendar data for the specified user and current month.
+     * 
+     * @param userId User identifier for data filtering
+     * @return LiftrixResult containing volume calendar data or error
+     */
+    suspend fun getVolumeCalendarData(
+        userId: String
+    ): LiftrixResult<VolumeCalendarData>
     
     /**
      * Retrieves comprehensive progress summary for the specified user and time period.

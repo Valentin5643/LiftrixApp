@@ -1,5 +1,6 @@
 package com.example.liftrix.data.repository.workout
 
+import android.content.Context
 import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.local.dao.WorkoutPostDao
 import com.example.liftrix.data.local.dao.FollowRelationshipDao
@@ -10,8 +11,15 @@ import com.example.liftrix.data.mapper.WorkoutMapper
 import com.example.liftrix.data.mapper.WorkoutPostMapper
 import com.example.liftrix.data.mapper.ExerciseMapper
 import com.example.liftrix.data.sync.OfflineQueueManager
+import com.example.liftrix.data.model.SyncPayload
+import com.example.liftrix.data.model.SyncPayloadFactory
+import com.example.liftrix.data.model.WorkoutSyncDto
+import com.example.liftrix.data.model.ExerciseDto
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.decodeFromString
 import com.example.liftrix.sync.SyncCoordinator
 import androidx.work.WorkManager
+import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.model.WorkoutSummary
@@ -39,7 +47,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import timber.log.Timber
@@ -49,6 +56,7 @@ import java.time.Duration
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 /**
  * Implementation of WorkoutRepository focused on data mapping and persistence only.
@@ -76,8 +84,11 @@ class WorkoutRepositoryImpl @Inject constructor(
     private val exerciseMapper: ExerciseMapper,
     private val syncCoordinator: SyncCoordinator,
     private val offlineQueueManager: OfflineQueueManager,
-    private val workManager: WorkManager
+    @ApplicationContext private val context: Context
 ) : WorkoutRepository {
+    
+    private val workManager: WorkManager
+        get() = WorkManagerProvider.getInstance(context)
 
     override suspend fun createWorkout(workout: Workout): LiftrixResult<Workout> {
         // Validate user ID
@@ -693,14 +704,47 @@ class WorkoutRepositoryImpl @Inject constructor(
             }
         ) {
             // Get the workout to queue for sync
-            val workout = workoutDao.getWorkoutByIdForUser(workoutId.value, userId)
-            if (workout != null) {
+            val workoutEntity = workoutDao.getWorkoutByIdForUser(workoutId.value, userId)
+            if (workoutEntity != null) {
+                // Parse exercises JSON to properly typed DTOs
+                val exercises = try {
+                    if (workoutEntity.exercisesJson.isNullOrBlank()) {
+                        emptyList<ExerciseDto>()
+                    } else {
+                        Json { ignoreUnknownKeys = true }.decodeFromString<List<ExerciseDto>>(workoutEntity.exercisesJson)
+                    }
+                } catch (e: Exception) {
+                    Timber.w(e, "Failed to parse exercises JSON for workout ${workoutEntity.id}, using empty list")
+                    emptyList<ExerciseDto>()
+                }
+                
+                // Create type-safe WorkoutSyncDto
+                val workoutSyncDto = WorkoutSyncDto(
+                    id = workoutEntity.id,
+                    userId = workoutEntity.userId,
+                    name = workoutEntity.name,
+                    date = workoutEntity.date.atStartOfDay().toInstant(java.time.ZoneOffset.UTC).toEpochMilli(),
+                    status = workoutEntity.status.name,
+                    startTime = workoutEntity.startTime?.epochSecond,
+                    endTime = workoutEntity.endTime?.epochSecond,
+                    exercises = exercises,
+                    notes = workoutEntity.notes,
+                    templateId = workoutEntity.templateId,
+                    createdAt = workoutEntity.createdAt.epochSecond,
+                    updatedAt = workoutEntity.updatedAt.epochSecond,
+                    syncVersion = workoutEntity.syncVersion,
+                    isSynced = false
+                )
+                
+                // Create type-safe payload
+                val payload = SyncPayloadFactory.createWorkoutPayload(workoutSyncDto)
+                
                 offlineQueueManager.queueOperation(
                     userId = userId,
                     entityType = "WORKOUT",
                     entityId = workoutId.value,
                     operation = "UPSERT",
-                    data = workout
+                    data = payload
                 )
                 
                 // Also trigger sync coordinator for immediate sync attempt
@@ -1263,12 +1307,48 @@ class WorkoutRepositoryImpl @Inject constructor(
      */
     private suspend fun queueWorkoutForSync(workout: Workout) {
         try {
+            // Convert to entity first to get a serializable format
+            val workoutEntity = workoutMapper.toEntity(workout)
+            
+            // Parse exercises JSON to properly typed DTOs
+            val exercises = try {
+                if (workoutEntity.exercisesJson.isNullOrBlank()) {
+                    emptyList<ExerciseDto>()
+                } else {
+                    Json { ignoreUnknownKeys = true }.decodeFromString<List<ExerciseDto>>(workoutEntity.exercisesJson)
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to parse exercises JSON for workout ${workoutEntity.id}, using empty list")
+                emptyList<ExerciseDto>()
+            }
+            
+            // Create type-safe WorkoutSyncDto
+            val workoutSyncDto = WorkoutSyncDto(
+                id = workoutEntity.id,
+                userId = workoutEntity.userId,
+                name = workoutEntity.name,
+                date = workoutEntity.date.atStartOfDay().toInstant(java.time.ZoneOffset.UTC).toEpochMilli(),
+                status = workoutEntity.status.name,
+                startTime = workoutEntity.startTime?.epochSecond,
+                endTime = workoutEntity.endTime?.epochSecond,
+                exercises = exercises,
+                notes = workoutEntity.notes,
+                templateId = workoutEntity.templateId,
+                createdAt = workoutEntity.createdAt.epochSecond,
+                updatedAt = workoutEntity.updatedAt.epochSecond,
+                syncVersion = workoutEntity.syncVersion,
+                isSynced = false
+            )
+            
+            // Create type-safe payload
+            val payload = SyncPayloadFactory.createWorkoutPayload(workoutSyncDto)
+            
             offlineQueueManager.queueOperation(
                 userId = workout.userId,
                 entityType = "WORKOUT",
                 entityId = workout.id.value,
                 operation = "UPSERT",
-                data = workout
+                data = payload
             )
             
             // Trigger sync coordinator for background sync

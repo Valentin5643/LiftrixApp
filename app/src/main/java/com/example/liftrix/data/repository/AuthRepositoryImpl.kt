@@ -350,15 +350,37 @@ class AuthRepositoryImpl @Inject constructor(
 
     private suspend fun updateLastSignInTime(uid: String) {
         try {
+            // CRITICAL FIX: Include userId field required by Firestore security rules
+            val updateMap = mapOf(
+                "userId" to uid,  // Required by security rules for user document writes
+                "last_sign_in_at" to com.google.firebase.Timestamp.now(),
+                "updated_at" to com.google.firebase.Timestamp.now()
+            )
+            
+            Timber.d("Updating last sign-in time for user $uid")
+            
             firestore.collection("users")
                 .document(uid)
-                .set(
-                    mapOf("last_sign_in_at" to com.google.firebase.Timestamp.now()),
-                    com.google.firebase.firestore.SetOptions.merge()
-                )
+                .set(updateMap, com.google.firebase.firestore.SetOptions.merge())
                 .await()
+                
+            Timber.d("Successfully updated last sign-in time for user $uid")
         } catch (exception: Exception) {
-            Timber.e(exception, "Failed to update last sign in time")
+            Timber.e(exception, "CRITICAL: Failed to update last sign-in time for user $uid")
+            
+            // Enhanced error logging for debugging Firestore permission issues
+            when {
+                exception.message?.contains("PERMISSION_DENIED") == true -> {
+                    Timber.e("Firestore PERMISSION_DENIED: Check security rules for users/$uid write permissions")
+                    Timber.e("Attempted to write fields: userId, last_sign_in_at, updated_at")
+                }
+                exception.message?.contains("NOT_FOUND") == true -> {
+                    Timber.e("User document not found: users/$uid - user may need to be created first")
+                }
+                else -> {
+                    Timber.e("Unexpected Firestore error: ${exception.javaClass.simpleName} - ${exception.message}")
+                }
+            }
         }
     }
     

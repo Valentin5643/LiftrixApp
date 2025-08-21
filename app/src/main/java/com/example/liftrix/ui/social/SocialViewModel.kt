@@ -18,7 +18,12 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.example.liftrix.domain.model.social.WorkoutPost
 import com.example.liftrix.service.FirebasePresenceService
+import com.example.liftrix.sync.FollowRealtimeService
+import com.example.liftrix.sync.FollowRelationshipSyncWorker
+import android.content.Context
+import com.example.liftrix.core.workmanager.WorkManagerProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -44,7 +49,9 @@ class SocialViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val analyticsService: AnalyticsService,
     private val searchUsersUseCase: SearchUsersUseCase,
-    private val feedGeneratorUseCase: FeedGeneratorUseCase
+    private val feedGeneratorUseCase: FeedGeneratorUseCase,
+    private val followRealtimeService: FollowRealtimeService,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SocialUiState())
@@ -63,10 +70,34 @@ class SocialViewModel @Inject constructor(
         private const val FRIEND_FEED_LIMIT = 10
     }
 
+    /**
+     * Starts real-time sync for follow relationships and counts
+     */
+    private fun startRealtimeFollowSync() {
+        viewModelScope.launch {
+            try {
+                val currentUser = authRepository.getCurrentUser()
+                if (currentUser != null) {
+                    // Start real-time listeners for follow counts
+                    followRealtimeService.startListeningToProfile(currentUser.uid)
+                    followRealtimeService.startListeningToFollowRelationships(currentUser.uid)
+                    Timber.d("Started real-time follow sync for user ${currentUser.uid}")
+                }
+            } catch (exception: Exception) {
+                Timber.w(exception, "Failed to start real-time follow sync")
+            }
+        }
+    }
+
     init {
         startPresenceTracking()
         observeUserDataAndLoadSocial()
         trackSocialScreenViewed()
+        // Load following/followers data
+        loadFollowing()
+        loadFollowers()
+        // Start real-time sync for follow relationships
+        startRealtimeFollowSync()
     }
 
     /**
@@ -88,9 +119,27 @@ class SocialViewModel @Inject constructor(
             is SocialEvent.LoadFriends -> {
                 loadFriendFeed()
             }
+            // New Following/Followers handlers
+            is SocialEvent.LoadFollowing -> {
+                loadFollowing()
+            }
+            is SocialEvent.LoadFollowers -> {
+                loadFollowers()
+            }
+            is SocialEvent.FollowUser -> {
+                followUser(event.userId)
+            }
+            is SocialEvent.UnfollowUser -> {
+                unfollowUser(event.userId)
+            }
+            // Search handlers
             is SocialEvent.SearchFriends -> {
                 searchFriends(event.query)
             }
+            is SocialEvent.SearchUsers -> {
+                searchUsers(event.query)
+            }
+            // Legacy friend request handlers
             is SocialEvent.SendFriendRequest -> {
                 sendFriendRequest(event.userId)
             }
@@ -531,11 +580,231 @@ class SocialViewModel @Inject constructor(
     }
 
     /**
+     * Loads following list (people you follow)
+     */
+    private fun loadFollowing() {
+        viewModelScope.launch {
+            try {
+                val currentUser = authRepository.getCurrentUser()
+                if (currentUser == null) {
+                    updateState { copy(isLoading = false, error = "User not authenticated") }
+                    return@launch
+                }
+
+                updateState { copy(isLoading = true, error = null) }
+                
+                // Use existing friends list and filter for people you are following
+                // In a real implementation, you'd have separate endpoints for following vs followers
+                socialRepository.getFriends(currentUser.uid).collect { friends ->
+                    updateState {
+                        copy(
+                            isLoading = false,
+                            following = friends, // For now, using friends as following
+                            followingCount = friends.size,
+                            error = null
+                        )
+                    }
+                }
+            } catch (exception: Exception) {
+                Timber.e(exception, "Error loading following")
+                updateState { 
+                    copy(
+                        isLoading = false, 
+                        error = "Failed to load following: ${exception.message}"
+                    ) 
+                }
+            }
+        }
+    }
+
+    /**
+     * Loads followers list (people who follow you)
+     */
+    private fun loadFollowers() {
+        viewModelScope.launch {
+            try {
+                val currentUser = authRepository.getCurrentUser()
+                if (currentUser == null) {
+                    updateState { copy(isLoading = false, error = "User not authenticated") }
+                    return@launch
+                }
+
+                updateState { copy(isLoading = true, error = null) }
+                
+                // Use existing friends list as followers for now
+                // In a real implementation, you'd have separate endpoints
+                socialRepository.getFriends(currentUser.uid).collect { friends ->
+                    updateState {
+                        copy(
+                            isLoading = false,
+                            followers = friends, // For now, using friends as followers
+                            followersCount = friends.size,
+                            error = null
+                        )
+                    }
+                }
+            } catch (exception: Exception) {
+                Timber.e(exception, "Error loading followers")
+                updateState { 
+                    copy(
+                        isLoading = false, 
+                        error = "Failed to load followers: ${exception.message}"
+                    ) 
+                }
+            }
+        }
+    }
+
+    /**
+     * Follows a user
+     */
+    private fun followUser(userId: String) {
+        viewModelScope.launch {
+            try {
+                updateState { copy(isLoading = true) }
+                
+                val result = socialRepository.followUser(userId)
+                
+                if (result.isSuccess) {
+                    // Refresh following list
+                    loadFollowing()
+                    // Trigger sync to Firebase
+                    syncFollowRelationships(forceSync = true)
+                    analyticsService.logSocialFeedEvent(
+                        userId = authRepository.getCurrentUserId() ?: "",
+                        eventType = "user_followed",
+                        additionalData = mapOf("target_user_id" to userId)
+                    )
+                } else {
+                    val error = result.exceptionOrNull()
+                    updateState { 
+                        copy(
+                            isLoading = false, 
+                            error = "Failed to follow user: ${error?.message}"
+                        ) 
+                    }
+                }
+            } catch (exception: Exception) {
+                Timber.e(exception, "Error following user")
+                updateState { 
+                    copy(
+                        isLoading = false, 
+                        error = "Failed to follow user: ${exception.message}"
+                    ) 
+                }
+            }
+        }
+    }
+
+    /**
+     * Unfollows a user
+     */
+    private fun unfollowUser(userId: String) {
+        viewModelScope.launch {
+            try {
+                updateState { copy(isLoading = true) }
+                
+                // Use removeFriend for now as unfollow equivalent
+                val result = socialRepository.removeFriend(userId)
+                
+                if (result.isSuccess) {
+                    // Refresh following list
+                    loadFollowing()
+                    // Trigger sync to Firebase
+                    syncFollowRelationships(forceSync = true)
+                    analyticsService.logSocialFeedEvent(
+                        userId = authRepository.getCurrentUserId() ?: "",
+                        eventType = "user_unfollowed",
+                        additionalData = mapOf("target_user_id" to userId)
+                    )
+                } else {
+                    val error = result.exceptionOrNull()
+                    updateState { 
+                        copy(
+                            isLoading = false, 
+                            error = "Failed to unfollow user: ${error?.message}"
+                        ) 
+                    }
+                }
+            } catch (exception: Exception) {
+                Timber.e(exception, "Error unfollowing user")
+                updateState { 
+                    copy(
+                        isLoading = false, 
+                        error = "Failed to unfollow user: ${exception.message}"
+                    ) 
+                }
+            }
+        }
+    }
+
+    /**
+     * Searches for users (renamed from searchFriends)
+     */
+    private fun searchUsers(query: String) {
+        viewModelScope.launch {
+            try {
+                updateState { 
+                    copy(
+                        searchQuery = query,
+                        isSearching = query.isNotEmpty()
+                    ) 
+                }
+                
+                if (query.isBlank()) {
+                    updateState { copy(searchResults = emptyList(), isSearching = false) }
+                    return@launch
+                }
+
+                socialRepository.searchUsers(query).collect { users ->
+                    updateState {
+                        copy(
+                            searchResults = users,
+                            isSearching = false,
+                            error = null
+                        )
+                    }
+                }
+            } catch (exception: Exception) {
+                Timber.e(exception, "Error searching users")
+                updateState { 
+                    copy(
+                        isSearching = false, 
+                        error = "Search failed: ${exception.message}"
+                    ) 
+                }
+            }
+        }
+    }
+
+    /**
+     * Triggers sync of follow relationships to Firebase
+     */
+    private fun syncFollowRelationships(forceSync: Boolean = false) {
+        viewModelScope.launch {
+            try {
+                val currentUser = authRepository.getCurrentUser()
+                if (currentUser != null) {
+                    val workRequest = FollowRelationshipSyncWorker.createWorkRequest(
+                        userId = currentUser.uid,
+                        forceSync = forceSync
+                    )
+                    WorkManagerProvider.getInstance(context).enqueue(workRequest)
+                    Timber.d("Enqueued follow relationship sync for user ${currentUser.uid}")
+                }
+            } catch (exception: Exception) {
+                Timber.w(exception, "Failed to trigger follow relationship sync")
+            }
+        }
+    }
+
+    /**
      * Updates the UI state using the provided transform function
      */
     private fun updateState(transform: SocialUiState.() -> SocialUiState) {
         _uiState.value = _uiState.value.transform()
     }
+
 
     // Analytics tracking methods
     
@@ -738,7 +1007,8 @@ class SocialViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        // Stop presence tracking when ViewModel is cleared
+        // Stop all real-time listeners and services
+        followRealtimeService.stopAllListeners()
         viewModelScope.launch {
             try {
                 presenceService.stopPresenceTracking()
@@ -754,10 +1024,16 @@ class SocialViewModel @Inject constructor(
  */
 data class SocialUiState(
     val isLoading: Boolean = false,
-    val friends: List<Friend> = emptyList(),
-    val friendRequests: List<Friend> = emptyList(),
+    val friends: List<Friend> = emptyList(), // Kept for backward compatibility
+    val friendRequests: List<Friend> = emptyList(), // Kept for backward compatibility
     val friendWorkouts: List<SharedWorkout> = emptyList(),
-    val pendingRequests: List<Friend> = emptyList(),
+    val pendingRequests: List<Friend> = emptyList(), // Kept for backward compatibility
+    // New Following/Followers fields
+    val following: List<Friend> = emptyList(),
+    val followers: List<Friend> = emptyList(),
+    val followingCount: Int = 0,
+    val followersCount: Int = 0,
+    // Search and UI state
     val searchQuery: String = "",
     val searchResults: List<User> = emptyList(),
     val isSearching: Boolean = false,
@@ -773,12 +1049,20 @@ sealed class SocialEvent : ViewModelEvent {
     object RefreshData : SocialEvent()
     object Refresh : SocialEvent() // Added alias for RefreshData
     object LoadFriends : SocialEvent() // Added for friends list refresh
+    // New Following/Followers events
+    object LoadFollowing : SocialEvent()
+    object LoadFollowers : SocialEvent()
+    data class FollowUser(val userId: String) : SocialEvent()
+    data class UnfollowUser(val userId: String) : SocialEvent()
+    // Legacy friend request events (kept for compatibility)
     data class SendFriendRequest(val userId: String) : SocialEvent()
     data class AcceptFriendRequest(val userId: String) : SocialEvent()
     data class DeclineFriendRequest(val userId: String) : SocialEvent()
     data class RemoveFriend(val userId: String) : SocialEvent()
     data class BlockUser(val userId: String) : SocialEvent()
-    data class SearchFriends(val query: String) : SocialEvent() // Added for search
+    // Search events
+    data class SearchFriends(val query: String) : SocialEvent() // Legacy event
+    data class SearchUsers(val query: String) : SocialEvent() // New event for user search
     object ViewAllFriends : SocialEvent()
     data class ViewWorkout(val sharedWorkout: SharedWorkout) : SocialEvent()
     data class CongratulateWorkout(val sharedWorkout: SharedWorkout) : SocialEvent()

@@ -29,6 +29,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.ui.onboarding.model.OnboardingStep
 import com.example.liftrix.ui.theme.LiftrixTheme
+import com.example.liftrix.ui.theme.LiftrixColorsV2
+import androidx.compose.foundation.isSystemInDarkTheme
 
 /**
  * Introduction screen for onboarding flow.
@@ -95,7 +97,7 @@ private fun WelcomeMessage() {
             Text(
                 text = "Answer a few quick questions to get workout recommendations tailored to your goals, equipment, and fitness level.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary,
                 textAlign = TextAlign.Center
             )
         }
@@ -114,7 +116,7 @@ private fun BenefitsSection() {
         Text(
             text = "What you'll get:",
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onBackground,
+            color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
             fontWeight = FontWeight.Medium
         )
         
@@ -159,7 +161,7 @@ private fun BenefitItem(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
+            tint = LiftrixColorsV2.Teal,
             modifier = Modifier.size(24.dp)
         )
         
@@ -170,14 +172,14 @@ private fun BenefitItem(
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onBackground,
+                color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
                 fontWeight = FontWeight.Medium
             )
             
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary
             )
         }
     }
@@ -197,7 +199,7 @@ private fun PersonalizationPreview() {
         Text(
             text = "We'll ask about your age, equipment, and fitness goals to create the perfect workout plan for you.",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary
         )
     }
 }

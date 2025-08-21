@@ -229,6 +229,7 @@ class LegacyNavigationWrapper @Inject constructor(
                 LiftrixRoute.PrivacyPolicy -> "Replace with: navController.navigate(LiftrixRoute.PrivacyPolicy)"
                 LiftrixRoute.TermsOfService -> "Replace with: navController.navigate(LiftrixRoute.TermsOfService)"
                 LiftrixRoute.DataPortability -> "Replace with: navController.navigate(LiftrixRoute.DataPortability)"
+                LiftrixRoute.AIChatSettings -> "Replace with: navController.navigate(LiftrixRoute.AIChatSettings)"
             }
         } else {
             null

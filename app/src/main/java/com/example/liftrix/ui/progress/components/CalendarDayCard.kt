@@ -17,7 +17,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import com.example.liftrix.domain.model.Weight
+import com.example.liftrix.domain.model.Volume
 import com.example.liftrix.ui.theme.LiftrixColors
 import kotlinx.datetime.LocalDate
 
@@ -42,7 +42,7 @@ import kotlinx.datetime.LocalDate
 @Composable
 fun CalendarDayCard(
     date: LocalDate,
-    volume: Weight,
+    volume: Volume,
     intensity: Float,
     isCurrentMonth: Boolean,
     onClick: () -> Unit
@@ -133,7 +133,7 @@ private fun getDayTextColor(intensity: Float, isCurrentMonth: Boolean): Color {
  */
 private fun buildContentDescription(
     date: LocalDate,
-    volume: Weight,
+    volume: Volume,
     isCurrentMonth: Boolean
 ): String {
     val monthContext = if (isCurrentMonth) "" else " (previous/next month)"

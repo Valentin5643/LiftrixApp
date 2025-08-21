@@ -1,6 +1,6 @@
 package com.example.liftrix.di
 
-import androidx.work.WorkManager
+import android.content.Context
 import com.example.liftrix.service.sync.ConflictResolver
 import com.example.liftrix.service.sync.RealtimeSyncManager
 import com.example.liftrix.service.sync.SyncStrategy
@@ -9,6 +9,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
@@ -21,10 +22,9 @@ import javax.inject.Singleton
  * Components Provided:
  * - SyncStrategy: Smart polling and sync pattern management based on widget complexity
  * - ConflictResolver: Timestamp-based conflict resolution for sync operations
- * - RealtimeSyncManager: Hybrid sync strategy with Firestore listeners and WorkManager
+ * - RealtimeSyncManager: Hybrid sync strategy with Firestore listeners
  * 
  * Dependencies from Other Modules:
- * - WorkManager: Provided by NetworkModule for background sync worker coordination
  * - FirebaseFirestore: Provided by NetworkModule for real-time listeners
  * 
  * All sync components are provided as Singleton instances to ensure:
@@ -35,7 +35,7 @@ import javax.inject.Singleton
  * 
  * Technical Implementation:
  * - Leverages Firebase Firestore for real-time listeners
- * - Uses WorkManager for background sync with network constraints
+ * - Uses WorkManagerProvider for background sync with network constraints
  * - Follows established DI patterns for testability and maintainability
  * - Integrates with existing analytics and cache infrastructure
  */
@@ -83,12 +83,12 @@ object WidgetSyncModule {
      * The RealtimeSyncManager coordinates real-time synchronization with:
      * - Firestore listeners for sub-second updates on critical data
      * - Smart polling intervals based on widget complexity and activity
-     * - WorkManager integration for background sync recovery
+     * - WorkManagerProvider integration for background sync recovery
      * - Memory leak prevention with proper listener management
      * 
      * @param firestore Firebase Firestore instance for real-time listeners
      * @param auth Firebase Auth instance for authentication validation
-     * @param workManager WorkManager for background sync operations
+     * Uses WorkManagerProvider.getInstance() for background sync operations
      * @param syncStrategy Strategy for complexity-based sync patterns
      * @param conflictResolver Resolver for handling sync conflicts
      * @return Configured RealtimeSyncManager instance
@@ -98,14 +98,14 @@ object WidgetSyncModule {
     fun provideRealtimeSyncManager(
         firestore: FirebaseFirestore,
         auth: FirebaseAuth,
-        workManager: WorkManager,
+        @ApplicationContext context: Context,
         syncStrategy: SyncStrategy,
         conflictResolver: ConflictResolver
     ): RealtimeSyncManager {
         return RealtimeSyncManager(
             firestore = firestore,
             auth = auth,
-            workManager = workManager,
+            context = context,
             syncStrategy = syncStrategy,
             conflictResolver = conflictResolver
         )

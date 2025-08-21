@@ -145,4 +145,37 @@ interface ChatHistoryDao {
         AND created_at >= :hourAgoTimestamp
     """)
     suspend fun getHourlyTokenUsage(userId: String, hourAgoTimestamp: Long): Int?
+    
+    /**
+     * Deletes ALL chat history for a user.
+     * Used by settings screen for complete history clear.
+     * Returns the number of deleted messages.
+     */
+    @Query("DELETE FROM chat_history WHERE user_id = :userId")
+    suspend fun clearAllHistory(userId: String): Int
+    
+    /**
+     * Gets all chat messages for a user for export purposes.
+     * Ordered by conversation and creation time.
+     */
+    @Query("""
+        SELECT * FROM chat_history 
+        WHERE user_id = :userId 
+        ORDER BY conversation_id, created_at ASC
+    """)
+    suspend fun getAllMessagesForExport(userId: String): List<ChatHistoryEntity>
+    
+    /**
+     * Gets total message count for a user.
+     * Used for storage statistics display.
+     */
+    @Query("SELECT COUNT(*) FROM chat_history WHERE user_id = :userId")
+    suspend fun getTotalMessageCount(userId: String): Int
+    
+    /**
+     * Gets total token usage across all conversations for a user.
+     * Used for usage statistics display.
+     */
+    @Query("SELECT SUM(token_count) FROM chat_history WHERE user_id = :userId")
+    suspend fun getTotalTokenUsage(userId: String): Int?
 }

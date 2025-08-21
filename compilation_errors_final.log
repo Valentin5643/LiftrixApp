@@ -1,19 +1,294 @@
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/data/repository/ProfileRepositoryImpl.kt:260:13 Unresolved reference 'liftrixSuccess'.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/data/repository/ProfileRepositoryImpl.kt:263:13 Unresolved reference 'liftrixFailure'.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/data/repository/ProfileRepositoryImpl.kt:304:24 Unresolved reference 'liftrixFailure'.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/data/repository/ProfileRepositoryImpl.kt:314:24 Unresolved reference 'liftrixFailure'.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/data/repository/ProfileRepositoryImpl.kt:327:13 Unresolved reference 'liftrixSuccess'.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/data/repository/ProfileRepositoryImpl.kt:331:13 Unresolved reference 'liftrixFailure'.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/data/repository/ProfileRepositoryImpl.kt:344:27 Unresolved reference 'liftrixFailure'.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/data/repository/ProfileRepositoryImpl.kt:361:13 Unresolved reference 'liftrixSuccess'.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/data/repository/ProfileRepositoryImpl.kt:365:13 Unresolved reference 'liftrixFailure'.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/data/repository/ProfileRepositoryImpl.kt:389:17 Unresolved reference 'liftrixSuccess'.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/data/repository/ProfileRepositoryImpl.kt:391:17 Unresolved reference 'liftrixSuccess'.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/data/repository/ProfileRepositoryImpl.kt:395:13 Unresolved reference 'liftrixFailure'.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/data/repository/ProfileRepositoryImpl.kt:411:17 Unresolved reference 'liftrixSuccess'.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/data/repository/ProfileRepositoryImpl.kt:413:17 Unresolved reference 'liftrixFailure'.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/data/repository/ProfileRepositoryImpl.kt:423:13 Unresolved reference 'liftrixFailure'.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/data/repository/ProfileRepositoryImpl.kt:437:13 Unresolved reference 'liftrixSuccess'.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/data/repository/ProfileRepositoryImpl.kt:440:13 Unresolved reference 'liftrixFailure'.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/data/repository/ProfileRepositoryImpl.kt:454:13 Unresolved reference 'liftrixSuccess'.
-e: file:///C:/Users/Administrator/Liftrix/app/src/main/java/com/example/liftrix/data/repository/ProfileRepositoryImpl.kt:457:13 Unresolved reference 'liftrixFailure'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/data/repository/UserSearchRepositoryTest.kt:14:26 Unresolved reference 'truth'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/data/repository/UserSearchRepositoryTest.kt:149:9 Unresolved reference 'Truth'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/data/repository/UserSearchRepositoryTest.kt:154:9 Unresolved reference 'Truth'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/data/repository/UserSearchRepositoryTest.kt:155:9 Unresolved reference 'Truth'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/data/repository/UserSearchRepositoryTest.kt:198:9 Unresolved reference 'Truth'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/data/repository/UserSearchRepositoryTest.kt:247:9 Unresolved reference 'Truth'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/data/repository/UserSearchRepositoryTest.kt:252:9 Unresolved reference 'Truth'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/data/repository/UserSearchRepositoryTest.kt:253:9 Unresolved reference 'Truth'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/data/repository/UserSearchRepositoryTest.kt:293:9 Unresolved reference 'Truth'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/data/repository/UserSearchRepositoryTest.kt:295:9 Unresolved reference 'Truth'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/data/repository/UserSearchRepositoryTest.kt:296:9 Unresolved reference 'Truth'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/data/repository/UserSearchRepositoryTest.kt:342:9 Unresolved reference 'Truth'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/data/repository/UserSearchRepositoryTest.kt:344:9 Unresolved reference 'Truth'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:9:26 Unresolved reference 'truth'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:65:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:72:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:89:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:89:41 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:94:30 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:94:41 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:95:30 Unresolved reference 'Error'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:95:39 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:100:30 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:100:41 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:101:30 Unresolved reference 'Error'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:101:39 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:116:30 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:117:17 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:118:17 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:118:41 Unresolved reference 'data'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:120:30 Unresolved reference 'Error'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:120:39 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:139:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:154:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:169:30 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:170:17 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:171:17 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:171:42 Unresolved reference 'data'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:172:17 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:172:42 Unresolved reference 'data'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:172:55 Unresolved reference 'displayName'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:174:30 Unresolved reference 'Error'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:174:39 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:178:30 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:179:17 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:180:17 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:180:41 Unresolved reference 'data'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:181:17 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:181:41 Unresolved reference 'data'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:181:54 Unresolved reference 'displayName'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:183:30 Unresolved reference 'Error'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:183:39 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:201:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:201:41 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:205:30 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:205:41 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:205:71 Unresolved reference 'data'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:206:30 Unresolved reference 'Error'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:206:39 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:214:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:220:30 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:220:41 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:220:70 Unresolved reference 'data'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:221:30 Unresolved reference 'Error'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:221:39 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:237:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:237:41 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:241:30 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:241:41 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:241:66 Unresolved reference 'data'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:242:30 Unresolved reference 'Error'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:242:39 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:250:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:256:30 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:256:41 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:256:65 Unresolved reference 'data'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:257:30 Unresolved reference 'Error'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/debug/UserSearchIssueReproductionTest.kt:257:39 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/export/ExportWorkoutsUseCaseTest.kt:96:18 Unresolved reference 'LiftrixResult'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/export/ExportWorkoutsUseCaseTest.kt:96:55 Argument type mismatch: actual type is 'kotlin.Result<com.example.liftrix.domain.usecase.export.ExportResult>', but 'kotlin.Any?' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/export/ExportWorkoutsUseCaseTest.kt:126:18 Unresolved reference 'LiftrixResult'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/export/ExportWorkoutsUseCaseTest.kt:126:55 Argument type mismatch: actual type is 'kotlin.Result<com.example.liftrix.domain.usecase.export.ExportResult>', but 'kotlin.Any?' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/export/ExportWorkoutsUseCaseTest.kt:185:18 Unresolved reference 'LiftrixResult'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/export/ExportWorkoutsUseCaseTest.kt:185:39 Argument type mismatch: actual type is 'kotlin.Result<com.example.liftrix.domain.usecase.export.ExportResult>', but 'kotlin.Any?' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/export/ExportWorkoutsUseCaseTest.kt:212:18 Unresolved reference 'LiftrixResult'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/export/ExportWorkoutsUseCaseTest.kt:212:39 Argument type mismatch: actual type is 'kotlin.Result<com.example.liftrix.domain.usecase.export.ExportResult>', but 'kotlin.Any?' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/export/ExportWorkoutsUseCaseTest.kt:231:18 Unresolved reference 'LiftrixResult'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/export/ExportWorkoutsUseCaseTest.kt:231:47 Argument type mismatch: actual type is 'kotlin.Result<kotlin.Unit>', but 'kotlin.Any?' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/export/ExportWorkoutsUseCaseTest.kt:245:18 Unresolved reference 'LiftrixResult'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/export/ExportWorkoutsUseCaseTest.kt:245:39 Argument type mismatch: actual type is 'kotlin.Result<kotlin.Unit>', but 'kotlin.Any?' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/export/ExportWorkoutsUseCaseTest.kt:347:18 Unresolved reference 'LiftrixResult'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/export/ExportWorkoutsUseCaseTest.kt:347:55 Argument type mismatch: actual type is 'kotlin.Result<com.example.liftrix.domain.usecase.export.ExportResult>', but 'kotlin.Any?' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:13:26 Unresolved reference 'truth'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:76:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:83:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:97:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:97:41 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:101:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:101:50 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:104:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:104:57 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:117:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:117:50 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:125:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:126:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:127:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:147:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:163:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:163:41 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:167:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:167:51 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:174:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:186:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:186:50 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:194:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:195:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:214:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:231:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:246:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:246:51 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:251:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:252:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:254:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:254:50 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:259:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:260:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:284:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:284:41 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:289:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:296:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:296:41 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:300:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:300:50 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:308:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:308:50 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:316:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:335:37 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:335:45 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:341:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:346:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:346:51 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:355:13 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:355:48 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:360:13 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:371:13 No value passed for parameter 'photoUrl'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:371:13 No value passed for parameter 'isAnonymous'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:371:13 No value passed for parameter 'subscriptionTier'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:371:13 No value passed for parameter 'subscriptionStatus'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:371:13 No value passed for parameter 'subscriptionExpiresAt'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:371:13 No value passed for parameter 'premiumFeaturesEnabled'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:371:13 No value passed for parameter 'onboardingCompleted'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:371:13 No value passed for parameter 'profileVersion'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:371:13 No value passed for parameter 'createdAt'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:371:13 No value passed for parameter 'lastSignInAt'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/domain/usecase/social/UserSearchUseCaseTest.kt:371:13 No value passed for parameter 'updatedAt'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:19:26 Unresolved reference 'truth'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:96:17 No value passed for parameter 'photoUrl'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:96:17 No value passed for parameter 'isAnonymous'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:96:17 No value passed for parameter 'subscriptionTier'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:96:17 No value passed for parameter 'subscriptionStatus'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:96:17 No value passed for parameter 'subscriptionExpiresAt'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:96:17 No value passed for parameter 'premiumFeaturesEnabled'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:96:17 No value passed for parameter 'onboardingCompleted'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:96:17 No value passed for parameter 'profileVersion'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:96:17 No value passed for parameter 'createdAt'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:96:17 No value passed for parameter 'lastSignInAt'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:96:17 No value passed for parameter 'updatedAt'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:101:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:102:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:109:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:125:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:126:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:144:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:144:41 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:153:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:158:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:159:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:173:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:173:41 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:182:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:184:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:222:72 No value passed for parameter 'photoUrl'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:222:72 No value passed for parameter 'isAnonymous'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:222:72 No value passed for parameter 'subscriptionTier'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:222:72 No value passed for parameter 'subscriptionStatus'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:222:72 No value passed for parameter 'subscriptionExpiresAt'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:222:72 No value passed for parameter 'premiumFeaturesEnabled'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:222:72 No value passed for parameter 'onboardingCompleted'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:222:72 No value passed for parameter 'profileVersion'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:222:72 No value passed for parameter 'createdAt'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:222:72 No value passed for parameter 'lastSignInAt'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:222:72 No value passed for parameter 'updatedAt'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:227:37 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:246:13 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:247:13 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:264:37 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:264:45 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:276:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:293:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:309:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:314:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:314:41 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:317:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:321:51 No value passed for parameter 'updates'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:322:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:351:66 Argument type mismatch: actual type is 'com.example.liftrix.domain.model.social.SocialProfile', but 'kotlin.String' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:351:66 No value passed for parameter 'updates'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:352:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:353:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:360:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:360:41 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:365:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:367:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:392:37 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:413:13 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:414:13 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:415:13 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:453:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:456:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:461:33 Unresolved reference 'Success'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:461:41 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/integration/UserCreationSearchFlowTest.kt:464:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:18:18 Unresolved reference 'jupiter'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:61:9 Unresolved reference 'assertTrue'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:74:9 Unresolved reference 'assertFalse'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:89:9 Unresolved reference 'assertFalse'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:111:9 Unresolved reference 'assertTrue'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:132:9 Unresolved reference 'assertFalse'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:154:9 Unresolved reference 'assertTrue'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:175:9 Unresolved reference 'assertFalse'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:192:9 Unresolved reference 'assertTrue'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:205:9 Unresolved reference 'assertFalse'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:221:9 Unresolved reference 'assertFalse'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:237:9 Unresolved reference 'assertTrue'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:253:9 Unresolved reference 'assertFalse'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:270:9 Unresolved reference 'assertTrue'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:296:9 Unresolved reference 'assertEquals'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:320:9 Unresolved reference 'assertEquals'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:336:9 Unresolved reference 'assertFalse'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:351:9 Unresolved reference 'assertFalse'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:367:9 Unresolved reference 'assertFalse'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:390:9 Unresolved reference 'assertTrue'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/service/PrivacyEnforcementServiceTest.kt:416:13 No parameter with name 'createdAt' found.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:9:26 Unresolved reference 'truth'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:108:9 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:108:17 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:108:36 Unresolved reference 'getProfilesForSync'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:108:55 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:111:86 Argument type mismatch: actual type is 'kotlin.Unit', but 'java.lang.Void!' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:118:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:146:9 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:146:17 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:146:36 Unresolved reference 'getProfilesForSync'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:146:55 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:150:102 Argument type mismatch: actual type is 'kotlin.Unit', but 'java.lang.Void!' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:156:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:160:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:161:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:162:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:163:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:164:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:186:9 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:186:17 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:186:36 Unresolved reference 'getProfilesForSync'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:186:55 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:190:102 Argument type mismatch: actual type is 'kotlin.Unit', but 'java.lang.Void!' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:196:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:200:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:201:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:223:9 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:223:17 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:223:36 Unresolved reference 'getProfilesForSync'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:223:55 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:224:86 Argument type mismatch: actual type is 'kotlin.Unit', but 'java.lang.Void!' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:246:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:254:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:255:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:256:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:283:9 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:283:17 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:283:36 Unresolved reference 'getProfilesForSync'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:283:55 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:284:86 Argument type mismatch: actual type is 'kotlin.Unit', but 'java.lang.Void!' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:289:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:322:9 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:322:17 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:322:36 Unresolved reference 'getProfilesForSync'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:322:55 Cannot infer type for this parameter. Please specify it explicitly.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:323:86 Argument type mismatch: actual type is 'kotlin.Unit', but 'java.lang.Void!' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:328:9 Unresolved reference 'assertThat'.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:360:13 No parameter with name 'profileImageUrl' found.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:366:13 No parameter with name 'tiktokHandle' found.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:371:27 Argument type mismatch: actual type is 'kotlin.Long', but 'kotlin.Int' was expected.
+e: file:///C:/Users/Administrator/Liftrix/app/src/test/java/com/example/liftrix/sync/SocialProfileSyncWorkerTest.kt:372:13 No parameter with name 'lastModified' found.

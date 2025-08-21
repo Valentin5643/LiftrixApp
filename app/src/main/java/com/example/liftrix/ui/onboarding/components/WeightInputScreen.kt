@@ -43,6 +43,8 @@ import com.example.liftrix.ui.onboarding.OnboardingState
 import com.example.liftrix.ui.onboarding.WeightUnit
 import com.example.liftrix.ui.onboarding.model.OnboardingStep
 import com.example.liftrix.ui.theme.LiftrixTheme
+import com.example.liftrix.ui.theme.LiftrixColorsV2
+import androidx.compose.foundation.isSystemInDarkTheme
 import kotlin.math.round
 
 /**
@@ -154,7 +156,7 @@ private fun WeightInputHelperText() {
         Text(
             text = "Weight helps us track your progress over time and provide more accurate workout recommendations.",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
@@ -191,14 +193,14 @@ private fun WeightInputField(
             Text(
                 text = "Enter your weight",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary
             )
         },
         supportingText = {
             Text(
                 text = "This information is optional",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary
             )
         },
         trailingIcon = {
@@ -207,7 +209,7 @@ private fun WeightInputField(
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
                         contentDescription = "Valid weight",
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = LiftrixColorsV2.Teal,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -215,7 +217,7 @@ private fun WeightInputField(
                     Icon(
                         imageVector = Icons.Default.Error,
                         contentDescription = "Invalid weight",
-                        tint = MaterialTheme.colorScheme.error,
+                        tint = LiftrixColorsV2.DataViz.Series1,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -249,7 +251,7 @@ private fun UnitSelector(
         Text(
             text = "Unit",
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onBackground,
+            color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
             fontWeight = FontWeight.Medium
         )
         
@@ -275,8 +277,8 @@ private fun UnitSelector(
                         )
                     },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        selectedContainerColor = LiftrixColorsV2.TealSurface,
+                        selectedLabelColor = LiftrixColorsV2.TealDark
                     ),
                     modifier = Modifier.semantics {
                         contentDescription = "${unit.displayName} unit selector"
@@ -312,7 +314,7 @@ private fun ConversionDisplay(
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                containerColor = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.BackgroundSecondary else LiftrixColorsV2.Light.BackgroundSecondary
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) {
@@ -329,7 +331,7 @@ private fun ConversionDisplay(
                 Text(
                     text = "$weight ${currentUnit.symbol}",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary,
                     fontWeight = FontWeight.Medium
                 )
                 
@@ -338,7 +340,7 @@ private fun ConversionDisplay(
                 Text(
                     text = "=",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary
                 )
                 
                 Spacer(modifier = Modifier.width(8.dp))
@@ -346,7 +348,7 @@ private fun ConversionDisplay(
                 Text(
                     text = convertedValue,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = LiftrixColorsV2.Teal,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -378,14 +380,14 @@ private fun WeightValidationMessage(
                 Icon(
                     imageVector = Icons.Default.Error,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
+                    tint = LiftrixColorsV2.DataViz.Series1,
                     modifier = Modifier.size(16.dp)
                 )
                 
                 Text(
                     text = validationResult.message,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = LiftrixColorsV2.DataViz.Series1,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -403,14 +405,14 @@ private fun WeightValidationMessage(
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = LiftrixColorsV2.Teal,
                     modifier = Modifier.size(16.dp)
                 )
                 
                 Text(
                     text = "Weight looks good!",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = LiftrixColorsV2.Teal,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -431,7 +433,7 @@ private fun SkipOption(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.BackgroundPrimary else LiftrixColorsV2.Light.BackgroundPrimary
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
@@ -445,7 +447,7 @@ private fun SkipOption(
             Text(
                 text = "Prefer not to say?",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
                 fontWeight = FontWeight.Medium
             )
             
@@ -458,7 +460,7 @@ private fun SkipOption(
                 Text(
                     text = "Skip this step",
                     style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary
+                    color = LiftrixColorsV2.Teal
                 )
             }
         }

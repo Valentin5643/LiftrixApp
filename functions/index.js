@@ -1610,3 +1610,135 @@ async function sendBatchedNotification(userId, notifications, style) {
     })),
   });
 }
+
+// ================================
+// SUPPORT TICKET EMAIL FUNCTIONS
+// ================================
+
+/**
+ * Cloud Function to send support ticket emails
+ * Called when support tickets are created or updated
+ */
+exports.sendSupportTicketEmail = onCall(async (request) => {
+  if (!request.auth) {
+    throw new Error("Authentication required");
+  }
+
+  const {ticketId, subject, description, category, deviceInfo, userEmail, userName} = request.data;
+  
+  if (!ticketId || !subject || !description || !category) {
+    throw new Error("Missing required ticket parameters");
+  }
+
+  try {
+    // Use Nodemailer to send email
+    const nodemailer = require('nodemailer');
+    
+    // Configure Gmail transporter
+    const transporter = nodemailer.createTransporter({
+      service: 'gmail',
+      auth: {
+        user: 'valijianu98@gmail.com',
+        pass: process.env.GMAIL_APP_PASSWORD // Set this in Firebase Functions config
+      }
+    });
+
+    const emailBody = `
+New Support Ticket Received
+
+Ticket ID: ${ticketId}
+Category: ${category}
+Subject: ${subject}
+
+User Information:
+- Email: ${userEmail || 'Not provided'}
+- Name: ${userName || 'Anonymous'}
+
+Description:
+${description}
+
+Device Information:
+${deviceInfo || 'Not provided'}
+
+Submitted at: ${new Date().toISOString()}
+    `;
+
+    const mailOptions = {
+      from: 'valijianu98@gmail.com',
+      to: 'valijianu98@gmail.com',
+      subject: `Liftrix Support: ${category} - ${subject}`,
+      text: emailBody,
+      replyTo: userEmail || 'valijianu98@gmail.com'
+    };
+
+    const result = await transporter.sendMail(mailOptions);
+    
+    logger.info(`Support ticket email sent successfully for ticket: ${ticketId}`);
+    
+    return {
+      success: true,
+      ticketId: ticketId,
+      messageId: result.messageId
+    };
+
+  } catch (error) {
+    logger.error(`Error sending support ticket email: ${error.message}`, error);
+    throw new Error(`Failed to send support ticket email: ${error.message}`);
+  }
+});
+
+/**
+ * Triggered function when support tickets are created in Firestore
+ * Automatically sends email notifications
+ */
+exports.onSupportTicketCreated = onDocumentWritten(
+    "support_tickets/{ticketId}",
+    async (event) => {
+      const ticketId = event.params.ticketId;
+      const ticketData = event.data?.after?.data();
+
+      if (!ticketData) {
+        logger.info(`Support ticket deleted: ${ticketId}`);
+        return null;
+      }
+
+      // Only process new tickets (not updates)
+      if (ticketData.email_sent) {
+        logger.info(`Email already sent for ticket: ${ticketId}`);
+        return null;
+      }
+
+      try {
+        // Get user information
+        const userDoc = await db.collection("users").doc(ticketData.user_id).get();
+        const userData = userDoc.exists ? userDoc.data() : {};
+
+        // Send email notification
+        await exports.sendSupportTicketEmail.run({
+          auth: { uid: ticketData.user_id },
+          data: {
+            ticketId: ticketId,
+            subject: ticketData.subject,
+            description: ticketData.description,
+            category: ticketData.category,
+            deviceInfo: ticketData.device_info,
+            userEmail: userData.email,
+            userName: userData.display_name || userData.username
+          }
+        });
+
+        // Mark ticket as email sent
+        await event.data.after.ref.update({
+          email_sent: true,
+          email_sent_at: new Date()
+        });
+
+        logger.info(`Support ticket email workflow completed for ticket: ${ticketId}`);
+        return null;
+
+      } catch (error) {
+        logger.error(`Error in support ticket email workflow: ${ticketId}`, error);
+        // Don't throw error to avoid retries - log and continue
+        return null;
+      }
+    });

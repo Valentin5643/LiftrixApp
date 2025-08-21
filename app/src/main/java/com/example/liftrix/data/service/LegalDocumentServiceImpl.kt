@@ -96,7 +96,7 @@ You have the right to:
 7. Contact Us
 For privacy concerns or data requests:
 • In-app: Settings > Help & Support
-• Email: privacy@liftrix.com"""
+• Email: valijianu98@gmail.com"""
         
         private const val DEFAULT_TERMS_OF_SERVICE = """Terms of Service for Liftrix
 

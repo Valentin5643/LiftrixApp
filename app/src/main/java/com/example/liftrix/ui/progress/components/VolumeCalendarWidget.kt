@@ -93,8 +93,8 @@ fun VolumeCalendarWidget(
  */
 @Composable
 private fun VolumeStatsSummary(
-    totalVolume: com.example.liftrix.domain.model.Weight,
-    averageVolume: com.example.liftrix.domain.model.Weight,
+    totalVolume: com.example.liftrix.domain.model.Volume,
+    averageVolume: com.example.liftrix.domain.model.Volume,
     workoutDays: Int,
     workoutFrequency: Float
 ) {

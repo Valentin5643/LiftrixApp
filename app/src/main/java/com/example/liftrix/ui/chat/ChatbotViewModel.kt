@@ -146,7 +146,7 @@ class ChatbotViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                // Optimistic UI update
+                // Optimistic UI update - show the message immediately
                 _uiState.value = _uiState.value.copy(
                     messages = _uiState.value.messages + userMessage,
                     currentInput = "",
@@ -154,25 +154,28 @@ class ChatbotViewModel @Inject constructor(
                     error = null
                 )
 
-                // Save user message to repository
-                chatRepository.saveMessage(
-                    userId = userId!!,
-                    message = content.trim(),
-                    type = MessageType.USER,
-                    conversationId = currentConversationId,
-                    language = _uiState.value.currentLanguage.code
-                )
+                // DON'T save user message here - SendChatMessageUseCase handles it
+                // This prevents duplicate messages in the database
                 
-                // Use real AI integration
+                // Use real AI integration - this will save both user and AI messages
                 sendChatMessageUseCase(
                     userId = userId!!,
                     message = content.trim(),
                     conversationId = currentConversationId,
                     language = _uiState.value.currentLanguage.code
                 ).fold(
-                    onSuccess = { (userMessage, aiMessage) ->
+                    onSuccess = { (savedUserMessage, aiMessage) ->
                         Timber.d("AI response received successfully")
+                        
+                        // Replace the optimistic user message with the saved one (with proper ID)
+                        // and add the AI response
+                        val updatedMessages = _uiState.value.messages
+                            .filterNot { it.id == userMessage.id } // Remove optimistic message
+                            .plus(savedUserMessage) // Add saved user message
+                            .plus(aiMessage) // Add AI response
+                        
                         _uiState.value = _uiState.value.copy(
+                            messages = updatedMessages,
                             isTyping = false
                         )
                         // Update usage limits after AI response
@@ -180,9 +183,17 @@ class ChatbotViewModel @Inject constructor(
                     },
                     onFailure = { error ->
                         Timber.e("Failed to get AI response: $error")
+                        val liftrixError = error as? LiftrixError
+                        
+                        // Remove the optimistic message on failure
+                        val updatedMessages = _uiState.value.messages
+                            .filterNot { it.id == userMessage.id }
+                        
                         _uiState.value = _uiState.value.copy(
+                            messages = updatedMessages,
                             isTyping = false,
-                            error = error as? LiftrixError
+                            error = liftrixError,
+                            lastFailedMessage = content.trim() // Store for retry
                         )
                     }
                 )
@@ -216,11 +227,17 @@ class ChatbotViewModel @Inject constructor(
     }
 
     private fun retryLastMessage() {
-        val lastUserMessage = _uiState.value.messages
-            .lastOrNull { it.type == MessageType.USER }
+        // First try to use the stored failed message, then fall back to last user message
+        val messageToRetry = _uiState.value.lastFailedMessage 
+            ?: _uiState.value.messages.lastOrNull { it.type == MessageType.USER }?.content
         
-        if (lastUserMessage != null) {
-            sendMessage(lastUserMessage.content)
+        if (messageToRetry != null) {
+            // Clear the error state and failed message before retrying
+            _uiState.value = _uiState.value.copy(
+                error = null,
+                lastFailedMessage = null
+            )
+            sendMessage(messageToRetry)
         }
     }
 
@@ -251,7 +268,10 @@ class ChatbotViewModel @Inject constructor(
     }
 
     private fun dismissError() {
-        _uiState.value = _uiState.value.copy(error = null)
+        _uiState.value = _uiState.value.copy(
+            error = null,
+            lastFailedMessage = null
+        )
     }
 
     /**
@@ -302,7 +322,8 @@ data class ChatbotUiState(
     val showUsageWarning: Boolean = false,
     val currentLanguage: Language = Language.ENGLISH,
     val autoDetectLanguage: Boolean = true,
-    val error: LiftrixError? = null
+    val error: LiftrixError? = null,
+    val lastFailedMessage: String? = null // Store last failed message for retry
 )
 
 /**

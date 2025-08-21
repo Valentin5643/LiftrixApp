@@ -278,6 +278,7 @@ class ProgressChartsViewModel @Inject constructor(
                     volumeChart = AsyncData.Loading(),
                     durationChart = AsyncData.Loading(),
                     frequencyChart = AsyncData.Loading(),
+                    volumeCalendar = AsyncData.Loading(),
                     lastRefreshTimestamp = System.currentTimeMillis()
                 )
             )
@@ -419,11 +420,14 @@ class ProgressChartsViewModel @Inject constructor(
      * @param timeRange The time range for data retrieval
      */
     private suspend fun loadAllCharts(userId: String, timeRange: TimeRange) {
+        Timber.d("🔍 VOLUME-CALENDAR-DEBUG: loadAllCharts starting - userId=$userId, timeRange=$timeRange")
+        
         // Set loading state for all charts
         updateChartStates(
             volumeChart = AsyncData.Loading(),
             durationChart = AsyncData.Loading(),
-            frequencyChart = AsyncData.Loading()
+            frequencyChart = AsyncData.Loading(),
+            volumeCalendar = AsyncData.Loading()
         )
 
         // Launch concurrent data loading with timeout
@@ -433,6 +437,10 @@ class ProgressChartsViewModel @Inject constructor(
                     launch { loadVolumeChart(userId, timeRange) }
                     launch { loadDurationChart(userId, timeRange) }
                     launch { loadFrequencyChart(userId, timeRange) }
+                    launch { 
+                        Timber.d("🔍 VOLUME-CALENDAR-DEBUG: Launching loadVolumeCalendar coroutine")
+                        loadVolumeCalendar(userId) 
+                    }
                 }
             } catch (timeout: kotlinx.coroutines.TimeoutCancellationException) {
                 Timber.w("Chart loading timeout - setting fallback states")
@@ -527,16 +535,46 @@ class ProgressChartsViewModel @Inject constructor(
     }
 
     /**
+     * Loads volume calendar data from the service.
+     * 
+     * @param userId The user ID for data scoping
+     */
+    private suspend fun loadVolumeCalendar(userId: String) {
+        try {
+            Timber.d("🔍 VOLUME-CALENDAR-DEBUG: Starting loadVolumeCalendar for userId=$userId")
+            val result = progressDataService.getVolumeCalendarData(userId)
+            
+            result.fold(
+                onSuccess = { data ->
+                    Timber.d("🔍 VOLUME-CALENDAR-DEBUG: Successfully loaded volume calendar with ${data.dailyVolumes.size} days")
+                    updateChartStates(volumeCalendar = AsyncData.Success(data))
+                },
+                onFailure = { error ->
+                    Timber.e("🔍 VOLUME-CALENDAR-DEBUG: Volume calendar fetch failure: ${error.message}")
+                    val liftrixError = if (error is LiftrixError) error else LiftrixError.UnknownError(error.message ?: "Unknown error")
+                    updateChartStates(volumeCalendar = AsyncData.Failure(liftrixError))
+                    handleError(liftrixError)
+                }
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Volume calendar fetch exception: ${e.message}")
+            updateChartStates(volumeCalendar = AsyncData.Failure(LiftrixError.UnknownError("Volume calendar fetch exception: ${e.message}")))
+        }
+    }
+
+    /**
      * Updates the chart states in the UI state.
      * 
      * @param volumeChart Optional new volume chart state
      * @param durationChart Optional new duration chart state
      * @param frequencyChart Optional new frequency chart state
+     * @param volumeCalendar Optional new volume calendar state
      */
     private fun updateChartStates(
         volumeChart: AsyncData<List<com.example.liftrix.domain.repository.VolumeDataPoint>>? = null,
         durationChart: AsyncData<List<com.example.liftrix.domain.repository.DurationDataPoint>>? = null,
-        frequencyChart: AsyncData<List<com.example.liftrix.domain.repository.FrequencyDataPoint>>? = null
+        frequencyChart: AsyncData<List<com.example.liftrix.domain.repository.FrequencyDataPoint>>? = null,
+        volumeCalendar: AsyncData<com.example.liftrix.domain.model.analytics.VolumeCalendarData>? = null
     ) {
         val currentState = _uiState.value
         
@@ -547,6 +585,7 @@ class ProgressChartsViewModel @Inject constructor(
                         volumeChart = volumeChart ?: currentState.data.volumeChart,
                         durationChart = durationChart ?: currentState.data.durationChart,
                         frequencyChart = frequencyChart ?: currentState.data.frequencyChart,
+                        volumeCalendar = volumeCalendar ?: currentState.data.volumeCalendar,
                         lastRefreshTimestamp = System.currentTimeMillis()
                     )
                 )
@@ -560,6 +599,7 @@ class ProgressChartsViewModel @Inject constructor(
                         volumeChart = volumeChart ?: combinedStateValue.volumeChart,
                         durationChart = durationChart ?: combinedStateValue.durationChart,
                         frequencyChart = frequencyChart ?: combinedStateValue.frequencyChart,
+                        volumeCalendar = volumeCalendar ?: combinedStateValue.volumeCalendar,
                         lastRefreshTimestamp = System.currentTimeMillis()
                     )
                 )

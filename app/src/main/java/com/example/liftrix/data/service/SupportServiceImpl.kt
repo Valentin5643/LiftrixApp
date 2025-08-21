@@ -2,6 +2,9 @@ package com.example.liftrix.data.service
 
 import android.net.Uri
 import com.example.liftrix.data.local.dao.SupportTicketDao
+import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.tasks.await
 import com.example.liftrix.data.mapper.SupportTicketMapper.toDomainModel
 import com.example.liftrix.data.mapper.SupportTicketMapper.toDomainModels
 import com.example.liftrix.data.mapper.SupportTicketMapper.toEntity
@@ -421,12 +424,38 @@ class SupportServiceImpl @Inject constructor(
                 return@withContext
             }
             
-            // In a real implementation, this would sync with remote server
-            // For now, we'll just mark them as synced
+            // Sync tickets to Firestore which will trigger email sending
+            val firestore = FirebaseFirestore.getInstance()
+            val batch = firestore.batch()
+            
+            for (ticket in unsyncedTickets) {
+                val firestoreTicket = mapOf(
+                    "user_id" to ticket.userId,
+                    "ticket_id" to ticket.ticketId,
+                    "category" to ticket.category,
+                    "subject" to ticket.subject,
+                    "description" to ticket.description,
+                    "device_info" to ticket.deviceInfo,
+                    "app_version" to ticket.appVersion,
+                    "status" to ticket.status,
+                    "created_at" to Timestamp(ticket.createdAt),
+                    "updated_at" to ticket.updatedAt?.let { Timestamp(it) },
+                    "email_sent" to false,
+                    "sync_version" to ticket.syncVersion
+                )
+                
+                val docRef = firestore.collection("support_tickets").document(ticket.ticketId)
+                batch.set(docRef, firestoreTicket)
+            }
+            
+            // Commit batch to Firestore
+            batch.commit().await()
+            
+            // Mark tickets as synced in local database
             val ticketIds = unsyncedTickets.map { it.ticketId }
             supportTicketDao.markTicketsSynced(ticketIds, userId)
             
-            Timber.d("Synced ${unsyncedTickets.size} tickets for user $userId")
+            Timber.d("Synced ${unsyncedTickets.size} tickets to Firestore for user $userId")
         }
     }
     

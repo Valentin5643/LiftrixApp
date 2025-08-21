@@ -171,6 +171,9 @@ dependencies {
     implementation(libs.firebase.perf)
     implementation(libs.firebase.config)
     implementation(libs.firebase.messaging)
+    implementation(libs.firebase.appcheck)
+    implementation(libs.firebase.appcheck.playintegrity)
+    debugImplementation(libs.firebase.appcheck.debug)
     
     // Google Play Billing
     implementation("com.android.billingclient:billing-ktx:6.0.1")
@@ -201,6 +204,8 @@ dependencies {
     implementation(libs.hilt.work)
     implementation(libs.hilt.navigation.compose)
     ksp(libs.hilt.compiler)
+    // CRITICAL: Required for @HiltWorker annotation processing
+    ksp("androidx.hilt:hilt-compiler:1.2.0")
     
     // WorkManager
     implementation(libs.work.runtime.ktx)
@@ -243,6 +248,7 @@ dependencies {
     implementation(libs.androidx.animation)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.jdk8)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
@@ -257,6 +263,7 @@ dependencies {
     testImplementation("androidx.paging:paging-testing:3.2.1")
     testImplementation(libs.androidx.sqlite.framework)
     testImplementation(libs.androidx.runner)
+    testImplementation("com.google.truth:truth:1.4.4")
     
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.benchmark.junit4)

@@ -95,6 +95,13 @@ interface ProgressStatsRepository {
     ): Flow<LiftrixResult<VolumeCalendarData>>
     
     /**
+     * Get user's historical maximum daily volume for proportional intensity scaling
+     * @param userId User identifier
+     * @return Flow of maximum daily volume ever recorded for this user
+     */
+    suspend fun getUserMaxDailyVolume(userId: String): Flow<LiftrixResult<com.example.liftrix.domain.model.Volume>>
+    
+    /**
      * Get comprehensive progress metrics for analytics dashboard
      * @param userId User identifier
      * @param timeRange Time range for metrics calculation

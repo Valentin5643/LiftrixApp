@@ -1,14 +1,18 @@
 package com.example.liftrix.data.repository
 
+import android.content.Context
 import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.local.LiftrixDatabase
 import com.example.liftrix.data.mapper.UserProfileMapper
 import com.example.liftrix.data.sync.OfflineQueueManager
+import com.example.liftrix.data.model.SyncPayload
+import com.example.liftrix.data.model.SyncPayloadFactory
 import com.example.liftrix.sync.SyncCoordinator
 import com.example.liftrix.domain.model.StreakData
 import com.example.liftrix.domain.model.UserProfile
@@ -29,18 +33,22 @@ import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 @Singleton
 class ProfileRepositoryImpl @Inject constructor(
     private val userProfileDao: UserProfileDao,
     private val userProfileMapper: UserProfileMapper,
     private val firestore: FirebaseFirestore,
-    private val workManager: WorkManager,
+    @ApplicationContext private val context: Context,
     private val workoutRepository: WorkoutRepository,
     private val database: LiftrixDatabase,
     private val syncCoordinator: SyncCoordinator,
     private val offlineQueueManager: OfflineQueueManager
 ) : ProfileRepository {
+    
+    private val workManager: WorkManager
+        get() = WorkManagerProvider.getInstance(context)
 
     override fun getProfile(userId: String): Flow<UserProfile?> {
         return flow {
@@ -183,13 +191,25 @@ class ProfileRepositoryImpl @Inject constructor(
         return try {
             val profile = userProfileDao.getProfileForUserSuspend(userId)
             if (profile != null && !profile.isSynced) {
+                // Create type-safe profile payload
+                val profilePayload = SyncPayloadFactory.createProfilePayload(
+                    userId = profile.userId,
+                    displayName = profile.displayName,
+                    email = "", // Email is not stored in UserProfileEntity
+                    profileImageUrl = profile.profileImageUrl,
+                    goals = profile.goals?.split(",")?.filter { it.isNotBlank() } ?: emptyList(),
+                    preferences = emptyMap(), // Add preferences mapping if needed
+                    syncVersion = profile.syncVersion,
+                    lastModified = profile.updatedAt.atZone(java.time.ZoneId.systemDefault()).toEpochSecond()
+                )
+                
                 // Queue in offline manager
                 val queueResult = offlineQueueManager.queueOperation(
                     userId = userId,
                     entityType = "PROFILE",
                     entityId = userId,
                     operation = "UPSERT",
-                    data = profile
+                    data = profilePayload
                 )
                 
                 if (queueResult.isSuccess) {

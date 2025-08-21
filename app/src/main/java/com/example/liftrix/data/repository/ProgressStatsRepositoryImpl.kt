@@ -260,6 +260,8 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         month: Int
     ): Flow<LiftrixResult<VolumeCalendarData>> = flow {
         try {
+            Timber.d("🔍 VOLUME-CALENDAR-FIX: getVolumeCalendarData starting for userId=$userId, year=$year, month=$month")
+            
             val startDate = LocalDate(year, month, 1)
             // Calculate last day of month
             val endDate = when (month) {
@@ -270,18 +272,143 @@ class ProgressStatsRepositoryImpl @Inject constructor(
                 else -> LocalDate(year, month, 31)
             }
             
-            val dailyVolumes = workoutDao.getDailyVolumesByDateRange(userId, startDate.toString(), endDate.toString())
-            val volumeCalendarData = analyticsMapper.mapToVolumeCalendarData(
-                dailyVolumes,
-                year,
-                kotlinx.datetime.Month.values()[month - 1]
-            )
+            Timber.d("🔍 VOLUME-CALENDAR-FIX: Using same data source as working volume chart")
+            
+            // FIX: Use the same data calculation method as the working volume chart
+            // This calls getWorkoutsInDateRangeWithMetrics() which properly calculates volume from exercise sets
+            val allDailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(userId, startDate, endDate)
+            
+            Timber.d("🔍 VOLUME-CALENDAR-FIX: Got ${allDailyMetrics.size} daily metrics")
+            
+            // Filter to only include dates within the specified month (VolumeCalendarData validation requirement)
+            val filteredMetrics = allDailyMetrics.filterKeys { date ->
+                date.year == year && date.monthNumber == month
+            }
+            
+            Timber.d("🔍 VOLUME-CALENDAR-FIX: Filtered to ${filteredMetrics.size} metrics within month $month/$year")
+            
+            // Convert daily metrics to volume calendar format
+            Timber.d("🔍 VOLUME-CALENDAR-FIX: Converting ${filteredMetrics.size} daily metrics to calendar format")
+            
+            val dailyVolumes = try {
+                filteredMetrics.mapValues { (date, metrics) ->
+                    Timber.d("🔍 VOLUME-CALENDAR-FIX: Processing date=$date, volume=${metrics.totalVolume}kg")
+                    com.example.liftrix.domain.model.Volume(metrics.totalVolume.toDouble())
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "🔍 VOLUME-CALENDAR-FIX: Error converting daily metrics to volumes")
+                throw e
+            }
+            
+            Timber.d("🔍 VOLUME-CALENDAR-FIX: Converted to ${dailyVolumes.size} daily volumes")
+            
+            // Use historical maximum for consistent proportional scaling across months
+            val maxVolume = try {
+                var historicalMaxVolume: com.example.liftrix.domain.model.Volume? = null
+                
+                // Get user's historical maximum daily volume
+                getUserMaxDailyVolume(userId).collect { result ->
+                    result.fold(
+                        onSuccess = { historicalMaxVolume = it },
+                        onFailure = { 
+                            Timber.w("Failed to get historical max volume, falling back to monthly max")
+                            historicalMaxVolume = dailyVolumes.values.maxByOrNull { it.kilograms } 
+                                ?: com.example.liftrix.domain.model.Volume.ZERO
+                        }
+                    )
+                }
+                
+                val finalMaxVolume = historicalMaxVolume ?: com.example.liftrix.domain.model.Volume.ZERO
+                Timber.d("🔍 VOLUME-CALENDAR-FIX: Using max volume: ${finalMaxVolume.kilograms}kg for proportional scaling")
+                finalMaxVolume
+                
+            } catch (e: Exception) {
+                Timber.e(e, "🔍 VOLUME-CALENDAR-FIX: Error calculating max volume, using monthly fallback")
+                dailyVolumes.values.maxByOrNull { it.kilograms } ?: com.example.liftrix.domain.model.Volume.ZERO
+            }
+            
+            val totalVolume = try {
+                dailyVolumes.values.fold(com.example.liftrix.domain.model.Volume.ZERO) { acc, volume -> 
+                    com.example.liftrix.domain.model.Volume(acc.kilograms + volume.kilograms) 
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "🔍 VOLUME-CALENDAR-FIX: Error calculating total volume")
+                throw e
+            }
+            
+            val averageVolume = try {
+                if (dailyVolumes.isNotEmpty()) {
+                    com.example.liftrix.domain.model.Volume(totalVolume.kilograms / dailyVolumes.size)
+                } else {
+                    com.example.liftrix.domain.model.Volume.ZERO
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "🔍 VOLUME-CALENDAR-FIX: Error calculating average volume")
+                throw e
+            }
+            
+            Timber.d("🔍 VOLUME-CALENDAR-FIX: Calculated - Max: ${maxVolume.kilograms}kg, Total: ${totalVolume.kilograms}kg, Avg: ${averageVolume.kilograms}kg")
+            
+            val volumeCalendarData = try {
+                VolumeCalendarData(
+                    year = year,
+                    month = kotlinx.datetime.Month.values()[month - 1],
+                    dailyVolumes = dailyVolumes,
+                    maxVolume = maxVolume,
+                    averageVolume = averageVolume
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "🔍 VOLUME-CALENDAR-FIX: Error creating VolumeCalendarData object")
+                throw e
+            }
+            
+            Timber.d("🔍 VOLUME-CALENDAR-FIX: Created calendar data - Max: ${maxVolume.kilograms}kg, Avg: ${averageVolume.kilograms}kg, Days: ${dailyVolumes.size}")
             
             emit(LiftrixResult.success(volumeCalendarData))
             
         } catch (e: Exception) {
             Timber.e(e, "Failed to get volume calendar data for user: $userId, month: $month")
             emit(LiftrixResult.failure(LiftrixError.DatabaseError("Failed to load volume calendar data")))
+        }
+    }
+    
+    override suspend fun getUserMaxDailyVolume(userId: String): Flow<LiftrixResult<com.example.liftrix.domain.model.Volume>> = flow {
+        try {
+            Timber.d("🔍 MAX-VOLUME: Getting historical maximum daily volume for userId=$userId")
+            
+            // Get all workout data for the user to find maximum daily volume
+            // Using a reasonable time window (last 2 years) for performance
+            val currentDate = kotlinx.datetime.Clock.System.now()
+            val twoYearsAgo = kotlinx.datetime.LocalDate.fromEpochDays(
+                (currentDate.epochSeconds / 86400).toInt() - (365 * 2)
+            )
+            val today = kotlinx.datetime.LocalDate.fromEpochDays(
+                (currentDate.epochSeconds / 86400).toInt()
+            )
+            
+            // Get all daily metrics in the time window
+            val allDailyMetrics = workoutDao.getWorkoutsInDateRangeWithMetrics(userId, twoYearsAgo, today)
+            
+            Timber.d("🔍 MAX-VOLUME: Found ${allDailyMetrics.size} days with workout data")
+            
+            // Find the maximum daily volume
+            val maxDailyVolume = allDailyMetrics.values.maxOfOrNull { it.totalVolume } ?: 0f
+            
+            Timber.d("🔍 MAX-VOLUME: Historical maximum daily volume: ${maxDailyVolume}kg")
+            
+            // Apply minimum threshold to ensure reasonable intensity scaling
+            // Even users with low volume should see visual differences
+            val effectiveMaxVolume = maxOf(maxDailyVolume.toDouble(), 1000.0) // Minimum 1000kg for scaling
+            
+            val maxVolume = com.example.liftrix.domain.model.Volume.fromKilograms(effectiveMaxVolume)
+            
+            Timber.d("🔍 MAX-VOLUME: Effective max volume for scaling: ${maxVolume.kilograms}kg")
+            
+            emit(LiftrixResult.success(maxVolume))
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get user max daily volume for user: $userId")
+            emit(LiftrixResult.failure(LiftrixError.DatabaseError("Failed to load maximum daily volume")))
         }
     }
     

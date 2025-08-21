@@ -2,6 +2,7 @@ package com.example.liftrix.ui.progress
 
 import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.analytics.TimeRangeType
+import com.example.liftrix.domain.model.analytics.VolumeCalendarData
 import com.example.liftrix.domain.repository.VolumeDataPoint
 import com.example.liftrix.domain.repository.DurationDataPoint
 import com.example.liftrix.domain.repository.FrequencyDataPoint
@@ -64,6 +65,7 @@ data class ProgressChartsState(
     val volumeChart: AsyncData<List<VolumeDataPoint>> = AsyncData.NotAsked,
     val durationChart: AsyncData<List<DurationDataPoint>> = AsyncData.NotAsked,
     val frequencyChart: AsyncData<List<FrequencyDataPoint>> = AsyncData.NotAsked,
+    val volumeCalendar: AsyncData<VolumeCalendarData> = AsyncData.NotAsked,
     val currentTimeRange: TimeRange = TimeRange.lastMonth(),
     val userId: String? = null,
     val lastRefreshTimestamp: Long = 0L
@@ -80,7 +82,7 @@ data class ProgressChartsState(
  * @return true if any chart is in loading state, false otherwise
  */
 fun ProgressChartsState.isAnyChartLoading(): Boolean = 
-    volumeChart.isLoading() || durationChart.isLoading() || frequencyChart.isLoading()
+    volumeChart.isLoading() || durationChart.isLoading() || frequencyChart.isLoading() || volumeCalendar.isLoading()
 
 /**
  * Checks if all charts have successfully loaded data.
@@ -88,7 +90,7 @@ fun ProgressChartsState.isAnyChartLoading(): Boolean =
  * @return true if all charts have data, false otherwise
  */
 fun ProgressChartsState.areAllChartsLoaded(): Boolean = 
-    volumeChart.isSuccess() && durationChart.isSuccess() && frequencyChart.isSuccess()
+    volumeChart.isSuccess() && durationChart.isSuccess() && frequencyChart.isSuccess() && volumeCalendar.isSuccess()
 
 /**
  * Checks if any chart has failed to load data.
@@ -96,7 +98,7 @@ fun ProgressChartsState.areAllChartsLoaded(): Boolean =
  * @return true if any chart has an error, false otherwise
  */
 fun ProgressChartsState.hasAnyChartError(): Boolean = 
-    volumeChart.isFailure() || durationChart.isFailure() || frequencyChart.isFailure()
+    volumeChart.isFailure() || durationChart.isFailure() || frequencyChart.isFailure() || volumeCalendar.isFailure()
 
 /**
  * Checks if all charts are in not asked state (initial state).
@@ -104,7 +106,7 @@ fun ProgressChartsState.hasAnyChartError(): Boolean =
  * @return true if all charts are in NotAsked state, false otherwise
  */
 fun ProgressChartsState.areAllChartsNotAsked(): Boolean = 
-    volumeChart.isNotAsked() && durationChart.isNotAsked() && frequencyChart.isNotAsked()
+    volumeChart.isNotAsked() && durationChart.isNotAsked() && frequencyChart.isNotAsked() && volumeCalendar.isNotAsked()
 
 /**
  * Checks if the state has a valid user for data operations.
@@ -194,6 +196,7 @@ fun createLoadingChartsState(userId: String, timeRange: TimeRange = TimeRange.la
         volumeChart = AsyncData.Loading(),
         durationChart = AsyncData.Loading(),
         frequencyChart = AsyncData.Loading(),
+        volumeCalendar = AsyncData.Loading(),
         currentTimeRange = timeRange,
         userId = userId,
         lastRefreshTimestamp = System.currentTimeMillis()

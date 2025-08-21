@@ -2,6 +2,7 @@ package com.example.liftrix.data.repository
 
 import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.local.dao.UserSearchCacheDao
+import com.example.liftrix.data.local.dao.FollowRelationshipDao
 import com.example.liftrix.data.local.entity.UserSearchCacheEntity
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -49,6 +50,9 @@ class UserSearchRepositoryTest {
     
     @MockK
     private lateinit var userSearchCacheDao: UserSearchCacheDao
+    
+    @MockK
+    private lateinit var followRelationshipDao: FollowRelationshipDao
     
     @MockK
     private lateinit var authRepository: AuthRepository
@@ -99,6 +103,7 @@ class UserSearchRepositoryTest {
         repository = UserSearchRepositoryImpl(
             userProfileDao = userProfileDao,
             userSearchCacheDao = userSearchCacheDao,
+            followRelationshipDao = followRelationshipDao,
             authRepository = authRepository,
             firestore = firestore,
             gson = gson
@@ -131,7 +136,7 @@ class UserSearchRepositoryTest {
         every { querySnapshot.documents } returns emptyList() // ❌ No data because wrong collection
         
         // Mock empty local cache
-        coEvery { userSearchCacheDao.searchUsers(any(), any()) } returns emptyList()
+        coEvery { userSearchCacheDao.getCachedSearchResult(any<String>(), any<String>()) } returns null
         
         // Execute search
         val result = repository.searchUsers(
@@ -168,16 +173,14 @@ class UserSearchRepositoryTest {
         
         // Simulate stale cache data (user was once findable)
         val staleCache = UserSearchCacheEntity(
-            userId = testUserId,
-            username = "cachetest",
-            displayName = "Cache Test User",
-            profileImageUrl = null,
-            bio = null,
-            searchTokens = listOf("cache", "test", "cachetest"),
-            isPublic = true,
-            lastUpdated = System.currentTimeMillis() - 3600000 // 1 hour old
+            id = "cache_${testUserId}_12345",
+            viewerUserId = currentUserId,
+            searchQuery = searchQuery,
+            searchResults = "[]", // Empty JSON array for stale cache
+            createdAt = "2024-01-01T10:00:00",
+            expiresAt = "2024-01-01T11:00:00" // Expired cache
         )
-        coEvery { userSearchCacheDao.searchUsers(any(), any()) } returns listOf(staleCache)
+        coEvery { userSearchCacheDao.getCachedSearchResult(any<String>(), any<String>()) } returns staleCache
         
         // Repository tries to refresh from Firebase but finds nothing (wrong collection)
         every { userSearchCacheCollection.whereEqualTo("isPublic", true) } returns query
@@ -228,7 +231,7 @@ class UserSearchRepositoryTest {
         coEvery { query.get().await() } returns querySnapshot
         
         // Mock local cache as empty too
-        coEvery { userSearchCacheDao.searchUsers(any(), any()) } returns emptyList()
+        coEvery { userSearchCacheDao.getCachedSearchResult(any<String>(), any<String>()) } returns null
         
         // Meanwhile, tokens exist in 'social_profiles' collection (where sync worker put them)
         // but repository never searches there
@@ -321,7 +324,7 @@ class UserSearchRepositoryTest {
         every { usersPublicCollection.whereEqualTo("isPublic", true) } returns query
         every { querySnapshot.documents } returns emptyList()
         coEvery { query.get().await() } returns querySnapshot
-        coEvery { userSearchCacheDao.searchUsers(any(), any()) } returns emptyList()
+        coEvery { userSearchCacheDao.getCachedSearchResult(any<String>(), any<String>()) } returns null
         
         // Mock the collection where data ACTUALLY exists (but repository doesn't search it)
         val actualDataDoc = mockDocumentSnapshot(testUserId, testUsername, "Demo User")

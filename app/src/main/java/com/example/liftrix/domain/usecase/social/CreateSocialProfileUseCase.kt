@@ -36,6 +36,7 @@ class CreateSocialProfileUseCase @Inject constructor(
     ) {
         val userId = getCurrentUserIdUseCase() 
             ?: throw IllegalStateException("User not authenticated")
+        
 
         // Validate inputs
         validator.validateUsername(username).getOrThrow()
@@ -45,15 +46,12 @@ class CreateSocialProfileUseCase @Inject constructor(
         // Check username availability with cleanup
         val isUsernameAvailable = repository.checkUsernameAvailability(username).getOrThrow()
         if (!isUsernameAvailable) {
-            android.util.Log.i("CreateSocialProfileUseCase", "Username '$username' taken, attempting cleanup")
             
             // Try to clean up orphaned username from previous failed signups
             val cleanupResult = repository.cleanupOrphanedUsername(username, userId).getOrThrow()
             if (cleanupResult) {
-                android.util.Log.i("CreateSocialProfileUseCase", "Successfully cleaned up orphaned username")
                 // Username is now available, continue
             } else {
-                android.util.Log.e("CreateSocialProfileUseCase", "Username '$username' is legitimately taken")
                 throw IllegalArgumentException("Username '$username' is already taken")
             }
         }
@@ -72,8 +70,9 @@ class CreateSocialProfileUseCase @Inject constructor(
             createdAt = now,
             updatedAt = now
         )
-
-        repository.createProfile(profile).getOrThrow()
+        
+        val result = repository.createProfile(profile).getOrThrow()
+        result
     }
 }
 

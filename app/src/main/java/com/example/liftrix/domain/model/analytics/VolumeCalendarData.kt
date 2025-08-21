@@ -1,6 +1,6 @@
 package com.example.liftrix.domain.model.analytics
 
-import com.example.liftrix.domain.model.Weight
+import com.example.liftrix.domain.model.Volume
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.Month
@@ -26,9 +26,9 @@ import kotlinx.datetime.number
 data class VolumeCalendarData(
     val year: Int,
     val month: Month,
-    val dailyVolumes: Map<LocalDate, Weight>,
-    val maxVolume: Weight,
-    val averageVolume: Weight
+    val dailyVolumes: Map<LocalDate, Volume>,
+    val maxVolume: Volume,
+    val averageVolume: Volume
 ) {
     init {
         require(year >= MIN_YEAR && year <= MAX_YEAR) { 
@@ -39,11 +39,11 @@ data class VolumeCalendarData(
         }) { 
             "All dates must be within the specified year ($year) and month ($month)" 
         }
-        require(maxVolume >= Weight.ZERO) { "Max volume cannot be negative: $maxVolume" }
-        require(averageVolume >= Weight.ZERO) { "Average volume cannot be negative: $averageVolume" }
+        require(maxVolume >= Volume.ZERO) { "Max volume cannot be negative: $maxVolume" }
+        require(averageVolume >= Volume.ZERO) { "Average volume cannot be negative: $averageVolume" }
         
         // Validate max volume is actually the maximum
-        val actualMax = dailyVolumes.values.maxWithOrNull(compareBy { it.kilograms }) ?: Weight.ZERO
+        val actualMax = dailyVolumes.values.maxWithOrNull(compareBy { it.kilograms }) ?: Volume.ZERO
         require(maxVolume >= actualMax) { 
             "Max volume ($maxVolume) must be >= actual maximum ($actualMax)" 
         }
@@ -61,23 +61,27 @@ data class VolumeCalendarData(
             year = year,
             month = month,
             dailyVolumes = emptyMap(),
-            maxVolume = Weight.ZERO,
-            averageVolume = Weight.ZERO
+            maxVolume = Volume.ZERO,
+            averageVolume = Volume.ZERO
         )
     }
     
     /**
      * Calculates volume intensity for color-coding (0.0 to 1.0)
      * 
-     * Used by UI components to determine gradient color intensity:
+     * Uses proportional scaling based on user's historical maximum daily volume
+     * for consistent intensity visualization across all months:
      * - 0.0 = No volume (transparent/minimal color)
-     * - 1.0 = Maximum volume (full color intensity)
+     * - 0.25 = 25% of user's max volume (light color)
+     * - 0.5 = 50% of user's max volume (medium color)
+     * - 0.75 = 75% of user's max volume (strong color)
+     * - 1.0 = User's maximum volume (full color intensity)
      * 
      * @param date Target date for intensity calculation
-     * @return Float between 0.0 and 1.0 representing volume intensity
+     * @return Float between 0.0 and 1.0 representing proportional volume intensity
      */
     fun getVolumeIntensity(date: LocalDate): Float {
-        val volume = dailyVolumes[date] ?: Weight.ZERO
+        val volume = dailyVolumes[date] ?: Volume.ZERO
         return if (maxVolume.kilograms > 0.0) {
             (volume.kilograms / maxVolume.kilograms).toFloat().coerceIn(0.0f, 1.0f)
         } else 0.0f
@@ -86,7 +90,7 @@ data class VolumeCalendarData(
     /**
      * Gets volume for a specific date with safe fallback
      */
-    fun getVolumeForDate(date: LocalDate): Weight = dailyVolumes[date] ?: Weight.ZERO
+    fun getVolumeForDate(date: LocalDate): Volume = dailyVolumes[date] ?: Volume.ZERO
     
     /**
      * Generates all days to display in calendar grid (42 days)
@@ -138,12 +142,12 @@ data class VolumeCalendarData(
     /**
      * Calculates total volume for the entire month
      */
-    fun getTotalMonthVolume(): Weight = dailyVolumes.values.fold(Weight.ZERO) { acc, volume -> acc + volume }
+    fun getTotalMonthVolume(): Volume = dailyVolumes.values.fold(Volume.ZERO) { acc, volume -> acc + volume }
     
     /**
      * Gets number of workout days in month (days with volume > 0)
      */
-    fun getWorkoutDaysCount(): Int = dailyVolumes.values.count { it > Weight.ZERO }
+    fun getWorkoutDaysCount(): Int = dailyVolumes.values.count { it > Volume.ZERO }
     
     /**
      * Calculates workout frequency rate for the month (0.0 to 1.0)
@@ -158,7 +162,7 @@ data class VolumeCalendarData(
     /**
      * Checks if current month has any workout data
      */
-    fun hasWorkoutData(): Boolean = dailyVolumes.isNotEmpty() && dailyVolumes.values.any { it > Weight.ZERO }
+    fun hasWorkoutData(): Boolean = dailyVolumes.isNotEmpty() && dailyVolumes.values.any { it > Volume.ZERO }
     
     /**
      * Gets formatted month display name

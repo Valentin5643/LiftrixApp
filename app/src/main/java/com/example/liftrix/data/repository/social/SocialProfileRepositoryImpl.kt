@@ -1,6 +1,8 @@
 package com.example.liftrix.data.repository.social
 
+import android.content.Context
 import androidx.work.WorkManager
+import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.data.local.dao.BlockedUserDao
 import com.example.liftrix.data.local.dao.SocialProfileDao
 import com.example.liftrix.data.local.dao.UserAccountDao
@@ -17,6 +19,7 @@ import kotlinx.coroutines.flow.map
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 /**
  * Implementation of SocialProfileRepository with user scoping and privacy enforcement.
@@ -29,8 +32,11 @@ class SocialProfileRepositoryImpl @Inject constructor(
     private val socialProfileDao: SocialProfileDao,
     private val blockedUserDao: BlockedUserDao,
     private val userAccountDao: UserAccountDao,
-    private val workManager: WorkManager
+    @ApplicationContext private val context: Context
 ) : SocialProfileRepository {
+    
+    private val workManager: WorkManager
+        get() = WorkManagerProvider.getInstance(context)
 
     // ========================================
     // Profile Retrieval
@@ -229,10 +235,10 @@ class SocialProfileRepositoryImpl @Inject constructor(
             }
         ) {
             val entity = profile.toEntity()
-            socialProfileDao.insertProfile(entity)
+            val insertResult = socialProfileDao.insertProfile(entity)
             
             // Also update the username in UserAccountEntity for consistency
-            userAccountDao.updateUsername(profile.userId, profile.username)
+            val usernameUpdateResult = userAccountDao.updateUsername(profile.userId, profile.username)
             Timber.d("Updated username in UserAccountEntity for user: ${profile.userId}")
             
             // Trigger sync to make the profile searchable immediately
@@ -241,6 +247,7 @@ class SocialProfileRepositoryImpl @Inject constructor(
             
             workManager.enqueue(userPublicSyncRequest)
             workManager.enqueue(socialProfileSyncRequest)
+            
             
             Timber.d("Triggered sync workers after social profile creation for user: ${profile.userId}")
             

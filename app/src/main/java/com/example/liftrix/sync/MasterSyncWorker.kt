@@ -2,19 +2,19 @@ package com.example.liftrix.sync
 
 import android.content.Context
 import androidx.hilt.work.HiltWorker
-import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.WorkManager
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.workDataOf
 import androidx.work.ExistingWorkPolicy
 import androidx.work.Data
+import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.domain.repository.SyncStatusRepository
 import com.example.liftrix.domain.model.common.LiftrixResult
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import timber.log.Timber
 import kotlinx.coroutines.delay
 
@@ -50,56 +50,29 @@ import kotlinx.coroutines.delay
 class MasterSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
-    private val workManager: WorkManager,
     private val syncStatusRepository: SyncStatusRepository
-) : CoroutineWorker(context, params) {
+) : BaseSyncWorker(context, params) {
 
-    // Fallback constructor for non-Hilt instantiation (emergency backup)
-    constructor(context: Context, params: WorkerParameters) : this(
-        context = context,
-        params = params,
-        workManager = WorkManager.getInstance(context),
-        syncStatusRepository = createFallbackSyncStatusRepository(context)
-    ) {
-        Timber.w("MasterSyncWorker: Using fallback constructor - Hilt DI failed!")
-        Timber.w("This indicates a WorkManager configuration issue that should be investigated")
-    }
-
-    init {
-        Timber.d("MasterSyncWorker: Constructor called successfully with Hilt DI")
-        Timber.d("MasterSyncWorker: WorkManager instance: ${workManager.javaClass.simpleName}")
-        Timber.d("MasterSyncWorker: SyncStatusRepository instance: ${syncStatusRepository.javaClass.simpleName}")
-    }
+    override val workerName: String = "MasterSyncWorker"
+    
+    // Get WorkManager from the provider to ensure proper initialization
+    private val workManager: WorkManager
+        get() = WorkManagerProvider.getInstance(applicationContext)
 
     companion object {
         const val WORK_NAME = "master_sync_work"
         const val KEY_SYNC_SUMMARY = "sync_summary"
-        const val KEY_ERROR_MESSAGE = "error_message"
-        private const val MAX_RETRY_COUNT = 3
         private const val SYNC_DELAY_MS = 1000L // Delay between entity syncs to prevent rate limiting
-        
-        /**
-         * Creates a fallback SyncStatusRepository when Hilt injection fails.
-         * This is an emergency measure to prevent total sync system failure.
-         */
-        private fun createFallbackSyncStatusRepository(context: Context): SyncStatusRepository {
-            Timber.w("Creating fallback SyncStatusRepository - this should not happen in production")
-            // Since SyncStatusRepository is a concrete class with @Inject, 
-            // we create a normal instance that will work but won't persist state
-            return SyncStatusRepository()
-        }
     }
 
-    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        val userId = inputData.getString("userId") ?: return@withContext Result.failure(
-            Data.Builder()
-                .putString(KEY_ERROR_MESSAGE, "User ID not provided for master sync")
-                .build()
-        )
+    override suspend fun performSync(userId: String): Result {
 
         Timber.d("MasterSyncWorker: Starting periodic sync for user $userId")
         
         try {
+            // Check cancellation before starting
+            checkCancellation()
+            
             // Update sync status to indicate sync in progress
             updateSyncStatus(userId, isInProgress = true)
             
@@ -109,6 +82,7 @@ class MasterSyncWorker @AssistedInject constructor(
             var hasPartialFailure = false
             
             // 1. Profile Sync (Foundation)
+            checkCancellation() // Check before each sync operation
             Timber.d("MasterSyncWorker: Starting profile sync")
             val profileResult = syncEntity("profile", userId)
             syncResults["profile"] = profileResult
@@ -119,6 +93,7 @@ class MasterSyncWorker @AssistedInject constructor(
             delay(SYNC_DELAY_MS)
             
             // 2. Workout Sync (High Priority)
+            checkCancellation()
             Timber.d("MasterSyncWorker: Starting workout sync")
             val workoutResult = syncEntity("workout", userId)
             syncResults["workout"] = workoutResult
@@ -129,6 +104,7 @@ class MasterSyncWorker @AssistedInject constructor(
             delay(SYNC_DELAY_MS)
             
             // 3. Template Sync (Medium Priority)
+            checkCancellation()
             Timber.d("MasterSyncWorker: Starting template sync")
             val templateResult = syncEntity("template", userId)
             syncResults["template"] = templateResult
@@ -139,6 +115,7 @@ class MasterSyncWorker @AssistedInject constructor(
             delay(SYNC_DELAY_MS)
             
             // 4. User Public Sync (High Priority - enables search functionality)
+            checkCancellation()
             Timber.d("MasterSyncWorker: Starting user public sync")
             val userPublicResult = syncEntity("user_public", userId)
             syncResults["user_public"] = userPublicResult
@@ -149,6 +126,7 @@ class MasterSyncWorker @AssistedInject constructor(
             delay(SYNC_DELAY_MS)
             
             // 5. Achievement Sync (Low Priority)
+            checkCancellation()
             Timber.d("MasterSyncWorker: Starting achievement sync")
             val achievementResult = syncEntity("achievement", userId)
             syncResults["achievement"] = achievementResult
@@ -175,7 +153,7 @@ class MasterSyncWorker @AssistedInject constructor(
                 lastSyncTime = System.currentTimeMillis()
             )
             
-            return@withContext when {
+            return when {
                 successfulEntities == totalEntities && totalFailed == 0 -> {
                     // Perfect sync - all entities successful, no item failures
                     Result.success(
@@ -194,23 +172,22 @@ class MasterSyncWorker @AssistedInject constructor(
                     )
                 }
                 else -> {
-                    // All entities failed
+                    // All entities failed - let base class handle retry
                     val errorMessage = "All sync operations failed"
                     Timber.e("MasterSyncWorker: $errorMessage")
-                    
-                    if (runAttemptCount < MAX_RETRY_COUNT) {
-                        Result.retry()
-                    } else {
-                        Result.failure(
-                            Data.Builder()
-                                .putString(KEY_ERROR_MESSAGE, errorMessage)
-                                .putString(KEY_SYNC_SUMMARY, syncSummary)
-                                .build()
-                        )
-                    }
+                    throw Exception(errorMessage)
                 }
             }
             
+        } catch (e: CancellationException) {
+            // Re-throw cancellation to maintain cancellation chain
+            Timber.d("MasterSyncWorker: Sync cancelled for user $userId")
+            updateSyncStatus(
+                userId = userId,
+                isInProgress = false,
+                hasError = false // Not an error, just cancelled
+            )
+            throw e
         } catch (e: Exception) {
             Timber.e(e, "MasterSyncWorker: Fatal error during sync for user $userId")
             
@@ -220,15 +197,8 @@ class MasterSyncWorker @AssistedInject constructor(
                 hasError = true
             )
             
-            if (runAttemptCount < MAX_RETRY_COUNT) {
-                Result.retry()
-            } else {
-                Result.failure(
-                    Data.Builder()
-                        .putString(KEY_ERROR_MESSAGE, e.message ?: "Unknown sync error")
-                        .build()
-                )
-            }
+            // Let base class handle the error
+            throw e
         }
     }
     

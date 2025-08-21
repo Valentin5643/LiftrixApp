@@ -1,6 +1,6 @@
 package com.example.liftrix.di
 
-import androidx.work.WorkManager
+import android.content.Context
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SettingsRepository
 import com.example.liftrix.domain.repository.SubscriptionRepository
@@ -27,6 +27,7 @@ import com.example.liftrix.domain.usecase.settings.UpdateUserPreferencesUseCase
 import com.example.liftrix.domain.usecase.settings.EvaluateFeatureFlagUseCase
 import com.example.liftrix.domain.usecase.folder.ReorderFoldersUseCase
 import com.example.liftrix.domain.usecase.settings.EnhancedSignOutUseCase
+import com.example.liftrix.domain.usecase.settings.InitializeUserThemeUseCase
 import com.example.liftrix.ui.common.state.StateCleanupManager
 import com.example.liftrix.domain.usecase.analytics.GetVolumeAnalysisUseCase
 import com.example.liftrix.domain.usecase.analytics.GetOneRmProgressionUseCase
@@ -48,6 +49,7 @@ import com.example.liftrix.sync.SyncManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
@@ -91,6 +93,22 @@ object UseCaseModule {
     }
 
     /**
+     * Provides InitializeUserThemeUseCase with proper dependency injection.
+     * 
+     * @param settingsRepository The settings repository dependency
+     * @param context Application context for theme manager access
+     * @return Configured InitializeUserThemeUseCase instance
+     */
+    @Provides
+    @Singleton
+    fun provideInitializeUserThemeUseCase(
+        settingsRepository: SettingsRepository,
+        @ApplicationContext context: Context
+    ): InitializeUserThemeUseCase {
+        return InitializeUserThemeUseCase(settingsRepository, context)
+    }
+
+    /**
      * Provides GetSubscriptionStatusUseCase with proper dependency injection.
      * 
      * @param subscriptionRepository The subscription repository dependency
@@ -125,7 +143,7 @@ object UseCaseModule {
         analyticsService: AnalyticsService,
         settingsRepository: SettingsRepository,
         syncManager: SyncManager,
-        workManager: WorkManager,
+        @ApplicationContext context: Context,
         stateCleanupManager: StateCleanupManager
     ): EnhancedSignOutUseCase {
         return EnhancedSignOutUseCase(
@@ -133,7 +151,7 @@ object UseCaseModule {
             analyticsService = analyticsService,
             settingsRepository = settingsRepository,
             syncManager = syncManager,
-            workManager = workManager,
+            context = context,
             stateCleanupManager = stateCleanupManager
         )
     }

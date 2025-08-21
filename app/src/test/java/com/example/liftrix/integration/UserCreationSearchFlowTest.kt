@@ -93,7 +93,18 @@ class UserCreationSearchFlowTest {
             User(
                 uid = newUserId,
                 email = newUserEmail,
-                displayName = newUsername
+                displayName = newUsername,
+                photoUrl = null,
+                isAnonymous = false,
+                subscriptionTier = com.example.liftrix.domain.model.SubscriptionTier.FREE,
+                subscriptionStatus = com.example.liftrix.domain.model.SubscriptionStatus.ACTIVE,
+                subscriptionExpiresAt = null,
+                premiumFeaturesEnabled = false,
+                onboardingCompleted = true,
+                profileVersion = 1L,
+                createdAt = java.time.LocalDateTime.now(),
+                lastSignInAt = java.time.LocalDateTime.now(),
+                updatedAt = java.time.LocalDateTime.now()
             )
         )
         
@@ -219,7 +230,22 @@ class UserCreationSearchFlowTest {
             // Mock successful signup
             coEvery { 
                 signUpWithEmailUseCase(email, "password123", username) 
-            } returns Result.success(User(uid = userId, email = email, displayName = username))
+            } returns Result.success(User(
+                uid = userId, 
+                email = email, 
+                displayName = username,
+                photoUrl = null,
+                isAnonymous = false,
+                subscriptionTier = com.example.liftrix.domain.model.SubscriptionTier.FREE,
+                subscriptionStatus = com.example.liftrix.domain.model.SubscriptionStatus.ACTIVE,
+                subscriptionExpiresAt = null,
+                premiumFeaturesEnabled = false,
+                onboardingCompleted = true,
+                profileVersion = 1L,
+                createdAt = java.time.LocalDateTime.now(),
+                lastSignInAt = java.time.LocalDateTime.now(),
+                updatedAt = java.time.LocalDateTime.now()
+            ))
             
             // Mock social profile creation with privacy issue
             coEvery {

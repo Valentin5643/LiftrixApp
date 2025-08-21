@@ -5,6 +5,7 @@ import com.example.liftrix.data.local.dao.MonthlyWorkoutCount
 import com.example.liftrix.data.local.dao.WorkoutStatsResult
 import com.example.liftrix.data.local.entity.WorkoutEntity
 import com.example.liftrix.domain.model.WorkoutStatus
+import com.example.liftrix.domain.model.Volume
 import com.example.liftrix.domain.model.Weight
 import com.example.liftrix.domain.model.analytics.ProgressMetrics
 import com.example.liftrix.domain.model.analytics.VolumeCalendarData
@@ -56,14 +57,14 @@ class AnalyticsMapper @Inject constructor() {
         try {
             val volumeMap = dailyVolumes.associate { result ->
                 val date = LocalDate.parse(result.date)
-                date to Weight.fromKilograms(result.total_volume)
+                date to Volume.fromKilograms(result.total_volume)
             }
             
-            val maxVolume = volumeMap.values.maxByOrNull { it.kilograms } ?: Weight.ZERO
+            val maxVolume = volumeMap.values.maxByOrNull { it.kilograms } ?: Volume.ZERO
             val averageVolume = if (volumeMap.isNotEmpty()) {
-                val totalVolume = volumeMap.values.fold(Weight.ZERO) { acc, weight -> acc + weight }
-                Weight.fromKilograms(totalVolume.kilograms / volumeMap.size)
-            } else Weight.ZERO
+                val totalVolume = volumeMap.values.fold(Volume.ZERO) { acc, volume -> acc + volume }
+                Volume.fromKilograms(totalVolume.kilograms / volumeMap.size)
+            } else Volume.ZERO
             
             return VolumeCalendarData(
                 year = year,

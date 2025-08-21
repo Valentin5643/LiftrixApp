@@ -297,9 +297,10 @@ class HomeViewModel @Inject constructor(
     fun loadRecommendations() {
         viewModelScope.launch {
             try {
+                val userId = getAuthenticatedUserIdUseCase()
+                
                 updateHomeScreenData { it.copy(recommendationsState = RecommendationsState.Loading) }
                 currentRecommendationsOffset = 0
-
                 socialRepository.getRecommendedUsers(RECOMMENDATIONS_LIMIT, 0)
                     .catch { exception ->
                         Timber.e(exception, "Error loading recommendations")

@@ -1,5 +1,6 @@
 package com.example.liftrix.data.repository
 
+import android.content.Context
 import com.example.liftrix.data.local.converter.DateTimeConverters
 import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.local.entity.UserProfileEntity
@@ -12,12 +13,14 @@ import com.example.liftrix.domain.repository.ProfileImageRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.storage.FirebaseStorage
 import androidx.work.WorkManager
+import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.sync.UserPublicSyncWorker
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import java.time.LocalDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 /**
  * Implementation of ProfileImageRepository providing Firebase Storage integration
@@ -42,8 +45,11 @@ class ProfileImageRepositoryImpl @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
     private val userProfileDao: UserProfileDao,
     private val dateTimeConverters: DateTimeConverters,
-    private val workManager: WorkManager
+    @ApplicationContext private val context: Context
 ) : ProfileImageRepository {
+    
+    private val workManager: WorkManager
+        get() = WorkManagerProvider.getInstance(context)
     
     companion object {
         private const val STORAGE_PATH_PROFILE_IMAGES = "profile_images"

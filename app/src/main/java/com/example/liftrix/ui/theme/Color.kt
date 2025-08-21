@@ -9,88 +9,8 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 
-/**
- * Liftrix 5-Color Palette System
- * Minimal color palette following Material 3 principles with 98%+ app coverage
- * Achieving <20% grey usage while maintaining WCAG 2.1 AA accessibility compliance
- */
-object LiftrixColors {
-    
-    // Core 5-Color Palette - Foundation of entire color system
-    val Night = Color(0xFF131515)          // hsla(180, 5%, 8%, 1) - Dark backgrounds
-    val Jet = Color(0xFF2B2C28)            // hsla(75, 5%, 16%, 1) - Secondary surfaces
-    val PersianGreen = Color(0xFF339989)    // hsla(171, 50%, 40%, 1) - Primary brand
-    val TiffanyBlue = Color(0xFF7DE2D1)     // hsla(170, 64%, 69%, 1) - Accent/Interactive
-    val Snow = Color(0xFFFFFAFB)           // hsla(348, 100%, 99%, 1) - Light backgrounds
-    
-    // Simplified color mappings
-    val Primary: Color = PersianGreen
-    val Secondary: Color = Jet
-    val Error: Color = Color(0xFFFF4444)  // Only exception to 5-color rule
-    
-    // Container variations using solid tinted colors (eliminates lighter rectangle issue)
-    val PersianGreenContainer10 = Color(0xFFE6F3F1)  // Very light teal-tinted white
-    val PersianGreenContainer20 = Color(0xFFCCE7E2)  // Light teal-tinted surface
-    val PersianGreenContainer30 = Color(0xFFB3DDD3)  // Medium teal-tinted surface
-    val TiffanyBlueContainer10 = Color(0xFFE8F8F5)   // Very light blue-tinted white
-    val TiffanyBlueContainer20 = Color(0xFFD1F1EB)   // Light blue-tinted surface  
-    val TiffanyBlueContainer30 = Color(0xFFBAEAE1)   // Medium blue-tinted surface
-    
-    // Theme-based background and surface colors
-    val BackgroundLight: Color = Snow
-    val BackgroundDark: Color = Night
-    val SurfaceLight: Color = Snow
-    val SurfaceDark: Color = Jet
-    
-    // Text and content colors optimized for contrast
-    val OnPrimary: Color = Snow
-    val OnSecondary: Color = Snow
-    val OnError: Color = Snow
-    val OnBackground: Color = Night  // On light backgrounds
-    val OnSurface: Color = Night  // On light surfaces
-    val OnBackgroundDark: Color = Snow  // On dark backgrounds
-    val OnSurfaceDark: Color = Snow  // On dark surfaces
-    
-    // Material 3 Container Colors using solid tinted variants
-    val PrimaryContainer: Color = PersianGreenContainer20
-    val OnPrimaryContainer: Color = Night
-    val SecondaryContainer: Color = Color(0xFFE8E9E6)  // Light Jet-tinted surface
-    val OnSecondaryContainer: Color = Night
-    val TertiaryContainer: Color = TiffanyBlueContainer20
-    val OnTertiaryContainer: Color = Night
-    val ErrorContainer: Color = Color(0xFFFFDAD6)  // Exception color
-    val OnErrorContainer: Color = Color(0xFF410002)  // Exception color
-    
-    // Material 3 Container Colors (Dark Theme) - solid variants for consistency
-    val PrimaryContainerDark: Color = Color(0xFF1B423C)  // Dark teal container
-    val OnPrimaryContainerDark: Color = Snow
-    val SecondaryContainerDark: Color = Color(0xFF3B3C38)  // Dark Jet-tinted container
-    val OnSecondaryContainerDark: Color = Snow
-    val TertiaryContainerDark: Color = Color(0xFF1F4E47)  // Dark blue-teal container
-    val OnTertiaryContainerDark: Color = Snow
-    val ErrorContainerDark: Color = Color(0xFF93000A)  // Exception color
-    val OnErrorContainerDark: Color = Snow
-    
-    // Outline Colors using Persian Green to eliminate grey usage
-    val Outline: Color = PersianGreen.copy(alpha = 0.38f)
-    val OutlineDark: Color = PersianGreen.copy(alpha = 0.60f)
-    val OutlineVariant: Color = PersianGreen.copy(alpha = 0.12f)
-    val OutlineVariantDark: Color = PersianGreen.copy(alpha = 0.24f)
-    
-    // Surface Variants using solid tinted variants
-    val SurfaceVariant: Color = Color(0xFFF8FAFA)  // Very light teal-tinted Snow
-    val OnSurfaceVariant: Color = Jet
-    val SurfaceVariantDark: Color = Color(0xFF1A1B1A)  // Very dark teal-tinted variant
-    val OnSurfaceVariantDark: Color = TiffanyBlue
-    
-    // Inverse Colors using 5-color palette
-    val InverseSurface: Color = Jet
-    val InverseOnSurface: Color = Snow
-    val InversePrimary: Color = TiffanyBlue
-    val InverseSurfaceDark: Color = Snow
-    val InverseOnSurfaceDark: Color = Night
-    val InversePrimaryDark: Color = PersianGreen
-}
+// REMOVED: Old V1 5-color system (LiftrixColors object)
+// All color definitions now use LiftrixColorsV2 system only
 
 /**
  * Data class representing brand colors for accessibility functions
@@ -102,12 +22,9 @@ data class BrandColors(
     val background: Color
 )
 
-
-
 /**
- * WCAG 2.1 AA Contrast Validation for 5-Color Palette
- * Ensures all 5-color palette combinations meet accessibility standards
- * Updated for Night, Jet, Persian Green, Tiffany Blue, Snow color system
+ * WCAG 2.1 AA Contrast Validation for LiftrixColorsV2
+ * Ensures all color combinations meet accessibility standards
  */
 object AccessibilityColors {
     
@@ -179,8 +96,8 @@ object AccessibilityColors {
     }
     
     /**
-     * Get accessible color variant from 5-color palette that meets WCAG AA standards
-     * Prioritizes using Night/Snow for maximum contrast with brand colors
+     * Get accessible color variant from LiftrixColorsV2 that meets WCAG AA standards
+     * Prioritizes using V2 high contrast colors
      */
     fun getAccessibleColor(
         originalColor: Color,
@@ -200,11 +117,11 @@ object AccessibilityColors {
             }
         }
         
-        // Fall back to 5-color palette high contrast colors
+        // Fall back to LiftrixColorsV2 high contrast colors
         return if (backgroundColor.luminance() > 0.5f) {
-            LiftrixColors.Night  // Use Night instead of pure black
+            LiftrixColorsV2.Dark.BackgroundPrimary  // Use V2 dark background
         } else {
-            LiftrixColors.Snow   // Use Snow instead of pure white
+            LiftrixColorsV2.Light.BackgroundPrimary   // Use V2 light background
         }
     }
     
@@ -260,70 +177,70 @@ object AccessibilityColors {
     }
     
     /**
-     * Get high contrast color scheme using 5-color palette for accessibility
+     * Get high contrast color scheme using LiftrixColorsV2 for accessibility
      */
     fun getHighContrastColorScheme(isDark: Boolean): ColorScheme {
         return if (isDark) {
             darkColorScheme(
-                primary = LiftrixColors.Snow,
-                onPrimary = LiftrixColors.Night,
-                primaryContainer = LiftrixColors.Jet,
-                onPrimaryContainer = LiftrixColors.Snow,
-                secondary = LiftrixColors.Snow,
-                onSecondary = LiftrixColors.Night,
-                secondaryContainer = LiftrixColors.Jet,
-                onSecondaryContainer = LiftrixColors.Snow,
-                tertiary = LiftrixColors.Snow,
-                onTertiary = LiftrixColors.Night,
-                tertiaryContainer = LiftrixColors.Jet,
-                onTertiaryContainer = LiftrixColors.Snow,
-                error = LiftrixColors.Error,
-                onError = LiftrixColors.Night,
+                primary = Color.White,
+                onPrimary = Color.Black,
+                primaryContainer = LiftrixColorsV2.Dark.BackgroundSecondary,
+                onPrimaryContainer = Color.White,
+                secondary = Color.White,
+                onSecondary = Color.Black,
+                secondaryContainer = LiftrixColorsV2.Dark.BackgroundSecondary,
+                onSecondaryContainer = Color.White,
+                tertiary = Color.White,
+                onTertiary = Color.Black,
+                tertiaryContainer = LiftrixColorsV2.Dark.BackgroundSecondary,
+                onTertiaryContainer = Color.White,
+                error = LiftrixColorsV2.Dark.Error,
+                onError = Color.Black,
                 errorContainer = Color(0xFF5F0008),
-                onErrorContainer = LiftrixColors.Snow,
-                background = LiftrixColors.Night,
-                onBackground = LiftrixColors.Snow,
-                surface = LiftrixColors.Night,
-                onSurface = LiftrixColors.Snow,
-                surfaceVariant = LiftrixColors.Jet,
-                onSurfaceVariant = LiftrixColors.Snow,
-                outline = LiftrixColors.PersianGreen.copy(alpha = 0.87f),
-                outlineVariant = LiftrixColors.PersianGreen.copy(alpha = 0.38f),
-                scrim = LiftrixColors.Night,
-                inverseSurface = LiftrixColors.Snow,
-                inverseOnSurface = LiftrixColors.Night,
-                inversePrimary = LiftrixColors.Night
+                onErrorContainer = Color.White,
+                background = LiftrixColorsV2.Dark.BackgroundPrimary,
+                onBackground = Color.White,
+                surface = LiftrixColorsV2.Dark.BackgroundPrimary,
+                onSurface = Color.White,
+                surfaceVariant = LiftrixColorsV2.Dark.BackgroundSecondary,
+                onSurfaceVariant = Color.White,
+                outline = LiftrixColorsV2.Teal.copy(alpha = 0.87f),
+                outlineVariant = LiftrixColorsV2.Teal.copy(alpha = 0.38f),
+                scrim = Color.Black,
+                inverseSurface = Color.White,
+                inverseOnSurface = Color.Black,
+                inversePrimary = Color.Black
             )
         } else {
             lightColorScheme(
-                primary = LiftrixColors.Night,
-                onPrimary = LiftrixColors.Snow,
-                primaryContainer = LiftrixColors.Snow.copy(alpha = 0.9f),
-                onPrimaryContainer = LiftrixColors.Night,
-                secondary = LiftrixColors.Night,
-                onSecondary = LiftrixColors.Snow,
-                secondaryContainer = LiftrixColors.Snow.copy(alpha = 0.9f),
-                onSecondaryContainer = LiftrixColors.Night,
-                tertiary = LiftrixColors.Night,
-                onTertiary = LiftrixColors.Snow,
-                tertiaryContainer = LiftrixColors.Snow.copy(alpha = 0.9f),
-                onTertiaryContainer = LiftrixColors.Night,
-                error = LiftrixColors.Error,
-                onError = LiftrixColors.Snow,
+                primary = Color.Black,
+                onPrimary = Color.White,
+                primaryContainer = Color.White.copy(alpha = 0.9f),
+                onPrimaryContainer = Color.Black,
+                secondary = Color.Black,
+                onSecondary = Color.White,
+                secondaryContainer = Color.White.copy(alpha = 0.9f),
+                onSecondaryContainer = Color.Black,
+                tertiary = Color.Black,
+                onTertiary = Color.White,
+                tertiaryContainer = Color.White.copy(alpha = 0.9f),
+                onTertiaryContainer = Color.Black,
+                error = LiftrixColorsV2.Light.Error,
+                onError = Color.White,
                 errorContainer = Color(0xFFFFDAD6),
-                onErrorContainer = LiftrixColors.Night,
-                background = LiftrixColors.Snow,
-                onBackground = LiftrixColors.Night,
-                surface = LiftrixColors.Snow,
-                onSurface = LiftrixColors.Night,
-                surfaceVariant = LiftrixColors.Snow.copy(alpha = 0.95f),
-                onSurfaceVariant = LiftrixColors.Night,
-                outline = LiftrixColors.PersianGreen.copy(alpha = 0.60f),
-                outlineVariant = LiftrixColors.PersianGreen.copy(alpha = 0.24f),
-                scrim = LiftrixColors.Night,
-                inverseSurface = LiftrixColors.Night,
-                inverseOnSurface = LiftrixColors.Snow,
-                inversePrimary = LiftrixColors.Snow
+                onErrorContainer = Color.Black,
+                background = LiftrixColorsV2.Light.BackgroundPrimary,
+                onBackground = Color.Black,
+                surface = LiftrixColorsV2.Light.BackgroundPrimary,
+                onSurface = Color.Black,
+                surfaceVariant = Color.White.copy(alpha = 0.95f),
+                onSurfaceVariant = Color.Black,
+                outline = LiftrixColorsV2.Teal.copy(alpha = 0.60f),
+                outlineVariant = LiftrixColorsV2.Teal.copy(alpha = 0.24f),
+                scrim = Color.Black,
+                inverseSurface = Color.Black,
+                inverseOnSurface = Color.White,
+                inversePrimary = Color.White
             )
         }
     }
@@ -388,26 +305,26 @@ object AccessibilityColors {
     }
     
     /**
-     * Get brand colors from 5-color palette with accessibility validation
+     * Get brand colors from LiftrixColorsV2 with accessibility validation
      */
     fun getAccessibleBrandColors(
         isDark: Boolean,
         isHighContrast: Boolean = false
     ): BrandColors {
-        val backgroundColor = if (isDark) LiftrixColors.BackgroundDark else LiftrixColors.BackgroundLight
+        val backgroundColor = if (isDark) LiftrixColorsV2.Dark.BackgroundPrimary else LiftrixColorsV2.Light.BackgroundPrimary
         
         return if (isHighContrast) {
             BrandColors(
-                primary = if (isDark) LiftrixColors.Snow else LiftrixColors.Night,
-                secondary = if (isDark) LiftrixColors.Snow else LiftrixColors.Night,
-                accent = if (isDark) LiftrixColors.TiffanyBlue.copy(alpha = 0.8f) else LiftrixColors.TiffanyBlue,
+                primary = if (isDark) Color.White else Color.Black,
+                secondary = if (isDark) Color.White else Color.Black,
+                accent = if (isDark) LiftrixColorsV2.TealLight.copy(alpha = 0.8f) else LiftrixColorsV2.Teal,
                 background = backgroundColor
             )
         } else {
             BrandColors(
-                primary = getAccessibleColor(LiftrixColors.PersianGreen, backgroundColor),
-                secondary = getAccessibleColor(LiftrixColors.Jet, backgroundColor),
-                accent = getAccessibleColor(LiftrixColors.TiffanyBlue, backgroundColor),
+                primary = getAccessibleColor(LiftrixColorsV2.Teal, backgroundColor),
+                secondary = getAccessibleColor(LiftrixColorsV2.TealHover, backgroundColor),
+                accent = getAccessibleColor(LiftrixColorsV2.TealLight, backgroundColor),
                 background = backgroundColor
             )
         }
@@ -426,9 +343,9 @@ data class AccessibilityValidationResult(
 )
 
 /**
- * 5-Color Palette Compliance Validation
- * Ensures color usage adheres to Night, Jet, Persian Green, Tiffany Blue, Snow palette
- * Validates <20% grey usage requirement through pure 5-color system adoption
+ * LiftrixColorsV2 Palette Compliance Validation
+ * Ensures color usage adheres to the modern Teal-based color system
+ * Validates grey usage and provides V2 alternatives
  */
 object ColorPaletteValidator {
     
@@ -502,34 +419,34 @@ object ColorPaletteValidator {
     }
     
     /**
-     * Suggests 5-color palette alternatives to replace any off-palette colors
+     * Suggests LiftrixColorsV2 alternatives to replace any off-palette colors
      */
-    fun suggest5ColorAlternatives(offPaletteColor: Color): List<ColorAlternative> {
+    fun suggestV2ColorAlternatives(offPaletteColor: Color): List<ColorAlternative> {
         return listOf(
             ColorAlternative(
-                color = LiftrixColors.PersianGreen.copy(alpha = 0.12f),
-                name = "Persian Green Variant",
-                description = "Light Persian Green maintaining brand consistency"
+                color = LiftrixColorsV2.Teal.copy(alpha = 0.12f),
+                name = "Teal Variant",
+                description = "Light Teal maintaining brand consistency"
             ),
             ColorAlternative(
-                color = LiftrixColors.TiffanyBlue.copy(alpha = 0.20f),
-                name = "Tiffany Blue Container",
-                description = "Subtle Tiffany Blue container color"
+                color = LiftrixColorsV2.TealLight.copy(alpha = 0.20f),
+                name = "Teal Light Container",
+                description = "Subtle Teal Light container color"
             ),
             ColorAlternative(
-                color = LiftrixColors.Jet.copy(alpha = 0.15f),
-                name = "Jet Surface Variant", 
-                description = "Light Jet for subtle surface differentiation"
+                color = LiftrixColorsV2.TealHover.copy(alpha = 0.15f),
+                name = "Teal Hover Surface Variant", 
+                description = "Light Teal Hover for subtle surface differentiation"
             ),
             ColorAlternative(
-                color = LiftrixColors.Snow,
-                name = "Snow Background",
-                description = "Pure Snow for maximum contrast and clarity"
+                color = LiftrixColorsV2.Light.BackgroundPrimary,
+                name = "V2 Light Background",
+                description = "Pure white for maximum contrast and clarity"
             ),
             ColorAlternative(
-                color = LiftrixColors.Night,
-                name = "Night Background",
-                description = "Pure Night for deep contrast and OLED optimization"
+                color = LiftrixColorsV2.Dark.BackgroundPrimary,
+                name = "V2 Dark Background",
+                description = "Pure black for deep contrast and OLED optimization"
             )
         )
     }
@@ -549,7 +466,7 @@ object ColorPaletteValidator {
         
         if (lightReport.meetsTarget && darkReport.meetsTarget) {
             recommendations.add("✅ Grey usage is within acceptable limits (<20%)")
-            recommendations.add("Continue using teal-based alternatives to maintain brand consistency")
+            recommendations.add("Continue using LiftrixColorsV2 Teal-based alternatives to maintain brand consistency")
         }
         
         return recommendations
@@ -586,14 +503,14 @@ data class ColorAlternative(
     val description: String
 )
 
-// Direct gradient definitions for component usage
+// V2 gradient definitions for component usage
 val PrimaryGradient: Brush = Brush.linearGradient(
-    colors = listOf(LiftrixColors.PersianGreen, LiftrixColors.TiffanyBlue)
+    colors = listOf(LiftrixColorsV2.Teal, LiftrixColorsV2.TealHover)
 )
 
 val CardElevationGradient: Brush = Brush.verticalGradient(
     colors = listOf(
-        LiftrixColors.PersianGreen.copy(alpha = 0.05f),
+        LiftrixColorsV2.Teal.copy(alpha = 0.05f),
         Color.Transparent
     )
 )

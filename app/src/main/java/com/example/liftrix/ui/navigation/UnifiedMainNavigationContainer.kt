@@ -318,6 +318,10 @@ fun UnifiedMainNavigationContainer(
                         onNavigateToAuth = {
                             // Navigate to authentication screen
                             navController.navigate(LiftrixRoute.AuthSignIn)
+                        },
+                        onNavigateToAIChatSettings = {
+                            // Navigate to AI chat settings screen
+                            navController.navigate(LiftrixRoute.AIChatSettings)
                         }
                     )
                 }

@@ -7,6 +7,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.example.liftrix.core.workmanager.WorkManagerProvider
 import android.content.Context
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -34,8 +35,11 @@ class AchievementRepositoryImpl @Inject constructor(
     private val achievementDao: AchievementDao,
     private val achievementMapper: AchievementMapper,
     private val firestore: FirebaseFirestore,
-    private val workManager: WorkManager
+    @ApplicationContext private val context: Context
 ) : AchievementRepository {
+    
+    private val workManager: WorkManager
+        get() = WorkManagerProvider.getInstance(context)
 
     override suspend fun getUserAchievements(userId: String): LiftrixResult<List<UserAchievement>> {
         return try {

@@ -81,6 +81,7 @@ fun SettingsScreen(
     onNavigateToPrivacyPolicy: (() -> Unit)? = null,
     onNavigateToTermsOfService: (() -> Unit)? = null,
     onNavigateToDataPortability: (() -> Unit)? = null,
+    onNavigateToAIChatSettings: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -110,6 +111,7 @@ fun SettingsScreen(
         val stableOnNavigateToPrivacyPolicy = remember(onNavigateToPrivacyPolicy) { onNavigateToPrivacyPolicy }
         val stableOnNavigateToTermsOfService = remember(onNavigateToTermsOfService) { onNavigateToTermsOfService }
         val stableOnNavigateToDataPortability = remember(onNavigateToDataPortability) { onNavigateToDataPortability }
+        val stableOnNavigateToAIChatSettings = remember(onNavigateToAIChatSettings) { onNavigateToAIChatSettings }
         
         // Optimized LaunchedEffect with stable key
         LaunchedEffect(uiState.isSigningOut, uiState.error) {
@@ -161,6 +163,7 @@ fun SettingsScreen(
                             onNavigateToAnomalyDashboard = stableOnNavigateToAnomalyDashboard,
                             onNavigateToWidgetSettings = stableOnNavigateToWidgetSettings,
                             onNavigateToNotifications = stableOnNavigateToNotifications,
+                            onNavigateToAIChatSettings = stableOnNavigateToAIChatSettings,
                             onNavigateToEmailChange = stableOnNavigateToEmailChange,
                             onNavigateToPasswordChange = stableOnNavigateToPasswordChange,
                             onNavigateToUsernameChange = stableOnNavigateToUsernameChange,
@@ -221,6 +224,7 @@ private fun SettingsContent(
     onNavigateToAnomalyDashboard: (() -> Unit)? = null,
     onNavigateToWidgetSettings: (() -> Unit)? = null,
     onNavigateToNotifications: (() -> Unit)? = null,
+    onNavigateToAIChatSettings: (() -> Unit)? = null,
     onNavigateToEmailChange: (() -> Unit)? = null,
     onNavigateToPasswordChange: (() -> Unit)? = null,
     onNavigateToUsernameChange: (() -> Unit)? = null,
@@ -275,6 +279,7 @@ private fun SettingsContent(
                     onNavigateToAnomalyDashboard = onNavigateToAnomalyDashboard,
                     onNavigateToWidgetSettings = onNavigateToWidgetSettings,
                     onNavigateToNotifications = stableOnNavigateToNotifications,
+                    onNavigateToAIChatSettings = onNavigateToAIChatSettings,
                     onNavigateToEmailChange = onNavigateToEmailChange,
                     onNavigateToPasswordChange = onNavigateToPasswordChange,
                     onNavigateToUsernameChange = onNavigateToUsernameChange,
@@ -331,6 +336,7 @@ private fun SettingsCategoryContent(
     onNavigateToAnomalyDashboard: (() -> Unit)? = null,
     onNavigateToWidgetSettings: (() -> Unit)? = null,
     onNavigateToNotifications: (() -> Unit)? = null,
+    onNavigateToAIChatSettings: (() -> Unit)? = null,
     onNavigateToEmailChange: (() -> Unit)? = null,
     onNavigateToPasswordChange: (() -> Unit)? = null,
     onNavigateToUsernameChange: (() -> Unit)? = null,
@@ -351,7 +357,8 @@ private fun SettingsCategoryContent(
                     onNavigateToAnomalyDetection = onNavigateToAnomalyDetection,
                     onNavigateToAnomalyDashboard = onNavigateToAnomalyDashboard,
                     onNavigateToWidgetSettings = onNavigateToWidgetSettings,
-                    onNavigateToNotifications = onNavigateToNotifications
+                    onNavigateToNotifications = onNavigateToNotifications,
+                    onNavigateToAIChatSettings = onNavigateToAIChatSettings
                 )
             }
             
@@ -397,11 +404,13 @@ private fun GeneralSettings(
     onNavigateToAnomalyDetection: (() -> Unit)? = null,
     onNavigateToAnomalyDashboard: (() -> Unit)? = null,
     onNavigateToWidgetSettings: (() -> Unit)? = null,
-    onNavigateToNotifications: (() -> Unit)? = null
+    onNavigateToNotifications: (() -> Unit)? = null,
+    onNavigateToAIChatSettings: (() -> Unit)? = null
 ) {
     // Stable callback to prevent unnecessary recompositions
     val stableOnEvent = remember(onEvent) { onEvent }
     val stableOnNavigateToNotifications = remember(onNavigateToNotifications) { onNavigateToNotifications }
+    val stableOnNavigateToAIChatSettings = remember(onNavigateToAIChatSettings) { onNavigateToAIChatSettings }
     
     Column(
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -438,6 +447,16 @@ private fun GeneralSettings(
                 stableOnEvent(SettingsEvent.NavigateToNotifications)
                 // Navigate to notification settings
                 stableOnNavigateToNotifications?.invoke()
+            }
+        )
+        
+        SettingsNavigationItem(
+            title = "AI Chat Settings",
+            subtitle = "Configure AI assistant language, behavior, and data management",
+            icon = Icons.Default.SmartToy,
+            onClick = { 
+                // Navigate to AI chat settings
+                stableOnNavigateToAIChatSettings?.invoke()
             }
         )
         

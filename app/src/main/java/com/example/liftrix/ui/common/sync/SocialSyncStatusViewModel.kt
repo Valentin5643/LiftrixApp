@@ -1,9 +1,11 @@
 package com.example.liftrix.ui.common.sync
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.data.local.dao.SocialProfileDao
 import com.example.liftrix.data.local.dao.FollowRelationshipDao
 import com.example.liftrix.data.local.dao.WorkoutPostDao
@@ -11,6 +13,7 @@ import com.example.liftrix.data.local.dao.GymBuddyDao
 import com.example.liftrix.data.repository.SocialRepositoryImplEnhanced
 import com.example.liftrix.domain.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -31,8 +34,11 @@ class SocialSyncStatusViewModel @Inject constructor(
     private val postDao: WorkoutPostDao,
     private val gymBuddyDao: GymBuddyDao,
     private val socialRepository: SocialRepositoryImplEnhanced,
-    private val workManager: WorkManager
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
+    
+    private val workManager: WorkManager
+        get() = WorkManager.getInstance(context)
 
     private val _profileSyncStatus = MutableStateFlow<SocialSyncStatus>(SocialSyncStatus.Idle)
     val profileSyncStatus: StateFlow<SocialSyncStatus> = _profileSyncStatus.asStateFlow()

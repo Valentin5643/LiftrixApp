@@ -183,10 +183,12 @@ abstract class ServiceModule {
         fun provideProgressDataService(
             progressStatsRepository: ProgressStatsRepository,
             cacheManager: com.example.liftrix.core.cache.EnhancedCacheManager,
+            generateVolumeCalendarUseCase: com.example.liftrix.domain.usecase.analytics.GenerateVolumeCalendarUseCase,
             @IoDispatcher ioDispatcher: CoroutineDispatcher
         ): ProgressDataService = ProgressDataServiceImpl(
             progressStatsRepository = progressStatsRepository,
             cacheManager = cacheManager,
+            generateVolumeCalendarUseCase = generateVolumeCalendarUseCase,
             ioDispatcher = ioDispatcher
         )
         

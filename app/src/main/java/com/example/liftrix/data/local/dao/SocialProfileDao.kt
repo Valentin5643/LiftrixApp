@@ -31,8 +31,19 @@ interface SocialProfileDao {
     @Query("SELECT * FROM social_profiles WHERE user_id = :userId")
     suspend fun getSocialProfileByUserId(userId: String): SocialProfileEntity?
 
-    @Query("SELECT * FROM social_profiles WHERE user_id = :viewerId AND username = :username")
-    suspend fun getProfileByUsername(viewerId: String, username: String): SocialProfileEntity?
+    @Query("""
+        SELECT sp.* FROM social_profiles sp
+        WHERE sp.username = :username
+        AND sp.is_private = 0
+        AND (:viewerId IS NULL OR sp.user_id != :viewerId)
+        AND (:viewerId IS NULL OR sp.user_id NOT IN (
+            SELECT blocked_user_id FROM blocked_users WHERE user_id = :viewerId
+        ))
+        AND (:viewerId IS NULL OR :viewerId NOT IN (
+            SELECT user_id FROM blocked_users WHERE blocked_user_id = sp.user_id
+        ))
+    """)
+    suspend fun getProfileByUsername(viewerId: String?, username: String): SocialProfileEntity?
 
     @Query("SELECT EXISTS(SELECT 1 FROM social_profiles WHERE user_id = :userId)")
     suspend fun hasProfile(userId: String): Boolean
@@ -308,4 +319,14 @@ interface SocialProfileDao {
         WHERE user_id = :userId AND is_private = 0
     """)
     suspend fun getAverageFollowerCount(userId: String): Double?
+    
+    // ========================================
+    // Debug Support
+    // ========================================
+    
+    @Query("SELECT * FROM social_profiles ORDER BY created_at DESC LIMIT 10")
+    suspend fun getAllProfilesForDebug(): List<SocialProfileEntity>
+    
+    @Query("SELECT COUNT(*) FROM social_profiles")
+    suspend fun getTotalProfileCount(): Int
 }

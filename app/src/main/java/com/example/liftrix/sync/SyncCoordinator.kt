@@ -10,7 +10,6 @@ import androidx.work.Constraints
 import androidx.work.NetworkType
 import androidx.work.BackoffPolicy
 import androidx.work.workDataOf
-import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.data.sync.RealtimeSyncService
 import com.example.liftrix.domain.repository.SyncStatusRepository
 import com.example.liftrix.domain.model.common.LiftrixResult
@@ -56,9 +55,9 @@ class SyncCoordinator @Inject constructor(
     private val realtimeSyncService: RealtimeSyncService,
     private val syncStatusRepository: SyncStatusRepository
 ) {
-    // Get WorkManager from the provider to ensure proper initialization
+    // Use standard WorkManager instance (initialized via Configuration.Provider)
     private val workManager: WorkManager
-        get() = WorkManagerProvider.getInstance(context)
+        get() = WorkManager.getInstance(context)
     
     private val coordinatorScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     

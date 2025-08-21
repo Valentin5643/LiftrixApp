@@ -1,6 +1,8 @@
 package com.example.liftrix.domain.usecase.settings
 
+import android.content.Context
 import androidx.work.WorkManager
+import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SettingsRepository
 import com.example.liftrix.domain.service.AnalyticsService
@@ -8,6 +10,7 @@ import com.example.liftrix.sync.SyncManager
 import com.example.liftrix.ui.common.state.StateCleanupManager
 import timber.log.Timber
 import javax.inject.Inject
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 /**
  * Enhanced sign out use case that handles comprehensive logout functionality.
@@ -27,9 +30,12 @@ class EnhancedSignOutUseCase @Inject constructor(
     private val analyticsService: AnalyticsService,
     private val settingsRepository: SettingsRepository,
     private val syncManager: SyncManager,
-    private val workManager: WorkManager,
+    @ApplicationContext private val context: Context,
     private val stateCleanupManager: StateCleanupManager
 ) {
+    
+    private val workManager: WorkManager
+        get() = WorkManagerProvider.getInstance(context)
     
     /**
      * Executes comprehensive sign out process.

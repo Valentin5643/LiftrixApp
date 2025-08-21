@@ -41,7 +41,8 @@ class SocialRepositoryImpl @Inject constructor(
     private val authRepository: AuthRepository,
     private val firestore: FirebaseFirestore,
     private val recommendationCache: RecommendationCache,
-    private val getSocialProfileUseCase: GetSocialProfileUseCase
+    private val getSocialProfileUseCase: GetSocialProfileUseCase,
+    private val userSuggestionService: com.example.liftrix.domain.service.UserSuggestionService
 ) : SocialRepository {
 
     companion object {
@@ -509,16 +510,59 @@ class SocialRepositoryImpl @Inject constructor(
                     recommendations.addAll(mutualFriendsUsers)
                 }
                 
-                // Step 4: Get general discovery recommendations to fill remaining slots
+                // Step 4: Get discovery recommendations to fill remaining slots
                 val remainingSlots = limit - recommendations.size
                 if (remainingSlots > 0) {
-                    val generalUsers = getGeneralRecommendations(
-                        currentUserId = currentUserId,
-                        excludeUserIds = friendIds + recommendations.map { it.userId }.toSet(),
-                        limit = remainingSlots,
-                        offset = offset
-                    )
-                    recommendations.addAll(generalUsers)
+                        // For new users (< 3 friends), use sophisticated UserSuggestionService
+                    if (friendIds.size < 3) {
+                        
+                        try {
+                            // Use the sophisticated recommendation service for new users
+                            val suggestionResult = userSuggestionService.getNewUserSuggestions(currentUserId, remainingSlots)
+                            
+                            suggestionResult.fold(
+                                onSuccess = { suggestions ->
+                                    val convertedUsers = suggestions.map { suggestion ->
+                                        RecommendedUser(
+                                            userId = suggestion.userSearchResult.userId,
+                                            username = suggestion.userSearchResult.displayName,
+                                            profileImageUrl = suggestion.userSearchResult.profileImageUrl,
+                                            isFollowing = false
+                                        )
+                                    }
+                                    recommendations.addAll(convertedUsers)
+                                },
+                                onFailure = { error ->
+                                    // Fallback to basic recommendations
+                                    val generalUsers = getGeneralRecommendations(
+                                        currentUserId = currentUserId,
+                                        excludeUserIds = friendIds + recommendations.map { it.userId }.toSet(),
+                                        limit = remainingSlots,
+                                        offset = offset
+                                    )
+                                    recommendations.addAll(generalUsers)
+                                }
+                            )
+                        } catch (e: Exception) {
+                            // Fallback to basic recommendations
+                            val generalUsers = getGeneralRecommendations(
+                                currentUserId = currentUserId,
+                                excludeUserIds = friendIds + recommendations.map { it.userId }.toSet(),
+                                limit = remainingSlots,
+                                offset = offset
+                            )
+                            recommendations.addAll(generalUsers)
+                        }
+                    } else {
+                        // For established users, use the basic Firebase query approach
+                        val generalUsers = getGeneralRecommendations(
+                            currentUserId = currentUserId,
+                            excludeUserIds = friendIds + recommendations.map { it.userId }.toSet(),
+                            limit = remainingSlots,
+                            offset = offset
+                        )
+                        recommendations.addAll(generalUsers)
+                    }
                 }
                 
                 // Remove duplicates and limit results
@@ -753,8 +797,10 @@ class SocialRepositoryImpl @Inject constructor(
             for (userId in potentialFriends.drop(offset).take(limit)) {
                 val user = getUserById(userId)
                 if (user != null) {
+                    // Check actual follow status instead of hardcoding false
+                    val isFollowing = friendDao.getFriendRelationship(currentUserId, userId)?.status == FriendStatus.ACCEPTED.name
                     recommendations.add(
-                        RecommendedUser.fromUser(user, isFollowing = false)
+                        RecommendedUser.fromUser(user, isFollowing = isFollowing)
                     )
                 }
             }
@@ -790,12 +836,10 @@ class SocialRepositoryImpl @Inject constructor(
         offset: Int
     ): List<RecommendedUser> {
         return try {
-            // First, try to get recent public profiles from social_profiles collection
+            // TEMPORARY: Most basic query to test permissions
+            // First, try to get any social profiles collection documents
             val socialProfilesQuery = firestore.collection("social_profiles")
-                .whereEqualTo("isPrivate", false)  // Only public profiles
-                .whereEqualTo("hideFromSuggestions", false)  // Not hidden from discovery
-                .orderBy("createdAt", com.google.firebase.firestore.Query.Direction.DESCENDING)  // Most recent first
-                .limit((limit * 2 + offset).toLong()) // Get extra to account for filtering
+                .limit(10) // Very basic query with no where clauses
                 .get()
                 .await()
             
@@ -812,16 +856,32 @@ class SocialRepositoryImpl @Inject constructor(
                 
                 try {
                     val profileData = document.data ?: continue
+                    
+                    // TEMPORARY: Client-side filtering for basic query
+                    val isPrivate = profileData["isPrivate"] as? Boolean ?: true
+                    val hideFromSuggestions = profileData["hideFromSuggestions"] as? Boolean ?: false
+                    
+                    if (isPrivate) {
+                        continue
+                    }
+                    
+                    if (hideFromSuggestions) {
+                        continue
+                    }
+                    
                     val username = profileData["username"] as? String ?: continue
                     val displayName = profileData["displayName"] as? String
                     val profilePhotoUrl = profileData["profilePhotoUrl"] as? String
+                    
+                    // Check actual follow status instead of hardcoding false
+                    val isFollowing = friendDao.getFriendRelationship(currentUserId, userId)?.status == FriendStatus.ACCEPTED.name
                     
                     recommendations.add(
                         RecommendedUser(
                             userId = userId,
                             username = displayName ?: username,
                             profileImageUrl = profilePhotoUrl,
-                            isFollowing = false
+                            isFollowing = isFollowing
                         )
                     )
                     
@@ -834,56 +894,45 @@ class SocialRepositoryImpl @Inject constructor(
                 }
             }
             
-            // If we don't have enough from social profiles, fall back to users collection
+            // Fallback to users collection if we don't have enough recommendations from social_profiles
             if (recommendations.size < limit) {
-                val remainingLimit = limit - recommendations.size
-                val generalQuery = firestore.collection(USERS_COLLECTION)
-                    .whereEqualTo("onboardingCompleted", true)
-                    .limit((remainingLimit * 2).toLong())
-                    .get()
-                    .await()
-                    
-                for (document in generalQuery.documents) {
-                    val userId = document.id
-                
-                // Skip current user and existing friends
-                if (userId == currentUserId || userId in excludeUserIds) {
-                    continue
-                }
-                
                 try {
-                    val userData = document.data ?: continue
-                    val user = User(
-                        uid = userId,
-                        email = userData["email"] as? String ?: "",
-                        displayName = userData["displayName"] as? String,
-                        photoUrl = userData["photoUrl"] as? String,
-                        isAnonymous = userData["isAnonymous"] as? Boolean ?: false,
-                        subscriptionTier = com.example.liftrix.domain.model.SubscriptionTier.FREE,
-                        subscriptionStatus = com.example.liftrix.domain.model.SubscriptionStatus.ACTIVE,
-                        subscriptionExpiresAt = null,
-                        premiumFeaturesEnabled = false,
-                        onboardingCompleted = userData["onboardingCompleted"] as? Boolean ?: false,
-                        profileVersion = userData["profileVersion"] as? Long ?: 1L,
-                        createdAt = java.time.LocalDateTime.now(),
-                        lastSignInAt = java.time.LocalDateTime.now(),
-                        updatedAt = java.time.LocalDateTime.now()
-                    )
+                    val usersQuery = firestore.collection("users")
+                        .whereEqualTo("isPublic", true)
+                        .limit((limit - recommendations.size + 5).toLong()) // Get a few extra to account for filtering
+                        .get()
+                        .await()
                     
-                    recommendations.add(
-                        RecommendedUser.fromUser(user, isFollowing = false)
-                    )
                     
-                } catch (e: Exception) {
-                    Timber.w(e, "Failed to parse user for general recommendations: $userId")
-                }
-                
-                // Stop if we have enough recommendations
-                if (recommendations.size >= limit) {
-                    break
+                    for (userDoc in usersQuery.documents) {
+                        if (recommendations.size >= limit) break
+                        
+                        val userId = userDoc.id
+                        if (userId == currentUserId || userId in excludeUserIds) continue
+                        
+                        val userData = userDoc.data ?: continue
+                        val username = userData["username"] as? String ?: continue
+                        val displayName = userData["displayName"] as? String
+                        
+                        // Check if this user already has a social profile (to avoid duplicates)
+                        val hasSocialProfile = recommendations.any { it.userId == userId }
+                        if (!hasSocialProfile) {
+                            // Check actual follow status instead of hardcoding false
+                            val isFollowing = friendDao.getFriendRelationship(currentUserId, userId)?.status == FriendStatus.ACCEPTED.name
+                            recommendations.add(
+                                RecommendedUser(
+                                    userId = userId,
+                                    username = displayName ?: username,
+                                    profileImageUrl = null,
+                                    isFollowing = isFollowing
+                                )
+                            )
+                        }
+                    }
+                } catch (fallbackError: Exception) {
+                    Timber.w(fallbackError, "Fallback to users collection failed")
                 }
             }
-        }
             
             val finalRecommendations = recommendations.drop(offset).take(limit)
             Timber.d("Found ${finalRecommendations.size} general recommendations")

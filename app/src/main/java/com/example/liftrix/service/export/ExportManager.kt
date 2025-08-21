@@ -1,5 +1,6 @@
 package com.example.liftrix.service.export
 
+import android.content.Context
 import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
@@ -8,6 +9,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.workDataOf
+import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
@@ -18,6 +20,7 @@ import kotlinx.coroutines.flow.map
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 /**
  * Comprehensive export manager implementing dual export system with background processing.
@@ -42,9 +45,12 @@ import javax.inject.Singleton
  */
 @Singleton
 class ExportManager @Inject constructor(
-    private val workManager: WorkManager,
+    @ApplicationContext private val context: Context,
     private val analyticsService: AnalyticsService
 ) {
+    
+    private val workManager: WorkManager
+        get() = WorkManagerProvider.getInstance(context)
     
     companion object {
         private const val EXPORT_WORK_NAME_PREFIX = "export_work"

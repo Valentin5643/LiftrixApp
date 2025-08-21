@@ -1,10 +1,12 @@
 package com.example.liftrix.service.sync
 
+import android.content.Context
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.google.firebase.auth.FirebaseAuth
@@ -27,6 +29,7 @@ import timber.log.Timber
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 /**
  * Real-time synchronization manager providing hybrid sync strategy.
@@ -54,10 +57,13 @@ import javax.inject.Singleton
 class RealtimeSyncManager @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val auth: FirebaseAuth,
-    private val workManager: WorkManager,
+    @ApplicationContext private val context: Context,
     private val syncStrategy: SyncStrategy,
     private val conflictResolver: ConflictResolver
 ) {
+    
+    private val workManager: WorkManager
+        get() = WorkManagerProvider.getInstance(context)
     
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     

@@ -482,4 +482,11 @@ sealed class LiftrixRoute {
         val conversationId: String? = null,
         val workoutContext: String? = null
     ) : LiftrixRoute()
+    
+    /**
+     * AI Chat Settings screen for configuring AI chatbot preferences
+     * Provides comprehensive controls for language, behavior, usage limits, and data management
+     */
+    @Serializable
+    data object AIChatSettings : LiftrixRoute()
 }

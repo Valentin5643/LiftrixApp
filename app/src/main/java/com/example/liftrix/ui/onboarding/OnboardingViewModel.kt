@@ -517,21 +517,46 @@ class OnboardingViewModel @Inject constructor(
 
         val profileData = currentState.profileData
         
-        // Validate profile completion
-        val completionValidation = validateProfileInputUseCase.validateProfileCompletion(
-            age = profileData.getValidatedAge(),
-            weight = profileData.getValidatedWeight(),
-            equipment = profileData.selectedEquipment.toList(),
-            goals = profileData.selectedGoals.toList()
-        )
-        
-        if (completionValidation is ValidationResult.Invalid) {
-            return Result.failure(IllegalArgumentException(completionValidation.message))
-        }
+        // Enhanced validation with detailed error reporting
+        try {
+            // Check completion requirements step by step
+            if (!profileData.isAgeStepValid()) {
+                Timber.e("Profile validation failed: Age step invalid. Age input: '${profileData.ageInput}', Validated age: ${profileData.getValidatedAge()}")
+                return Result.failure(IllegalArgumentException("Age information is required"))
+            }
+            
+            if (!profileData.isEquipmentStepValid()) {
+                Timber.e("Profile validation failed: Equipment step invalid. Selected equipment: ${profileData.selectedEquipment.size} items, Other equipment: '${profileData.otherEquipmentInput}'")
+                return Result.failure(IllegalArgumentException("At least one piece of equipment must be selected"))
+            }
+            
+            if (!profileData.isGoalsStepValid()) {
+                Timber.e("Profile validation failed: Goals step invalid. Selected goals: ${profileData.selectedGoals.size} items")
+                return Result.failure(IllegalArgumentException("At least one fitness goal must be selected"))
+            }
+            
+            // Validate profile completion
+            val completionValidation = validateProfileInputUseCase.validateProfileCompletion(
+                age = profileData.getValidatedAge(),
+                weight = profileData.getValidatedWeight(),
+                equipment = profileData.selectedEquipment.toList(),
+                goals = profileData.selectedGoals.toList()
+            )
+            
+            if (completionValidation is ValidationResult.Invalid) {
+                Timber.e("Profile completion validation failed: ${completionValidation.message}")
+                return Result.failure(IllegalArgumentException(completionValidation.message))
+            }
 
-        // Convert to domain model and save
-        val domainProfile = profileData.toDomainModel()
-        return saveProfileUseCase(domainProfile)
+            // Convert to domain model and save
+            Timber.d("Converting profile data to domain model for user: ${profileData.userId}")
+            val domainProfile = profileData.toDomainModel()
+            Timber.d("Calling SaveProfileUseCase for user: ${profileData.userId}")
+            return saveProfileUseCase(domainProfile)
+        } catch (e: Exception) {
+            Timber.e(e, "Exception during profile validation and saving")
+            return Result.failure(e)
+        }
     }
 
     /**

@@ -14,5 +14,13 @@ data class ChatPreferences(
     val maxTokensPerMonth: Int = 10000,
     val autoClearDays: Int = 30,
     val userContextPrompt: String? = null,
+    
+    // Enhanced AI Settings
+    val aiResponseStyle: String = "balanced", // "concise", "balanced", "detailed"
+    val includeWorkoutHistory: Boolean = true,
+    val includeExerciseFormTips: Boolean = true,
+    val usageNotificationsThreshold: Int = 80, // Percentage threshold
+    val conversationSaveEnabled: Boolean = true,
+    
     val updatedAt: Long = System.currentTimeMillis()
 )

@@ -1,11 +1,13 @@
 package com.example.liftrix.debug
 
+import android.content.Context
 import com.example.liftrix.data.local.dao.UserAccountDao
 import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.local.entity.UserAccountEntity
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.sync.UserPublicSyncWorker
 import androidx.work.WorkManager
+import com.example.liftrix.core.workmanager.WorkManagerProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -13,6 +15,7 @@ import java.time.LocalDateTime
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 /**
  * Debug utility for generating test user data to validate search functionality.
@@ -30,8 +33,11 @@ import javax.inject.Singleton
 class UserSearchTestDataGenerator @Inject constructor(
     private val userAccountDao: UserAccountDao,
     private val userProfileDao: UserProfileDao,
-    private val workManager: WorkManager
+    @ApplicationContext private val context: Context
 ) {
+    
+    private val workManager: WorkManager
+        get() = WorkManagerProvider.getInstance(context)
 
     companion object {
         private const val TEST_USER_PREFIX = "test_user_"

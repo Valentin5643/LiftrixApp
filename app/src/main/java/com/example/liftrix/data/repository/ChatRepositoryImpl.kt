@@ -220,6 +220,58 @@ class ChatRepositoryImpl @Inject constructor(
         val hourAgo = System.currentTimeMillis() - 3600000 // 1 hour ago
         return chatHistoryDao.getTokenUsageSince(userId, hourAgo) ?: 0
     }
+    
+    override suspend fun clearAllHistory(userId: String): LiftrixResult<Int> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "CLEAR_HISTORY_FAILED",
+                errorMessage = "Failed to clear chat history",
+                analyticsContext = mapOf("user_id" to userId)
+            )
+        }
+    ) {
+        val deletedCount = chatHistoryDao.clearAllHistory(userId)
+        Timber.i("Cleared all chat history for user: $userId. Deleted $deletedCount messages.")
+        deletedCount
+    }
+    
+    override suspend fun exportChatHistory(userId: String): LiftrixResult<String> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "EXPORT_FAILED",
+                errorMessage = "Failed to export chat history",
+                analyticsContext = mapOf("user_id" to userId)
+            )
+        }
+    ) {
+        val allMessages = chatHistoryDao.getAllMessagesForExport(userId)
+        // Convert to JSON export format (simplified for now)
+        Json.encodeToString(allMessages.map { it.toDomainModel() })
+    }
+    
+    override suspend fun getTotalMessageCount(userId: String): LiftrixResult<Int> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "COUNT_FETCH_FAILED",
+                errorMessage = "Failed to get message count",
+                analyticsContext = mapOf("user_id" to userId)
+            )
+        }
+    ) {
+        chatHistoryDao.getTotalMessageCount(userId)
+    }
+    
+    override suspend fun getTotalTokenUsage(userId: String): LiftrixResult<Int> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "TOKEN_COUNT_FAILED",
+                errorMessage = "Failed to get token usage",
+                analyticsContext = mapOf("user_id" to userId)
+            )
+        }
+    ) {
+        chatHistoryDao.getTotalTokenUsage(userId) ?: 0
+    }
 }
 
 // Extension functions for entity/domain mapping
@@ -259,6 +311,11 @@ private fun ChatPreferencesEntity.toDomainModel(): ChatPreferences {
         maxTokensPerMonth = maxTokensPerMonth,
         autoClearDays = autoClearDays,
         userContextPrompt = userContextPrompt,
+        aiResponseStyle = aiResponseStyle,
+        includeWorkoutHistory = includeWorkoutHistory,
+        includeExerciseFormTips = includeExerciseFormTips,
+        usageNotificationsThreshold = usageNotificationsThreshold,
+        conversationSaveEnabled = conversationSaveEnabled,
         updatedAt = updatedAt
     )
 }
@@ -275,6 +332,11 @@ private fun ChatPreferences.toEntity(): ChatPreferencesEntity {
         maxTokensPerMonth = maxTokensPerMonth,
         autoClearDays = autoClearDays,
         userContextPrompt = userContextPrompt,
+        aiResponseStyle = aiResponseStyle,
+        includeWorkoutHistory = includeWorkoutHistory,
+        includeExerciseFormTips = includeExerciseFormTips,
+        usageNotificationsThreshold = usageNotificationsThreshold,
+        conversationSaveEnabled = conversationSaveEnabled,
         isSynced = false,
         syncVersion = 0,
         updatedAt = updatedAt

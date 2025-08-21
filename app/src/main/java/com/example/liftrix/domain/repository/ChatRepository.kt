@@ -79,4 +79,26 @@ interface ChatRepository {
      * Gets token usage for the current hour.
      */
     suspend fun getHourlyTokenUsage(userId: String): Int
+    
+    /**
+     * Clears all chat history for a user.
+     * Used by settings screen for complete history clear.
+     */
+    suspend fun clearAllHistory(userId: String): LiftrixResult<Int>
+    
+    /**
+     * Exports all chat history for a user.
+     * Returns formatted export data.
+     */
+    suspend fun exportChatHistory(userId: String): LiftrixResult<String>
+    
+    /**
+     * Gets total message count for storage statistics.
+     */
+    suspend fun getTotalMessageCount(userId: String): LiftrixResult<Int>
+    
+    /**
+     * Gets total token usage for usage statistics.
+     */
+    suspend fun getTotalTokenUsage(userId: String): LiftrixResult<Int>
 }

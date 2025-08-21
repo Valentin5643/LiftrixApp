@@ -79,6 +79,7 @@ import com.example.liftrix.ui.settings.about.AboutScreen
 import com.example.liftrix.ui.settings.legal.PrivacyPolicyScreen
 import com.example.liftrix.ui.settings.legal.TermsOfServiceScreen
 import com.example.liftrix.ui.chat.ChatbotScreen
+import com.example.liftrix.ui.chat.settings.AIChatSettingsScreen
 import com.example.liftrix.ui.social.SocialViewModel
 import com.example.liftrix.ui.social.SocialEvent
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
@@ -462,6 +463,9 @@ fun UnifiedNavigationContainer(
                         },
                         onNavigateToDataPortability = {
                             navController.navigate(LiftrixRoute.DataPortability)
+                        },
+                        onNavigateToAIChatSettings = {
+                            navController.navigate(LiftrixRoute.AIChatSettings)
                         }
                     )
                 }
@@ -605,6 +609,12 @@ fun UnifiedNavigationContainer(
                     ChatbotScreen(
                         conversationId = route.conversationId,
                         initialWorkoutContext = route.workoutContext,
+                        onNavigateBack = { navController.popBackStackSafely() }
+                    )
+                }
+                
+                composable<LiftrixRoute.AIChatSettings> {
+                    AIChatSettingsScreen(
                         onNavigateBack = { navController.popBackStackSafely() }
                     )
                 }
@@ -914,21 +924,10 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.PostComments> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.PostComments>()
-                    // PostCommentsScreen implementation placeholder
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Post Comments Screen")
-                            Text("Post ID: ${route.postId}")
-                            Button(
-                                onClick = { navController.popBackStackSafely() }
-                            ) {
-                                Text("Back")
-                            }
-                        }
-                    }
+                    com.example.liftrix.ui.social.comments.PostCommentsScreen(
+                        postId = route.postId,
+                        onNavigateBack = { navController.popBackStackSafely() }
+                    )
                 }
                 
                 // Analytics Detail Screen Routes

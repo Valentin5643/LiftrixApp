@@ -394,12 +394,8 @@ class ThemeManager private constructor(private val context: Context) {
     }
     
     private fun loadThemeVersion(): ThemeVersion {
-        val savedVersion = sharedPreferences.getString(KEY_THEME_VERSION, ThemeVersion.V2.name)
-        return try {
-            ThemeVersion.valueOf(savedVersion ?: ThemeVersion.V2.name)
-        } catch (e: IllegalArgumentException) {
-            ThemeVersion.V2 // Default to V2 for new installations
-        }
+        // Always return V2 - no other options available
+        return ThemeVersion.V2
     }
 }
 
@@ -414,22 +410,10 @@ data class ThemeState(
 )
 
 /**
- * Extension functions for easy theme version management
+ * Extension functions for theme management (V2 only)
  */
 fun ThemeManager.isUsingV2Theme(): Boolean {
-    return themeVersion.value == ThemeVersion.V2
+    return true // Always using V2
 }
 
-fun ThemeManager.switchToV2() {
-    setThemeVersion(ThemeVersion.V2)
-}
-
-fun ThemeManager.switchToV1() {
-    setThemeVersion(ThemeVersion.V1)
-}
-
-fun ThemeManager.toggleThemeVersion() {
-    val currentVersion = themeVersion.value
-    val newVersion = if (currentVersion == ThemeVersion.V1) ThemeVersion.V2 else ThemeVersion.V1
-    setThemeVersion(newVersion)
-}
+// REMOVED: V1 theme functions - only V2 is supported

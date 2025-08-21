@@ -42,6 +42,22 @@ data class ChatPreferencesEntity(
     @ColumnInfo(name = "user_context_prompt")
     val userContextPrompt: String? = null, // Free-form preferences
     
+    // Enhanced AI Settings
+    @ColumnInfo(name = "ai_response_style", defaultValue = "'balanced'")
+    val aiResponseStyle: String = "balanced", // "concise", "balanced", "detailed"
+    
+    @ColumnInfo(name = "include_workout_history", defaultValue = "1")
+    val includeWorkoutHistory: Boolean = true,
+    
+    @ColumnInfo(name = "include_exercise_form_tips", defaultValue = "1")
+    val includeExerciseFormTips: Boolean = true,
+    
+    @ColumnInfo(name = "usage_notifications_threshold", defaultValue = "80")
+    val usageNotificationsThreshold: Int = 80, // Percentage threshold for usage alerts
+    
+    @ColumnInfo(name = "conversation_save_enabled", defaultValue = "1")
+    val conversationSaveEnabled: Boolean = true,
+    
     // Sync metadata
     @ColumnInfo(name = "is_synced", defaultValue = "0")
     val isSynced: Boolean = false,

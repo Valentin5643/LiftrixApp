@@ -12,6 +12,7 @@ import com.example.liftrix.domain.repository.ChatRepository
 import com.example.liftrix.domain.service.AIChatService
 import com.example.liftrix.domain.service.AbuseAction
 import timber.log.Timber
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 /**
@@ -57,6 +58,7 @@ class SendChatMessageUseCase @Inject constructor(
                 else -> LiftrixError.BusinessLogicError(
                     code = "CHAT_MESSAGE_FAILED",
                     errorMessage = "Failed to send message. Please try again.",
+                    isRecoverable = true, // Make error recoverable for retry
                     analyticsContext = mapOf(
                         "user_id" to userId,
                         "operation" to "SEND_CHAT_MESSAGE",
@@ -130,14 +132,18 @@ class SendChatMessageUseCase @Inject constructor(
                 }
             )
         
-        // 5. Build conversation context
+        // 5. Get user chat preferences for personalization
+        val currentPreferences = chatRepository.observePreferences(userId).first()
+        val userPreferences = currentPreferences?.userContextPrompt
+        
+        // 6. Build conversation context
         val conversationContext = com.example.liftrix.domain.service.ConversationContext(
             recentMessages = recentMessages,
             workoutContext = workoutContext,
-            userPreferences = null // TODO: Add user preferences from ChatPreferences
+            userPreferences = userPreferences
         )
         
-        // 6. Get AI response
+        // 7. Get AI response
         val aiResponse = aiChatService.generateResponse(
             userId = userId,
             message = message,

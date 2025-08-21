@@ -1,6 +1,8 @@
 package com.example.liftrix.data.repository
 
+import android.content.Context
 import androidx.work.WorkManager
+import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.data.local.dao.UserAccountDao
 import com.example.liftrix.data.mapper.UserAccountMapper
 import com.example.liftrix.domain.model.UserAccount
@@ -8,6 +10,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.UserAccountRepository
+import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.sync.UserPublicSyncWorker
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -16,6 +19,7 @@ import timber.log.Timber
 import java.time.LocalDateTime
 import javax.inject.Inject
 import javax.inject.Singleton
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 /**
  * Repository implementation for user account management operations.
@@ -26,8 +30,12 @@ import javax.inject.Singleton
 @Singleton
 class UserAccountRepositoryImpl @Inject constructor(
     private val userAccountDao: UserAccountDao,
-    private val workManager: WorkManager
+    private val authRepository: AuthRepository,
+    @ApplicationContext private val context: Context
 ) : UserAccountRepository {
+    
+    private val workManager: WorkManager
+        get() = WorkManagerProvider.getInstance(context)
 
     override fun getAccountInfo(userId: String): Flow<UserAccount?> {
         return userAccountDao.getAccountForUser(userId)
@@ -84,15 +92,85 @@ class UserAccountRepositoryImpl @Inject constructor(
                 }
             }
             
-            // Update the username
-            val rowsUpdated = userAccountDao.updateUsername(userId, username)
-            if (rowsUpdated == 0) {
-                throw LiftrixError.NotFoundError(
-                    errorMessage = "User account not found",
-                    resourceType = "UserAccount",
-                    resourceId = userId,
-                    analyticsContext = mapOf("operation" to "UPDATE_USERNAME")
-                )
+            // Check if user account exists first
+            val existingAccount = userAccountDao.getAccountForUserSuspend(userId)
+            if (existingAccount == null) {
+                // Create a user account if it doesn't exist (race condition handling)
+                Timber.w("User account not found for userId: $userId, creating account before username update")
+                
+                // Get current user information from Firebase to create proper account
+                try {
+                    val currentUser = authRepository.getCurrentUser()
+                    if (currentUser != null && currentUser.uid == userId) {
+                        // Create proper account with Firebase user data
+                        val userAccount = com.example.liftrix.domain.model.UserAccount.create(
+                            userId = userId,
+                            email = currentUser.email ?: "unknown@example.com",
+                            displayName = currentUser.displayName,
+                            username = username
+                        )
+                        
+                        val result = upsertAccountInfo(userAccount)
+                        result.fold(
+                            onSuccess = { 
+                                Timber.d("Created account for user $userId with Firebase data before username update")
+                            },
+                            onFailure = { error ->
+                                Timber.e("Failed to create account before username update: $error")
+                                throw error
+                            }
+                        )
+                    } else {
+                        // Fallback: create minimal account
+                        val minimalAccount = com.example.liftrix.domain.model.UserAccount.create(
+                            userId = userId,
+                            email = "temp@example.com", // Will be updated by sync
+                            displayName = null,
+                            username = username
+                        )
+                        
+                        val result = upsertAccountInfo(minimalAccount)
+                        result.fold(
+                            onSuccess = { 
+                                Timber.d("Created minimal account for user $userId before username update")
+                            },
+                            onFailure = { error ->
+                                Timber.e("Failed to create minimal account before username update: $error")
+                                throw error
+                            }
+                        )
+                    }
+                } catch (error: Exception) {
+                    Timber.e("Exception getting current user, creating minimal account: $error")
+                    // Fallback: create minimal account
+                    val minimalAccount = com.example.liftrix.domain.model.UserAccount.create(
+                        userId = userId,
+                        email = "temp@example.com", // Will be updated by sync
+                        displayName = null,
+                        username = username
+                    )
+                    
+                    val result = upsertAccountInfo(minimalAccount)
+                    result.fold(
+                        onSuccess = { 
+                            Timber.d("Created fallback minimal account for user $userId before username update")
+                        },
+                        onFailure = { fallbackError ->
+                            Timber.e("Failed to create fallback account before username update: $fallbackError")
+                            throw fallbackError
+                        }
+                    )
+                }
+            } else {
+                // Update the username on existing account
+                val rowsUpdated = userAccountDao.updateUsername(userId, username)
+                if (rowsUpdated == 0) {
+                    throw LiftrixError.DatabaseError(
+                        errorMessage = "Failed to update username - no rows affected",
+                        operation = "UPDATE_USERNAME", 
+                        analyticsContext = mapOf("user_id" to userId, "username" to (username ?: "null"))
+                    )
+                }
             }
             
             Timber.d("Username updated successfully for user: $userId to: $username")

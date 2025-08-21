@@ -39,12 +39,13 @@ class GetDiscoverableSocialProfilesUseCase @Inject constructor(
     ) {
         val viewerId = getCurrentUserIdUseCase() 
             ?: throw IllegalStateException("User not authenticated")
-
+        
         // Validate limit
         if (limit <= 0 || limit > 100) {
             throw IllegalArgumentException("Limit must be between 1 and 100")
         }
 
-        repository.getDiscoverableProfiles(viewerId, limit).getOrThrow()
+        val profiles = repository.getDiscoverableProfiles(viewerId, limit).getOrThrow()
+        profiles
     }
 }

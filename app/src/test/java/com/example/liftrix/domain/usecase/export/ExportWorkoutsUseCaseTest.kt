@@ -5,7 +5,9 @@ import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.local.entity.DataExportEntity
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.data.local.entity.WorkoutEntity
 import io.mockk.*
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
@@ -51,9 +53,9 @@ class ExportWorkoutsUseCaseTest {
         )
         
         // Setup common mock behaviors
-        every { dataExportDao.insertExport(any()) } returns Unit
-        every { dataExportDao.updateExportStatus(any(), any(), any(), any()) } returns Unit
-        every { dataExportDao.markExportCompleted(any(), any(), any(), any(), any(), any()) } returns Unit
+        coEvery { dataExportDao.insertExport(any()) } returns Unit
+        coEvery { dataExportDao.updateExportStatus(any(), any(), any(), any()) } returns Unit
+        coEvery { dataExportDao.markExportCompleted(any(), any(), any(), any(), any(), any()) } returns Unit
         
         // Mock file creation for tests
         mockkStatic(File::class)
@@ -79,13 +81,13 @@ class ExportWorkoutsUseCaseTest {
         )
         
         val mockWorkouts = listOf(
-            mockk<com.example.liftrix.data.local.entity.WorkoutEntity> {
+            mockk<WorkoutEntity> {
                 every { id } returns "workout-1"
                 every { name } returns "Test Workout"
             }
         )
         
-        every { workoutDao.getAllWorkoutsForUser(testUserId) } returns mockWorkouts.toString()
+        every { workoutDao.getAllWorkoutsForUser(testUserId) } returns flowOf(mockWorkouts)
         
         // Act
         val result = exportWorkoutsUseCase.invoke(testUserId, request)
@@ -98,9 +100,9 @@ class ExportWorkoutsUseCaseTest {
         assertTrue(exportResult.recordCount >= 0)
         
         // Verify database interactions
-        verify { dataExportDao.insertExport(any()) }
-        verify { dataExportDao.updateExportStatus(any(), testUserId, "IN_PROGRESS") }
-        verify { dataExportDao.markExportCompleted(any(), testUserId, any(), any(), any(), any()) }
+        coVerify { dataExportDao.insertExport(any()) }
+        coVerify { dataExportDao.updateExportStatus(any(), testUserId, "IN_PROGRESS") }
+        coVerify { dataExportDao.markExportCompleted(any(), testUserId, any(), any(), any(), any()) }
     }
     
     @Test
@@ -115,7 +117,7 @@ class ExportWorkoutsUseCaseTest {
             )
         )
         
-        every { workoutDao.getWorkoutsInDateRangeForUser(any(), any(), any()) } returns emptyList()
+        coEvery { workoutDao.getWorkoutsInDateRangeForUser(any(), any(), any()) } returns emptyList()
         
         // Act
         val result = exportWorkoutsUseCase.invoke(testUserId, request)
@@ -125,7 +127,7 @@ class ExportWorkoutsUseCaseTest {
         val exportResult = result.getOrThrow()
         assertEquals(ExportFormat.CSV, exportResult.format)
         
-        verify { workoutDao.getWorkoutsInDateRangeForUser(testUserId, any(), any()) }
+        coVerify { workoutDao.getWorkoutsInDateRangeForUser(testUserId, any(), any()) }
     }
     
     @Test
@@ -143,7 +145,7 @@ class ExportWorkoutsUseCaseTest {
         }
         
         // Verify no database operations occurred
-        verify(exactly = 0) { dataExportDao.insertExport(any()) }
+        coVerify(exactly = 0) { dataExportDao.insertExport(any()) }
     }
     
     @Test
@@ -173,19 +175,23 @@ class ExportWorkoutsUseCaseTest {
             dateRange = null
         )
         
-        every { workoutDao.getAllWorkoutsForUser(testUserId) } throws RuntimeException("Database error")
+        every { workoutDao.getAllWorkoutsForUser(testUserId) } returns flowOf(emptyList())
+        coEvery { workoutDao.getWorkoutsInDateRangeForUser(any(), any(), any()) } throws RuntimeException("Database error")
         
         // Act
         val result = exportWorkoutsUseCase.invoke(testUserId, request)
         
         // Assert
-        assertIs<LiftrixResult.Error<ExportResult>>(result)
-        val error = result.exceptionOrNull()
+        assertIs<LiftrixResult.Error>(result)
+        val error = result.fold(
+            onSuccess = { null },
+            onFailure = { it }
+        )
         assertIs<LiftrixError.BusinessLogicError>(error)
-        assertTrue(error.message.contains("Failed to export workout data"))
+        assertTrue(error.errorMessage.contains("Failed to export workout data"))
         
         // Verify export was marked as failed
-        verify { dataExportDao.updateExportStatus(any(), testUserId, "FAILED", any()) }
+        coVerify { dataExportDao.updateExportStatus(any(), testUserId, "FAILED", any()) }
     }
     
     @Test
@@ -197,17 +203,20 @@ class ExportWorkoutsUseCaseTest {
             dateRange = null
         )
         
-        every { workoutDao.getAllWorkoutsForUser(testUserId) } returns "[]"
+        every { workoutDao.getAllWorkoutsForUser(testUserId) } returns flowOf(emptyList())
         
         // Act
         val result = exportWorkoutsUseCase.invoke(testUserId, request)
         
         // Assert
-        assertIs<LiftrixResult.Error<ExportResult>>(result)
-        val error = result.exceptionOrNull()
+        assertIs<LiftrixResult.Error>(result)
+        val error = result.fold(
+            onSuccess = { null },
+            onFailure = { it }
+        )
         assertTrue(error is UnsupportedOperationException)
         
-        verify { dataExportDao.updateExportStatus(any(), testUserId, "FAILED", any()) }
+        coVerify { dataExportDao.updateExportStatus(any(), testUserId, "FAILED", any()) }
     }
     
     @Test
@@ -220,23 +229,26 @@ class ExportWorkoutsUseCaseTest {
         
         // Assert
         assertIs<LiftrixResult.Success<Unit>>(result)
-        verify { dataExportDao.updateExportStatus(exportId, testUserId, "CANCELLED") }
+        coVerify { dataExportDao.updateExportStatus(exportId, testUserId, "CANCELLED") }
     }
     
     @Test
     fun `cancelExport with database error should return error result`() = runTest {
         // Arrange
         val exportId = "test-export-123"
-        every { dataExportDao.updateExportStatus(exportId, testUserId, "CANCELLED") } throws RuntimeException("Database error")
+        coEvery { dataExportDao.updateExportStatus(exportId, testUserId, "CANCELLED") } throws RuntimeException("Database error")
         
         // Act
         val result = exportWorkoutsUseCase.cancelExport(exportId, testUserId)
         
         // Assert
-        assertIs<LiftrixResult.Error<Unit>>(result)
-        val error = result.exceptionOrNull()
+        assertIs<LiftrixResult.Error>(result)
+        val error = result.fold(
+            onSuccess = { null },
+            onFailure = { it }
+        )
         assertIs<LiftrixError.BusinessLogicError>(error)
-        assertTrue(error.message.contains("Failed to cancel export"))
+        assertTrue(error.errorMessage.contains("Failed to cancel export"))
     }
     
     @Test
@@ -291,10 +303,10 @@ class ExportWorkoutsUseCaseTest {
             )
         )
         
-        every { workoutDao.getWorkoutsInDateRangeForUser(any(), any(), any()) } returns emptyList()
+        coEvery { workoutDao.getWorkoutsInDateRangeForUser(any(), any(), any()) } returns emptyList()
         
         val capturedEntity = slot<DataExportEntity>()
-        every { dataExportDao.insertExport(capture(capturedEntity)) } returns Unit
+        coEvery { dataExportDao.insertExport(capture(capturedEntity)) } returns Unit
         
         // Act
         exportWorkoutsUseCase.invoke(testUserId, request)
@@ -306,7 +318,7 @@ class ExportWorkoutsUseCaseTest {
         assertEquals("WORKOUTS,TEMPLATES", entity.dataTypes)
         assertEquals("REQUESTED", entity.status)
         assertTrue(entity.requestedAt > 0)
-        assertTrue(entity.expiresAt > entity.requestedAt)
+        assertTrue(entity.expiresAt!! > entity.requestedAt)
     }
     
     @Test
@@ -320,13 +332,13 @@ class ExportWorkoutsUseCaseTest {
         
         // Simulate large dataset
         val largeWorkoutList = (1..1000).map { i ->
-            mockk<com.example.liftrix.data.local.entity.WorkoutEntity> {
+            mockk<WorkoutEntity> {
                 every { id } returns "workout-$i"
                 every { name } returns "Workout $i"
             }
         }
         
-        every { workoutDao.getAllWorkoutsForUser(testUserId) } returns largeWorkoutList.toString()
+        every { workoutDao.getAllWorkoutsForUser(testUserId) } returns flowOf(largeWorkoutList)
         
         // Act
         val result = exportWorkoutsUseCase.invoke(testUserId, request)
@@ -337,7 +349,7 @@ class ExportWorkoutsUseCaseTest {
         assertTrue(exportResult.recordCount >= 0)
         
         // Verify export completed successfully even with large dataset
-        verify { dataExportDao.markExportCompleted(any(), testUserId, any(), any(), any(), any()) }
+        coVerify { dataExportDao.markExportCompleted(any(), testUserId, any(), any(), any(), any()) }
     }
 }
 

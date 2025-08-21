@@ -48,4 +48,39 @@ interface ChatPreferencesDao {
      */
     @Query("SELECT * FROM chat_preferences WHERE user_id = :userId AND is_synced = 0")
     suspend fun getUnsyncedPreferences(userId: String): ChatPreferencesEntity?
+    
+    /**
+     * Updates specific AI response style for a user.
+     * Used by settings screen for quick style changes.
+     */
+    @Query("UPDATE chat_preferences SET ai_response_style = :style, is_synced = 0, updated_at = :timestamp WHERE user_id = :userId")
+    suspend fun updateResponseStyle(userId: String, style: String, timestamp: Long = System.currentTimeMillis())
+    
+    /**
+     * Updates user context prompt for personalized AI responses.
+     * Used by settings screen for context customization.
+     */
+    @Query("UPDATE chat_preferences SET user_context_prompt = :prompt, is_synced = 0, updated_at = :timestamp WHERE user_id = :userId")
+    suspend fun updateUserContextPrompt(userId: String, prompt: String?, timestamp: Long = System.currentTimeMillis())
+    
+    /**
+     * Updates usage notification threshold for a user.
+     * Used by settings screen for usage alert customization.
+     */
+    @Query("UPDATE chat_preferences SET usage_notifications_threshold = :threshold, is_synced = 0, updated_at = :timestamp WHERE user_id = :userId")
+    suspend fun updateUsageThreshold(userId: String, threshold: Int, timestamp: Long = System.currentTimeMillis())
+    
+    /**
+     * Toggles workout history inclusion for AI context.
+     * Used by settings screen for context control.
+     */
+    @Query("UPDATE chat_preferences SET include_workout_history = :include, is_synced = 0, updated_at = :timestamp WHERE user_id = :userId")
+    suspend fun updateWorkoutHistoryInclusion(userId: String, include: Boolean, timestamp: Long = System.currentTimeMillis())
+    
+    /**
+     * Gets current preferences as a single value (non-Flow).
+     * Used by settings operations that need immediate access.
+     */
+    @Query("SELECT * FROM chat_preferences WHERE user_id = :userId")
+    suspend fun getChatPreferencesSync(userId: String): ChatPreferencesEntity?
 }

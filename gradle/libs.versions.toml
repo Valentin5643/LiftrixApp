@@ -58,6 +58,7 @@ navigationComposeAndroid = "2.9.0"
 navigationComposeJvmstubs = "2.9.0"
 firebaseStorage = "21.0.2"
 firebaseMessaging = "24.1.0"
+firebaseAppcheck = "18.0.0"
 vico = "1.15.0"
 workTesting = "2.10.2"
 coil = "2.5.0"
@@ -169,6 +170,9 @@ androidx-navigation-compose-android = { group = "androidx.navigation", name = "n
 androidx-navigation-compose-jvmstubs = { group = "androidx.navigation", name = "navigation-compose-jvmstubs", version.ref = "navigationComposeJvmstubs" }
 firebase-storage = { group = "com.google.firebase", name = "firebase-storage", version.ref = "firebaseStorage" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging", version.ref = "firebaseMessaging" }
+firebase-appcheck = { group = "com.google.firebase", name = "firebase-appcheck", version.ref = "firebaseAppcheck" }
+firebase-appcheck-playintegrity = { group = "com.google.firebase", name = "firebase-appcheck-playintegrity", version.ref = "firebaseAppcheck" }
+firebase-appcheck-debug = { group = "com.google.firebase", name = "firebase-appcheck-debug", version.ref = "firebaseAppcheck" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

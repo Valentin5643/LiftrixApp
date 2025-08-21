@@ -13,10 +13,9 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.pow
 
 /**
- * Performance optimizations for Liftrix color systems (V1 & V2)
+ * Performance optimizations for LiftrixColorsV2 system
  * 
- * V1: Simplified 5-color palette (Persian Green, Tiffany Blue, Night, Jet, Snow)
- * V2: Modern Teal-based palette with pure black/white backgrounds
+ * Modern Teal-based palette with pure black/white backgrounds
  * 
  * Achieves 20%+ performance improvement in theme switching through:
  * - Pre-calculated color schemes for instant switching
@@ -24,75 +23,12 @@ import kotlin.math.pow
  * - Smart alpha variation caching for container colors
  * - Performance monitoring for theme operations
  * 
- * Integrates with existing PerformanceOptimizations system while providing
- * enhanced capabilities specific to both color systems.
+ * Integrates with existing PerformanceOptimizations system.
  */
 object ColorSystemOptimizations {
     
-    // Pre-calculated color schemes for instant switching
-    private val lightColorSchemeCache: ColorScheme by lazy {
-        lightColorScheme(
-            primary = LiftrixColors.PersianGreen,
-            onPrimary = Color.White,
-            primaryContainer = LiftrixColors.PrimaryContainer,
-            onPrimaryContainer = LiftrixColors.OnPrimaryContainer,
-            secondary = LiftrixColors.TiffanyBlue,
-            onSecondary = LiftrixColors.Night,
-            secondaryContainer = LiftrixColors.SecondaryContainer,
-            onSecondaryContainer = LiftrixColors.OnSecondaryContainer,
-            tertiary = LiftrixColors.PersianGreen,
-            onTertiary = Color.White,
-            tertiaryContainer = LiftrixColors.TertiaryContainer,
-            onTertiaryContainer = LiftrixColors.OnTertiaryContainer,
-            background = LiftrixColors.Snow,
-            onBackground = LiftrixColors.Night,
-            surface = LiftrixColors.Snow,
-            onSurface = LiftrixColors.Night,
-            surfaceVariant = LiftrixColors.SurfaceVariant,
-            onSurfaceVariant = LiftrixColors.OnSurfaceVariant,
-            outline = LiftrixColors.PersianGreen.copy(alpha = 0.38f),
-            outlineVariant = LiftrixColors.PersianGreen.copy(alpha = 0.12f),
-            error = LiftrixColors.Error,
-            onError = Color.White,
-            errorContainer = LiftrixColors.ErrorContainer,
-            onErrorContainer = LiftrixColors.OnErrorContainer,
-            inverseSurface = LiftrixColors.Jet,
-            inverseOnSurface = LiftrixColors.Snow,
-            inversePrimary = LiftrixColors.TiffanyBlue,
-        )
-    }
-    
-    private val darkColorSchemeCache: ColorScheme by lazy {
-        darkColorScheme(
-            primary = LiftrixColors.PersianGreen,
-            onPrimary = Color.White,
-            primaryContainer = LiftrixColors.PrimaryContainerDark,
-            onPrimaryContainer = LiftrixColors.OnPrimaryContainerDark,
-            secondary = LiftrixColors.TiffanyBlue,
-            onSecondary = LiftrixColors.Night,
-            secondaryContainer = LiftrixColors.SecondaryContainerDark,
-            onSecondaryContainer = LiftrixColors.OnSecondaryContainerDark,
-            tertiary = LiftrixColors.PersianGreen,
-            onTertiary = Color.White,
-            tertiaryContainer = LiftrixColors.TertiaryContainerDark,
-            onTertiaryContainer = LiftrixColors.OnTertiaryContainerDark,
-            background = LiftrixColors.Night,
-            onBackground = LiftrixColors.Snow,
-            surface = LiftrixColors.Jet,
-            onSurface = LiftrixColors.Snow,
-            surfaceVariant = LiftrixColors.SurfaceVariantDark,
-            onSurfaceVariant = LiftrixColors.OnSurfaceVariantDark,
-            outline = LiftrixColors.PersianGreen.copy(alpha = 0.60f),
-            outlineVariant = LiftrixColors.PersianGreen.copy(alpha = 0.24f),
-            error = LiftrixColors.Error,
-            onError = Color.White,
-            errorContainer = Color(0xFF93000A),
-            onErrorContainer = LiftrixColors.ErrorContainer,
-            inverseSurface = LiftrixColors.Snow,
-            inverseOnSurface = LiftrixColors.Night,
-            inversePrimary = LiftrixColors.PersianGreen,
-        )
-    }
+    // REMOVED: Old V1 color scheme caches
+    // Now using only V2 color schemes
     
     // V2 Pre-calculated color schemes for instant switching
     private val lightColorSchemeV2Cache: ColorScheme by lazy {
@@ -103,68 +39,36 @@ object ColorSystemOptimizations {
         LiftrixColorsV2.darkColorScheme
     }
     
-    // Optimized theme provider with instant switching (V1)
+    // Optimized theme provider with instant switching (V2 only)
     fun getColorScheme(isDarkTheme: Boolean): ColorScheme {
-        return if (isDarkTheme) darkColorSchemeCache else lightColorSchemeCache
-    }
-    
-    // Optimized theme provider with instant switching (V2)
-    fun getColorSchemeV2(isDarkTheme: Boolean): ColorScheme {
         return if (isDarkTheme) darkColorSchemeV2Cache else lightColorSchemeV2Cache
     }
     
     /**
      * Pre-calculated container colors for performance
-     * Uses alpha variations with both V1 and V2 color systems for optimal caching
+     * Uses LiftrixColorsV2 system only
      */
     object CachedContainerColors {
-        // V1 Light theme containers
-        val V1LightPrimaryContainer = LiftrixColors.PersianGreen.copy(alpha = 0.1f)
-        val V1LightSecondaryContainer = LiftrixColors.TiffanyBlue.copy(alpha = 0.1f)
-        
-        // V1 Dark theme containers (higher alpha for visibility)
-        val V1DarkPrimaryContainer = LiftrixColors.PersianGreen.copy(alpha = 0.2f)
-        val V1DarkSecondaryContainer = LiftrixColors.TiffanyBlue.copy(alpha = 0.2f)
-        
         // V2 Light theme containers
-        val V2LightPrimaryContainer = LiftrixColorsV2.TealSurface
-        val V2LightSecondaryContainer = LiftrixColorsV2.Light.BackgroundTertiary
+        val LightPrimaryContainer = LiftrixColorsV2.TealSurface
+        val LightSecondaryContainer = LiftrixColorsV2.Light.BackgroundTertiary
         
         // V2 Dark theme containers
-        val V2DarkPrimaryContainer = LiftrixColorsV2.TealContainer
-        val V2DarkSecondaryContainer = LiftrixColorsV2.Dark.BackgroundTertiary
+        val DarkPrimaryContainer = LiftrixColorsV2.TealContainer
+        val DarkSecondaryContainer = LiftrixColorsV2.Dark.BackgroundTertiary
         
-        fun getPrimaryContainer(isDarkTheme: Boolean, useV2: Boolean = false): Color {
-            return when {
-                useV2 && isDarkTheme -> V2DarkPrimaryContainer
-                useV2 && !isDarkTheme -> V2LightPrimaryContainer
-                isDarkTheme -> V1DarkPrimaryContainer
-                else -> V1LightPrimaryContainer
-            }
-        }
-        
-        fun getSecondaryContainer(isDarkTheme: Boolean, useV2: Boolean = false): Color {
-            return when {
-                useV2 && isDarkTheme -> V2DarkSecondaryContainer
-                useV2 && !isDarkTheme -> V2LightSecondaryContainer
-                isDarkTheme -> V1DarkSecondaryContainer
-                else -> V1LightSecondaryContainer
-            }
-        }
-        
-        // Legacy functions for backward compatibility
         fun getPrimaryContainer(isDarkTheme: Boolean): Color {
-            return getPrimaryContainer(isDarkTheme, useV2 = false)
+            return if (isDarkTheme) DarkPrimaryContainer else LightPrimaryContainer
         }
         
         fun getSecondaryContainer(isDarkTheme: Boolean): Color {
-            return getSecondaryContainer(isDarkTheme, useV2 = false)
+            return if (isDarkTheme) DarkSecondaryContainer else LightSecondaryContainer
         }
     }
     
     /**
      * Memory-efficient color management
-     * Reuses color instances instead of creating new ones for the 5-color system
+     * Reuses color instances for LiftrixColorsV2 system
      */
     object ColorMemoryManager {
         // Reuse color instances instead of creating new ones
@@ -180,18 +84,13 @@ object ColorSystemOptimizations {
         
         fun getCacheSize(): Int = colorInstanceCache.size
         
-        // Pre-populate cache with both V1 and V2 color system colors for maximum efficiency
+        // Pre-populate cache with V2 color system colors for maximum efficiency
         init {
-            // V1 5-color system
-            colorInstanceCache[0xFF131515] = LiftrixColors.Night
-            colorInstanceCache[0xFF2B2C28] = LiftrixColors.Jet
-            colorInstanceCache[0xFF339989] = LiftrixColors.PersianGreen
-            colorInstanceCache[0xFF7DE2D1] = LiftrixColors.TiffanyBlue
-            colorInstanceCache[0xFFFFFAFB] = LiftrixColors.Snow
-            
             // V2 core colors
-            colorInstanceCache[0xFF06B6D4] = LiftrixColorsV2.Teal
+            colorInstanceCache[0xFF00BCD4] = LiftrixColorsV2.Teal
             colorInstanceCache[0xFF0891B2] = LiftrixColorsV2.TealHover
+            colorInstanceCache[0xFF0E7490] = LiftrixColorsV2.TealDark
+            colorInstanceCache[0xFF67E8F9] = LiftrixColorsV2.TealLight
             colorInstanceCache[0xFF0B0C0B] = LiftrixColorsV2.Dark.BackgroundPrimary
             colorInstanceCache[0xFFFFFFFF] = LiftrixColorsV2.Light.BackgroundPrimary
             colorInstanceCache[0xFF0F0F0F] = LiftrixColorsV2.Dark.BackgroundSecondary
@@ -202,7 +101,7 @@ object ColorSystemOptimizations {
     
     /**
      * Performance monitoring for theme operations
-     * Tracks theme switching performance and provides metrics specific to 5-color system
+     * Tracks theme switching performance for LiftrixColorsV2 system
      */
     object ThemePerformanceMonitor {
         private var themeSwithingStartTime = 0L
@@ -248,7 +147,7 @@ object ColorSystemOptimizations {
             val sampleCount = themeSwitchingTimes.size
             
             return buildString {
-                appendLine("=== 5-Color System Performance Report ===")
+                appendLine("=== LiftrixColorsV2 Performance Report ===")
                 appendLine("Average theme switching time: ${avgSwitchTime.toInt()}ms")
                 appendLine("Color cache size: $cacheSize colors")
                 appendLine("Theme switch samples: $sampleCount")
@@ -276,7 +175,7 @@ object ColorSystemOptimizations {
     }
     
     /**
-     * Smart caching system optimized for 5-color palette
+     * Smart caching system optimized for LiftrixColorsV2 palette
      * Provides intelligent cache management with memory efficiency
      */
     object SmartCaching {
@@ -326,7 +225,7 @@ object ColorSystemOptimizations {
     
     /**
      * Performance validation utilities
-     * Validates that the 5-color system meets performance targets
+     * Validates that LiftrixColorsV2 meets performance targets
      */
     object PerformanceValidation {
         private const val TARGET_THEME_SWITCH_TIME_MS = 50L
@@ -363,8 +262,8 @@ object ColorSystemOptimizations {
 }
 
 /**
- * Enhanced Theme Implementation with Performance Optimizations
- * Uses pre-calculated color schemes for instant theme switching
+ * Enhanced LiftrixColorsV2 Theme Implementation with Performance Optimizations
+ * Uses pre-calculated V2 color schemes for instant theme switching
  */
 @Composable
 fun OptimizedLiftrixTheme(

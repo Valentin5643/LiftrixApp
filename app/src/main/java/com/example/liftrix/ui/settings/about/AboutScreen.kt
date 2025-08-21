@@ -449,8 +449,8 @@ private fun SocialLinksSection(
                 SocialLinkItem(
                     icon = Icons.Default.Email,
                     title = "Contact Support",
-                    subtitle = "Get help via support@liftrix.com",
-                    url = "mailto:support@liftrix.com",
+                    subtitle = "Get help via valijianu98@gmail.com",
+                    url = "mailto:valijianu98@gmail.com",
                     onLinkClicked = onLinkClicked,
                     showDivider = true
                 )
@@ -557,7 +557,7 @@ private fun DeveloperCreditsCard(
             )
             
             Text(
-                text = "Developed with ❤️ by the Liftrix Team",
+                text = "Developed with ❤️ by Valentin",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -568,8 +568,8 @@ private fun DeveloperCreditsCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             
-            CreditItem(text = "• Android Jetpack team for Compose UI framework")
-            CreditItem(text = "• Material Design team for design guidelines")
+            CreditItem(text = "• Android Jetpack for Compose UI framework")
+            CreditItem(text = "• Material Design for design guidelines")
             CreditItem(text = "• Open source contributors for libraries used")
             CreditItem(text = "• Beta testers for valuable feedback")
             CreditItem(text = "• Fitness community for inspiration and support")

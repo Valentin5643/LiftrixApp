@@ -449,8 +449,8 @@ class AnalyticsEngine @Inject constructor(
                     year = year,
                     month = month,
                     dailyVolumes = emptyMap(),
-                    maxVolume = com.example.liftrix.domain.model.Weight.ZERO,
-                    averageVolume = com.example.liftrix.domain.model.Weight.ZERO
+                    maxVolume = com.example.liftrix.domain.model.Volume.ZERO,
+                    averageVolume = com.example.liftrix.domain.model.Volume.ZERO
                 )
             }
             

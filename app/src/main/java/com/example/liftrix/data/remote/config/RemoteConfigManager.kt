@@ -108,7 +108,14 @@ class RemoteConfigManager @Inject constructor(
             AI_MAX_OUTPUT_TOKENS to 500,
             AI_TEMPERATURE to 0.7,
             AI_TOP_K to 40,
-            AI_TOP_P to 0.95
+            AI_TOP_P to 0.95,
+            
+            // Additional AI rate limiting keys for compatibility
+            "ai_max_daily_messages" to 50L,
+            "ai_max_monthly_tokens" to 100000L,
+            "ai_rate_limit_enabled" to true,
+            "ai_cost_threshold_per_hour" to 1.0,
+            "ai_avg_response_time_ms" to 1500L
         )
     }
     

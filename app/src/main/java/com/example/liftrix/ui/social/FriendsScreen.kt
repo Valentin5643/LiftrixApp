@@ -68,17 +68,27 @@ fun FriendsScreen(
                 onClick = { selectedTabIndex = 0 },
                 text = { 
                     Text(
-                        "Friends",
+                        "Following",
                         style = MaterialTheme.typography.titleSmall,
                         color = if (selectedTabIndex == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     ) 
                 },
                 icon = {
-                    Icon(
-                        imageVector = Icons.Default.People,
-                        contentDescription = null,
-                        tint = if (selectedTabIndex == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    BadgedBox(
+                        badge = {
+                            if (uiState.followingCount > 0) {
+                                Badge { 
+                                    Text(uiState.followingCount.toString()) 
+                                }
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.People,
+                            contentDescription = null,
+                            tint = if (selectedTabIndex == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             )
             Tab(
@@ -86,7 +96,7 @@ fun FriendsScreen(
                 onClick = { selectedTabIndex = 1 },
                 text = { 
                     Text(
-                        "Requests",
+                        "Followers",
                         style = MaterialTheme.typography.titleSmall,
                         color = if (selectedTabIndex == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     ) 
@@ -94,9 +104,9 @@ fun FriendsScreen(
                 icon = {
                     BadgedBox(
                         badge = {
-                            if (uiState.friendRequests.isNotEmpty()) {
+                            if (uiState.followersCount > 0) {
                                 Badge { 
-                                    Text(uiState.friendRequests.size.toString()) 
+                                    Text(uiState.followersCount.toString()) 
                                 }
                             }
                         }
@@ -113,13 +123,13 @@ fun FriendsScreen(
         
         // Tab Content
         when (selectedTabIndex) {
-            0 -> FriendsTab(
+            0 -> FollowingTab(
                 uiState = uiState,
                 onEvent = viewModel::onEvent,
                 onNavigateToUserSearch = onNavigateToUserSearch,
                 modifier = Modifier.fillMaxSize()
             )
-            1 -> RequestsTab(
+            1 -> FollowersTab(
                 uiState = uiState,
                 onEvent = viewModel::onEvent,
                 modifier = Modifier.fillMaxSize()
@@ -129,10 +139,10 @@ fun FriendsScreen(
 }
 
 /**
- * Friends tab with search and friends list
+ * Following tab with search and list of people you follow
  */
 @Composable
-private fun FriendsTab(
+private fun FollowingTab(
     uiState: SocialUiState,
     onEvent: (SocialEvent) -> Unit,
     onNavigateToUserSearch: () -> Unit,
@@ -142,7 +152,7 @@ private fun FriendsTab(
         modifier = modifier
     ) {
         // Search Section
-        SearchFriends(
+        SearchUsers(
             searchQuery = uiState.searchQuery,
             searchResults = uiState.searchResults,
             onEvent = onEvent,
@@ -150,9 +160,9 @@ private fun FriendsTab(
             modifier = Modifier.padding(16.dp)
         )
         
-        // Friends List
-        FriendsList(
-            friends = uiState.friends,
+        // Following List
+        FollowingList(
+            following = uiState.following,
             isLoading = uiState.isLoading,
             error = uiState.error,
             onEvent = onEvent,
@@ -162,16 +172,16 @@ private fun FriendsTab(
 }
 
 /**
- * Friend requests tab
+ * Followers tab - shows people who follow you
  */
 @Composable
-private fun RequestsTab(
+private fun FollowersTab(
     uiState: SocialUiState,
     onEvent: (SocialEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    FriendRequests(
-        requests = uiState.friendRequests,
+    FollowersList(
+        followers = uiState.followers,
         isLoading = uiState.isLoading,
         error = uiState.error,
         onEvent = onEvent,
@@ -180,10 +190,10 @@ private fun RequestsTab(
 }
 
 /**
- * Search functionality for finding friends
+ * Search functionality for finding users to follow
  */
 @Composable
-private fun SearchFriends(
+private fun SearchUsers(
     searchQuery: String,
     searchResults: List<User>,
     onEvent: (SocialEvent) -> Unit,
@@ -202,8 +212,8 @@ private fun SearchFriends(
         ) {
             OutlinedTextField(
                 value = searchQuery,
-                onValueChange = { onEvent(SocialEvent.SearchFriends(it)) },
-                placeholder = { Text("Search friends by name or email") },
+                onValueChange = { onEvent(SocialEvent.SearchUsers(it)) },
+                placeholder = { Text("Search users by name or email") },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Search,
@@ -213,7 +223,7 @@ private fun SearchFriends(
                 trailingIcon = if (searchQuery.isNotEmpty()) {
                     {
                         IconButton(
-                            onClick = { onEvent(SocialEvent.SearchFriends("")) }
+                            onClick = { onEvent(SocialEvent.SearchUsers("")) }
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Clear,
@@ -261,7 +271,7 @@ private fun SearchFriends(
                     searchResults.forEach { user ->
                         SearchResultItem(
                             user = user,
-                            onSendRequest = { onEvent(SocialEvent.SendFriendRequest(user.uid)) }
+                            onFollowUser = { onEvent(SocialEvent.FollowUser(user.uid)) }
                         )
                     }
                 }
@@ -271,12 +281,12 @@ private fun SearchFriends(
 }
 
 /**
- * Search result item with add friend button
+ * Search result item with follow button
  */
 @Composable
 private fun SearchResultItem(
     user: User,
-    onSendRequest: () -> Unit,
+    onFollowUser: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -302,7 +312,7 @@ private fun SearchResultItem(
         }
         
         FilledTonalButton(
-            onClick = onSendRequest,
+            onClick = onFollowUser,
             modifier = Modifier.padding(start = 8.dp)
         ) {
             Icon(
@@ -311,17 +321,17 @@ private fun SearchResultItem(
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))
-            Text("Add")
+            Text("Follow")
         }
     }
 }
 
 /**
- * Friends list display
+ * Following list display - shows people you follow
  */
 @Composable
-private fun FriendsList(
-    friends: List<Friend>,
+private fun FollowingList(
+    following: List<Friend>,
     isLoading: Boolean,
     error: String?,
     onEvent: (SocialEvent) -> Unit,
@@ -340,13 +350,13 @@ private fun FriendsList(
         error != null -> {
             ErrorState(
                 error = error,
-                onRetry = { onEvent(SocialEvent.LoadFriends) },
+                onRetry = { onEvent(SocialEvent.LoadFollowing) },
                 modifier = modifier
             )
         }
         
-        friends.isEmpty() -> {
-            EmptyFriendsState(
+        following.isEmpty() -> {
+            EmptyFollowingState(
                 modifier = modifier
             )
         }
@@ -357,8 +367,11 @@ private fun FriendsList(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(friends) { friend ->
-                    FriendItem(friend = friend)
+                items(following) { user ->
+                    FollowingItem(
+                        user = user,
+                        onUnfollow = { onEvent(SocialEvent.UnfollowUser(user.userId)) }
+                    )
                 }
             }
         }
@@ -366,11 +379,64 @@ private fun FriendsList(
 }
 
 /**
- * Individual friend item
+ * Followers list display - shows people who follow you
  */
 @Composable
-private fun FriendItem(
-    friend: Friend,
+private fun FollowersList(
+    followers: List<Friend>,
+    isLoading: Boolean,
+    error: String?,
+    onEvent: (SocialEvent) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    when {
+        isLoading -> {
+            Box(
+                modifier = modifier,
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        }
+        
+        error != null -> {
+            ErrorState(
+                error = error,
+                onRetry = { onEvent(SocialEvent.LoadFollowers) },
+                modifier = modifier
+            )
+        }
+        
+        followers.isEmpty() -> {
+            EmptyFollowersState(
+                modifier = modifier
+            )
+        }
+        
+        else -> {
+            LazyColumn(
+                modifier = modifier,
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(followers) { user ->
+                    FollowerItem(
+                        user = user,
+                        onFollowBack = { onEvent(SocialEvent.FollowUser(user.userId)) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Individual following item with unfollow option
+ */
+@Composable
+private fun FollowingItem(
+    user: Friend,
+    onUnfollow: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -385,7 +451,7 @@ private fun FriendItem(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Friend Avatar Placeholder
+            // User Avatar Placeholder
             Box(
                 modifier = Modifier
                     .size(48.dp)
@@ -395,7 +461,7 @@ private fun FriendItem(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                val initials = friend.displayName
+                val initials = user.displayName
                     .split(' ')
                     .take(2)
                     .mapNotNull { it.firstOrNull() }
@@ -415,83 +481,46 @@ private fun FriendItem(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = friend.displayName,
+                    text = user.displayName,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium
                 )
-                if (!friend.email.isNullOrEmpty()) {
+                if (!user.email.isNullOrEmpty()) {
                     Text(
-                        text = friend.email,
+                        text = user.email,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 }
-            }
-        }
-    }
-}
-
-/**
- * Friend requests management
- */
-@Composable
-private fun FriendRequests(
-    requests: List<Friend>,
-    isLoading: Boolean,
-    error: String?,
-    onEvent: (SocialEvent) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    when {
-        isLoading -> {
-            Box(
-                modifier = modifier,
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator()
-            }
-        }
-        
-        error != null -> {
-            ErrorState(
-                error = error,
-                onRetry = { onEvent(SocialEvent.LoadFriends) },
-                modifier = modifier
-            )
-        }
-        
-        requests.isEmpty() -> {
-            EmptyRequestsState(
-                modifier = modifier
-            )
-        }
-        
-        else -> {
-            LazyColumn(
-                modifier = modifier,
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(requests) { request ->
-                    FriendRequestItem(
-                        request = request,
-                        onAccept = { onEvent(SocialEvent.AcceptFriendRequest(request.userId)) },
-                        onDecline = { onEvent(SocialEvent.DeclineFriendRequest(request.userId)) }
+                if (user.isOnline()) {
+                    Text(
+                        text = user.getPresenceDisplayStatus(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
+            
+            OutlinedButton(
+                onClick = onUnfollow,
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("Unfollow")
+            }
         }
     }
 }
 
 /**
- * Individual friend request item with accept/decline buttons
+ * Individual follower item with follow back option
  */
 @Composable
-private fun FriendRequestItem(
-    request: Friend,
-    onAccept: () -> Unit,
-    onDecline: () -> Unit,
+private fun FollowerItem(
+    user: Friend,
+    onFollowBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -500,91 +529,105 @@ private fun FriendRequestItem(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            // User Avatar Placeholder
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(
+                        MaterialTheme.colorScheme.primary,
+                        shape = androidx.compose.foundation.shape.CircleShape
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.PersonAdd,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
+                val initials = user.displayName
+                    .split(' ')
+                    .take(2)
+                    .mapNotNull { it.firstOrNull() }
+                    .joinToString("")
+                
+                Text(
+                    text = initials,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    fontWeight = FontWeight.Bold
                 )
-                
-                Spacer(modifier = Modifier.width(8.dp))
-                
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
+            }
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = user.displayName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium
+                )
+                if (!user.email.isNullOrEmpty()) {
                     Text(
-                        text = request.displayName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = "wants to be friends",
+                        text = user.email,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 }
+                if (user.isOnline()) {
+                    Text(
+                        text = user.getPresenceDisplayStatus(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
             
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+            Button(
+                onClick = onFollowBack
             ) {
-                OutlinedButton(
-                    onClick = onDecline,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text("Decline")
-                }
-                
-                Button(
-                    onClick = onAccept
-                ) {
-                    Text("Accept")
-                }
+                Icon(
+                    imageVector = Icons.Default.PersonAdd,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Follow Back")
             }
         }
     }
 }
 
+
 /**
- * Empty state for when user has no friends
+ * Empty state for when user follows no one
  */
 @Composable
-private fun EmptyFriendsState(
+private fun EmptyFollowingState(
     modifier: Modifier = Modifier
 ) {
     EmptyStateContent(
         icon = Icons.Default.People,
-        title = "No friends yet",
-        description = "Search for friends above to start building your fitness community!",
+        title = "Not following anyone yet",
+        description = "Search for people above to start following and see their workout updates!",
         modifier = modifier
     )
 }
 
 /**
- * Empty state for when user has no friend requests
+ * Empty state for when user has no followers
  */
 @Composable
-private fun EmptyRequestsState(
+private fun EmptyFollowersState(
     modifier: Modifier = Modifier
 ) {
     EmptyStateContent(
         icon = Icons.Default.PersonAdd,
-        title = "No friend requests",
-        description = "When people send you friend requests, they'll appear here.",
+        title = "No followers yet",
+        description = "When people follow you, they'll appear here. Share great workouts to attract followers!",
         modifier = modifier
     )
 }

@@ -625,6 +625,40 @@ grouped.forEach { (key, items) ->
 notifications.forEach { fcmSender.send(it) }  // Causes notification spam
 ```
 
+## AI Chatbot System
+
+### AI Architecture Pattern
+```kotlin
+// Firebase AI with Gemini 2.5 Flash Lite
+ChatbotViewModel → SendChatMessageUseCase → AIChatService
+    ↓ AbusePreventionService (fitness-aware jailbreak detection)
+    ↓ RateLimitingService (100 msg/day, 10k tokens/month, $1/hr)
+```
+
+### Critical AI Implementation Rules
+```kotlin
+// MANDATORY chat entity user scoping
+@Query("SELECT * FROM chat_history WHERE user_id = :userId")
+suspend fun getChatHistory(userId: String): List<ChatHistoryEntity>
+
+// Three-tier rate limiting
+if (limits.dailyMessagesRemaining <= 0) throw QuotaExceededException()
+if (limits.monthlyTokensRemaining <= 0) throw QuotaExceededException()
+if (estimatedHourlyCost > 1.0) throw CostThresholdException()
+
+// Fitness context reduces jailbreak score by 50%
+if (containsFitnessKeywords(message)) score *= 0.5f
+
+// Language auto-detection for English/Romanian
+if (message.contains("ă", "â", "î", "ș", "ț")) Language.ROMANIAN
+```
+
+### AI Debug Hot Zones
+1. **Jailbreak false positives**: `AbusePreventionService` - Fitness keywords like "pretend to be doing squats" trigger detection
+2. **Token overflow**: `ChatHistoryEntity.tokenCount` - Monitor monthly usage approaching 10k limit
+3. **Language conflicts**: Auto-detection overrides user preference - check `ChatPreferencesEntity.autoDetectLanguage`
+4. **Context loss**: Only last 10 messages included - check `conversationContext.recentMessages.takeLast(10)`
+
 ## Progress Dashboard Architecture
 
 ### Dashboard Component Hierarchy
@@ -719,6 +753,7 @@ fun ModernChart(
 - Repositories: `*RepositoryImpl.kt` in `data/repository/`
 - DAOs: `*Dao.kt` in `data/local/dao/`
 - Entities: `*Entity.kt` in `data/local/entity/`
+- AI Components: `ui/chat/ChatbotViewModel.kt`, `domain/service/AIChatService.kt`, `data/service/AbusePreventionService.kt`
 
 ### Validation Patterns
 - Use validation DSL for chainable rules

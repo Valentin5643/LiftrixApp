@@ -45,6 +45,8 @@ import com.example.liftrix.domain.usecase.ValidationResult
 import com.example.liftrix.domain.usecase.ValidateProfileInputUseCase
 import com.example.liftrix.ui.onboarding.model.OnboardingStep
 import com.example.liftrix.ui.theme.LiftrixTheme
+import com.example.liftrix.ui.theme.LiftrixColorsV2
+import androidx.compose.foundation.isSystemInDarkTheme
 
 /**
  * Equipment selection screen for onboarding flow.
@@ -160,7 +162,7 @@ private fun EquipmentSelectionHelperText() {
         Text(
             text = "Select all equipment you have access to. This helps us recommend workouts that match your setup.",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
@@ -221,9 +223,9 @@ private fun EquipmentChip(
             }
         } else null,
         colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
+            selectedContainerColor = LiftrixColorsV2.TealSurface,
+            selectedLabelColor = LiftrixColorsV2.TealDark,
+            selectedLeadingIconColor = LiftrixColorsV2.TealDark
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -244,7 +246,7 @@ private fun SelectedEquipmentDisplay(
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                containerColor = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.BackgroundSecondary else LiftrixColorsV2.Light.BackgroundSecondary
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) {
@@ -262,14 +264,14 @@ private fun SelectedEquipmentDisplay(
                     Text(
                         text = "Selected Equipment",
                         style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary,
                         fontWeight = FontWeight.Medium
                     )
                     
                     Text(
                         text = "${selectedEquipment.size}/10",
                         style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = LiftrixColorsV2.Teal,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -277,7 +279,7 @@ private fun SelectedEquipmentDisplay(
                 Text(
                     text = selectedEquipment.joinToString(", ") { it.displayName },
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary
                 )
             }
         }
@@ -305,7 +307,7 @@ private fun OtherEquipmentInput(
         Text(
             text = "Other Equipment",
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onBackground,
+            color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
             fontWeight = FontWeight.Medium
         )
         
@@ -326,7 +328,7 @@ private fun OtherEquipmentInput(
                 Text(
                     text = "e.g., Medicine ball, Yoga mat, Foam roller...",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary
                 )
             },
             supportingText = {
@@ -337,7 +339,7 @@ private fun OtherEquipmentInput(
                     Text(
                         text = "Optional - describe any additional equipment",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (isSystemInDarkTheme()) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary
                     )
                     
                     Text(
@@ -365,7 +367,7 @@ private fun OtherEquipmentInput(
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = "Valid description",
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = LiftrixColorsV2.Teal,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -373,7 +375,7 @@ private fun OtherEquipmentInput(
                         Icon(
                             imageVector = Icons.Default.Error,
                             contentDescription = "Invalid description",
-                            tint = MaterialTheme.colorScheme.error,
+                            tint = LiftrixColorsV2.DataViz.Series1,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -409,14 +411,14 @@ private fun OtherEquipmentInput(
                     Icon(
                         imageVector = Icons.Default.Error,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
+                        tint = LiftrixColorsV2.DataViz.Series1,
                         modifier = Modifier.size(16.dp)
                     )
                     
                     Text(
                         text = validationResult.message,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
+                        color = LiftrixColorsV2.DataViz.Series1,
                         fontWeight = FontWeight.Medium
                     )
                 }
@@ -452,14 +454,14 @@ private fun EquipmentValidationMessage(
                 Icon(
                     imageVector = Icons.Default.Error,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
+                    tint = LiftrixColorsV2.DataViz.Series1,
                     modifier = Modifier.size(16.dp)
                 )
                 
                 Text(
                     text = validationResult.message,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = LiftrixColorsV2.DataViz.Series1,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -477,14 +479,14 @@ private fun EquipmentValidationMessage(
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = LiftrixColorsV2.Teal,
                     modifier = Modifier.size(16.dp)
                 )
                 
                 Text(
                     text = "Great equipment selection!",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = LiftrixColorsV2.Teal,
                     fontWeight = FontWeight.Medium
                 )
             }

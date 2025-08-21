@@ -2,6 +2,7 @@ package com.example.liftrix.ui.icons
 
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -86,7 +87,7 @@ object LiftrixIcons {
      * Icons for navigation, movement, and directional actions
      */
     object Navigation {
-        val Back: ImageVector = Icons.Default.ArrowBack                // Navigate back
+        val Back: ImageVector = Icons.AutoMirrored.Filled.ArrowBack    // Navigate back
         val Forward: ImageVector = Icons.Default.ArrowForward          // Navigate forward
         val Up: ImageVector = Icons.Default.KeyboardArrowUp            // Move up
         val Down: ImageVector = Icons.Default.KeyboardArrowDown        // Move down

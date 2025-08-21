@@ -1,5 +1,6 @@
 package com.example.liftrix.data.repository
 
+import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -8,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.data.local.dao.SettingsDao
 import com.example.liftrix.data.mapper.SettingsMapper
 import com.example.liftrix.domain.model.UserSettings
@@ -31,6 +33,7 @@ import timber.log.Timber
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 /**
  * Implementation of SettingsRepository using DataStore for immediate persistence
@@ -48,9 +51,12 @@ class SettingsRepositoryImpl @Inject constructor(
     private val settingsDao: SettingsDao,
     private val settingsMapper: SettingsMapper,
     private val dataStore: DataStore<Preferences>,
-    private val workManager: WorkManager,
+    @ApplicationContext private val context: Context,
     private val persistenceManager: SettingsPersistenceManager
 ) : SettingsRepository {
+    
+    private val workManager: WorkManager
+        get() = WorkManagerProvider.getInstance(context)
     
     // Separate coroutine scope for async sync operations to prevent circular dependencies
     private val syncScope = CoroutineScope(Dispatchers.IO + SupervisorJob())

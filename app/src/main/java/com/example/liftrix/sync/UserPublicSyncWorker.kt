@@ -14,6 +14,7 @@ import androidx.work.workDataOf
 import com.example.liftrix.data.local.dao.UserAccountDao
 import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.local.dao.WorkoutDao
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.FieldValue
@@ -47,6 +48,7 @@ class UserPublicSyncWorker @AssistedInject constructor(
     private val userProfileDao: UserProfileDao,
     private val workoutDao: WorkoutDao,
     private val firestore: FirebaseFirestore,
+    private val auth: FirebaseAuth,
     private val gson: Gson
 ) : CoroutineWorker(context, params) {
 
@@ -89,23 +91,83 @@ class UserPublicSyncWorker @AssistedInject constructor(
             
             val forceSync = inputData.getBoolean("forceSync", false)
 
-            Timber.i("UserPublicSyncWorker", "Starting user public sync for: $userId")
-            
-            // Get user account data (username, email, display name)
-            val userAccount = userAccountDao.getAccountForUserSuspend(userId)
-            if (userAccount == null) {
-                Timber.e("UserPublicSyncWorker", "No user account found for: $userId")
+            // AUTHENTICATION FIX: Verify auth state and user context
+            val currentUser = auth.currentUser
+            if (currentUser == null) {
+                Timber.e("UserPublicSyncWorker", "No authenticated user found")
                 return@withContext Result.failure(
                     Data.Builder()
-                        .putString(KEY_ERROR_MESSAGE, "User account not found for user $userId")
+                        .putString(KEY_ERROR_MESSAGE, "User not authenticated")
                         .build()
                 )
             }
             
-            // Processing user account for sync
+            if (currentUser.uid != userId) {
+                Timber.e("UserPublicSyncWorker", "Authentication UID mismatch: auth=${currentUser.uid}, requested=$userId")
+                return@withContext Result.failure(
+                    Data.Builder()
+                        .putString(KEY_ERROR_MESSAGE, "User ID mismatch with authentication")
+                        .build()
+                )
+            }
+
+            Timber.i("Starting user public sync for: $userId (authenticated)")
+            
+            // Get user account data (username, email, display name)
+            val userAccount = userAccountDao.getAccountForUserSuspend(userId)
+            if (userAccount == null) {
+                Timber.w("No user account found for: $userId - This may be expected during initial user creation")
+                
+                // Create a minimal public profile for new users without a full account yet
+                // This prevents sync failures during the sign-up process
+                val minimalPublicData = mapOf(
+                    "userId" to userId,
+                    "username" to null,
+                    "displayName" to "New User",
+                    "bio" to null,
+                    "isPublic" to true,
+                    "isPrivate" to false,
+                    "totalWorkouts" to 0,
+                    "currentStreak" to 0,
+                    "longestStreak" to 0,
+                    "followersCount" to 0,
+                    "followingCount" to 0,
+                    "profileImageUrl" to null,
+                    "memberSince" to LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                    "lastActiveAt" to LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                    "profileViews" to 0,
+                    "profileCompletionPercentage" to 0,
+                    "fitnessGoals" to emptyList<String>(),
+                    "availableEquipment" to emptyList<String>(),
+                    "publicAchievements" to emptyList<Map<String, Any>>(),
+                    "searchTokens" to emptyList<String>(),
+                    "searchKeywords" to emptyList<String>(),
+                    "syncVersion" to 1,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+                
+                // Write minimal public data
+                val publicDocRef = firestore
+                    .collection(USERS_PUBLIC_COLLECTION)
+                    .document(userId)
+                
+                publicDocRef.set(minimalPublicData, SetOptions.merge()).await()
+                
+                Timber.i("Created minimal public profile for new user: $userId")
+                
+                return@withContext Result.success(
+                    Data.Builder()
+                        .putInt(KEY_SYNC_COUNT, 1)
+                        .putString("status", "minimal_profile_created")
+                        .build()
+                )
+            }
             
             // Get user profile data (bio, fitness level, etc.)
             val userProfile = userProfileDao.getProfileForUserSuspend(userId)
+            if (userAccount.username == null) {
+                Timber.w("UserAccount has null username for user: $userId")
+            }
             
             // Calculate workout statistics
             val totalWorkouts = workoutDao.getWorkoutCountForUser(userId)
@@ -115,11 +177,8 @@ class UserPublicSyncWorker @AssistedInject constructor(
             val searchTokens = generateSearchTokens(userAccount, userProfile)
             val searchKeywords = generateSearchKeywords(userAccount, userProfile)
             
-            // Generated search tokens and keywords
-            
             // Prepare public user data
             val isPublicProfile = userProfile?.isPublic ?: true
-            // Determined profile visibility
             
             val publicUserData = mutableMapOf<String, Any?>(
                 "userId" to userId,
@@ -159,11 +218,9 @@ class UserPublicSyncWorker @AssistedInject constructor(
                 "searchKeywords" to searchKeywords,
                 
                 // Metadata
-                "syncVersion" to System.currentTimeMillis(),
+                "syncVersion" to 1, // Use simple integer version for Firestore rules compatibility
                 "updatedAt" to FieldValue.serverTimestamp()
             )
-            
-            // Writing to users_public collection
             
             // Sync to users_public collection
             val publicDocRef = firestore
@@ -171,8 +228,6 @@ class UserPublicSyncWorker @AssistedInject constructor(
                 .document(userId)
             
             publicDocRef.set(publicUserData, SetOptions.merge()).await()
-            
-            // Successfully wrote to users_public
             
             // Also sync to user_search_cache collection for tokenized search
             val searchCacheData = mapOf(
@@ -191,15 +246,13 @@ class UserPublicSyncWorker @AssistedInject constructor(
                 "updatedAt" to FieldValue.serverTimestamp()
             )
             
-            // Writing to user_search_cache collection
-            
             val searchCacheDocRef = firestore
                 .collection(USER_SEARCH_CACHE_COLLECTION)
                 .document(userId)
-                
+            
             searchCacheDocRef.set(searchCacheData, SetOptions.merge()).await()
             
-            Timber.i("UserPublicSyncWorker", "User public data sync completed successfully")
+            Timber.i("User public data sync completed successfully for user: $userId")
             
             return@withContext Result.success(
                 Data.Builder()
@@ -208,14 +261,35 @@ class UserPublicSyncWorker @AssistedInject constructor(
             )
             
         } catch (e: Exception) {
-            Timber.e(e, "UserPublicSyncWorker failed for user ${inputData.getString("userId")}")
+            val userId = inputData.getString("userId")
+            val currentUser = auth.currentUser
+            
+            val errorMessage = when {
+                e.message?.contains("PERMISSION_DENIED") == true -> {
+                    val authInfo = if (currentUser != null) {
+                        "User authenticated as ${currentUser.uid}, writing for $userId"
+                    } else {
+                        "No authenticated user found"
+                    }
+                    "Permission denied writing user public data. Auth context: $authInfo. Check Firestore security rules."
+                }
+                e.message?.contains("INVALID_ARGUMENT") == true -> {
+                    "Invalid data format for user public sync. Check field types and validation rules."
+                }
+                else -> {
+                    e.message ?: "Unknown error during user public sync"
+                }
+            }
+            
+            Timber.e(e, "UserPublicSyncWorker failed for user $userId: $errorMessage")
             
             if (runAttemptCount < MAX_RETRY_COUNT) {
                 Result.retry()
             } else {
                 Result.failure(
                     Data.Builder()
-                        .putString(KEY_ERROR_MESSAGE, e.message ?: "Unknown error")
+                        .putString(KEY_ERROR_MESSAGE, errorMessage)
+                        .putInt("attempt_count", runAttemptCount)
                         .build()
                 )
             }

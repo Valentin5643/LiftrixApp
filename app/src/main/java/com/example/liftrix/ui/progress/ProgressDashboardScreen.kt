@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PictureAsPdf
@@ -84,7 +85,7 @@ import com.example.liftrix.ui.progress.components.ProgressSummaryCards
 import com.example.liftrix.ui.progress.components.GlobalTimeRangeSelector
 import com.example.liftrix.ui.progress.components.VolumeCalendarWidget
 import com.example.liftrix.ui.progress.components.WorkoutDurationChart
-import com.example.liftrix.ui.progress.components.WorkoutFrequencyHeatmap
+import com.example.liftrix.ui.progress.components.WorkoutVolumeHeatmap
 import com.example.liftrix.ui.progress.components.WorkoutVolumeChart
 import com.example.liftrix.ui.progress.components.charts.ModernVolumeChart
 import com.example.liftrix.domain.model.Weight
@@ -861,18 +862,21 @@ private fun ChartsSection(
             // Show authentication-aware loading state
             if (isFrequencyWaitingForAuth) {
                 ChartContainer(
-                    title = "Workout Frequency", 
-                    icon = Icons.Default.TableChart,
+                    title = "Volume Calendar", 
+                    icon = Icons.Default.FitnessCenter,
                     isLoading = true,
                     hasData = false,
                     isWaitingForAuth = true,
                     onRefresh = { /* Handle refresh */ }
                 ) { /* Empty content when waiting for auth */ }
             } else {
-                // PROGRESSIVE LOADING: Always show chart, let individual components handle their own loading states
-                WorkoutFrequencyHeatmap(
-                    data = frequencyChartData,
-                    isLoading = isFrequencyLoading,
+                // PROGRESSIVE LOADING: Always show volume heatmap (replacing frequency)
+                WorkoutVolumeHeatmap(
+                    data = when (chartsState.volumeCalendar) {
+                        is AsyncData.Success -> chartsState.volumeCalendar.data
+                        else -> null
+                    },
+                    isLoading = chartsState.volumeCalendar is AsyncData.Loading,
                     modifier = Modifier.fillMaxWidth()
                 )
             }

@@ -1,9 +1,11 @@
 package com.example.liftrix.sync
 
+import android.content.Context
 import androidx.lifecycle.asFlow
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.OneTimeWorkRequestBuilder
+import com.example.liftrix.core.workmanager.WorkManagerProvider
 import androidx.work.ExistingWorkPolicy
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.repository.ProgressStatsRepository
@@ -13,13 +15,17 @@ import kotlinx.coroutines.flow.combine
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 @Singleton
 class SyncManager @Inject constructor(
     private val workoutRepository: WorkoutRepository,
     private val progressStatsRepository: ProgressStatsRepository,
-    private val workManager: WorkManager
+    @ApplicationContext private val context: Context
 ) {
+    
+    private val workManager: WorkManager
+        get() = WorkManager.getInstance(context)
 
     /**
      * Get sync status as a Flow
@@ -33,11 +39,11 @@ class SyncManager @Inject constructor(
                     workInfo == null -> SyncStatus.Idle
                     workInfo.state == WorkInfo.State.RUNNING -> SyncStatus.Syncing
                     workInfo.state == WorkInfo.State.SUCCEEDED -> {
-                        val syncCount = workInfo.outputData.getInt(WorkoutSyncWorker.KEY_SYNC_COUNT, 0)
+                        val syncCount = workInfo.outputData.getInt("sync_count", 0)
                         SyncStatus.Success(syncCount)
                     }
                     workInfo.state == WorkInfo.State.FAILED -> {
-                        val errorMessage = workInfo.outputData.getString(WorkoutSyncWorker.KEY_ERROR_MESSAGE)
+                        val errorMessage = workInfo.outputData.getString("error_message")
                         SyncStatus.Error(errorMessage ?: "Unknown sync error")
                     }
                     else -> SyncStatus.Idle

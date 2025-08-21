@@ -1,7 +1,6 @@
 package com.example.liftrix.sync
 
 import android.content.Context
-import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.Data
@@ -15,6 +14,7 @@ import com.example.liftrix.data.local.dao.SocialProfileDao
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.FieldValue
+import androidx.hilt.work.HiltWorker
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
@@ -74,16 +74,20 @@ class SocialProfileSyncWorker @AssistedInject constructor(
             )
             
             val forceSync = inputData.getBoolean("forceSync", false)
+            
+            Timber.d("Starting social profile sync for user: $userId, forceSync: $forceSync")
 
             val profile = socialProfileDao.getProfile(userId) 
                 ?: return@withContext Result.failure(
                     Data.Builder()
                         .putString(KEY_ERROR_MESSAGE, "Social profile not found for user $userId")
                         .build()
-                )
+                ).also {
+                    Timber.e("Social profile not found in local DB for user: $userId")
+                }
             
             if (profile.isSynced && !forceSync) {
-                Timber.d("Social profile already synced for user $userId")
+                Timber.d("Profile already synced for user $userId, skipping")
                 return@withContext Result.success(
                     Data.Builder()
                         .putInt(KEY_SYNC_COUNT, 0)
@@ -91,7 +95,8 @@ class SocialProfileSyncWorker @AssistedInject constructor(
                 )
             }
 
-            Timber.d("Syncing social profile for user $userId (forceSync: $forceSync)")
+            Timber.d("Profile found, syncing to Firebase for user $userId (forceSync: $forceSync)")
+            Timber.d("Profile data: username=${profile.username}, isPrivate=${profile.isPrivate}, hideFromSuggestions=${profile.hideFromSuggestions}")
             
             val docRef = firestore
                 .collection("social_profiles")
@@ -131,7 +136,7 @@ class SocialProfileSyncWorker @AssistedInject constructor(
                 version = System.currentTimeMillis().toInt()
             )
             
-            Timber.d("Successfully synced social profile for user $userId")
+            Timber.d("Successfully synced social profile and updated local sync status for user: $userId")
             
             return@withContext Result.success(
                 Data.Builder()
