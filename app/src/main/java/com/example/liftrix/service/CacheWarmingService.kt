@@ -2,6 +2,7 @@ package com.example.liftrix.service
 
 import com.example.liftrix.core.cache.CacheKeyGenerator
 import com.example.liftrix.core.cache.EnhancedCacheManager
+import com.example.liftrix.core.cache.getOrComputeTyped
 import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
@@ -268,7 +269,7 @@ class CacheWarmingService @Inject constructor(
         try {
             val (key, ttl) = com.example.liftrix.core.cache.AnalyticsCacheKeys.widgetPreferences(userId)
             
-            cacheManager.getOrCompute(key, ttl) {
+            cacheManager.getOrComputeTyped<Map<String, Any>>(key, ttl) {
                 // This would be replaced with actual user preferences loading
                 Timber.d("$TAG: Loading user preferences for cache warming")
                 emptyMap<String, Any>() // Placeholder
@@ -285,7 +286,7 @@ class CacheWarmingService @Inject constructor(
         try {
             val (key, ttl) = com.example.liftrix.core.cache.AnalyticsCacheKeys.widgetPreferences(userId)
             
-            cacheManager.getOrCompute(key, ttl) {
+            cacheManager.getOrComputeTyped<Map<String, Any>>(key, ttl) {
                 Timber.d("$TAG: Loading widget preferences for cache warming")
                 emptyMap<String, Any>() // Placeholder
             }

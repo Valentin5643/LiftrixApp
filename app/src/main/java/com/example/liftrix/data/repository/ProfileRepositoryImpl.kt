@@ -89,8 +89,31 @@ class ProfileRepositoryImpl @Inject constructor(
                 return Result.failure(IllegalStateException("Profile save verification failed - data may not be persisted"))
             }
             
-            // Queue sync in background
-            queueSync(profile.userId)
+            // ONBOARDING FIX: Check if this is an initial profile save (during onboarding)
+            val isOnboardingProfile = existingEntity == null || profile.completedAt != null
+            
+            if (isOnboardingProfile) {
+                // For onboarding profiles, trigger immediate sync to ensure data availability
+                Timber.d("Onboarding profile detected - triggering immediate sync for user: ${profile.userId}")
+                
+                // Queue sync first
+                queueSync(profile.userId)
+                
+                // Then trigger immediate sync for onboarding profiles
+                try {
+                    val immediateSync = syncNow(profile.userId)
+                    if (immediateSync.isSuccess) {
+                        Timber.d("Onboarding profile synced immediately for user: ${profile.userId}")
+                    } else {
+                        Timber.w("Immediate sync failed for onboarding profile, will retry in background: ${profile.userId}")
+                    }
+                } catch (syncError: Exception) {
+                    Timber.w(syncError, "Non-critical: Immediate sync failed, queued for background sync")
+                }
+            } else {
+                // For regular updates, just queue sync in background
+                queueSync(profile.userId)
+            }
             
             Timber.d("User profile saved successfully: ${profile.userId} (${if (existingEntity != null) "updated" else "created"})")
             Result.success(Unit)

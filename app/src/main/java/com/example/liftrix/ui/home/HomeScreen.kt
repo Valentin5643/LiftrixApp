@@ -355,6 +355,17 @@ private fun EnhancedHomeContent(
         }
         
         // Social Feed Posts (from FeedViewModel - exactly like Feed screen)
+        // Show shimmer loading state during initial load
+        if (posts.loadState.refresh is LoadState.Loading && posts.itemCount == 0) {
+            items(5) { // Show 5 shimmer placeholders
+                FeedItemShimmer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = LiftrixSpacing.medium, vertical = LiftrixSpacing.small)
+                )
+            }
+        }
+        
         // Handle empty state for home feed
         if (posts.itemCount == 0 && posts.loadState.refresh !is LoadState.Loading) {
             item {

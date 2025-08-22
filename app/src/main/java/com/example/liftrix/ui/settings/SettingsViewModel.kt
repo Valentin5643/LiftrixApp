@@ -157,7 +157,14 @@ class SettingsViewModel @Inject constructor(
         when (event) {
             is SettingsEvent.LoadSettings -> loadSettings()
             is SettingsEvent.RefreshSettings -> refreshSettings()
-            is SettingsEvent.UpdateDarkMode -> updateDarkMode(event.enabled)
+            is SettingsEvent.UpdateDarkMode -> {
+                // For backward compatibility, use the legacy updateDarkMode
+                updateDarkMode(event.enabled)
+            }
+            is SettingsEvent.ToggleTheme -> {
+                // New event for theme toggling with system awareness
+                updateThemeFromToggle(event.isSystemInDarkTheme)
+            }
             is SettingsEvent.UpdateNotifications -> updateNotifications(event.enabled)
             is SettingsEvent.UpdateWeightUnit -> updateWeightUnit(event.weightUnit)
             is SettingsEvent.NavigateToProfile -> handleProfileNavigation()
@@ -276,28 +283,34 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Updates the dark mode setting with persistence verification and retry logic.
+     * Updates the theme state from the UI toggle
+     * Requires system theme state to properly handle toggling
      * 
-     * @param enabled New dark mode state
+     * @param isSystemInDarkTheme Current system dark theme state
      */
-    private fun updateDarkMode(enabled: Boolean) {
+    fun updateThemeFromToggle(isSystemInDarkTheme: Boolean) {
         val userId = currentUserId ?: return
         
         viewModelScope.launch {
             updateState { copy(isUpdatingSettings = true) }
             
             try {
-                Timber.d("Updating dark mode for user $userId to: $enabled")
+                // Use the toggle method which handles system mode properly
+                themeManager.toggleTheme(isSystemInDarkTheme)
                 
-                // Update theme manager immediately for instant UI response
-                val themeMode = if (enabled) ThemeMode.DARK else ThemeMode.LIGHT
-                themeManager.switchTheme(themeMode)
+                // Get the NEW effective state AFTER toggling for persistence
+                val newEffectiveState = themeManager.getEffectiveThemeState(isSystemInDarkTheme)
+                
+                Timber.d("Toggled theme for user $userId, new effective state: $newEffectiveState")
+                
+                // Update the UI state immediately with the new state
+                updateState { copy(effectiveThemeState = newEffectiveState) }
                 
                 // Use persistence manager for reliable settings update
                 val persistenceResult = settingsPersistenceManager.persistSetting(
                     userId = userId,
                     key = "dark_mode",
-                    value = enabled
+                    value = newEffectiveState
                 )
                 
                 persistenceResult.fold(
@@ -306,20 +319,21 @@ class SettingsViewModel @Inject constructor(
                         val verificationResult = settingsValidator.verifySetting(
                             userId = userId,
                             key = "dark_mode",
-                            expectedValue = enabled
+                            expectedValue = newEffectiveState
                         )
                         
                         verificationResult.fold(
                             onSuccess = { isVerified: Boolean ->
                                 if (isVerified) {
                                     Timber.d("Dark mode updated and verified successfully")
-                                    trackSettingChanged("dark_mode", enabled)
+                                    trackSettingChanged("dark_mode", newEffectiveState)
                                     updateState { copy(isUpdatingSettings = false) }
+                                    // Don't reload settings - we already have the updated state
                                 } else {
                                     // Setting didn't persist correctly, try again
                                     Timber.w("Dark mode setting not verified, retrying...")
                                     viewModelScope.launch {
-                                        retrySettingUpdate("dark_mode", enabled)
+                                        retrySettingUpdate("dark_mode", newEffectiveState)
                                     }
                                 }
                             },
@@ -327,7 +341,7 @@ class SettingsViewModel @Inject constructor(
                                 Timber.e(exception, "Failed to verify dark mode setting")
                                 // Continue with fallback to use case
                                 viewModelScope.launch {
-                                    fallbackToUseCase(userId, enabled, "dark_mode")
+                                    fallbackToUseCase(userId, newEffectiveState, "dark_mode")
                                 }
                             }
                         )
@@ -336,14 +350,16 @@ class SettingsViewModel @Inject constructor(
                         Timber.e(exception, "Failed to persist dark mode setting")
                         // Fallback to original use case method
                         viewModelScope.launch {
-                            fallbackToUseCase(userId, enabled, "dark_mode")
+                            fallbackToUseCase(userId, newEffectiveState, "dark_mode")
                         }
                     }
                 )
             } catch (exception: Exception) {
                 Timber.e(exception, "Exception updating dark mode")
                 viewModelScope.launch {
-                    fallbackToUseCase(userId, enabled, "dark_mode")
+                    // Calculate the effective state that would result from the toggle
+                    val effectiveState = themeManager.getEffectiveThemeState(isSystemInDarkTheme)
+                    fallbackToUseCase(userId, effectiveState, "dark_mode")
                 }
             }
         }
@@ -454,6 +470,69 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Legacy method for updating dark mode directly
+     * Use updateThemeFromToggle for proper system-aware toggling
+     * 
+     * @param enabled New dark mode state
+     */
+    private fun updateDarkMode(enabled: Boolean) {
+        val userId = currentUserId ?: return
+        
+        viewModelScope.launch {
+            updateState { copy(isUpdatingSettings = true) }
+            
+            try {
+                Timber.d("Updating dark mode for user $userId to: $enabled")
+                
+                // Update theme manager immediately for instant UI response
+                val themeMode = if (enabled) ThemeMode.DARK else ThemeMode.LIGHT
+                themeManager.switchTheme(themeMode)
+                
+                // Update UI state
+                updateState { copy(effectiveThemeState = enabled) }
+                
+                // Use persistence manager for reliable settings update
+                val persistenceResult = settingsPersistenceManager.persistSetting(
+                    userId = userId,
+                    key = "dark_mode",
+                    value = enabled
+                )
+                
+                persistenceResult.fold(
+                    onSuccess = {
+                        Timber.d("Dark mode updated successfully")
+                        trackSettingChanged("dark_mode", enabled)
+                        updateState { copy(isUpdatingSettings = false) }
+                        // Don't reload settings - we already have the updated state
+                    },
+                    onFailure = { error ->
+                        Timber.e("Failed to update dark mode: $error")
+                        // Revert theme manager change
+                        val revertMode = if (enabled) ThemeMode.LIGHT else ThemeMode.DARK
+                        themeManager.switchTheme(revertMode)
+                        updateState { 
+                            copy(
+                                isUpdatingSettings = false,
+                                effectiveThemeState = !enabled,
+                                error = "Failed to update dark mode"
+                            )
+                        }
+                        lastFailedEvent = SettingsEvent.UpdateDarkMode(enabled)
+                    }
+                )
+            } catch (exception: Exception) {
+                Timber.e(exception, "Exception updating dark mode")
+                updateState { 
+                    copy(
+                        isUpdatingSettings = false,
+                        error = "Failed to update dark mode: ${exception.message}"
+                    )
+                }
+            }
+        }
+    }
+    
     /**
      * Updates the notification setting with persistence verification and retry logic.
      * 
@@ -1044,10 +1123,31 @@ class SettingsViewModel @Inject constructor(
                 cachedCurrentUser // Fall back to cached user on error
             }
             
-            // Sync theme manager with user settings
+            // Sync theme manager with user settings only if not already in the correct mode
             settings?.let { userSettings ->
-                val themeMode = if (userSettings.darkMode) ThemeMode.DARK else ThemeMode.LIGHT
-                themeManager.switchTheme(themeMode)
+                val currentMode = themeManager.themeMode.value
+                // Only sync if we're in SYSTEM mode or if the mode doesn't match the settings
+                if (currentMode == ThemeMode.SYSTEM || 
+                    (currentMode == ThemeMode.DARK && !userSettings.darkMode) ||
+                    (currentMode == ThemeMode.LIGHT && userSettings.darkMode)) {
+                    val themeMode = if (userSettings.darkMode) ThemeMode.DARK else ThemeMode.LIGHT
+                    themeManager.switchTheme(themeMode)
+                }
+            }
+            
+            // Calculate the effective theme state (what's actually being displayed)
+            // This is needed to properly show toggle state when in SYSTEM mode
+            val currentThemeMode = themeManager.themeMode.value
+            val effectiveThemeState = when (currentThemeMode) {
+                ThemeMode.SYSTEM -> {
+                    // In SYSTEM mode, we need to check what the system default is
+                    // Since we can't directly access isSystemInDarkTheme here,
+                    // we'll use the settings value as a fallback
+                    settings?.darkMode ?: false
+                }
+                ThemeMode.DARK -> true
+                ThemeMode.LIGHT -> false
+                ThemeMode.TIME_BASED -> settings?.darkMode ?: false
             }
             
             // Prioritize showing content over error state
@@ -1079,7 +1179,8 @@ class SettingsViewModel @Inject constructor(
                 currentUser = currentUser,
                 subscriptionStatus = subscription,
                 error = if (settings == null) errorMessage else null, // Only show error if critical data missing
-                isUpdatingSettings = false
+                isUpdatingSettings = false,
+                effectiveThemeState = effectiveThemeState
             )
             
             _uiState.value = newState

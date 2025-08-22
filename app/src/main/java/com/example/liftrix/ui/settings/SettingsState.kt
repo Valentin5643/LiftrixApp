@@ -37,7 +37,8 @@ data class SettingsState(
     val isSigningOut: Boolean = false,
     val showLogoutDialog: Boolean = false,
     val showImagePickerDialog: Boolean = false,
-    val expandedCard: String? = null
+    val expandedCard: String? = null,
+    val effectiveThemeState: Boolean = false  // Actual theme state (dark/light) regardless of mode
 ) {
     /**
      * Indicates if the screen should show initial loading state.
@@ -71,10 +72,11 @@ data class SettingsState(
 
     /**
      * Gets the current theme mode for UI theming.
-     * Defaults to false (light mode) if settings not loaded.
+     * Uses the effective theme state which reflects actual display (handles SYSTEM mode)
+     * Falls back to userSettings if effective state not available
      */
     val currentThemeMode: Boolean
-        get() = userSettings?.darkMode ?: false
+        get() = effectiveThemeState
 
     /**
      * Gets the current notification setting.

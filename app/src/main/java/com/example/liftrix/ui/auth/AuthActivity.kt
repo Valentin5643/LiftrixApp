@@ -43,7 +43,11 @@ class AuthActivity : ComponentActivity() {
         checkGooglePlayServices()
         
         setContent {
-            LiftrixTheme {
+            val themeManager = com.example.liftrix.ui.theme.ThemeManager.getInstance(this@AuthActivity)
+            
+            LiftrixTheme(
+                themeManager = themeManager
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

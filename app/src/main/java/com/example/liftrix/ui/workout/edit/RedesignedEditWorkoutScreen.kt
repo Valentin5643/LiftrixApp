@@ -349,6 +349,17 @@ private fun EditWorkoutContent(
                             viewModel.updateExercise(index, updatedExercise)
                         }
                     },
+                    onRemoveSet = { setIndex ->
+                        if (exercise.sets.size > 1) {
+                            val updatedSets = exercise.sets.toMutableList()
+                            updatedSets.removeAt(setIndex)
+                            val reindexedSets = updatedSets.mapIndexed { idx, set ->
+                                set.copy(setNumber = idx + 1)
+                            }
+                            val updatedExercise = exercise.copy(sets = reindexedSets)
+                            viewModel.updateExercise(index, updatedExercise)
+                        }
+                    },
                     onMenuClick = { showMenu = true },
                     onNotesClick = { showNotesDialog = true }
                 )

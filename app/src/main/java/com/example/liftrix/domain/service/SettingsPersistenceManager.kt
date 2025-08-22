@@ -132,7 +132,7 @@ class SettingsPersistenceManager @Inject constructor(
         try {
             firestore.collection("user_settings")
                 .document(userId)
-                .update(
+                .set(
                     mapOf(
                         key to when (value) {
                             is WeightUnit -> value.name
@@ -140,7 +140,8 @@ class SettingsPersistenceManager @Inject constructor(
                         },
                         "last_updated" to System.currentTimeMillis(),
                         "settings_version" to (getCurrentSettingsVersion(userId) + 1)
-                    )
+                    ),
+                    com.google.firebase.firestore.SetOptions.merge()
                 )
                 .await()
             Timber.d("Settings synced to Firebase for user $userId")

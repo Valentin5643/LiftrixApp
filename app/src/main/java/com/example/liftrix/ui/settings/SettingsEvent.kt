@@ -37,6 +37,14 @@ sealed class SettingsEvent : ViewModelEvent {
     data class UpdateDarkMode(val enabled: Boolean) : SettingsEvent()
     
     /**
+     * Triggered when user toggles the theme with system awareness.
+     * Properly handles SYSTEM mode by switching to opposite of current display.
+     * 
+     * @property isSystemInDarkTheme Current system dark theme state
+     */
+    data class ToggleTheme(val isSystemInDarkTheme: Boolean) : SettingsEvent()
+    
+    /**
      * Triggered when user toggles notification setting.
      * 
      * @property enabled New notification state

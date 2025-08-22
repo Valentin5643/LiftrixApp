@@ -93,8 +93,8 @@ class ExportWorkoutsUseCaseTest {
         val result = exportWorkoutsUseCase.invoke(testUserId, request)
         
         // Assert
-        assertIs<LiftrixResult.Success<ExportResult>>(result)
-        val exportResult = result.getOrThrow()
+        assertTrue(result.isSuccess)
+        val exportResult = result.getOrNull()!!
         
         assertEquals(ExportFormat.JSON, exportResult.format)
         assertTrue(exportResult.recordCount >= 0)
@@ -123,8 +123,8 @@ class ExportWorkoutsUseCaseTest {
         val result = exportWorkoutsUseCase.invoke(testUserId, request)
         
         // Assert
-        assertIs<LiftrixResult.Success<ExportResult>>(result)
-        val exportResult = result.getOrThrow()
+        assertTrue(result.isSuccess)
+        val exportResult = result.getOrNull()!!
         assertEquals(ExportFormat.CSV, exportResult.format)
         
         coVerify { workoutDao.getWorkoutsInDateRangeForUser(testUserId, any(), any()) }
@@ -182,13 +182,10 @@ class ExportWorkoutsUseCaseTest {
         val result = exportWorkoutsUseCase.invoke(testUserId, request)
         
         // Assert
-        assertIs<LiftrixResult.Error>(result)
-        val error = result.fold(
-            onSuccess = { null },
-            onFailure = { it }
-        )
-        assertIs<LiftrixError.BusinessLogicError>(error)
-        assertTrue(error.errorMessage.contains("Failed to export workout data"))
+        assertTrue(result.isFailure)
+        val exception = result.exceptionOrNull()!!
+        assertIs<LiftrixError.BusinessLogicError>(exception)
+        assertTrue(exception.errorMessage.contains("Failed to export workout data"))
         
         // Verify export was marked as failed
         coVerify { dataExportDao.updateExportStatus(any(), testUserId, "FAILED", any()) }
@@ -209,12 +206,9 @@ class ExportWorkoutsUseCaseTest {
         val result = exportWorkoutsUseCase.invoke(testUserId, request)
         
         // Assert
-        assertIs<LiftrixResult.Error>(result)
-        val error = result.fold(
-            onSuccess = { null },
-            onFailure = { it }
-        )
-        assertTrue(error is UnsupportedOperationException)
+        assertTrue(result.isFailure)
+        val exception = result.exceptionOrNull()!!
+        assertIs<LiftrixError.BusinessLogicError>(exception)
         
         coVerify { dataExportDao.updateExportStatus(any(), testUserId, "FAILED", any()) }
     }
@@ -228,7 +222,7 @@ class ExportWorkoutsUseCaseTest {
         val result = exportWorkoutsUseCase.cancelExport(exportId, testUserId)
         
         // Assert
-        assertIs<LiftrixResult.Success<Unit>>(result)
+        assertTrue(result.isSuccess)
         coVerify { dataExportDao.updateExportStatus(exportId, testUserId, "CANCELLED") }
     }
     
@@ -242,13 +236,10 @@ class ExportWorkoutsUseCaseTest {
         val result = exportWorkoutsUseCase.cancelExport(exportId, testUserId)
         
         // Assert
-        assertIs<LiftrixResult.Error>(result)
-        val error = result.fold(
-            onSuccess = { null },
-            onFailure = { it }
-        )
-        assertIs<LiftrixError.BusinessLogicError>(error)
-        assertTrue(error.errorMessage.contains("Failed to cancel export"))
+        assertTrue(result.isFailure)
+        val exception = result.exceptionOrNull()!!
+        assertIs<LiftrixError.BusinessLogicError>(exception)
+        assertTrue(exception.errorMessage.contains("Failed to cancel export"))
     }
     
     @Test
@@ -344,8 +335,8 @@ class ExportWorkoutsUseCaseTest {
         val result = exportWorkoutsUseCase.invoke(testUserId, request)
         
         // Assert
-        assertIs<LiftrixResult.Success<ExportResult>>(result)
-        val exportResult = result.getOrThrow()
+        assertTrue(result.isSuccess)
+        val exportResult = result.getOrNull()!!
         assertTrue(exportResult.recordCount >= 0)
         
         // Verify export completed successfully even with large dataset

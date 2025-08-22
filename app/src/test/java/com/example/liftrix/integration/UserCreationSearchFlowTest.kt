@@ -11,6 +11,7 @@ import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.repository.UserSearchRepository
 import com.example.liftrix.domain.repository.UserAccountRepository
 import com.example.liftrix.domain.repository.social.SocialProfileRepository
+import com.example.liftrix.domain.repository.social.SocialProfileRepository.ProfileUpdate
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.domain.usecase.auth.SignUpWithEmailUseCase
 import com.example.liftrix.domain.usecase.social.CreateSocialProfileUseCase
@@ -27,6 +28,7 @@ import org.junit.Before
 import org.junit.Test
 import timber.log.Timber
 import java.time.LocalDateTime
+import kotlin.Result
 
 /**
  * FAILING INTEGRATION TEST SUITE: Complete User Creation to Search Flow
@@ -89,7 +91,7 @@ class UserCreationSearchFlowTest {
         Timber.d("📝 Step 1: Account Creation")
         coEvery { 
             signUpWithEmailUseCase(newUserEmail, "password123", newUsername) 
-        } returns Result.success(
+        } returns Result.success<User>(
             User(
                 uid = newUserId,
                 email = newUserEmail,
@@ -117,7 +119,7 @@ class UserCreationSearchFlowTest {
         Timber.d("📝 Step 2: Social Profile Creation")
         coEvery {
             createSocialProfileUseCase(newUsername, newUsername, null)
-        } returns LiftrixResult.Success(
+        } returns Result.success<SocialProfile>(
             SocialProfile(
                 userId = newUserId,
                 username = newUsername.lowercase(),
@@ -152,7 +154,7 @@ class UserCreationSearchFlowTest {
                 currentUserId = currentUserId,
                 filters = SearchFilters()
             )
-        } returns LiftrixResult.Success(emptyList()) // ❌ No results due to collection mismatch
+        } returns Result.success<List<UserSearchResult>>(emptyList()) // ❌ No results due to collection mismatch
         
         val immediateSearchResult = userSearchRepository.searchUsers(
             query = newUsername,
@@ -181,7 +183,7 @@ class UserCreationSearchFlowTest {
                 currentUserId = currentUserId,
                 filters = SearchFilters()
             )
-        } returns LiftrixResult.Success(emptyList()) // ❌ Still no results
+        } returns Result.success<List<UserSearchResult>>(emptyList()) // ❌ Still no results
         
         val delayedSearchResult = userSearchRepository.searchUsers(
             query = newUsername,
@@ -230,7 +232,7 @@ class UserCreationSearchFlowTest {
             // Mock successful signup
             coEvery { 
                 signUpWithEmailUseCase(email, "password123", username) 
-            } returns Result.success(User(
+            } returns Result.success<User>(User(
                 uid = userId, 
                 email = email, 
                 displayName = username,
@@ -250,7 +252,7 @@ class UserCreationSearchFlowTest {
             // Mock social profile creation with privacy issue
             coEvery {
                 createSocialProfileUseCase(username, username, null)
-            } returns LiftrixResult.Success(
+            } returns Result.success<SocialProfile>(
                 SocialProfile(
                     userId = userId,
                     username = username.lowercase(),
@@ -287,7 +289,7 @@ class UserCreationSearchFlowTest {
                     currentUserId = currentUserId,
                     filters = SearchFilters()
                 )
-            } returns LiftrixResult.Success(emptyList()) // ❌ All searches fail
+            } returns Result.success<List<UserSearchResult>>(emptyList()) // ❌ All searches fail
             
             val searchResult = userSearchRepository.searchUsers(username, currentUserId, SearchFilters())
             val foundUsers = searchResult.getOrNull()
@@ -316,7 +318,7 @@ class UserCreationSearchFlowTest {
         // Initial profile creation with default privacy
         coEvery {
             createSocialProfileUseCase(username, username, null)
-        } returns LiftrixResult.Success(
+        } returns Result.success<SocialProfile>(
             SocialProfile(
                 userId = userId,
                 username = username,
@@ -337,15 +339,15 @@ class UserCreationSearchFlowTest {
         // Initial search - no results due to privacy
         coEvery {
             userSearchRepository.searchUsers(username, currentUserId, SearchFilters())
-        } returns LiftrixResult.Success(emptyList())
+        } returns Result.success<List<UserSearchResult>>(emptyList())
         
         val initialSearch = userSearchRepository.searchUsers(username, currentUserId, SearchFilters())
         assertThat(initialSearch.getOrNull()).isEmpty() // Confirms privacy blocking
         
         // User updates profile to be public
         coEvery {
-            socialProfileRepository.updateProfile(any())
-        } returns LiftrixResult.Success(
+            socialProfileRepository.updateProfile(any(), any())
+        } returns Result.success<SocialProfile>(
             SocialProfile(
                 userId = userId,
                 username = username,
@@ -360,21 +362,13 @@ class UserCreationSearchFlowTest {
             )
         )
         
-        // Mock profile update
-        val updatedProfile = SocialProfile(
-            userId = userId,
-            username = username,
+        // Mock profile update using correct method signature
+        val profileUpdate = ProfileUpdate(
             displayName = username,
-            bio = null,
-            memberSince = System.currentTimeMillis(),
-            isPrivate = false,
-            hideFromSuggestions = false,
-            allowFriendRequests = true,
-            createdAt = System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis()
+            bio = null
         )
         
-        val updateResult = socialProfileRepository.updateProfile(updatedProfile)
+        val updateResult = socialProfileRepository.updateProfile(userId, profileUpdate)
         assertThat(updateResult.isSuccess).isTrue()
         assertThat(updateResult.getOrNull()?.isPrivate).isFalse()
         
@@ -383,7 +377,7 @@ class UserCreationSearchFlowTest {
         // Search after privacy update - still no results due to collection mismatch
         coEvery {
             userSearchRepository.searchUsers(username, currentUserId, SearchFilters())
-        } returns LiftrixResult.Success(emptyList()) // ❌ Still no results!
+        } returns Result.success<List<UserSearchResult>>(emptyList()) // ❌ Still no results!
         
         val postUpdateSearch = userSearchRepository.searchUsers(username, currentUserId, SearchFilters())
         
@@ -415,7 +409,7 @@ class UserCreationSearchFlowTest {
                     currentUserId = currentUserId,
                     filters = SearchFilters()
                 )
-            } returns LiftrixResult.Success(
+            } returns Result.success<List<UserSearchResult>>(
                 listOf(
                     UserSearchResult(
                         userId = userId,
@@ -476,7 +470,7 @@ class UserCreationSearchFlowTest {
         
         coEvery {
             createSocialProfileUseCase(username, username, null)
-        } returns LiftrixResult.Success(profileWithPrivacyIssue)
+        } returns Result.success(profileWithPrivacyIssue)
         
         val result = createSocialProfileUseCase(username, username, null)
         assertThat(result.isSuccess).isTrue()
@@ -484,7 +478,7 @@ class UserCreationSearchFlowTest {
         // Search fails due to BOTH issues compounding
         coEvery {
             userSearchRepository.searchUsers(username, currentUserId, SearchFilters())
-        } returns LiftrixResult.Success(emptyList()) // ❌ Fails due to compound issues
+        } returns Result.success<List<UserSearchResult>>(emptyList()) // ❌ Fails due to compound issues
         
         val searchResult = userSearchRepository.searchUsers(username, currentUserId, SearchFilters())
         assertThat(searchResult.getOrNull()).isEmpty()

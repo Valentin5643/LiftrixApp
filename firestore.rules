@@ -99,8 +99,14 @@ service cloud.firestore {
     
     // Users collection - user profile data with sync support
     match /users/{userId} {
-      // Allow read for authenticated users who own the data
-      allow read: if isAuthenticated() && isOwner(userId);
+      // Allow querying for public profiles (list operations for collection queries)
+      allow list: if isAuthenticated();
+
+      // Allow read if owner OR document has isPublic == true
+      // Simplified condition - only docs with explicit isPublic: true are accessible
+      allow get, read: if isAuthenticated() &&
+                          (isOwner(userId) ||
+                           (resource.data.isPublic == true));
       
       // Allow write with enhanced validation - require userId and validate common fields
       allow write: if isAuthenticated() && 
@@ -340,9 +346,11 @@ service cloud.firestore {
     
     // Follow relationships - user connections
     match /follow_relationships/{relationshipId} {
-      allow read: if isAuthenticated() &&
-                     (isOwner(resource.data.followerId) ||
-                      isOwner(resource.data.followingId));
+      // FIXED: Allow reads for documents where user is involved
+      // This supports both individual document reads and collection queries
+      allow read: if isAuthenticated() && 
+                     (resource.data.followerId == request.auth.uid ||
+                      resource.data.followingId == request.auth.uid);
                       
       allow write: if isAuthenticated() &&
                       isOwner(request.resource.data.followerId) &&
@@ -494,7 +502,37 @@ service cloud.firestore {
                        isValidChatMessage();
     }
     
-    // User settings - preferences and configuration
+    // User settings - preferences and configuration (root-level collection)
+    // This is used by SettingsPersistenceManager for dark mode, notifications, weight units, etc.
+    match /user_settings/{userId} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      
+      allow write: if isAuthenticated() && 
+                      isOwner(userId) &&
+                      // Allow flexible updates for settings fields
+                      (!('dark_mode' in request.resource.data) || request.resource.data.dark_mode is bool) &&
+                      (!('notifications_enabled' in request.resource.data) || request.resource.data.notifications_enabled is bool) &&
+                      (!('weight_unit' in request.resource.data) || request.resource.data.weight_unit is string) &&
+                      (!('terminology_preference' in request.resource.data) || request.resource.data.terminology_preference is string) &&
+                      (!('migration_completed' in request.resource.data) || request.resource.data.migration_completed is bool) &&
+                      (!('migration_explanation_seen' in request.resource.data) || request.resource.data.migration_explanation_seen is bool) &&
+                      (!('last_updated' in request.resource.data) || request.resource.data.last_updated is number) &&
+                      (!('settings_version' in request.resource.data) || request.resource.data.settings_version is number);
+      
+      allow create: if isAuthenticated() && 
+                       isOwner(userId) &&
+                       // Allow flexible creation with any combination of settings fields
+                       (!('dark_mode' in request.resource.data) || request.resource.data.dark_mode is bool) &&
+                       (!('notifications_enabled' in request.resource.data) || request.resource.data.notifications_enabled is bool) &&
+                       (!('weight_unit' in request.resource.data) || request.resource.data.weight_unit is string) &&
+                       (!('terminology_preference' in request.resource.data) || request.resource.data.terminology_preference is string) &&
+                       (!('migration_completed' in request.resource.data) || request.resource.data.migration_completed is bool) &&
+                       (!('migration_explanation_seen' in request.resource.data) || request.resource.data.migration_explanation_seen is bool) &&
+                       (!('last_updated' in request.resource.data) || request.resource.data.last_updated is number) &&
+                       (!('settings_version' in request.resource.data) || request.resource.data.settings_version is number);
+    }
+    
+    // User settings - preferences and configuration (subcollection for backward compatibility)
     match /users/{userId}/settings/{docId} {
       allow read: if isAuthenticated() && isOwner(userId);
       

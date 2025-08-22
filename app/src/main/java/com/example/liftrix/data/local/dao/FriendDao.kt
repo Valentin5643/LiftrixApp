@@ -68,4 +68,18 @@ interface FriendDao {
     
     @Query("DELETE FROM friends WHERE user_id = :userId")
     suspend fun deleteAllFriendsForUser(userId: String): Int
+    
+    // Following/Followers distinction methods
+    
+    @Query("SELECT * FROM friends WHERE user_id = :userId AND status = 'ACCEPTED' ORDER BY created_at DESC")
+    fun getFollowing(userId: String): Flow<List<FriendEntity>>
+    
+    @Query("SELECT * FROM friends WHERE friend_user_id = :userId AND status = 'ACCEPTED' ORDER BY created_at DESC")
+    fun getFollowers(userId: String): Flow<List<FriendEntity>>
+    
+    @Query("SELECT COUNT(*) FROM friends WHERE user_id = :userId AND status = 'ACCEPTED'")
+    suspend fun getFollowingCount(userId: String): Int
+    
+    @Query("SELECT COUNT(*) FROM friends WHERE friend_user_id = :userId AND status = 'ACCEPTED'")
+    suspend fun getFollowersCount(userId: String): Int
 } 

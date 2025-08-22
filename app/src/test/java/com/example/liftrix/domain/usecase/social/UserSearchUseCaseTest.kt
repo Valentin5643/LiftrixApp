@@ -22,6 +22,7 @@ import org.junit.Before
 import org.junit.Test
 import timber.log.Timber
 import java.time.LocalDateTime
+import kotlin.Result
 
 /**
  * FAILING TEST SUITE: User Search Issues
@@ -73,14 +74,14 @@ class UserSearchUseCaseTest {
         // Simulate successful account creation
         coEvery { 
             signUpWithEmailUseCase(testEmail, "password123", testUsername) 
-        } returns LiftrixResult.Success(
+        } returns Result.success(
             mockUser(testUserId, testUsername)
         )
         
         // Simulate social profile creation with privacy bug
         coEvery {
             createSocialProfileUseCase(testUsername, testUsername, null)
-        } returns LiftrixResult.Success(
+        } returns Result.success(
             mockSocialProfile(testUserId, testUsername, isPrivate = true) // ❌ BUG: Privacy default
         )
         
@@ -94,14 +95,14 @@ class UserSearchUseCaseTest {
                 currentUserId = currentUserId,
                 filters = SearchFilters()
             )
-        } returns LiftrixResult.Success(emptyList()) // ❌ NO RESULTS DUE TO COLLECTION MISMATCH
+        } returns Result.success(emptyList()) // ❌ NO RESULTS DUE TO COLLECTION MISMATCH
         
         // Execute account creation flow
         val signUpResult = signUpWithEmailUseCase(testEmail, "password123", testUsername)
-        assertThat(signUpResult is LiftrixResult.Success).isTrue()
+        assertThat(signUpResult.isSuccess).isTrue()
         
         val socialProfileResult = createSocialProfileUseCase(testUsername, testUsername, null)
-        assertThat(socialProfileResult is LiftrixResult.Success).isTrue()
+        assertThat(socialProfileResult.isSuccess).isTrue()
         
         // Allow time for background sync
         delay(2000)
@@ -114,7 +115,7 @@ class UserSearchUseCaseTest {
         )
         
         // 🚨 THIS ASSERTION WILL FAIL until the collection mismatch is fixed
-        assertThat(searchResult is LiftrixResult.Success).isTrue()
+        assertThat(searchResult.isSuccess).isTrue()
         val users = searchResult.fold(
             onSuccess = { it },
             onFailure = { null }
@@ -144,7 +145,7 @@ class UserSearchUseCaseTest {
         // Simulate profile creation with conflicting privacy settings
         coEvery {
             createSocialProfileUseCase(testUsername, testUsername, null)
-        } returns LiftrixResult.Success(
+        } returns Result.success(
             mockSocialProfile(
                 userId = testUserId, 
                 username = testUsername, 
@@ -160,11 +161,11 @@ class UserSearchUseCaseTest {
                 currentUserId = currentUserId,
                 filters = SearchFilters()
             )
-        } returns LiftrixResult.Success(emptyList()) // ❌ FILTERED OUT DUE TO PRIVACY=TRUE
+        } returns Result.success(emptyList()) // ❌ FILTERED OUT DUE TO PRIVACY=TRUE
         
         // Create profile with default privacy settings
         val profileResult = createSocialProfileUseCase(testUsername, testUsername, null)
-        assertThat(profileResult is LiftrixResult.Success).isTrue()
+        assertThat(profileResult.isSuccess).isTrue()
         
         // Verify privacy setting is problematic
         val createdProfile = profileResult.fold(
@@ -183,7 +184,7 @@ class UserSearchUseCaseTest {
         )
         
         // 🚨 THIS ASSERTION WILL FAIL due to privacy filtering
-        assertThat(searchResult is LiftrixResult.Success).isTrue()
+        assertThat(searchResult.isSuccess).isTrue()
         val users = searchResult.fold(
             onSuccess = { it },
             onFailure = { null }
@@ -211,7 +212,7 @@ class UserSearchUseCaseTest {
                 currentUserId = currentUserId,
                 filters = SearchFilters()
             )
-        } returns LiftrixResult.Success(
+        } returns Result.success(
             listOf(
                 mockUserSearchResult(
                     userId = "default_liftrix_id",
@@ -228,7 +229,7 @@ class UserSearchUseCaseTest {
                 currentUserId = currentUserId,
                 filters = SearchFilters()
             )
-        } returns LiftrixResult.Success(
+        } returns Result.success(
             listOf(
                 mockUserSearchResult(
                     userId = "default_sample_id",
@@ -243,7 +244,7 @@ class UserSearchUseCaseTest {
         val sampleResult = userSearchRepository.searchUsers("Sample", currentUserId, SearchFilters())
         
         // ✅ These assertions should PASS, proving search mechanism works
-        assertThat(liftrixResult is LiftrixResult.Success).isTrue()
+        assertThat(liftrixResult.isSuccess).isTrue()
         val liftrixUsers = liftrixResult.fold(
             onSuccess = { it },
             onFailure = { emptyList() }
@@ -251,7 +252,7 @@ class UserSearchUseCaseTest {
         assertThat(liftrixUsers).hasSize(1)
         assertThat(liftrixUsers.first().displayName).isEqualTo("liftrix")
         
-        assertThat(sampleResult is LiftrixResult.Success).isTrue()
+        assertThat(sampleResult.isSuccess).isTrue()
         val sampleUsers = sampleResult.fold(
             onSuccess = { it },
             onFailure = { emptyList() }
@@ -281,23 +282,23 @@ class UserSearchUseCaseTest {
         // Initial state: User doesn't exist in search
         coEvery {
             userSearchRepository.searchUsers(testUsername, currentUserId, SearchFilters())
-        } returns LiftrixResult.Success(emptyList())
+        } returns Result.success(emptyList())
         
         // User updates their profile (triggers sync to 'social_profiles')
         coEvery {
             createSocialProfileUseCase(testUsername, "Updated Display Name", "New bio")
-        } returns LiftrixResult.Success(
+        } returns Result.success(
             mockSocialProfile(testUserId, testUsername, isPrivate = false) // Even public won't help
         )
         
         // After profile update, user still not searchable due to collection mismatch
         coEvery {
             userSearchRepository.searchUsers(testUsername, currentUserId, SearchFilters())
-        } returns LiftrixResult.Success(emptyList()) // ❌ STILL NOT FOUND
+        } returns Result.success(emptyList()) // ❌ STILL NOT FOUND
         
         // Execute profile update
         val updateResult = createSocialProfileUseCase(testUsername, "Updated Display Name", "New bio")
-        assertThat(updateResult is LiftrixResult.Success).isTrue()
+        assertThat(updateResult.isSuccess).isTrue()
         
         delay(1500) // Allow sync time
         
@@ -305,7 +306,7 @@ class UserSearchUseCaseTest {
         val searchResult = userSearchRepository.searchUsers(testUsername, currentUserId, SearchFilters())
         
         // 🚨 THIS ASSERTION WILL FAIL - user still not found after update
-        assertThat(searchResult is LiftrixResult.Success).isTrue()
+        assertThat(searchResult.isSuccess).isTrue()
         val users = searchResult.fold(
             onSuccess = { it },
             onFailure = { null }
@@ -332,18 +333,18 @@ class UserSearchUseCaseTest {
         for (keyword in searchableKeywords) {
             coEvery {
                 userSearchRepository.searchUsers(keyword, currentUserId, SearchFilters())
-            } returns LiftrixResult.Success(emptyList()) // ❌ NO RESULTS DUE TO WRONG COLLECTION
+            } returns Result.success(emptyList()) // ❌ NO RESULTS DUE TO WRONG COLLECTION
         }
         
         // Create profile that should generate search tokens
         coEvery {
             createSocialProfileUseCase(testUsername, "Token Test User", "Searchable bio content")
-        } returns LiftrixResult.Success(
+        } returns Result.success(
             mockSocialProfile(testUserId, testUsername, isPrivate = false)
         )
         
         val profileResult = createSocialProfileUseCase(testUsername, "Token Test User", "Searchable bio content")
-        assertThat(profileResult is LiftrixResult.Success).isTrue()
+        assertThat(profileResult.isSuccess).isTrue()
         
         delay(2000) // Allow token generation and sync
         
@@ -352,7 +353,7 @@ class UserSearchUseCaseTest {
             val result = userSearchRepository.searchUsers(keyword, currentUserId, SearchFilters())
             
             // 🚨 ALL THESE ASSERTIONS WILL FAIL
-            assertThat(result is LiftrixResult.Success).isTrue()
+            assertThat(result.isSuccess).isTrue()
             val resultUsers = result.fold(
                 onSuccess = { it },
                 onFailure = { emptyList() }

@@ -105,10 +105,10 @@ class SocialProfileSyncWorkerTest {
         Timber.w("🚨 FAILING TEST: Sync worker syncs to social_profiles but search expects users_public")
         
         // Mock successful profile retrieval from local database
-        coEvery { socialProfileDao.getProfilesForSync(any()) } returns listOf(socialProfile)
+        coEvery { socialProfileDao.getUnsyncedProfiles(testUserId) } returns listOf(socialProfile)
         
         // Mock successful sync to 'social_profiles' collection (current behavior)
-        coEvery { documentReference.set(any(), SetOptions.merge()).await() } returns Unit
+        coEvery { documentReference.set(any(), SetOptions.merge()).await() } returns null
         coEvery { documentReference.get().await() } returns documentSnapshot
         every { documentSnapshot.exists() } returns false
         
@@ -143,11 +143,11 @@ class SocialProfileSyncWorkerTest {
         Timber.w("🚨 FAILING TEST: Search indexing goes to social_profiles instead of user_search_cache")
         
         // Mock profile with rich searchable content
-        coEvery { socialProfileDao.getProfilesForSync(any()) } returns listOf(socialProfile)
+        coEvery { socialProfileDao.getUnsyncedProfiles(testUserId) } returns listOf(socialProfile)
         
         // Capture the data being synced to verify search tokens
         val syncDataSlot = slot<Map<String, Any>>()
-        coEvery { documentReference.set(capture(syncDataSlot), SetOptions.merge()).await() } returns Unit
+        coEvery { documentReference.set(capture(syncDataSlot), SetOptions.merge()).await() } returns null
         coEvery { documentReference.get().await() } returns documentSnapshot
         every { documentSnapshot.exists() } returns false
         
@@ -183,11 +183,11 @@ class SocialProfileSyncWorkerTest {
         Timber.w("🚨 FAILING TEST: Privacy settings synced to social_profiles but search filters on users_public")
         
         // Mock public profile that should be searchable
-        coEvery { socialProfileDao.getProfilesForSync(any()) } returns listOf(publicProfile)
+        coEvery { socialProfileDao.getUnsyncedProfiles(testUserId) } returns listOf(publicProfile)
         
         // Capture privacy settings in sync data
         val syncDataSlot = slot<Map<String, Any>>()
-        coEvery { documentReference.set(capture(syncDataSlot), SetOptions.merge()).await() } returns Unit
+        coEvery { documentReference.set(capture(syncDataSlot), SetOptions.merge()).await() } returns null
         coEvery { documentReference.get().await() } returns documentSnapshot
         every { documentSnapshot.exists() } returns false
         
@@ -220,8 +220,8 @@ class SocialProfileSyncWorkerTest {
         Timber.w("🔬 DEMONSTRATION: Complete collection mismatch analysis")
         
         // Mock multiple profiles to show batch processing
-        coEvery { socialProfileDao.getProfilesForSync(any()) } returns listOf(socialProfile)
-        coEvery { documentReference.set(any(), SetOptions.merge()).await() } returns Unit
+        coEvery { socialProfileDao.getUnsyncedProfiles(testUserId) } returns listOf(socialProfile)
+        coEvery { documentReference.set(any(), SetOptions.merge()).await() } returns null
         coEvery { documentReference.get().await() } returns documentSnapshot
         every { documentSnapshot.exists() } returns false
         
@@ -280,8 +280,8 @@ class SocialProfileSyncWorkerTest {
         Timber.d("   4. AND include isPublic field for privacy filtering")
         
         // Current implementation verification (targets wrong collection)
-        coEvery { socialProfileDao.getProfilesForSync(any()) } returns listOf(socialProfile)
-        coEvery { documentReference.set(any(), SetOptions.merge()).await() } returns Unit
+        coEvery { socialProfileDao.getUnsyncedProfiles(testUserId) } returns listOf(socialProfile)
+        coEvery { documentReference.set(any(), SetOptions.merge()).await() } returns null
         coEvery { documentReference.get().await() } returns documentSnapshot
         every { documentSnapshot.exists() } returns false
         
@@ -319,8 +319,8 @@ class SocialProfileSyncWorkerTest {
         Timber.w("🔄 INTEGRATION: End-to-end sync/search mismatch simulation")
         
         // Step 1: Social profile sync (current implementation)
-        coEvery { socialProfileDao.getProfilesForSync(any()) } returns listOf(socialProfile)
-        coEvery { documentReference.set(any(), SetOptions.merge()).await() } returns Unit
+        coEvery { socialProfileDao.getUnsyncedProfiles(testUserId) } returns listOf(socialProfile)
+        coEvery { documentReference.set(any(), SetOptions.merge()).await() } returns null
         coEvery { documentReference.get().await() } returns documentSnapshot
         every { documentSnapshot.exists() } returns false
         
@@ -357,19 +357,17 @@ class SocialProfileSyncWorkerTest {
             username = username.lowercase(),
             displayName = username,
             bio = bio,
-            profileImageUrl = null,
+            profilePhotoUrl = null,
             memberSince = System.currentTimeMillis(),
             isPrivate = isPrivate,
             hideFromSuggestions = false,
             allowFriendRequests = true,
             instagramHandle = null,
-            tiktokHandle = null,
             youtubeChannel = null,
             createdAt = System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis(),
             isSynced = false,
-            syncVersion = 1L,
-            lastModified = System.currentTimeMillis()
+            syncVersion = 1
         )
     }
 }

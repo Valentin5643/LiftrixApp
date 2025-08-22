@@ -14,6 +14,8 @@ import com.example.liftrix.domain.usecase.auth.GetAuthenticatedUserIdUseCase
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.domain.usecase.GetWorkoutHistoryUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
+import com.example.liftrix.domain.usecase.social.FollowAction
+import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.state.HomeScreenData
 import com.example.liftrix.ui.common.state.FeedState
@@ -49,6 +51,7 @@ class HomeViewModel @Inject constructor(
     private val analyticsService: AnalyticsService,
     private val socialRepository: SocialRepository,
     private val getWorkoutHistoryUseCase: GetWorkoutHistoryUseCase,
+    private val followUserUseCase: com.example.liftrix.domain.usecase.social.FollowUserUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<UiState<HomeScreenData>, HomeEvent>(errorHandler) {
 
@@ -194,7 +197,19 @@ class HomeViewModel @Inject constructor(
      * Refreshes home screen data manually
      */
     fun refreshData() {
+        // Set refreshing state
+        updateHomeScreenData { it.copy(isRefreshing = true) }
+        
+        // Refresh all sections
         loadHomeData()
+        loadFeedWorkouts()
+        loadRecommendations()
+        
+        // Clear refreshing state after a delay
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(500) // Small delay to ensure all loads are initiated
+            updateHomeScreenData { it.copy(isRefreshing = false) }
+        }
     }
 
     /**
@@ -424,8 +439,12 @@ class HomeViewModel @Inject constructor(
                     )
                 )
                 
-                socialRepository.followUser(userId).fold(
-                    onSuccess = {
+                followUserUseCase(
+                    targetUserId = userId,
+                    action = FollowAction.FOLLOW,
+                    context = "HOME_DISCOVERY"
+                ).fold(
+                    onSuccess = { followStatus ->
                         // Update recommendations state to reflect follow action
                         val currentData = uiState.value.dataOrNull() ?: HomeScreenData()
                         val currentState = currentData.recommendationsState
@@ -443,11 +462,20 @@ class HomeViewModel @Inject constructor(
                         }
                         trackUserFollowed(userId)
                     },
-                    onFailure = { exception ->
-                        Timber.e(exception, "Failed to follow user: $userId")
-                        updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.NetworkError(
-                            "Failed to follow user: ${exception.message}"
-                        ))
+                    onFailure = { error: Throwable ->
+                        Timber.e("Failed to follow user: $userId - ${error.message}")
+                        val liftrixError = when (error) {
+                            is LiftrixError -> error
+                            else -> LiftrixError.BusinessLogicError(
+                                code = "FOLLOW_USER_FAILED",
+                                errorMessage = "Failed to follow user: ${error.message}",
+                                analyticsContext = mapOf(
+                                    "operation" to "FOLLOW_USER",
+                                    "target_user_id" to userId
+                                )
+                            )
+                        }
+                        updateErrorState(liftrixError)
                     }
                 )
             } catch (exception: Exception) {
@@ -465,8 +493,12 @@ class HomeViewModel @Inject constructor(
     private fun unfollowUser(userId: String) {
         viewModelScope.launch {
             try {
-                socialRepository.removeFriend(userId).fold(
-                    onSuccess = {
+                followUserUseCase(
+                    targetUserId = userId,
+                    action = FollowAction.UNFOLLOW,
+                    context = "HOME_DISCOVERY"
+                ).fold(
+                    onSuccess = { followStatus ->
                         // Update recommendations state to reflect unfollow action
                         val currentData = uiState.value.dataOrNull() ?: HomeScreenData()
                         val currentState = currentData.recommendationsState
@@ -484,11 +516,20 @@ class HomeViewModel @Inject constructor(
                         }
                         trackUserUnfollowed(userId)
                     },
-                    onFailure = { exception ->
-                        Timber.e(exception, "Failed to unfollow user: $userId")
-                        updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.NetworkError(
-                            "Failed to unfollow user: ${exception.message}"
-                        ))
+                    onFailure = { error: Throwable ->
+                        Timber.e("Failed to unfollow user: $userId - ${error.message}")
+                        val liftrixError = when (error) {
+                            is LiftrixError -> error
+                            else -> LiftrixError.BusinessLogicError(
+                                code = "UNFOLLOW_USER_FAILED",
+                                errorMessage = "Failed to unfollow user: ${error.message}",
+                                analyticsContext = mapOf(
+                                    "operation" to "UNFOLLOW_USER",
+                                    "target_user_id" to userId
+                                )
+                            )
+                        }
+                        updateErrorState(liftrixError)
                     }
                 )
             } catch (exception: Exception) {

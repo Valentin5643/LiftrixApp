@@ -145,6 +145,13 @@ private fun ActiveWorkoutContent(
     val exerciseNotes = remember { mutableStateMapOf<String, String>() }
     var showReorderDialog by remember { mutableStateOf(false) }
     
+    // Anomaly detection states
+    var showAnomalyDialog by remember { mutableStateOf(false) }
+    var anomalyDetails by remember { mutableStateOf<Triple<String, String, String?>?>(null) } // value, type, previousValue
+    var anomalyExerciseName by remember { mutableStateOf("") }
+    var anomalySetIndex by remember { mutableStateOf(0) }
+    var anomalyExerciseId by remember { mutableStateOf("") }
+    
     // Timer state
     var elapsedTime by remember { mutableStateOf(session.elapsedTimeSeconds) }
     LaunchedEffect(session.sessionStatus) {
@@ -353,9 +360,30 @@ private fun ActiveWorkoutContent(
                             )
                         }
                     },
+                    onRemoveSet = { setIndex ->
+                        viewModel.removeSetFromExercise(exercise.exerciseId.value, setIndex + 1)
+                    },
                     onMenuClick = { showMenu = true },
                     onNotesClick = { showNotesDialog = true },
-                    context = ExerciseCardContext.ACTIVE_WORKOUT
+                    context = ExerciseCardContext.ACTIVE_WORKOUT,
+                    onAnomalyDetected = { value, setIdx ->
+                        // Prepare anomaly dialog data
+                        anomalyDetails = Triple(
+                            value,
+                            if (value.toDoubleOrNull() != null) "weight" else "reps",
+                            exercise.sets.getOrNull(setIdx)?.let { set ->
+                                buildString {
+                                    val prevWeight = set.targetWeight?.kilograms ?: 0
+                                    val prevReps = set.targetReps ?: 0
+                                    append("$prevWeight kg x $prevReps")
+                                }
+                            }
+                        )
+                        anomalyExerciseName = exercise.name
+                        anomalySetIndex = setIdx
+                        anomalyExerciseId = exercise.exerciseId.value
+                        showAnomalyDialog = true
+                    }
                 )
                 
                 // Exercise options menu
@@ -483,6 +511,48 @@ private fun ActiveWorkoutContent(
                     // Reorder functionality handled by ViewModel layer
                     // For now, just close the dialog
                     showReorderDialog = false
+                }
+            )
+        }
+        
+        // Anomaly Detection Dialog
+        if (showAnomalyDialog && anomalyDetails != null) {
+            AnomalyNudgeDialog(
+                anomalyValue = anomalyDetails!!.first,
+                anomalyType = anomalyDetails!!.second,
+                previousValue = anomalyDetails!!.third,
+                exerciseName = anomalyExerciseName,
+                onConfirm = {
+                    // User confirms the value is correct
+                    showAnomalyDialog = false
+                    anomalyDetails = null
+                },
+                onCorrect = { correctedValue ->
+                    // Update the corrected value in the exercise
+                    val exercise = session.exercises.find { it.exerciseId.value == anomalyExerciseId }
+                    if (exercise != null && anomalySetIndex < exercise.sets.size) {
+                        val set = exercise.sets[anomalySetIndex]
+                        val updatedSet = if (anomalyDetails!!.second == "weight") {
+                            set.copy(
+                                actualWeight = correctedValue.toDoubleOrNull()?.let {
+                                    com.example.liftrix.domain.model.Weight.fromKilograms(it)
+                                }
+                            )
+                        } else {
+                            set.copy(actualReps = correctedValue.toIntOrNull())
+                        }
+                        viewModel.updateSetInExercise(
+                            anomalyExerciseId,
+                            anomalySetIndex + 1,
+                            updatedSet
+                        )
+                    }
+                    showAnomalyDialog = false
+                    anomalyDetails = null
+                },
+                onDismiss = {
+                    showAnomalyDialog = false
+                    anomalyDetails = null
                 }
             )
         }

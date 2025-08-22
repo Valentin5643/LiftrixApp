@@ -4,6 +4,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.material3.Button
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FitnessCenter
@@ -14,6 +17,8 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -257,13 +263,19 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.PublicProfile> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.PublicProfile>()
-                    com.example.liftrix.ui.social.PublicProfileScreen(
+                    com.example.liftrix.ui.profile.UserProfileScreen(
                         userId = route.userId,
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         },
-                        onNavigateToQRCode = { userId ->
-                            navController.navigateToQRCodeDisplay(userId)
+                        onNavigateToFollowersList = { userId ->
+                            navController.navigate(LiftrixRoute.FollowersList(userId = userId, listType = "FOLLOWERS"))
+                        },
+                        onNavigateToFollowingList = { userId ->
+                            navController.navigate(LiftrixRoute.FollowingList(userId = userId, listType = "FOLLOWING"))
+                        },
+                        onNavigateToWorkoutDetail = { workoutId ->
+                            navController.navigate(LiftrixRoute.WorkoutDetails(workoutId))
                         }
                     )
                 }
@@ -968,6 +980,49 @@ fun UnifiedNavigationContainer(
                         navController = navController
                     )
                 }
+                
+                // Social Follow System Routes
+                composable<LiftrixRoute.FollowersList> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.FollowersList>()
+                    val listType = when (route.listType) {
+                        "FOLLOWERS" -> com.example.liftrix.ui.profile.FollowerListType.FOLLOWERS
+                        "FOLLOWING" -> com.example.liftrix.ui.profile.FollowerListType.FOLLOWING
+                        "PENDING_REQUESTS" -> com.example.liftrix.ui.profile.FollowerListType.PENDING_REQUESTS
+                        else -> com.example.liftrix.ui.profile.FollowerListType.FOLLOWERS
+                    }
+                    
+                    com.example.liftrix.ui.profile.FollowerListScreen(
+                        userId = route.userId,
+                        listType = listType,
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        },
+                        onNavigateToProfile = { userId ->
+                            navController.navigateToPublicProfile(userId)
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.FollowingList> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.FollowingList>()
+                    val listType = when (route.listType) {
+                        "FOLLOWERS" -> com.example.liftrix.ui.profile.FollowerListType.FOLLOWERS
+                        "FOLLOWING" -> com.example.liftrix.ui.profile.FollowerListType.FOLLOWING
+                        "PENDING_REQUESTS" -> com.example.liftrix.ui.profile.FollowerListType.PENDING_REQUESTS
+                        else -> com.example.liftrix.ui.profile.FollowerListType.FOLLOWING
+                    }
+                    
+                    com.example.liftrix.ui.profile.FollowerListScreen(
+                        userId = route.userId,
+                        listType = listType,
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        },
+                        onNavigateToProfile = { userId ->
+                            navController.navigateToPublicProfile(userId)
+                        }
+                    )
+                }
             }
             
             // Persistent live session bar - only show if session exists and not on active workout screen
@@ -992,7 +1047,9 @@ fun UnifiedNavigationContainer(
                     },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 80.dp) // Account for bottom navigation
+                        .padding(
+                            bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 64.dp
+                        )
                 )
             }
         }
@@ -1089,8 +1146,8 @@ private fun BottomNavigationBar(
     val items = listOf(
         BottomNavItem(LiftrixRoute.Home, "Home", Icons.Default.Home),
         BottomNavItem(LiftrixRoute.Workout, "Workout", Icons.Default.FitnessCenter),
-        BottomNavItem(LiftrixRoute.Progress, "Progress", Icons.Default.TrendingUp),
-        BottomNavItem(LiftrixRoute.Coach, "Coach", Icons.Default.Psychology)
+        BottomNavItem(LiftrixRoute.Progress, "Progress", Icons.Default.TrendingUp)
+        // Temporarily hidden: BottomNavItem(LiftrixRoute.Coach, "Coach", Icons.Default.Psychology)
     )
     
     NavigationBar {
@@ -1138,7 +1195,7 @@ private data class BottomNavItem(
  */
 @HiltViewModel
 class UnifiedNavigationViewModel @Inject constructor(
-    private val sessionManager: UnifiedWorkoutSessionManager,
+    val sessionManager: UnifiedWorkoutSessionManager,  // Made public for WorkoutScreen access
     private val getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 ) : ViewModel() {
     
@@ -1316,7 +1373,10 @@ private fun NavigationAwareTopAppBar(
         "NotificationSettings" to "Notification Settings",
         "GymBuddy" to "Gym Buddy",
         "PostCreation" to "Create Post",
-        "PostComments" to "Comments"
+        "PostComments" to "Comments",
+        "FollowersList" to "Followers",
+        "FollowingList" to "Following",
+        "PublicProfile" to "Profile"
     )
     
     // Check if current route is a main tab (should show global top bar)
@@ -1369,6 +1429,10 @@ private fun NavigationAwareTopAppBar(
             }
         },
         actions = {
+            // Show actions specific to PublicProfile screen
+            // Note: Profile-specific actions are handled within the screen itself
+            // to maintain proper ViewModel scoping
+            
             // Show refresh button specifically for Friends screen
             if (currentRoute?.contains("Friends") == true) {
                 // Get SocialViewModel instance for refresh functionality  

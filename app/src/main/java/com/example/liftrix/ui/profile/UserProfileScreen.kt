@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -59,7 +60,8 @@ fun UserProfileScreen(
     onNavigateToFollowingList: (String) -> Unit,
     onNavigateToWorkoutDetail: (String) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: UserProfileViewModel = hiltViewModel()
+    viewModel: UserProfileViewModel = hiltViewModel(),
+    topBarActions: (@Composable () -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     
@@ -77,29 +79,6 @@ fun UserProfileScreen(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.cardSpacing)
     ) {
-        // Top App Bar
-        TopAppBar(
-            title = { Text("Profile") },
-            navigationIcon = {
-                IconButton(onClick = onNavigateBack) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                }
-            },
-            actions = {
-                uiState.profile?.let { profile ->
-                    // Share profile button
-                    IconButton(onClick = { viewModel.shareProfile(profile) }) {
-                        Icon(Icons.Default.Share, contentDescription = "Share Profile")
-                    }
-                    
-                    // More options menu
-                    IconButton(onClick = { viewModel.showMoreOptions() }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More options")
-                    }
-                }
-            }
-        )
-        
         when {
             uiState.isLoading -> {
                 UserProfileLoadingState()
@@ -124,7 +103,9 @@ fun UserProfileScreen(
                     onTabSelected = { viewModel.selectTab(it) },
                     onNavigateToFollowersList = onNavigateToFollowersList,
                     onNavigateToFollowingList = onNavigateToFollowingList,
-                    onNavigateToWorkoutDetail = onNavigateToWorkoutDetail
+                    onNavigateToWorkoutDetail = onNavigateToWorkoutDetail,
+                    onShareProfile = { viewModel.shareProfile(profile) },
+                    onMoreOptions = { viewModel.showMoreOptions() }
                 )
             }
             else -> {
@@ -147,9 +128,11 @@ private fun UserProfileContent(
     onTabSelected: (ProfileTab) -> Unit,
     onNavigateToFollowersList: (String) -> Unit,
     onNavigateToFollowingList: (String) -> Unit,
-    onNavigateToWorkoutDetail: (String) -> Unit
+    onNavigateToWorkoutDetail: (String) -> Unit,
+    onShareProfile: () -> Unit,
+    onMoreOptions: () -> Unit
 ) {
-    // Profile Header Card
+    // Profile Header Card with Actions
     UnifiedWorkoutCard(
         title = profile.displayName ?: "Unknown User",
         subtitle = generateProfileSubtitle(profile),
@@ -158,6 +141,33 @@ private fun UserProfileContent(
         Column(
             verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.elementSpacing)
         ) {
+            // Action buttons row at the top
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconButton(
+                    onClick = onShareProfile,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = "Share Profile",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(
+                    onClick = onMoreOptions,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "More options",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.elementSpacing),
@@ -226,26 +236,22 @@ private fun UserProfileContent(
                 }
             }
             
-            // Follower/Following counts (clickable if accessible)
-            if (canViewDetails && (profile.followersCount > 0 || profile.followingCount > 0)) {
+            // Follower/Following counts (always clickable if accessible, including zero counts for discovery)
+            if (canViewDetails) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.elementSpacing)
                 ) {
-                    if (profile.followersCount > 0) {
-                        TextButton(
-                            onClick = { onNavigateToFollowersList(profile.userId) }
-                        ) {
-                            Text("${profile.followersCount} follower${if (profile.followersCount > 1) "s" else ""}")
-                        }
+                    TextButton(
+                        onClick = { onNavigateToFollowersList(profile.userId) }
+                    ) {
+                        Text("${profile.followersCount} follower${if (profile.followersCount != 1) "s" else ""}")
                     }
                     
-                    if (profile.followingCount > 0) {
-                        TextButton(
-                            onClick = { onNavigateToFollowingList(profile.userId) }
-                        ) {
-                            Text("${profile.followingCount} following")
-                        }
+                    TextButton(
+                        onClick = { onNavigateToFollowingList(profile.userId) }
+                    ) {
+                        Text("${profile.followingCount} following")
                     }
                 }
             }

@@ -5,6 +5,7 @@ import com.example.liftrix.data.local.dao.FollowRequestDao
 import com.example.liftrix.data.local.dao.ProfileViewDao
 import com.example.liftrix.data.local.dao.SocialProfileDao
 import com.example.liftrix.data.local.dao.BlockedUserDao
+import com.example.liftrix.data.local.dao.EnrichedFollowRelationship
 import com.example.liftrix.data.local.entity.FollowRelationshipEntity
 import com.example.liftrix.data.local.entity.FollowRequestEntity
 import com.example.liftrix.data.local.entity.ProfileViewEntity
@@ -470,6 +471,32 @@ class FollowRepositoryImpl @Inject constructor(
             .map { entities -> entities.map { mapEntityToDomain(it) } }
     }
 
+    // ========================================
+    // Enriched Follow Data with Profile Information
+    // ========================================
+
+    /**
+     * Observes following list with enriched profile data (names, images, bio)
+     * This resolves the "Unknown User" issue by joining with social_profiles table
+     */
+    override fun observeFollowingWithProfiles(userId: String): Flow<List<FollowRelationship>> {
+        return followRelationshipDao.observeFollowingWithProfiles(userId)
+            .map { enrichedList -> 
+                enrichedList.map { enriched -> mapEnrichedToDomain(enriched) }
+            }
+    }
+
+    /**
+     * Observes followers list with enriched profile data (names, images, bio)
+     * This resolves the "Unknown User" issue by joining with social_profiles table
+     */
+    override fun observeFollowersWithProfiles(userId: String): Flow<List<FollowRelationship>> {
+        return followRelationshipDao.observeFollowersWithProfiles(userId)
+            .map { enrichedList -> 
+                enrichedList.map { enriched -> mapEnrichedToDomain(enriched) }
+            }
+    }
+
     override fun observePendingRequestCount(userId: String): Flow<Int> {
         return followRelationshipDao.observePendingRequestCount(userId)
     }
@@ -665,6 +692,34 @@ class FollowRepositoryImpl @Inject constructor(
             bio = null,
             location = null,
             connectionStatus = ConnectionStatus.NONE // Default, should be updated by calling code
+        )
+    }
+
+    /**
+     * Maps enriched follow relationship (with profile data) to domain model
+     * This provides complete user information to prevent "Unknown User" display
+     */
+    private fun mapEnrichedToDomain(enriched: EnrichedFollowRelationship): FollowRelationship {
+        return FollowRelationship(
+            id = enriched.id,
+            followerId = enriched.followerId,
+            followingId = enriched.followingId,
+            status = when (enriched.status) {
+                FollowRelationshipEntity.STATUS_PENDING -> FollowStatus.PENDING_SENT
+                FollowRelationshipEntity.STATUS_ACCEPTED -> FollowStatus.FOLLOWING
+                FollowRelationshipEntity.STATUS_BLOCKED -> FollowStatus.BLOCKED
+                else -> throw IllegalArgumentException("Unknown status: ${enriched.status}")
+            },
+            createdAt = enriched.createdAt,
+            acceptedAt = enriched.acceptedAt,
+            blockedAt = enriched.blockedAt,
+            // Enriched display properties from social_profiles join
+            userId = enriched.followingId, // For display purposes, show the followed user
+            displayName = enriched.profileDisplayName ?: "Unknown User", // Fallback for missing profiles
+            profileImageUrl = enriched.profileImageUrl,
+            bio = enriched.profileBio,
+            location = null, // Not included in current join, could be added if needed
+            connectionStatus = ConnectionStatus.CONNECTED // Accepted relationships are connected
         )
     }
 

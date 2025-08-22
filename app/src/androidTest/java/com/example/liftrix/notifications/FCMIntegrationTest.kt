@@ -24,7 +24,7 @@ import android.content.Context
 import android.os.Build
 import androidx.test.filters.SdkSuppress
 import com.example.liftrix.data.repository.notifications.FCMTokenRepository
-import com.example.liftrix.domain.model.LiftrixResult
+import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.services.NotificationChannelManager
 import com.example.liftrix.services.LiftrixFirebaseMessagingService
 import com.google.firebase.FirebaseApp
@@ -151,14 +151,14 @@ class FCMIntegrationTest {
         ).first()
         
         // Verify storage was successful
-        assertTrue("Token storage should succeed", storeResult is LiftrixResult.Success)
+        assertTrue("Token storage should succeed", storeResult.isSuccess)
         
         // Retrieve stored tokens
         val retrieveResult = fcmTokenRepository.getActiveTokensForUser(testUserId).first()
         
-        assertTrue("Token retrieval should succeed", retrieveResult is LiftrixResult.Success)
+        assertTrue("Token retrieval should succeed", retrieveResult.isSuccess)
         
-        val tokens = (retrieveResult as LiftrixResult.Success).data
+        val tokens = retrieveResult.getOrNull()!!
         assertTrue("Should have at least one stored token", tokens.isNotEmpty())
         
         val storedToken = tokens.find { it.deviceId == deviceId }
@@ -188,7 +188,7 @@ class FCMIntegrationTest {
             platform = "ANDROID"
         ).first()
         
-        assertTrue("Initial token storage should succeed", storeResult is LiftrixResult.Success)
+        assertTrue("Initial token storage should succeed", storeResult.isSuccess)
         
         // Simulate token refresh by deleting and recreating
         firebaseMessaging.deleteToken().await()
@@ -205,13 +205,13 @@ class FCMIntegrationTest {
             platform = "ANDROID"
         ).first()
         
-        assertTrue("Token refresh should succeed", updateResult is LiftrixResult.Success)
+        assertTrue("Token refresh should succeed", updateResult.isSuccess)
         
         // Verify the new token is stored
         val retrieveResult = fcmTokenRepository.getActiveTokensForUser(testUserId).first()
-        assertTrue("Token retrieval after refresh should succeed", retrieveResult is LiftrixResult.Success)
+        assertTrue("Token retrieval after refresh should succeed", retrieveResult.isSuccess)
         
-        val tokens = (retrieveResult as LiftrixResult.Success).data
+        val tokens = retrieveResult.getOrNull()!!
         val refreshedToken = tokens.find { it.deviceId == deviceId }
         assertNotNull("Refreshed token should be found", refreshedToken)
         assertEquals("Token should be updated", newToken, refreshedToken!!.token)
@@ -319,14 +319,14 @@ class FCMIntegrationTest {
             platform = "ANDROID"
         ).first()
         
-        assertTrue("Device 1 token storage should succeed", store1Result is LiftrixResult.Success)
-        assertTrue("Device 2 token storage should succeed", store2Result is LiftrixResult.Success)
+        assertTrue("Device 1 token storage should succeed", store1Result.isSuccess)
+        assertTrue("Device 2 token storage should succeed", store2Result.isSuccess)
         
         // Retrieve all tokens for user
         val retrieveResult = fcmTokenRepository.getActiveTokensForUser(testUserId).first()
-        assertTrue("Token retrieval should succeed", retrieveResult is LiftrixResult.Success)
+        assertTrue("Token retrieval should succeed", retrieveResult.isSuccess)
         
-        val tokens = (retrieveResult as LiftrixResult.Success).data
+        val tokens = retrieveResult.getOrNull()!!
         assertTrue("Should have at least 2 tokens", tokens.size >= 2)
         
         // Verify both tokens are present
@@ -340,13 +340,13 @@ class FCMIntegrationTest {
         
         // Test deactivating one token
         val deactivateResult = fcmTokenRepository.deactivateToken(mockToken1).first()
-        assertTrue("Token deactivation should succeed", deactivateResult is LiftrixResult.Success)
+        assertTrue("Token deactivation should succeed", deactivateResult.isSuccess)
         
         // Verify only one token remains active
         val activeTokensResult = fcmTokenRepository.getActiveTokensForUser(testUserId).first()
-        assertTrue("Active tokens retrieval should succeed", activeTokensResult is LiftrixResult.Success)
+        assertTrue("Active tokens retrieval should succeed", activeTokensResult.isSuccess)
         
-        val activeTokens = (activeTokensResult as LiftrixResult.Success).data
+        val activeTokens = activeTokensResult.getOrNull()!!
         val activeDevice1Token = activeTokens.find { it.deviceId == device1Id }
         val activeDevice2Token = activeTokens.find { it.deviceId == device2Id }
         
@@ -374,17 +374,17 @@ class FCMIntegrationTest {
         
         // Mark one as expired by simulating last used time
         val expireResult = fcmTokenRepository.markTokenAsExpired(expiredToken).first()
-        assertTrue("Token expiration should succeed", expireResult is LiftrixResult.Success)
+        assertTrue("Token expiration should succeed", expireResult.isSuccess)
         
         // Run cleanup
         val cleanupResult = fcmTokenRepository.cleanupExpiredTokens().first()
-        assertTrue("Token cleanup should succeed", cleanupResult is LiftrixResult.Success)
+        assertTrue("Token cleanup should succeed", cleanupResult.isSuccess)
         
         // Verify expired token is removed and valid token remains
         val remainingTokensResult = fcmTokenRepository.getActiveTokensForUser(testUserId).first()
-        assertTrue("Remaining tokens retrieval should succeed", remainingTokensResult is LiftrixResult.Success)
+        assertTrue("Remaining tokens retrieval should succeed", remainingTokensResult.isSuccess)
         
-        val remainingTokens = (remainingTokensResult as LiftrixResult.Success).data
+        val remainingTokens = remainingTokensResult.getOrNull()!!
         val expiredTokenExists = remainingTokens.any { it.token == expiredToken && it.isActive }
         val validTokenExists = remainingTokens.any { it.token == validToken && it.isActive }
         
@@ -401,8 +401,8 @@ class FCMIntegrationTest {
         try {
             // Get all tokens for test user
             val tokensResult = fcmTokenRepository.getActiveTokensForUser(testUserId).first()
-            if (tokensResult is LiftrixResult.Success) {
-                val tokens = tokensResult.data
+            if (tokensResult.isSuccess) {
+                val tokens = tokensResult.getOrNull()!!
                 
                 // Deactivate all test tokens
                 tokens.forEach { token ->

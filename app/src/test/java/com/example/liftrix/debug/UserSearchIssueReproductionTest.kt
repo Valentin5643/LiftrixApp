@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
 import timber.log.Timber
+import kotlin.Result
 
 /**
  * Reproduction test for the user search issue where newly created accounts
@@ -62,14 +63,14 @@ class UserSearchIssueReproductionTest {
         // Step 1: Mock successful account creation
         coEvery { 
             signUpWithEmailUseCase(email, password, username) 
-        } returns LiftrixResult.Success(
+        } returns Result.success(
             mockUser(userId = "new_user_id", username = username)
         )
         
         // Step 2: Mock social profile creation (with privacy issue)
         coEvery {
             createSocialProfileUseCase(username, username, null)
-        } returns LiftrixResult.Success(
+        } returns Result.success(
             mockSocialProfile(
                 userId = "new_user_id",
                 username = username,
@@ -86,20 +87,14 @@ class UserSearchIssueReproductionTest {
                 currentUserId = currentUserId,
                 filters = SearchFilters()
             )
-        } returns LiftrixResult.Success(emptyList()) // ❌ No results found!
+        } returns Result.success(emptyList()) // ❌ No results found!
         
         // Execute the reproduction
         val signUpResult = signUpWithEmailUseCase(email, password, username)
-        when (signUpResult) {
-            is LiftrixResult.Success -> assertThat(true).isTrue()
-            is LiftrixResult.Error -> assertThat(false).isTrue()
-        }
+        assertThat(signUpResult.isSuccess).isTrue()
         
         val socialProfileResult = createSocialProfileUseCase(username, username, null)
-        when (socialProfileResult) {
-            is LiftrixResult.Success -> assertThat(true).isTrue()
-            is LiftrixResult.Error -> assertThat(false).isTrue()
-        }
+        assertThat(socialProfileResult.isSuccess).isTrue()
         
         // Simulate sync delay
         delay(1000)
@@ -112,13 +107,9 @@ class UserSearchIssueReproductionTest {
         )
         
         // ❌ REPRODUCTION CONFIRMED: Search returns empty results
-        when (searchResult) {
-            is LiftrixResult.Success -> {
-                assertThat(true).isTrue()
-                assertThat(searchResult.data).isEmpty()
-            }
-            is LiftrixResult.Error -> assertThat(false).isTrue()
-        }
+        assertThat(searchResult.isSuccess).isTrue()
+        val searchData = searchResult.getOrNull()!!
+        assertThat(searchData).isEmpty()
         
         Timber.e("🚨 ISSUE REPRODUCED: User '$username' created successfully but not found in search!")
     }
@@ -136,7 +127,7 @@ class UserSearchIssueReproductionTest {
                 currentUserId = currentUserId,
                 filters = SearchFilters()
             )
-        } returns LiftrixResult.Success(
+        } returns Result.success(
             listOf(
                 mockUserSearchResult(
                     userId = "default_liftrix_id",
@@ -151,7 +142,7 @@ class UserSearchIssueReproductionTest {
                 currentUserId = currentUserId,
                 filters = SearchFilters()
             )
-        } returns LiftrixResult.Success(
+        } returns Result.success(
             listOf(
                 mockUserSearchResult(
                     userId = "default_sample_id", 
@@ -165,23 +156,15 @@ class UserSearchIssueReproductionTest {
         val sampleResult = userSearchRepository.searchUsers("Sample user", currentUserId, SearchFilters())
         
         // ✅ Default accounts should be found
-        when (liftrixResult) {
-            is LiftrixResult.Success -> {
-                assertThat(true).isTrue()
-                assertThat(liftrixResult.data).hasSize(1)
-                assertThat(liftrixResult.data.first().displayName).isEqualTo("liftrix")
-            }
-            is LiftrixResult.Error -> assertThat(false).isTrue()
-        }
+        assertThat(liftrixResult.isSuccess).isTrue()
+        val liftrixData = liftrixResult.getOrNull()!!
+        assertThat(liftrixData).hasSize(1)
+        assertThat(liftrixData.first().displayName).isEqualTo("liftrix")
         
-        when (sampleResult) {
-            is LiftrixResult.Success -> {
-                assertThat(true).isTrue()
-                assertThat(sampleResult.data).hasSize(1)
-                assertThat(sampleResult.data.first().displayName).isEqualTo("Sample user")
-            }
-            is LiftrixResult.Error -> assertThat(false).isTrue()
-        }
+        assertThat(sampleResult.isSuccess).isTrue()
+        val sampleData = sampleResult.getOrNull()!!
+        assertThat(sampleData).hasSize(1)
+        assertThat(sampleData.first().displayName).isEqualTo("Sample user")
         
         Timber.d("✅ VERIFICATION PASSED: Default accounts are searchable")
     }
@@ -198,28 +181,26 @@ class UserSearchIssueReproductionTest {
         // Scenario 1: Data synced to social_profiles (current broken behavior)
         coEvery {
             userSearchRepository.searchUsers(username, currentUserId, SearchFilters())
-        } returns LiftrixResult.Success(emptyList()) // No results because wrong collection
+        } returns Result.success(emptyList()) // No results because wrong collection
         
         val brokenSearchResult = userSearchRepository.searchUsers(username, currentUserId, SearchFilters())
-        when (brokenSearchResult) {
-            is LiftrixResult.Success -> assertThat(brokenSearchResult.data).isEmpty()
-            is LiftrixResult.Error -> assertThat(false).isTrue()
-        }
+        assertThat(brokenSearchResult.isSuccess).isTrue()
+        val brokenData = brokenSearchResult.getOrNull()!!
+        assertThat(brokenData).isEmpty()
         
         Timber.e("❌ BROKEN: SocialProfileSyncWorker syncs to 'social_profiles' but search looks in 'users_public'")
         
         // Scenario 2: Data synced to users_public (fixed behavior)
         coEvery {
             userSearchRepository.searchUsers(username, currentUserId, SearchFilters())
-        } returns LiftrixResult.Success(
+        } returns Result.success(
             listOf(mockUserSearchResult(userId = "fixed_user_id", displayName = username))
         )
         
         val fixedSearchResult = userSearchRepository.searchUsers(username, currentUserId, SearchFilters())
-        when (fixedSearchResult) {
-            is LiftrixResult.Success -> assertThat(fixedSearchResult.data).hasSize(1)
-            is LiftrixResult.Error -> assertThat(false).isTrue()
-        }
+        assertThat(fixedSearchResult.isSuccess).isTrue()
+        val fixedData = fixedSearchResult.getOrNull()!!
+        assertThat(fixedData).hasSize(1)
         
         Timber.d("✅ FIXED: UserPublicSyncWorker syncs to 'users_public' and search finds results")
     }
@@ -234,28 +215,26 @@ class UserSearchIssueReproductionTest {
         // Scenario 1: SocialProfile.isPrivate = true blocks search
         coEvery {
             userSearchRepository.searchUsers(username, currentUserId, SearchFilters())
-        } returns LiftrixResult.Success(emptyList()) // Filtered out due to privacy
+        } returns Result.success(emptyList()) // Filtered out due to privacy
         
         val privateResult = userSearchRepository.searchUsers(username, currentUserId, SearchFilters())
-        when (privateResult) {
-            is LiftrixResult.Success -> assertThat(privateResult.data).isEmpty()
-            is LiftrixResult.Error -> assertThat(false).isTrue()
-        }
+        assertThat(privateResult.isSuccess).isTrue()
+        val privateData = privateResult.getOrNull()!!
+        assertThat(privateData).isEmpty()
         
         Timber.e("❌ PRIVACY CONFLICT: CreateSocialProfileUseCase sets isPrivate=true by default")
         
         // Scenario 2: Consistent privacy settings allow search
         coEvery {
             userSearchRepository.searchUsers(username, currentUserId, SearchFilters())
-        } returns LiftrixResult.Success(
+        } returns Result.success(
             listOf(mockUserSearchResult(userId = "public_user_id", displayName = username))
         )
         
         val publicResult = userSearchRepository.searchUsers(username, currentUserId, SearchFilters())
-        when (publicResult) {
-            is LiftrixResult.Success -> assertThat(publicResult.data).hasSize(1)
-            is LiftrixResult.Error -> assertThat(false).isTrue()
-        }
+        assertThat(publicResult.isSuccess).isTrue()
+        val publicData = publicResult.getOrNull()!!
+        assertThat(publicData).hasSize(1)
         
         Timber.d("✅ PRIVACY FIXED: Consistent isPublic=true settings allow discovery")
     }

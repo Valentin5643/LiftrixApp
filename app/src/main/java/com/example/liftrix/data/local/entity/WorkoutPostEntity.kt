@@ -18,7 +18,16 @@ import androidx.room.PrimaryKey
     indices = [
         Index(value = ["user_id", "created_at"], name = "idx_workout_posts_user_created"),
         Index(value = ["visibility", "created_at"], name = "idx_workout_posts_visibility"),
-        Index(value = ["workout_id"])
+        Index(value = ["workout_id"]),
+        // Composite indexes for feed queries
+        Index(value = ["user_id", "visibility", "created_at"], 
+              name = "idx_workout_posts_feed_query"),
+        Index(value = ["like_count", "comment_count", "created_at"], 
+              name = "idx_workout_posts_engagement"),
+        Index(value = ["prs_count", "created_at"], 
+              name = "idx_workout_posts_prs"),
+        Index(value = ["is_synced", "sync_version"], 
+              name = "idx_workout_posts_sync")
     ],
     foreignKeys = [
         ForeignKey(

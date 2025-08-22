@@ -63,7 +63,7 @@ class EnhancedCacheManager @Inject constructor(
 ) {
     
     // Memory cache (L1) - LRU cache for instant access
-    private val memoryCache = object : LruCache<String, CacheEntry<*>>(cacheConfig.memoryCacheSizeMB * 1024 * 1024) {
+    internal val memoryCache = object : LruCache<String, CacheEntry<*>>(cacheConfig.memoryCacheSizeMB * 1024 * 1024) {
         override fun sizeOf(key: String, value: CacheEntry<*>): Int {
             // Calculate memory size (rough estimation)
             return key.length * 2 + estimateObjectSize(value)
@@ -76,13 +76,13 @@ class EnhancedCacheManager @Inject constructor(
     }
     
     // Thread-safe access coordination
-    private val memoryMutex = Mutex()
-    private val diskMutex = Mutex()
+    internal val memoryMutex = Mutex()
+    internal val diskMutex = Mutex()
     
     // Performance tracking
-    private var hitCount = 0
-    private var missCount = 0
-    private var diskHitCount = 0
+    internal var hitCount = 0
+    internal var missCount = 0
+    internal var diskHitCount = 0
     
     companion object {
         private const val TAG = "EnhancedCacheManager"
@@ -105,6 +105,7 @@ class EnhancedCacheManager @Inject constructor(
     suspend fun <T> getOrCompute(
         key: CacheKey,
         ttl: Duration = cacheConfig.defaultTTL,
+        typeClass: Class<T>,
         compute: suspend () -> T
     ): T {
         val keyString = key.keyString
@@ -127,7 +128,7 @@ class EnhancedCacheManager @Inject constructor(
         }
         
         // L2: Check disk cache
-        val diskData = getDiskCache<T>(keyString, ttl)
+        val diskData = getDiskCache<T>(keyString, ttl, typeClass)
         if (diskData != null) {
             // Cache hit - store in memory for next access
             val cacheEntry = CacheEntry(diskData, Clock.System.now(), ttl)
@@ -156,7 +157,7 @@ class EnhancedCacheManager @Inject constructor(
         }
         
         // Store in disk cache (async for performance)
-        putDiskCache(keyString, result, ttl)
+        putDiskCache(keyString, result, ttl, typeClass)
         
         Timber.d("$TAG: Computed and cached: $keyString (${computeTime}ms)")
         return result
@@ -169,7 +170,7 @@ class EnhancedCacheManager @Inject constructor(
      * @param value Data to cache
      * @param ttl Time-to-live for the entry
      */
-    suspend fun <T> put(key: CacheKey, value: T, ttl: Duration = cacheConfig.defaultTTL) {
+    suspend fun <T> put(key: CacheKey, value: T, typeClass: Class<T>, ttl: Duration = cacheConfig.defaultTTL) {
         val keyString = key.keyString
         val cacheEntry = CacheEntry(value, Clock.System.now(), ttl)
         
@@ -179,7 +180,7 @@ class EnhancedCacheManager @Inject constructor(
         }
         
         // Store in disk cache
-        putDiskCache(keyString, value, ttl)
+        putDiskCache(keyString, value, ttl, typeClass)
         
         Timber.v("$TAG: Stored in both caches: $keyString")
     }
@@ -352,7 +353,7 @@ class EnhancedCacheManager @Inject constructor(
     
     // Private helper methods
     
-    private suspend fun <T> getDiskCache(key: String, ttl: Duration): T? {
+    internal suspend fun <T> getDiskCache(key: String, ttl: Duration, clazz: Class<T>): T? {
         return withContext(ioDispatcher) {
             diskMutex.withLock {
                 try {
@@ -360,8 +361,13 @@ class EnhancedCacheManager @Inject constructor(
                     if (!file.exists()) return@withLock null
                     
                     val content = file.readText()
-                    val type = object : TypeToken<CacheEntry<T>>() {}.type
-                    val entry = gson.fromJson<CacheEntry<T>>(content, type)
+                    // Create TypeToken with concrete type using ParameterizedTypeImpl
+                    val cacheEntryType = com.google.gson.internal.`$Gson$Types`.newParameterizedTypeWithOwner(
+                        null,
+                        CacheEntry::class.java,
+                        clazz
+                    )
+                    val entry = gson.fromJson<CacheEntry<T>>(content, cacheEntryType)
                     
                     if (entry.isValid()) {
                         entry.data
@@ -378,7 +384,7 @@ class EnhancedCacheManager @Inject constructor(
         }
     }
     
-    private suspend fun <T> putDiskCache(key: String, value: T, ttl: Duration) {
+    internal suspend fun <T> putDiskCache(key: String, value: T, ttl: Duration, clazz: Class<T>) {
         withContext(ioDispatcher) {
             diskMutex.withLock {
                 try {
@@ -401,8 +407,13 @@ class EnhancedCacheManager @Inject constructor(
             for (file in files) {
                 try {
                     val content = file.readText()
-                    val type = object : TypeToken<CacheEntry<*>>() {}.type
-                    val entry = gson.fromJson<CacheEntry<*>>(content, type)
+                    // For cleanup, we can use a raw type since we only need metadata
+                    val cacheEntryType = com.google.gson.internal.`$Gson$Types`.newParameterizedTypeWithOwner(
+                        null,
+                        CacheEntry::class.java,
+                        Any::class.java
+                    )
+                    val entry = gson.fromJson<CacheEntry<Any>>(content, cacheEntryType)
                     
                     if (entry.isExpired()) {
                         file.delete()
@@ -466,6 +477,26 @@ data class CacheConfiguration(
         )
     }
 }
+
+/**
+ * Inline extension function to provide reified type support for getOrCompute.
+ * This allows calling without explicitly passing the Class parameter.
+ */
+suspend inline fun <reified T> EnhancedCacheManager.getOrComputeTyped(
+    key: CacheKey,
+    ttl: Duration = CacheConfiguration().defaultTTL,
+    noinline compute: suspend () -> T
+): T = getOrCompute(key, ttl, T::class.java, compute)
+
+/**
+ * Inline extension function to provide reified type support for put.
+ * This allows calling without explicitly passing the Class parameter.
+ */
+suspend inline fun <reified T> EnhancedCacheManager.putTyped(
+    key: CacheKey,
+    value: T,
+    ttl: Duration = CacheConfiguration().defaultTTL
+) = put(key, value, T::class.java, ttl)
 
 /**
  * Statistics for enhanced cache performance monitoring.

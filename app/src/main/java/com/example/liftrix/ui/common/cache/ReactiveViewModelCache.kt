@@ -82,6 +82,7 @@ class ReactiveViewModelCache @Inject constructor(
         key: CacheKey,
         source: suspend () -> LiftrixResult<T>,
         scope: CoroutineScope,
+        typeClass: Class<T>,
         ttl: Duration? = null,
         refreshOnInvalidate: Boolean = true
     ): StateFlow<UiState<ReactiveData<T>>> {
@@ -91,6 +92,7 @@ class ReactiveViewModelCache @Inject constructor(
         return reactiveCacheService.observeCachedData(
             key = key,
             ttl = actualTtl,
+            typeClass = typeClass,
             source = source,
             refreshOnInvalidate = refreshOnInvalidate
         )
@@ -122,10 +124,11 @@ class ReactiveViewModelCache @Inject constructor(
     suspend fun <T> createBatchReactiveState(
         operations: Map<CacheKey, suspend () -> LiftrixResult<T>>,
         scope: CoroutineScope,
+        typeClass: Class<T>,
         ttl: Duration = 15.minutes
     ): StateFlow<UiState<BatchReactiveData<T>>> {
         
-        return reactiveCacheService.observeBatchCachedData(operations, ttl)
+        return reactiveCacheService.observeBatchCachedData(operations, ttl, typeClass)
             .map { batchData -> batchData.toUiState() }
             .catch { throwable ->
                 Timber.e(throwable, "$TAG: Error in batch reactive state")
@@ -156,10 +159,11 @@ class ReactiveViewModelCache @Inject constructor(
         key: CacheKey,
         source: suspend () -> LiftrixResult<T>,
         scope: CoroutineScope,
+        typeClass: Class<T>,
         refreshInterval: Duration = 30.minutes
     ): StateFlow<UiState<ReactiveData<T>>> {
         
-        return reactiveCacheService.createHotDataStream(key, source, refreshInterval)
+        return reactiveCacheService.createHotDataStream(key, source, refreshInterval, typeClass)
             .map { cachedData -> cachedData.toUiState() }
             .catch { throwable ->
                 Timber.e(throwable, "$TAG: Error in hot reactive state for key: ${key.keyString}")
@@ -190,10 +194,11 @@ class ReactiveViewModelCache @Inject constructor(
         key: CacheKey,
         source: suspend () -> LiftrixResult<T>,
         scope: CoroutineScope,
+        typeClass: Class<T>,
         ttl: Duration = 1.hours
     ): StateFlow<UiState<ReactiveData<T>>> {
         
-        return reactiveCacheService.createColdDataStream(key, source, ttl)
+        return reactiveCacheService.createColdDataStream(key, source, ttl, typeClass)
             .map { cachedData -> cachedData.toUiState() }
             .catch { throwable ->
                 Timber.e(throwable, "$TAG: Error in cold reactive state for key: ${key.keyString}")
@@ -219,11 +224,12 @@ class ReactiveViewModelCache @Inject constructor(
     fun <T> refreshData(
         key: CacheKey,
         source: suspend () -> LiftrixResult<T>,
-        scope: CoroutineScope
+        scope: CoroutineScope,
+        typeClass: Class<T>
     ): Flow<UiState<T>> = flow {
         emit(UiState.Loading)
         
-        val result = reactiveCacheService.refreshData(key, source)
+        val result = reactiveCacheService.refreshData(key, source, typeClass)
         result.fold(
             onSuccess = { data -> emit(UiState.Success(data)) },
             onFailure = { throwable -> emit(UiState.Error(throwable.toLiftrixError())) }
@@ -422,6 +428,67 @@ private fun <T> com.example.liftrix.service.BatchCachedData<T>.toUiState(): UiSt
 }
 
 /**
+ * Inline extension functions to provide reified type support.
+ */
+
+/**
+ * Creates a reactive state with automatic type inference.
+ */
+suspend inline fun <reified T> ReactiveViewModelCache.createReactiveStateTyped(
+    key: CacheKey,
+    noinline source: suspend () -> LiftrixResult<T>,
+    scope: CoroutineScope,
+    ttl: Duration? = null,
+    refreshOnInvalidate: Boolean = true
+): StateFlow<UiState<ReactiveData<T>>> = createReactiveState(
+    key, source, scope, T::class.java, ttl, refreshOnInvalidate
+)
+
+/**
+ * Creates a batch reactive state with automatic type inference.
+ */
+suspend inline fun <reified T> ReactiveViewModelCache.createBatchReactiveStateTyped(
+    operations: Map<CacheKey, suspend () -> LiftrixResult<T>>,
+    scope: CoroutineScope,
+    ttl: Duration = 15.minutes
+): StateFlow<UiState<BatchReactiveData<T>>> = createBatchReactiveState(
+    operations, scope, T::class.java, ttl
+)
+
+/**
+ * Creates a hot reactive state with automatic type inference.
+ */
+inline fun <reified T> ReactiveViewModelCache.createHotReactiveStateTyped(
+    key: CacheKey,
+    noinline source: suspend () -> LiftrixResult<T>,
+    scope: CoroutineScope,
+    refreshInterval: Duration = 30.minutes
+): StateFlow<UiState<ReactiveData<T>>> = createHotReactiveState(
+    key, source, scope, T::class.java, refreshInterval
+)
+
+/**
+ * Creates a cold reactive state with automatic type inference.
+ */
+inline fun <reified T> ReactiveViewModelCache.createColdReactiveStateTyped(
+    key: CacheKey,
+    noinline source: suspend () -> LiftrixResult<T>,
+    scope: CoroutineScope,
+    ttl: Duration = 1.hours
+): StateFlow<UiState<ReactiveData<T>>> = createColdReactiveState(
+    key, source, scope, T::class.java, ttl
+)
+
+/**
+ * Refreshes data with automatic type inference.
+ */
+inline fun <reified T> ReactiveViewModelCache.refreshDataTyped(
+    key: CacheKey,
+    noinline source: suspend () -> LiftrixResult<T>,
+    scope: CoroutineScope
+): Flow<UiState<T>> = refreshData(key, source, scope, T::class.java)
+
+/**
  * Reactive cache extensions for ViewModels.
  */
 object ViewModelCacheExtensions {
@@ -436,7 +503,7 @@ object ViewModelCacheExtensions {
      * @param scope ViewModel scope
      * @return StateFlow of UI state with reactive data
      */
-    suspend inline fun <T> createSimpleReactiveFlow(
+    suspend inline fun <reified T> createSimpleReactiveFlow(
         cache: ReactiveViewModelCache,
         userId: String,
         operation: String,
@@ -454,6 +521,7 @@ object ViewModelCacheExtensions {
             key = key,
             source = source,
             scope = scope,
+            typeClass = T::class.java,
             ttl = ttl
         )
     }
@@ -464,11 +532,34 @@ object ViewModelCacheExtensions {
  */
 
 /**
+ * Extension function for ViewModels to create reactive cached flows easily with type inference.
+ */
+suspend inline fun <reified T> ViewModel.reactiveFlowTyped(
+    cache: ReactiveViewModelCache,
+    key: CacheKey,
+    ttl: Duration = 15.minutes,
+    noinline source: suspend () -> LiftrixResult<T>
+): StateFlow<UiState<ReactiveData<T>>> {
+    return try {
+        cache.createReactiveState(
+            key = key,
+            source = source,
+            scope = viewModelScope,
+            typeClass = T::class.java,
+            ttl = ttl
+        )
+    } catch (e: Exception) {
+        MutableStateFlow<UiState<ReactiveData<T>>>(UiState.Error(e.toLiftrixError())).asStateFlow()
+    }
+}
+
+/**
  * Extension function for ViewModels to create reactive cached flows easily.
  */
 fun <T> ViewModel.reactiveFlow(
     cache: ReactiveViewModelCache,
     key: CacheKey,
+    typeClass: Class<T>,
     ttl: Duration = 15.minutes,
     source: suspend () -> LiftrixResult<T>
 ): StateFlow<UiState<ReactiveData<T>>> {
@@ -478,6 +569,7 @@ fun <T> ViewModel.reactiveFlow(
                 key = key,
                 source = { source() },
                 scope = viewModelScope,
+                typeClass = typeClass,
                 ttl = ttl
             )
         }
@@ -489,7 +581,7 @@ fun <T> ViewModel.reactiveFlow(
 /**
  * Extension function to convert Throwable to LiftrixError for consistent error handling.
  */
-internal fun Throwable.toLiftrixError(): LiftrixError {
+fun Throwable.toLiftrixError(): LiftrixError {
     return when (this) {
         is LiftrixError -> this
         else -> LiftrixError.UnknownError(

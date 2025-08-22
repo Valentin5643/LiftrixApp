@@ -27,6 +27,7 @@ import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.Friend
 import androidx.compose.foundation.background
 import com.example.liftrix.ui.theme.LiftrixTheme
+import com.example.liftrix.ui.profile.components.CompactProfileImage
 
 /**
  * Full friends list, search, requests, and privacy settings in dedicated screen
@@ -337,8 +338,17 @@ private fun FollowingList(
     onEvent: (SocialEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Debug logging for UI state
+    LaunchedEffect(following, isLoading, error) {
+        timber.log.Timber.d("DEBUG_UI_FOLLOWING: State update - isLoading: $isLoading, error: $error, following count: ${following.size}")
+        following.forEachIndexed { index, friend ->
+            timber.log.Timber.d("DEBUG_UI_FOLLOWING: Friend $index - ${friend.displayName} (${friend.userId})")
+        }
+    }
+    
     when {
         isLoading -> {
+            timber.log.Timber.d("DEBUG_UI_FOLLOWING: Showing loading state")
             Box(
                 modifier = modifier,
                 contentAlignment = Alignment.Center
@@ -348,6 +358,7 @@ private fun FollowingList(
         }
         
         error != null -> {
+            timber.log.Timber.d("DEBUG_UI_FOLLOWING: Showing error state: $error")
             ErrorState(
                 error = error,
                 onRetry = { onEvent(SocialEvent.LoadFollowing) },
@@ -356,12 +367,14 @@ private fun FollowingList(
         }
         
         following.isEmpty() -> {
+            timber.log.Timber.d("DEBUG_UI_FOLLOWING: Showing empty state")
             EmptyFollowingState(
                 modifier = modifier
             )
         }
         
         else -> {
+            timber.log.Timber.d("DEBUG_UI_FOLLOWING: Showing list with ${following.size} items")
             LazyColumn(
                 modifier = modifier,
                 contentPadding = PaddingValues(16.dp),
@@ -389,8 +402,17 @@ private fun FollowersList(
     onEvent: (SocialEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Debug logging for UI state
+    LaunchedEffect(followers, isLoading, error) {
+        timber.log.Timber.d("DEBUG_UI_FOLLOWERS: State update - isLoading: $isLoading, error: $error, followers count: ${followers.size}")
+        followers.forEachIndexed { index, friend ->
+            timber.log.Timber.d("DEBUG_UI_FOLLOWERS: Follower $index - ${friend.displayName} (${friend.userId})")
+        }
+    }
+    
     when {
         isLoading -> {
+            timber.log.Timber.d("DEBUG_UI_FOLLOWERS: Showing loading state")
             Box(
                 modifier = modifier,
                 contentAlignment = Alignment.Center
@@ -400,6 +422,7 @@ private fun FollowersList(
         }
         
         error != null -> {
+            timber.log.Timber.d("DEBUG_UI_FOLLOWERS: Showing error state: $error")
             ErrorState(
                 error = error,
                 onRetry = { onEvent(SocialEvent.LoadFollowers) },
@@ -408,12 +431,14 @@ private fun FollowersList(
         }
         
         followers.isEmpty() -> {
+            timber.log.Timber.d("DEBUG_UI_FOLLOWERS: Showing empty state")
             EmptyFollowersState(
                 modifier = modifier
             )
         }
         
         else -> {
+            timber.log.Timber.d("DEBUG_UI_FOLLOWERS: Showing list with ${followers.size} items")
             LazyColumn(
                 modifier = modifier,
                 contentPadding = PaddingValues(16.dp),
@@ -451,29 +476,13 @@ private fun FollowingItem(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // User Avatar Placeholder
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .background(
-                        MaterialTheme.colorScheme.primary,
-                        shape = androidx.compose.foundation.shape.CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                val initials = user.displayName
-                    .split(' ')
-                    .take(2)
-                    .mapNotNull { it.firstOrNull() }
-                    .joinToString("")
-                
-                Text(
-                    text = initials,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            // User Profile Image
+            CompactProfileImage(
+                imageUrl = user.avatarUrl,
+                displayName = user.displayName,
+                userId = user.userId,
+                modifier = Modifier.size(48.dp)
+            )
             
             Spacer(modifier = Modifier.width(12.dp))
             
@@ -535,29 +544,13 @@ private fun FollowerItem(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // User Avatar Placeholder
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .background(
-                        MaterialTheme.colorScheme.primary,
-                        shape = androidx.compose.foundation.shape.CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                val initials = user.displayName
-                    .split(' ')
-                    .take(2)
-                    .mapNotNull { it.firstOrNull() }
-                    .joinToString("")
-                
-                Text(
-                    text = initials,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            // User Profile Image
+            CompactProfileImage(
+                imageUrl = user.avatarUrl,
+                displayName = user.displayName,
+                userId = user.userId,
+                modifier = Modifier.size(48.dp)
+            )
             
             Spacer(modifier = Modifier.width(12.dp))
             

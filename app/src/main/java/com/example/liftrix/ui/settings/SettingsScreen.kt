@@ -407,6 +407,9 @@ private fun GeneralSettings(
     onNavigateToNotifications: (() -> Unit)? = null,
     onNavigateToAIChatSettings: (() -> Unit)? = null
 ) {
+    // Get system theme state for proper toggle handling
+    val isSystemInDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+    
     // Stable callback to prevent unnecessary recompositions
     val stableOnEvent = remember(onEvent) { onEvent }
     val stableOnNavigateToNotifications = remember(onNavigateToNotifications) { onNavigateToNotifications }
@@ -415,9 +418,9 @@ private fun GeneralSettings(
     Column(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Memoize toggle callbacks for performance
-        val onDarkModeToggle = remember(stableOnEvent) { { enabled: Boolean ->
-            stableOnEvent(SettingsEvent.UpdateDarkMode(enabled))
+        // Use the new ToggleTheme event for system-aware toggling
+        val onDarkModeToggle = remember(stableOnEvent, isSystemInDarkTheme) { { _: Boolean ->
+            stableOnEvent(SettingsEvent.ToggleTheme(isSystemInDarkTheme))
         }}
         
         val onNotificationsToggle = remember(stableOnEvent) { { enabled: Boolean ->

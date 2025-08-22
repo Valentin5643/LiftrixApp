@@ -244,6 +244,14 @@ fun RedesignedCreateTemplateScreen(
                                     )
                                     viewModel.updateExercise(updatedExercise)
                                 },
+                                onRemoveSet = { setIndex ->
+                                    if ((exercise.targetSets ?: 1) > 1) {
+                                        val updatedExercise = exercise.copy(
+                                            targetSets = (exercise.targetSets ?: 1) - 1
+                                        )
+                                        viewModel.updateExercise(updatedExercise)
+                                    }
+                                },
                                 onMenuClick = { showMenu = true },
                                 onNotesClick = { showNotesDialog = true },
                                 context = ExerciseCardContext.TEMPLATE_CREATION

@@ -109,6 +109,7 @@ class ReactiveCacheService @Inject constructor(
     suspend fun <T> observeCachedData(
         key: CacheKey,
         ttl: Duration,
+        typeClass: Class<T>,
         source: suspend () -> LiftrixResult<T>,
         refreshOnInvalidate: Boolean = true
     ): Flow<CachedData<T>> {
@@ -146,7 +147,7 @@ class ReactiveCacheService @Inject constructor(
         // Fetch fresh data in background
         serviceScope.launch {
             try {
-                val freshResult = cacheManager.getOrCompute(key, ttl) {
+                val freshResult = cacheManager.getOrCompute(key, ttl, typeClass) {
                     source().getOrThrow()
                 }
                 
@@ -194,7 +195,8 @@ class ReactiveCacheService @Inject constructor(
      */
     suspend fun <T> observeBatchCachedData(
         operations: Map<CacheKey, suspend () -> LiftrixResult<T>>,
-        ttl: Duration
+        ttl: Duration,
+        typeClass: Class<T>
     ): Flow<BatchCachedData<T>> = flow {
         emit(BatchCachedData.Loading(operations.keys.toList()))
         
@@ -204,7 +206,7 @@ class ReactiveCacheService @Inject constructor(
         operations.map { (key, source) ->
             serviceScope.launch {
                 try {
-                    val data = cacheManager.getOrCompute(key, ttl) {
+                    val data = cacheManager.getOrCompute(key, ttl, typeClass) {
                         source().getOrThrow()
                     }
                     
@@ -256,7 +258,8 @@ class ReactiveCacheService @Inject constructor(
     fun <T> createHotDataStream(
         key: CacheKey,
         source: suspend () -> LiftrixResult<T>,
-        refreshInterval: Duration
+        refreshInterval: Duration,
+        typeClass: Class<T>
     ): Flow<CachedData<T>> = flow {
         while (true) {
             try {
@@ -264,7 +267,7 @@ class ReactiveCacheService @Inject constructor(
                 result.fold(
                     onSuccess = { data ->
                         // Cache the fresh data
-                        cacheManager.put(key, data, refreshInterval)
+                        cacheManager.put(key, data, typeClass, refreshInterval)
                         emit(CachedData.Fresh(data, System.currentTimeMillis()))
                     },
                     onFailure = { throwable ->
@@ -295,10 +298,11 @@ class ReactiveCacheService @Inject constructor(
     fun <T> createColdDataStream(
         key: CacheKey,
         source: suspend () -> LiftrixResult<T>,
-        ttl: Duration
+        ttl: Duration,
+        typeClass: Class<T>
     ): Flow<CachedData<T>> = flow {
         try {
-            val data = cacheManager.getOrCompute(key, ttl) {
+            val data = cacheManager.getOrCompute(key, ttl, typeClass) {
                 source().getOrThrow()
             }
             
@@ -317,7 +321,8 @@ class ReactiveCacheService @Inject constructor(
      */
     suspend fun <T> refreshData(
         key: CacheKey,
-        source: suspend () -> LiftrixResult<T>
+        source: suspend () -> LiftrixResult<T>,
+        typeClass: Class<T>
     ): LiftrixResult<T> {
         return try {
             // Invalidate existing cache
@@ -326,7 +331,7 @@ class ReactiveCacheService @Inject constructor(
             // Fetch fresh data
             val result = source()
             if (result.isSuccess) {
-                cacheManager.put(key, result.getOrNull()!!)
+                cacheManager.put(key, result.getOrNull()!!, typeClass)
             }
             
             result

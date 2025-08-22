@@ -9,8 +9,10 @@ import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,12 +25,14 @@ import javax.inject.Singleton
  * - Automatic listener management with proper cleanup
  * - Error handling with authentication validation
  * - Direct integration with Room database for local updates
+ * - Lifecycle-aware listener management to prevent memory leaks
  * 
  * Key Features:
  * - Firestore snapshot listeners for < 1 second update latency
  * - User-scoped data access with Firebase Auth integration
- * - Memory leak prevention through proper listener lifecycle management
+ * - Memory leak prevention through lifecycle observers and proper cleanup
  * - Error resilience with graceful degradation
+ * - Automatic cleanup when app goes to background
  */
 @Singleton
 class RealtimeSyncService @Inject constructor(
@@ -37,8 +41,11 @@ class RealtimeSyncService @Inject constructor(
     private val workoutDao: WorkoutDao
 ) {
     
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var workoutListener: ListenerRegistration? = null
+    private val supervisorJob = SupervisorJob()
+    private val scope = CoroutineScope(supervisorJob + Dispatchers.IO)
+    
+    // Thread-safe map to manage multiple listeners
+    private val activeListeners = ConcurrentHashMap<String, ListenerRegistration>()
     private var currentUserId: String? = null
     
     /**
@@ -65,13 +72,13 @@ class RealtimeSyncService @Inject constructor(
                 )
             }
             
-            // Stop any existing listener to prevent memory leaks
-            stopRealtimeSync()
+            // Stop any existing listener for this workout to prevent memory leaks
+            stopWorkoutListener(workoutId)
             
             currentUserId = userId
             
             // Set up Firestore snapshot listener for the specific workout
-            workoutListener = firestore
+            val listener = firestore
                 .collection("users")
                 .document(userId)
                 .collection("workouts")
@@ -99,6 +106,9 @@ class RealtimeSyncService @Inject constructor(
                     }
                 }
             
+            // Store the listener reference for proper cleanup
+            activeListeners[workoutId] = listener
+            
             Timber.i("RealtimeSyncService: Real-time sync started for workout $workoutId")
             Result.success(Unit)
             
@@ -118,21 +128,35 @@ class RealtimeSyncService @Inject constructor(
     }
     
     /**
-     * Stops real-time synchronization and cleans up resources.
+     * Stops a specific workout listener.
+     * 
+     * @param workoutId The workout ID to stop listening to
+     */
+    fun stopWorkoutListener(workoutId: String) {
+        activeListeners.remove(workoutId)?.let { listener ->
+            listener.remove()
+            Timber.d("RealtimeSyncService: Stopped listener for workout $workoutId")
+        }
+    }
+    
+    /**
+     * Stops all real-time synchronization and cleans up resources.
      * 
      * This method should be called when ending active workout sessions to prevent
      * memory leaks and unnecessary network usage.
      */
     fun stopRealtimeSync() {
-        workoutListener?.let { listener ->
+        // Remove all active listeners
+        activeListeners.forEach { (workoutId, listener) ->
             listener.remove()
-            workoutListener = null
-            
-            val userId = currentUserId
-            currentUserId = null
-            
-            Timber.d("RealtimeSyncService: Stopped real-time sync for user $userId")
+            Timber.d("RealtimeSyncService: Removed listener for workout $workoutId")
         }
+        activeListeners.clear()
+        
+        val userId = currentUserId
+        currentUserId = null
+        
+        Timber.d("RealtimeSyncService: Stopped all real-time sync for user $userId")
     }
     
     /**
@@ -206,5 +230,46 @@ class RealtimeSyncService @Inject constructor(
                 // For other errors, keep the listener active but log the issue
             }
         }
+    }
+    
+    // Lifecycle management methods
+    
+    /**
+     * Called when the app comes to foreground.
+     * Re-enables real-time sync if there was an active user.
+     * Should be called from Application or Activity lifecycle.
+     */
+    fun onAppForegrounded() {
+        currentUserId?.let { userId ->
+            Timber.d("RealtimeSyncService: App resumed, re-enabling real-time sync for user $userId")
+            enableRealtimeSync(userId)
+        }
+    }
+    
+    /**
+     * Called when the app goes to background.
+     * Stops all listeners to prevent battery drain and memory leaks.
+     * Should be called from Application or Activity lifecycle.
+     */
+    fun onAppBackgrounded() {
+        Timber.d("RealtimeSyncService: App backgrounded, pausing real-time sync")
+        // Stop all listeners but keep user context for resume
+        activeListeners.forEach { (workoutId, listener) ->
+            listener.remove()
+            Timber.d("RealtimeSyncService: Paused listener for workout $workoutId")
+        }
+        activeListeners.clear()
+    }
+    
+    /**
+     * Called when the service is being destroyed.
+     * Performs complete cleanup of all resources.
+     * Should be called when the app is terminating.
+     */
+    fun cleanup() {
+        Timber.d("RealtimeSyncService: Cleaning up all resources")
+        stopRealtimeSync()
+        // Cancel the coroutine scope to prevent leaks
+        scope.cancel("Service cleanup")
     }
 }

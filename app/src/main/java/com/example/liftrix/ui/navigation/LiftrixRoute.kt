@@ -368,6 +368,30 @@ sealed class LiftrixRoute {
     data object NotificationSettings : LiftrixRoute()
     
     /**
+     * Followers list screen showing users who follow the specified user
+     * 
+     * @param userId Unique identifier for the user whose followers to display
+     * @param listType Type of list to display (FOLLOWERS, FOLLOWING, PENDING_REQUESTS)
+     */
+    @Serializable
+    data class FollowersList(
+        val userId: String,
+        val listType: String = "FOLLOWERS"
+    ) : LiftrixRoute()
+    
+    /**
+     * Following list screen showing users that the specified user follows
+     * 
+     * @param userId Unique identifier for the user whose following list to display
+     * @param listType Type of list to display (FOLLOWERS, FOLLOWING, PENDING_REQUESTS)
+     */
+    @Serializable
+    data class FollowingList(
+        val userId: String,
+        val listType: String = "FOLLOWING"
+    ) : LiftrixRoute()
+    
+    /**
      * Gym buddy screen for QR code pairing and gym partner connections
      */
     @Serializable

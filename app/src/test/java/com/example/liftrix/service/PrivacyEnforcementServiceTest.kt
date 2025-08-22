@@ -15,7 +15,9 @@ import io.mockk.impl.annotations.MockK
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
-import org.junit.jupiter.api.Assertions.*
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
 import java.util.*
 
 /**
@@ -413,7 +415,6 @@ class PrivacyEnforcementServiceTest {
             showAchievements = true,
             showWorkoutStreak = true,
             hideFromSuggestions = hideFromSuggestions,
-            createdAt = System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis()
         )
     }

@@ -48,6 +48,7 @@ import com.example.liftrix.ui.common.UserCardShimmer
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.components.cards.CompactLiftrixCard
 import com.example.liftrix.ui.components.layouts.GridSystem
+import com.example.liftrix.ui.profile.components.CompactProfileImage
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
@@ -139,10 +140,11 @@ private fun RecommendedUserCard(
             verticalArrangement = Arrangement.spacedBy(GridSystem.spacing2)
         ) {
             // Enhanced profile image
-            ProfileImage(
+            CompactProfileImage(
                 imageUrl = user.profileImageUrl,
                 displayName = user.username,
-                size = 56.dp
+                userId = user.userId,
+                modifier = Modifier.size(56.dp)
             )
             
             // Username with enhanced typography
@@ -231,48 +233,4 @@ private fun FollowButton(
     }
 }
 
-/**
- * Enhanced profile image component with modern styling
- */
-@Composable
-private fun ProfileImage(
-    imageUrl: String?,
-    displayName: String,
-    size: Dp,
-    modifier: Modifier = Modifier
-) {
-    // Enhanced initials-based approach with better styling
-    val initials = displayName
-        .trim()
-        .split(' ')
-        .take(2)
-        .mapNotNull { it.firstOrNull()?.uppercaseChar() }
-        .joinToString("")
-        .ifEmpty { "?" }
-    
-    Box(
-        modifier = modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primary),
-        contentAlignment = Alignment.Center
-    ) {
-        if (initials == "?") {
-            Icon(
-                imageVector = Icons.Default.Person,
-                contentDescription = "User avatar",
-                tint = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(size * 0.6f)
-            )
-        } else {
-            Text(
-                text = initials,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimary,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
 

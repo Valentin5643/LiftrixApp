@@ -319,13 +319,54 @@ class ThemeManager private constructor(private val context: Context) {
     val themeVersion: StateFlow<ThemeVersion> = _themeVersion.asStateFlow()
     
     /**
+     * Get the effective theme state (what's actually displayed)
+     * When in SYSTEM mode, returns whether dark theme is actually active
+     * When in LIGHT/DARK mode, returns the explicit setting
+     * 
+     * @param isSystemInDarkTheme Current system dark theme state
+     * @return true if dark theme is active, false if light theme is active
+     */
+    fun getEffectiveThemeState(isSystemInDarkTheme: Boolean): Boolean {
+        return when (_themeMode.value) {
+            ThemeMode.SYSTEM -> isSystemInDarkTheme
+            ThemeMode.DARK -> true
+            ThemeMode.LIGHT -> false
+            ThemeMode.TIME_BASED -> isSystemInDarkTheme // Respect system for time-based
+        }
+    }
+    
+    /**
      * Switch theme mode with immediate persistence
+     * When toggling in SYSTEM mode, switches to explicit LIGHT/DARK based on current state
      */
     fun switchTheme(mode: ThemeMode) {
         _themeMode.value = mode
         sharedPreferences.edit()
             .putString(KEY_THEME_MODE, mode.name)
             .apply()
+    }
+    
+    /**
+     * Toggle theme between light and dark
+     * If in SYSTEM mode, switches to opposite of current effective theme
+     * If in explicit mode, toggles to the opposite
+     * 
+     * @param isSystemInDarkTheme Current system dark theme state
+     */
+    fun toggleTheme(isSystemInDarkTheme: Boolean) {
+        val newMode = when (_themeMode.value) {
+            ThemeMode.SYSTEM -> {
+                // When in system mode, switch to explicit mode opposite of current
+                if (isSystemInDarkTheme) ThemeMode.LIGHT else ThemeMode.DARK
+            }
+            ThemeMode.DARK -> ThemeMode.LIGHT
+            ThemeMode.LIGHT -> ThemeMode.DARK
+            ThemeMode.TIME_BASED -> {
+                // Similar to system mode handling
+                if (isSystemInDarkTheme) ThemeMode.LIGHT else ThemeMode.DARK
+            }
+        }
+        switchTheme(newMode)
     }
     
     /**
@@ -377,10 +418,17 @@ class ThemeManager private constructor(private val context: Context) {
     }
     
     private fun loadThemeMode(): ThemeMode {
-        val savedMode = sharedPreferences.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name)
-        return try {
-            ThemeMode.valueOf(savedMode ?: ThemeMode.SYSTEM.name)
-        } catch (e: IllegalArgumentException) {
+        // Default to SYSTEM mode so the app respects system theme preferences
+        val savedMode = sharedPreferences.getString(KEY_THEME_MODE, null)
+        return if (savedMode != null) {
+            try {
+                ThemeMode.valueOf(savedMode)
+            } catch (e: IllegalArgumentException) {
+                // If saved mode is invalid, default to SYSTEM
+                ThemeMode.SYSTEM
+            }
+        } else {
+            // No saved preference - default to SYSTEM mode
             ThemeMode.SYSTEM
         }
     }

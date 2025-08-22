@@ -21,11 +21,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import com.example.liftrix.ui.common.AccessibilityUtils.ensureMinimumTouchTarget
 import com.example.liftrix.ui.common.AccessibilityUtils.accessibilitySemantics
@@ -114,6 +121,14 @@ fun PrimaryActionButton(
                     Icons.Default.Add -> "+"
                     Icons.Default.Save -> "⊡"
                     Icons.Default.Refresh -> "↻"
+                    Icons.Default.PersonAdd -> "⊕"
+                    Icons.Default.Check -> "✓"
+                    Icons.Default.Block -> "⊗"
+                    Icons.Default.ExitToApp -> "↪"
+                    Icons.Default.MoreHoriz -> "⋯"
+                    Icons.Default.MoreVert -> "⋮"
+                    Icons.Default.Schedule -> "⏱"
+                    Icons.Default.Star -> "★"
                     else -> "●"
                 }
                 Text(
@@ -195,6 +210,14 @@ fun SecondaryActionButton(
                     Icons.Default.Add -> "+"
                     Icons.Default.Save -> "⊡"
                     Icons.Default.Refresh -> "↻"
+                    Icons.Default.PersonAdd -> "⊕"
+                    Icons.Default.Check -> "✓"
+                    Icons.Default.Block -> "⊗"
+                    Icons.Default.ExitToApp -> "↪"
+                    Icons.Default.MoreHoriz -> "⋯"
+                    Icons.Default.MoreVert -> "⋮"
+                    Icons.Default.Schedule -> "⏱"
+                    Icons.Default.Star -> "★"
                     else -> "●"
                 }
                 Text(
@@ -271,6 +294,14 @@ fun TertiaryActionButton(
                     Icons.Default.Add -> "+"
                     Icons.Default.Save -> "⊡"
                     Icons.Default.Refresh -> "↻"
+                    Icons.Default.PersonAdd -> "⊕"
+                    Icons.Default.Check -> "✓"
+                    Icons.Default.Block -> "⊗"
+                    Icons.Default.ExitToApp -> "↪"
+                    Icons.Default.MoreHoriz -> "⋯"
+                    Icons.Default.MoreVert -> "⋮"
+                    Icons.Default.Schedule -> "⏱"
+                    Icons.Default.Star -> "★"
                     else -> "●"
                 }
                 Text(

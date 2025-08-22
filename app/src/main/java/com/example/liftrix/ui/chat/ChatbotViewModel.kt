@@ -97,10 +97,19 @@ class ChatbotViewModel @Inject constructor(
         try {
             // Observe conversation messages
             chatRepository.observeConversation(userId, currentConversationId)
-                .collect { messages ->
+                .collect { incomingMessages ->
+                    // Merge with any existing optimistic messages, avoiding duplicates
+                    val currentMessages = _uiState.value.messages
+                    val optimisticMessages = currentMessages.filter { it.id.startsWith("optimistic_") }
+                    
+                    // Combine database messages with optimistic ones, ensuring no duplicates
+                    val mergedMessages = (incomingMessages + optimisticMessages)
+                        .distinctBy { it.id }
+                        .sortedBy { it.createdAt }
+                    
                     _uiState.value = _uiState.value.copy(
-                        messages = messages,
-                        conversationState = UiState.Success(messages)
+                        messages = mergedMessages,
+                        conversationState = UiState.Success(mergedMessages)
                     )
                 }
         } catch (exception: Exception) {
@@ -134,14 +143,18 @@ class ChatbotViewModel @Inject constructor(
     private fun sendMessage(content: String) {
         if (content.isBlank() || userId == null) return
 
+        // Use timestamp + UUID suffix for guaranteed uniqueness in rapid sends
+        val timestamp = System.currentTimeMillis()
+        val optimisticId = "optimistic_${timestamp}_${UUID.randomUUID().toString().takeLast(8)}"
+        
         val userMessage = ChatMessage(
-            id = UUID.randomUUID().toString(),
+            id = optimisticId,
             userId = userId!!,
             conversationId = currentConversationId,
             type = MessageType.USER,
             language = _uiState.value.currentLanguage.code,
             content = content.trim(),
-            createdAt = System.currentTimeMillis()
+            createdAt = timestamp
         )
 
         viewModelScope.launch {
@@ -168,11 +181,14 @@ class ChatbotViewModel @Inject constructor(
                         Timber.d("AI response received successfully")
                         
                         // Replace the optimistic user message with the saved one (with proper ID)
-                        // and add the AI response
-                        val updatedMessages = _uiState.value.messages
-                            .filterNot { it.id == userMessage.id } // Remove optimistic message
+                        // and add the AI response - use more robust filtering
+                        val currentMessages = _uiState.value.messages
+                        val updatedMessages = currentMessages
+                            .filterNot { it.id.startsWith("optimistic_") || it.id == userMessage.id } // Remove any optimistic messages
                             .plus(savedUserMessage) // Add saved user message
                             .plus(aiMessage) // Add AI response
+                            .distinctBy { it.id } // Ensure no duplicates by ID
+                            .sortedBy { it.createdAt } // Maintain chronological order
                         
                         _uiState.value = _uiState.value.copy(
                             messages = updatedMessages,
@@ -185,9 +201,11 @@ class ChatbotViewModel @Inject constructor(
                         Timber.e("Failed to get AI response: $error")
                         val liftrixError = error as? LiftrixError
                         
-                        // Remove the optimistic message on failure
+                        // Remove the optimistic message on failure - use robust filtering
                         val updatedMessages = _uiState.value.messages
-                            .filterNot { it.id == userMessage.id }
+                            .filterNot { it.id.startsWith("optimistic_") || it.id == userMessage.id }
+                            .distinctBy { it.id } // Ensure no duplicates
+                            .sortedBy { it.createdAt } // Maintain order
                         
                         _uiState.value = _uiState.value.copy(
                             messages = updatedMessages,

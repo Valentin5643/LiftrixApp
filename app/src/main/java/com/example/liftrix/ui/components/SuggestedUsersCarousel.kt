@@ -214,13 +214,24 @@ private fun SuggestedUserCard(
             }
             
             // Follow Button
-            PrimaryActionButton(
-                text = if (isFollowActionLoading) "Following..." else "Follow",
-                onClick = onFollowClick,
-                leadingIcon = if (isFollowActionLoading) null else Icons.Default.PersonAdd,
-                enabled = !isFollowActionLoading,
-                modifier = Modifier.fillMaxWidth()
-            )
+            if (!suggestedUser.isFollowing) {
+                PrimaryActionButton(
+                    text = if (isFollowActionLoading) "Following..." else "Follow",
+                    onClick = onFollowClick,
+                    leadingIcon = if (isFollowActionLoading) null else Icons.Default.PersonAdd,
+                    enabled = !isFollowActionLoading,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                // Show following status - no action needed since they're already followed
+                SecondaryActionButton(
+                    text = "Following",
+                    onClick = { /* No action needed - already following */ },
+                    leadingIcon = Icons.Default.Check,
+                    enabled = false,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
             
             // Loading indicator
             if (isFollowActionLoading) {
@@ -416,6 +427,15 @@ class SuggestedUsersCarouselViewModel @javax.inject.Inject constructor(
                             )
                             
                             profileResult.getOrNull()?.let { profile ->
+                                // Check actual follow status instead of hardcoding false
+                                val followStatusResult = followRepository.getFollowStatus(
+                                    followerId = currentUserId,
+                                    targetUserId = userId
+                                )
+                                val isFollowing = followStatusResult.getOrNull()?.let { status ->
+                                    status == com.example.liftrix.domain.model.social.FollowStatus.FOLLOWING
+                                } ?: false
+                                
                                 SuggestedUser(
                                     userId = profile.userId,
                                     displayName = profile.displayName ?: profile.username,
@@ -428,7 +448,7 @@ class SuggestedUsersCarouselViewModel @javax.inject.Inject constructor(
                                         profile.fitnessLevel != null -> "Similar fitness level"
                                         else -> "Recommended for you"
                                     },
-                                    isFollowing = false
+                                    isFollowing = isFollowing
                                 )
                             }
                         } catch (e: Exception) {
@@ -437,13 +457,16 @@ class SuggestedUsersCarouselViewModel @javax.inject.Inject constructor(
                         }
                     }
                     
+                    // Filter out users who are already being followed to maintain clean suggestions
+                    val unfollowedUsers = suggestedUsers.filter { !it.isFollowing }
+                    
                     updateState { 
                         it.copy(
                             isLoading = false,
-                            suggestedUsers = suggestedUsers
+                            suggestedUsers = unfollowedUsers
                         )
                     }
-                    Timber.i("Loaded ${suggestedUsers.size} suggested users with full profiles")
+                    Timber.i("Loaded ${unfollowedUsers.size} unfollowed users from ${suggestedUsers.size} total suggestions")
                 } else {
                     val error = result.exceptionOrNull()
                     updateState { 

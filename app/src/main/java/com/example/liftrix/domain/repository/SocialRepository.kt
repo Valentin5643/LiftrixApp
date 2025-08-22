@@ -126,4 +126,22 @@ interface SocialRepository {
      * @return Result indicating success or failure
      */
     suspend fun refreshDiscoveryCache(): Result<Unit>
+    
+    /**
+     * Get following list (people the user follows)
+     * Returns Flow of users that the current user is following
+     * 
+     * @param userId Current user's ID
+     * @return Flow of following list
+     */
+    fun getFollowing(userId: String): Flow<List<Friend>>
+    
+    /**
+     * Get followers list (people who follow the user)
+     * Returns Flow of users that follow the current user
+     * 
+     * @param userId Current user's ID
+     * @return Flow of followers list
+     */
+    fun getFollowers(userId: String): Flow<List<Friend>>
 } 

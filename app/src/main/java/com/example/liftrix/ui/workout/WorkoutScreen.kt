@@ -68,8 +68,10 @@ import timber.log.Timber
 import com.example.liftrix.ui.workout.components.CreateFolderDialog
 import com.example.liftrix.ui.workout.components.FolderEditDialog
 import com.example.liftrix.ui.workout.components.QuickCreateFolderButton
+import com.example.liftrix.ui.workout.components.ActiveWorkoutDialog
 import com.example.liftrix.ui.common.sync.CompactSyncIndicator
 import com.example.liftrix.ui.common.sync.SyncStatusViewModel
+import com.example.liftrix.service.UnifiedWorkoutSessionManager
 
 /**
  * Main workout screen - simplified entry point with unified visual design.
@@ -94,10 +96,16 @@ fun WorkoutScreen(
     onNavigateToEditWorkout: (workoutId: String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: WorkoutViewModel = hiltViewModel(),
-    syncStatusViewModel: SyncStatusViewModel = hiltViewModel()
+    syncStatusViewModel: SyncStatusViewModel = hiltViewModel(),
+    sessionManager: UnifiedWorkoutSessionManager = hiltViewModel<com.example.liftrix.ui.navigation.UnifiedNavigationViewModel>().sessionManager
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val currentState = uiState
+    
+    // Active workout detection state
+    val currentSession by sessionManager.currentSession.collectAsStateWithLifecycle()
+    var showActiveWorkoutDialog by remember { mutableStateOf(false) }
+    var pendingNavigation by remember { mutableStateOf<(() -> Unit)?>(null) }
     
     when (currentState) {
         is WorkoutUiState.Loading -> {
@@ -106,8 +114,24 @@ fun WorkoutScreen(
         is WorkoutUiState.Success -> {
             WorkoutContent(
                 screenData = currentState.data,
-                onNavigateToActiveWorkout = onNavigateToActiveWorkout,
-                onNavigateToWorkoutCreation = onNavigateToWorkoutCreation,
+                onNavigateToActiveWorkout = { templateId ->
+                    // Check for active workout before navigating
+                    if (currentSession?.isLive() == true) {
+                        pendingNavigation = { onNavigateToActiveWorkout(templateId) }
+                        showActiveWorkoutDialog = true
+                    } else {
+                        onNavigateToActiveWorkout(templateId)
+                    }
+                },
+                onNavigateToWorkoutCreation = { folderId ->
+                    // Check for active workout before navigating to creation
+                    if (currentSession?.isLive() == true) {
+                        pendingNavigation = { onNavigateToWorkoutCreation(folderId) }
+                        showActiveWorkoutDialog = true
+                    } else {
+                        onNavigateToWorkoutCreation(folderId)
+                    }
+                },
                 onNavigateToEditWorkout = onNavigateToEditWorkout,
                 onCreateFolder = { folderName -> 
                     viewModel.handleEvent(WorkoutEvent.CreateFolder(folderName))
@@ -126,8 +150,43 @@ fun WorkoutScreen(
         }
         is WorkoutUiState.Empty -> {
             WorkoutEmptyScreen(
-                onCreateWorkout = { onNavigateToWorkoutCreation(null) },
+                onCreateWorkout = { folderId ->
+                    // Check for active workout before navigating
+                    if (currentSession?.isLive() == true) {
+                        pendingNavigation = { onNavigateToWorkoutCreation(folderId) }
+                        showActiveWorkoutDialog = true
+                    } else {
+                        onNavigateToWorkoutCreation(folderId)
+                    }
+                },
                 modifier = modifier
+            )
+        }
+    }
+    
+    // Show active workout dialog when needed
+    if (showActiveWorkoutDialog) {
+        currentSession?.let { session ->
+            ActiveWorkoutDialog(
+                workoutName = session.name,
+                onContinueWorkout = {
+                    // Navigate to the active workout
+                    showActiveWorkoutDialog = false
+                    pendingNavigation = null
+                    onNavigateToActiveWorkout(session.templateId)
+                },
+                onDiscardAndStartNew = {
+                    // Discard current workout and proceed with pending navigation
+                    sessionManager.discardSession()
+                    showActiveWorkoutDialog = false
+                    pendingNavigation?.invoke()
+                    pendingNavigation = null
+                },
+                onDismiss = {
+                    // Cancel the navigation
+                    showActiveWorkoutDialog = false
+                    pendingNavigation = null
+                }
             )
         }
     }

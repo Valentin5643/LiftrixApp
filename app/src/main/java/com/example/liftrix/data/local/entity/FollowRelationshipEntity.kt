@@ -23,7 +23,14 @@ import androidx.room.PrimaryKey
     indices = [
         Index(value = ["follower_id", "status"]),
         Index(value = ["following_id", "status"]),
-        Index(value = ["follower_id", "following_id"], unique = true)
+        Index(value = ["follower_id", "following_id"], unique = true),
+        // Composite indexes for relationship queries
+        Index(value = ["follower_id", "status", "created_at"], 
+              name = "idx_follow_relationships_follower_timeline"),
+        Index(value = ["following_id", "status", "created_at"], 
+              name = "idx_follow_relationships_following_timeline"),
+        Index(value = ["status", "accepted_at"], 
+              name = "idx_follow_relationships_accepted")
     ],
     foreignKeys = [
         ForeignKey(
@@ -69,7 +76,10 @@ data class FollowRelationshipEntity(
     val isSynced: Boolean = false,
 
     @ColumnInfo(name = "sync_version", defaultValue = "0")
-    val syncVersion: Int = 0
+    val syncVersion: Int = 0,
+
+    @ColumnInfo(name = "last_modified", defaultValue = "CURRENT_TIMESTAMP")
+    val lastModified: Long = System.currentTimeMillis()
 ) {
     companion object {
         const val STATUS_PENDING = "PENDING"

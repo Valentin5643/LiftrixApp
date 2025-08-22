@@ -1,5 +1,6 @@
 package com.example.liftrix.data.local.dao
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
@@ -8,6 +9,45 @@ import androidx.room.Query
 import androidx.room.Update
 import com.example.liftrix.data.local.entity.FollowRelationshipEntity
 import kotlinx.coroutines.flow.Flow
+
+/**
+ * Enriched follow relationship that includes profile data from joins.
+ * Used for displaying follow/follower lists with complete user information.
+ */
+data class EnrichedFollowRelationship(
+    @androidx.room.ColumnInfo(name = "id") val id: String,
+    @androidx.room.ColumnInfo(name = "follower_id") val followerId: String,
+    @androidx.room.ColumnInfo(name = "following_id") val followingId: String,
+    @androidx.room.ColumnInfo(name = "status") val status: String,
+    @androidx.room.ColumnInfo(name = "created_at") val createdAt: Long,
+    @androidx.room.ColumnInfo(name = "accepted_at") val acceptedAt: Long?,
+    @androidx.room.ColumnInfo(name = "blocked_at") val blockedAt: Long?,
+    @androidx.room.ColumnInfo(name = "is_synced") val isSynced: Boolean,
+    @androidx.room.ColumnInfo(name = "sync_version") val syncVersion: Int,
+    @androidx.room.ColumnInfo(name = "last_modified") val lastModified: Long,
+    // Profile data from social_profiles join
+    @androidx.room.ColumnInfo(name = "profile_display_name") val profileDisplayName: String?,
+    @androidx.room.ColumnInfo(name = "profile_image_url") val profileImageUrl: String?,
+    @androidx.room.ColumnInfo(name = "profile_bio") val profileBio: String?
+) {
+    /**
+     * Converts to domain model with proper display name fallback
+     */
+    fun toFollowRelationshipEntity(): FollowRelationshipEntity {
+        return FollowRelationshipEntity(
+            id = id,
+            followerId = followerId,
+            followingId = followingId,
+            status = status,
+            createdAt = createdAt,
+            acceptedAt = acceptedAt,
+            blockedAt = blockedAt,
+            isSynced = isSynced,
+            syncVersion = syncVersion,
+            lastModified = lastModified
+        )
+    }
+}
 
 /**
  * DAO for follow relationship operations with mandatory user scoping.
@@ -143,6 +183,54 @@ interface FollowRelationshipDao {
         ORDER BY fr.accepted_at DESC
     """)
     fun observeFollowers(userId: String): Flow<List<FollowRelationshipEntity>>
+
+    // ========================================
+    // Enriched Follow Queries with Profile Data
+    // ========================================
+
+    @Query("""
+        SELECT 
+            fr.id,
+            fr.follower_id,
+            fr.following_id,
+            fr.status,
+            fr.created_at,
+            fr.accepted_at,
+            fr.blocked_at,
+            fr.is_synced,
+            fr.sync_version,
+            fr.last_modified,
+            sp.display_name as profile_display_name,
+            sp.profile_photo_url as profile_image_url,
+            sp.bio as profile_bio
+        FROM follow_relationships fr
+        INNER JOIN social_profiles sp ON fr.following_id = sp.user_id
+        WHERE fr.follower_id = :userId AND fr.status = 'ACCEPTED'
+        ORDER BY fr.accepted_at DESC
+    """)
+    fun observeFollowingWithProfiles(userId: String): Flow<List<EnrichedFollowRelationship>>
+
+    @Query("""
+        SELECT 
+            fr.id,
+            fr.follower_id,
+            fr.following_id,
+            fr.status,
+            fr.created_at,
+            fr.accepted_at,
+            fr.blocked_at,
+            fr.is_synced,
+            fr.sync_version,
+            fr.last_modified,
+            sp.display_name as profile_display_name,
+            sp.profile_photo_url as profile_image_url,
+            sp.bio as profile_bio
+        FROM follow_relationships fr
+        INNER JOIN social_profiles sp ON fr.follower_id = sp.user_id
+        WHERE fr.following_id = :userId AND fr.status = 'ACCEPTED'
+        ORDER BY fr.accepted_at DESC
+    """)
+    fun observeFollowersWithProfiles(userId: String): Flow<List<EnrichedFollowRelationship>>
 
     @Query("""
         SELECT COUNT(*) FROM follow_relationships 

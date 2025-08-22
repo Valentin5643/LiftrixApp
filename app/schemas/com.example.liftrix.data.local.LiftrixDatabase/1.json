@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "dbca3fda78998e5f3db8999adfb45fce",
+    "identityHash": "12fefe54d814d88573d6fb4bc066b83b",
     "entities": [
       {
         "tableName": "workouts",
@@ -2982,6 +2982,37 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_social_profiles_member_since` ON `${TABLE_NAME}` (`member_since`)"
+          },
+          {
+            "name": "idx_social_profiles_discovery",
+            "unique": false,
+            "columnNames": [
+              "is_private",
+              "hide_from_suggestions",
+              "last_active"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_social_profiles_discovery` ON `${TABLE_NAME}` (`is_private`, `hide_from_suggestions`, `last_active`)"
+          },
+          {
+            "name": "idx_social_profiles_popularity",
+            "unique": false,
+            "columnNames": [
+              "workout_count",
+              "follower_count"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_social_profiles_popularity` ON `${TABLE_NAME}` (`workout_count`, `follower_count`)"
+          },
+          {
+            "name": "idx_social_profiles_search",
+            "unique": false,
+            "columnNames": [
+              "username",
+              "display_name"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_social_profiles_search` ON `${TABLE_NAME}` (`username`, `display_name`)"
           }
         ],
         "foreignKeys": [
@@ -3000,7 +3031,7 @@
       },
       {
         "tableName": "follow_relationships",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `follower_id` TEXT NOT NULL, `following_id` TEXT NOT NULL, `status` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `accepted_at` INTEGER, `blocked_at` INTEGER, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`follower_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`following_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `follower_id` TEXT NOT NULL, `following_id` TEXT NOT NULL, `status` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `accepted_at` INTEGER, `blocked_at` INTEGER, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(`id`), FOREIGN KEY(`follower_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`following_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -3057,6 +3088,13 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "CURRENT_TIMESTAMP"
           }
         ],
         "primaryKey": {
@@ -3095,6 +3133,38 @@
             ],
             "orders": [],
             "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_follow_relationships_follower_id_following_id` ON `${TABLE_NAME}` (`follower_id`, `following_id`)"
+          },
+          {
+            "name": "idx_follow_relationships_follower_timeline",
+            "unique": false,
+            "columnNames": [
+              "follower_id",
+              "status",
+              "created_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_follow_relationships_follower_timeline` ON `${TABLE_NAME}` (`follower_id`, `status`, `created_at`)"
+          },
+          {
+            "name": "idx_follow_relationships_following_timeline",
+            "unique": false,
+            "columnNames": [
+              "following_id",
+              "status",
+              "created_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_follow_relationships_following_timeline` ON `${TABLE_NAME}` (`following_id`, `status`, `created_at`)"
+          },
+          {
+            "name": "idx_follow_relationships_accepted",
+            "unique": false,
+            "columnNames": [
+              "status",
+              "accepted_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_follow_relationships_accepted` ON `${TABLE_NAME}` (`status`, `accepted_at`)"
           }
         ],
         "foreignKeys": [
@@ -4001,6 +4071,48 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_workout_posts_workout_id` ON `${TABLE_NAME}` (`workout_id`)"
+          },
+          {
+            "name": "idx_workout_posts_feed_query",
+            "unique": false,
+            "columnNames": [
+              "user_id",
+              "visibility",
+              "created_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_workout_posts_feed_query` ON `${TABLE_NAME}` (`user_id`, `visibility`, `created_at`)"
+          },
+          {
+            "name": "idx_workout_posts_engagement",
+            "unique": false,
+            "columnNames": [
+              "like_count",
+              "comment_count",
+              "created_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_workout_posts_engagement` ON `${TABLE_NAME}` (`like_count`, `comment_count`, `created_at`)"
+          },
+          {
+            "name": "idx_workout_posts_prs",
+            "unique": false,
+            "columnNames": [
+              "prs_count",
+              "created_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_workout_posts_prs` ON `${TABLE_NAME}` (`prs_count`, `created_at`)"
+          },
+          {
+            "name": "idx_workout_posts_sync",
+            "unique": false,
+            "columnNames": [
+              "is_synced",
+              "sync_version"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_workout_posts_sync` ON `${TABLE_NAME}` (`is_synced`, `sync_version`)"
           }
         ],
         "foreignKeys": [
@@ -7203,7 +7315,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'dbca3fda78998e5f3db8999adfb45fce')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '12fefe54d814d88573d6fb4bc066b83b')"
     ]
   }
 }

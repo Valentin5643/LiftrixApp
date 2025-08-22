@@ -18,7 +18,14 @@ import androidx.room.PrimaryKey
     indices = [
         Index(value = ["user_id"], unique = true),
         Index(value = ["username"], unique = true),
-        Index(value = ["member_since"])
+        Index(value = ["member_since"]),
+        // Composite indexes for social queries
+        Index(value = ["is_private", "hide_from_suggestions", "last_active"], 
+              name = "idx_social_profiles_discovery"),
+        Index(value = ["workout_count", "follower_count"], 
+              name = "idx_social_profiles_popularity"),
+        Index(value = ["username", "display_name"], 
+              name = "idx_social_profiles_search")
     ],
     foreignKeys = [
         ForeignKey(

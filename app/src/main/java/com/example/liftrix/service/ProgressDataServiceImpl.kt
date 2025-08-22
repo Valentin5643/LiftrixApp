@@ -1,6 +1,7 @@
 package com.example.liftrix.service
 
 import com.example.liftrix.core.cache.EnhancedCacheManager
+import com.example.liftrix.core.cache.getOrComputeTyped
 import com.example.liftrix.core.cache.CacheKeyGenerator
 import com.example.liftrix.core.cache.AnalyticsCacheKeys
 import com.example.liftrix.domain.model.analytics.TimeRange
@@ -80,7 +81,7 @@ class ProgressDataServiceImpl @Inject constructor(
             val (cacheKey, ttl) = CacheKeyGenerator.volumeKey(userId, timeRange)
             
             // Use enhanced cache manager with automatic fallback
-            val data = cacheManager.getOrCompute(cacheKey, ttl) {
+            val data = cacheManager.getOrComputeTyped<List<VolumeDataPoint>>(cacheKey, ttl) {
                 val startDate = kotlinx.datetime.LocalDate.fromEpochDays(
                     (timeRange.startDate.time / (24 * 60 * 60 * 1000)).toInt()
                 )
@@ -132,7 +133,7 @@ class ProgressDataServiceImpl @Inject constructor(
             }
             
             // Use enhanced cache manager
-            val data = cacheManager.getOrCompute(cacheKey, ttl) {
+            val data = cacheManager.getOrComputeTyped<List<DurationDataPoint>>(cacheKey, ttl) {
                 val startDate = kotlinx.datetime.LocalDate.fromEpochDays(
                     (timeRange.startDate.time / (24 * 60 * 60 * 1000)).toInt()
                 )
@@ -174,7 +175,7 @@ class ProgressDataServiceImpl @Inject constructor(
             )
             
             // Use enhanced cache manager
-            val data = cacheManager.getOrCompute(cacheKey, ttl) {
+            val data = cacheManager.getOrComputeTyped<List<FrequencyDataPoint>>(cacheKey, ttl) {
                 val startDate = kotlinx.datetime.LocalDate.fromEpochDays(
                     (timeRange.startDate.time / (24 * 60 * 60 * 1000)).toInt()
                 )
@@ -215,7 +216,7 @@ class ProgressDataServiceImpl @Inject constructor(
             val (cacheKey, ttl) = AnalyticsCacheKeys.dashboardSummary(userId)
             
             // Use enhanced cache manager
-            val data = cacheManager.getOrCompute(cacheKey, ttl) {
+            val data = cacheManager.getOrComputeTyped<ProgressSummary>(cacheKey, ttl) {
                 val startDate = kotlinx.datetime.LocalDate.fromEpochDays(
                     (timeRange.startDate.time / (24 * 60 * 60 * 1000)).toInt()
                 )

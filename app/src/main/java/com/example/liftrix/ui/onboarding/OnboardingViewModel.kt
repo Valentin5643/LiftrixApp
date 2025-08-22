@@ -29,7 +29,8 @@ class OnboardingViewModel @Inject constructor(
     private val saveProfileUseCase: SaveProfileUseCase,
     private val validateProfileInputUseCase: ValidateProfileInputUseCase,
     private val getProfileUseCase: GetProfileUseCase,
-    private val savedStateHandle: SavedStateHandle
+    private val savedStateHandle: SavedStateHandle,
+    private val profileRepository: com.example.liftrix.domain.repository.ProfileRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<OnboardingState>(OnboardingState.Loading)
@@ -332,8 +333,13 @@ class OnboardingViewModel @Inject constructor(
             if (result.isSuccess) {
                 val profileData = currentState.profileData
                 val domainProfile = profileData.toDomainModel()
+                
+                // CRITICAL FIX: Trigger immediate sync after successful profile save
+                Timber.d("Triggering immediate sync for newly saved profile: ${profileData.userId}")
+                triggerImmediateProfileSync(profileData.userId)
+                
                 _state.value = OnboardingState.Completed(domainProfile)
-                Timber.d("Profile saved successfully for user: ${profileData.userId}")
+                Timber.d("Profile saved and sync triggered successfully for user: ${profileData.userId}")
             } else {
                 val exception = result.exceptionOrNull() ?: Exception("Unknown error occurred")
                 _state.value = OnboardingState.Error(exception, canRetry = true)
@@ -630,6 +636,34 @@ class OnboardingViewModel @Inject constructor(
             }
         } catch (e: Exception) {
             Timber.e(e, "Failed to save state to handle")
+        }
+    }
+
+    /**
+     * Triggers immediate sync of the profile to Firebase after onboarding completion.
+     * This ensures the profile data is immediately available across all app sections.
+     */
+    private suspend fun triggerImmediateProfileSync(userId: String) {
+        try {
+            Timber.d("Starting immediate profile sync for user: $userId")
+            
+            // First queue the sync to ensure it's in the queue
+            val queueResult = profileRepository.queueSync(userId)
+            if (queueResult.isFailure) {
+                Timber.w("Failed to queue profile sync: ${queueResult.exceptionOrNull()?.message}")
+            }
+            
+            // Then trigger immediate sync to bypass the periodic schedule
+            val syncResult = profileRepository.syncNow(userId)
+            if (syncResult.isSuccess) {
+                Timber.d("Profile sync completed successfully for user: $userId")
+            } else {
+                Timber.e("Immediate profile sync failed: ${syncResult.exceptionOrNull()?.message}")
+                // Even if immediate sync fails, the queued sync will retry periodically
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Exception during immediate profile sync for user: $userId")
+            // Non-critical failure - profile is saved locally and will sync eventually
         }
     }
 

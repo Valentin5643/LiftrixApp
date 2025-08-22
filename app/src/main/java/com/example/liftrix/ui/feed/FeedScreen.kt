@@ -23,6 +23,7 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.WorkoutPost
 import com.example.liftrix.ui.common.components.ErrorDisplay
 import com.example.liftrix.ui.common.components.LoadingIndicator
+import com.example.liftrix.ui.common.FeedItemShimmer
 import com.example.liftrix.ui.feed.components.WorkoutPostCard
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.theme.LiftrixSpacing
@@ -141,6 +142,17 @@ private fun FeedContent(
         contentPadding = PaddingValues(vertical = LiftrixSpacing.small),
         verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.small)
     ) {
+        // Show shimmer loading state during initial load
+        if (posts.loadState.refresh is LoadState.Loading && posts.itemCount == 0) {
+            items(5) { // Show 5 shimmer placeholders
+                FeedItemShimmer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = LiftrixSpacing.medium, vertical = LiftrixSpacing.small)
+                )
+            }
+        }
+        
         // Handle empty state for home feed
         if (posts.itemCount == 0 && posts.loadState.refresh !is LoadState.Loading) {
             item {

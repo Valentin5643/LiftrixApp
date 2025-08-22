@@ -83,8 +83,6 @@ class AnomalySettingsViewModel @Inject constructor(
                 // Save settings in the background
                 // Note: This would typically use a repository method to save settings
                 // For now, we'll just log the update since the repository method isn't implemented yet
-                Timber.d("Updating anomaly detection settings for user: ${currentUser.uid}")
-                Timber.d("Settings: $updatedSettings")
                 
                 // In a real implementation, you would call something like:
                 // val result = anomalyRepository.saveDetectionSettings(updatedSettings)
@@ -112,8 +110,6 @@ class AnomalySettingsViewModel @Inject constructor(
 
                 val defaultSettings = AnomalyDetectionSettings.createDefault(currentUser.uid)
                 updateSettings(defaultSettings)
-                
-                Timber.d("Reset anomaly detection settings to defaults for user: ${currentUser.uid}")
                 
             } catch (e: Exception) {
                 Timber.e(e, "Error resetting anomaly detection settings")

@@ -157,6 +157,18 @@ interface FollowRepository {
      */
     fun observePendingRequestCount(userId: String): Flow<Int>
 
+    /**
+     * Observes following relationships with enriched profile data (names, images, bio)
+     * Prevents "Unknown User" display by joining with social profiles data
+     */
+    fun observeFollowingWithProfiles(userId: String): Flow<List<FollowRelationship>>
+
+    /**
+     * Observes followers relationships with enriched profile data (names, images, bio)
+     * Prevents "Unknown User" display by joining with social profiles data
+     */
+    fun observeFollowersWithProfiles(userId: String): Flow<List<FollowRelationship>>
+
     // ========================================
     // Blocking & Privacy
     // ========================================

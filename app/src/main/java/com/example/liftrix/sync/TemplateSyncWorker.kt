@@ -25,6 +25,7 @@ import timber.log.Timber
 import java.util.concurrent.TimeUnit
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.decodeFromString
+import com.example.liftrix.domain.model.TemplateExercise
 
 /**
  * WorkManager worker for syncing workout templates to Firebase Firestore.
@@ -147,10 +148,10 @@ class TemplateSyncWorker @AssistedInject constructor(
                     if (shouldSync) {
                         // Parse the JSON exercises string into a proper list for Firestore validation
                         val exercisesList = try {
-                            Json.decodeFromString<List<Any>>(template.templateExercisesJson)
+                            Json.decodeFromString<List<TemplateExercise>>(template.templateExercisesJson)
                         } catch (e: Exception) {
                             Timber.w(e, "Failed to parse template exercises JSON, using empty list")
-                            emptyList<Any>()
+                            emptyList<TemplateExercise>()
                         }
                         
                         // Create template data that complies with Firestore security rules

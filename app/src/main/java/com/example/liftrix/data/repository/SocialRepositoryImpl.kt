@@ -15,6 +15,7 @@ import java.time.Duration
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SocialRepository
 import com.example.liftrix.domain.usecase.social.GetSocialProfileUseCase
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -155,9 +156,12 @@ class SocialRepositoryImpl @Inject constructor(
                 friendUserId = friendUserId,
                 isSynced = false
             )
+            
+            Timber.d("DEBUG_SEND_FRIEND_REQUEST: Created friend request entity - userId: ${friendRequest.userId}, friendUserId: ${friendRequest.friendUserId}, status: ${friendRequest.status}")
 
             // Save to local database (offline-first)
-            friendDao.insertFriend(friendRequest)
+            val insertId = friendDao.insertFriend(friendRequest)
+            Timber.d("DEBUG_SEND_FRIEND_REQUEST: Inserted friend request to database with ID: $insertId")
 
             // Sync to Firebase
             syncFriendRequestToFirebase(currentUserId, friendUserId)
@@ -222,26 +226,35 @@ class SocialRepositoryImpl @Inject constructor(
     }
 
     override fun getFriends(userId: String): Flow<List<Friend>> {
+        Timber.d("DEBUG_REPO: getFriends called for userId: $userId")
         return friendDao.getFriends(userId).map { friendEntities ->
+            Timber.d("DEBUG_REPO: Retrieved ${friendEntities.size} friend entities from database")
+            friendEntities.forEachIndexed { index, entity ->
+                Timber.d("DEBUG_REPO: Entity $index - userId: ${entity.userId}, friendUserId: ${entity.friendUserId}, status: ${entity.status}")
+            }
+            
             friendEntities.mapNotNull { entity ->
                 try {
                     // Get the friend's profile data for proper display
                     val friendProfile = getSocialProfileUseCase(entity.friendUserId).getOrNull()
+                    Timber.d("DEBUG_REPO: Mapping entity ${entity.friendUserId}, profile found: ${friendProfile != null}")
                     
-                    friendMapper.toDomain(
+                    val mappedFriend = friendMapper.toDomain(
                         entity = entity,
                         displayName = friendProfile?.displayName ?: "User ${entity.friendUserId.take(8)}",
                         email = null, // Email is not in social profile - could be added if needed
                         avatarUrl = friendProfile?.profilePhotoUrl,
                         presence = null // Presence service integration can be added when available
                     )
+                    Timber.d("DEBUG_REPO: Successfully mapped friend: ${mappedFriend.displayName} (${mappedFriend.userId})")
+                    mappedFriend
                 } catch (e: Exception) {
-                    Timber.w(e, "Failed to map friend entity: ${entity.friendUserId}")
+                    Timber.w(e, "DEBUG_REPO: Failed to map friend entity: ${entity.friendUserId}")
                     null
                 }
             }
         }.catch { e ->
-            Timber.e(e, "Failed to get friends for user: $userId")
+            Timber.e(e, "DEBUG_REPO: Failed to get friends for user: $userId")
             emit(emptyList())
         }
     }
@@ -593,19 +606,26 @@ class SocialRepositoryImpl @Inject constructor(
             val currentUserId = authRepository.getCurrentUserId()
                 ?: return Result.failure(Exception("User not authenticated"))
 
+            Timber.d("DEBUG_REPO_FOLLOW: followUser called - currentUserId: $currentUserId, targetUserId: $userId")
+
             // Check if there's already a pending request from the target user
             val incomingRequest = friendDao.getFriendRelationship(userId, currentUserId)
+            Timber.d("DEBUG_REPO_FOLLOW: Checked for incoming request - found: ${incomingRequest != null}, status: ${incomingRequest?.status}")
             
             if (incomingRequest != null && incomingRequest.status == FriendStatus.PENDING.name) {
                 // Accept existing friend request
+                Timber.d("DEBUG_REPO_FOLLOW: Accepting existing friend request")
                 respondToFriendRequest(userId, accept = true)
             } else {
                 // Send new friend request
-                sendFriendRequest(userId)
+                Timber.d("DEBUG_REPO_FOLLOW: Sending new friend request")
+                val result = sendFriendRequest(userId)
+                Timber.d("DEBUG_REPO_FOLLOW: sendFriendRequest result: ${if (result.isSuccess) "SUCCESS" else "FAILURE"}")
+                result
             }
             
         } catch (e: Exception) {
-            Timber.e(e, "Failed to follow user: $userId")
+            Timber.e(e, "DEBUG_REPO_FOLLOW: Failed to follow user: $userId")
             Result.failure(e)
         }
     }
@@ -897,6 +917,16 @@ class SocialRepositoryImpl @Inject constructor(
             // Fallback to users collection if we don't have enough recommendations from social_profiles
             if (recommendations.size < limit) {
                 try {
+                    // 🔍 DEBUG: Confirm authentication state before query
+                    val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                    Timber.d("AUTH_DEBUG: Current user before users query: ${currentUser?.uid}")
+                    
+                    if (currentUser == null) {
+                        Timber.w("AUTH_DEBUG: No authenticated user - query will fail with PERMISSION_DENIED")
+                        // Don't use return here, just skip the query
+                    } else {
+                    
+                    Timber.d("AUTH_DEBUG: Executing users collection query with isPublic=true filter")
                     val usersQuery = firestore.collection("users")
                         .whereEqualTo("isPublic", true)
                         .limit((limit - recommendations.size + 5).toLong()) // Get a few extra to account for filtering
@@ -904,8 +934,16 @@ class SocialRepositoryImpl @Inject constructor(
                         .await()
                     
                     
+                    Timber.d("AUTH_DEBUG: Query returned ${usersQuery.documents.size} documents")
+                    
                     for (userDoc in usersQuery.documents) {
                         if (recommendations.size >= limit) break
+                        
+                        // 🔍 DEBUG: Log document data to verify isPublic field
+                        val docData = userDoc.data
+                        val hasIsPublic = docData?.containsKey("isPublic") ?: false
+                        val isPublicValue = docData?.get("isPublic")
+                        Timber.d("AUTH_DEBUG: Doc ${userDoc.id} - hasIsPublic: $hasIsPublic, isPublic: $isPublicValue")
                         
                         val userId = userDoc.id
                         if (userId == currentUserId || userId in excludeUserIds) continue
@@ -929,8 +967,16 @@ class SocialRepositoryImpl @Inject constructor(
                             )
                         }
                     }
+                    } // Close the else block here
                 } catch (fallbackError: Exception) {
-                    Timber.w(fallbackError, "Fallback to users collection failed")
+                    when (fallbackError.message?.contains("PERMISSION_DENIED")) {
+                        true -> {
+                            Timber.w("AUTH_DEBUG: PERMISSION_DENIED error in users collection query")
+                            Timber.w("AUTH_DEBUG: Auth state: ${com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid}")
+                            Timber.w("AUTH_DEBUG: Error details: ${fallbackError.message}")
+                        }
+                        else -> Timber.w(fallbackError, "Fallback to users collection failed")
+                    }
                 }
             }
             
@@ -1048,6 +1094,75 @@ class SocialRepositoryImpl @Inject constructor(
             Timber.d("Friend removal synced to Firebase: $userId removed $friendId")
         } catch (e: Exception) {
             Timber.e(e, "Failed to sync friend removal to Firebase")
+        }
+    }
+    
+    override fun getFollowing(userId: String): Flow<List<Friend>> {
+        Timber.d("DEBUG_REPO_FOLLOWING: getFollowing called for userId: $userId")
+        return friendDao.getFollowing(userId).map { friendEntities ->
+            Timber.d("DEBUG_REPO_FOLLOWING: Retrieved ${friendEntities.size} following entities from database")
+            friendEntities.forEachIndexed { index, entity ->
+                Timber.d("DEBUG_REPO_FOLLOWING: Entity $index - userId: ${entity.userId}, friendUserId: ${entity.friendUserId}, status: ${entity.status}")
+            }
+            
+            friendEntities.mapNotNull { entity ->
+                try {
+                    // Get the friend's profile data for proper display
+                    val friendProfile = getSocialProfileUseCase(entity.friendUserId).getOrNull()
+                    Timber.d("DEBUG_REPO_FOLLOWING: Mapping entity ${entity.friendUserId}, profile found: ${friendProfile != null}")
+                    
+                    val mappedFriend = friendMapper.toDomain(
+                        entity = entity,
+                        displayName = friendProfile?.displayName ?: "User ${entity.friendUserId.take(8)}",
+                        email = null,
+                        avatarUrl = friendProfile?.profilePhotoUrl,
+                        presence = null
+                    )
+                    Timber.d("DEBUG_REPO_FOLLOWING: Successfully mapped following: ${mappedFriend.displayName} (${mappedFriend.userId})")
+                    mappedFriend
+                } catch (e: Exception) {
+                    Timber.w(e, "DEBUG_REPO_FOLLOWING: Failed to map following entity: ${entity.friendUserId}")
+                    null
+                }
+            }
+        }.catch { e ->
+            Timber.e(e, "DEBUG_REPO_FOLLOWING: Failed to get following for user: $userId")
+            emit(emptyList())
+        }
+    }
+    
+    override fun getFollowers(userId: String): Flow<List<Friend>> {
+        Timber.d("DEBUG_REPO_FOLLOWERS: getFollowers called for userId: $userId")
+        return friendDao.getFollowers(userId).map { friendEntities ->
+            Timber.d("DEBUG_REPO_FOLLOWERS: Retrieved ${friendEntities.size} follower entities from database")
+            friendEntities.forEachIndexed { index, entity ->
+                Timber.d("DEBUG_REPO_FOLLOWERS: Entity $index - userId: ${entity.userId}, friendUserId: ${entity.friendUserId}, status: ${entity.status}")
+            }
+            
+            friendEntities.mapNotNull { entity ->
+                try {
+                    // For followers, the "userId" field in the entity represents the follower
+                    // Get the follower's profile data for proper display
+                    val followerProfile = getSocialProfileUseCase(entity.userId).getOrNull()
+                    Timber.d("DEBUG_REPO_FOLLOWERS: Mapping follower entity ${entity.userId}, profile found: ${followerProfile != null}")
+                    
+                    val mappedFollower = friendMapper.toDomain(
+                        entity = entity.copy(friendUserId = entity.userId), // Swap for proper mapping
+                        displayName = followerProfile?.displayName ?: "User ${entity.userId.take(8)}",
+                        email = null,
+                        avatarUrl = followerProfile?.profilePhotoUrl,
+                        presence = null
+                    )
+                    Timber.d("DEBUG_REPO_FOLLOWERS: Successfully mapped follower: ${mappedFollower.displayName} (${mappedFollower.userId})")
+                    mappedFollower
+                } catch (e: Exception) {
+                    Timber.w(e, "DEBUG_REPO_FOLLOWERS: Failed to map follower entity: ${entity.userId}")
+                    null
+                }
+            }
+        }.catch { e ->
+            Timber.e(e, "DEBUG_REPO_FOLLOWERS: Failed to get followers for user: $userId")
+            emit(emptyList())
         }
     }
 } 

@@ -1,7 +1,9 @@
 package com.example.liftrix.service
 
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
+import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import com.example.liftrix.domain.model.UnifiedWorkoutSession
 import com.example.liftrix.domain.model.WorkoutSessionId
@@ -102,6 +104,9 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         }
         
         forceStartSession(session)
+        
+        // Start foreground service for persistent notifications
+        startWorkoutForegroundService()
     }
 
     /**
@@ -124,6 +129,9 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         scope.launch {
             persistSession(session)
         }
+        
+        // Start foreground service for force-started sessions too
+        startWorkoutForegroundService()
         
         Timber.i("🔥 FORCE-START-DEBUG: Session force-started successfully with ${session.exercises.size} exercises")
     }
@@ -358,6 +366,9 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             Timber.w("Cannot discard - no active session")
             return
         }
+        
+        // Stop foreground service when discarding session
+        stopWorkoutForegroundService()
         
         clearSession()
         Timber.d("Session discarded: ${session.name}")
@@ -710,6 +721,10 @@ class UnifiedWorkoutSessionManager @Inject constructor(
      */
     private fun clearSession() {
         val currentSession = _currentSession.value
+        
+        // Stop foreground service when clearing session
+        stopWorkoutForegroundService()
+        
         _currentSession.value = null
         // Don't clear the saved workout ID here - it's needed for navigation
         sharedPrefs.edit {
@@ -752,6 +767,12 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                     if (session.sessionStatus != UnifiedWorkoutSession.SessionStatus.COMPLETED) {
                         // 🔥 KEY FIX: Immediately set session state for UI visibility
                         _currentSession.value = session
+                        
+                        // Start foreground service for recovered active sessions
+                        if (session.sessionStatus == UnifiedWorkoutSession.SessionStatus.ACTIVE ||
+                            session.sessionStatus == UnifiedWorkoutSession.SessionStatus.PAUSED) {
+                            startWorkoutForegroundService()
+                        }
                         
                         if (session.sessionStatus == UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE) {
                             Timber.w("Failed save session recovered: ${session.name}")
@@ -862,6 +883,41 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Fallback cache invalidation failed for user: $userId")
             // Continue anyway - don't let cache issues block workout completion
+        }
+    }
+
+    /**
+     * Starts the workout foreground service for persistent notifications
+     */
+    private fun startWorkoutForegroundService() {
+        try {
+            val intent = Intent(context, WorkoutForegroundService::class.java).apply {
+                action = WorkoutForegroundService.ACTION_START_FOREGROUND
+            }
+            
+            // Use ContextCompat for safe foreground service starting
+            ContextCompat.startForegroundService(context, intent)
+            
+            Timber.d("Workout foreground service started")
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to start workout foreground service")
+        }
+    }
+
+    /**
+     * Stops the workout foreground service
+     */
+    private fun stopWorkoutForegroundService() {
+        try {
+            val intent = Intent(context, WorkoutForegroundService::class.java).apply {
+                action = WorkoutForegroundService.ACTION_STOP_FOREGROUND
+            }
+            
+            context.startService(intent)
+            
+            Timber.d("Workout foreground service stopped")
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to stop workout foreground service")
         }
     }
 

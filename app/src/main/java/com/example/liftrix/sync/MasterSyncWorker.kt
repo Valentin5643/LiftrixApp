@@ -16,7 +16,10 @@ import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
 import timber.log.Timber
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.supervisorScope
 
 /**
  * Master coordinator worker that orchestrates all sync operations during periodic background sync.
@@ -36,9 +39,10 @@ import kotlinx.coroutines.delay
  * 
  * Performance Optimizations:
  * - Only triggers sync for entities with unsynced changes
- * - Uses sequential execution to prevent Firebase rate limiting
+ * - Uses parallel execution with supervisorScope for independent entity syncs
  * - Implements intelligent backoff on consecutive failures
  * - Tracks sync metrics for performance monitoring
+ * - Profile syncs first (foundation), then other entities in parallel
  * 
  * Error Handling:
  * - Individual entity sync failures don't block other entities
@@ -62,7 +66,7 @@ class MasterSyncWorker @AssistedInject constructor(
     companion object {
         const val WORK_NAME = "master_sync_work"
         const val KEY_SYNC_SUMMARY = "sync_summary"
-        private const val SYNC_DELAY_MS = 1000L // Delay between entity syncs to prevent rate limiting
+        // Removed SYNC_DELAY_MS - using parallel execution instead
     }
 
     override suspend fun performSync(userId: String): Result {
@@ -78,62 +82,54 @@ class MasterSyncWorker @AssistedInject constructor(
             
             // Track sync results for each entity type
             val syncResults = mutableMapOf<String, SyncResult>()
-            var overallSuccess = true
             var hasPartialFailure = false
             
-            // 1. Profile Sync (Foundation)
-            checkCancellation() // Check before each sync operation
-            Timber.d("MasterSyncWorker: Starting profile sync")
+            // 1. Profile Sync (Foundation) - Must complete first as other entities depend on it
+            checkCancellation()
+            Timber.d("MasterSyncWorker: Starting profile sync (foundation)")
             val profileResult = syncEntity("profile", userId)
             syncResults["profile"] = profileResult
             if (!profileResult.success) {
                 Timber.w("MasterSyncWorker: Profile sync failed, continuing with other entities")
                 hasPartialFailure = true
             }
-            delay(SYNC_DELAY_MS)
             
-            // 2. Workout Sync (High Priority)
+            // 2. Parallel sync for remaining entities using supervisorScope
+            // supervisorScope ensures one entity failure doesn't cancel others
             checkCancellation()
-            Timber.d("MasterSyncWorker: Starting workout sync")
-            val workoutResult = syncEntity("workout", userId)
-            syncResults["workout"] = workoutResult
-            if (!workoutResult.success) {
-                Timber.w("MasterSyncWorker: Workout sync failed")
-                hasPartialFailure = true
-            }
-            delay(SYNC_DELAY_MS)
+            Timber.d("MasterSyncWorker: Starting parallel sync for remaining entities")
             
-            // 3. Template Sync (Medium Priority)
-            checkCancellation()
-            Timber.d("MasterSyncWorker: Starting template sync")
-            val templateResult = syncEntity("template", userId)
-            syncResults["template"] = templateResult
-            if (!templateResult.success) {
-                Timber.w("MasterSyncWorker: Template sync failed")
-                hasPartialFailure = true
+            supervisorScope {
+                val parallelResults = listOf(
+                    async { 
+                        Timber.d("MasterSyncWorker: Syncing workouts (parallel)")
+                        "workout" to syncEntity("workout", userId)
+                    },
+                    async { 
+                        Timber.d("MasterSyncWorker: Syncing templates (parallel)")
+                        "template" to syncEntity("template", userId)
+                    },
+                    async { 
+                        Timber.d("MasterSyncWorker: Syncing user_public (parallel)")
+                        "user_public" to syncEntity("user_public", userId)
+                    },
+                    async { 
+                        Timber.d("MasterSyncWorker: Syncing achievements (parallel)")
+                        "achievement" to syncEntity("achievement", userId)
+                    }
+                ).awaitAll()
+                
+                // Process parallel results
+                parallelResults.forEach { (entityType, result) ->
+                    syncResults[entityType] = result
+                    if (!result.success) {
+                        Timber.w("MasterSyncWorker: $entityType sync failed")
+                        hasPartialFailure = true
+                    }
+                }
             }
-            delay(SYNC_DELAY_MS)
             
-            // 4. User Public Sync (High Priority - enables search functionality)
-            checkCancellation()
-            Timber.d("MasterSyncWorker: Starting user public sync")
-            val userPublicResult = syncEntity("user_public", userId)
-            syncResults["user_public"] = userPublicResult
-            if (!userPublicResult.success) {
-                Timber.w("MasterSyncWorker: User public sync failed")
-                hasPartialFailure = true
-            }
-            delay(SYNC_DELAY_MS)
-            
-            // 5. Achievement Sync (Low Priority)
-            checkCancellation()
-            Timber.d("MasterSyncWorker: Starting achievement sync")
-            val achievementResult = syncEntity("achievement", userId)
-            syncResults["achievement"] = achievementResult
-            if (!achievementResult.success) {
-                Timber.w("MasterSyncWorker: Achievement sync failed")
-                hasPartialFailure = true
-            }
+            Timber.d("MasterSyncWorker: All parallel syncs complete")
             
             // Calculate overall sync summary
             val totalSynced = syncResults.values.sumOf { it.syncedCount }

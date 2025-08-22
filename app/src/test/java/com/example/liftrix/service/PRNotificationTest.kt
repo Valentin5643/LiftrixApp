@@ -76,7 +76,7 @@ class PRNotificationTest {
 
         coEvery { 
             prNotificationSender.sendPRNotification(any(), any(), any(), any(), any(), any()) 
-        } returns LiftrixResult.Success(Unit)
+        } returns Result.success(Unit)
 
         // When
         val result = prNotificationSender.sendPRNotification(
@@ -89,7 +89,7 @@ class PRNotificationTest {
         )
 
         // Then
-        assertTrue("Result should be success", result is LiftrixResult.Success)
+        assertTrue("Result should be success", result.isSuccess)
     }
 
     @Test
@@ -108,7 +108,7 @@ class PRNotificationTest {
         
         coEvery { 
             prNotificationSender.sendPRNotification(any(), any(), any(), any(), any(), any()) 
-        } returns LiftrixResult.Success(Unit)
+        } returns Result.success(Unit)
 
         // When
         val result = prNotificationSender.sendPRNotification(
@@ -121,7 +121,7 @@ class PRNotificationTest {
         )
 
         // Then
-        assertTrue("Result should be success", result is LiftrixResult.Success)
+        assertTrue("Result should be success", result.isSuccess)
     }
 
     @Test
@@ -140,7 +140,7 @@ class PRNotificationTest {
 
         coEvery { 
             prNotificationSender.sendPRNotification(any(), any(), any(), any(), any(), any()) 
-        } returns LiftrixResult.Success(Unit)
+        } returns Result.success(Unit)
 
         // When
         val result = prNotificationSender.sendPRNotification(
@@ -153,7 +153,7 @@ class PRNotificationTest {
         )
 
         // Then
-        assertTrue("Result should be success", result is LiftrixResult.Success)
+        assertTrue("Result should be success", result.isSuccess)
     }
 
     @Test
@@ -173,7 +173,7 @@ class PRNotificationTest {
         // Mock FCM failure
         coEvery { 
             prNotificationSender.sendPRNotification(any(), any(), any(), any(), any(), any()) 
-        } returns LiftrixResult.Error(LiftrixError.NetworkError(errorMessage = "FCM delivery failed", analyticsContext = mapOf()))
+        } returns Result.failure(LiftrixError.NetworkError(errorMessage = "FCM delivery failed", analyticsContext = mapOf()))
 
         // When
         val result = prNotificationSender.sendPRNotification(
@@ -186,7 +186,7 @@ class PRNotificationTest {
         )
 
         // Then - Should handle failure gracefully
-        assertTrue("Result should indicate failure", result is LiftrixResult.Error)
+        assertTrue("Result should indicate failure", result.isFailure)
         
         // Verify the notification was attempted
         coVerify {
@@ -217,7 +217,7 @@ class PRNotificationTest {
 
         coEvery { 
             prNotificationSender.sendPRNotification(any(), any(), any(), any(), any(), any()) 
-        } returns LiftrixResult.Success(Unit)
+        } returns Result.success(Unit)
 
         // When
         val result = prNotificationSender.sendPRNotification(
@@ -230,7 +230,7 @@ class PRNotificationTest {
         )
 
         // Then
-        assertTrue("Result should be success", result is LiftrixResult.Success)
+        assertTrue("Result should be success", result.isSuccess)
     }
 
     @Test
@@ -249,7 +249,7 @@ class PRNotificationTest {
         
         coEvery { 
             prNotificationSender.sendPRNotification(any(), any(), any(), any(), any(), any()) 
-        } returns LiftrixResult.Error(LiftrixError.BusinessLogicError(code = "DATABASE_ERROR", errorMessage = "Database error", analyticsContext = mapOf()))
+        } returns Result.failure(LiftrixError.BusinessLogicError(code = "DATABASE_ERROR", errorMessage = "Database error", analyticsContext = mapOf()))
 
         // When
         val result = prNotificationSender.sendPRNotification(
@@ -262,7 +262,7 @@ class PRNotificationTest {
         )
 
         // Then
-        assertTrue("Result should be error", result is LiftrixResult.Error)
+        assertTrue("Result should be error", result.isFailure)
     }
 
     @Test
@@ -282,7 +282,7 @@ class PRNotificationTest {
         // Mock successful FCM send
         coEvery { 
             prNotificationSender.sendPRNotification(any(), any(), any(), any(), any(), any()) 
-        } returns LiftrixResult.Success(Unit)
+        } returns Result.success(Unit)
 
         // When
         val result = prNotificationSender.sendPRNotification(
@@ -295,7 +295,7 @@ class PRNotificationTest {
         )
 
         // Then
-        assertTrue("Result should be success", result is LiftrixResult.Success)
+        assertTrue("Result should be success", result.isSuccess)
         
         // Verify the notification was called with correct parameters
         coVerify {
@@ -326,7 +326,7 @@ class PRNotificationTest {
 
         coEvery { 
             prNotificationSender.sendPRNotification(any(), any(), any(), any(), any(), any()) 
-        } returns LiftrixResult.Success(Unit)
+        } returns Result.success(Unit)
 
         // When
         val result = prNotificationSender.sendPRNotification(
@@ -339,7 +339,7 @@ class PRNotificationTest {
         )
 
         // Then
-        assertTrue("Result should be success", result is LiftrixResult.Success)
+        assertTrue("Result should be success", result.isSuccess)
     }
 
     // Helper methods for creating test data

@@ -1062,6 +1062,50 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
     fun clearSavedWorkoutId() {
         sessionManager.clearSavedWorkoutId()
     }
+    
+    /**
+     * Removes a set from an exercise in the current session
+     */
+    fun removeSetFromExercise(exerciseId: String, setNumber: Int) {
+        viewModelScope.launch {
+            try {
+                val currentSession = sessionManager.getCurrentSession()
+                if (currentSession == null) {
+                    Timber.e("Cannot remove set - no active session")
+                    return@launch
+                }
+                
+                val exercise = currentSession.exercises.find { it.exerciseId.value == exerciseId }
+                if (exercise == null) {
+                    Timber.e("Exercise not found: $exerciseId")
+                    return@launch
+                }
+                
+                if (exercise.sets.size <= 1) {
+                    Timber.w("Cannot remove last set from exercise")
+                    return@launch
+                }
+                
+                // Remove the set and reindex remaining sets
+                val updatedSets = exercise.sets.toMutableList()
+                if (setNumber > 0 && setNumber <= updatedSets.size) {
+                    updatedSets.removeAt(setNumber - 1)
+                    val reindexedSets = updatedSets.mapIndexed { index, set ->
+                        set.copy(setNumber = index + 1)
+                    }
+                    
+                    val updatedExercise = exercise.copy(sets = reindexedSets)
+                    sessionManager.updateExerciseInSession(ExerciseId(exerciseId), updatedExercise)
+                    Timber.d("Set $setNumber removed from exercise $exerciseId")
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Error removing set from exercise")
+                _uiState.value = UnifiedActiveWorkoutUiState.Error(
+                    message = "Failed to remove set: ${e.message}"
+                )
+            }
+        }
+    }
 }
 
 /**
