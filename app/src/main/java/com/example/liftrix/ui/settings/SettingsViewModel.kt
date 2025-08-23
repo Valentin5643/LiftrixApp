@@ -15,6 +15,7 @@ import com.example.liftrix.domain.usecase.settings.UpdateWeightUnitPreferenceUse
 import com.example.liftrix.domain.usecase.profile.UploadProfileImageUseCase
 import com.example.liftrix.domain.usecase.GetProfileUseCase
 import com.example.liftrix.domain.usecase.social.GetSocialProfileUseCase
+import com.example.liftrix.domain.usecase.admin.CheckAdminPermissionsUseCase
 import com.example.liftrix.domain.model.WeightUnit
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.ui.theme.ThemeManager
@@ -67,6 +68,7 @@ class SettingsViewModel @Inject constructor(
     private val analyticsService: AnalyticsService,
     private val settingsPersistenceManager: SettingsPersistenceManager,
     private val settingsValidator: SettingsValidator,
+    private val checkAdminPermissionsUseCase: CheckAdminPermissionsUseCase,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -1170,6 +1172,16 @@ class SettingsViewModel @Inject constructor(
                 else -> null
             }
             
+            // Check admin permissions for current user
+            val isAdmin = try {
+                currentUser?.uid?.let { userId ->
+                    checkAdminPermissionsUseCase(userId).getOrNull() ?: false
+                } ?: false
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to check admin permissions")
+                false
+            }
+            
             // Always update state to exit loading, even with partial data
             val newState = _uiState.value.copy(
                 isLoading = false,
@@ -1180,7 +1192,8 @@ class SettingsViewModel @Inject constructor(
                 subscriptionStatus = subscription,
                 error = if (settings == null) errorMessage else null, // Only show error if critical data missing
                 isUpdatingSettings = false,
-                effectiveThemeState = effectiveThemeState
+                effectiveThemeState = effectiveThemeState,
+                isAdmin = isAdmin
             )
             
             _uiState.value = newState

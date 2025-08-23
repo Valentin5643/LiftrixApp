@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.MoreVert
@@ -248,6 +249,9 @@ fun UnifiedNavigationContainer(
                         },
                         onNavigateToUserSearch = {
                             navController.navigate(LiftrixRoute.UserSearch)
+                        },
+                        onNavigateToQRCode = {
+                            navController.navigateToQRCodeDisplay()
                         }
                     )
                 }
@@ -478,6 +482,9 @@ fun UnifiedNavigationContainer(
                         },
                         onNavigateToAIChatSettings = {
                             navController.navigate(LiftrixRoute.AIChatSettings)
+                        },
+                        onNavigateToAdminBanManagement = {
+                            navController.navigate(LiftrixRoute.AdminBanManagement)
                         }
                     )
                 }
@@ -766,6 +773,19 @@ fun UnifiedNavigationContainer(
                         }
                     }
                     
+                    // Listen for new exercise addition from navigation
+                    LaunchedEffect(backStackEntry.savedStateHandle) {
+                        backStackEntry.savedStateHandle.getStateFlow<com.example.liftrix.domain.model.ExerciseLibrary?>(
+                            "selected_exercise", null
+                        ).collect { selectedExercise ->
+                            if (selectedExercise != null) {
+                                editWorkoutViewModel.handleEvent(com.example.liftrix.ui.workout.edit.EditWorkoutEvent.AddExercise(selectedExercise.id))
+                                // Clear the saved state to prevent re-triggering
+                                backStackEntry.savedStateHandle.remove<com.example.liftrix.domain.model.ExerciseLibrary>("selected_exercise")
+                            }
+                        }
+                    }
+                    
                     com.example.liftrix.ui.workout.edit.RedesignedEditWorkoutScreen(
                         workoutId = WorkoutId(route.workoutId),
                         onNavigateBack = {
@@ -1023,6 +1043,15 @@ fun UnifiedNavigationContainer(
                         }
                     )
                 }
+                
+                // Admin System Routes (Admin-only access)
+                composable<LiftrixRoute.AdminBanManagement> {
+                    com.example.liftrix.ui.admin.AdminBanManagementScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
             }
             
             // Persistent live session bar - only show if session exists and not on active workout screen
@@ -1047,9 +1076,7 @@ fun UnifiedNavigationContainer(
                     },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(
-                            bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 64.dp
-                        )
+                        .padding(bottom = 8.dp) // Fixed: Use minimal padding above navigation bar
                 )
             }
         }
@@ -1433,22 +1460,19 @@ private fun NavigationAwareTopAppBar(
             // Note: Profile-specific actions are handled within the screen itself
             // to maintain proper ViewModel scoping
             
-            // Show refresh button specifically for Friends screen
+            // Show search button specifically for Friends screen
             if (currentRoute?.contains("Friends") == true) {
-                // Get SocialViewModel instance for refresh functionality  
-                val socialViewModel: SocialViewModel = hiltViewModel()
-                
                 IconButton(
                     onClick = {
-                        socialViewModel.onEvent(SocialEvent.Refresh)
+                        navController.navigateToUserSearch()
                     },
                     modifier = Modifier.semantics {
-                        contentDescription = "Refresh friends"
+                        contentDescription = "Search users"
                     }
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Sync,
-                        contentDescription = "Refresh",
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search",
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }

@@ -1612,6 +1612,611 @@ async function sendBatchedNotification(userId, notifications, style) {
 }
 
 // ================================
+// USER MANAGEMENT & BANNING FUNCTIONS
+// ================================
+
+/**
+ * Admin-only Cloud Function to ban/disable users
+ * Disables Firebase Auth account and updates user document
+ */
+exports.banUser = onCall(async (request) => {
+  // Verify admin permissions
+  if (!request.auth || !request.auth.token.admin) {
+    throw new Error("Only admin users can ban other users");
+  }
+
+  const { userId, reason, banDuration, severity } = request.data;
+
+  if (!userId || !reason) {
+    throw new Error("userId and reason are required");
+  }
+
+  try {
+    logger.info(`Admin ${request.auth.uid} attempting to ban user: ${userId}`);
+
+    // Get user record to check if user exists
+    const userRecord = await auth.getUser(userId);
+
+    if (!userRecord) {
+      throw new Error(`User not found: ${userId}`);
+    }
+
+    // Disable Firebase Auth account
+    await auth.updateUser(userId, {
+      disabled: true,
+      customClaims: {
+        ...userRecord.customClaims,
+        banned: true,
+        banReason: reason,
+        bannedBy: request.auth.uid,
+        bannedAt: new Date().toISOString(),
+        banDuration: banDuration || null,
+        severity: severity || "moderate"
+      }
+    });
+
+    // Create ban record in Firestore
+    const banRecord = {
+      userId: userId,
+      bannedBy: request.auth.uid,
+      reason: reason,
+      severity: severity || "moderate",
+      banDuration: banDuration || null, // null means permanent
+      bannedAt: new Date(),
+      status: "active",
+      userEmail: userRecord.email || null,
+      userDisplayName: userRecord.displayName || null,
+      metadata: {
+        userCreatedAt: userRecord.metadata.creationTime,
+        lastSignIn: userRecord.metadata.lastSignInTime,
+        providerData: userRecord.providerData.map(p => p.providerId)
+      }
+    };
+
+    const banDoc = await db.collection("user_bans").add(banRecord);
+
+    // Update user profile to reflect ban status
+    try {
+      await db.collection("users").doc(userId).update({
+        accountStatus: "banned",
+        bannedAt: new Date(),
+        bannedBy: request.auth.uid,
+        banReason: reason,
+        banSeverity: severity || "moderate",
+        profileVersion: db.FieldValue.increment(1),
+        updated_at: new Date()
+      });
+    } catch (profileError) {
+      logger.warn(`Could not update user profile for banned user ${userId}:`, profileError);
+    }
+
+    // Block user in social contexts
+    try {
+      // Add to global blocked users collection
+      await db.collection("globally_blocked_users").doc(userId).set({
+        userId: userId,
+        bannedBy: request.auth.uid,
+        reason: reason,
+        bannedAt: new Date(),
+        status: "active"
+      });
+
+      // Remove from public discoverable profiles
+      const socialProfileRef = db.collection("social_profiles").doc(userId);
+      await socialProfileRef.update({
+        isDiscoverable: false,
+        profileVisibility: "PRIVATE",
+        accountStatus: "banned",
+        updatedAt: new Date()
+      });
+    } catch (socialError) {
+      logger.warn(`Could not update social data for banned user ${userId}:`, socialError);
+    }
+
+    // Log the ban action for auditing
+    await db.collection("admin_actions").add({
+      actionType: "BAN_USER",
+      performedBy: request.auth.uid,
+      targetUserId: userId,
+      details: {
+        reason: reason,
+        severity: severity || "moderate",
+        banDuration: banDuration || "permanent",
+        userEmail: userRecord.email
+      },
+      timestamp: new Date(),
+      outcome: "success"
+    });
+
+    logger.info(`User ${userId} successfully banned by admin ${request.auth.uid}. Reason: ${reason}`);
+
+    return {
+      success: true,
+      userId: userId,
+      banId: banDoc.id,
+      bannedAt: banRecord.bannedAt,
+      message: `User ${userId} has been banned successfully`
+    };
+
+  } catch (error) {
+    logger.error(`Error banning user ${userId}:`, error);
+    
+    // Log failed ban attempt
+    await db.collection("admin_actions").add({
+      actionType: "BAN_USER",
+      performedBy: request.auth.uid,
+      targetUserId: userId,
+      details: {
+        reason: reason,
+        severity: severity || "moderate",
+        error: error.message
+      },
+      timestamp: new Date(),
+      outcome: "failed"
+    });
+
+    throw new Error(`Failed to ban user: ${error.message}`);
+  }
+});
+
+/**
+ * Admin-only Cloud Function to unban/re-enable users
+ */
+exports.unbanUser = onCall(async (request) => {
+  // Verify admin permissions
+  if (!request.auth || !request.auth.token.admin) {
+    throw new Error("Only admin users can unban other users");
+  }
+
+  const { userId, reason } = request.data;
+
+  if (!userId) {
+    throw new Error("userId is required");
+  }
+
+  try {
+    logger.info(`Admin ${request.auth.uid} attempting to unban user: ${userId}`);
+
+    // Re-enable Firebase Auth account
+    await auth.updateUser(userId, {
+      disabled: false,
+      customClaims: {
+        banned: false,
+        unbannedBy: request.auth.uid,
+        unbannedAt: new Date().toISOString(),
+        unbanReason: reason || "Appeal approved"
+      }
+    });
+
+    // Update ban record to inactive
+    const banQuery = await db.collection("user_bans")
+      .where("userId", "==", userId)
+      .where("status", "==", "active")
+      .limit(1)
+      .get();
+
+    if (!banQuery.empty) {
+      await banQuery.docs[0].ref.update({
+        status: "inactive",
+        unbannedBy: request.auth.uid,
+        unbannedAt: new Date(),
+        unbanReason: reason || "Appeal approved"
+      });
+    }
+
+    // Update user profile
+    try {
+      await db.collection("users").doc(userId).update({
+        accountStatus: "active",
+        bannedAt: db.FieldValue.delete(),
+        bannedBy: db.FieldValue.delete(),
+        banReason: db.FieldValue.delete(),
+        banSeverity: db.FieldValue.delete(),
+        unbannedAt: new Date(),
+        unbannedBy: request.auth.uid,
+        profileVersion: db.FieldValue.increment(1),
+        updated_at: new Date()
+      });
+    } catch (profileError) {
+      logger.warn(`Could not update user profile for unbanned user ${userId}:`, profileError);
+    }
+
+    // Remove from globally blocked users
+    try {
+      await db.collection("globally_blocked_users").doc(userId).delete();
+
+      // Restore social profile (but keep as private by default)
+      const socialProfileRef = db.collection("social_profiles").doc(userId);
+      await socialProfileRef.update({
+        accountStatus: "active",
+        updatedAt: new Date()
+        // Note: Don't automatically restore discoverability - user should opt back in
+      });
+    } catch (socialError) {
+      logger.warn(`Could not update social data for unbanned user ${userId}:`, socialError);
+    }
+
+    // Log the unban action
+    await db.collection("admin_actions").add({
+      actionType: "UNBAN_USER",
+      performedBy: request.auth.uid,
+      targetUserId: userId,
+      details: {
+        reason: reason || "Appeal approved"
+      },
+      timestamp: new Date(),
+      outcome: "success"
+    });
+
+    logger.info(`User ${userId} successfully unbanned by admin ${request.auth.uid}`);
+
+    return {
+      success: true,
+      userId: userId,
+      unbannedAt: new Date(),
+      message: `User ${userId} has been unbanned successfully`
+    };
+
+  } catch (error) {
+    logger.error(`Error unbanning user ${userId}:`, error);
+    
+    // Log failed unban attempt
+    await db.collection("admin_actions").add({
+      actionType: "UNBAN_USER",
+      performedBy: request.auth.uid,
+      targetUserId: userId,
+      details: {
+        reason: reason,
+        error: error.message
+      },
+      timestamp: new Date(),
+      outcome: "failed"
+    });
+
+    throw new Error(`Failed to unban user: ${error.message}`);
+  }
+});
+
+/**
+ * Admin-only Cloud Function to get user ban history and details
+ */
+exports.getUserBanInfo = onCall(async (request) => {
+  // Verify admin permissions
+  if (!request.auth || !request.auth.token.admin) {
+    throw new Error("Only admin users can view ban information");
+  }
+
+  const { userId } = request.data;
+
+  if (!userId) {
+    throw new Error("userId is required");
+  }
+
+  try {
+    // Get Firebase Auth user info
+    const userRecord = await auth.getUser(userId);
+    
+    // Get ban history from Firestore
+    const banHistorySnapshot = await db.collection("user_bans")
+      .where("userId", "==", userId)
+      .orderBy("bannedAt", "desc")
+      .get();
+
+    const banHistory = banHistorySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      bannedAt: doc.data().bannedAt?.toDate?.()?.toISOString() || doc.data().bannedAt,
+      unbannedAt: doc.data().unbannedAt?.toDate?.()?.toISOString() || doc.data().unbannedAt
+    }));
+
+    // Get current user profile info
+    let userProfile = null;
+    try {
+      const profileDoc = await db.collection("users").doc(userId).get();
+      if (profileDoc.exists) {
+        userProfile = profileDoc.data();
+      }
+    } catch (profileError) {
+      logger.warn(`Could not fetch profile for user ${userId}:`, profileError);
+    }
+
+    return {
+      success: true,
+      userInfo: {
+        uid: userRecord.uid,
+        email: userRecord.email,
+        displayName: userRecord.displayName,
+        disabled: userRecord.disabled,
+        createdAt: userRecord.metadata.creationTime,
+        lastSignIn: userRecord.metadata.lastSignInTime,
+        customClaims: userRecord.customClaims || {},
+        providerData: userRecord.providerData.map(p => ({
+          providerId: p.providerId,
+          email: p.email,
+          displayName: p.displayName
+        }))
+      },
+      userProfile: userProfile,
+      banHistory: banHistory,
+      currentlyBanned: userRecord.disabled || userRecord.customClaims?.banned === true
+    };
+
+  } catch (error) {
+    logger.error(`Error getting ban info for user ${userId}:`, error);
+    throw new Error(`Failed to get user ban info: ${error.message}`);
+  }
+});
+
+/**
+ * Admin-only Cloud Function to list all banned users
+ */
+exports.listBannedUsers = onCall(async (request) => {
+  // Verify admin permissions
+  if (!request.auth || !request.auth.token.admin) {
+    throw new Error("Only admin users can list banned users");
+  }
+
+  const { limit = 50, offset = 0, severity = null } = request.data;
+
+  try {
+    let query = db.collection("user_bans")
+      .where("status", "==", "active")
+      .orderBy("bannedAt", "desc");
+
+    if (severity) {
+      query = query.where("severity", "==", severity);
+    }
+
+    query = query.limit(limit);
+    if (offset > 0) {
+      const offsetSnapshot = await db.collection("user_bans")
+        .where("status", "==", "active")
+        .orderBy("bannedAt", "desc")
+        .limit(offset)
+        .get();
+      
+      if (!offsetSnapshot.empty) {
+        const lastVisible = offsetSnapshot.docs[offsetSnapshot.docs.length - 1];
+        query = query.startAfter(lastVisible);
+      }
+    }
+
+    const snapshot = await query.get();
+    
+    const bannedUsers = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      bannedAt: doc.data().bannedAt?.toDate?.()?.toISOString() || doc.data().bannedAt
+    }));
+
+    // Get total count for pagination
+    const totalSnapshot = await db.collection("user_bans")
+      .where("status", "==", "active")
+      .select()
+      .get();
+
+    return {
+      success: true,
+      bannedUsers: bannedUsers,
+      total: totalSnapshot.size,
+      hasMore: snapshot.size === limit,
+      nextOffset: offset + snapshot.size
+    };
+
+  } catch (error) {
+    logger.error("Error listing banned users:", error);
+    throw new Error(`Failed to list banned users: ${error.message}`);
+  }
+});
+
+/**
+ * Admin-only Cloud Function to search users by email or display name
+ * Fixed implementation with robust search similar to social user search
+ */
+exports.searchUsers = onCall(async (request) => {
+  // Verify admin permissions  
+  if (!request.auth || !request.auth.token.admin) {
+    throw new Error("Only admin users can search for users");
+  }
+
+  const { query: searchQuery, limit = 50 } = request.data;
+
+  if (!searchQuery || searchQuery.length < 3) {
+    throw new Error("Search query must be at least 3 characters long");
+  }
+
+  try {
+    logger.info(`Admin user search initiated with query: "${searchQuery}"`);
+    
+    // Normalize search query for case-insensitive matching
+    const normalizedQuery = searchQuery.toLowerCase().trim();
+    
+    // Get all users from the collection (since Firestore doesn't support case-insensitive queries well)
+    // We'll limit the initial query and do client-side filtering
+    const allUsersSnapshot = await db.collection("users")
+      .limit(500) // Get a reasonable subset to search through
+      .get();
+
+    logger.info(`Retrieved ${allUsersSnapshot.size} users for search processing`);
+
+    // Client-side filtering for robust search functionality
+    const matchingUsers = [];
+    const userMap = new Map();
+    
+    allUsersSnapshot.docs.forEach(doc => {
+      const data = doc.data();
+      const userId = doc.id;
+      
+      // Extract searchable fields
+      const email = (data.email || '').toLowerCase();
+      const displayName = (data.displayName || '').toLowerCase();
+      const username = (data.username || '').toLowerCase();
+      
+      // Apply flexible matching logic (similar to social search)
+      const matchesEmail = email.includes(normalizedQuery);
+      const matchesDisplayName = displayName.includes(normalizedQuery);
+      const matchesUsername = username.includes(normalizedQuery);
+      
+      if (matchesEmail || matchesDisplayName || matchesUsername) {
+        // Create user info object
+        const userInfo = {
+          uid: userId,
+          email: data.email,
+          displayName: data.displayName || data.username,
+          accountStatus: data.accountStatus || "active",
+          createdAt: data.created_at?.toDate?.()?.toISOString() || data.created_at,
+          lastActive: data.last_active_at?.toDate?.()?.toISOString() || data.last_active_at,
+          currentlyBanned: false // Will be updated below
+        };
+        
+        userMap.set(userId, userInfo);
+        matchingUsers.push(userInfo);
+      }
+    });
+
+    logger.info(`Found ${matchingUsers.length} matching users after filtering`);
+
+    // Limit results to requested amount
+    const limitedUsers = matchingUsers.slice(0, limit);
+    
+    // For each matching user, check if they're banned
+    if (limitedUsers.length > 0) {
+      const userIds = limitedUsers.map(u => u.uid);
+      
+      // Query ban status in batches if needed (Firestore 'in' query limit is 10)
+      const bannedUserIds = new Set();
+      
+      for (let i = 0; i < userIds.length; i += 10) {
+        const batch = userIds.slice(i, i + 10);
+        const banSnapshot = await db.collection("user_bans")
+          .where("userId", "in", batch)
+          .where("status", "==", "active")
+          .get();
+        
+        banSnapshot.docs.forEach(doc => {
+          bannedUserIds.add(doc.data().userId);
+        });
+      }
+      
+      // Update ban status for all users
+      limitedUsers.forEach(user => {
+        user.currentlyBanned = bannedUserIds.has(user.uid);
+      });
+      
+      logger.info(`Updated ban status for ${limitedUsers.length} users. ${bannedUserIds.size} users are currently banned.`);
+    }
+
+    logger.info(`Admin user search completed successfully. Returning ${limitedUsers.length} results.`);
+
+    return {
+      success: true,
+      users: limitedUsers,
+      searchQuery: searchQuery,
+      totalMatches: matchingUsers.length
+    };
+
+  } catch (error) {
+    logger.error(`Error searching users with query "${searchQuery}":`, error);
+    throw new Error(`Failed to search users: ${error.message}`);
+  }
+});
+
+// ================================
+// ADMIN CLAIM MANAGEMENT FUNCTIONS
+// ================================
+
+/**
+ * Admin-only Cloud Function to set admin claims for a user
+ * This function allows setting custom admin claims for user authentication
+ */
+exports.setAdminClaim = onCall(async (request) => {
+  // For initial setup, allow if no admins exist yet
+  const adminQuery = await db.collection("admin_users").limit(1).get();
+  const hasExistingAdmins = !adminQuery.empty;
+  
+  // If admins exist, verify the caller is an admin
+  if (hasExistingAdmins && (!request.auth || !request.auth.token.admin)) {
+    throw new Error("Only admin users can set admin claims");
+  }
+  
+  const { targetUserId, isAdmin = true } = request.data;
+  
+  if (!targetUserId) {
+    throw new Error("targetUserId is required");
+  }
+  
+  try {
+    // Get the user record
+    const userRecord = await auth.getUser(targetUserId);
+    
+    if (!userRecord) {
+      throw new Error(`User not found: ${targetUserId}`);
+    }
+    
+    // Set admin custom claim
+    await auth.setCustomUserClaims(targetUserId, {
+      ...userRecord.customClaims,
+      admin: isAdmin,
+      adminSetAt: new Date().toISOString(),
+      adminSetBy: request.auth?.uid || "system"
+    });
+    
+    // Record this admin in the admin_users collection
+    if (isAdmin) {
+      await db.collection("admin_users").doc(targetUserId).set({
+        userId: targetUserId,
+        email: userRecord.email,
+        displayName: userRecord.displayName,
+        grantedAt: new Date(),
+        grantedBy: request.auth?.uid || "system",
+        status: "active"
+      });
+    } else {
+      // Remove from admin_users if revoking admin
+      await db.collection("admin_users").doc(targetUserId).delete();
+    }
+    
+    // Log the action
+    await db.collection("admin_actions").add({
+      actionType: isAdmin ? "GRANT_ADMIN" : "REVOKE_ADMIN",
+      performedBy: request.auth?.uid || "system",
+      targetUserId: targetUserId,
+      timestamp: new Date(),
+      outcome: "success"
+    });
+    
+    logger.info(`Admin claim ${isAdmin ? 'granted to' : 'revoked from'} user: ${targetUserId}`);
+    
+    // Verify the claims were set
+    const updatedUser = await auth.getUser(targetUserId);
+    
+    return {
+      success: true,
+      userId: targetUserId,
+      email: userRecord.email,
+      adminStatus: isAdmin,
+      customClaims: updatedUser.customClaims,
+      message: `Admin claim ${isAdmin ? 'granted' : 'revoked'} successfully`
+    };
+    
+  } catch (error) {
+    logger.error(`Error setting admin claim for user ${targetUserId}:`, error);
+    
+    // Log failed attempt
+    await db.collection("admin_actions").add({
+      actionType: isAdmin ? "GRANT_ADMIN" : "REVOKE_ADMIN",
+      performedBy: request.auth?.uid || "system",
+      targetUserId: targetUserId,
+      error: error.message,
+      timestamp: new Date(),
+      outcome: "failed"
+    });
+    
+    throw new Error(`Failed to set admin claim: ${error.message}`);
+  }
+});
+
+// ================================
 // SUPPORT TICKET EMAIL FUNCTIONS
 // ================================
 

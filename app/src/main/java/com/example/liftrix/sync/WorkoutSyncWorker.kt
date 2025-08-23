@@ -32,6 +32,10 @@ import kotlinx.serialization.Serializable
 import com.example.liftrix.data.model.ExerciseDto
 import com.example.liftrix.data.model.WorkoutSyncDto
 import com.example.liftrix.data.model.SyncPayload
+import com.example.liftrix.data.model.EnhancedWorkoutData
+import com.example.liftrix.data.model.DirectExerciseListWrapper
+import com.example.liftrix.data.model.LegacyExerciseWrapper
+import com.example.liftrix.data.remote.dto.WorkoutFirestoreDto
 
 @HiltWorker
 class WorkoutSyncWorker @AssistedInject constructor(
@@ -122,11 +126,13 @@ class WorkoutSyncWorker @AssistedInject constructor(
                         val remoteDoc = docRef.get().await()
                         
                         val dataToSync = if (remoteDoc.exists()) {
-                            // Handle conflict resolution
+                            // Handle conflict resolution using proper DTO
                             val remoteWorkout = remoteDoc.toObject(WorkoutFirestoreDto::class.java)
                             if (remoteWorkout != null) {
                                 // Simple last-write-wins for now - can be enhanced with ConflictResolver
-                                if (workout.updatedAt.epochSecond > (remoteWorkout.updatedAt ?: 0)) {
+                                val remoteUpdatedAtMillis = remoteWorkout.updatedAt?.toDate()?.time ?: 0L
+                                val localUpdatedAtMillis = workout.updatedAt.epochSecond * 1000
+                                if (localUpdatedAtMillis > remoteUpdatedAtMillis) {
                                     workoutMapper.toFirestoreDto(workoutMapper.toDomain(workout), userId)
                                 } else {
                                     // Remote is newer, update local
@@ -151,8 +157,16 @@ class WorkoutSyncWorker @AssistedInject constructor(
                                 if (workout.exercisesJson.isNullOrBlank()) {
                                     emptyList<ExerciseDto>()
                                 } else {
-                                    // Parse JSON string to list of properly typed DTOs
-                                    Json { ignoreUnknownKeys = true }.decodeFromString<List<ExerciseDto>>(workout.exercisesJson)
+                                    // Handle both wrapped and unwrapped formats
+                                    val json = Json { ignoreUnknownKeys = true }
+                                    try {
+                                        // First try the wrapped format (new enhanced format)
+                                        val wrapper = json.decodeFromString<LegacyExerciseWrapper>(workout.exercisesJson)
+                                        wrapper.exercises
+                                    } catch (e: Exception) {
+                                        // Fallback to direct list format (legacy)
+                                        json.decodeFromString<List<ExerciseDto>>(workout.exercisesJson)
+                                    }
                                 }
                             } catch (e: Exception) {
                                 Timber.w(e, "Failed to parse exercises JSON for workout ${workout.id}, using empty list")
@@ -254,14 +268,7 @@ class WorkoutSyncWorker @AssistedInject constructor(
         }
     }
 
-    // Helper data class for Firestore mapping with proper serialization
-    @Serializable
-    private data class WorkoutFirestoreDto(
-        val id: String = "",
-        val userId: String = "",
-        val name: String = "",
-        val updatedAt: Long? = null,
-        val status: String = "",
-        val exercises: List<ExerciseDto> = emptyList()
-    )
+    // WorkoutFirestoreDto moved to proper data class file:
+    // app/src/main/java/com/example/liftrix/data/remote/dto/WorkoutFirestoreDto.kt
+    // This resolves Firestore field mapping warnings for isSynced and other fields
 } 

@@ -24,7 +24,8 @@ class FriendMapper @Inject constructor() {
         displayName: String,
         email: String? = null,
         avatarUrl: String? = null,
-        presence: UserPresence? = null
+        presence: UserPresence? = null,
+        isMutual: Boolean = false
     ): Friend {
         return Friend(
             userId = entity.friendUserId,
@@ -33,7 +34,8 @@ class FriendMapper @Inject constructor() {
             avatarUrl = avatarUrl,
             status = FriendEntity.toFriendStatus(entity.status),
             presence = presence,
-            friendSince = entity.createdAt
+            friendSince = entity.createdAt,
+            isMutual = isMutual
         )
     }
 

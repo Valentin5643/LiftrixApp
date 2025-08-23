@@ -6,9 +6,14 @@ import com.example.liftrix.data.service.NetworkConnectivityMonitorImpl
 import com.example.liftrix.domain.service.NetworkConnectivityMonitor
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.storage.FirebaseStorage
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.example.liftrix.domain.model.Exercise
+import com.example.liftrix.domain.model.ExerciseSet
+import com.example.liftrix.data.serialization.ExerciseDeserializer
+import com.example.liftrix.data.serialization.ExerciseSetDeserializer
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -50,6 +55,16 @@ abstract class NetworkModule {
             }
         }
 
+        @Provides
+        @Singleton
+        fun provideFirebaseFunctions(): FirebaseFunctions {
+            return FirebaseFunctions.getInstance().apply {
+                // Configure timeout for Cloud Functions calls
+                // Admin operations may take longer than default
+                // Default timeout is 70 seconds which should be sufficient for admin operations
+            }
+        }
+
         // REMOVED: WorkManager provider
         // WorkManager MUST NOT be provided through Hilt to prevent early initialization.
         // Components that need WorkManager should use WorkManagerProvider.getInstance()
@@ -61,6 +76,8 @@ abstract class NetworkModule {
             return GsonBuilder()
                 .setDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ")
                 .setLenient() // Add lenient parsing for cache recovery and backward compatibility
+                .registerTypeAdapter(ExerciseSet::class.java, ExerciseSetDeserializer())
+                .registerTypeAdapter(Exercise::class.java, ExerciseDeserializer())
                 .create()
         }
 

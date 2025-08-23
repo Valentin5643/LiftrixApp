@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import androidx.core.content.FileProvider
 import com.example.liftrix.domain.model.ShareableContent
 import com.example.liftrix.domain.model.ShareableContentType
 import com.example.liftrix.domain.model.SocialPlatform
@@ -16,6 +17,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -29,6 +31,8 @@ class PlatformShareAdapterImpl @Inject constructor(
 ) : PlatformShareAdapter {
     
     companion object {
+        private const val FILE_PROVIDER_AUTHORITY = "com.example.liftrix.fileprovider"
+        
         // Platform configurations
         private val PLATFORM_CONFIGS = mapOf(
             SocialPlatform.INSTAGRAM to PlatformConfig(
@@ -207,7 +211,8 @@ class PlatformShareAdapterImpl @Inject constructor(
             
             if (imageUrl != null) {
                 type = "image/*"
-                putExtra(Intent.EXTRA_STREAM, Uri.parse(imageUrl))
+                val uri = createSecureUri(imageUrl)
+                putExtra(Intent.EXTRA_STREAM, uri)
             } else {
                 type = "text/plain"
             }
@@ -231,7 +236,8 @@ class PlatformShareAdapterImpl @Inject constructor(
             
             if (imageUrl != null) {
                 type = "image/*"
-                putExtra(Intent.EXTRA_STREAM, Uri.parse(imageUrl))
+                val uri = createSecureUri(imageUrl)
+                putExtra(Intent.EXTRA_STREAM, uri)
             } else {
                 type = "text/plain"
             }
@@ -255,7 +261,8 @@ class PlatformShareAdapterImpl @Inject constructor(
             
             if (imageUrl != null) {
                 type = "image/*"
-                putExtra(Intent.EXTRA_STREAM, Uri.parse(imageUrl))
+                val uri = createSecureUri(imageUrl)
+                putExtra(Intent.EXTRA_STREAM, uri)
             } else {
                 type = "text/plain"
             }
@@ -279,7 +286,8 @@ class PlatformShareAdapterImpl @Inject constructor(
             
             if (imageUrl != null) {
                 type = "image/*"
-                putExtra(Intent.EXTRA_STREAM, Uri.parse(imageUrl))
+                val uri = createSecureUri(imageUrl)
+                putExtra(Intent.EXTRA_STREAM, uri)
             } else {
                 type = "text/plain"
             }
@@ -303,7 +311,8 @@ class PlatformShareAdapterImpl @Inject constructor(
             
             if (imageUrl != null) {
                 type = "image/*"
-                putExtra(Intent.EXTRA_STREAM, Uri.parse(imageUrl))
+                val uri = createSecureUri(imageUrl)
+                putExtra(Intent.EXTRA_STREAM, uri)
             } else {
                 type = "text/plain"
             }
@@ -327,7 +336,8 @@ class PlatformShareAdapterImpl @Inject constructor(
             
             if (imageUrl != null) {
                 type = "image/*"
-                putExtra(Intent.EXTRA_STREAM, Uri.parse(imageUrl))
+                val uri = createSecureUri(imageUrl)
+                putExtra(Intent.EXTRA_STREAM, uri)
             } else {
                 type = "text/plain"
             }
@@ -416,5 +426,44 @@ class PlatformShareAdapterImpl @Inject constructor(
         }
         
         return hashtags.take(3)
+    }
+    
+    /**
+     * Creates a secure URI for sharing, handling both local files and remote URLs.
+     * 
+     * For local files, uses FileProvider to create a secure URI with proper permissions.
+     * For remote URLs, returns the URL as-is.
+     */
+    private fun createSecureUri(imageUrl: String): Uri {
+        return try {
+            // Check if it's a local file path
+            if (imageUrl.startsWith("/") || imageUrl.startsWith("file://")) {
+                val filePath = if (imageUrl.startsWith("file://")) {
+                    imageUrl.substring(7) // Remove "file://" prefix
+                } else {
+                    imageUrl
+                }
+                
+                val file = File(filePath)
+                
+                if (file.exists() && file.canRead()) {
+                    // Use FileProvider for secure sharing of local files
+                    FileProvider.getUriForFile(
+                        context,
+                        FILE_PROVIDER_AUTHORITY,
+                        file
+                    )
+                } else {
+                    throw IllegalArgumentException("File does not exist or is not readable: $filePath")
+                }
+            } else {
+                // For remote URLs, return as-is
+                Uri.parse(imageUrl)
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Error creating secure URI for: $imageUrl")
+            // Fallback to parsing as regular URI
+            Uri.parse(imageUrl)
+        }
     }
 }

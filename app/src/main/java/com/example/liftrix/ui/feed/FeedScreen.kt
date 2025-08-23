@@ -18,6 +18,7 @@ import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import com.example.liftrix.ui.navigation.LiftrixRoute
+import com.example.liftrix.ui.navigation.navigateToEditWorkout
 import com.example.liftrix.R
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.WorkoutPost
@@ -110,6 +111,7 @@ fun FeedScreen(
                 selectedTab = selectedTab,
                 likedPosts = feedUiState.likedPosts,
                 savedPosts = feedUiState.savedPosts,
+                currentUserId = feedUiState.currentUserId,
                 onPostInteraction = { interaction ->
                     // Map feed interactions to social events
                     feedViewModel.onEvent(FeedEvent.HandlePostInteraction(interaction))
@@ -132,6 +134,7 @@ private fun FeedContent(
     selectedTab: FeedTab,
     likedPosts: Set<String>,
     savedPosts: Set<String>,
+    currentUserId: String?,
     onPostInteraction: (PostInteraction) -> Unit,
     navController: NavController
 ) {
@@ -205,6 +208,10 @@ private fun FeedContent(
                     onWorkoutCopyClick = {
                         onPostInteraction(PostInteraction.CopyWorkout(post))
                     },
+                    onEditWorkout = {
+                        navController.navigateToEditWorkout(post.workoutId)
+                    },
+                    isOwnPost = currentUserId == post.userId,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = LiftrixSpacing.medium)

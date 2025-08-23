@@ -11,6 +11,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
+import timber.log.Timber
 
 @Singleton
 class WorkoutMapper @Inject constructor(
@@ -35,19 +36,23 @@ class WorkoutMapper @Inject constructor(
             if (enhancedData?.containsKey("exercises") == true) {
                 // New format with exercises key
                 val exercisesType = object : TypeToken<List<Exercise>>() {}.type
-                gson.fromJson(gson.toJson(enhancedData["exercises"]), exercisesType) ?: emptyList()
+                val exercisesList = gson.fromJson<List<Exercise>>(gson.toJson(enhancedData["exercises"]), exercisesType) ?: emptyList<Exercise>()
+                exercisesList
             } else {
                 // Old format - direct exercise list
                 val exercisesType = object : TypeToken<List<Exercise>>() {}.type
-                gson.fromJson(exercisesJson, exercisesType) ?: emptyList()
+                val exercisesList = gson.fromJson<List<Exercise>>(exercisesJson, exercisesType) ?: emptyList<Exercise>()
+                exercisesList
             }
         } catch (e: Exception) {
             // Fallback to old format if parsing fails
             try {
                 val exercisesType = object : TypeToken<List<Exercise>>() {}.type
-                gson.fromJson(exercisesJson, exercisesType) ?: emptyList()
+                val fallbackList = gson.fromJson<List<Exercise>>(exercisesJson, exercisesType) ?: emptyList<Exercise>()
+                fallbackList
             } catch (e2: Exception) {
-                emptyList()
+                Timber.e(e2, "🔥 WORKOUT-DEBUG: Exercise JSON parsing failed completely")
+                emptyList<Exercise>()
             }
         }
 
@@ -196,4 +201,5 @@ class WorkoutMapper @Inject constructor(
     private fun Timestamp.toInstant(): Instant {
         return Instant.ofEpochSecond(seconds, nanoseconds.toLong())
     }
+
 } 

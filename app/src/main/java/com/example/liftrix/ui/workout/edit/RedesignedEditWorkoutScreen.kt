@@ -318,47 +318,65 @@ private fun EditWorkoutContent(
                             weight = if (weightValue > 0) displayWeight.toString() else "",
                             reps = set.reps?.count?.toString() ?: "",
                             previousValue = previousValueText,
-                            isCompleted = set.completedAt != null
+                            isCompleted = set.completedAt != null,
+                            setId = set.id.value // Use actual set ID for stable identification
                         )
                     },
                     onAddSet = {
-                        // Add a new set to the exercise
-                        val newSet = com.example.liftrix.domain.model.ExerciseSet(
-                            id = com.example.liftrix.domain.model.ExerciseSetId(java.util.UUID.randomUUID().toString()),
-                            setNumber = exercise.sets.size + 1,
-                            reps = null,
-                            weight = null,
-                            completedAt = null
-                        )
-                        val updatedExercise = exercise.copy(
-                            sets = exercise.sets + newSet
-                        )
-                        viewModel.updateExercise(index, updatedExercise)
+                        // Use the ViewModel event for adding sets
+                        viewModel.handleEvent(EditWorkoutEvent.AddExerciseSet(index))
                     },
                     onUpdateSet = { setIndex, setData ->
-                        val updatedSets = exercise.sets.toMutableList()
-                        if (setIndex < updatedSets.size) {
-                            updatedSets[setIndex] = updatedSets[setIndex].copy(
-                                weight = setData.weight.toDoubleOrNull()?.let {
-                                    com.example.liftrix.domain.model.Weight.fromKilograms(it)
-                                },
-                                reps = setData.reps.toIntOrNull()?.let { com.example.liftrix.domain.model.Reps(it) },
-                                completedAt = if (setData.isCompleted) java.time.Instant.now() else null
-                            )
-                            val updatedExercise = exercise.copy(sets = updatedSets)
-                            viewModel.updateExercise(index, updatedExercise)
+                        try {
+                            val updatedSets = exercise.sets.toMutableList()
+                            if (setIndex in updatedSets.indices) {
+                                // Validate weight input
+                                val weightValue = if (setData.weight.isNotBlank()) {
+                                    setData.weight.toDoubleOrNull()?.let { weight ->
+                                        if (weight < 0) {
+                                            Timber.w("🔥 SET-UPDATE-DEBUG: Negative weight ignored: $weight")
+                                            null
+                                        } else if (weight > 1000) {
+                                            Timber.w("🔥 SET-UPDATE-DEBUG: Unrealistic weight capped: $weight")
+                                            1000.0 // Cap at 1000kg
+                                        } else {
+                                            weight
+                                        }
+                                    }
+                                } else null
+                                
+                                // Validate reps input
+                                val repsValue = if (setData.reps.isNotBlank()) {
+                                    setData.reps.toIntOrNull()?.let { reps ->
+                                        if (reps < 0) {
+                                            Timber.w("🔥 SET-UPDATE-DEBUG: Negative reps ignored: $reps")
+                                            null
+                                        } else if (reps > 1000) {
+                                            Timber.w("🔥 SET-UPDATE-DEBUG: Unrealistic reps capped: $reps")
+                                            1000 // Cap at 1000 reps
+                                        } else {
+                                            reps
+                                        }
+                                    }
+                                } else null
+                                
+                                val updatedSet = updatedSets[setIndex].copy(
+                                    weight = weightValue?.let { com.example.liftrix.domain.model.Weight.fromKilograms(it) },
+                                    reps = repsValue?.let { com.example.liftrix.domain.model.Reps(it) },
+                                    completedAt = if (setData.isCompleted) java.time.Instant.now() else null
+                                )
+                                // Use the event-driven system instead of direct method call
+                                viewModel.handleEvent(EditWorkoutEvent.UpdateExerciseSet(index, setIndex, updatedSet))
+                            } else {
+                                Timber.e("🔥 SET-UPDATE-DEBUG: Invalid set index: $setIndex for exercise $index")
+                            }
+                        } catch (e: Exception) {
+                            Timber.e(e, "🔥 SET-UPDATE-DEBUG: Failed to update set $setIndex for exercise $index")
                         }
                     },
                     onRemoveSet = { setIndex ->
-                        if (exercise.sets.size > 1) {
-                            val updatedSets = exercise.sets.toMutableList()
-                            updatedSets.removeAt(setIndex)
-                            val reindexedSets = updatedSets.mapIndexed { idx, set ->
-                                set.copy(setNumber = idx + 1)
-                            }
-                            val updatedExercise = exercise.copy(sets = reindexedSets)
-                            viewModel.updateExercise(index, updatedExercise)
-                        }
+                        // Use the ViewModel event for removing sets
+                        viewModel.handleEvent(EditWorkoutEvent.RemoveExerciseSet(index, setIndex))
                     },
                     onMenuClick = { showMenu = true },
                     onNotesClick = { showNotesDialog = true }
@@ -376,7 +394,17 @@ private fun EditWorkoutContent(
                         onNavigateToExerciseSelectionWithReplacement(index)
                     },
                     onRemove = {
-                        viewModel.removeExercise(index)
+                        try {
+                            if (data.editedExercises.size <= 1) {
+                                Timber.w("🔥 REMOVE-EXERCISE-DEBUG: Cannot remove last exercise from workout")
+                                // Show error message to user
+                                viewModel.handleEvent(EditWorkoutEvent.ShowError("Workout must have at least one exercise"))
+                            } else {
+                                viewModel.handleEvent(EditWorkoutEvent.RemoveExercise(index))
+                            }
+                        } catch (e: Exception) {
+                            Timber.e(e, "🔥 REMOVE-EXERCISE-DEBUG: Failed to remove exercise $index")
+                        }
                     }
                 )
                 
@@ -431,7 +459,10 @@ private fun EditWorkoutContent(
             // Add Exercise Button
             item {
                 OutlinedButton(
-                    onClick = onNavigateToExerciseSelection,
+                    onClick = {
+                        // Navigate to exercise selection for adding to the workout
+                        onNavigateToExerciseSelection()
+                    },
                     colors = ButtonDefaults.outlinedButtonColors(
                         contentColor = LiftrixColorsV2.Teal
                     ),
@@ -465,22 +496,20 @@ private fun EditWorkoutContent(
             }
         }
         
-        // Save Changes Button (Fixed at bottom)
-        if (data.hasChanges) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(LiftrixColorsV2.Dark.BackgroundPrimary)
-                    .padding(16.dp)
-            ) {
-                RedesignedPrimaryButton(
-                    text = "Save Changes",
-                    onClick = {
-                        viewModel.saveChanges()
-                    },
-                    enabled = workoutName.isNotBlank()
-                )
-            }
+        // Persistent Save Button (Always visible for editing)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(LiftrixColorsV2.Dark.BackgroundPrimary)
+                .padding(16.dp)
+        ) {
+            RedesignedPrimaryButton(
+                text = if (data.hasChanges) "Save Changes" else "Save Workout",
+                onClick = {
+                    viewModel.handleEvent(EditWorkoutEvent.SaveChanges)
+                },
+                enabled = workoutName.isNotBlank() && workoutName.length >= 2
+            )
         }
         
         // Reorder dialog

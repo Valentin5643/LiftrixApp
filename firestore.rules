@@ -365,6 +365,12 @@ service cloud.firestore {
                        request.resource.data.keys().hasAll(['followerId', 'followingId', 'status', 'createdAt']) &&
                        request.resource.data.status in ['PENDING', 'ACCEPTED', 'BLOCKED'] &&
                        !hasBlockRelationship(request.resource.data.followerId, request.resource.data.followingId);
+                       
+      // FIXED: Add explicit delete rule for unfollow operations
+      // Allow deletion if user is either the follower or the one being followed
+      allow delete: if isAuthenticated() &&
+                       (resource.data.followerId == request.auth.uid ||
+                        resource.data.followingId == request.auth.uid);
     }
     
     // Gym buddy relationships - inner circle connections

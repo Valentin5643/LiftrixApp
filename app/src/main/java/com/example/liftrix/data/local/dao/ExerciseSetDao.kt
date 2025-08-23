@@ -270,7 +270,7 @@ interface ExerciseSetDao {
      */
     @Query("""
         SELECT 
-            DATE(es.completed_at / 1000, 'unixepoch') as date,
+            COALESCE(DATE(es.completed_at / 1000, 'unixepoch'), w.date) as date,
             e.exercise_library_id,
             el.name as exercise_name,
             SUM(es.weight_kg * es.reps) as total_volume,
@@ -287,7 +287,7 @@ interface ExerciseSetDao {
             OR 
             (es.completed_at IS NULL AND DATE(w.date) BETWEEN :startDate AND :endDate)
         )
-        GROUP BY DATE(es.completed_at / 1000, 'unixepoch'), e.exercise_library_id, el.name
+        GROUP BY COALESCE(DATE(es.completed_at / 1000, 'unixepoch'), w.date), e.exercise_library_id, el.name
         ORDER BY date ASC, el.name ASC
     """)
     suspend fun getDailyVolumeDataByExercise(
@@ -306,7 +306,7 @@ interface ExerciseSetDao {
      */
     @Query("""
         SELECT 
-            DATE(es.completed_at / 1000, 'unixepoch') as date,
+            COALESCE(DATE(es.completed_at / 1000, 'unixepoch'), w.date) as date,
             el.primary_muscle_group,
             SUM(es.weight_kg * es.reps) as total_volume,
             COUNT(DISTINCT e.exercise_library_id) as exercise_count,
@@ -323,7 +323,7 @@ interface ExerciseSetDao {
             OR 
             (es.completed_at IS NULL AND DATE(w.date) BETWEEN :startDate AND :endDate)
         )
-        GROUP BY DATE(es.completed_at / 1000, 'unixepoch'), el.primary_muscle_group
+        GROUP BY COALESCE(DATE(es.completed_at / 1000, 'unixepoch'), w.date), el.primary_muscle_group
         ORDER BY date ASC, el.primary_muscle_group ASC
     """)
     suspend fun getDailyVolumeDataByMuscleGroup(
@@ -343,7 +343,7 @@ interface ExerciseSetDao {
      */
     @Query("""
         SELECT 
-            DATE(es.completed_at / 1000, 'unixepoch') as date,
+            COALESCE(DATE(es.completed_at / 1000, 'unixepoch'), w.date) as date,
             SUM(es.weight_kg * es.reps) as total_volume,
             COUNT(es.id) as total_sets,
             COUNT(DISTINCT e.exercise_library_id) as exercise_count
@@ -358,7 +358,7 @@ interface ExerciseSetDao {
             OR 
             (es.completed_at IS NULL AND DATE(w.date) BETWEEN :startDate AND :endDate)
         )
-        GROUP BY DATE(es.completed_at / 1000, 'unixepoch')
+        GROUP BY COALESCE(DATE(es.completed_at / 1000, 'unixepoch'), w.date)
         ORDER BY date ASC
     """)
     suspend fun getDailyVolumeData(

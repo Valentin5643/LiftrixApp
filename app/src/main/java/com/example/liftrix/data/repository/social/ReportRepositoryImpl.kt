@@ -3,8 +3,8 @@ package com.example.liftrix.data.repository.social
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.model.social.ReportReason
 import com.example.liftrix.domain.repository.social.ReportRepository
-import com.example.liftrix.domain.usecase.social.ReportReason
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber

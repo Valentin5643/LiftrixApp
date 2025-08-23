@@ -7,6 +7,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
@@ -39,11 +40,24 @@ import com.example.liftrix.ui.profile.components.CompactProfileImage
 fun FriendsScreen(
     onNavigateBack: () -> Unit, // Kept for backward compatibility, but navigation handled by global TopAppBar
     onNavigateToUserSearch: () -> Unit = {},
+    onNavigateToQRCode: () -> Unit = {},
+    onNavigateToUserProfile: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SocialViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var selectedTabIndex by remember { mutableIntStateOf(0) }
+    
+    // Handle navigation events
+    LaunchedEffect(viewModel) {
+        viewModel.navigationEvents.collect { event ->
+            when (event) {
+                is SocialNavigationEvent.NavigateToUserProfile -> {
+                    onNavigateToUserProfile(event.userId)
+                }
+            }
+        }
+    }
     
     Column(
         modifier = modifier.fillMaxSize()
@@ -128,11 +142,14 @@ fun FriendsScreen(
                 uiState = uiState,
                 onEvent = viewModel::onEvent,
                 onNavigateToUserSearch = onNavigateToUserSearch,
+                onNavigateToQRCode = onNavigateToQRCode,
+                onUserClick = { userId -> viewModel.onEvent(SocialEvent.NavigateToUserProfile(userId)) },
                 modifier = Modifier.fillMaxSize()
             )
             1 -> FollowersTab(
                 uiState = uiState,
                 onEvent = viewModel::onEvent,
+                onUserClick = { userId -> viewModel.onEvent(SocialEvent.NavigateToUserProfile(userId)) },
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -147,26 +164,43 @@ private fun FollowingTab(
     uiState: SocialUiState,
     onEvent: (SocialEvent) -> Unit,
     onNavigateToUserSearch: () -> Unit,
+    onNavigateToQRCode: () -> Unit,
+    onUserClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Local state for following search
+    var followingSearchQuery by remember { mutableStateOf("") }
+    
+    // Filter the following list based on search query
+    val filteredFollowing = remember(uiState.following, followingSearchQuery) {
+        if (followingSearchQuery.isBlank()) {
+            uiState.following
+        } else {
+            uiState.following.filter { friend ->
+                friend.displayName.contains(followingSearchQuery, ignoreCase = true) ||
+                (friend.email?.contains(followingSearchQuery, ignoreCase = true) == true)
+            }
+        }
+    }
+    
     Column(
         modifier = modifier
     ) {
-        // Search Section
-        SearchUsers(
-            searchQuery = uiState.searchQuery,
-            searchResults = uiState.searchResults,
-            onEvent = onEvent,
-            onNavigateToUserSearch = onNavigateToUserSearch,
+        // Search Section for Following
+        SearchFollowingUsers(
+            searchQuery = followingSearchQuery,
+            onSearchQueryChange = { followingSearchQuery = it },
+            onNavigateToQRCode = onNavigateToQRCode,
             modifier = Modifier.padding(16.dp)
         )
         
-        // Following List
+        // Following List (filtered)
         FollowingList(
-            following = uiState.following,
+            following = filteredFollowing,
             isLoading = uiState.isLoading,
             error = uiState.error,
             onEvent = onEvent,
+            onUserClick = onUserClick,
             modifier = Modifier.fillMaxSize()
         )
     }
@@ -179,6 +213,7 @@ private fun FollowingTab(
 private fun FollowersTab(
     uiState: SocialUiState,
     onEvent: (SocialEvent) -> Unit,
+    onUserClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     FollowersList(
@@ -186,8 +221,66 @@ private fun FollowersTab(
         isLoading = uiState.isLoading,
         error = uiState.error,
         onEvent = onEvent,
+        onUserClick = onUserClick,
         modifier = modifier
     )
+}
+
+/**
+ * Search functionality for filtering existing following users
+ */
+@Composable
+private fun SearchFollowingUsers(
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onNavigateToQRCode: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+    
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = onSearchQueryChange,
+            placeholder = { Text("Search following by name or email") },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = null
+                )
+            },
+            trailingIcon = if (searchQuery.isNotEmpty()) {
+                {
+                    IconButton(
+                        onClick = { onSearchQueryChange("") }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Clear,
+                            contentDescription = "Clear search"
+                        )
+                    }
+                }
+            } else null,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(
+                onSearch = { keyboardController?.hide() }
+            ),
+            modifier = Modifier.weight(1f)
+        )
+        
+        // Add QR code button for gym buddy pairing
+        IconButton(
+            onClick = onNavigateToQRCode
+        ) {
+            Icon(
+                Icons.Default.QrCode,
+                contentDescription = "Gym buddy QR code"
+            )
+        }
+    }
 }
 
 /**
@@ -336,6 +429,7 @@ private fun FollowingList(
     isLoading: Boolean,
     error: String?,
     onEvent: (SocialEvent) -> Unit,
+    onUserClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Debug logging for UI state
@@ -383,7 +477,8 @@ private fun FollowingList(
                 items(following) { user ->
                     FollowingItem(
                         user = user,
-                        onUnfollow = { onEvent(SocialEvent.UnfollowUser(user.userId)) }
+                        onUnfollow = { onEvent(SocialEvent.UnfollowUser(user.userId)) },
+                        onUserClick = { onUserClick(user.userId) }
                     )
                 }
             }
@@ -400,6 +495,7 @@ private fun FollowersList(
     isLoading: Boolean,
     error: String?,
     onEvent: (SocialEvent) -> Unit,
+    onUserClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Debug logging for UI state
@@ -447,7 +543,8 @@ private fun FollowersList(
                 items(followers) { user ->
                     FollowerItem(
                         user = user,
-                        onFollowBack = { onEvent(SocialEvent.FollowUser(user.userId)) }
+                        onFollowBack = { onEvent(SocialEvent.FollowUser(user.userId)) },
+                        onUserClick = { onUserClick(user.userId) }
                     )
                 }
             }
@@ -462,13 +559,15 @@ private fun FollowersList(
 private fun FollowingItem(
     user: Friend,
     onUnfollow: () -> Unit,
+    onUserClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+        ),
+        onClick = onUserClick
     ) {
         Row(
             modifier = Modifier
@@ -507,6 +606,22 @@ private fun FollowingItem(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Medium
+                    )
+                }
+                
+                // Display MUTUAL badge for mutual following
+                if (user.isMutual) {
+                    Text(
+                        text = "MUTUAL",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .background(
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                shape = MaterialTheme.shapes.small
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
             }
@@ -530,13 +645,15 @@ private fun FollowingItem(
 private fun FollowerItem(
     user: Friend,
     onFollowBack: () -> Unit,
+    onUserClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+        ),
+        onClick = onUserClick
     ) {
         Row(
             modifier = Modifier
@@ -575,6 +692,22 @@ private fun FollowerItem(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Medium
+                    )
+                }
+                
+                // Display MUTUAL badge for mutual followers
+                if (user.isMutual) {
+                    Text(
+                        text = "MUTUAL",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .background(
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                shape = MaterialTheme.shapes.small
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
             }

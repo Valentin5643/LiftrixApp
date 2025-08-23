@@ -53,6 +53,23 @@ class SocialRepositoryImpl @Inject constructor(
         private const val DISCOVERY_BATCH_SIZE = 10
         private const val MUTUAL_FRIENDS_WEIGHT = 0.5 // 50% mutual friends, 50% general discovery
     }
+    
+    /**
+     * Check if there's a mutual follow relationship between current user and target user
+     */
+    private suspend fun checkMutualRelationship(currentUserId: String, targetUserId: String): Boolean {
+        return try {
+            // Check if current user follows target
+            val currentFollowsTarget = friendDao.getFriendRelationship(currentUserId, targetUserId) != null
+            // Check if target follows current user  
+            val targetFollowsCurrent = friendDao.getFriendRelationship(targetUserId, currentUserId) != null
+            
+            currentFollowsTarget && targetFollowsCurrent
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to check mutual relationship between $currentUserId and $targetUserId")
+            false
+        }
+    }
 
     override fun searchUsers(query: String): Flow<List<User>> = flow {
         if (query.isBlank()) {
@@ -244,7 +261,8 @@ class SocialRepositoryImpl @Inject constructor(
                         displayName = friendProfile?.displayName ?: "User ${entity.friendUserId.take(8)}",
                         email = null, // Email is not in social profile - could be added if needed
                         avatarUrl = friendProfile?.profilePhotoUrl,
-                        presence = null // Presence service integration can be added when available
+                        presence = null, // Presence service integration can be added when available
+                        isMutual = checkMutualRelationship(userId, entity.friendUserId)
                     )
                     Timber.d("DEBUG_REPO: Successfully mapped friend: ${mappedFriend.displayName} (${mappedFriend.userId})")
                     mappedFriend
@@ -268,7 +286,8 @@ class SocialRepositoryImpl @Inject constructor(
                         displayName = "User ${entity.userId.take(8)}", // Placeholder
                         email = null,
                         avatarUrl = null,
-                        presence = null
+                        presence = null,
+                        isMutual = false // Pending requests are not mutual
                     )
                 } catch (e: Exception) {
                     Timber.w(e, "Failed to map pending request entity: ${entity.userId}")
@@ -1116,7 +1135,8 @@ class SocialRepositoryImpl @Inject constructor(
                         displayName = friendProfile?.displayName ?: "User ${entity.friendUserId.take(8)}",
                         email = null,
                         avatarUrl = friendProfile?.profilePhotoUrl,
-                        presence = null
+                        presence = null,
+                        isMutual = checkMutualRelationship(userId, entity.friendUserId)
                     )
                     Timber.d("DEBUG_REPO_FOLLOWING: Successfully mapped following: ${mappedFriend.displayName} (${mappedFriend.userId})")
                     mappedFriend
@@ -1151,7 +1171,8 @@ class SocialRepositoryImpl @Inject constructor(
                         displayName = followerProfile?.displayName ?: "User ${entity.userId.take(8)}",
                         email = null,
                         avatarUrl = followerProfile?.profilePhotoUrl,
-                        presence = null
+                        presence = null,
+                        isMutual = checkMutualRelationship(userId, entity.userId)
                     )
                     Timber.d("DEBUG_REPO_FOLLOWERS: Successfully mapped follower: ${mappedFollower.displayName} (${mappedFollower.userId})")
                     mappedFollower

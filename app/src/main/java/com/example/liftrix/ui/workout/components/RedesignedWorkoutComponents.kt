@@ -175,32 +175,41 @@ fun RedesignedExerciseCard(
         
         Spacer(modifier = Modifier.height(12.dp))
         
-        // Set rows
+        // Set rows with stable keys to prevent index confusion during recomposition
         sets.forEachIndexed { index, set ->
-            if (onRemoveSet != null && sets.size > 1) {
-                SwipeToDismissSetRow(
-                    setNumber = index + 1,
-                    setData = set,
-                    context = context,
-                    onUpdateSet = { updatedSet ->
-                        onUpdateSet(index, updatedSet)
-                    },
-                    onRemoveSet = { onRemoveSet(index) },
-                    onAnomalyDetected = onAnomalyDetected
-                )
-            } else {
-                RedesignedSetRow(
-                    setNumber = index + 1,
-                    setData = set,
-                    context = context,
-                    onUpdateSet = { updatedSet ->
-                        onUpdateSet(index, updatedSet)
-                    },
-                    onAnomalyDetected = onAnomalyDetected
-                )
-            }
-            if (index < sets.size - 1) {
-                Spacer(modifier = Modifier.height(8.dp))
+            // Use stable key based on setId to prevent Compose state confusion
+            key(set.setId) {
+                if (onRemoveSet != null && sets.size > 1) {
+                    SwipeToDismissSetRow(
+                        setNumber = index + 1,
+                        setData = set,
+                        context = context,
+                        onUpdateSet = { updatedSet ->
+                            onUpdateSet(index, updatedSet)
+                        },
+                        onRemoveSet = { 
+                            // Find actual index based on setId to avoid stale closure problem
+                            val actualIndex = sets.indexOfFirst { it.setId == set.setId }
+                            if (actualIndex != -1) {
+                                onRemoveSet(actualIndex)
+                            }
+                        },
+                        onAnomalyDetected = onAnomalyDetected
+                    )
+                } else {
+                    RedesignedSetRow(
+                        setNumber = index + 1,
+                        setData = set,
+                        context = context,
+                        onUpdateSet = { updatedSet ->
+                            onUpdateSet(index, updatedSet)
+                        },
+                        onAnomalyDetected = onAnomalyDetected
+                    )
+                }
+                if (index < sets.size - 1) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
             }
         }
         
@@ -788,49 +797,71 @@ private fun SwipeToDismissSetRow(
             }
         }
     )
+    
+    // Reset dismiss state if it gets stuck
+    LaunchedEffect(setData.setId) {
+        if (dismissState.currentValue != SwipeToDismissBoxValue.Settled) {
+            dismissState.snapTo(SwipeToDismissBoxValue.Settled)
+        }
+    }
 
     SwipeToDismissBox(
         state = dismissState,
         backgroundContent = {
-            // Delete background
+            // Delete background - only show when actively swiping
+            val isActivelySwiping = dismissState.dismissDirection != null
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.error, RoundedCornerShape(6.dp))
+                    .background(
+                        if (isActivelySwiping) MaterialTheme.colorScheme.error else Color.Transparent,
+                        RoundedCornerShape(6.dp)
+                    )
                     .padding(horizontal = 16.dp),
                 contentAlignment = Alignment.CenterEnd
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete set",
-                        tint = MaterialTheme.colorScheme.onError,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(
-                        text = "Remove",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = MaterialTheme.colorScheme.onError,
-                            fontWeight = FontWeight.Medium
+                if (isActivelySwiping) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete set",
+                            tint = MaterialTheme.colorScheme.onError,
+                            modifier = Modifier.size(20.dp)
                         )
-                    )
+                        Text(
+                            text = "Remove",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = MaterialTheme.colorScheme.onError,
+                                fontWeight = FontWeight.Medium
+                            )
+                        )
+                    }
                 }
             }
         },
         enableDismissFromStartToEnd = false,
         enableDismissFromEndToStart = true
     ) {
-        // The actual set row content
-        RedesignedSetRow(
-            setNumber = setNumber,
-            setData = setData,
-            context = context,
-            onUpdateSet = onUpdateSet,
-            onAnomalyDetected = onAnomalyDetected
-        )
+        // The actual set row content with solid background to prevent bleeding
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    MaterialTheme.colorScheme.surfaceVariant,
+                    RoundedCornerShape(6.dp)
+                )
+        ) {
+            RedesignedSetRow(
+                setNumber = setNumber,
+                setData = setData,
+                context = context,
+                onUpdateSet = onUpdateSet,
+                onAnomalyDetected = onAnomalyDetected
+            )
+        }
     }
 }
 
@@ -845,7 +876,8 @@ data class RedesignedSetData(
     val notes: String? = null,
     val hasWeightAnomaly: Boolean = false,
     val hasRepsAnomaly: Boolean = false,
-    val anomalyConfidenceScore: Float = 0f
+    val anomalyConfidenceScore: Float = 0f,
+    val setId: String = java.util.UUID.randomUUID().toString() // Stable ID for Compose keys
 )
 
 /**

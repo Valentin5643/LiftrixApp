@@ -11,11 +11,12 @@ import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.workout.GetWorkoutByIdRequest
 import com.example.liftrix.domain.usecase.workout.GetWorkoutByIdUseCase
+import com.example.liftrix.domain.usecase.workout.AddExerciseToWorkoutUseCase
+import com.example.liftrix.domain.usecase.template.GetWorkoutTemplateByIdUseCase
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.state.EditWorkoutUiState
 import com.example.liftrix.ui.common.state.EditWorkoutData
-import com.example.liftrix.ui.common.state.dataOrNull
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -27,6 +28,17 @@ import timber.log.Timber
 import java.time.Duration
 import java.time.Instant
 import javax.inject.Inject
+
+/**
+ * Extension function to properly extract data from EditWorkoutUiState
+ * Fixes the dataOrNull() issue with custom sealed class hierarchy
+ */
+private fun EditWorkoutUiState.dataOrNull(): EditWorkoutData? = when (this) {
+    is EditWorkoutUiState.Success -> data
+    is EditWorkoutUiState.Error -> previousData
+    EditWorkoutUiState.Loading -> null
+    EditWorkoutUiState.Empty -> null
+}
 
 /**
  * EditWorkoutViewModel - Manages state for editing workout routines and completed sessions
@@ -52,6 +64,8 @@ import javax.inject.Inject
 @HiltViewModel
 class EditWorkoutViewModel @Inject constructor(
     private val getWorkoutByIdUseCase: GetWorkoutByIdUseCase,
+    private val getWorkoutTemplateByIdUseCase: GetWorkoutTemplateByIdUseCase,
+    private val addExerciseToWorkoutUseCase: AddExerciseToWorkoutUseCase,
     private val workoutRepository: WorkoutRepository,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     errorHandler: ErrorHandler
@@ -90,6 +104,9 @@ class EditWorkoutViewModel @Inject constructor(
             is EditWorkoutEvent.UpdateDuration -> updateDuration(event.duration)
             is EditWorkoutEvent.UpdateExercise -> updateExercise(event.index, event.exercise)
             is EditWorkoutEvent.UpdateExerciseSet -> updateExerciseSet(event.exerciseIndex, event.setIndex, event.set)
+            is EditWorkoutEvent.AddExercise -> addExercise(event.exerciseLibraryId)
+            is EditWorkoutEvent.AddExerciseSet -> addExerciseSet(event.exerciseIndex)
+            is EditWorkoutEvent.RemoveExerciseSet -> removeExerciseSet(event.exerciseIndex, event.setIndex)
             is EditWorkoutEvent.RemoveExercise -> removeExercise(event.index)
             is EditWorkoutEvent.ReorderExercises -> reorderExercises(event.exerciseIds)
             is EditWorkoutEvent.SaveChanges -> saveChanges()
@@ -165,13 +182,20 @@ class EditWorkoutViewModel @Inject constructor(
             return
         }
 
-        val request = GetWorkoutByIdRequest(workoutId, userId)
-        Timber.d("🔥 EDIT-WORKOUT-DEBUG: Creating request - workoutId: ${request.workoutId.value}, userId: ${request.userId}")
+        // Check if this is a template ID (starts with "template-")
+        val isTemplate = workoutId.value.startsWith("template-")
+        Timber.d("🔥 EDIT-WORKOUT-DEBUG: Checking ID type - workoutId: ${workoutId.value}, isTemplate: $isTemplate")
 
         executeUseCase(
             useCase = { 
-                Timber.d("🔥 EDIT-WORKOUT-DEBUG: Calling getWorkoutByIdUseCase with request")
-                getWorkoutByIdUseCase(request)
+                if (isTemplate) {
+                    Timber.d("🔥 EDIT-WORKOUT-DEBUG: Calling getWorkoutTemplateByIdUseCase for template")
+                    getWorkoutTemplateByIdUseCase(workoutId.value, userId)
+                } else {
+                    Timber.d("🔥 EDIT-WORKOUT-DEBUG: Calling getWorkoutByIdUseCase for regular workout")
+                    val request = GetWorkoutByIdRequest(workoutId, userId)
+                    getWorkoutByIdUseCase(request)
+                }
             },
             onSuccess = { workout ->
                 Timber.d("🔥 EDIT-WORKOUT-DEBUG: Use case completed successfully - workout is ${if (workout != null) "NOT NULL" else "NULL"}")
@@ -332,7 +356,10 @@ class EditWorkoutViewModel @Inject constructor(
      * Updates a specific exercise set
      */
     fun updateExerciseSet(exerciseIndex: Int, setIndex: Int, set: ExerciseSet) {
-        val currentData = _uiState.value.dataOrNull()
+        val currentState = _uiState.value
+        Timber.d("🔥 SET-UPDATE-DEBUG: Current state type: ${currentState::class.simpleName}")
+        val currentData = currentState.dataOrNull()
+        Timber.d("🔥 SET-UPDATE-DEBUG: Current data: ${if (currentData != null) "NOT NULL (${currentData.editedExercises.size} exercises)" else "NULL"}")
         if (currentData != null) {
             val updatedExercises = currentData.editedExercises.toMutableList()
             if (exerciseIndex in updatedExercises.indices) {
@@ -345,8 +372,216 @@ class EditWorkoutViewModel @Inject constructor(
                     setState(EditWorkoutUiState.Success(
                         data = currentData.copy(editedExercises = updatedExercises)
                     ))
+                    Timber.d("🔥 SET-UPDATE-DEBUG: Updated set $setIndex for exercise $exerciseIndex")
                 }
             }
+        }
+    }
+
+    /**
+     * Adds an exercise to the workout using the exercise library
+     */
+    fun addExercise(exerciseLibraryId: String) {
+        val currentState = _uiState.value
+        Timber.d("🔥 ADD-EXERCISE-DEBUG: Current state type: ${currentState::class.simpleName}")
+        val currentData = currentState.dataOrNull()
+        Timber.d("🔥 ADD-EXERCISE-DEBUG: Current data: ${if (currentData != null) "NOT NULL (original workout: ${currentData.originalWorkout?.name})" else "NULL"}")
+        if (currentData?.originalWorkout == null) {
+            Timber.e("🔥 ADD-EXERCISE-DEBUG: Cannot add exercise - no original workout loaded")
+            return
+        }
+
+        executeUseCase(
+            useCase = {
+                Timber.d("🔥 ADD-EXERCISE-DEBUG: Adding exercise $exerciseLibraryId to workout ${currentData.originalWorkout.id.value}")
+                addExerciseToWorkoutUseCase.invoke(
+                    workoutId = currentData.originalWorkout.id,
+                    exerciseLibraryId = exerciseLibraryId,
+                    initialSets = 3
+                )
+            },
+            onSuccess = { updatedWorkout ->
+                Timber.i("🔥 ADD-EXERCISE-DEBUG: Successfully added exercise to workout")
+                setState(EditWorkoutUiState.Success(
+                    data = currentData.copy(
+                        editedWorkout = updatedWorkout,
+                        editedExercises = updatedWorkout.exercises,
+                        lastModified = updatedWorkout.updatedAt
+                    )
+                ))
+            },
+            onError = { error ->
+                Timber.e("🔥 ADD-EXERCISE-DEBUG: Failed to add exercise: ${error.message}")
+                handleError(error)
+            }
+        )
+    }
+
+    /**
+     * Adds a new set to an exercise with comprehensive validation
+     */
+    fun addExerciseSet(exerciseIndex: Int) {
+        try {
+            val currentData = _uiState.value.dataOrNull()
+            if (currentData == null) {
+                Timber.e("🔥 ADD-SET-DEBUG: Cannot add set - no workout data loaded")
+                handleError(LiftrixError.BusinessLogicError(
+                    code = "NO_WORKOUT_DATA",
+                    errorMessage = "No workout data available"
+                ))
+                return
+            }
+
+            val updatedExercises = currentData.editedExercises.toMutableList()
+            if (exerciseIndex !in updatedExercises.indices) {
+                Timber.e("🔥 ADD-SET-DEBUG: Invalid exercise index: $exerciseIndex")
+                handleError(LiftrixError.BusinessLogicError(
+                    code = "INVALID_EXERCISE_INDEX",
+                    errorMessage = "Invalid exercise selected"
+                ))
+                return
+            }
+
+            val exercise = updatedExercises[exerciseIndex]
+            
+            // Validate set count limit
+            if (exercise.sets.size >= 20) {
+                Timber.w("🔥 ADD-SET-DEBUG: Exercise already has maximum sets: ${exercise.sets.size}")
+                viewModelScope.launch {
+                    _events.emit(EditWorkoutEvent.ShowError("Exercise cannot have more than 20 sets"))
+                }
+                return
+            }
+
+            val newSetNumber = exercise.sets.size + 1
+            
+            // 🔥 FIX: Apply smart defaults based on exercise type and existing sets to satisfy domain validation
+            val defaultReps = run {
+                // Use existing set's reps as template, or infer from exercise type
+                val existingReps = exercise.sets.lastOrNull()?.reps?.count
+                existingReps ?: when {
+                    // Time-based exercises (planks, holds, core) - no reps needed if time is provided
+                    exercise.libraryExercise.name.contains("plank", ignoreCase = true) ||
+                    exercise.libraryExercise.name.contains("hold", ignoreCase = true) ||
+                    exercise.libraryExercise.primaryMuscleGroup == ExerciseCategory.CORE -> null
+                    
+                    // Distance-based exercises - no reps needed if distance provided
+                    exercise.libraryExercise.name.contains("run", ignoreCase = true) ||
+                    exercise.libraryExercise.name.contains("walk", ignoreCase = true) ||
+                    exercise.libraryExercise.name.contains("cycle", ignoreCase = true) -> null
+                    
+                    // Standard strength exercises - default to 10 reps
+                    else -> 10
+                }
+            }
+            
+            val defaultTime = when {
+                // Time-based exercises get default time if no reps
+                (exercise.libraryExercise.name.contains("plank", ignoreCase = true) ||
+                 exercise.libraryExercise.name.contains("hold", ignoreCase = true) ||
+                 exercise.libraryExercise.primaryMuscleGroup == ExerciseCategory.CORE) && defaultReps == null -> {
+                    exercise.sets.lastOrNull()?.time ?: java.time.Duration.ofSeconds(30)
+                }
+                else -> null
+            }
+            
+            val newSet = ExerciseSet(
+                id = ExerciseSetId(java.util.UUID.randomUUID().toString()),
+                setNumber = newSetNumber,
+                reps = defaultReps?.let { Reps(it) },
+                weight = null,
+                time = defaultTime,
+                completedAt = null
+            )
+            
+            val updatedSets = exercise.sets + newSet
+            val updatedExercise = exercise.copy(sets = updatedSets)
+            updatedExercises[exerciseIndex] = updatedExercise
+            
+            setState(EditWorkoutUiState.Success(
+                data = currentData.copy(editedExercises = updatedExercises)
+            ))
+            Timber.d("🔥 ADD-SET-DEBUG: Added set $newSetNumber to exercise $exerciseIndex")
+            
+        } catch (e: Exception) {
+            Timber.e(e, "🔥 ADD-SET-DEBUG: Failed to add set to exercise $exerciseIndex")
+            handleError(LiftrixError.BusinessLogicError(
+                code = "ADD_SET_FAILED",
+                errorMessage = "Failed to add set: ${e.message}"
+            ))
+        }
+    }
+
+    /**
+     * Removes a set from an exercise with comprehensive validation
+     */
+    fun removeExerciseSet(exerciseIndex: Int, setIndex: Int) {
+        try {
+            val currentState = _uiState.value
+            Timber.d("🔥 REMOVE-SET-DEBUG: Current state type: ${currentState::class.simpleName}")
+            val currentData = currentState.dataOrNull()
+            Timber.d("🔥 REMOVE-SET-DEBUG: Current data: ${if (currentData != null) "NOT NULL (${currentData.editedExercises.size} exercises)" else "NULL"}")
+            if (currentData == null) {
+                Timber.e("🔥 REMOVE-SET-DEBUG: Cannot remove set - no workout data loaded")
+                handleError(LiftrixError.BusinessLogicError(
+                    code = "NO_WORKOUT_DATA",
+                    errorMessage = "No workout data available"
+                ))
+                return
+            }
+
+            val updatedExercises = currentData.editedExercises.toMutableList()
+            if (exerciseIndex !in updatedExercises.indices) {
+                Timber.e("🔥 REMOVE-SET-DEBUG: Invalid exercise index: $exerciseIndex")
+                handleError(LiftrixError.BusinessLogicError(
+                    code = "INVALID_EXERCISE_INDEX",
+                    errorMessage = "Invalid exercise selected"
+                ))
+                return
+            }
+
+            val exercise = updatedExercises[exerciseIndex]
+            
+            // Ensure at least one set remains
+            if (exercise.sets.size <= 1) {
+                Timber.w("🔥 REMOVE-SET-DEBUG: Cannot remove last set from exercise")
+                viewModelScope.launch {
+                    _events.emit(EditWorkoutEvent.ShowError("Exercise must have at least one set"))
+                }
+                return
+            }
+            
+            if (setIndex !in exercise.sets.indices) {
+                Timber.e("🔥 REMOVE-SET-DEBUG: Invalid set index: $setIndex for exercise $exerciseIndex")
+                handleError(LiftrixError.BusinessLogicError(
+                    code = "INVALID_SET_INDEX",
+                    errorMessage = "Invalid set selected"
+                ))
+                return
+            }
+
+            val updatedSets = exercise.sets.toMutableList()
+            updatedSets.removeAt(setIndex)
+            
+            // Reindex the remaining sets
+            val reindexedSets = updatedSets.mapIndexed { index, set ->
+                set.copy(setNumber = index + 1)
+            }
+            
+            val updatedExercise = exercise.copy(sets = reindexedSets)
+            updatedExercises[exerciseIndex] = updatedExercise
+            
+            setState(EditWorkoutUiState.Success(
+                data = currentData.copy(editedExercises = updatedExercises)
+            ))
+            Timber.d("🔥 REMOVE-SET-DEBUG: Removed set $setIndex from exercise $exerciseIndex")
+            
+        } catch (e: Exception) {
+            Timber.e(e, "🔥 REMOVE-SET-DEBUG: Failed to remove set $setIndex from exercise $exerciseIndex")
+            handleError(LiftrixError.BusinessLogicError(
+                code = "REMOVE_SET_FAILED",
+                errorMessage = "Failed to remove set: ${e.message}"
+            ))
         }
     }
 
@@ -558,6 +793,9 @@ sealed class EditWorkoutEvent : ViewModelEvent {
     data class UpdateDuration(val duration: Duration?) : EditWorkoutEvent()
     data class UpdateExercise(val index: Int, val exercise: Exercise) : EditWorkoutEvent()
     data class UpdateExerciseSet(val exerciseIndex: Int, val setIndex: Int, val set: ExerciseSet) : EditWorkoutEvent()
+    data class AddExercise(val exerciseLibraryId: String) : EditWorkoutEvent()
+    data class AddExerciseSet(val exerciseIndex: Int) : EditWorkoutEvent()
+    data class RemoveExerciseSet(val exerciseIndex: Int, val setIndex: Int) : EditWorkoutEvent()
     data class RemoveExercise(val index: Int) : EditWorkoutEvent()
     data class ReorderExercises(val exerciseIds: List<ExerciseId>) : EditWorkoutEvent()
     data object SaveChanges : EditWorkoutEvent()
@@ -565,3 +803,4 @@ sealed class EditWorkoutEvent : ViewModelEvent {
     data object NavigateBack : EditWorkoutEvent()
     data class ShowError(val message: String) : EditWorkoutEvent()
 }
+

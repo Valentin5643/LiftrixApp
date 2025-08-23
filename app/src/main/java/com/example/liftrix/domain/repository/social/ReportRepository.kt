@@ -1,7 +1,7 @@
 package com.example.liftrix.domain.repository.social
 
 import com.example.liftrix.domain.model.common.LiftrixResult
-import com.example.liftrix.domain.usecase.social.ReportReason
+import com.example.liftrix.domain.model.social.ReportReason
 
 /**
  * Repository interface for managing user reports

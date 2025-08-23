@@ -513,4 +513,13 @@ sealed class LiftrixRoute {
      */
     @Serializable
     data object AIChatSettings : LiftrixRoute()
+    
+    // Admin System Routes (Admin-only access)
+    
+    /**
+     * Admin Ban Management screen for user moderation and banning
+     * Only accessible to users with admin Firebase custom claims
+     */
+    @Serializable
+    data object AdminBanManagement : LiftrixRoute()
 }

@@ -15,6 +15,7 @@ import com.example.liftrix.data.local.dao.WorkoutPostDao
 import com.example.liftrix.data.local.dao.FeedCacheDao
 import com.example.liftrix.data.local.LiftrixDatabase
 import com.example.liftrix.data.local.dao.UserAccountDao
+import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.repository.social.SocialProfileRepositoryImpl
 import com.example.liftrix.domain.repository.social.SocialProfileRepository
 import com.example.liftrix.data.repository.social.FeedRepositoryImpl
@@ -44,6 +45,8 @@ import com.example.liftrix.data.mapper.EngagementMapper
 import com.example.liftrix.data.mapper.WorkoutPostMapper
 import com.example.liftrix.domain.service.QRCodeService
 import com.example.liftrix.service.QRCodeServiceImpl
+import com.example.liftrix.domain.share.PlatformShareAdapter
+import com.example.liftrix.service.share.PlatformShareAdapterImpl
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.messaging.FirebaseMessaging
@@ -93,6 +96,18 @@ abstract class SocialModule {
     abstract fun bindMediaProcessingService(
         mediaProcessingServiceImpl: MediaProcessingServiceImpl
     ): MediaProcessingService
+
+    /**
+     * Binds PlatformShareAdapter interface to its implementation.
+     * 
+     * Provides external platform sharing functionality for social content
+     * including Instagram, WhatsApp, Twitter, Facebook, Telegram, and Discord.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindPlatformShareAdapter(
+        platformShareAdapterImpl: PlatformShareAdapterImpl
+    ): PlatformShareAdapter
 
     companion object {
         
@@ -195,9 +210,10 @@ abstract class SocialModule {
             profileViewDao: ProfileViewDao,
             socialProfileDao: SocialProfileDao,
             blockedUserDao: BlockedUserDao,
+            userProfileDao: UserProfileDao,
             firestore: com.google.firebase.firestore.FirebaseFirestore
             ): FollowRepository {
-                return FollowRepositoryImpl(followRelationshipDao, followRequestDao, profileViewDao, socialProfileDao, blockedUserDao, firestore)
+                return FollowRepositoryImpl(followRelationshipDao, followRequestDao, profileViewDao, socialProfileDao, blockedUserDao, userProfileDao, firestore)
             }
 
         @Provides

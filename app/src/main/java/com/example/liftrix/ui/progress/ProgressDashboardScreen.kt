@@ -68,15 +68,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.state.AsyncData
 import com.example.liftrix.domain.repository.ProgressSummary
@@ -113,7 +109,6 @@ import com.example.liftrix.domain.model.analytics.WidgetPriority
 import com.example.liftrix.domain.usecase.analytics.CalorieAnalyticsUseCase
 import com.example.liftrix.ui.common.validation.ViewModelValidator
 import com.example.liftrix.core.extensions.collectAsOptimizedState
-import timber.log.Timber
 import com.example.liftrix.ui.progress.NavigationCallbacks
 
 /**
@@ -288,8 +283,6 @@ private fun ProgressDashboardContent(
     }
     val weightFormatter = remember { WeightFormatter() }
     
-    // Debug panel state
-    var showDebugPanel by remember { mutableStateOf(false) }
     
     // Migration notification state
     var showMigrationNotification by remember { mutableStateOf(false) }
@@ -327,88 +320,48 @@ private fun ProgressDashboardContent(
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Debug panel toggle button
+                // Feature flag controlled export button
+                if (featuresState.exportEnabled) {
+                    var showExportBottomSheet by remember { mutableStateOf(false) }
+                    
                     IconButton(
-                        onClick = { showDebugPanel = !showDebugPanel }
+                        onClick = { showExportBottomSheet = true }
                     ) {
                         Icon(
-                            imageVector = if (showDebugPanel) Icons.Default.VisibilityOff else Icons.Default.BugReport,
-                            contentDescription = if (showDebugPanel) "Hide Debug Panel" else "Show Debug Panel",
-                            tint = if (showDebugPanel) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                            imageVector = Icons.Default.FileDownload,
+                            contentDescription = "Export data",
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                     
-                    // Feature flag controlled export button
-                    if (featuresState.exportEnabled) {
-                        var showExportBottomSheet by remember { mutableStateOf(false) }
-                        
-                        IconButton(
-                            onClick = { showExportBottomSheet = true }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.FileDownload,
-                                contentDescription = "Export data",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        
-                        // Export Bottom Sheet
-                        ExportBottomSheet(
-                            isVisible = showExportBottomSheet,
-                            onDismiss = { showExportBottomSheet = false },
-                            onStartExport = { configuration ->
-                                // Handle export configuration
-                                when (configuration.type) {
-                                    com.example.liftrix.ui.export.ExportType.ANALYTICS -> {
-                                        if (configuration.analyticsFormat == com.example.liftrix.service.export.ExportFormat.PDF) {
-                                            onCoordinatorEvent(CoordinatorEvent.ExportToPdf)
-                                        } else {
-                                            onCoordinatorEvent(CoordinatorEvent.ExportToCsv)
-                                        }
-                                    }
-                                    com.example.liftrix.ui.export.ExportType.RAW_DATA -> {
-                                        // Handle raw data export through coordinator
-                                        onCoordinatorEvent(CoordinatorEvent.ExportRawData(configuration))
+                    // Export Bottom Sheet
+                    ExportBottomSheet(
+                        isVisible = showExportBottomSheet,
+                        onDismiss = { showExportBottomSheet = false },
+                        onStartExport = { configuration ->
+                            // Handle export configuration
+                            when (configuration.type) {
+                                com.example.liftrix.ui.export.ExportType.ANALYTICS -> {
+                                    if (configuration.analyticsFormat == com.example.liftrix.service.export.ExportFormat.PDF) {
+                                        onCoordinatorEvent(CoordinatorEvent.ExportToPdf)
+                                    } else {
+                                        onCoordinatorEvent(CoordinatorEvent.ExportToCsv)
                                     }
                                 }
-                                showExportBottomSheet = false
-                            },
-                            exportProgress = coordinatorState.exportProgress,
-                            onCancelExport = { onCoordinatorEvent(CoordinatorEvent.CancelExport) }
-                        )
-                    }
+                                com.example.liftrix.ui.export.ExportType.RAW_DATA -> {
+                                    // Handle raw data export through coordinator
+                                    onCoordinatorEvent(CoordinatorEvent.ExportRawData(configuration))
+                                }
+                            }
+                            showExportBottomSheet = false
+                        },
+                        exportProgress = coordinatorState.exportProgress,
+                        onCancelExport = { onCoordinatorEvent(CoordinatorEvent.CancelExport) }
+                    )
                 }
             }
         }
 
-        // Debug Panel - shows all ViewModel states and debugging info
-        if (showDebugPanel) {
-            item {
-                DebugPanel(
-                    rawChartsState = rawChartsState,
-                    rawWidgetState = rawWidgetState,
-                    rawPreferencesState = rawPreferencesState,
-                    rawSummaryState = rawSummaryState,
-                    rawCalorieState = rawCalorieState,
-                    rawFeaturesState = rawFeaturesState,
-                    rawCoordinatorState = rawCoordinatorState,
-                    calorieState = calorieState,
-                    coordinatorState = coordinatorState,
-                    onRefresh = { onCoordinatorEvent(CoordinatorEvent.RefreshAllData) },
-                    onCalorieRefresh = { onCalorieEvent(CalorieTrackingEvent.RefreshAllData) },
-                    onSummaryRefresh = { onSummaryEvent(ProgressSummaryEvent.RefreshSummary) },
-                    onWidgetMigrate = { 
-                        // Force show all 23 widgets
-                        onWidgetEvent(AnalyticsWidgetEvent.ForceAllWidgets())
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
 
         // Time period selector with modern styling
         item {
@@ -969,12 +922,6 @@ private fun ResponsiveWidgetsSection(
             }
         }
         
-        // Debug widget visibility conditions
-        Timber.d("=== UI DEBUG: activeWidgets.size = ${widgetState.activeWidgets.size}")
-        Timber.d("=== UI DEBUG: filteredWidgets.size = ${filteredWidgets.size}")
-        Timber.d("=== UI DEBUG: configuration = ${widgetState.configuration?.javaClass?.simpleName ?: "null"}")
-        Timber.d("=== UI DEBUG: activeWidgets = ${widgetState.activeWidgets.map { it.displayName }}")
-        Timber.d("=== UI DEBUG: filteredWidgets = ${filteredWidgets.map { it.displayName }}")
         
         // Only show widgets if we have configuration and non-deprecated widgets available
         if (filteredWidgets.isNotEmpty() && widgetState.configuration != null) {
@@ -983,11 +930,6 @@ private fun ResponsiveWidgetsSection(
                 configuration = widgetState.configuration,
                 layoutMode = run {
                     val userPreference = mapDomainLayoutModeToUI(widgetState.preferences?.dashboardLayout)
-                    Timber.d("🔍 DEBUG LAYOUT: preferences=${widgetState.preferences}")
-                    Timber.d("🔍 DEBUG LAYOUT: dashboardLayout=${widgetState.preferences?.dashboardLayout}")
-                    Timber.d("🔍 DEBUG LAYOUT: userPreference=$userPreference")
-                    Timber.d("🔍 DEBUG LAYOUT: screenWidth=${windowSizeClass.widthDp.value.toInt()}")
-                    Timber.d("🔍 DEBUG LAYOUT: widgetCount=${filteredWidgets.size}")
                     
                     // Convert UI enum result back to domain enum for ResponsiveDashboardLayout
                     val uiLayoutMode = DashboardLayoutMode.getOptimalMode(
@@ -997,7 +939,6 @@ private fun ResponsiveWidgetsSection(
                     )
                     val result = DashboardLayoutMode.toDomain(uiLayoutMode)
                     
-                    Timber.d("🔍 DEBUG LAYOUT: FINAL RESULT=$result")
                     result
                 },
                 onWidgetClick = { widget ->
@@ -1494,375 +1435,5 @@ private fun AnalyticsMigrationNotificationCard(
     }
 }
 
-/**
- * Debug Panel - Visual debugging for Progress Dashboard
- */
-@Composable
-private fun DebugPanel(
-    rawChartsState: UiState<ProgressChartsState>,
-    rawWidgetState: UiState<AnalyticsWidgetState>,
-    rawPreferencesState: UiState<UserPreferencesState>,
-    rawSummaryState: UiState<ProgressSummaryState>,
-    rawCalorieState: UiState<CalorieTrackingState>,
-    rawFeaturesState: UiState<FeatureConfigurationState>,
-    rawCoordinatorState: UiState<CoordinatorState>,
-    calorieState: CalorieTrackingState,
-    coordinatorState: CoordinatorState,
-    onRefresh: () -> Unit,
-    onCalorieRefresh: () -> Unit,
-    onSummaryRefresh: () -> Unit,
-    onWidgetMigrate: () -> Unit = {},
-    modifier: Modifier = Modifier
-) {
-    Card( // Specialized debug panel card
-        modifier = modifier
-            .border(2.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(12.dp)),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f)
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            // Debug Panel Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "🐛 DEBUG PANEL",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    fontWeight = FontWeight.Bold
-                )
-                
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    TertiaryActionButton(
-                        text = "Refresh All",
-                        onClick = onRefresh,
-                        modifier = Modifier.height(32.dp)
-                    )
-                    
-                    TertiaryActionButton(
-                        text = "Refresh Calories",
-                        onClick = onCalorieRefresh,
-                        modifier = Modifier.height(32.dp)
-                    )
-                    
-                    TertiaryActionButton(
-                        text = "Refresh Summary",
-                        onClick = { onSummaryRefresh() },
-                        modifier = Modifier.height(32.dp)
-                    )
-                    
-                    TertiaryActionButton(
-                        text = "Fix Widgets",
-                        onClick = onWidgetMigrate,
-                        modifier = Modifier.height(32.dp)
-                    )
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Volume Chart Debug Section (PRIMARY ISSUE)
-            DebugSection(
-                title = "🔥 VOLUME CHART DEBUG (PRIMARY ISSUE)",
-                content = {
-                    DebugStateRow("Charts State", rawChartsState)
-                    
-                    if (rawChartsState is UiState.Success) {
-                        val chartsState = rawChartsState.data
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        // Volume chart specific debugging
-                        when (val volumeChart = chartsState.volumeChart) {
-                            is AsyncData.Success -> {
-                                val volumeData = volumeChart.data
-                                DebugInfoRow("📊 Volume Data Points", volumeData.size.toString())
-                                
-                                if (volumeData.isNotEmpty()) {
-                                    val totalVolume = volumeData.sumOf { it.totalVolume.toDouble() }.toFloat()
-                                    val maxVolume = volumeData.maxOfOrNull { it.totalVolume } ?: 0f
-                                    val nonZeroPoints = volumeData.count { it.totalVolume > 0f }
-                                    
-                                    DebugInfoRow("📈 Total Volume", "${totalVolume}kg", isError = totalVolume == 0f)
-                                    DebugInfoRow("📈 Max Volume", "${maxVolume}kg", isError = maxVolume == 0f)
-                                    DebugInfoRow("📈 Non-Zero Points", "$nonZeroPoints/${volumeData.size}", 
-                                        isError = nonZeroPoints == 0)
-                                    DebugInfoRow("📈 Exercise Count", volumeData.sumOf { it.exerciseCount }.toString())
-                                    
-                                    // Show recent data points
-                                    volumeData.takeLast(3).forEachIndexed { index, point ->
-                                        DebugInfoRow("Recent ${index + 1}", "${point.date}: ${point.totalVolume}kg", 
-                                            isError = point.totalVolume == 0f)
-                                    }
-                                } else {
-                                    DebugInfoRow("Volume Data", "EMPTY DATASET", isError = true)
-                                }
-                            }
-                            is AsyncData.Loading -> {
-                                DebugInfoRow("Volume Chart", "Loading...", isError = false)
-                            }
-                            is AsyncData.Failure -> {
-                                DebugInfoRow("Volume Chart", "Failed: ${volumeChart.error.message}", isError = true)
-                            }
-                            is AsyncData.NotAsked -> {
-                                DebugInfoRow("Volume Chart", "Not Asked", isError = true)
-                            }
-                        }
-                        
-                        DebugInfoRow("User ID", chartsState.userId ?: "null")
-                        DebugInfoRow("Time Range", chartsState.currentTimeRange.toString())
-                    }
-                    
-                    if (rawChartsState is UiState.Error) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        DebugInfoRow("Charts Error", rawChartsState.error.message, isError = true)
-                    }
-                }
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Summary ViewModel Debug (Secondary Issue)
-            DebugSection(
-                title = "📊 SUMMARY DEBUG",
-                content = {
-                    DebugStateRow("Summary State", rawSummaryState)
-                    
-                    // Show summary data details if successful
-                    if (rawSummaryState is UiState.Success) {
-                        val summaryState = rawSummaryState.data
-                        Spacer(modifier = Modifier.height(8.dp))
-                        DebugInfoRow("User ID", summaryState.userId ?: "null")
-                        DebugInfoRow("Time Range", summaryState.currentTimeRange.toString())
-                        
-                        // Check if summary data is available
-                        when (val summaryData = summaryState.summaryData) {
-                            is AsyncData.Success -> {
-                                val data = summaryData.data
-                                DebugInfoRow("📊 Total Volume", "${data.totalVolume}kg", 
-                                    isError = data.totalVolume == 0f)
-                                DebugInfoRow("📊 Total Workouts", data.totalWorkouts.toString(),
-                                    isError = data.totalWorkouts == 0)
-                                DebugInfoRow("📊 Active Time", "${data.totalActiveTime}min")
-                                DebugInfoRow("📊 Current Streak", data.currentStreak.toString())
-                                DebugInfoRow("📊 Average Duration", "${data.averageDuration}min")
-                            }
-                            is AsyncData.Loading -> {
-                                DebugInfoRow("Summary Data", "Loading...", isError = false)
-                            }
-                            is AsyncData.Failure -> {
-                                DebugInfoRow("Summary Data", "Failed: ${summaryData.error.message}", isError = true)
-                            }
-                            is AsyncData.NotAsked -> {
-                                DebugInfoRow("Summary Data", "Not Asked", isError = true)
-                            }
-                        }
-                    }
-                    
-                    if (rawSummaryState is UiState.Error) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        DebugInfoRow("Error Message", rawSummaryState.error.message, isError = true)
-                        DebugInfoRow("Error Type", rawSummaryState.error::class.simpleName ?: "Unknown", isError = true)
-                        DebugInfoRow("Is Recoverable", rawSummaryState.error.isRecoverable.toString())
-                        rawSummaryState.error.analyticsContext?.let { context ->
-                            context.forEach { (key, value) ->
-                                DebugInfoRow("Context: $key", value.toString())
-                            }
-                        }
-                    }
-                }
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Widget Debug Section
-            DebugSection(
-                title = "🧩 WIDGETS DEBUG",
-                content = {
-                    DebugStateRow("Widget State", rawWidgetState)
-                    
-                    if (rawWidgetState is UiState.Success) {
-                        val widgetState = rawWidgetState.data
-                        Spacer(modifier = Modifier.height(8.dp))
-                        DebugInfoRow("Active Widgets Count", widgetState.activeWidgets.size.toString())
-                        DebugInfoRow("Visible Widgets", widgetState.preferences?.visibleWidgets?.size?.toString() ?: "null")
-                        DebugInfoRow("Has Preferences", (widgetState.preferences != null).toString())
-                        
-                        if (widgetState.activeWidgets.isNotEmpty()) {
-                            DebugInfoRow("Active Widget Names", widgetState.activeWidgets.map { it.displayName }.joinToString(", "))
-                        } else {
-                            DebugInfoRow("Active Widgets", "EMPTY - No widgets to display!", isError = true)
-                        }
-                        
-                        if (widgetState.preferences?.visibleWidgets?.isNotEmpty() == true) {
-                            DebugInfoRow("Preference Widget Names", widgetState.preferences.visibleWidgets.joinToString(", "))
-                        } else {
-                            DebugInfoRow("Visible Widgets in Prefs", "EMPTY or NULL", isError = true)
-                        }
-                        
-                        DebugInfoRow("Has Configuration", (widgetState.configuration != null).toString(), 
-                            isError = widgetState.configuration == null)
-                        
-                        // Check the condition that determines if widgets section is shown
-                        val shouldShowWidgets = widgetState.activeWidgets.isNotEmpty() && widgetState.configuration != null
-                        DebugInfoRow("WIDGETS SECTION VISIBLE", shouldShowWidgets.toString(), 
-                            isError = !shouldShowWidgets)
-                        
-                        if (widgetState.hasWidgetErrors()) {
-                            DebugInfoRow("Widget Errors", widgetState.widgetErrors.size.toString(), isError = true)
-                            widgetState.widgetErrors.forEach { (widgetId, error) ->
-                                DebugInfoRow("Error: $widgetId", error.message, isError = true)
-                            }
-                        }
-                    }
-                    
-                    if (rawWidgetState is UiState.Error) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        DebugInfoRow("Widget Error", rawWidgetState.error.message, isError = true)
-                    }
-                }
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // User & Time Range Info
-            DebugSection(
-                title = "User & Time Range",
-                content = {
-                    DebugInfoRow("User ID", coordinatorState.getCurrentUserId() ?: "null")
-                    DebugInfoRow("Time Range", calorieState.getTimeRangeDisplayText())
-                    DebugInfoRow("Data Fresh", calorieState.isDataFresh().toString())
-                }
-            )
-        }
-    }
-}
 
-@Composable
-private fun DebugSection(
-    title: String,
-    content: @Composable () -> Unit
-) {
-    Column {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        content()
-    }
-}
-
-@Composable
-private fun DebugStateRow(
-    name: String,
-    state: UiState<*>
-) {
-    val (statusText, statusColor) = when (state) {
-        is UiState.Loading -> "Loading" to MaterialTheme.colorScheme.primary
-        is UiState.Success -> "Success" to MaterialTheme.colorScheme.tertiary
-        is UiState.Error -> "Error" to MaterialTheme.colorScheme.error
-        is UiState.Empty -> "Empty" to MaterialTheme.colorScheme.outline
-        else -> "Unknown" to MaterialTheme.colorScheme.outline
-    }
-    
-    Column(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = name,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = statusText,
-                style = MaterialTheme.typography.bodyMedium,
-                color = statusColor,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        
-        // Show error details if in error state
-        if (state is UiState.Error) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Error: ${state.error.message}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(start = 16.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun DebugInfoRow(
-    label: String,
-    value: String,
-    isError: Boolean = false
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodySmall,
-            color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-            fontWeight = if (isError) FontWeight.Bold else FontWeight.Normal,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
-private fun DebugAsyncDataRow(
-    label: String,
-    asyncData: AsyncData<*>
-) {
-    val (statusText, statusColor) = when (asyncData) {
-        is AsyncData.NotAsked -> "Not Asked" to MaterialTheme.colorScheme.outline
-        is AsyncData.Loading -> "Loading" to MaterialTheme.colorScheme.primary
-        is AsyncData.Success -> "Success (${asyncData.data?.let { "Data Available" } ?: "Null Data"})" to MaterialTheme.colorScheme.tertiary
-        is AsyncData.Failure -> "Failed: ${asyncData.error.message}" to MaterialTheme.colorScheme.error
-    }
-    
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = statusText,
-            style = MaterialTheme.typography.bodySmall,
-            color = statusColor,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-} 
+ 

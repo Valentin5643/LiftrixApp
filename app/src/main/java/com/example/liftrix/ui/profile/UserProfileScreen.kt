@@ -1,5 +1,7 @@
 package com.example.liftrix.ui.profile
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,11 +13,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.liftrix.R
@@ -25,13 +33,21 @@ import com.example.liftrix.domain.model.social.ConnectionStatus
 import com.example.liftrix.ui.animations.ScreenLoadingSkeleton
 import com.example.liftrix.ui.error.ErrorHandlingExtensions.LiftrixErrorState
 import com.example.liftrix.ui.common.state.UiState
-import com.example.liftrix.ui.profile.components.AchievementDisplay
 import com.example.liftrix.ui.profile.components.ProfileImageDisplay
+import com.example.liftrix.ui.profile.components.StatType
+import com.example.liftrix.ui.profile.components.ProfileStatsData
+import com.example.liftrix.ui.profile.components.ModernProfileHeader
+import com.example.liftrix.ui.theme.ProfileColors
+import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.workout.components.PrimaryActionButton
 import com.example.liftrix.ui.workout.components.SecondaryActionButton
 import com.example.liftrix.ui.workout.components.TertiaryActionButton
-import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
 import com.example.liftrix.ui.theme.LiftrixSpacing
+import com.example.liftrix.ui.feed.components.WorkoutPostCard
+import com.example.liftrix.ui.components.ReportContentBottomSheet
+import com.example.liftrix.domain.model.social.ContentType
+import com.example.liftrix.domain.model.social.ReportReason
+import android.content.Intent
 import timber.log.Timber
 
 /**
@@ -46,7 +62,7 @@ import timber.log.Timber
  * - Profile sharing capabilities
  * 
  * Design System Compliance:
- * - Uses UnifiedWorkoutCard for consistent layout
+ * - Uses ModernProfileHeader for consistent modern layout
  * - Follows ModernActionButton hierarchy (Primary/Secondary/Tertiary)
  * - Implements LiftrixSpacing semantic tokens
  * - WCAG 2.1 AA accessibility compliance
@@ -64,250 +80,142 @@ fun UserProfileScreen(
     topBarActions: (@Composable () -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     
-    // Load profile when userId changes
+    // State for report bottom sheet
+    var showReportBottomSheet by remember { mutableStateOf(false) }
+    
+    // Load profile only when userId changes or it's the first load
     LaunchedEffect(userId) {
-        viewModel.loadUserProfile(userId)
+        // Only load if we don't have a profile or if the userId changed
+        if (uiState.profile == null || uiState.profile?.userId != userId) {
+            viewModel.loadUserProfile(userId, forceRefresh = false)
+        }
     }
     
-    Timber.d("UserProfileScreen: Composing for user $userId with state - loading: ${uiState.isLoading}")
+    // Handle share message when it's set - now uses enhanced PlatformShareAdapter
+    LaunchedEffect(uiState.shareMessage) {
+        if (!uiState.shareMessage.isNullOrBlank()) {
+            // Enhanced sharing: if shareableContent is available, use platform chooser
+            // Otherwise, fall back to basic text sharing
+            uiState.shareableContent?.let { content ->
+                // Show platform selection dialog or use default sharing
+                // For now, use default Android chooser with enhanced content
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    val shareMessage = content.metadata["shareMessage"] as? String ?: content.title
+                    putExtra(Intent.EXTRA_TEXT, shareMessage)
+                    putExtra(Intent.EXTRA_SUBJECT, content.title)
+                    // Add hashtags if supported by the platform
+                    val hashtags = content.metadata["hashtags"] as? List<*>
+                    if (!hashtags.isNullOrEmpty()) {
+                        val hashtagText = hashtags.filterIsInstance<String>().joinToString(" ")
+                        putExtra(Intent.EXTRA_TEXT, "$shareMessage\n\n$hashtagText")
+                    }
+                }
+                val chooserIntent = Intent.createChooser(shareIntent, "Share Profile")
+                context.startActivity(chooserIntent)
+            } ?: run {
+                // Fallback to basic text sharing
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, uiState.shareMessage)
+                    putExtra(Intent.EXTRA_SUBJECT, "Check out this profile on Liftrix!")
+                }
+                val chooserIntent = Intent.createChooser(shareIntent, "Share Profile")
+                context.startActivity(chooserIntent)
+            }
+            
+            // Clear the share message after sharing
+            viewModel.clearShareMessage()
+        }
+    }
     
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(LiftrixSpacing.screenPadding)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.cardSpacing)
-    ) {
-        when {
-            uiState.isLoading -> {
+    Timber.d("UserProfileScreen: Composing for user $userId with state - loading: ${uiState.isLoading}, profile: ${uiState.profile?.userId}")
+    
+    when {
+        uiState.isLoading -> {
+            Column(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(LiftrixSpacing.screenPadding)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.cardSpacing)
+            ) {
                 UserProfileLoadingState()
             }
-            uiState.error != null -> {
+        }
+        uiState.error != null -> {
+            Column(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(LiftrixSpacing.screenPadding)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.cardSpacing)
+            ) {
                 UserProfileErrorState(
                     error = uiState.error,
                     onRetry = { viewModel.retryLastOperation() }
                 )
             }
-            uiState.profile != null -> {
-                val profile = uiState.profile!!
-                UserProfileContent(
-                    profile = profile,
-                    followStatus = uiState.followStatus,
-                    canViewDetails = uiState.canViewDetails,
-                    isOwnProfile = uiState.isOwnProfile,
-                    mutualConnectionCount = uiState.mutualConnectionCount,
-                    selectedTab = uiState.selectedTab,
-                    onFollowClick = { viewModel.toggleFollow() },
-                    onBlockClick = { viewModel.blockUser() },
-                    onTabSelected = { viewModel.selectTab(it) },
-                    onNavigateToFollowersList = onNavigateToFollowersList,
-                    onNavigateToFollowingList = onNavigateToFollowingList,
-                    onNavigateToWorkoutDetail = onNavigateToWorkoutDetail,
-                    onShareProfile = { viewModel.shareProfile(profile) },
-                    onMoreOptions = { viewModel.showMoreOptions() }
-                )
-            }
-            else -> {
+        }
+        uiState.profile != null -> {
+            val profile = uiState.profile!!
+            
+            // Modern profile layout using LazyColumn internally - no parent scrolling needed
+            ModernUserProfileContent(
+                uiState = uiState,
+                profile = profile,
+                onFollowClick = { viewModel.toggleFollow() },
+                onMessageClick = { viewModel.showMoreOptions() },
+                onActivityClick = { workoutPost -> viewModel.handleActivityClick(workoutPost) },
+                onSeeAllActivitiesClick = { viewModel.showAllActivities() },
+                onSeeAllAchievementsClick = { viewModel.showAllAchievements() },
+                modifier = modifier
+            )
+        }
+        else -> {
+            Column(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(LiftrixSpacing.screenPadding)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.cardSpacing)
+            ) {
                 UserProfileNotFoundState()
             }
         }
     }
+    
+    // Settings Menu Overlay - render when showMoreOptions is true
+    if (uiState.showMoreOptions && uiState.profile != null) {
+        ProfileSettingsMenu(
+            profile = uiState.profile!!,
+            isOwnProfile = uiState.isOwnProfile,
+            onDismiss = { viewModel.hideMoreOptions() },
+            onBlockUser = { viewModel.blockUser() },
+            onReportUser = { 
+                viewModel.hideMoreOptions()
+                showReportBottomSheet = true 
+            },
+            onShareProfile = { viewModel.shareProfile(uiState.profile!!) }
+        )
+    }
+    
+    // Report Bottom Sheet
+    if (showReportBottomSheet && uiState.profile != null) {
+        ReportContentBottomSheet(
+            contentType = ContentType.PROFILE,
+            contentId = uiState.profile!!.userId,
+            onDismiss = { showReportBottomSheet = false },
+            onReport = { reason, description ->
+                viewModel.reportUser(reason, description)
+                showReportBottomSheet = false
+            }
+        )
+    }
 }
 
-@Composable
-private fun UserProfileContent(
-    profile: PublicUserProfile,
-    followStatus: FollowStatus,
-    canViewDetails: Boolean,
-    isOwnProfile: Boolean,
-    mutualConnectionCount: Int,
-    selectedTab: ProfileTab,
-    onFollowClick: () -> Unit,
-    onBlockClick: () -> Unit,
-    onTabSelected: (ProfileTab) -> Unit,
-    onNavigateToFollowersList: (String) -> Unit,
-    onNavigateToFollowingList: (String) -> Unit,
-    onNavigateToWorkoutDetail: (String) -> Unit,
-    onShareProfile: () -> Unit,
-    onMoreOptions: () -> Unit
-) {
-    // Profile Header Card with Actions
-    UnifiedWorkoutCard(
-        title = profile.displayName ?: "Unknown User",
-        subtitle = generateProfileSubtitle(profile),
-        leadingIcon = Icons.Default.Person
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.elementSpacing)
-        ) {
-            // Action buttons row at the top
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                IconButton(
-                    onClick = onShareProfile,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Share,
-                        contentDescription = "Share Profile",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                IconButton(
-                    onClick = onMoreOptions,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "More options",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.elementSpacing),
-                verticalAlignment = Alignment.Top
-            ) {
-                // Profile Image
-                ProfileImageDisplay(
-                    imageUrl = profile.profileImageUrl,
-                    displayName = profile.displayName ?: "User",
-                    userId = profile.userId,
-                    size = 80.dp,
-                    onClick = null, // No click for other users' images
-                    modifier = Modifier
-                )
-                
-                // Profile Stats
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.elementPaddingSmall)
-                ) {
-                    if (canViewDetails) {
-                        ProfileStatRow("Workouts", profile.totalWorkouts.toString())
-                        ProfileStatRow("Followers", "${profile.followersCount}")
-                        ProfileStatRow("Following", "${profile.followingCount}")
-                        if (profile.currentStreak > 0) {
-                            ProfileStatRow("Current Streak", "${profile.currentStreak} days")
-                        }
-                    } else {
-                        Text(
-                            text = "Private Profile",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-            
-            // Mutual Connections
-            if (mutualConnectionCount > 0 && !isOwnProfile) {
-                Text(
-                    text = "$mutualConnectionCount mutual connection${if (mutualConnectionCount > 1) "s" else ""}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            
-            // Action Buttons
-            if (!isOwnProfile) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.buttonSpacing)
-                ) {
-                    // Follow Button
-                    FollowButton(
-                        followStatus = followStatus,
-                        onClick = onFollowClick,
-                        modifier = Modifier.weight(1f)
-                    )
-                    
-                    // More Actions
-                    SecondaryActionButton(
-                        text = "More",
-                        onClick = onBlockClick,
-                        leadingIcon = Icons.Default.MoreHoriz
-                    )
-                }
-            }
-            
-            // Follower/Following counts (always clickable if accessible, including zero counts for discovery)
-            if (canViewDetails) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.elementSpacing)
-                ) {
-                    TextButton(
-                        onClick = { onNavigateToFollowersList(profile.userId) }
-                    ) {
-                        Text("${profile.followersCount} follower${if (profile.followersCount != 1) "s" else ""}")
-                    }
-                    
-                    TextButton(
-                        onClick = { onNavigateToFollowingList(profile.userId) }
-                    ) {
-                        Text("${profile.followingCount} following")
-                    }
-                }
-            }
-        }
-    }
-    
-    // Bio Section
-    if (canViewDetails && !profile.bio.isNullOrBlank()) {
-        UnifiedWorkoutCard(
-            title = "About",
-            subtitle = null
-        ) {
-            Text(
-                text = profile.bio,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-    }
-    
-    // Achievements Section (if accessible)
-    if (canViewDetails && profile.achievements.isNotEmpty()) {
-        UnifiedWorkoutCard(
-            title = "Achievements",
-            subtitle = "${profile.achievements.size} unlocked",
-            leadingIcon = Icons.Default.Star
-        ) {
-            AchievementDisplay(
-                achievements = profile.achievements.map { achievement ->
-                    com.example.liftrix.domain.model.UserAchievement(
-                        id = achievement.id,
-                        userId = profile.userId,
-                        achievementType = com.example.liftrix.domain.model.AchievementType.FIRST_TIME_EVENTS, // Default for social achievements
-                        title = achievement.title,
-                        description = achievement.description,
-                        unlockedAt = achievement.earnedAt
-                    )
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-    }
-    
-    // Content Tabs (if accessible)
-    if (canViewDetails) {
-        ProfileTabsSection(
-            selectedTab = selectedTab,
-            onTabSelected = onTabSelected,
-            profile = profile,
-            onNavigateToWorkoutDetail = onNavigateToWorkoutDetail
-        )
-    } else {
-        // Privacy Message
-        PrivacyMessageCard(profile = profile, followStatus = followStatus)
-    }
-}
 
 @Composable
 private fun FollowButton(
@@ -348,6 +256,14 @@ private fun FollowButton(
                 modifier = modifier
             )
         }
+        FollowStatus.MUTUAL_FOLLOW -> {
+            SecondaryActionButton(
+                text = "Mutual",
+                onClick = onClick,
+                leadingIcon = Icons.Default.Favorite,
+                modifier = modifier
+            )
+        }
         FollowStatus.BLOCKED -> {
             TertiaryActionButton(
                 text = "Blocked",
@@ -360,157 +276,6 @@ private fun FollowButton(
     }
 }
 
-@Composable
-private fun ProfileTabsSection(
-    selectedTab: ProfileTab,
-    onTabSelected: (ProfileTab) -> Unit,
-    profile: PublicUserProfile,
-    onNavigateToWorkoutDetail: (String) -> Unit
-) {
-    Column {
-        // Tab Row
-        TabRow(
-            selectedTabIndex = selectedTab.ordinal,
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface
-        ) {
-            ProfileTab.entries.forEach { tab ->
-                Tab(
-                    selected = selectedTab == tab,
-                    onClick = { onTabSelected(tab) },
-                    text = { 
-                        Text(
-                            text = tab.displayName,
-                            style = MaterialTheme.typography.labelMedium
-                        ) 
-                    }
-                )
-            }
-        }
-        
-        // Tab Content
-        when (selectedTab) {
-            ProfileTab.WORKOUTS -> {
-                WorkoutsTabContent(
-                    profile = profile,
-                    onNavigateToWorkoutDetail = onNavigateToWorkoutDetail
-                )
-            }
-            ProfileTab.STATS -> {
-                StatsTabContent(profile = profile)
-            }
-            ProfileTab.ACHIEVEMENTS -> {
-                AchievementsTabContent(profile = profile)
-            }
-        }
-    }
-}
-
-@Composable
-private fun PrivacyMessageCard(
-    profile: PublicUserProfile,
-    followStatus: FollowStatus
-) {
-    UnifiedWorkoutCard(
-        title = "Private Profile",
-        subtitle = null,
-        leadingIcon = Icons.Default.Lock
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.elementSpacing),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = when (followStatus) {
-                    FollowStatus.PENDING_SENT -> "Your follow request is pending approval."
-                    else -> "This profile is private. Follow ${profile.displayName ?: "this user"} to see their workouts and achievements."
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
-@Composable
-private fun WorkoutsTabContent(
-    profile: PublicUserProfile,
-    onNavigateToWorkoutDetail: (String) -> Unit
-) {
-    if (profile.recentWorkouts.isEmpty()) {
-        Text(
-            text = "No recent workouts",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(LiftrixSpacing.cardPadding)
-        )
-    } else {
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.cardSpacing),
-            modifier = Modifier.height(300.dp)
-        ) {
-            items(profile.recentWorkouts) { workout ->
-                UnifiedWorkoutCard(
-                    title = workout.name,
-                    subtitle = "Recent workout • ${workout.date}",
-                    onClick = { onNavigateToWorkoutDetail(workout.id) }
-                ) {
-                    Text(
-                        text = "${workout.exerciseCount} exercises • ${workout.duration}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatsTabContent(profile: PublicUserProfile) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.cardSpacing),
-        modifier = Modifier.padding(LiftrixSpacing.cardPadding)
-    ) {
-        ProfileStatRow("Total Workouts", profile.totalWorkouts.toString())
-        ProfileStatRow("Current Streak", "${profile.currentStreak} days")
-        ProfileStatRow("Best Streak", "${profile.longestStreak} days")
-        ProfileStatRow("Member Since", formatMemberSince(profile.memberSince))
-    }
-}
-
-@Composable
-private fun AchievementsTabContent(profile: PublicUserProfile) {
-    if (profile.achievements.isEmpty()) {
-        Text(
-            text = "No achievements yet",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(LiftrixSpacing.cardPadding)
-        )
-    } else {
-        AchievementDisplay(
-            achievements = profile.achievements.map { achievement ->
-                com.example.liftrix.domain.model.UserAchievement(
-                    id = achievement.id,
-                    userId = profile.userId,
-                    achievementType = com.example.liftrix.domain.model.AchievementType.FIRST_TIME_EVENTS, // Default for social achievements
-                    title = achievement.title,
-                    description = achievement.description,
-                    unlockedAt = achievement.earnedAt
-                )
-            },
-            modifier = Modifier.padding(LiftrixSpacing.cardPadding)
-        )
-    }
-}
 
 @Composable
 private fun ProfileStatRow(
@@ -568,13 +333,29 @@ private fun UserProfileErrorState(
     error: com.example.liftrix.domain.model.error.LiftrixError?,
     onRetry: () -> Unit
 ) {
-    UnifiedWorkoutCard(
-        title = "Error Loading Profile",
-        subtitle = error?.message ?: "Unknown error"
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
     ) {
         Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.elementSpacing)
         ) {
+            Text(
+                text = "Error Loading Profile",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = error?.message ?: "Unknown error",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Text(
                 text = "We couldn't load this profile. Please try again.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -591,53 +372,482 @@ private fun UserProfileErrorState(
 
 @Composable
 private fun UserProfileNotFoundState() {
-    UnifiedWorkoutCard(
-        title = "Profile Not Found",
-        subtitle = "This user profile doesn't exist or is no longer available"
-    ) {
-        Text(
-            text = "The profile you're looking for might have been deleted or made private.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
         )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Profile Not Found",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "This user profile doesn't exist or is no longer available",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "The profile you're looking for might have been deleted or made private.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
-// Helper functions
-private fun generateProfileSubtitle(profile: PublicUserProfile): String {
-    return buildString {
-        if (profile.age != null) {
-            append("${profile.age} years old")
-        }
-        if (profile.location?.isNotBlank() == true) {
-            if (isNotEmpty()) append(" • ")
-            append(profile.location)
-        }
-        if (isEmpty()) {
-            append("Liftrix member")
-        }
-    }
-}
 
-private fun formatMemberSince(memberSince: java.time.LocalDateTime): String {
-    val now = java.time.LocalDateTime.now()
-    val period = java.time.Period.between(memberSince.toLocalDate(), now.toLocalDate())
-    
-    return when {
-        period.years > 0 -> "${period.years} year${if (period.years > 1) "s" else ""}"
-        period.months > 0 -> "${period.months} month${if (period.months > 1) "s" else ""}"
-        period.days > 7 -> "${period.days / 7} week${if (period.days / 7 > 1) "s" else ""}"
-        period.days > 0 -> "${period.days} day${if (period.days > 1) "s" else ""}"
-        else -> "New member"
+
+/**
+ * Privacy message card for private profiles
+ */
+@Composable
+private fun PrivacyMessageCard(
+    profile: PublicUserProfile,
+    followStatus: FollowStatus
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "🔒",
+                fontSize = 32.sp
+            )
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Text(
+                text = "This profile is private",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Text(
+                text = when (followStatus) {
+                    FollowStatus.NONE -> "Follow ${profile.displayName ?: profile.username} to see their activity"
+                    FollowStatus.PENDING_SENT -> "Your follow request is pending approval"
+                    FollowStatus.BLOCKED -> "You have been blocked by this user"
+                    else -> "You can see this profile's public information only"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
 /**
- * Enum representing profile tabs
+ * Modern profile content using card-based layout with existing data
  */
-enum class ProfileTab(val displayName: String) {
-    WORKOUTS("Workouts"),
-    STATS("Stats"),
-    ACHIEVEMENTS("Achievements")
+@Composable
+private fun ModernUserProfileContent(
+    uiState: UserProfileUiState,
+    profile: PublicUserProfile,
+    onFollowClick: () -> Unit,
+    onMessageClick: () -> Unit,
+    onActivityClick: (com.example.liftrix.domain.model.social.WorkoutPost) -> Unit,
+    onSeeAllActivitiesClick: () -> Unit,
+    onSeeAllAchievementsClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Modern Profile Header with stats
+        item {
+            ModernProfileHeader(
+                profile = profile,
+                stats = ProfileStatsData(
+                    workoutCount = profile.totalWorkouts,
+                    followersCount = profile.followersCount,
+                    followingCount = profile.followingCount
+                ),
+                followStatus = uiState.followStatus,
+                isOwnProfile = uiState.isOwnProfile,
+                onFollowClick = onFollowClick,
+                onMessageClick = onMessageClick, // Trigger settings menu
+                onStatsClick = { /* Handle stats click */ },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        // Weekly Progress Card (simplified using existing data)
+        if (uiState.canViewDetails && profile.currentStreak > 0) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp)
+                    ) {
+                        Text(
+                            text = "This Week's Progress",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // Current streak with green progress
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Current Streak",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = "${profile.currentStreak} days",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = ProfileColors.ProgressGreen,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = (profile.currentStreak.toFloat() / 7f).coerceAtMost(1f),
+                            modifier = Modifier.fillMaxWidth(),
+                            color = ProfileColors.ProgressGreen,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        // Achievement Progress Card (using existing achievements)
+        if (uiState.canViewDetails && profile.achievements.isNotEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Achievements",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            TextButton(onClick = onSeeAllAchievementsClick) {
+                                Text("See All")
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        // Progress indicator
+                        val achievementCount = profile.achievements.size
+                        Text(
+                            text = "$achievementCount/10 completed",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = (achievementCount.toFloat() / 10f).coerceAtMost(1f),
+                            modifier = Modifier.fillMaxWidth(),
+                            color = ProfileColors.ProgressGreen,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        // Recent Activity Section - Shows workout posts in feed style
+        if (uiState.canViewDetails && profile.recentWorkoutPosts.isNotEmpty()) {
+            // Section header
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Recent Workouts",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    TextButton(onClick = onSeeAllActivitiesClick) {
+                        Text("See All")
+                    }
+                }
+            }
+            
+            // Display workout posts in feed style
+            items(profile.recentWorkoutPosts.size) { index ->
+                val post = profile.recentWorkoutPosts[index]
+                WorkoutPostCard(
+                    post = post,
+                    isLiked = false, // TODO: Get actual like status
+                    isSaved = false, // TODO: Get actual save status
+                    onLikeClick = { /* TODO: Handle like */ },
+                    onCommentClick = { /* TODO: Handle comment */ },
+                    onShareClick = { /* TODO: Handle share */ },
+                    onSaveClick = { /* TODO: Handle save */ },
+                    onProfileClick = { /* Already on profile */ },
+                    onWorkoutCopyClick = { /* TODO: Handle copy */ },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                )
+            }
+        } else if (uiState.canViewDetails && profile.recentWorkouts.isNotEmpty()) {
+            // Fallback to simple workout display if no posts available
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Recent Activity",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            TextButton(onClick = onSeeAllActivitiesClick) {
+                                Text("See All")
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        profile.recentWorkouts.take(3).forEach { workout ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.FitnessCenter,
+                                        contentDescription = null,
+                                        tint = LiftrixColorsV2.Teal,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = workout.name,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Text(
+                                            text = "${workout.exerciseCount} exercises • ${workout.duration}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Privacy message if profile is private
+        if (!uiState.canViewDetails) {
+            item {
+                PrivacyMessageCard(
+                    profile = profile, 
+                    followStatus = uiState.followStatus
+                )
+            }
+        }
+    }
+}
+
+
+/**
+ * Profile settings menu overlay with block/report/share options
+ */
+@Composable
+private fun ProfileSettingsMenu(
+    profile: PublicUserProfile,
+    isOwnProfile: Boolean,
+    onDismiss: () -> Unit,
+    onBlockUser: () -> Unit,
+    onReportUser: () -> Unit,
+    onShareProfile: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Background overlay
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.5f))
+            .clickable { onDismiss() }
+    ) {
+        // Settings menu card
+        Card(
+            modifier = modifier
+                .align(Alignment.Center)
+                .width(280.dp)
+                .clickable { }, // Prevent click-through
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Header
+                Text(
+                    text = if (isOwnProfile) "Profile Options" else "User Options",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                
+                // Share Profile option
+                ProfileMenuOption(
+                    icon = Icons.Default.Share,
+                    text = "Share Profile",
+                    onClick = {
+                        onShareProfile()
+                        onDismiss()
+                    }
+                )
+                
+                // Options for other users' profiles
+                if (!isOwnProfile) {
+                    ProfileMenuOption(
+                        icon = Icons.Default.Block,
+                        text = "Block User",
+                        textColor = MaterialTheme.colorScheme.error,
+                        onClick = {
+                            onBlockUser()
+                            onDismiss()
+                        }
+                    )
+                    
+                    ProfileMenuOption(
+                        icon = Icons.Default.Report,
+                        text = "Report User",
+                        textColor = MaterialTheme.colorScheme.error,
+                        onClick = {
+                            onReportUser()
+                            onDismiss()
+                        }
+                    )
+                }
+                
+                // Cancel option
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
+                
+                ProfileMenuOption(
+                    icon = Icons.Default.Close,
+                    text = "Cancel",
+                    onClick = onDismiss
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Individual menu option in profile settings
+ */
+@Composable
+private fun ProfileMenuOption(
+    icon: ImageVector,
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    textColor: Color = MaterialTheme.colorScheme.onSurface
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 12.dp, horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = textColor,
+            modifier = Modifier.size(24.dp)
+        )
+        
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge,
+            color = textColor
+        )
+    }
 }

@@ -52,6 +52,7 @@ fun WorkoutPostCard(
     modifier: Modifier = Modifier,
     onBlockUser: () -> Unit = {},
     onReportPost: () -> Unit = {},
+    onEditWorkout: () -> Unit = {},
     isOwnPost: Boolean = false
 ) {
     val hapticFeedback = LocalHapticFeedback.current
@@ -70,6 +71,7 @@ fun WorkoutPostCard(
                 onProfileClick = onProfileClick,
                 onBlockUser = onBlockUser,
                 onReportPost = onReportPost,
+                onEditWorkout = onEditWorkout,
                 isOwnPost = isOwnPost,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -132,6 +134,7 @@ private fun PostHeader(
     modifier: Modifier = Modifier,
     onBlockUser: () -> Unit = {},
     onReportPost: () -> Unit = {},
+    onEditWorkout: () -> Unit = {},
     isOwnPost: Boolean = false
 ) {
     var showOptionsMenu by remember { mutableStateOf(false) }
@@ -194,20 +197,33 @@ private fun PostHeader(
             }
         }
         
-        // More options menu (only for other users' posts)
-        if (!isOwnPost) {
-            IconButton(onClick = { showOptionsMenu = true }) {
-                Icon(
-                    imageVector = Icons.Default.MoreVert,
-                    contentDescription = "More options",
-                    tint = LiftrixColorsV2.onSurfaceVariant
+        // More options menu
+        IconButton(onClick = { showOptionsMenu = true }) {
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "More options",
+                tint = LiftrixColorsV2.onSurfaceVariant
+            )
+        }
+        
+        DropdownMenu(
+            expanded = showOptionsMenu,
+            onDismissRequest = { showOptionsMenu = false }
+        ) {
+            if (isOwnPost) {
+                // Options for user's own posts
+                DropdownMenuItem(
+                    text = { Text("Edit Workout") },
+                    leadingIcon = { 
+                        Icon(Icons.Default.Edit, contentDescription = null) 
+                    },
+                    onClick = {
+                        onEditWorkout()
+                        showOptionsMenu = false
+                    }
                 )
-            }
-            
-            DropdownMenu(
-                expanded = showOptionsMenu,
-                onDismissRequest = { showOptionsMenu = false }
-            ) {
+            } else {
+                // Options for other users' posts
                 DropdownMenuItem(
                     text = { Text("Block User") },
                     leadingIcon = { 

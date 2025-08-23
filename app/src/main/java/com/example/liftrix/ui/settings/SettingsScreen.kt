@@ -82,6 +82,7 @@ fun SettingsScreen(
     onNavigateToTermsOfService: (() -> Unit)? = null,
     onNavigateToDataPortability: (() -> Unit)? = null,
     onNavigateToAIChatSettings: (() -> Unit)? = null,
+    onNavigateToAdminBanManagement: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -172,6 +173,7 @@ fun SettingsScreen(
                             onNavigateToDataPortability = stableOnNavigateToDataPortability,
                             onNavigateToHelpCenter = stableOnNavigateToHelpCenter,
                             onNavigateToAbout = stableOnNavigateToAbout,
+                            onNavigateToAdminBanManagement = onNavigateToAdminBanManagement,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -233,6 +235,7 @@ private fun SettingsContent(
     onNavigateToDataPortability: (() -> Unit)? = null,
     onNavigateToHelpCenter: (() -> Unit)? = null,
     onNavigateToAbout: (() -> Unit)? = null,
+    onNavigateToAdminBanManagement: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     // Stable callbacks and data to prevent unnecessary recompositions
@@ -286,6 +289,7 @@ private fun SettingsContent(
                     onNavigateToAccountDeletion = onNavigateToAccountDeletion,
                     onNavigateToPrivacyPolicy = stableOnNavigateToPrivacyPolicy,
                     onNavigateToDataPortability = stableOnNavigateToDataPortability,
+                    onNavigateToAdminBanManagement = onNavigateToAdminBanManagement,
                     onNavigateToHelpCenter = stableOnNavigateToHelpCenter,
                     onNavigateToAbout = stableOnNavigateToAbout
                 )
@@ -343,6 +347,7 @@ private fun SettingsCategoryContent(
     onNavigateToAccountDeletion: (() -> Unit)? = null,
     onNavigateToPrivacyPolicy: (() -> Unit)? = null,
     onNavigateToDataPortability: (() -> Unit)? = null,
+    onNavigateToAdminBanManagement: (() -> Unit)? = null,
     onNavigateToHelpCenter: (() -> Unit)? = null,
     onNavigateToAbout: (() -> Unit)? = null
 ) {
@@ -378,7 +383,8 @@ private fun SettingsCategoryContent(
                     onNavigateToUsernameChange = onNavigateToUsernameChange,
                     onNavigateToAccountDeletion = onNavigateToAccountDeletion,
                     onNavigateToPrivacyPolicy = onNavigateToPrivacyPolicy,
-                    onNavigateToDataPortability = onNavigateToDataPortability
+                    onNavigateToDataPortability = onNavigateToDataPortability,
+                    onNavigateToAdminBanManagement = onNavigateToAdminBanManagement
                 )
             }
             
@@ -582,7 +588,8 @@ private fun PrivacySettings(
     onNavigateToUsernameChange: (() -> Unit)? = null,
     onNavigateToAccountDeletion: (() -> Unit)? = null,
     onNavigateToPrivacyPolicy: (() -> Unit)? = null,
-    onNavigateToDataPortability: (() -> Unit)? = null
+    onNavigateToDataPortability: (() -> Unit)? = null,
+    onNavigateToAdminBanManagement: (() -> Unit)? = null
 ) {
     // Stable callbacks to prevent unnecessary recompositions
     val stableOnEvent = remember(onEvent) { onEvent }
@@ -592,6 +599,7 @@ private fun PrivacySettings(
     val stableOnNavigateToAccountDeletion = remember(onNavigateToAccountDeletion) { onNavigateToAccountDeletion }
     val stableOnNavigateToPrivacyPolicy = remember(onNavigateToPrivacyPolicy) { onNavigateToPrivacyPolicy }
     val stableOnNavigateToDataPortability = remember(onNavigateToDataPortability) { onNavigateToDataPortability }
+    val stableOnNavigateToAdminBanManagement = remember(onNavigateToAdminBanManagement) { onNavigateToAdminBanManagement }
     
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -663,6 +671,26 @@ private fun PrivacySettings(
                 stableOnNavigateToDataPortability?.invoke()
             }
         )
+        
+        // Admin Section (Only visible to admin users)
+        if (uiState.isAdmin && onNavigateToAdminBanManagement != null) {
+            Text(
+                text = "Administration",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
+            )
+            
+            SettingsNavigationItem(
+                title = "User Management",
+                subtitle = "Ban and manage users",
+                icon = Icons.Default.AdminPanelSettings,
+                onClick = { 
+                    stableOnNavigateToAdminBanManagement?.invoke()
+                }
+            )
+        }
         
         // Danger Zone Section
         Text(

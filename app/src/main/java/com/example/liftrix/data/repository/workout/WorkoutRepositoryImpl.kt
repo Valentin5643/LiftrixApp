@@ -16,7 +16,7 @@ import com.example.liftrix.data.model.SyncPayloadFactory
 import com.example.liftrix.data.model.WorkoutSyncDto
 import com.example.liftrix.data.model.ExerciseDto
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import com.example.liftrix.sync.SyncCoordinator
 import androidx.work.WorkManager
 import com.example.liftrix.core.workmanager.WorkManagerProvider
@@ -1311,14 +1311,81 @@ class WorkoutRepositoryImpl @Inject constructor(
             val workoutEntity = workoutMapper.toEntity(workout)
             
             // Parse exercises JSON to properly typed DTOs
+            // The stored JSON can be in two formats:
+            // 1. Workouts: {"exercises": [...], "totalVolume": ..., ...} - wrapped object with metadata
+            // 2. Templates: [...] - direct array of exercises
             val exercises = try {
                 if (workoutEntity.exercisesJson.isNullOrBlank()) {
                     emptyList<ExerciseDto>()
                 } else {
-                    Json { ignoreUnknownKeys = true }.decodeFromString<List<ExerciseDto>>(workoutEntity.exercisesJson)
+                    val gson = com.google.gson.Gson()
+                    
+                    // First, determine the format and extract the Exercise list
+                    val domainExercises = try {
+                        // Try parsing as JsonObject first (workout format)
+                        val jsonElement = gson.fromJson(workoutEntity.exercisesJson, com.google.gson.JsonElement::class.java)
+                        
+                        when {
+                            jsonElement.isJsonObject -> {
+                                // Wrapped format: {"exercises": [...], ...}
+                                val jsonObject = jsonElement.asJsonObject
+                                if (jsonObject.has("exercises")) {
+                                    val exercisesArray = jsonObject.getAsJsonArray("exercises")
+                                    val exerciseType = object : com.google.gson.reflect.TypeToken<List<com.example.liftrix.domain.model.Exercise>>() {}.type
+                                    gson.fromJson<List<com.example.liftrix.domain.model.Exercise>>(exercisesArray, exerciseType) ?: emptyList()
+                                } else {
+                                    Timber.w("JSON object doesn't contain 'exercises' field for workout ${workoutEntity.id}")
+                                    emptyList()
+                                }
+                            }
+                            jsonElement.isJsonArray -> {
+                                // Direct array format (templates or old workouts)
+                                val exerciseType = object : com.google.gson.reflect.TypeToken<List<com.example.liftrix.domain.model.Exercise>>() {}.type
+                                gson.fromJson<List<com.example.liftrix.domain.model.Exercise>>(jsonElement, exerciseType) ?: emptyList()
+                            }
+                            else -> {
+                                Timber.w("Unexpected JSON type for workout ${workoutEntity.id}: ${jsonElement.javaClass.simpleName}")
+                                emptyList()
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Timber.w(e, "Failed to parse exercises JSON for workout ${workoutEntity.id}")
+                        emptyList<com.example.liftrix.domain.model.Exercise>()
+                    }
+                    
+                    // Convert Exercise domain models to ExerciseDto for sync
+                    domainExercises.mapNotNull { exercise ->
+                        try {
+                            ExerciseDto(
+                                id = exercise.id.value,
+                                name = exercise.libraryExercise.name,
+                                muscleGroup = exercise.libraryExercise.primaryMuscleGroup.name,
+                                sets = exercise.sets.map { set ->
+                                    com.example.liftrix.data.model.SetDto(
+                                        setNumber = set.setNumber,
+                                        targetReps = exercise.targetReps,  // From Exercise, not ExerciseSet
+                                        actualReps = set.reps?.count,      // Reps object has count field
+                                        targetWeight = exercise.targetWeight?.kilograms,  // From Exercise
+                                        actualWeight = set.weight?.kilograms,  // Weight from set
+                                        completed = set.isCompleted,
+                                        notes = set.notes,
+                                        rpe = set.rpe?.value?.toDouble(),
+                                        dropSet = false,  // Not stored in ExerciseSet
+                                        superSet = false  // Not stored in ExerciseSet
+                                    )
+                                },
+                                notes = exercise.notes,
+                                restTimeSeconds = null, // Not stored in Exercise domain model
+                                orderIndex = exercise.orderIndex
+                            )
+                        } catch (e: Exception) {
+                            Timber.w(e, "Failed to convert exercise ${exercise.id.value} to DTO")
+                            null
+                        }
+                    }
                 }
             } catch (e: Exception) {
-                Timber.w(e, "Failed to parse exercises JSON for workout ${workoutEntity.id}, using empty list")
+                Timber.w(e, "Failed to parse and convert exercises for workout ${workoutEntity.id}, using empty list")
                 emptyList<ExerciseDto>()
             }
             

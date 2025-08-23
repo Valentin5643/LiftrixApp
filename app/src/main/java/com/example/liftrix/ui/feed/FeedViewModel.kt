@@ -47,6 +47,7 @@ class FeedViewModel @Inject constructor(
             selectedTab = FeedTab.HOME,
             likedPosts = emptySet(),
             savedPosts = emptySet(),
+            currentUserId = null,
             isLoading = false,
             error = null
         )
@@ -54,6 +55,19 @@ class FeedViewModel @Inject constructor(
 
     init {
         collectUserState()
+        initializeCurrentUser()
+    }
+    
+    private fun initializeCurrentUser() {
+        viewModelScope.launch {
+            try {
+                val userId = getCurrentUserIdUseCase()
+                _uiState.value = _uiState.value.copy(currentUserId = userId)
+                Timber.d("🔥 FEED-DEBUG: Current user ID set to: $userId")
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to get current user ID")
+            }
+        }
     }
 
     val posts: Flow<PagingData<WorkoutPost>> = _selectedTab
@@ -377,6 +391,7 @@ data class FeedUiState(
     val selectedTab: FeedTab = FeedTab.HOME,
     val likedPosts: Set<String> = emptySet(),
     val savedPosts: Set<String> = emptySet(),
+    val currentUserId: String? = null,
     val isLoading: Boolean = false,
     val error: LiftrixError? = null
 )

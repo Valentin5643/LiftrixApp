@@ -3,8 +3,11 @@ package com.example.liftrix.data.repository
 import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.local.dao.UserSearchCacheDao
 import com.example.liftrix.data.local.dao.FollowRelationshipDao
+import com.example.liftrix.data.local.dao.WorkoutDao
+import com.example.liftrix.data.local.dao.WorkoutPostDao
 import com.example.liftrix.data.local.entity.UserSearchCacheEntity
 import com.example.liftrix.data.local.entity.FollowRelationshipEntity
+import com.example.liftrix.data.mapper.WorkoutPostMapper
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -15,6 +18,8 @@ import com.example.liftrix.domain.model.FitnessLevel
 import com.example.liftrix.domain.model.social.ConnectionStatus
 import com.example.liftrix.domain.model.social.FollowStatus
 import com.example.liftrix.domain.model.social.PublicWorkoutStats
+import com.example.liftrix.domain.model.social.RecentWorkout
+import com.example.liftrix.domain.model.social.WorkoutPost
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.FitnessGoal
 import com.example.liftrix.domain.model.UserAchievement
@@ -23,9 +28,10 @@ import com.example.liftrix.domain.repository.AuthRepository
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.gson.Gson
 import kotlinx.coroutines.tasks.await
-import timber.log.Timber
-import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.time.LocalDateTime
+import kotlinx.coroutines.flow.first
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -47,6 +53,9 @@ class UserSearchRepositoryImpl @Inject constructor(
     private val userProfileDao: UserProfileDao,
     private val userSearchCacheDao: UserSearchCacheDao,
     private val followRelationshipDao: FollowRelationshipDao,
+    private val workoutDao: WorkoutDao,
+    private val workoutPostDao: WorkoutPostDao,
+    private val workoutPostMapper: WorkoutPostMapper,
     private val authRepository: AuthRepository,
     private val firestore: FirebaseFirestore,
     private val gson: Gson
@@ -153,6 +162,82 @@ class UserSearchRepositoryImpl @Inject constructor(
             val totalWorkouts = (data["totalWorkouts"] as? Number)?.toInt() ?: 0
             val fitnessLevel = determineFitnessLevel(totalWorkouts, data)
             
+            // Get accurate follower/following counts from local database
+            val followersCount = try {
+                followRelationshipDao.getFollowerCount(userId)
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to get follower count for user: $userId, falling back to Firestore")
+                (data["followersCount"] as? Number)?.toInt() ?: 0
+            }
+            
+            val followingCount = try {
+                followRelationshipDao.getFollowingCount(userId)
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to get following count for user: $userId, falling back to Firestore")
+                (data["followingCount"] as? Number)?.toInt() ?: 0
+            }
+            
+            Timber.d("Profile counts for $userId - Followers: $followersCount, Following: $followingCount")
+            
+            // Fetch recent workouts for the user profile (basic info)
+            val recentWorkouts = try {
+                val workoutsFlow = workoutDao.getRecentCompletedWorkouts(userId, limit = 5)
+                val workouts = workoutsFlow.first()
+                workouts.map { workout ->
+                    // Calculate duration from start and end times
+                    val durationMinutes = if (workout.startTime != null && workout.endTime != null) {
+                        val durationSeconds = workout.endTime.epochSecond - workout.startTime.epochSecond
+                        "${durationSeconds / 60}m"
+                    } else {
+                        "N/A"
+                    }
+                    
+                    // Parse exercises from JSON to get count
+                    val exerciseCount = try {
+                        if (!workout.exercisesJson.isNullOrBlank()) {
+                            val gson = com.google.gson.Gson()
+                            val jsonElement = gson.fromJson(workout.exercisesJson, com.google.gson.JsonElement::class.java)
+                            when {
+                                jsonElement.isJsonObject && jsonElement.asJsonObject.has("exercises") -> {
+                                    jsonElement.asJsonObject.getAsJsonArray("exercises").size()
+                                }
+                                jsonElement.isJsonArray -> {
+                                    jsonElement.asJsonArray.size()
+                                }
+                                else -> 0
+                            }
+                        } else {
+                            0
+                        }
+                    } catch (e: Exception) {
+                        0
+                    }
+                    
+                    RecentWorkout(
+                        id = workout.id,
+                        name = workout.name,
+                        date = workout.date.format(DateTimeFormatter.ofPattern("MMM d, yyyy")),
+                        exerciseCount = exerciseCount,
+                        duration = durationMinutes
+                    )
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to fetch recent workouts for user: $userId")
+                emptyList()
+            }
+            
+            // Fetch recent workout posts for feed-style display
+            val recentWorkoutPosts = try {
+                val postsFlow = workoutPostDao.getRecentUserPosts(userId, limit = 3)
+                val postEntities = postsFlow.first()
+                postEntities.map { entity ->
+                    workoutPostMapper.toDomain(entity, isLikedByViewer = false, isSavedByViewer = false)
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to fetch recent workout posts for user: $userId")
+                emptyList()
+            }
+            
             PublicUserProfile(
                 userId = userId,
                 username = data["username"] as? String ?: "",  // Don't generate temporary username
@@ -163,8 +248,8 @@ class UserSearchRepositoryImpl @Inject constructor(
                 age = data["age"] as? Int,
                 location = data["location"] as? String,
                 fitnessLevel = fitnessLevel,
-                followersCount = (data["followersCount"] as? Number)?.toInt() ?: 0,
-                followingCount = (data["followingCount"] as? Number)?.toInt() ?: 0,
+                followersCount = followersCount,
+                followingCount = followingCount,
                 mutualConnectionsCount = mutualConnections,
                 totalWorkouts = totalWorkouts,
                 currentStreak = (data["currentStreak"] as? Number)?.toInt() ?: 0,
@@ -176,6 +261,8 @@ class UserSearchRepositoryImpl @Inject constructor(
                 followStatus = FollowStatus.NONE, // Will be determined by relationship check
                 connectionStatus = connectionStatus,
                 canViewDetails = true, // Will be determined by privacy settings
+                recentWorkouts = recentWorkouts, // Now populated with actual workout data
+                recentWorkoutPosts = recentWorkoutPosts, // Feed-style workout posts
                 publicWorkoutStats = PublicWorkoutStats(
                     totalWorkouts = totalWorkouts,
                     totalWorkoutTime = (data["totalWorkoutTime"] as? Number)?.toLong() ?: 0L,

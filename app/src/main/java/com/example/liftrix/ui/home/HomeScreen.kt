@@ -57,6 +57,7 @@ import com.example.liftrix.ui.feed.components.WorkoutPostCard
 import com.example.liftrix.ui.common.sync.SyncStatusIndicator
 import com.example.liftrix.ui.common.sync.SyncStatusViewModel
 import com.example.liftrix.ui.navigation.LiftrixRoute
+import com.example.liftrix.ui.navigation.navigateToEditWorkout
 import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
 import com.example.liftrix.ui.workout.components.PrimaryActionButton
 import com.example.liftrix.ui.workout.components.SecondaryActionButton
@@ -417,6 +418,10 @@ private fun EnhancedHomeContent(
                     onWorkoutCopyClick = {
                         feedViewModel.onEvent(FeedEvent.HandlePostInteraction(PostInteraction.CopyWorkout(post)))
                     },
+                    onEditWorkout = {
+                        navController.navigateToEditWorkout(post.workoutId)
+                    },
+                    isOwnPost = feedUiState.currentUserId == post.userId,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = LiftrixSpacing.medium)

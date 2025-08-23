@@ -12,7 +12,8 @@ data class Friend(
     val avatarUrl: String?,
     val status: FriendStatus,
     val presence: UserPresence?,
-    val friendSince: Instant
+    val friendSince: Instant,
+    val isMutual: Boolean = false // True if both users follow each other
 ) {
     init {
         require(userId.isNotBlank()) { "Friend user ID cannot be blank" }

@@ -2,6 +2,8 @@ package com.example.liftrix.ui.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -41,6 +43,8 @@ fun ReportContentBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .heightIn(max = 600.dp) // Constrain height to enable scrolling
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp)
                 .padding(bottom = 32.dp) // Extra padding for bottom sheet
         ) {
@@ -87,10 +91,11 @@ fun ReportContentBottomSheet(
                 Spacer(modifier = Modifier.height(8.dp))
             }
             
-            // Additional details section
+            // Spacer before action section
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Additional details section (visible when reason is selected)
             if (selectedReason != null) {
-                Spacer(modifier = Modifier.height(16.dp))
-                
                 Text(
                     text = "Additional details (optional)",
                     style = MaterialTheme.typography.titleSmall,
@@ -112,8 +117,11 @@ fun ReportContentBottomSheet(
                     enabled = !isSubmitting
                 )
                 
-                Spacer(modifier = Modifier.height(24.dp))
-                
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+            
+            // Action buttons (always visible when reason is selected)
+            if (selectedReason != null) {
                 // Submit button
                 Button(
                     onClick = {
@@ -151,6 +159,8 @@ fun ReportContentBottomSheet(
                 ) {
                     Text("Cancel")
                 }
+                
+                Spacer(modifier = Modifier.height(16.dp))
             }
             
             // Privacy notice

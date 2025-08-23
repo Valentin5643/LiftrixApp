@@ -3,6 +3,7 @@ package com.example.liftrix.domain.usecase.social
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.model.social.ReportReason
 import com.example.liftrix.domain.repository.social.ReportRepository
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import timber.log.Timber
@@ -79,17 +80,4 @@ class ReportUserUseCase @Inject constructor(
         
         Unit
     }
-}
-
-/**
- * Reasons for reporting a user
- */
-enum class ReportReason {
-    INAPPROPRIATE_CONTENT,
-    HARASSMENT,
-    SPAM,
-    FAKE_PROFILE,
-    VIOLENCE,
-    HATE_SPEECH,
-    OTHER
 }

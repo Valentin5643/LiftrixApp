@@ -5,10 +5,13 @@ import com.example.liftrix.data.local.dao.FollowRequestDao
 import com.example.liftrix.data.local.dao.ProfileViewDao
 import com.example.liftrix.data.local.dao.SocialProfileDao
 import com.example.liftrix.data.local.dao.BlockedUserDao
+import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.local.dao.EnrichedFollowRelationship
 import com.example.liftrix.data.local.entity.FollowRelationshipEntity
 import com.example.liftrix.data.local.entity.FollowRequestEntity
 import com.example.liftrix.data.local.entity.ProfileViewEntity
+import com.example.liftrix.data.local.entity.SocialProfileEntity
+import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -49,6 +52,7 @@ class FollowRepositoryImpl @Inject constructor(
     private val profileViewDao: ProfileViewDao,
     private val socialProfileDao: SocialProfileDao,
     private val blockedUserDao: BlockedUserDao,
+    private val userProfileDao: UserProfileDao,
     private val firestore: FirebaseFirestore
 ) : FollowRepository {
 
@@ -108,9 +112,14 @@ class FollowRepositoryImpl @Inject constructor(
                 return@liftrixCatching FollowStatus.PENDING_SENT
             }
             
-            // Get target user's profile privacy
-            val targetProfile = socialProfileDao.getSocialProfileByUserId(targetUserId)
-                ?: throw IllegalArgumentException("Target user profile not found")
+            // Get target user's profile privacy - try local first, then Firebase fallback
+            var targetProfile = socialProfileDao.getSocialProfileByUserId(targetUserId)
+            
+            if (targetProfile == null) {
+                Timber.w("Social profile not found locally for user $targetUserId, attempting Firebase fallback")
+                targetProfile = fetchAndCreateSocialProfileFromFirebase(targetUserId)
+                    ?: throw IllegalArgumentException("Target user profile not found in local DB or Firebase")
+            }
             
             val currentTime = System.currentTimeMillis()
             val relationshipId = UUID.randomUUID().toString()
@@ -213,7 +222,15 @@ class FollowRepositoryImpl @Inject constructor(
             val relationship = followRelationshipDao.getFollowRelationship(requesterId, targetUserId)
             relationship?.let { syncRelationshipToFirebase(it) }
             
-            FollowStatus.FOLLOWING
+            // Check if this creates a mutual follow relationship
+            val isMutual = followRelationshipDao.areMutuallyFollowing(targetUserId, requesterId)
+            
+            if (isMutual) {
+                Timber.d("Mutual follow relationship detected between $targetUserId and $requesterId")
+                FollowStatus.MUTUAL_FOLLOW
+            } else {
+                FollowStatus.FOLLOWING
+            }
         }
     }
 
@@ -806,6 +823,140 @@ class FollowRepositoryImpl @Inject constructor(
             }
         } catch (e: Exception) {
             Timber.e(e, "Failed to sync relationship deletion to Firebase")
+        }
+    }
+    
+    /**
+     * Fetches a user's profile from Firebase and creates local database entries.
+     * This is a fallback mechanism for when a user exists in Firebase but not locally.
+     * Creates both UserProfileEntity (parent) and SocialProfileEntity (child) to satisfy foreign key constraints.
+     * 
+     * @param userId The user ID to fetch profile for
+     * @return The created SocialProfileEntity or null if not found
+     */
+    private suspend fun fetchAndCreateSocialProfileFromFirebase(userId: String): SocialProfileEntity? {
+        return try {
+            Timber.d("Attempting to fetch social profile from Firebase for user: $userId")
+            
+            // First check if user already exists in user_profiles table
+            val existingUserProfile = userProfileDao.getProfileForUserSuspend(userId)
+            if (existingUserProfile == null) {
+                Timber.d("User profile doesn't exist locally, will create it first")
+            }
+            
+            // Try to get from social_profiles collection first
+            var profileData = firestore.collection(SOCIAL_PROFILES_COLLECTION)
+                .document(userId)
+                .get()
+                .await()
+            
+            // If not found in social_profiles, try users_public collection as fallback
+            if (!profileData.exists()) {
+                Timber.d("Profile not found in social_profiles, trying users_public collection")
+                profileData = firestore.collection("users_public")
+                    .document(userId)
+                    .get()
+                    .await()
+            }
+            
+            if (!profileData.exists()) {
+                Timber.w("User profile not found in any Firebase collection for userId: $userId")
+                return null
+            }
+            
+            val data = profileData.data ?: return null
+            val currentTime = System.currentTimeMillis()
+            val currentDateTime = java.time.LocalDateTime.now()
+            
+            // Step 1: Create UserProfileEntity first (parent table) if it doesn't exist
+            if (existingUserProfile == null) {
+                val userProfile = UserProfileEntity(
+                    id = userId, // Use userId as the primary key
+                    userId = userId,
+                    displayName = data["displayName"] as? String ?: data["display_name"] as? String ?: data["username"] as? String ?: "User",
+                    age = (data["age"] as? Number)?.toInt(),
+                    weightKg = (data["weightKg"] as? Number)?.toDouble(),
+                    heightCm = (data["heightCm"] as? Number)?.toDouble(),
+                    fitnessLevel = data["fitnessLevel"] as? String,
+                    goals = data["goals"] as? String ?: data["fitnessGoals"] as? String,
+                    availableEquipment = data["availableEquipment"] as? String,
+                    workoutFrequency = (data["workoutFrequency"] as? Number)?.toInt(),
+                    preferredWorkoutDuration = (data["preferredWorkoutDuration"] as? Number)?.toInt(),
+                    completedAt = null, // Profile not completed yet
+                    createdAt = currentDateTime,
+                    updatedAt = currentDateTime,
+                    isSynced = true,
+                    syncVersion = 1L,
+                    bio = data["bio"] as? String,
+                    isPublic = data["isPublic"] as? Boolean ?: true,
+                    lastActiveAt = currentDateTime,
+                    totalWorkouts = (data["totalWorkouts"] as? Number)?.toInt() ?: 0,
+                    currentStreak = (data["currentStreak"] as? Number)?.toInt() ?: 0,
+                    longestStreak = (data["longestStreak"] as? Number)?.toInt() ?: 0,
+                    memberSince = currentDateTime,
+                    profileCompletionPercentage = 50, // Default partial completion
+                    profileImageUrl = data["profileImageUrl"] as? String ?: data["profilePhotoUrl"] as? String,
+                    profileImageUpdatedAt = null,
+                    hasCustomProfileImage = (data["profileImageUrl"] as? String != null || data["profilePhotoUrl"] as? String != null)
+                )
+                
+                try {
+                    userProfileDao.insertProfile(userProfile)
+                    Timber.i("Successfully created UserProfileEntity for user: $userId")
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to create UserProfileEntity for user: $userId")
+                    // If we can't create the parent, we can't proceed
+                    return null
+                }
+            }
+            
+            // Step 2: Create SocialProfileEntity (child table) - now the foreign key constraint will be satisfied
+            val socialProfile = SocialProfileEntity(
+                userId = userId,
+                username = data["username"] as? String ?: "user_$userId",
+                displayName = data["displayName"] as? String ?: data["display_name"] as? String,
+                bio = data["bio"] as? String,
+                profilePhotoUrl = data["profilePhotoUrl"] as? String ?: data["profileImageUrl"] as? String ?: data["profile_photo_url"] as? String,
+                coverPhotoUrl = data["coverPhotoUrl"] as? String ?: data["coverImageUrl"] as? String ?: data["cover_photo_url"] as? String,
+                workoutCount = (data["workoutCount"] as? Number)?.toInt() ?: (data["totalWorkouts"] as? Number)?.toInt() ?: 0,
+                followerCount = (data["followerCount"] as? Number)?.toInt() ?: (data["followersCount"] as? Number)?.toInt() ?: 0,
+                followingCount = (data["followingCount"] as? Number)?.toInt() ?: 0,
+                memberSince = (data["memberSince"] as? Number)?.toLong() ?: currentTime,
+                lastActive = (data["lastActive"] as? Number)?.toLong() ?: currentTime,
+                isVerified = data["isVerified"] as? Boolean ?: false,
+                isPrivate = data["isPrivate"] as? Boolean ?: false,
+                hideFromSuggestions = data["hideFromSuggestions"] as? Boolean ?: false,
+                allowFriendRequests = data["allowFriendRequests"] as? Boolean ?: true,
+                instagramHandle = data["instagramHandle"] as? String,
+                youtubeChannel = data["youtubeChannel"] as? String,
+                personalWebsite = data["personalWebsite"] as? String,
+                isSynced = true, // Mark as synced since we just fetched from Firebase
+                syncVersion = 1,
+                createdAt = (data["createdAt"] as? Number)?.toLong() ?: currentTime,
+                updatedAt = currentTime
+            )
+            
+            // Insert social profile into local database
+            try {
+                socialProfileDao.insertProfile(socialProfile)
+                Timber.i("Successfully created local social profile for user: $userId from Firebase data")
+            } catch (e: Exception) {
+                // If insert fails (e.g., already exists), try to update instead
+                Timber.w("Social profile insert failed, attempting update for user: $userId", e)
+                try {
+                    socialProfileDao.updateProfile(socialProfile)
+                    Timber.i("Successfully updated social profile for user: $userId")
+                } catch (updateError: Exception) {
+                    Timber.e(updateError, "Failed to update social profile for user: $userId")
+                    return null
+                }
+            }
+            
+            return socialProfile
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to fetch and create profiles from Firebase for user: $userId")
+            null
         }
     }
 }

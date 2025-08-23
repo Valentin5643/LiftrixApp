@@ -53,6 +53,7 @@ data class PublicUserProfile(
     
     // Recent content (privacy-aware)
     val recentWorkouts: List<RecentWorkout> = emptyList(),
+    val recentWorkoutPosts: List<WorkoutPost> = emptyList(), // For feed-style display
     val achievements: List<ProfileAchievement> = emptyList(),
     
     // Workout statistics (privacy-aware)
@@ -95,6 +96,7 @@ enum class FollowStatus {
     FOLLOWING,         // Currently following
     PENDING_SENT,      // Follow request sent, awaiting approval
     PENDING_RECEIVED,  // Follow request received, awaiting acceptance
+    MUTUAL_FOLLOW,     // Both users follow each other
     BLOCKED            // User is blocked
 }
 

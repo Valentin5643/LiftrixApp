@@ -11,7 +11,7 @@ import com.example.liftrix.domain.usecase.social.FollowUserUseCase
 import com.example.liftrix.domain.usecase.social.FollowAction
 import com.example.liftrix.domain.usecase.social.BlockUserUseCase
 import com.example.liftrix.domain.usecase.social.ReportUserUseCase
-import com.example.liftrix.domain.usecase.social.ReportReason
+import com.example.liftrix.domain.model.social.ReportReason
 import com.example.liftrix.domain.model.social.FollowStatus
 import com.example.liftrix.domain.model.social.ConnectionStatus
 import com.example.liftrix.ui.common.event.ViewModelEvent
@@ -263,8 +263,7 @@ class PublicProfileViewModel @Inject constructor(
             FollowStatus.PENDING_SENT -> ConnectionStatus.PENDING_SENT
             FollowStatus.PENDING_RECEIVED -> ConnectionStatus.PENDING_RECEIVED
             FollowStatus.FOLLOWING -> ConnectionStatus.CONNECTED
-            // Note: MUTUAL_FOLLOWING doesn't exist in FollowStatus enum
-            // Using FOLLOWING -> CONNECTED mapping as the primary status
+            FollowStatus.MUTUAL_FOLLOW -> ConnectionStatus.MUTUAL_FOLLOW
             FollowStatus.BLOCKED -> ConnectionStatus.BLOCKED
         }
     }

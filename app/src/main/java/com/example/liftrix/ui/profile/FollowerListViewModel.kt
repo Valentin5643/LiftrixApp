@@ -312,6 +312,7 @@ class FollowerListViewModel @Inject constructor(
                                         com.example.liftrix.domain.model.social.FollowStatus.FOLLOWING -> com.example.liftrix.domain.model.social.ConnectionStatus.CONNECTED
                                         com.example.liftrix.domain.model.social.FollowStatus.PENDING_SENT -> com.example.liftrix.domain.model.social.ConnectionStatus.PENDING_SENT
                                         com.example.liftrix.domain.model.social.FollowStatus.PENDING_RECEIVED -> com.example.liftrix.domain.model.social.ConnectionStatus.PENDING_RECEIVED
+                                        com.example.liftrix.domain.model.social.FollowStatus.MUTUAL_FOLLOW -> com.example.liftrix.domain.model.social.ConnectionStatus.MUTUAL_FOLLOW
                                         com.example.liftrix.domain.model.social.FollowStatus.BLOCKED -> com.example.liftrix.domain.model.social.ConnectionStatus.BLOCKED
                                         else -> com.example.liftrix.domain.model.social.ConnectionStatus.NONE
                                     }

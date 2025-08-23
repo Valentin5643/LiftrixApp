@@ -21,3 +21,11 @@ local.properties
 /scripts
 /serviceAccountKey.json
 /node_modules
+/.kotlin/errors/
+/.kotlin/sessions/
+/buildSrc/build/
+**/out/
+*.tmp
+*.hprof
+firebase-debug.log
+*.log

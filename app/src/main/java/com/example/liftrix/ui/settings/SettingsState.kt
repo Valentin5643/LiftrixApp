@@ -38,7 +38,8 @@ data class SettingsState(
     val showLogoutDialog: Boolean = false,
     val showImagePickerDialog: Boolean = false,
     val expandedCard: String? = null,
-    val effectiveThemeState: Boolean = false  // Actual theme state (dark/light) regardless of mode
+    val effectiveThemeState: Boolean = false,  // Actual theme state (dark/light) regardless of mode
+    val isAdmin: Boolean = false  // Whether the current user has admin privileges
 ) {
     /**
      * Indicates if the screen should show initial loading state.
@@ -189,5 +190,13 @@ data class SettingsState(
      */
     fun withImagePickerDialog(show: Boolean): SettingsState = copy(
         showImagePickerDialog = show
+    )
+    
+    /**
+     * Creates a copy of the state with updated admin status.
+     * Used for setting admin privileges after permission check.
+     */
+    fun withAdminStatus(adminStatus: Boolean): SettingsState = copy(
+        isAdmin = adminStatus
     )
 }

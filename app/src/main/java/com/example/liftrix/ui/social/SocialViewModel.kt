@@ -60,6 +60,10 @@ class SocialViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(SocialUiState())
     val uiState: StateFlow<SocialUiState> = _uiState.asStateFlow()
+    
+    // Navigation events
+    private val _navigationEvents = MutableSharedFlow<SocialNavigationEvent>()
+    val navigationEvents: SharedFlow<SocialNavigationEvent> = _navigationEvents.asSharedFlow()
 
     // Add Paging3 support for social feed
     val feedPagingData: Flow<PagingData<WorkoutPost>> = 
@@ -172,6 +176,10 @@ class SocialViewModel @Inject constructor(
             }
             is SocialEvent.ToggleFollow -> {
                 handleFollowAction(event.targetUserId)
+            }
+            is SocialEvent.NavigateToUserProfile -> {
+                // Emit navigation event - will be handled by the screen
+                _navigationEvents.tryEmit(SocialNavigationEvent.NavigateToUserProfile(event.userId))
             }
         }
     }
@@ -309,19 +317,19 @@ class SocialViewModel @Inject constructor(
                     val users = result.users.map { searchResult ->
                         User(
                             uid = searchResult.userId,
-                            email = "", // Email not available in search results for privacy
+                            email = "search-result@liftrix.app", // Placeholder email for search results
                             displayName = searchResult.displayName,
                             photoUrl = searchResult.profileImageUrl,
-                            isAnonymous = false, // Search results are for registered users
-                            subscriptionTier = com.example.liftrix.domain.model.SubscriptionTier.FREE, // Default tier
-                            subscriptionStatus = com.example.liftrix.domain.model.SubscriptionStatus.EXPIRED, // Default status
+                            isAnonymous = false, // Search results are registered users
+                            subscriptionTier = com.example.liftrix.domain.model.SubscriptionTier.FREE,
+                            subscriptionStatus = com.example.liftrix.domain.model.SubscriptionStatus.EXPIRED,
                             subscriptionExpiresAt = null,
                             premiumFeaturesEnabled = false,
-                            onboardingCompleted = true, // Assume completed for search results
+                            onboardingCompleted = true,
                             profileVersion = 1L,
-                            createdAt = java.time.LocalDateTime.now().minusDays(30), // Placeholder
-                            lastSignInAt = java.time.LocalDateTime.now().minusDays(1), // Placeholder
-                            updatedAt = java.time.LocalDateTime.now() // Placeholder
+                            createdAt = java.time.LocalDateTime.now().minusDays(30),
+                            lastSignInAt = java.time.LocalDateTime.now().minusDays(1),
+                            updatedAt = java.time.LocalDateTime.now()
                         )
                     }
                     _uiState.value = _uiState.value.copy(
@@ -842,10 +850,10 @@ class SocialViewModel @Inject constructor(
                         val users = result.users.map { searchResult ->
                             User(
                                 uid = searchResult.userId,
-                                email = "", // Email not available in search results for privacy
+                                email = "search-result@liftrix.app", // Placeholder email for search results
                                 displayName = searchResult.displayName,
                                 photoUrl = searchResult.profileImageUrl,
-                                isAnonymous = false,
+                                isAnonymous = false, // Search results are registered users
                                 subscriptionTier = com.example.liftrix.domain.model.SubscriptionTier.FREE,
                                 subscriptionStatus = com.example.liftrix.domain.model.SubscriptionStatus.EXPIRED,
                                 subscriptionExpiresAt = null,
@@ -887,6 +895,7 @@ class SocialViewModel @Inject constructor(
             }
         }
     }
+
 
     /**
      * Triggers sync of follow relationships to Firebase
@@ -1178,7 +1187,16 @@ sealed class SocialEvent : ViewModelEvent {
     data class ViewWorkout(val sharedWorkout: SharedWorkout) : SocialEvent()
     data class CongratulateWorkout(val sharedWorkout: SharedWorkout) : SocialEvent()
     data class ToggleFollow(val targetUserId: String) : SocialEvent()
+    // Navigation events
+    data class NavigateToUserProfile(val userId: String) : SocialEvent()
     object ErrorDismissed : SocialEvent()
+}
+
+/**
+ * Navigation events for social screen
+ */
+sealed class SocialNavigationEvent {
+    data class NavigateToUserProfile(val userId: String) : SocialNavigationEvent()
 }
 
 /**
