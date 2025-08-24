@@ -37,6 +37,19 @@ interface FeedCacheService {
     suspend fun invalidateUserCache(userId: String): LiftrixResult<Unit>
     
     /**
+     * Invalidates only profile-related cache for a user (when profile is updated)
+     * This preserves feed content cache to avoid UI disruption
+     * @param userId User whose profile cache to invalidate
+     */
+    suspend fun invalidateProfileCache(userId: String): LiftrixResult<Unit>
+    
+    /**
+     * Invalidates only feed content cache for a user (when follow list changes)
+     * @param userId User whose feed cache to invalidate
+     */
+    suspend fun invalidateFeedCache(userId: String): LiftrixResult<Unit>
+    
+    /**
      * Removes old cache entries beyond retention period
      * @param olderThanHours Remove cache entries older than this many hours
      */

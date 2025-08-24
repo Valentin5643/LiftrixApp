@@ -414,7 +414,6 @@ data class DateRange(
     val end: LocalDate
 )
 
-// Data classes for export
 data class WorkoutExportData(
     val id: String,
     val name: String,

@@ -164,6 +164,7 @@ private fun MobileOptimizedLayout(
                 widgetData = widgetData,
                 onClick = { onWidgetClick(widget) },
                 isLoading = isLoading,
+                aspectRatio = 2.0f, // Mobile single-column layout should use more rectangular ratio
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
@@ -257,6 +258,7 @@ private fun MobileWidgetColumn(
                 widgetData = widgetData,
                 onClick = { onWidgetClick(widget) },
                 isLoading = isLoading,
+                aspectRatio = 2.0f, // Mobile single-column layout should use more rectangular ratio
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
@@ -325,7 +327,8 @@ private fun ResponsiveGridLayout(
                     widget = widget,
                     widgetData = widgetData,
                     onClick = { onWidgetClick(widget) },
-                    isLoading = isLoading
+                    isLoading = isLoading,
+                    aspectRatio = if (columns == 1) 2.0f else 1.1f // Use more rectangular ratio for single column
                 )
             }
         }
@@ -367,7 +370,8 @@ private fun NonScrollableGrid(
                             widget = widget,
                             widgetData = widgetData,
                             onClick = { onWidgetClick(widget) },
-                            isLoading = isLoading
+                            isLoading = isLoading,
+                            aspectRatio = if (columns == 1) 2.0f else 1.1f // Use more rectangular ratio for single column
                         )
                     }
                 }

@@ -156,7 +156,7 @@ fun WorkoutDetailsScreen(
                             },
                             onEditWorkout = {
                                 navController.navigate(
-                                    LiftrixRoute.EditSession(workoutId)
+                                    LiftrixRoute.EditWorkout(workoutId)
                                 )
                             },
                             onShareWorkout = {
@@ -428,7 +428,6 @@ private fun ExerciseDetailCard(
             
             Spacer(modifier = Modifier.height(12.dp))
             
-            // Sets Table Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -478,7 +477,6 @@ private fun ExerciseDetailCard(
             Divider(color = LiftrixColorsV2.Dark.TextSecondary.copy(alpha = 0.2f))
             Spacer(modifier = Modifier.height(8.dp))
             
-            // Sets Data
             exercise.sets.forEachIndexed { index, set ->
                 SetRow(
                     setNumber = index + 1,
@@ -528,7 +526,6 @@ private fun SetRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Set number with PR indicator
         Box(
             modifier = Modifier.width(40.dp),
             contentAlignment = Alignment.CenterStart

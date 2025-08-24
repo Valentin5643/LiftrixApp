@@ -528,7 +528,7 @@ object LiftrixChartStyle {
 }
 
 /**
- * ModernChartRenderer - Encapsulates chart rendering operations per spec requirement
+ * ModernChartRenderer - Encapsulates chart rendering operations
  * 
  * This object provides the main API for rendering charts with bezier curves and gradients
  * following the Liftrix design system.

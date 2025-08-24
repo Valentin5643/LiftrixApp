@@ -79,44 +79,30 @@ class FeedRemoteMediator @Inject constructor(
                 return@withContext MediatorResult.Success(endOfPaginationReached = endOfPagination)
             }
             
-            // No cache or insufficient cache - refresh from network/recalculate
+            // No cache or insufficient cache - but DON'T clear existing data
             when (loadType) {
                 LoadType.REFRESH -> {
-                    // Clear existing cache and regenerate
-                    feedCacheService.invalidateUserCache(userId).fold(
-                        onSuccess = { },
-                        onFailure = { /* Log error but continue */ }
-                    )
-                    feedCacheService.updateFeedCache(userId, forceRefresh = true).fold(
-                        onSuccess = { },
-                        onFailure = { /* Log error but continue */ }
-                    )
+                    // 🔥 FIX: COMPLETELY DISABLE cache operations on refresh
+                    // The feed should persist through ANY refresh that isn't explicitly
+                    // triggered by new content being added
+                    
+                    // DO NOTHING - keep existing posts visible
+                    // The database already has the posts, we don't need to clear them
                 }
                 LoadType.APPEND -> {
-                    // For append, try to extend existing cache
-                    feedCacheService.updateFeedCache(userId, forceRefresh = false).fold(
-                        onSuccess = { },
-                        onFailure = { /* Log error but continue */ }
-                    )
+                    // For append, also do nothing - just load more from database
+                    // The paging source will handle getting more data
                 }
                 else -> { /* PREPEND already handled above */ }
             }
             
-            // Check if we now have data after cache update
-            val newCachedPostIdsResult = feedCacheService.getCachedFeedPostIds(
-                userId = userId,
-                limit = state.config.pageSize,
-                offset = loadKey
-            )
+            // 🔥 FIX: Since we're not updating cache, just return success
+            // The PagingSource will handle loading data from the database
+            // We don't need to check cache or determine pagination here
             
-            val newCachedPostIds = newCachedPostIdsResult.fold(
-                onSuccess = { it },
-                onFailure = { emptyList<String>() }
-            )
-            
-            val endOfPagination = newCachedPostIds.size < state.config.pageSize
-            
-            MediatorResult.Success(endOfPaginationReached = endOfPagination)
+            // Always return false for endOfPaginationReached to let the
+            // PagingSource determine when there's no more data
+            MediatorResult.Success(endOfPaginationReached = false)
             
         } catch (exception: Exception) {
             MediatorResult.Error(exception)

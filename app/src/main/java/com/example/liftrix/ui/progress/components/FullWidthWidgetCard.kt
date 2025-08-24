@@ -24,8 +24,7 @@ import com.example.liftrix.domain.model.analytics.WidgetData
 /**
  * Full-width widget card component for complex visualizations that span all columns.
  * 
- * Created for SPEC-20250205-progress-tab-ui-redesign to handle charts and calendars
- * that need the full screen width regardless of the grid column count.
+ * Handles charts and calendars that need the full screen width regardless of the grid column count.
  * 
  * Features:
  * - Spans full width of the grid using GridItemSpan(maxLineSpan)
@@ -69,7 +68,7 @@ fun FullWidthWidgetCard(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(20.dp),  // Internal padding per spec
+                .padding(20.dp),
             contentAlignment = Alignment.Center
         ) {
             // Use SimpleWidgetRenderer to render the appropriate widget content

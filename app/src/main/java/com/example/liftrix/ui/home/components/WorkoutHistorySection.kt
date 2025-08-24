@@ -143,15 +143,31 @@ fun WorkoutHistorySection(
             ) {
                 // If we have feed workouts with media, use those
                 if (feedWorkouts != null) {
-                    items(feedWorkouts) { feedWorkout ->
+                    // 🔥 CRITICAL FIX: Add unique key for feedWorkouts as well
+                    items(
+                        items = feedWorkouts,
+                        key = { feedWorkout -> feedWorkout.workout.id.value } // Use workout ID as unique key
+                    ) { feedWorkout ->
                         WorkoutHistoryCardWithMedia(
                             feedWorkout = feedWorkout,
                             onClick = { onWorkoutClick(feedWorkout.workout) }
                         )
                     }
                 } else {
+                    // 🔥 FORENSIC DEBUG - Log workouts being rendered to UI
+                    recentWorkouts.let { workouts ->
+                        android.util.Log.d("🔥 WORKOUT-RENDER-DEBUG", "Rendering ${workouts.size} workouts to LazyColumn")
+                        workouts.forEachIndexed { index, workout ->
+                            android.util.Log.d("🔥 WORKOUT-RENDER-DEBUG", "Workout[$index]: id=${workout.id.value}, name=${workout.name}")
+                        }
+                    }
+                    
                     // Otherwise fall back to regular workout display
-                    items(recentWorkouts) { workout ->
+                    // 🔥 CRITICAL FIX: Add unique key to prevent workout collapsing with same names
+                    items(
+                        items = recentWorkouts,
+                        key = { workout -> workout.id.value } // Use workout ID as unique key
+                    ) { workout ->
                         WorkoutHistoryCard(
                             workout = workout,
                             onClick = { onWorkoutClick(workout) }

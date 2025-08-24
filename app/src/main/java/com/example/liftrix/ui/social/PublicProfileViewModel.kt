@@ -14,10 +14,17 @@ import com.example.liftrix.domain.usecase.social.ReportUserUseCase
 import com.example.liftrix.domain.model.social.ReportReason
 import com.example.liftrix.domain.model.social.FollowStatus
 import com.example.liftrix.domain.model.social.ConnectionStatus
+import com.example.liftrix.domain.model.social.WorkoutPost
+import com.example.liftrix.domain.repository.social.FeedRepository
+import com.example.liftrix.domain.repository.social.EngagementRepository
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -35,6 +42,8 @@ class PublicProfileViewModel @Inject constructor(
     private val blockUserUseCase: BlockUserUseCase,
     private val reportUserUseCase: ReportUserUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val feedRepository: FeedRepository,
+    private val engagementRepository: EngagementRepository,
     errorHandler: ErrorHandler
 ) : BaseViewModel<PublicProfileUiState, PublicProfileEvent>(errorHandler) {
 
@@ -70,6 +79,15 @@ class PublicProfileViewModel @Inject constructor(
             }
             is PublicProfileEvent.ReportProfile -> {
                 reportProfile()
+            }
+            is PublicProfileEvent.ToggleLike -> {
+                toggleLike(event.postId)
+            }
+            is PublicProfileEvent.ToggleSave -> {
+                toggleSave(event.postId)
+            }
+            is PublicProfileEvent.OpenPostDetail -> {
+                // This will be handled by navigation in the UI
             }
         }
     }
@@ -110,6 +128,12 @@ class PublicProfileViewModel @Inject constructor(
                 }
                 
                 Timber.d("Profile loaded successfully for user: $userId")
+                
+                // Load user's workout posts
+                loadUserPosts(userId)
+                
+                // Load engagement state
+                loadEngagementState()
             },
             onError = { error ->
                 updateState { currentState ->
@@ -124,6 +148,115 @@ class PublicProfileViewModel @Inject constructor(
             },
             showLoading = false // We handle loading state manually
         )
+    }
+    
+    /**
+     * Loads workout posts for the user's profile
+     */
+    private fun loadUserPosts(userId: String) {
+        viewModelScope.launch {
+            // Get current user ID, or use empty string for anonymous viewing
+            val currentUserId = _uiState.value.currentUserId ?: getCurrentUserIdUseCase() ?: ""
+            
+            val postsFlow = feedRepository.getUserPosts(
+                userId = userId,
+                viewerId = currentUserId,
+                pageSize = 20
+            ).cachedIn(viewModelScope)
+            
+            updateState { currentState ->
+                currentState.copy(workoutPosts = postsFlow)
+            }
+            
+            Timber.d("Loading posts for user $userId viewed by $currentUserId")
+        }
+    }
+    
+    /**
+     * Loads engagement state (liked and saved posts)
+     */
+    private fun loadEngagementState() {
+        // Engagement state will be checked on demand for each post
+        // This is more efficient than pre-loading all liked/saved posts
+        Timber.d("Engagement state will be checked on demand for each post")
+    }
+    
+    /**
+     * Toggles like on a workout post
+     */
+    private fun toggleLike(postId: String) {
+        viewModelScope.launch {
+            val currentUserId = _uiState.value.currentUserId ?: return@launch
+            val isLiked = _uiState.value.likedPosts.contains(postId)
+            
+            // Optimistic update
+            updateState { currentState ->
+                currentState.copy(
+                    likedPosts = if (isLiked) {
+                        currentState.likedPosts - postId
+                    } else {
+                        currentState.likedPosts + postId
+                    }
+                )
+            }
+            
+            // Make API call
+            engagementRepository.toggleLike(postId, currentUserId).fold(
+                onSuccess = { /* Already updated optimistically */ },
+                onFailure = { error ->
+                    // Revert on failure
+                    updateState { currentState ->
+                        currentState.copy(
+                            likedPosts = if (isLiked) {
+                                currentState.likedPosts + postId
+                            } else {
+                                currentState.likedPosts - postId
+                            }
+                        )
+                    }
+                    Timber.e("Failed to toggle like: ${error.message}")
+                }
+            )
+        }
+    }
+    
+    /**
+     * Toggles save on a workout post
+     */
+    private fun toggleSave(postId: String) {
+        viewModelScope.launch {
+            val currentUserId = _uiState.value.currentUserId ?: return@launch
+            val isSaved = _uiState.value.savedPosts.contains(postId)
+            
+            // Optimistic update
+            updateState { currentState ->
+                currentState.copy(
+                    savedPosts = if (isSaved) {
+                        currentState.savedPosts - postId
+                    } else {
+                        currentState.savedPosts + postId
+                    }
+                )
+            }
+            
+            // Make API call
+            engagementRepository.toggleSave(postId, currentUserId).fold(
+                onSuccess = { /* Already updated optimistically */ },
+                onFailure = { error ->
+                    // Revert on failure
+                    updateState { currentState ->
+                        currentState.copy(
+                            savedPosts = if (isSaved) {
+                                currentState.savedPosts + postId
+                            } else {
+                                currentState.savedPosts - postId
+                            }
+                        )
+                    }
+                    Timber.e("Failed to toggle save: ${error.message}")
+                }
+            )
+        }
     }
 
     /**
@@ -391,7 +524,10 @@ data class PublicProfileUiState(
     val isLoading: Boolean,
     val error: LiftrixError?,
     val isConnectionLoading: Boolean,
-    val currentUserId: String? = null
+    val currentUserId: String? = null,
+    val workoutPosts: Flow<PagingData<WorkoutPost>> = flowOf(PagingData.empty()),
+    val likedPosts: Set<String> = emptySet(),
+    val savedPosts: Set<String> = emptySet()
 ) {
     
     /**
@@ -447,4 +583,19 @@ sealed class PublicProfileEvent : ViewModelEvent {
      * Report the profile
      */
     object ReportProfile : PublicProfileEvent()
+    
+    /**
+     * Toggle like on a workout post
+     */
+    data class ToggleLike(val postId: String) : PublicProfileEvent()
+    
+    /**
+     * Toggle save on a workout post
+     */
+    data class ToggleSave(val postId: String) : PublicProfileEvent()
+    
+    /**
+     * Navigate to post details
+     */
+    data class OpenPostDetail(val postId: String) : PublicProfileEvent()
 }

@@ -2,12 +2,27 @@ package com.example.liftrix.ui.progress.components.widgets
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,13 +34,18 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.liftrix.domain.model.analytics.*
-import com.example.liftrix.domain.repository.VolumeDataPoint
-import com.example.liftrix.domain.repository.FrequencyDataPoint
-import com.example.liftrix.domain.model.WeightUnit
 import com.example.liftrix.core.formatting.WeightFormatter
-import com.example.liftrix.ui.progress.components.WorkoutVolumeChart
+import com.example.liftrix.domain.model.WeightUnit
+import com.example.liftrix.domain.model.analytics.AnalyticsWidget
+import com.example.liftrix.domain.model.analytics.ChartSummary
+import com.example.liftrix.domain.model.analytics.ChartWidgetData
+import com.example.liftrix.domain.model.analytics.DataPoint
+import com.example.liftrix.domain.model.analytics.TrendDirection
+import com.example.liftrix.domain.repository.FrequencyDataPoint
+import com.example.liftrix.domain.repository.VolumeDataPoint
 import com.example.liftrix.ui.progress.components.WorkoutFrequencyHeatmap
+import com.example.liftrix.ui.progress.components.WorkoutVolumeChart
+import com.example.liftrix.ui.progress.components.widgets.FolderStyleWidget
 import com.example.liftrix.ui.theme.LiftrixColors
 import kotlin.math.max
 import kotlin.math.min
@@ -41,34 +61,47 @@ import kotlin.math.min
  */
 
 /**
- * Volume chart widget - visual volume progression using actual WorkoutVolumeChart
+ * Volume chart widget - visual volume progression with folder-style design
  */
 @Composable
 fun VolumeChartWidget(
     data: ChartWidgetData?,
     onRefresh: () -> Unit,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    useFolderStyle: Boolean = true
 ) {
-    // Convert ChartWidgetData to VolumeDataPoint list
-    val volumeData = data?.let { chartData ->
-        chartData.dataPoints.map { point ->
-            VolumeDataPoint(
-                date = kotlinx.datetime.LocalDate.fromEpochDays(point.x.toInt()),
-                totalVolume = point.y,
-                exerciseCount = 1 // Default value, could be enhanced
-            )
-        }
-    } ?: emptyList()
-    
-    // Use the actual WorkoutVolumeChart component
-    WorkoutVolumeChart(
-        data = volumeData,
-        isLoading = data?.isLoading == true,
-        weightUnit = WeightUnit.KILOGRAMS, // Default to kg, could be made configurable
-        weightFormatter = WeightFormatter(), // Use default formatter
-        modifier = modifier
-    )
+    if (useFolderStyle) {
+        FolderStyleWidget(
+            title = "Volume Chart",
+            icon = Icons.Default.ShowChart,
+            onClick = onClick,
+            modifier = modifier,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            iconTint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+        )
+    } else {
+        // Convert ChartWidgetData to VolumeDataPoint list
+        val volumeData = data?.let { chartData ->
+            chartData.dataPoints.map { point ->
+                VolumeDataPoint(
+                    date = kotlinx.datetime.LocalDate.fromEpochDays(point.x.toInt()),
+                    totalVolume = point.y,
+                    exerciseCount = 1 // Default value, could be enhanced
+                )
+            }
+        } ?: emptyList()
+        
+        // Use the actual WorkoutVolumeChart component
+        WorkoutVolumeChart(
+            data = volumeData,
+            isLoading = data?.isLoading == true,
+            weightUnit = WeightUnit.KILOGRAMS, // Default to kg, could be made configurable
+            weightFormatter = WeightFormatter(), // Use default formatter
+            modifier = modifier
+        )
+    }
 }
 
 /**
@@ -101,34 +134,47 @@ fun DurationChartWidget(
 }
 
 /**
- * Frequency chart widget - workout frequency patterns using actual WorkoutFrequencyHeatmap
+ * Frequency chart widget - workout frequency patterns with folder-style design
  */
 @Composable
 fun FrequencyChartWidget(
     data: ChartWidgetData?,
     onRefresh: () -> Unit,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    useFolderStyle: Boolean = true
 ) {
-    // Convert ChartWidgetData to FrequencyDataPoint list
-    val frequencyData = data?.let { chartData ->
-        chartData.dataPoints.map { point ->
-            FrequencyDataPoint(
-                date = kotlinx.datetime.LocalDate.fromEpochDays(point.x.toInt()),
-                workoutCount = point.y.toInt(),
-                intensity = (chartData.dataPoints.maxOfOrNull { it.y }?.let { max -> 
-                    if (max > 0f) point.y / max else 0f 
-                } ?: 0f)
-            )
-        }
-    } ?: emptyList()
-    
-    // Use the actual WorkoutFrequencyHeatmap component
-    WorkoutFrequencyHeatmap(
-        data = frequencyData,
-        isLoading = data?.isLoading == true,
-        modifier = modifier
-    )
+    if (useFolderStyle) {
+        FolderStyleWidget(
+            title = "Frequency Chart",
+            icon = Icons.Default.BarChart,
+            onClick = onClick,
+            modifier = modifier,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            iconTint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+        )
+    } else {
+        // Convert ChartWidgetData to FrequencyDataPoint list
+        val frequencyData = data?.let { chartData ->
+            chartData.dataPoints.map { point ->
+                FrequencyDataPoint(
+                    date = kotlinx.datetime.LocalDate.fromEpochDays(point.x.toInt()),
+                    workoutCount = point.y.toInt(),
+                    intensity = (chartData.dataPoints.maxOfOrNull { it.y }?.let { max -> 
+                        if (max > 0f) point.y / max else 0f 
+                    } ?: 0f)
+                )
+            }
+        } ?: emptyList()
+        
+        // Use the actual WorkoutFrequencyHeatmap component
+        WorkoutFrequencyHeatmap(
+            data = frequencyData,
+            isLoading = data?.isLoading == true,
+            modifier = modifier
+        )
+    }
 }
 
 /**
@@ -160,30 +206,43 @@ fun VolumeCalendarWidget(
 }
 
 /**
- * Progress chart widget - comprehensive progress visualization
+ * Progress chart widget - comprehensive progress visualization with folder-style design
  */
 @Composable
 fun ProgressChartWidget(
     data: ChartWidgetData?,
     onRefresh: () -> Unit,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    useFolderStyle: Boolean = true
 ) {
-    BaseWidget(
-        title = "Progress Chart",
-        subtitle = data?.timeRange,
-        isLoading = data?.isLoading == true,
-        error = data?.error?.message,
-        onRefresh = onRefresh,
-        onClick = onClick,
-        modifier = modifier
-    ) {
-        data?.let { chartData ->
-            ChartDisplay(
-                chartData = chartData,
-                chartColor = MaterialTheme.colorScheme.secondary,
-                icon = Icons.Default.ShowChart
-            )
+    if (useFolderStyle) {
+        FolderStyleWidget(
+            title = "Progress Chart",
+            icon = Icons.Default.TrendingUp,
+            onClick = onClick,
+            modifier = modifier,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            iconTint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+        )
+    } else {
+        BaseWidget(
+            title = "Progress Chart",
+            subtitle = data?.timeRange,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            onRefresh = onRefresh,
+            onClick = onClick,
+            modifier = modifier
+        ) {
+            data?.let { chartData ->
+                ChartDisplay(
+                    chartData = chartData,
+                    chartColor = MaterialTheme.colorScheme.secondary,
+                    icon = Icons.Default.ShowChart
+                )
+            }
         }
     }
 }

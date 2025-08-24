@@ -24,7 +24,6 @@ class UpdateWeightUnitPreferenceUseCase @Inject constructor(
             // Validate input
             require(userId.isNotBlank()) { "User ID cannot be blank" }
             
-            // Update the preference
             settingsRepository.updateWeightUnit(userId, weightUnit)
             
         } catch (e: IllegalArgumentException) {

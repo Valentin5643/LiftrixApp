@@ -116,6 +116,10 @@ class MasterSyncWorker @AssistedInject constructor(
                     async { 
                         Timber.d("MasterSyncWorker: Syncing achievements (parallel)")
                         "achievement" to syncEntity("achievement", userId)
+                    },
+                    async { 
+                        Timber.d("MasterSyncWorker: Syncing follow relationships (parallel)")
+                        "follow_relationship" to syncEntity("follow_relationship", userId)
                     }
                 ).awaitAll()
                 
@@ -209,6 +213,7 @@ class MasterSyncWorker @AssistedInject constructor(
                 "template" -> TemplateSyncWorker.createWorkRequest(userId)
                 "user_public" -> UserPublicSyncWorker.createWorkRequest(userId)
                 "achievement" -> AchievementSyncWorker.createWorkRequest(userId)
+                "follow_relationship" -> FollowRelationshipSyncWorker.createWorkRequest(userId)
                 else -> {
                     Timber.e("MasterSyncWorker: Unknown entity type: $entityType")
                     return SyncResult(success = false, syncedCount = 0, failedCount = 1, error = "Unknown entity type")

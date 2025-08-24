@@ -143,33 +143,21 @@ object LiftrixAnimations {
         easing = FastOutSlowInEasing
     )
     
-    /**
-     * Fast transition animation for quick UI changes
-     */
     val fastTransitionSpec: TweenSpec<Float> = tween(
         durationMillis = FAST,
         easing = FastOutSlowInEasing
     )
     
-    /**
-     * Fast transition animation for color changes
-     */
     val fastColorTransitionSpec: TweenSpec<Color> = tween(
         durationMillis = FAST,
         easing = FastOutSlowInEasing
     )
     
-    /**
-     * Standard transition animation for general UI transitions
-     */
     val standardTransitionSpec: TweenSpec<Float> = tween(
         durationMillis = STANDARD,
         easing = FastOutSlowInEasing
     )
     
-    /**
-     * Standard transition animation for color changes
-     */
     val standardColorTransitionSpec: TweenSpec<Color> = tween(
         durationMillis = STANDARD,
         easing = FastOutSlowInEasing
@@ -187,9 +175,6 @@ object LiftrixAnimations {
         1f at STANDARD
     }
     
-    /**
-     * Entrance animation specification for components appearing
-     */
     val bounceEntranceSpec: AnimationSpec<Float> = keyframes {
         durationMillis = STANDARD
         0f at 0
@@ -198,9 +183,6 @@ object LiftrixAnimations {
         1f at STANDARD
     }
     
-    /**
-     * Exit animation specification for components disappearing
-     */
     val exitSpec: TweenSpec<Float> = tween(
         durationMillis = FAST,
         easing = FastOutSlowInEasing
@@ -269,13 +251,13 @@ object LiftrixAnimations {
     )
     
     /**
-     * Skeleton loading shimmer animation - Task ANIM-001
+     * Skeleton loading shimmer animation
      * Smooth 1200ms cycle with teal accent color for skeleton loading states
      * Optimized for natural breathing effect and 60fps performance
      */
     val skeletonShimmerAnimation: InfiniteRepeatableSpec<Float> = infiniteRepeatable(
         animation = tween(
-            durationMillis = 1200, // Task specification: smooth skeleton loading
+            durationMillis = 1200,
             easing = LinearEasing
         ),
         repeatMode = RepeatMode.Restart
@@ -295,9 +277,6 @@ object LiftrixAnimations {
         1f at MEDIUM
     }
     
-    /**
-     * Card appearance animation with scale and fade
-     */
     val cardEntranceSpec: AnimationSpec<Float> = keyframes {
         durationMillis = MEDIUM
         0f at 0
@@ -316,17 +295,11 @@ object LiftrixAnimations {
         visibilityThreshold = 0.001f
     )
     
-    /**
-     * Card press animation for interactive feedback
-     */
     val cardPressSpec: TweenSpec<Float> = tween(
         durationMillis = MICRO,
         easing = FastOutSlowInEasing
     )
     
-    /**
-     * Surface elevation animation for depth changes
-     */
     val elevationChangeSpec: SpringSpec<Float> = spring(
         dampingRatio = Spring.DampingRatioMediumBouncy,
         stiffness = Spring.StiffnessHigh
@@ -344,9 +317,6 @@ object LiftrixAnimations {
         visibilityThreshold = 0.01f
     )
     
-    /**
-     * Screen transition animation for navigation
-     */
     val screenTransitionSpec: TweenSpec<Float> = tween(
         durationMillis = STANDARD,
         easing = FastOutSlowInEasing
@@ -362,17 +332,11 @@ object LiftrixAnimations {
         visibilityThreshold = 0.01f
     )
     
-    /**
-     * Bottom navigation selection animation
-     */
     val navigationSelectionSpec: SpringSpec<Float> = spring(
         dampingRatio = Spring.DampingRatioNoBouncy,
         stiffness = Spring.StiffnessHigh
     )
     
-    /**
-     * Navigation selection spring animation
-     */
     val navigationSelectionSpring: SpringSpec<Float> = spring(
         dampingRatio = Spring.DampingRatioNoBouncy,
         stiffness = Spring.StiffnessHigh
@@ -413,9 +377,6 @@ object LiftrixAnimations {
         visibilityThreshold = 0.01f
     )
     
-    /**
-     * Set completion checkmark animation
-     */
     val checkmarkAnimationSpec: SpringSpec<Float> = spring(
         dampingRatio = Spring.DampingRatioMediumBouncy,
         stiffness = Spring.StiffnessHigh
@@ -431,9 +392,6 @@ object LiftrixAnimations {
         visibilityThreshold = 0.005f
     )
     
-    /**
-     * Progress ring fill animation for workout progress
-     */
     val progressFillSpec: SpringSpec<Float> = spring(
         dampingRatio = Spring.DampingRatioLowBouncy,
         stiffness = Spring.StiffnessMedium
@@ -451,9 +409,6 @@ object LiftrixAnimations {
         repeatMode = RepeatMode.Reverse
     )
     
-    /**
-     * Timer pulse animation for active workout timer
-     */
     val timerPulseSpec: InfiniteRepeatableSpec<Float> = infiniteRepeatable(
         animation = tween(
             durationMillis = 1000,
@@ -464,17 +419,11 @@ object LiftrixAnimations {
     
     // Drag and Drop Animations
     
-    /**
-     * Drag start animation for lift-off effect
-     */
     val dragStartSpec: SpringSpec<Float> = spring(
         dampingRatio = Spring.DampingRatioNoBouncy,
         stiffness = Spring.StiffnessHigh
     )
     
-    /**
-     * Drag drop animation for settling into place
-     */
     val dragDropSpec: SpringSpec<Float> = spring(
         dampingRatio = Spring.DampingRatioMediumBouncy,
         stiffness = Spring.StiffnessMedium
@@ -482,17 +431,11 @@ object LiftrixAnimations {
     
     // Search and Input Animations
     
-    /**
-     * Search result appearance animation
-     */
     val searchResultSpec: TweenSpec<Float> = tween(
         durationMillis = FAST,
         easing = FastOutSlowInEasing
     )
     
-    /**
-     * Input field focus animation
-     */
     val inputFocusSpec: SpringSpec<Float> = spring(
         dampingRatio = Spring.DampingRatioNoBouncy,
         stiffness = Spring.StiffnessHigh

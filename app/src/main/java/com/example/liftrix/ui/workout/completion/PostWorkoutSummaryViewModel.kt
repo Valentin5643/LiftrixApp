@@ -108,6 +108,7 @@ class PostWorkoutSummaryViewModel @Inject constructor(
                     
                     _uiState.value = PostWorkoutUiState.Success(
                         workoutName = workout.name,
+                        workoutDate = workout.date,
                         duration = workout.getDuration() ?: Duration.ZERO,
                         totalVolume = totalVolume,
                         totalSets = totalSets,
@@ -362,6 +363,7 @@ sealed class PostWorkoutUiState {
     
     data class Success(
         val workoutName: String,
+        val workoutDate: java.time.LocalDate,
         val duration: Duration,
         val totalVolume: Int,
         val totalSets: Int,

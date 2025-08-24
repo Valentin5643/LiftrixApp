@@ -1,10 +1,26 @@
 package com.example.liftrix.ui.progress.components.widgets
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.DonutLarge
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.Scale
+import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -13,9 +29,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.liftrix.domain.model.analytics.*
-import com.example.liftrix.ui.theme.LiftrixColors
+import com.example.liftrix.domain.model.analytics.MetricWidgetData
+import com.example.liftrix.domain.model.analytics.TrendDirection
 import com.example.liftrix.ui.common.components.TrendIndicator
+import com.example.liftrix.ui.progress.components.widgets.FolderStyleWidget
+import com.example.liftrix.ui.theme.LiftrixColors
 
 /**
  * Enhanced metric widgets that include mini-graph visualizations.
@@ -23,7 +41,7 @@ import com.example.liftrix.ui.common.components.TrendIndicator
  */
 
 /**
- * Enhanced Total Volume Widget with mini line graph
+ * Enhanced Total Volume Widget with folder-style design
  */
 @Composable
 fun EnhancedTotalVolumeWidget(
@@ -31,163 +49,42 @@ fun EnhancedTotalVolumeWidget(
     graphData: List<Float>? = null,
     onRefresh: () -> Unit,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    useFolderStyle: Boolean = true,
+    aspectRatio: Float = 1.1f  // Responsive aspect ratio based on layout context
 ) {
-    BaseWidget(
-        title = "Total Volume",
-        subtitle = data?.comparisonPeriod,
-        isLoading = data?.isLoading == true,
-        error = data?.error?.message,
-        onRefresh = onRefresh,
-        onClick = onClick,
-        modifier = modifier
-    ) {
-        data?.let { widgetData ->
-            EnhancedMetricDisplay(
-                primaryValue = widgetData.primaryValue,
-                unit = widgetData.unit,
-                trend = widgetData.trend,
-                trendPercentage = widgetData.trendPercentage,
-                secondaryValue = widgetData.secondaryValue,
-                icon = Icons.Default.Scale,
-                primaryColor = MaterialTheme.colorScheme.primary,
-                graphData = graphData ?: emptyList(),
-                graphType = GraphType.LINE
-            )
-        }
-    }
-}
-
-/**
- * Enhanced Workout Frequency Widget with mini bar chart
- */
-@Composable
-fun EnhancedWorkoutFrequencyWidget(
-    data: MetricWidgetData?,
-    graphData: List<Float>? = null,
-    onRefresh: () -> Unit,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    BaseWidget(
-        title = "Workout Frequency",
-        subtitle = data?.comparisonPeriod,
-        isLoading = data?.isLoading == true,
-        error = data?.error?.message,
-        onRefresh = onRefresh,
-        onClick = onClick,
-        modifier = modifier
-    ) {
-        data?.let { widgetData ->
-            EnhancedMetricDisplay(
-                primaryValue = widgetData.primaryValue,
-                unit = widgetData.unit,
-                trend = widgetData.trend,
-                trendPercentage = widgetData.trendPercentage,
-                secondaryValue = widgetData.secondaryValue,
-                icon = Icons.Default.FitnessCenter,
-                primaryColor = MaterialTheme.colorScheme.primary,
-                graphData = graphData ?: emptyList(),
-                graphType = GraphType.BAR
-            )
-        }
-    }
-}
-
-/**
- * Enhanced Strength Progress Widget with mini line graph
- */
-@Composable
-fun EnhancedStrengthProgressWidget(
-    data: MetricWidgetData?,
-    graphData: List<Float>? = null,
-    onRefresh: () -> Unit,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    BaseWidget(
-        title = "Strength Progress",
-        subtitle = data?.comparisonPeriod,
-        isLoading = data?.isLoading == true,
-        error = data?.error?.message,
-        onRefresh = onRefresh,
-        onClick = onClick,
-        modifier = modifier
-    ) {
-        data?.let { widgetData ->
-            EnhancedMetricDisplay(
-                primaryValue = widgetData.primaryValue,
-                unit = widgetData.unit,
-                trend = widgetData.trend,
-                trendPercentage = widgetData.trendPercentage,
-                secondaryValue = widgetData.secondaryValue,
-                icon = Icons.Default.TrendingUp,
-                primaryColor = MaterialTheme.colorScheme.primary,
-                graphData = graphData ?: generateSampleProgressData(),
-                graphType = GraphType.LINE
-            )
-        }
-    }
-}
-
-/**
- * Enhanced Muscle Group Distribution Widget with mini distribution chart
- */
-@Composable
-fun EnhancedMuscleGroupWidget(
-    data: MetricWidgetData?,
-    distributionData: List<Pair<Float, Color>>? = null,
-    onRefresh: () -> Unit,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    BaseWidget(
-        title = "Muscle Groups",
-        subtitle = "Distribution",
-        isLoading = data?.isLoading == true,
-        error = data?.error?.message,
-        onRefresh = onRefresh,
-        onClick = onClick,
-        modifier = modifier
-    ) {
-        data?.let { widgetData ->
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Primary metric display
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "${widgetData.primaryValue} ${widgetData.unit}",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        widgetData.secondaryValue?.let { secondary ->
-                            Text(
-                                text = secondary,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
-                        }
-                    }
-                    
-                    Icon(
-                        imageVector = Icons.Default.DonutLarge,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                
-                // Distribution visualization
-                MiniDistributionChart(
-                    segments = distributionData ?: generateSampleDistribution(),
-                    modifier = Modifier.fillMaxWidth()
+    if (useFolderStyle) {
+        FolderStyleWidget(
+            title = "Volume Chart",
+            icon = Icons.Default.ShowChart,  // Line chart icon for volume - matches statistics style
+            onClick = onClick,
+            modifier = modifier,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            iconTint = MaterialTheme.colorScheme.primary,
+            aspectRatio = aspectRatio
+        )
+    } else {
+        BaseWidget(
+            title = "Total Volume",
+            subtitle = data?.comparisonPeriod,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            onRefresh = onRefresh,
+            onClick = onClick,
+            modifier = modifier
+        ) {
+            data?.let { widgetData ->
+                EnhancedMetricDisplay(
+                    primaryValue = widgetData.primaryValue,
+                    unit = widgetData.unit,
+                    trend = widgetData.trend,
+                    trendPercentage = widgetData.trendPercentage,
+                    secondaryValue = widgetData.secondaryValue,
+                    icon = Icons.Default.Scale,
+                    primaryColor = MaterialTheme.colorScheme.primary,
+                    graphData = graphData ?: emptyList(),
+                    graphType = GraphType.LINE
                 )
             }
         }
@@ -195,7 +92,188 @@ fun EnhancedMuscleGroupWidget(
 }
 
 /**
- * Enhanced 1RM Progression Widget with sparkline
+ * Enhanced Workout Frequency Widget with folder-style design
+ */
+@Composable
+fun EnhancedWorkoutFrequencyWidget(
+    data: MetricWidgetData?,
+    graphData: List<Float>? = null,
+    onRefresh: () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    useFolderStyle: Boolean = true,
+    aspectRatio: Float = 1.1f  // Responsive aspect ratio based on layout context
+) {
+    if (useFolderStyle) {
+        FolderStyleWidget(
+            title = "Frequency Chart",
+            icon = Icons.Default.BarChart,  // Bar chart icon for frequency - matches statistics style
+            onClick = onClick,
+            modifier = modifier,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            iconTint = MaterialTheme.colorScheme.primary,
+            aspectRatio = aspectRatio
+        )
+    } else {
+        BaseWidget(
+            title = "Workout Frequency",
+            subtitle = data?.comparisonPeriod,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            onRefresh = onRefresh,
+            onClick = onClick,
+            modifier = modifier
+        ) {
+            data?.let { widgetData ->
+                EnhancedMetricDisplay(
+                    primaryValue = widgetData.primaryValue,
+                    unit = widgetData.unit,
+                    trend = widgetData.trend,
+                    trendPercentage = widgetData.trendPercentage,
+                    secondaryValue = widgetData.secondaryValue,
+                    icon = Icons.Default.FitnessCenter,
+                    primaryColor = MaterialTheme.colorScheme.primary,
+                    graphData = graphData ?: emptyList(),
+                    graphType = GraphType.BAR
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Enhanced Strength Progress Widget with folder-style design
+ */
+@Composable
+fun EnhancedStrengthProgressWidget(
+    data: MetricWidgetData?,
+    graphData: List<Float>? = null,
+    onRefresh: () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    useFolderStyle: Boolean = true,
+    aspectRatio: Float = 1.1f  // Responsive aspect ratio based on layout context
+) {
+    if (useFolderStyle) {
+        FolderStyleWidget(
+            title = "Strength Progress",
+            icon = Icons.Default.FitnessCenter,  // Dumbbell icon for strength - matches statistics style
+            onClick = onClick,
+            modifier = modifier,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            iconTint = MaterialTheme.colorScheme.primary,
+            aspectRatio = aspectRatio
+        )
+    } else {
+        BaseWidget(
+            title = "Strength Progress",
+            subtitle = data?.comparisonPeriod,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            onRefresh = onRefresh,
+            onClick = onClick,
+            modifier = modifier
+        ) {
+            data?.let { widgetData ->
+                EnhancedMetricDisplay(
+                    primaryValue = widgetData.primaryValue,
+                    unit = widgetData.unit,
+                    trend = widgetData.trend,
+                    trendPercentage = widgetData.trendPercentage,
+                    secondaryValue = widgetData.secondaryValue,
+                    icon = Icons.Default.TrendingUp,
+                    primaryColor = MaterialTheme.colorScheme.primary,
+                    graphData = graphData ?: generateSampleProgressData(),
+                    graphType = GraphType.LINE
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Enhanced Muscle Group Distribution Widget with folder-style design
+ */
+@Composable
+fun EnhancedMuscleGroupWidget(
+    data: MetricWidgetData?,
+    distributionData: List<Pair<Float, Color>>? = null,
+    onRefresh: () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    useFolderStyle: Boolean = true,
+    aspectRatio: Float = 1.1f  // Responsive aspect ratio based on layout context
+) {
+    if (useFolderStyle) {
+        FolderStyleWidget(
+            title = "Muscle Groups",
+            icon = Icons.Default.DonutLarge,  // Donut chart icon for muscle distribution
+            onClick = onClick,
+            modifier = modifier,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            iconTint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+            aspectRatio = aspectRatio
+        )
+    } else {
+        BaseWidget(
+            title = "Muscle Groups",
+            subtitle = "Distribution",
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            onRefresh = onRefresh,
+            onClick = onClick,
+            modifier = modifier
+        ) {
+            data?.let { widgetData ->
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Primary metric display
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "${widgetData.primaryValue} ${widgetData.unit}",
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            widgetData.secondaryValue?.let { secondary ->
+                                Text(
+                                    text = secondary,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+                        
+                        Icon(
+                            imageVector = Icons.Default.DonutLarge,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    
+                    // Distribution visualization
+                    MiniDistributionChart(
+                        segments = distributionData ?: generateSampleDistribution(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Enhanced 1RM Progression Widget with folder-style design
  */
 @Composable
 fun EnhancedOneRmProgressionWidget(
@@ -203,35 +281,50 @@ fun EnhancedOneRmProgressionWidget(
     graphData: List<Float>? = null,
     onRefresh: () -> Unit,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    useFolderStyle: Boolean = true,
+    aspectRatio: Float = 1.1f  // Responsive aspect ratio based on layout context
 ) {
-    BaseWidget(
-        title = "1RM Progression",
-        subtitle = data?.comparisonPeriod,
-        isLoading = data?.isLoading == true,
-        error = data?.error?.message,
-        onRefresh = onRefresh,
-        onClick = onClick,
-        modifier = modifier
-    ) {
-        data?.let { widgetData ->
-            EnhancedMetricDisplay(
-                primaryValue = widgetData.primaryValue,
-                unit = widgetData.unit,
-                trend = widgetData.trend,
-                trendPercentage = widgetData.trendPercentage,
-                secondaryValue = widgetData.secondaryValue,
-                icon = Icons.Default.ShowChart,
-                primaryColor = MaterialTheme.colorScheme.primary,
-                graphData = graphData ?: generateSample1RMData(),
-                graphType = GraphType.SPARKLINE
-            )
+    if (useFolderStyle) {
+        FolderStyleWidget(
+            title = "1RM Progression",
+            icon = Icons.Default.TrendingUp,  // Trending up for 1RM progression
+            onClick = onClick,
+            modifier = modifier,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            iconTint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+            aspectRatio = aspectRatio
+        )
+    } else {
+        BaseWidget(
+            title = "1RM Progression",
+            subtitle = data?.comparisonPeriod,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            onRefresh = onRefresh,
+            onClick = onClick,
+            modifier = modifier
+        ) {
+            data?.let { widgetData ->
+                EnhancedMetricDisplay(
+                    primaryValue = widgetData.primaryValue,
+                    unit = widgetData.unit,
+                    trend = widgetData.trend,
+                    trendPercentage = widgetData.trendPercentage,
+                    secondaryValue = widgetData.secondaryValue,
+                    icon = Icons.Default.ShowChart,
+                    primaryColor = MaterialTheme.colorScheme.primary,
+                    graphData = graphData ?: generateSample1RMData(),
+                    graphType = GraphType.SPARKLINE
+                )
+            }
         }
     }
 }
 
 /**
- * Enhanced Volume Load Progression Widget
+ * Enhanced Volume Load Progression Widget with folder-style design
  */
 @Composable
 fun EnhancedVolumeLoadProgressionWidget(
@@ -239,29 +332,44 @@ fun EnhancedVolumeLoadProgressionWidget(
     graphData: List<Float>? = null,
     onRefresh: () -> Unit,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    useFolderStyle: Boolean = true,
+    aspectRatio: Float = 1.1f  // Responsive aspect ratio based on layout context
 ) {
-    BaseWidget(
-        title = "Volume Progression",
-        subtitle = data?.comparisonPeriod,
-        isLoading = data?.isLoading == true,
-        error = data?.error?.message,
-        onRefresh = onRefresh,
-        onClick = onClick,
-        modifier = modifier
-    ) {
-        data?.let { widgetData ->
-            EnhancedMetricDisplay(
-                primaryValue = widgetData.primaryValue,
-                unit = widgetData.unit,
-                trend = widgetData.trend,
-                trendPercentage = widgetData.trendPercentage,
-                secondaryValue = widgetData.secondaryValue,
-                icon = Icons.Default.Timeline,
-                primaryColor = MaterialTheme.colorScheme.primary,
-                graphData = graphData ?: emptyList(),
-                graphType = GraphType.LINE
-            )
+    if (useFolderStyle) {
+        FolderStyleWidget(
+            title = "Volume Progression",
+            icon = Icons.Default.Timeline,  // Timeline icon for volume progression
+            onClick = onClick,
+            modifier = modifier,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            iconTint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+            aspectRatio = aspectRatio
+        )
+    } else {
+        BaseWidget(
+            title = "Volume Progression",
+            subtitle = data?.comparisonPeriod,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            onRefresh = onRefresh,
+            onClick = onClick,
+            modifier = modifier
+        ) {
+            data?.let { widgetData ->
+                EnhancedMetricDisplay(
+                    primaryValue = widgetData.primaryValue,
+                    unit = widgetData.unit,
+                    trend = widgetData.trend,
+                    trendPercentage = widgetData.trendPercentage,
+                    secondaryValue = widgetData.secondaryValue,
+                    icon = Icons.Default.Timeline,
+                    primaryColor = MaterialTheme.colorScheme.primary,
+                    graphData = graphData ?: emptyList(),
+                    graphType = GraphType.LINE
+                )
+            }
         }
     }
 }

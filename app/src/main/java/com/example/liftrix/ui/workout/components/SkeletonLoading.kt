@@ -44,7 +44,7 @@ fun WorkoutCardSkeleton(
 ) {
     val shimmerColors = listOf(
         MaterialTheme.colorScheme.surfaceVariant,
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), // Task specification: teal accent
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
         MaterialTheme.colorScheme.surfaceVariant
     )
     
@@ -53,7 +53,7 @@ fun WorkoutCardSkeleton(
         initialValue = 0f,
         targetValue = 1000f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing), // Task specification: smooth shimmer
+            animation = tween(1200, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "shimmerTranslate"
@@ -226,13 +226,11 @@ fun ExerciseCardSkeleton(
             
             Spacer(modifier = Modifier.height(LiftrixSpacing.elementSpacing))
             
-            // Sets skeletons
             repeat(setsCount) { index ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Set number
                     Box(
                         modifier = Modifier
                             .width(30.dp)

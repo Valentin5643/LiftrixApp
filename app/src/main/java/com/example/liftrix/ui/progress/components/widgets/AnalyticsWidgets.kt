@@ -1,14 +1,39 @@
 package com.example.liftrix.ui.progress.components.widgets
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
+import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Diversity1
+import androidx.compose.material.icons.filled.DonutLarge
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.SelfImprovement
+import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
@@ -18,9 +43,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.liftrix.domain.model.analytics.*
-import com.example.liftrix.ui.progress.components.charts.MuscleGroupPieChart
+import com.example.liftrix.domain.model.analytics.AnalyticsWidget
+import com.example.liftrix.domain.model.analytics.AnalyticsWidgetData
+import com.example.liftrix.domain.model.analytics.Insight
+import com.example.liftrix.domain.model.analytics.InsightCategory
+import com.example.liftrix.domain.model.analytics.Recommendation
 import com.example.liftrix.ui.progress.components.charts.MuscleGroup
+import com.example.liftrix.ui.progress.components.charts.MuscleGroupPieChart
+import com.example.liftrix.ui.progress.components.widgets.FolderStyleWidget
 import com.example.liftrix.ui.theme.LiftrixColors
 import timber.log.Timber
 
@@ -34,67 +64,86 @@ import timber.log.Timber
  * - Actionable intelligence presentation
  */
 
-/**
- * Volume trends widget - advanced volume trend analysis with projections
- */
 @Composable
-fun VolumeTrendsWidget(
+fun VolumeAnalyticsWidget(
     data: AnalyticsWidgetData?,
     onRefresh: () -> Unit,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    useFolderStyle: Boolean = true,
+    aspectRatio: Float = 1.1f
 ) {
-    BaseWidget(
-        title = "Volume Trends",
-        subtitle = data?.timeRange,
-        isLoading = data?.isLoading == true,
-        error = data?.error?.message,
-        onRefresh = onRefresh,
-        onClick = onClick,
-        modifier = modifier
-    ) {
-        data?.let { analyticsData ->
-            AnalyticsDisplay(
-                analyticsData = analyticsData,
-                icon = Icons.Default.TrendingUp,
-                primaryColor = MaterialTheme.colorScheme.primary,
-                showMetrics = true
-            )
+    if (useFolderStyle) {
+        FolderStyleWidget(
+            title = "Volume Analytics",
+            icon = Icons.Default.Analytics,
+            onClick = onClick,
+            modifier = modifier,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            iconTint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+            aspectRatio = aspectRatio
+        )
+    } else {
+        BaseWidget(
+            title = "Volume Analytics",
+            subtitle = data?.timeRange,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            onRefresh = onRefresh,
+            onClick = onClick,
+            modifier = modifier
+        ) {
+            data?.let { analyticsData ->
+                VolumeAnalyticsDisplay(
+                    analyticsData = analyticsData,
+                    primaryColor = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }
 
-/**
- * Recovery metrics widget - tracks rest days and recovery patterns
- */
 @Composable
 fun RecoveryMetricsWidget(
     data: AnalyticsWidgetData?,
     onRefresh: () -> Unit,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    useFolderStyle: Boolean = true,
+    aspectRatio: Float = 1.1f
 ) {
-    BaseWidget(
-        title = "Recovery Metrics",
-        subtitle = data?.timeRange,
-        isLoading = data?.isLoading == true,
-        error = data?.error?.message,
-        onRefresh = onRefresh,
-        onClick = onClick,
-        modifier = modifier
-    ) {
-        data?.let { analyticsData ->
-            RecoveryDisplay(
-                analyticsData = analyticsData,
-                primaryColor = MaterialTheme.colorScheme.secondary
-            )
+    if (useFolderStyle) {
+        FolderStyleWidget(
+            title = "Recovery Metrics",
+            icon = Icons.Default.SelfImprovement,
+            onClick = onClick,
+            modifier = modifier,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            iconTint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+            aspectRatio = aspectRatio
+        )
+    } else {
+        BaseWidget(
+            title = "Recovery Metrics",
+            subtitle = data?.timeRange,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            onRefresh = onRefresh,
+            onClick = onClick,
+            modifier = modifier
+        ) {
+            data?.let { analyticsData ->
+                RecoveryDisplay(
+                    analyticsData = analyticsData,
+                    primaryColor = MaterialTheme.colorScheme.secondary
+                )
+            }
         }
     }
 }
 
-/**
- * Performance analysis widget - comprehensive performance analytics
- */
 @Composable
 fun PerformanceAnalysisWidget(
     data: AnalyticsWidgetData?,
@@ -120,9 +169,6 @@ fun PerformanceAnalysisWidget(
     }
 }
 
-/**
- * Weekly trends widget - advanced weekly trend analysis
- */
 @Composable
 fun WeeklyTrendsWidget(
     data: AnalyticsWidgetData?,
@@ -150,37 +196,44 @@ fun WeeklyTrendsWidget(
     }
 }
 
-/**
- * Muscle group distribution widget - training distribution across muscle groups
- */
 @Composable
 fun MuscleGroupDistributionWidget(
     data: AnalyticsWidgetData?,
     onRefresh: () -> Unit,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    useFolderStyle: Boolean = true
 ) {
-    BaseWidget(
-        title = "Muscle Group Distribution",
-        subtitle = data?.timeRange,
-        isLoading = data?.isLoading == true,
-        error = data?.error?.message,
-        onRefresh = onRefresh,
-        onClick = onClick,
-        modifier = modifier
-    ) {
-        data?.let { analyticsData ->
-            MuscleGroupDisplay(
-                analyticsData = analyticsData,
-                primaryColor = MaterialTheme.colorScheme.primary
-            )
+    if (useFolderStyle) {
+        FolderStyleWidget(
+            title = "Muscle Groups",
+            icon = Icons.Default.DonutLarge,
+            onClick = onClick,
+            modifier = modifier,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            iconTint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+        )
+    } else {
+        BaseWidget(
+            title = "Muscle Group Distribution",
+            subtitle = data?.timeRange,
+            isLoading = data?.isLoading == true,
+            error = data?.error?.message,
+            onRefresh = onRefresh,
+            onClick = onClick,
+            modifier = modifier
+        ) {
+            data?.let { analyticsData ->
+                MuscleGroupDisplay(
+                    analyticsData = analyticsData,
+                    primaryColor = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }
 
-/**
- * Recovery patterns widget - tracks recovery patterns and recommendations
- */
 @Composable
 fun RecoveryPatternsWidget(
     data: AnalyticsWidgetData?,
@@ -206,9 +259,6 @@ fun RecoveryPatternsWidget(
     }
 }
 
-/**
- * Training intensity widget - monitors workout intensity and RPE trends
- */
 @Composable
 fun TrainingIntensityWidget(
     data: AnalyticsWidgetData?,
@@ -234,9 +284,6 @@ fun TrainingIntensityWidget(
     }
 }
 
-/**
- * Exercise variety widget - tracks exercise diversity and movement patterns
- */
 @Composable
 fun ExerciseVarietyWidget(
     data: AnalyticsWidgetData?,
@@ -262,9 +309,6 @@ fun ExerciseVarietyWidget(
     }
 }
 
-/**
- * Time of day analysis widget - analyzes optimal workout timing
- */
 @Composable
 fun TimeOfDayAnalysisWidget(
     data: AnalyticsWidgetData?,
@@ -290,9 +334,6 @@ fun TimeOfDayAnalysisWidget(
     }
 }
 
-/**
- * Compact analytics widget for smaller layouts
- */
 @Composable
 fun CompactAnalyticsWidget(
     widget: AnalyticsWidget,
@@ -342,9 +383,173 @@ fun CompactAnalyticsWidget(
     }
 }
 
-/**
- * Standard analytics display component
- */
+@Composable
+private fun VolumeAnalyticsDisplay(
+    analyticsData: AnalyticsWidgetData,
+    primaryColor: Color
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Volume analytics header with key metrics
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = RoundedCornerShape(10.dp),
+                color = primaryColor.copy(alpha = 0.1f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.TrendingUp,
+                        contentDescription = null,
+                        tint = primaryColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            
+            Column(modifier = Modifier.weight(1f)) {
+                // Current volume metric from analytics data
+                val currentVolume = analyticsData.metrics["current_volume"] ?: "0"
+                val volumeChange = analyticsData.metrics["volume_change"] ?: "0%"
+                
+                Text(
+                    text = "$currentVolume kg total volume",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                
+                Text(
+                    text = "$volumeChange change • ${analyticsData.insights.size} insights",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            }
+        }
+        
+        // Volume trend visualization (mini chart)
+        if (analyticsData.metrics.isNotEmpty()) {
+            VolumeProgressIndicator(
+                metrics = analyticsData.metrics,
+                primaryColor = primaryColor
+            )
+        }
+        
+        // Volume insights and trends
+        if (analyticsData.insights.isNotEmpty()) {
+            InsightsDisplay(
+                insights = analyticsData.insights.take(2),
+                primaryColor = primaryColor
+            )
+        }
+        
+        // Load progression metrics
+        if (analyticsData.metrics.containsKey("progression_rate")) {
+            LoadProgressionDisplay(
+                progressionRate = analyticsData.metrics["progression_rate"] ?: "0%",
+                primaryColor = primaryColor
+            )
+        }
+        
+        // Volume recommendations
+        if (analyticsData.recommendations.isNotEmpty()) {
+            RecommendationsDisplay(
+                recommendations = analyticsData.recommendations.take(1),
+                primaryColor = primaryColor
+            )
+        }
+    }
+}
+
+@Composable
+private fun VolumeProgressIndicator(
+    metrics: Map<String, String>,
+    primaryColor: Color
+) {
+    val progressPercentage = metrics["progress_percentage"]?.toFloatOrNull() ?: 0f
+    val targetVolume = metrics["target_volume"] ?: "N/A"
+    
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Volume Progression",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            
+            Text(
+                text = "Target: $targetVolume kg",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+        }
+        
+        LinearProgressIndicator(
+            progress = (progressPercentage / 100f).coerceIn(0f, 1f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+            color = primaryColor,
+            trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+        )
+    }
+}
+
+@Composable
+private fun LoadProgressionDisplay(
+    progressionRate: String,
+    primaryColor: Color
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = primaryColor.copy(alpha = 0.1f)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Timeline,
+                contentDescription = null,
+                tint = primaryColor,
+                modifier = Modifier.size(16.dp)
+            )
+            
+            Column {
+                Text(
+                    text = "Load Progression",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                
+                Text(
+                    text = "$progressionRate weekly increase",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun AnalyticsDisplay(
     analyticsData: AnalyticsWidgetData,
@@ -418,9 +623,6 @@ private fun AnalyticsDisplay(
     }
 }
 
-/**
- * Recovery-specific display
- */
 @Composable
 private fun RecoveryDisplay(
     analyticsData: AnalyticsWidgetData,
@@ -471,9 +673,6 @@ private fun RecoveryDisplay(
     }
 }
 
-/**
- * Performance-specific display
- */
 @Composable
 private fun PerformanceDisplay(
     analyticsData: AnalyticsWidgetData,
@@ -511,9 +710,6 @@ private fun PerformanceDisplay(
     }
 }
 
-/**
- * Muscle group distribution display - Modern pie chart implementation
- */
 @Composable
 private fun MuscleGroupDisplay(
     analyticsData: AnalyticsWidgetData,
@@ -631,9 +827,6 @@ private fun mapStringToMuscleGroup(muscleGroupName: String): MuscleGroup? {
     }
 }
 
-/**
- * Recovery patterns display
- */
 @Composable
 private fun RecoveryPatternsDisplay(
     analyticsData: AnalyticsWidgetData,
@@ -647,9 +840,6 @@ private fun RecoveryPatternsDisplay(
     )
 }
 
-/**
- * Training intensity display
- */
 @Composable
 private fun IntensityDisplay(
     analyticsData: AnalyticsWidgetData,
@@ -702,9 +892,6 @@ private fun IntensityDisplay(
     }
 }
 
-/**
- * Exercise variety display
- */
 @Composable
 private fun VarietyDisplay(
     analyticsData: AnalyticsWidgetData,
@@ -763,9 +950,6 @@ private fun VarietyDisplay(
     }
 }
 
-/**
- * Time analysis display
- */
 @Composable
 private fun TimeAnalysisDisplay(
     analyticsData: AnalyticsWidgetData,
@@ -824,9 +1008,6 @@ private fun TimeAnalysisDisplay(
     }
 }
 
-/**
- * Insights display component
- */
 @Composable
 private fun InsightsDisplay(
     insights: List<Insight>,
@@ -851,9 +1032,6 @@ private fun InsightsDisplay(
     }
 }
 
-/**
- * Individual insight item
- */
 @Composable
 private fun InsightItem(
     insight: Insight,
@@ -891,9 +1069,6 @@ private fun InsightItem(
     }
 }
 
-/**
- * Recommendations display component
- */
 @Composable
 private fun RecommendationsDisplay(
     recommendations: List<Recommendation>,
@@ -918,9 +1093,6 @@ private fun RecommendationsDisplay(
     }
 }
 
-/**
- * Individual recommendation item
- */
 @Composable
 private fun RecommendationItem(
     recommendation: Recommendation,
@@ -963,9 +1135,6 @@ private fun RecommendationItem(
     }
 }
 
-/**
- * Metrics display component
- */
 @Composable
 private fun MetricsDisplay(
     metrics: Map<String, String>,
@@ -995,9 +1164,6 @@ private fun MetricsDisplay(
     }
 }
 
-/**
- * Individual metric card
- */
 @Composable
 private fun MetricCard(
     label: String,
@@ -1031,9 +1197,6 @@ private fun MetricCard(
     }
 }
 
-/**
- * Performance metric card
- */
 @Composable
 private fun PerformanceMetricCard(
     label: String,
@@ -1066,9 +1229,6 @@ private fun PerformanceMetricCard(
     }
 }
 
-/**
- * Muscle group progress bar
- */
 @Composable
 private fun MuscleGroupBar(
     label: String,
@@ -1108,9 +1268,6 @@ private fun MuscleGroupBar(
     }
 }
 
-/**
- * Confidence display component
- */
 @Composable
 private fun ConfidenceDisplay(
     confidence: Float,
@@ -1140,9 +1297,6 @@ private fun ConfidenceDisplay(
     }
 }
 
-/**
- * Confidence indicator component
- */
 @Composable
 private fun ConfidenceIndicator(
     confidence: Float,

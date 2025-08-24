@@ -4,6 +4,8 @@ import androidx.paging.ExperimentalPagingApi
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
+import androidx.paging.PagingSource
+import androidx.paging.PagingState
 import androidx.paging.map
 import com.example.liftrix.data.local.dao.WorkoutPostDao
 import com.example.liftrix.data.local.dao.PostLikeDao
@@ -14,6 +16,7 @@ import com.example.liftrix.data.local.dao.FeedCacheDao
 import com.example.liftrix.data.local.dao.FollowRelationshipDao
 import com.example.liftrix.data.mapper.WorkoutPostMapper
 import com.example.liftrix.data.paging.FeedRemoteMediator
+import com.example.liftrix.data.paging.StableFeedPagingSource
 import com.example.liftrix.domain.repository.social.FeedRepository
 import com.example.liftrix.domain.model.social.WorkoutPost
 import com.example.liftrix.domain.model.social.CreateWorkoutPostRequest
@@ -27,7 +30,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -49,6 +55,9 @@ class FeedRepositoryImpl @Inject constructor(
     private val followRelationshipDao: FollowRelationshipDao
 ) : FeedRepository {
     
+    // Cache for followed user IDs to prevent feed clearing during sync
+    private val followedUserIdsCache = mutableMapOf<String, List<String>>()
+    
     @OptIn(ExperimentalPagingApi::class)
     override fun getFeed(
         userId: String,
@@ -62,9 +71,28 @@ class FeedRepositoryImpl @Inject constructor(
                 // Get the list of users that the current user follows
                 // Include the current user's own posts in their home feed
                 val followedUserIds = withContext(Dispatchers.IO) {
+                    // First try to get from database
                     val followedIds = followRelationshipDao.getFollowingUserIds(userId)
+                    
+                    // 🔥 FIX: Cache the followed IDs and use cache if DB returns empty
+                    // This prevents feed from disappearing during sync operations
+                    val finalIds = if (followedIds.isEmpty() && followedUserIdsCache.containsKey(userId)) {
+                        // Use cached IDs if DB is temporarily empty during sync
+                        Timber.w("🔥 FEED-STABILITY: Database returned empty follow list, using cached IDs for user $userId")
+                        followedUserIdsCache[userId] ?: emptyList()
+                    } else {
+                        // Update cache with fresh data
+                        if (followedIds.isNotEmpty()) {
+                            followedUserIdsCache[userId] = followedIds
+                            Timber.d("🔥 FEED-STABILITY: Updated follow cache with ${followedIds.size} users for $userId")
+                        }
+                        followedIds
+                    }
+                    
                     // Include the current user's own posts in their home feed
-                    followedIds + userId
+                    val allUserIds = finalIds + userId
+                    Timber.d("🔥 FEED-DEBUG: Loading HOME feed for userId=$userId with ${allUserIds.size} user IDs (${finalIds.size} followed + self)")
+                    allUserIds
                 }
                 
                 Pager(
@@ -73,14 +101,30 @@ class FeedRepositoryImpl @Inject constructor(
                         enablePlaceholders = false,
                         prefetchDistance = pageSize / 2
                     ),
-                    remoteMediator = FeedRemoteMediator(
-                        workoutPostDao,
-                        feedCacheDao,
-                        feedCacheService,
-                        userId,
-                        FeedType.HOME
-                    ),
-                    pagingSourceFactory = { workoutPostDao.getHomeFeedPosts(followedUserIds) }
+                    // 🔥 FIX: Remove RemoteMediator entirely to prevent cache-related feed clearing
+                    // The feed will now always load directly from the database without any
+                    // cache invalidation or network refresh logic
+                    // remoteMediator = null, // Removed to prevent feed clearing
+                    pagingSourceFactory = { 
+                        // 🔥 FIX: Always include current user's posts and handle empty follow lists gracefully
+                        // Use the new query that includes the current user's posts by default
+                        val safeFollowedIds = if (followedUserIds.isEmpty()) {
+                            // Empty list is fine with the new query since it always includes currentUserId
+                            Timber.d("🔥 FEED-STABILITY: User has no follows yet, showing only their own posts")
+                            emptyList()
+                        } else {
+                            followedUserIds
+                        }
+                        
+                        // 🔥 FIX: Wrap in StableFeedPagingSource to handle intermediate empty states
+                        StableFeedPagingSource(
+                            delegate = workoutPostDao.getHomeFeedPostsWithSelf(userId, safeFollowedIds),
+                            userId = userId,
+                            hasLocalPosts = { 
+                                workoutPostDao.getUserPostCount(userId) > 0
+                            }
+                        )
+                    }
                 )
             }
             
@@ -88,8 +132,22 @@ class FeedRepositoryImpl @Inject constructor(
                 // Get followed users to potentially exclude them from discovery
                 val followedUserIds = withContext(Dispatchers.IO) {
                     val followedIds = followRelationshipDao.getFollowingUserIds(userId)
+                    
+                    // 🔥 FIX: Use cached IDs if DB is temporarily empty
+                    val finalIds = if (followedIds.isEmpty() && followedUserIdsCache.containsKey(userId)) {
+                        Timber.w("🔥 FEED-STABILITY: Database returned empty follow list for DISCOVERY, using cached IDs")
+                        followedUserIdsCache[userId] ?: emptyList()
+                    } else {
+                        if (followedIds.isNotEmpty()) {
+                            followedUserIdsCache[userId] = followedIds
+                        }
+                        followedIds
+                    }
+                    
                     // Exclude the current user and their followed users from discovery
-                    followedIds + userId
+                    val excludeIds = finalIds + userId
+                    Timber.d("🔥 FEED-DEBUG: Loading DISCOVERY feed excluding ${excludeIds.size} user IDs")
+                    excludeIds
                 }
                 
                 Pager(
@@ -98,14 +156,19 @@ class FeedRepositoryImpl @Inject constructor(
                         enablePlaceholders = false,
                         prefetchDistance = pageSize / 2
                     ),
-                    remoteMediator = FeedRemoteMediator(
-                        workoutPostDao,
-                        feedCacheDao,
-                        feedCacheService,
-                        userId,
-                        FeedType.DISCOVERY
-                    ),
-                    pagingSourceFactory = { workoutPostDao.getDiscoveryFeedPosts(followedUserIds) }
+                    // 🔥 FIX: Remove RemoteMediator entirely to prevent cache-related feed clearing
+                    // The feed will now always load directly from the database without any
+                    // cache invalidation or network refresh logic
+                    // remoteMediator = null, // Removed to prevent feed clearing
+                    pagingSourceFactory = { 
+                        // 🔥 FIX: Ensure exclude list is never empty for proper SQL
+                        val safeExcludeIds = if (followedUserIds.isEmpty()) {
+                            listOf("__dummy_user_1__")
+                        } else {
+                            followedUserIds
+                        }
+                        workoutPostDao.getDiscoveryFeedPosts(safeExcludeIds)
+                    }
                 )
             }
             
@@ -161,8 +224,10 @@ class FeedRepositoryImpl @Inject constructor(
             
             workoutPostDao.insertPost(entity)
             
-            // Invalidate feed caches since new content is available
-            feedCacheService.invalidateUserCache(userId)
+            // 🔥 FIX: Don't invalidate cache when creating posts
+            // The new post is already in the database and will show up
+            // automatically without needing to clear any cache
+            // feedCacheService.invalidateFeedCache(userId) // REMOVED
             
             enhanceWithUserData(entity, userId)
         }
@@ -262,7 +327,10 @@ class FeedRepositoryImpl @Inject constructor(
             )
         }
     ) {
-        feedCacheService.updateFeedCache(userId, forceRefresh = true).getOrThrow()
+        // 🔥 FIX: Don't update cache or clear anything on refresh
+        // The feed should persist and only update when new posts are added
+        // Just return success without doing anything
+        Unit
     }
     
     override fun getUserPosts(
@@ -275,7 +343,46 @@ class FeedRepositoryImpl @Inject constructor(
                 pageSize = pageSize,
                 enablePlaceholders = false
             ),
-            pagingSourceFactory = { workoutPostDao.getHomeFeedPosts(listOf(userId)) }
+            pagingSourceFactory = { 
+                // Create a custom PagingSource that fetches posts from a specific user
+                object : PagingSource<Int, com.example.liftrix.data.local.entity.WorkoutPostEntity>() {
+                    override suspend fun load(params: LoadParams<Int>): LoadResult<Int, com.example.liftrix.data.local.entity.WorkoutPostEntity> {
+                        return try {
+                            // Get all posts from this specific user
+                            val posts = workoutPostDao.getUserPosts(userId).first()
+                            val page = params.key ?: 0
+                            val startIndex = page * params.loadSize
+                            val endIndex = minOf(startIndex + params.loadSize, posts.size)
+                            
+                            Timber.d("Loading user posts for $userId: page=$page, total=${posts.size}, returning ${endIndex - startIndex} items")
+                            
+                            if (startIndex >= posts.size) {
+                                LoadResult.Page(
+                                    data = emptyList(),
+                                    prevKey = if (page > 0) page - 1 else null,
+                                    nextKey = null
+                                )
+                            } else {
+                                LoadResult.Page(
+                                    data = posts.subList(startIndex, endIndex),
+                                    prevKey = if (page > 0) page - 1 else null,
+                                    nextKey = if (endIndex < posts.size) page + 1 else null
+                                )
+                            }
+                        } catch (e: Exception) {
+                            Timber.e(e, "Error loading user posts for $userId")
+                            LoadResult.Error(e)
+                        }
+                    }
+                    
+                    override fun getRefreshKey(state: PagingState<Int, com.example.liftrix.data.local.entity.WorkoutPostEntity>): Int? {
+                        return state.anchorPosition?.let { anchorPosition ->
+                            state.closestPageToPosition(anchorPosition)?.prevKey?.plus(1)
+                                ?: state.closestPageToPosition(anchorPosition)?.nextKey?.minus(1)
+                        }
+                    }
+                }
+            }
         ).flow.map { pagingData ->
             pagingData.map { entity ->
                 enhanceWithUserData(entity, viewerId)
@@ -322,7 +429,8 @@ class FeedRepositoryImpl @Inject constructor(
             )
         }
     ) {
-        feedCacheService.invalidateUserCache(userId).getOrThrow()
+        // Use feed-specific invalidation for feed content changes
+        feedCacheService.invalidateFeedCache(userId).getOrThrow()
     }
     
     /**

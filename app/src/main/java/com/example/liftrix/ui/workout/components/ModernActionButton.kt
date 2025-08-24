@@ -81,7 +81,7 @@ fun PrimaryActionButton(
     leadingIcon: ImageVector? = null
 ) {
     val hapticFeedback = LocalHapticFeedback.current
-    val shape = RoundedCornerShape(20.dp) // Task specification: 20dp corner radius
+    val shape = RoundedCornerShape(20.dp)
     
     Button(
         onClick = {
@@ -92,7 +92,7 @@ fun PrimaryActionButton(
         },
         enabled = enabled,
         modifier = modifier
-            .heightIn(min = LiftrixSpacing.touchTarget) // Task specification: 48dp minimum height
+            .heightIn(min = LiftrixSpacing.touchTarget)
             .ensureWcagTouchTarget()
             .enhancedAccessibilitySemantics(
                 description = generateButtonContentDescription(text, "Primary", enabled, hasIcon = leadingIcon != null),
@@ -167,7 +167,7 @@ fun SecondaryActionButton(
     leadingIcon: ImageVector? = null
 ) {
     val hapticFeedback = LocalHapticFeedback.current
-    val shape = RoundedCornerShape(20.dp) // Task specification: 20dp corner radius
+    val shape = RoundedCornerShape(20.dp)
     
     OutlinedButton(
         onClick = {
@@ -178,7 +178,7 @@ fun SecondaryActionButton(
         },
         enabled = enabled,
         modifier = modifier
-            .heightIn(min = LiftrixSpacing.touchTarget) // Task specification: 48dp minimum height
+            .heightIn(min = LiftrixSpacing.touchTarget)
             .ensureWcagTouchTarget()
             .enhancedAccessibilitySemantics(
                 description = generateButtonContentDescription(text, "Secondary", enabled, hasIcon = leadingIcon != null),
@@ -256,7 +256,7 @@ fun TertiaryActionButton(
     leadingIcon: ImageVector? = null
 ) {
     val hapticFeedback = LocalHapticFeedback.current
-    val shape = RoundedCornerShape(20.dp) // Task specification: 20dp corner radius
+    val shape = RoundedCornerShape(20.dp)
     
     TextButton(
         onClick = {
@@ -267,7 +267,7 @@ fun TertiaryActionButton(
         },
         enabled = enabled,
         modifier = modifier
-            .heightIn(min = LiftrixSpacing.touchTarget) // Task specification: 48dp minimum height
+            .heightIn(min = LiftrixSpacing.touchTarget)
             .ensureWcagTouchTarget()
             .enhancedAccessibilitySemantics(
                 description = generateButtonContentDescription(text, "Tertiary", enabled, hasIcon = leadingIcon != null),

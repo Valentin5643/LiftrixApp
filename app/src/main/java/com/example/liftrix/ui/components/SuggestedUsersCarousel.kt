@@ -287,7 +287,6 @@ private fun SuggestedUsersLoadingCarousel() {
                         )
                     }
                     
-                    // Button skeleton
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()

@@ -46,7 +46,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * 🔥 NEW: Unified workout session manager that eliminates dual state management
+ * Unified workout session manager that eliminates dual state management.
  * 
  * This replaces the complex LiveWorkoutSessionManager + dual state system with
  * a single, simple session manager that uses UnifiedWorkoutSession as the
@@ -75,26 +75,21 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         encodeDefaults = true
     }
 
-    // 🔥 SIMPLIFIED: Single state flow for session state
     private val _currentSession = MutableStateFlow<UnifiedWorkoutSession?>(null)
     val currentSession: StateFlow<UnifiedWorkoutSession?> = _currentSession.asStateFlow()
 
-    // 🔥 SIMPLIFIED: Single state flow for session recovery
     private val _recoveryState = MutableStateFlow<RecoveryState>(RecoveryState.NoRecovery)
     val recoveryState: StateFlow<RecoveryState> = _recoveryState.asStateFlow()
     
-    // 🔥 FIX: Track the saved workout ID after successful completion
+    // Track the saved workout ID after successful completion
     private val _savedWorkoutId = MutableStateFlow<String?>(null)
     val savedWorkoutId: StateFlow<String?> = _savedWorkoutId.asStateFlow()
 
     init {
-        // 🔥 KEY FIX: Ensure session recovery happens immediately
+        // Ensure session recovery happens immediately
         recoverSessionOnStartup()
     }
 
-    /**
-     * 🔥 SIMPLIFIED: Starts a new workout session
-     */
     fun startSession(session: UnifiedWorkoutSession) {
         Timber.d("Starting unified workout session: ${session.name} with ${session.exercises.size} exercises")
         
@@ -109,11 +104,8 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         startWorkoutForegroundService()
     }
 
-    /**
-     * 🔥 FORCE START: Starts a session regardless of existing session state
-     */
     fun forceStartSession(session: UnifiedWorkoutSession) {
-        Timber.d("🔥 FORCE-START-DEBUG: Force starting session: ${session.name} with ${session.exercises.size} exercises")
+        Timber.d("Force starting session: ${session.name} with ${session.exercises.size} exercises")
         
         // Clear any existing session first
         _currentSession.value = null
@@ -123,7 +115,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         
         // Log exercise details for debugging
         session.exercises.forEachIndexed { index, exercise ->
-            Timber.d("🔥 FORCE-START-DEBUG: Exercise $index: ${exercise.name} with ${exercise.sets.size} sets")
+            Timber.d("Exercise $index: ${exercise.name} with ${exercise.sets.size} sets")
         }
         
         scope.launch {
@@ -133,12 +125,9 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         // Start foreground service for force-started sessions too
         startWorkoutForegroundService()
         
-        Timber.i("🔥 FORCE-START-DEBUG: Session force-started successfully with ${session.exercises.size} exercises")
+        Timber.i("Session force-started successfully with ${session.exercises.size} exercises")
     }
 
-    /**
-     * 🔥 SIMPLIFIED: Pauses the current session
-     */
     fun pauseSession() {
         val session = _currentSession.value
         if (session == null) {
@@ -161,9 +150,6 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         Timber.d("Session paused: ${session.name}")
     }
 
-    /**
-     * 🔥 SIMPLIFIED: Resumes the current session
-     */
     fun resumeSession() {
         val session = _currentSession.value
         if (session == null) {
@@ -186,9 +172,6 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         Timber.d("Session resumed: ${session.name}")
     }
 
-    /**
-     * 🔥 IMPROVED: Completes the current session with proper cleanup
-     */
     fun completeSession(): Boolean {
         val session = _currentSession.value
         if (session == null) {
@@ -210,7 +193,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                 val completedWorkout = completedSession.toCompletedWorkout()
                 Timber.d("WORKOUT-DEBUG: Completing session: ${completedWorkout.name} for user: ${completedWorkout.userId}")
                 
-                // 🔥 CRITICAL FIX: Use synchronous save to ensure database commit before session cleanup
+                // Use synchronous save to ensure database commit before session cleanup
                 val saveResult = if (workoutRepository is com.example.liftrix.data.repository.workout.WorkoutRepositoryImpl) {
                     // Use the LiftrixResult-based method for proper error handling
                     workoutRepository.createWorkout(completedWorkout)
@@ -234,7 +217,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                     onSuccess = { savedWorkout ->
                         Timber.d("WORKOUT-DEBUG: Session completed successfully - ID: ${savedWorkout.id.value}")
                         
-                        // 🔥 FIX: Store the saved workout ID for navigation
+                        // Store the saved workout ID for navigation
                         _savedWorkoutId.value = savedWorkout.id.value
                         
                         // Add small delay to ensure database transaction is fully committed
@@ -247,7 +230,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                         clearSession()
                     },
                     onFailure = { exception ->
-                        Timber.e("🔥 SESSION-COMPLETE: Failed to save completed workout: ${exception.message}")
+                        Timber.e("Failed to save completed workout: ${exception.message}")
                         
                         // Check if error is recoverable to decide whether to preserve session
                         val shouldPreserveSession = when (exception) {
@@ -261,7 +244,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                         }
                         
                         if (shouldPreserveSession) {
-                            Timber.w("🔥 SESSION-COMPLETE: Preserving session for recoverable error: ${exception.message}")
+                            Timber.w("Preserving session for recoverable error: ${exception.message}")
                             // Mark session as failed but preserve for retry
                             _currentSession.value = completedSession.copy(
                                 sessionStatus = UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE
@@ -270,16 +253,16 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                             // Persist the failed session state to SharedPreferences
                             persistSession(_currentSession.value!!)
                         } else {
-                            Timber.w("🔥 SESSION-COMPLETE: Clearing session for non-recoverable error")
+                            Timber.w("Clearing session for non-recoverable error")
                             clearSession()
                         }
                     }
                 )
             } catch (e: Exception) {
-                Timber.e(e, "🔥 SESSION-COMPLETE: Error in completion process")
+                Timber.e(e, "Error in completion process")
                 
-                // 🔥 CRITICAL FIX: Preserve session on unexpected errors to prevent data loss
-                Timber.w("🔥 SESSION-COMPLETE: Preserving session due to unexpected error")
+                // Preserve session on unexpected errors to prevent data loss
+                Timber.w("Preserving session due to unexpected error")
                 _currentSession.value = completedSession.copy(
                     sessionStatus = UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE
                 )
@@ -289,13 +272,10 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             }
         }
         
-        Timber.d("🔥 SESSION-COMPLETE: Session completed: ${session.name}")
+        Timber.d("Session completed: ${session.name}")
         return true
     }
 
-    /**
-     * Retry saving a failed session
-     */
     fun retrySaveSession(): Boolean {
         val session = _currentSession.value
         if (session == null || session.sessionStatus != UnifiedWorkoutSession.SessionStatus.FAILED_TO_SAVE) {
@@ -303,14 +283,14 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             return false
         }
 
-        Timber.i("🔥 SESSION-RETRY: Retrying save for session: ${session.name}")
+        Timber.i("Retrying save for session: ${session.name}")
         
         scope.launch {
             try {
                 val completedWorkout = session.toCompletedWorkout()
-                Timber.d("🔥 SESSION-RETRY: Attempting to save workout: ${completedWorkout.name}")
+                Timber.d("Attempting to save workout: ${completedWorkout.name}")
                 
-                // 🔥 CRITICAL FIX: Use same robust save method as completion
+                // Use same robust save method as completion
                 val saveResult = if (workoutRepository is com.example.liftrix.data.repository.workout.WorkoutRepositoryImpl) {
                     // Use the LiftrixResult-based method for proper error handling
                     workoutRepository.createWorkout(completedWorkout)
@@ -332,12 +312,12 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                 
                 saveResult.fold(
                     onSuccess = { savedWorkout ->
-                        Timber.i("🔥 SESSION-RETRY: Workout saved successfully on retry with ID: ${savedWorkout.id.value}")
+                        Timber.i("Workout saved successfully on retry with ID: ${savedWorkout.id.value}")
                         
-                        // 🔥 FIX: Store the saved workout ID for navigation
+                        // Store the saved workout ID for navigation
                         _savedWorkoutId.value = savedWorkout.id.value
                         
-                        // 🔥 CRITICAL FIX: Add delay for transaction commit
+                        // Add delay for transaction commit
                         kotlinx.coroutines.delay(100)
                         
                         // Update session status to completed and clear
@@ -345,21 +325,18 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                         clearSession()
                     },
                     onFailure = { exception ->
-                        Timber.e("🔥 SESSION-RETRY: Retry also failed for workout: ${completedWorkout.name}, error: ${exception.message}")
+                        Timber.e("Retry also failed for workout: ${completedWorkout.name}, error: ${exception.message}")
                         // Keep session in FAILED_TO_SAVE state for another retry attempt
                     }
                 )
             } catch (e: Exception) {
-                Timber.e(e, "🔥 SESSION-RETRY: Error in retry process")
+                Timber.e(e, "Error in retry process")
             }
         }
         
         return true
     }
 
-    /**
-     * 🔥 SIMPLIFIED: Discards the current session without saving
-     */
     fun discardSession() {
         val session = _currentSession.value
         if (session == null) {
@@ -374,9 +351,6 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         Timber.d("Session discarded: ${session.name}")
     }
 
-    /**
-     * 🔥 KEY FIX: Adds exercise to session-scoped list only
-     */
     fun addExerciseToSession(exercise: SessionExercise) {
         val session = _currentSession.value
         if (session == null) {
@@ -403,9 +377,6 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         }
     }
 
-    /**
-     * 🔥 KEY FIX: Removes exercise from session-scoped list only
-     */
     fun removeExerciseFromSession(exerciseId: ExerciseId) {
         val session = _currentSession.value
         if (session == null) {
@@ -432,9 +403,6 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         }
     }
 
-    /**
-     * Updates an exercise in the current session
-     */
     fun updateExerciseInSession(exerciseId: ExerciseId, updatedExercise: SessionExercise) {
         val session = _currentSession.value
         if (session == null) {
@@ -462,8 +430,8 @@ class UnifiedWorkoutSessionManager @Inject constructor(
     }
     
     /**
-     * 🔥 KEY FIX: Updates a specific set in a session exercise
-     * This ensures proper state propagation when sets are marked as completed
+     * Updates a specific set in a session exercise.
+     * This ensures proper state propagation when sets are marked as completed.
      */
     fun updateSetInSession(exerciseId: ExerciseId, setNumber: Int, updatedSet: SessionSet) {
         val session = _currentSession.value
@@ -499,7 +467,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             val updatedExercise = exercise.copy(sets = updatedSets)
             val updatedSession = session.updateExercise(exerciseId, updatedExercise)
             
-            // 🔥 KEY: Immediately update state to trigger UI refresh
+            // Immediately update state to trigger UI refresh
             _currentSession.value = updatedSession
             
             scope.launch {
@@ -512,9 +480,6 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         }
     }
 
-    /**
-     * Moves to the next exercise in the session
-     */
     fun moveToNextExercise() {
         val session = _currentSession.value
         if (session == null) {
@@ -541,9 +506,6 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         }
     }
 
-    /**
-     * Moves to the previous exercise in the session
-     */
     fun moveToPreviousExercise() {
         val session = _currentSession.value
         if (session == null) {
@@ -570,9 +532,6 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         }
     }
 
-    /**
-     * Updates session notes
-     */
     fun updateSessionNotes(notes: String?) {
         val session = _currentSession.value
         if (session == null) {
@@ -599,44 +558,29 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         }
     }
 
-    /**
-     * Checks if there's an active session
-     */
     fun hasActiveSession(): Boolean {
         return _currentSession.value?.isActive() == true
     }
 
-    /**
-     * Checks if there's a live session (active or paused)
-     */
     fun hasLiveSession(): Boolean {
         return _currentSession.value?.isLive() == true
     }
 
-    /**
-     * Gets the current session
-     */
     fun getCurrentSession(): UnifiedWorkoutSession? {
         return _currentSession.value
     }
 
-    /**
-     * Gets the session duration in seconds
-     */
     fun getSessionDurationSeconds(): Long {
         return _currentSession.value?.getTotalDurationSeconds() ?: 0L
     }
 
-    /**
-     * Gets the session duration in milliseconds
-     */
     fun getSessionDurationMillis(): Long {
         return getSessionDurationSeconds() * 1000L
     }
     
     /**
-     * 🔥 KEY FIX: Forces a session state refresh to trigger UI updates
-     * Use this when the session has been modified and UI needs to reflect changes
+     * Forces a session state refresh to trigger UI updates.
+     * Use this when the session has been modified and UI needs to reflect changes.
      */
     fun refreshSessionState() {
         val session = _currentSession.value
@@ -654,22 +598,22 @@ class UnifiedWorkoutSessionManager @Inject constructor(
     }
 
     /**
-     * 🔥 NEW: Completes the current session and persists it as a finished workout
+     * Completes the current session and persists it as a finished workout
      */
     suspend fun completeCurrentSession(): Boolean {
         val currentSession = _currentSession.value
         if (currentSession == null) {
-            Timber.w("🔥 COMPLETE-SESSION-DEBUG: No active session to complete")
+            Timber.w("No active session to complete")
             return false
         }
         
         if (currentSession.sessionStatus == UnifiedWorkoutSession.SessionStatus.COMPLETED) {
-            Timber.w("🔥 COMPLETE-SESSION-DEBUG: Session already completed")
+            Timber.w("Session already completed")
             return false
         }
         
         try {
-            Timber.d("🔥 COMPLETE-SESSION-DEBUG: Completing session: ${currentSession.name}")
+            Timber.d("Completing session: ${currentSession.name}")
             
             // Complete the session in the unified session state
             val completedSession = currentSession.complete()
@@ -682,7 +626,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             
             result.fold(
                 onSuccess = {
-                    Timber.d("🔥 COMPLETE-SESSION-DEBUG: Successfully saved completed workout")
+                    Timber.d("Successfully saved completed workout")
                     
                     // Clear the session after successful save
                     clearSession()
@@ -690,18 +634,18 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                     return true
                 },
                 onFailure = { exception ->
-                    Timber.e(exception, "🔥 COMPLETE-SESSION-DEBUG: Failed to save completed workout")
+                    Timber.e(exception, "Failed to save completed workout")
                     return false
                 }
             )
         } catch (e: Exception) {
-            Timber.e(e, "🔥 COMPLETE-SESSION-DEBUG: Exception during session completion")
+            Timber.e(e, "Exception during session completion")
             return false
         }
     }
     
     /**
-     * 🔥 SIMPLIFIED: Persists session to SharedPreferences
+     * Persists session to SharedPreferences
      */
     private suspend fun persistSession(session: UnifiedWorkoutSession) {
         try {
@@ -717,7 +661,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
     }
 
     /**
-     * 🔥 IMPROVED: Clears persisted session with proper logging
+     * Clears persisted session with proper logging
      */
     private fun clearSession() {
         val currentSession = _currentSession.value
@@ -731,19 +675,19 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             remove(KEY_CURRENT_SESSION)
             remove(KEY_LAST_UPDATED)
         }
-        Timber.d("🔥 SESSION-CLEAR: Session cleared${currentSession?.let { ": ${it.name}" } ?: ""}")
+        Timber.d("Session cleared${currentSession?.let { ": ${it.name}" } ?: ""}")
     }
     
     /**
-     * 🔥 FIX: Clears the saved workout ID after navigation
+     * Clears the saved workout ID after navigation
      */
     fun clearSavedWorkoutId() {
         _savedWorkoutId.value = null
-        Timber.d("🔥 SESSION-CLEAR: Saved workout ID cleared")
+        Timber.d("Saved workout ID cleared")
     }
 
     /**
-     * 🔥 SIMPLIFIED: Recovers session on startup
+     * Recovers session on startup
      */
     private fun recoverSessionOnStartup() {
         scope.launch {
@@ -765,7 +709,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                     val session = sessionData.toUnifiedWorkoutSession()
                     
                     if (session.sessionStatus != UnifiedWorkoutSession.SessionStatus.COMPLETED) {
-                        // 🔥 KEY FIX: Immediately set session state for UI visibility
+                        // Immediately set session state for UI visibility
                         _currentSession.value = session
                         
                         // Start foreground service for recovered active sessions
@@ -939,7 +883,7 @@ class UnifiedWorkoutSessionManager @Inject constructor(
 }
 
 /**
- * 🔥 SIMPLIFIED: Serializable session data for persistence
+ * Serializable session data for persistence
  */
 @Serializable
 data class SerializableSession(
@@ -1075,8 +1019,8 @@ private fun SerializableSessionSet.toSessionSet(): SessionSet {
 }
 
 /**
- * Extension function to convert UnifiedWorkoutSession to Workout for persistence
- * 🔥 FIX: Ensures proper conversion of session data to workout format
+ * Extension function to convert UnifiedWorkoutSession to Workout for persistence.
+ * Ensures proper conversion of session data to workout format.
  */
 private fun UnifiedWorkoutSession.toWorkout(): Workout {
     return Workout(

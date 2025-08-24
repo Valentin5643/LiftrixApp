@@ -272,22 +272,29 @@ fun WidgetPreviewThumbnail(
     modifier: Modifier = Modifier
 ) {
     val previewIcon = when (widget) {
+        // Consolidated widgets
+        AnalyticsWidget.StrengthAnalytics -> Icons.Default.FitnessCenter
+        AnalyticsWidget.VolumeAnalytics -> Icons.Default.Analytics
+        
+        // Active widgets
+        AnalyticsWidget.FrequencyChart -> Icons.Default.BarChart
+        AnalyticsWidget.ProgressChart -> Icons.Default.TrendingUp
+        AnalyticsWidget.MuscleGroupDistribution -> Icons.Default.DonutLarge
+        AnalyticsWidget.RecoveryMetrics -> Icons.Default.SelfImprovement
+        AnalyticsWidget.MonthlySummary -> Icons.Default.CalendarMonth
+        
+        // Hidden/deprecated widgets
         AnalyticsWidget.WorkoutFrequency -> Icons.Default.Timeline
         AnalyticsWidget.TotalVolume -> Icons.Default.FitnessCenter
         AnalyticsWidget.VolumeCalendar -> Icons.Default.CalendarMonth
         AnalyticsWidget.StrengthProgress -> Icons.Default.TrendingUp
         AnalyticsWidget.VolumeChart -> Icons.Default.BarChart
-        AnalyticsWidget.FrequencyChart -> Icons.Default.Analytics
         AnalyticsWidget.WorkoutStreak -> Icons.Default.LocalFireDepartment
         AnalyticsWidget.PersonalRecords -> Icons.Default.EmojiEvents
         AnalyticsWidget.VolumeTrends -> Icons.Default.Analytics
-        AnalyticsWidget.RecoveryMetrics -> Icons.Default.Healing
         AnalyticsWidget.AverageDuration -> Icons.Default.Timer
         AnalyticsWidget.VolumeLoadProgression -> Icons.Default.ShowChart
-        AnalyticsWidget.ProgressChart -> Icons.Default.BarChart
         AnalyticsWidget.OneRMProgression -> Icons.Default.Equalizer
-        AnalyticsWidget.MuscleGroupDistribution -> Icons.Default.Category
-        AnalyticsWidget.MonthlySummary -> Icons.Default.DateRange
     }
     
     Surface(

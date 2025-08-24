@@ -9,7 +9,7 @@ import androidx.compose.ui.unit.dp
 /**
  * Responsive utility functions for the Progress Tab UI Redesign.
  * 
- * Implements SPEC-20250205-progress-tab-ui-redesign breakpoints:
+ * Implements responsive breakpoints:
  * - Mobile: <600dp (2 columns)
  * - Tablet: 600-767dp (3 columns) 
  * - Desktop: ≥768dp (4 columns)
@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 object ResponsiveUtils {
     
     /**
-     * Breakpoint values per SPEC-20250205
+     * Responsive breakpoint values
      */
     object Breakpoints {
         val MOBILE_MAX = 599.dp
@@ -30,7 +30,7 @@ object ResponsiveUtils {
     }
     
     /**
-     * Spacing values per SPEC-20250205
+     * Responsive spacing values
      */
     object Spacing {
         val CARD_SPACING = 12.dp
@@ -40,7 +40,7 @@ object ResponsiveUtils {
     }
     
     /**
-     * Layout rules per SPEC-20250205
+     * Responsive layout rules
      */
     data class LayoutRules(
         val mobileColumns: Int = 2,        // <600dp
@@ -95,12 +95,12 @@ object ResponsiveUtils {
     }
     
     /**
-     * Gets screen padding (always 16dp per spec)
+     * Gets screen padding (always 16dp)
      */
     fun getScreenPadding(): Dp = Spacing.SCREEN_PADDING
     
     /**
-     * Gets internal card padding (always 20dp per spec)
+     * Gets internal card padding (always 20dp)
      */
     fun getInternalPadding(): Dp = Spacing.INTERNAL_PADDING
     

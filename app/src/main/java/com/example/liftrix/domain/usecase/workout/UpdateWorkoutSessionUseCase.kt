@@ -65,7 +65,6 @@ class UpdateWorkoutSessionUseCase @Inject constructor(
             
             Timber.d("Updating workout session for user: $currentUserId")
             
-            // Update the session in repository
             val updateResult = workoutRepository.updateWorkout(sessionToUpdate)
             val updatedSession = updateResult.getOrThrow()
             

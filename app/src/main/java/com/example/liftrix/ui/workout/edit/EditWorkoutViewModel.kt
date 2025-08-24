@@ -85,7 +85,6 @@ class EditWorkoutViewModel @Inject constructor(
     private var isUserIdInitialized = false
 
     init {
-        // Get current user ID
         viewModelScope.launch {
             Timber.d("🔥 EDIT-WORKOUT-DEBUG: EditWorkoutViewModel init - Getting current user ID")
             currentUserId = getCurrentUserIdUseCase()
@@ -653,9 +652,9 @@ class EditWorkoutViewModel @Inject constructor(
                     Timber.i("Successfully saved workout changes: ${savedWorkout.name}")
                     // Update original workout reference for future change tracking
                     this.originalWorkout = savedWorkout
-                    // Navigate back after successful save
+                    // Navigate to post creation screen to share the edited workout
                     viewModelScope.launch {
-                        _events.emit(EditWorkoutEvent.NavigateBack)
+                        _events.emit(EditWorkoutEvent.NavigateToPostCreation(savedWorkout.id.value))
                     }
                 },
                 onError = { error ->
@@ -801,6 +800,7 @@ sealed class EditWorkoutEvent : ViewModelEvent {
     data object SaveChanges : EditWorkoutEvent()
     data object DiscardChanges : EditWorkoutEvent()
     data object NavigateBack : EditWorkoutEvent()
+    data class NavigateToPostCreation(val workoutId: String) : EditWorkoutEvent()
     data class ShowError(val message: String) : EditWorkoutEvent()
 }
 

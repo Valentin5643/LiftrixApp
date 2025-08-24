@@ -34,11 +34,11 @@ object LiftrixAnimationUtils {
      * Creates a micro-interaction scale effect for pressable components
      * Scales down slightly when pressed for tactile feedback
      * 
-     * Task ANIM-001: Updated default scale to match task specification (0.98x)
+     * Updated default scale for optimal tactile feedback (0.98x)
      */
     @Composable
     fun Modifier.pressScale(
-        pressedScale: Float = 0.98f, // Task ANIM-001: Updated from 0.95f to 0.98f per specification
+        pressedScale: Float = 0.98f,
         unpressedScale: Float = 1.0f,
         interactionSource: MutableInteractionSource = remember { MutableInteractionSource() }
     ): Modifier = composed {

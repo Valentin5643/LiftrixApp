@@ -74,6 +74,14 @@ interface WorkoutPostDao {
     
     @Query("""
         SELECT * FROM workout_posts 
+        WHERE (user_id = :currentUserId OR user_id IN (:followedUserIds))
+        AND visibility IN ('PUBLIC', 'FOLLOWERS')
+        ORDER BY created_at DESC
+    """)
+    fun getHomeFeedPostsWithSelf(currentUserId: String, followedUserIds: List<String>): PagingSource<Int, WorkoutPostEntity>
+    
+    @Query("""
+        SELECT * FROM workout_posts 
         WHERE visibility = 'PUBLIC'
         AND user_id NOT IN (:excludeUserIds)
         ORDER BY 

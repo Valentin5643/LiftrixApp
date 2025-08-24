@@ -641,76 +641,73 @@ private fun ModernUserProfileContent(
                 )
             }
         } else if (uiState.canViewDetails && profile.recentWorkouts.isNotEmpty()) {
-            // Fallback to simple workout display if no posts available
+            // Convert regular workouts to feed-style display when no posts available
+            // Section header
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(20.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Recent Activity",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            TextButton(onClick = onSeeAllActivitiesClick) {
-                                Text("See All")
-                            }
-                        }
-                        
-                        Spacer(modifier = Modifier.height(12.dp))
-                        
-                        profile.recentWorkouts.take(3).forEach { workout ->
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                                )
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.FitnessCenter,
-                                        contentDescription = null,
-                                        tint = LiftrixColorsV2.Teal,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = workout.name,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                        Text(
-                                            text = "${workout.exerciseCount} exercises • ${workout.duration}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                    Text(
+                        text = "Recent Workouts",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    TextButton(onClick = onSeeAllActivitiesClick) {
+                        Text("See All")
                     }
                 }
+            }
+            
+            // Display workouts as feed-style cards by converting them to WorkoutPost format
+            items(profile.recentWorkouts.size) { index ->
+                val workout = profile.recentWorkouts[index]
+                // Create a simplified WorkoutPost from the regular workout data
+                val syntheticPost = com.example.liftrix.domain.model.social.WorkoutPost(
+                    id = workout.id,
+                    userId = profile.userId,
+                    workoutId = workout.id,
+                    authorUsername = profile.username,
+                    authorDisplayName = profile.displayName ?: profile.username,
+                    authorProfilePhotoUrl = profile.profileImageUrl,
+                    caption = workout.name,
+                    exercisesCount = workout.exerciseCount,
+                    workoutDuration = workout.duration.replace("min", "").trim().toIntOrNull(),
+                    totalVolume = null,
+                    prsCount = 0,
+                    mediaItems = emptyList(),
+                    likeCount = 0,
+                    commentCount = 0,
+                    shareCount = 0,
+                    saveCount = 0,
+                    visibility = com.example.liftrix.domain.model.social.PostVisibility.PUBLIC,
+                    createdAt = try {
+                        // Parse date string and convert to timestamp
+                        val dateTime = java.time.LocalDateTime.parse(workout.date + "T00:00:00")
+                        dateTime.toEpochSecond(java.time.ZoneOffset.UTC) * 1000
+                    } catch (e: Exception) {
+                        System.currentTimeMillis()
+                    },
+                    updatedAt = System.currentTimeMillis()
+                )
+                
+                WorkoutPostCard(
+                    post = syntheticPost,
+                    isLiked = false,
+                    isSaved = false,
+                    onLikeClick = { /* Not available for synthetic posts */ },
+                    onCommentClick = { /* Not available for synthetic posts */ },
+                    onShareClick = { /* Not available for synthetic posts */ },
+                    onSaveClick = { /* Not available for synthetic posts */ },
+                    onProfileClick = { /* Already on profile */ },
+                    onWorkoutCopyClick = { /* TODO: Handle copy */ },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                )
             }
         }
         

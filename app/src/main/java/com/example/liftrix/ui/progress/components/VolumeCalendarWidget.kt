@@ -98,27 +98,7 @@ private fun VolumeStatsSummary(
     workoutDays: Int,
     workoutFrequency: Float
 ) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(GridSystem.spacing1)
-    ) {
-        Text(
-            text = "Monthly Summary",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        
-        Text(
-            text = "Total Volume: ${totalVolume.kilograms}kg • Avg: ${averageVolume.kilograms}kg",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        
-        Text(
-            text = "Workout Days: $workoutDays • Frequency: ${(workoutFrequency * 100).toInt()}%",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
+    // Monthly summary stats removed per user request
 }
 
 /**

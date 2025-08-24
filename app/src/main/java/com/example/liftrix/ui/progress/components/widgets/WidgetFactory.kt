@@ -51,24 +51,35 @@ object WidgetFactory {
             // - AverageDuration
             // - VolumeCalendar
             
-            // CHARTS Category Widgets
-            AnalyticsWidget.VolumeChart -> {
-                VolumeChartWidget(
-                    data = data as? ChartWidgetData,
+            // CONSOLIDATED WIDGETS - Primary consolidated widgets
+            AnalyticsWidget.StrengthAnalytics -> {
+                StrengthAnalyticsWidget(
+                    data = data as? ProgressWidgetData,
                     onRefresh = onRefresh,
                     onClick = onClick,
-                    modifier = modifier
+                    modifier = modifier,
+                    useFolderStyle = true
                 )
             }
             
-            // DurationChart renamed to ProgressChart
+            AnalyticsWidget.VolumeAnalytics -> {
+                VolumeAnalyticsWidget(
+                    data = data as? AnalyticsWidgetData,
+                    onRefresh = onRefresh,
+                    onClick = onClick,
+                    modifier = modifier,
+                    useFolderStyle = true
+                )
+            }
             
+            // CHARTS Category Widgets - Remaining non-consolidated widgets
             AnalyticsWidget.FrequencyChart -> {
                 FrequencyChartWidget(
                     data = data as? ChartWidgetData,
                     onRefresh = onRefresh,
                     onClick = onClick,
-                    modifier = modifier
+                    modifier = modifier,
+                    useFolderStyle = true
                 )
             }
             
@@ -77,67 +88,19 @@ object WidgetFactory {
                     data = data as? ChartWidgetData,
                     onRefresh = onRefresh,
                     onClick = onClick,
-                    modifier = modifier
+                    modifier = modifier,
+                    useFolderStyle = true
                 )
             }
             
-            // WeeklyCalorieTrend widget removed - use VolumeTrends
-            
-            // PROGRESS Category Widgets
-            AnalyticsWidget.StrengthProgress -> {
-                StrengthProgressWidget(
-                    data = data as? ProgressWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
-            
-            AnalyticsWidget.PersonalRecords -> {
-                PersonalRecordsWidget(
-                    data = data as? ProgressWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
-            
-            AnalyticsWidget.VolumeLoadProgression -> {
-                VolumeLoadProgressionWidget(
-                    data = data as? ProgressWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
-            
-            AnalyticsWidget.OneRMProgression -> {
-                OneRMProgressionWidget(
-                    data = data as? ProgressWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
-                )
-            }
-            
-            // GoalAchievement widget removed
-            
+            // PROGRESS Category Widgets - Remaining non-consolidated widgets
             AnalyticsWidget.MonthlySummary -> {
                 MonthlySummaryWidget(
                     data = data as? ProgressWidgetData,
                     onRefresh = onRefresh,
                     onClick = onClick,
-                    modifier = modifier
-                )
-            }
-            
-            // ANALYTICS Category Widgets
-            AnalyticsWidget.VolumeTrends -> {
-                VolumeTrendsWidget(
-                    data = data as? AnalyticsWidgetData,
-                    onRefresh = onRefresh,
-                    onClick = onClick,
-                    modifier = modifier
+                    modifier = modifier,
+                    useFolderStyle = true
                 )
             }
             
@@ -146,7 +109,8 @@ object WidgetFactory {
                     data = data as? AnalyticsWidgetData,
                     onRefresh = onRefresh,
                     onClick = onClick,
-                    modifier = modifier
+                    modifier = modifier,
+                    useFolderStyle = true
                 )
             }
             
@@ -159,7 +123,8 @@ object WidgetFactory {
                     data = data as? AnalyticsWidgetData,
                     onRefresh = onRefresh,
                     onClick = onClick,
-                    modifier = modifier
+                    modifier = modifier,
+                    useFolderStyle = true
                 )
             }
             
@@ -298,15 +263,25 @@ object WidgetFactory {
             AnalyticsWidget.AverageDuration -> "min"
             AnalyticsWidget.WorkoutFrequency -> "workouts"
             
-            // Visible widgets
+            // Consolidated widgets - primary widgets
+            AnalyticsWidget.StrengthAnalytics -> "kg"
+            AnalyticsWidget.VolumeAnalytics -> "kg"
+            
+            // Other active widgets
+            AnalyticsWidget.MuscleGroupDistribution -> "%"
+            AnalyticsWidget.RecoveryMetrics -> "h"
+            AnalyticsWidget.MonthlySummary -> ""
+            AnalyticsWidget.FrequencyChart -> "workouts"
+            AnalyticsWidget.ProgressChart -> ""
+            
+            // Deprecated widgets (for compatibility)
             AnalyticsWidget.StrengthProgress -> "kg"
             AnalyticsWidget.PersonalRecords -> "records"
             AnalyticsWidget.OneRMProgression -> "kg"
-            AnalyticsWidget.MuscleGroupDistribution -> "%"
             AnalyticsWidget.VolumeLoadProgression -> "kg"
-            AnalyticsWidget.RecoveryMetrics -> "h"
             AnalyticsWidget.VolumeTrends -> "kg"
-            AnalyticsWidget.MonthlySummary -> ""
+            AnalyticsWidget.VolumeChart -> "kg"
+            
             else -> ""
         }
     }

@@ -23,8 +23,7 @@ import com.example.liftrix.domain.model.analytics.WidgetData
 /**
  * Small widget card component for 1x1 metric cards in the grid layout.
  * 
- * Created for SPEC-20250205-progress-tab-ui-redesign to standardize
- * small metric cards in the 2-column mobile grid layout.
+ * Standardizes small metric cards in the 2-column mobile grid layout.
  * 
  * Features:
  * - Consistent 120dp minimum height for grid alignment
@@ -66,7 +65,7 @@ fun SmallWidgetCard(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(20.dp),  // Internal padding per spec
+                .padding(20.dp),
             contentAlignment = Alignment.Center
         ) {
             // Use SimpleWidgetRenderer to render the appropriate widget content

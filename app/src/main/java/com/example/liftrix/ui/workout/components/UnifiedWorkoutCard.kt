@@ -62,20 +62,19 @@ fun UnifiedWorkoutCard(
     actions: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val shape = RoundedCornerShape(12.dp) // Task specification: 12dp corner radius
-    val elevation = CardDefaults.cardElevation(defaultElevation = 2.dp) // Task specification: 2dp elevation
+    val shape = RoundedCornerShape(12.dp)
+    val elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     val colors = CardDefaults.cardColors(
-        containerColor = MaterialTheme.colorScheme.surfaceVariant // Task specification: use surfaceVariant
+        containerColor = MaterialTheme.colorScheme.surfaceVariant
     )
     
-    // Task ANIM-001: Add press animation with 0.98x scale and 150ms timing
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val hapticFeedback = LocalHapticFeedback.current
     
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.98f else 1f, // Task specification: 0.98x scale factor
-        animationSpec = LiftrixAnimations.fastTransitionSpec, // Task specification: 150ms animation
+        targetValue = if (isPressed) 0.98f else 1f,
+        animationSpec = LiftrixAnimations.fastTransitionSpec,
         label = "unifiedCardPressScale"
     )
     
@@ -221,8 +220,8 @@ fun CompactUnifiedWorkoutCard(
     val hapticFeedback = LocalHapticFeedback.current
     
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.98f else 1f, // Task specification: 0.98x scale factor
-        animationSpec = LiftrixAnimations.fastTransitionSpec, // Task specification: 150ms animation
+        targetValue = if (isPressed) 0.98f else 1f,
+        animationSpec = LiftrixAnimations.fastTransitionSpec,
         label = "compactCardPressScale"
     )
     

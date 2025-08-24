@@ -157,7 +157,10 @@ private fun FriendWorkoutsList(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(horizontal = 16.dp)
     ) {
-        items(friendWorkouts) { workout ->
+        items(
+            items = friendWorkouts,
+            key = { sharedWorkout -> sharedWorkout.id } // Use shared workout ID for unique key
+        ) { workout ->
             FriendWorkoutCard(
                 sharedWorkout = workout,
                 onViewWorkout = onViewWorkout,

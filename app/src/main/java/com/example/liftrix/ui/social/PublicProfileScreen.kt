@@ -1,6 +1,7 @@
 package com.example.liftrix.ui.social
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -48,6 +49,11 @@ import com.example.liftrix.ui.components.buttons.LiftrixButton
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.theme.LiftrixTheme
 import com.example.liftrix.ui.workout.components.PrimaryActionButton
+import com.example.liftrix.ui.feed.components.WorkoutPostCard
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
+import androidx.paging.LoadState
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -128,10 +134,29 @@ fun PublicProfileScreen(
 
                 uiState.profile != null -> {
                     val profile = uiState.profile!!
+                    val workoutPosts = uiState.workoutPosts.collectAsLazyPagingItems()
+                    
+                    // Debug logging
+                    LaunchedEffect(workoutPosts.itemCount) {
+                        timber.log.Timber.d("PublicProfileScreen: Workout posts count = ${workoutPosts.itemCount}")
+                    }
+                    
                     ModernProfileContent(
                         profile = profile,
+                        workoutPosts = workoutPosts,
+                        likedPosts = uiState.likedPosts,
+                        savedPosts = uiState.savedPosts,
                         onConnectClick = {
                             viewModel.handleEvent(PublicProfileEvent.ToggleConnection)
+                        },
+                        onLikeClick = { postId ->
+                            viewModel.handleEvent(PublicProfileEvent.ToggleLike(postId))
+                        },
+                        onSaveClick = { postId ->
+                            viewModel.handleEvent(PublicProfileEvent.ToggleSave(postId))
+                        },
+                        onPostClick = { postId ->
+                            viewModel.handleEvent(PublicProfileEvent.OpenPostDetail(postId))
                         }
                     )
                 }
@@ -241,7 +266,13 @@ fun ProfileTopBar(
 @Composable
 fun ModernProfileContent(
         profile: PublicUserProfile,
-        onConnectClick: () -> Unit
+        workoutPosts: LazyPagingItems<com.example.liftrix.domain.model.social.WorkoutPost>,
+        likedPosts: Set<String>,
+        savedPosts: Set<String>,
+        onConnectClick: () -> Unit,
+        onLikeClick: (String) -> Unit,
+        onSaveClick: (String) -> Unit,
+        onPostClick: (String) -> Unit
     ) {
         val cardBackgroundColor = LiftrixColorsV2.Dark.BackgroundSecondary
         val primaryTeal = LiftrixColorsV2.Teal
@@ -420,6 +451,103 @@ fun ModernProfileContent(
                 }
             }
 
+            // Recent Activity Section with workout posts
+            // Always show the section to avoid UI jumping
+            ModernCard(title = "Recent Activity") {
+                when {
+                    // Loading state
+                    workoutPosts.loadState.refresh is LoadState.Loading -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = primaryTeal,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                    
+                    // Has posts
+                    workoutPosts.itemCount > 0 -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            // Display up to 3 posts
+                            for (index in 0 until minOf(workoutPosts.itemCount, 3)) {
+                                workoutPosts[index]?.let { post ->
+                                    WorkoutPostCard(
+                                        post = post,
+                                        isLiked = likedPosts.contains(post.id),
+                                        isSaved = savedPosts.contains(post.id),
+                                        onLikeClick = { onLikeClick(post.id) },
+                                        onCommentClick = { onPostClick(post.id) },
+                                        onShareClick = { /* Handle share */ },
+                                        onSaveClick = { onSaveClick(post.id) },
+                                        onProfileClick = { /* Already on profile */ },
+                                        onWorkoutCopyClick = { /* Handle copy workout */ },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        isOwnPost = false
+                                    )
+                                }
+                            }
+                            
+                            // Show "View All" button if there are more than 3 posts
+                            if (workoutPosts.itemCount > 3) {
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { /* Navigate to all posts */ }
+                                        .padding(vertical = 12.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = primaryTeal.copy(alpha = 0.1f)
+                                ) {
+                                    Text(
+                                        text = "View All ${workoutPosts.itemCount} Workouts",
+                                        modifier = Modifier.padding(16.dp),
+                                        color = primaryTeal,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    
+                    // No posts
+                    else -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.FitnessCenter,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = textSecondary.copy(alpha = 0.5f)
+                                )
+                                Text(
+                                    text = "No workouts yet",
+                                    color = textSecondary,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            
             // Add bottom spacing for FAB
             Spacer(modifier = Modifier.height(80.dp))
         }

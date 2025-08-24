@@ -44,6 +44,14 @@ class AuthRepositoryImpl @Inject constructor(
                         UserMapper.fromFirebaseUser(fbUser)
                     }
                 }
+                
+                // 🔥 WORKOUT-ASSOCIATION-DEBUG: Track when auth state changes
+                Timber.d("🔥 AUTH-STATE-DEBUG: Firebase auth state changed")
+                Timber.d("🔥 AUTH-STATE-DEBUG:   - User ID: ${user?.uid}")
+                Timber.d("🔥 AUTH-STATE-DEBUG:   - Display Name: ${user?.displayName}")
+                Timber.d("🔥 AUTH-STATE-DEBUG:   - Email: ${user?.email}")
+                Timber.d("🔥 AUTH-STATE-DEBUG:   - Has emitted before: $hasEmitted")
+                
                 trySend(user)
                 hasEmitted = true
                 Timber.d("Auth state emitted: ${if (user != null) "User(${user.uid})" else "null"}")

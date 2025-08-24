@@ -99,14 +99,14 @@ val Typography = Typography(
     labelMedium = TextStyle(
         fontFamily = InterFamily,
         fontWeight = FontWeight.Medium,
-        fontSize = 14.sp,  // Updated to meet 14sp minimum requirement per SPEC-20250205
+        fontSize = 14.sp,
         lineHeight = 18.sp,
         letterSpacing = 0.5.sp
     ),
     labelSmall = TextStyle(
         fontFamily = InterFamily,
         fontWeight = FontWeight.Medium,
-        fontSize = 14.sp,  // Updated to meet 14sp minimum requirement per SPEC-20250205
+        fontSize = 14.sp,
         lineHeight = 18.sp,
         letterSpacing = 0.5.sp
     ),

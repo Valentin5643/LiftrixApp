@@ -63,32 +63,62 @@ sealed class AnalyticsWidget(
     )
     
     /**
-     * Strength progression widget
+     * Strength analytics widget - unified strength analysis
+     * Combines StrengthProgress, PersonalRecords, and OneRMProgression
+     */
+    @Serializable
+    data object StrengthAnalytics : AnalyticsWidget(
+        id = "strength_analytics",
+        displayName = "Strength Analytics",
+        description = "Unified strength analysis with progress, records, and 1RM tracking",
+        category = WidgetCategory.PROGRESS,
+        complexity = WidgetComplexity.MODERATE,
+        priority = WidgetPriority.STANDARD
+    )
+    
+    /**
+     * Volume analytics widget - unified volume analysis 
+     * Combines VolumeChart, VolumeTrends, and VolumeLoadProgression
+     */
+    @Serializable
+    data object VolumeAnalytics : AnalyticsWidget(
+        id = "volume_analytics",
+        displayName = "Volume Analytics",
+        description = "Unified volume analysis with charts, trends, and progression",
+        category = WidgetCategory.ANALYTICS,
+        complexity = WidgetComplexity.COMPLEX,
+        priority = WidgetPriority.STANDARD
+    )
+    
+    /**
+     * Strength progression widget - DEPRECATED, replaced by StrengthAnalytics
      * Tracks personal records and strength gains over time
      */
     @Serializable
     data object StrengthProgress : AnalyticsWidget(
         id = "strength_progress",
         displayName = "Strength Progress",
-        description = "Track personal records and strength improvements",
+        description = "Deprecated - replaced by Strength Analytics",
         category = WidgetCategory.PROGRESS,
         complexity = WidgetComplexity.MODERATE,
-        priority = WidgetPriority.STANDARD
+        priority = WidgetPriority.STANDARD,
+        isDeprecated = true
     )
     
     
     /**
-     * Volume chart widget
+     * Volume chart widget - DEPRECATED, replaced by VolumeAnalytics
      * Visual chart displaying volume progression over time
      */
     @Serializable
     data object VolumeChart : AnalyticsWidget(
         id = "volume_chart",
         displayName = "Volume Chart",
-        description = "Visual chart showing volume progression over time",
+        description = "Deprecated - replaced by Volume Analytics",
         category = WidgetCategory.CHARTS,
         complexity = WidgetComplexity.MODERATE,
-        priority = WidgetPriority.STANDARD
+        priority = WidgetPriority.STANDARD,
+        isDeprecated = true
     )
     
     /**
@@ -116,29 +146,31 @@ sealed class AnalyticsWidget(
     )
     
     /**
-     * Personal records widget
+     * Personal records widget - DEPRECATED, replaced by StrengthAnalytics
      * Displays recent and all-time personal records
      */
     @Serializable
     data object PersonalRecords : AnalyticsWidget(
         id = "personal_records",
         displayName = "Personal Records",
-        description = "View your recent and all-time personal records",
+        description = "Deprecated - replaced by Strength Analytics",
         category = WidgetCategory.PROGRESS,
-        complexity = WidgetComplexity.MODERATE
+        complexity = WidgetComplexity.MODERATE,
+        isDeprecated = true
     )
     
     /**
-     * Volume trends analysis widget
+     * Volume trends analysis widget - DEPRECATED, replaced by VolumeAnalytics
      * Advanced trend analysis with projections
      */
     @Serializable
     data object VolumeTrends : AnalyticsWidget(
         id = "volume_trends",
         displayName = "Volume Trends",
-        description = "Advanced volume trend analysis with projections",
+        description = "Deprecated - replaced by Volume Analytics",
         category = WidgetCategory.ANALYTICS,
-        complexity = WidgetComplexity.COMPLEX
+        complexity = WidgetComplexity.COMPLEX,
+        isDeprecated = true
     )
     
     /**
@@ -168,16 +200,17 @@ sealed class AnalyticsWidget(
     )
     
     /**
-     * Volume load progression widget
+     * Volume load progression widget - DEPRECATED, replaced by VolumeAnalytics
      * Advanced volume progression tracking with load analysis
      */
     @Serializable
     data object VolumeLoadProgression : AnalyticsWidget(
         id = "volume_load_progression",
         displayName = "Volume Progression",
-        description = "Track volume progression with intensity load analysis",
+        description = "Deprecated - replaced by Volume Analytics",
         category = WidgetCategory.PROGRESS,
-        complexity = WidgetComplexity.MODERATE
+        complexity = WidgetComplexity.MODERATE,
+        isDeprecated = true
     )
     
     /**
@@ -194,16 +227,17 @@ sealed class AnalyticsWidget(
     )
     
     /**
-     * One rep max progression widget
+     * One rep max progression widget - DEPRECATED, replaced by StrengthAnalytics
      * Track estimated and actual one rep max progression
      */
     @Serializable
     data object OneRMProgression : AnalyticsWidget(
         id = "one_rm_progression",
         displayName = "1RM Progression",
-        description = "Track estimated and actual one rep max progression",
+        description = "Deprecated - replaced by Strength Analytics",
         category = WidgetCategory.PROGRESS,
-        complexity = WidgetComplexity.MODERATE
+        complexity = WidgetComplexity.MODERATE,
+        isDeprecated = true
     )
     
     /**
@@ -243,20 +277,24 @@ sealed class AnalyticsWidget(
         AverageDuration -> 999
         VolumeCalendar -> 999
         
-        // Visible widgets
-        VolumeChart -> 1
-        FrequencyChart -> 2
-        ProgressChart -> 3
+        // Deprecated widgets (replaced by consolidated widgets)
+        VolumeChart -> 999
+        StrengthProgress -> 999
+        PersonalRecords -> 999
+        VolumeTrends -> 999
+        VolumeLoadProgression -> 999
+        OneRMProgression -> 999
         
-        StrengthProgress -> 4
-        PersonalRecords -> 5
-        VolumeLoadProgression -> 6
-        OneRMProgression -> 7
-        MonthlySummary -> 8
+        // Active consolidated widgets
+        StrengthAnalytics -> 1      // Primary strength widget
+        VolumeAnalytics -> 2        // Primary volume widget
         
-        VolumeTrends -> 9
-        RecoveryMetrics -> 10
-        MuscleGroupDistribution -> 11
+        // Other active widgets
+        FrequencyChart -> 3
+        ProgressChart -> 4
+        MonthlySummary -> 5
+        RecoveryMetrics -> 6
+        MuscleGroupDistribution -> 7
     }
     
     /**
@@ -310,15 +348,14 @@ sealed class AnalyticsWidget(
          * All available analytics widgets - only non-deprecated widgets shown in UI
          */
         fun getAllWidgets(): List<AnalyticsWidget> = listOf(
-            // CHARTS Category (3 widgets)
-            VolumeChart, FrequencyChart, ProgressChart,
+            // CHARTS Category (2 widgets) - VolumeChart deprecated, replaced by VolumeAnalytics
+            FrequencyChart, ProgressChart,
             
-            // PROGRESS Category (5 widgets)
-            StrengthProgress, PersonalRecords, VolumeLoadProgression, 
-            OneRMProgression, MonthlySummary,
+            // PROGRESS Category (2 widgets) - StrengthProgress, PersonalRecords, OneRMProgression, VolumeLoadProgression deprecated
+            StrengthAnalytics, MonthlySummary,
             
-            // ANALYTICS Category (3 widgets)
-            VolumeTrends, RecoveryMetrics, MuscleGroupDistribution
+            // ANALYTICS Category (3 widgets) - VolumeTrends deprecated, replaced by VolumeAnalytics
+            VolumeAnalytics, RecoveryMetrics, MuscleGroupDistribution
         ).filter { !it.isDeprecated }
         
         /**

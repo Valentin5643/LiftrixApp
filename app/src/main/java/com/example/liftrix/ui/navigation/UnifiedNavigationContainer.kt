@@ -797,6 +797,14 @@ fun UnifiedNavigationContainer(
                         onNavigateToExerciseSelectionWithReplacement = { exerciseIndex ->
                             navController.navigateToExerciseSelection(isForTemplate = true, replaceExerciseIndex = exerciseIndex)
                         },
+                        onNavigateToPostCreation = { workoutId ->
+                            navController.navigate(LiftrixRoute.PostCreation(workoutId)) {
+                                // Pop the edit screen from the back stack
+                                popUpTo(LiftrixRoute.EditWorkout(workoutId)) {
+                                    inclusive = true
+                                }
+                            }
+                        },
                         viewModel = editWorkoutViewModel
                     )
                 }

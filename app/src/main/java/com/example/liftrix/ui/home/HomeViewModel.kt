@@ -541,9 +541,12 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    // 🔥 FIXED: Track current user ID to prevent duplicate subscriptions
+    private var currentObservedUserId: String? = null
+
     /**
      * Observes authentication state and loads data when user is available
-     * 🔥 IMPROVED: Now reactively observes workout data changes
+     * 🔥 IMPROVED: Now reactively observes workout data changes but prevents duplicate subscriptions
      */
     private fun observeUserDataAndLoadHome() {
         viewModelScope.launch {
@@ -556,9 +559,16 @@ class HomeViewModel @Inject constructor(
                 }
                 .collect { user ->
                     if (user != null) {
-                        // Start observing workout data reactively
-                        observeWorkoutDataReactively(user.uid)
+                        // 🔥 CRITICAL FIX: Only start new observation if user ID actually changed
+                        if (currentObservedUserId != user.uid) {
+                            Timber.d("🔥 WORKOUT-UI-DEBUG: User ID changed from $currentObservedUserId to ${user.uid} - starting new observation")
+                            currentObservedUserId = user.uid
+                            observeWorkoutDataReactively(user.uid)
+                        } else {
+                            Timber.d("🔥 WORKOUT-UI-DEBUG: User ID unchanged ($currentObservedUserId) - skipping duplicate observation")
+                        }
                     } else {
+                        currentObservedUserId = null
                         updateHomeScreenData { 
                             it.copy(recentWorkouts = emptyList()) 
                         }
@@ -568,48 +578,42 @@ class HomeViewModel @Inject constructor(
     }
     
     /**
-     * 🔥 NEW: Reactively observes workout data changes
+     * 🔥 FIXED: Reactively observes USER'S workout data changes (not activity feed)
      * This ensures Home screen updates automatically when workouts are completed
-     * Now includes media URLs from social posts when available
+     * Uses getRecentWorkouts for user's personal workout history
      */
     private fun observeWorkoutDataReactively(userId: String) {
         viewModelScope.launch {
-            // Observe recent activity feed with all users' workouts (includes media)
-            workoutRepository.getRecentActivityFeed(
-                userId = userId,
-                includeOthers = showAllUsersInRecentActivity,
-                limit = RECENT_WORKOUTS_LIMIT
-            )
+            // 🔥 FORENSIC DEBUG - Track when this method is called
+            Timber.d("🔥 WORKOUT-UI-DEBUG: observeWorkoutDataReactively called for userId: $userId")
+            
+            // 🔥 CRITICAL FIX: Use getRecentWorkouts for user's personal workouts, not activity feed
+            workoutRepository.getRecentWorkouts(userId, RECENT_WORKOUTS_LIMIT)
                 .catch { throwable ->
-                    Timber.e(throwable, "Error observing recent activity feed")
+                    Timber.e(throwable, "Error observing recent workouts")
                     updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.DataRetrievalError(
-                        "Failed to load recent activity: ${throwable.message}"
+                        "Failed to load recent workouts: ${throwable.message}"
                     ))
                 }
                 .collect { result ->
                     result.fold(
-                        onSuccess = { feedWorkouts ->
-                            Timber.d("🔥 HOME-REACTIVE: Received ${feedWorkouts.size} feed workouts with media")
-                            
-                            // Convert FeedWorkout to Workout for compatibility with current UI
-                            val workouts = feedWorkouts.map { it.workout }
+                        onSuccess = { workouts ->
+                            // 🔥 FORENSIC DEBUG - Add UI layer workout debugging for personal workouts
+                            Timber.d("🔥 WORKOUT-UI-DEBUG: Received ${workouts.size} personal workouts from repository")
+                            workouts.forEachIndexed { index, workout ->
+                                Timber.d("🔥 WORKOUT-UI-DEBUG: Workout[$index]: id=${workout.id.value}, name=${workout.name}, status=${workout.status}")
+                            }
                             
                             updateHomeScreenData {
-                                it.copy(
-                                    recentWorkouts = workouts,
-                                    // Store the full FeedWorkout data for media display
-                                    workoutFeedState = FeedState.Success(
-                                        workouts = feedWorkouts,
-                                        hasMore = false,
-                                        isLoadingMore = false
-                                    )
-                                )
+                                it.copy(recentWorkouts = workouts)
                             }
+                            
+                            Timber.d("🔥 WORKOUT-UI-DEBUG: UI updated with ${workouts.size} personal workouts")
                         },
                         onFailure = { throwable ->
-                            Timber.e(throwable, "Error in reactive activity feed observation")
+                            Timber.e(throwable, "Error in reactive workout observation")
                             updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.DataRetrievalError(
-                                throwable.message ?: "Failed to load recent activity"
+                                throwable.message ?: "Failed to load workouts"
                             ))
                             updateHomeScreenData {
                                 it.copy(recentWorkouts = emptyList())

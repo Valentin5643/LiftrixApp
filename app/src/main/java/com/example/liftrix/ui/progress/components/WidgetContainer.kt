@@ -60,12 +60,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
+import com.example.liftrix.domain.model.analytics.BasicWidgetData
+import com.example.liftrix.domain.model.analytics.ChartWidgetData
 import com.example.liftrix.domain.model.analytics.DashboardConfiguration
 import com.example.liftrix.domain.model.analytics.TrendDirection
 import com.example.liftrix.domain.model.analytics.WidgetCategory
 import com.example.liftrix.domain.model.analytics.WidgetData
-import com.example.liftrix.domain.model.analytics.BasicWidgetData
-import com.example.liftrix.domain.model.analytics.ChartWidgetData
 import com.example.liftrix.ui.theme.LiftrixColors
 import com.example.liftrix.ui.theme.LiftrixTheme
 import com.example.liftrix.core.extensions.rememberDerivedStateOf
@@ -199,7 +199,8 @@ fun WidgetContainer(
                 onWidgetClick = onWidgetClick,
                 onWidgetReorder = if (enableDragAndDrop) onWidgetReorder else { _, _ -> },
                 widgetDataProvider = widgetDataProvider,
-                enableCollapsibleSections = enableCollapsibleSections && windowSizeClass.widthDp.value >= 600,
+                enableCollapsibleSections = enableCollapsibleSections && 
+                    windowSizeClass.widthDp.value >= 600,
                 enableDragAndDrop = enableDragAndDrop,
                 isLoading = isLoading,
                 windowSizeClass = windowSizeClass
@@ -240,11 +241,15 @@ private fun GridLayout(
             val widget = widgets[index]
             val widgetData = widgetDataCache[widget] ?: createSampleWidgetData(widget)
             
+            // Calculate aspect ratio based on column count
+            val aspectRatio = if (columnsCount == 1) 2.0f else 1.1f
+            
             WidgetRenderer(
                 widget = widget,
                 widgetData = widgetData,
                 onClick = { onWidgetClick(widget) },
-                isLoading = isLoading
+                isLoading = isLoading,
+                aspectRatio = aspectRatio
             )
         }
     }
@@ -268,11 +273,16 @@ private fun StaggeredLayout(
     ) {
         items(widgets) { widget ->
             val widgetData = widgetDataProvider(widget)
+            
+            // Calculate aspect ratio based on column count
+            val aspectRatio = if (columnsCount == 1) 2.0f else 1.1f
+            
             WidgetRenderer(
                 widget = widget,
                 widgetData = widgetData,
                 onClick = { onWidgetClick(widget) },
-                isLoading = isLoading
+                isLoading = isLoading,
+                aspectRatio = aspectRatio
             )
         }
     }
@@ -294,11 +304,16 @@ private fun ListLayout(
     ) {
         widgets.forEach { widget ->
             val widgetData = widgetDataProvider(widget)
+            
+            // List layout always uses single column, so use rectangular aspect ratio
+            val aspectRatio = 2.0f
+            
             WidgetRenderer(
                 widget = widget,
                 widgetData = widgetData,
                 onClick = { onWidgetClick(widget) },
-                isLoading = isLoading
+                isLoading = isLoading,
+                aspectRatio = aspectRatio
             )
         }
     }
@@ -443,11 +458,16 @@ private fun WidgetSection(
                 ) {
                     widgets.forEach { widget ->
                         val widgetData = widgetDataProvider(widget)
+                        
+                        // Section layout uses single column, so use rectangular aspect ratio
+                        val aspectRatio = 2.0f
+                        
                         WidgetRenderer(
                             widget = widget,
                             widgetData = widgetData,
                             onClick = { onWidgetClick(widget) },
-                            isLoading = isLoading
+                            isLoading = isLoading,
+                            aspectRatio = aspectRatio
                         )
                     }
                 }
@@ -462,7 +482,8 @@ internal fun WidgetRenderer(
     widgetData: WidgetData,
     onClick: () -> Unit,
     isLoading: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    aspectRatio: Float = 1.1f  // Dynamic aspect ratio based on layout context
 ) {
     // Render appropriate widget component based on widget type
     when (widget) {
@@ -510,7 +531,9 @@ internal fun WidgetRenderer(
                 graphData = graphData,
                 onRefresh = {},
                 onClick = onClick,
-                modifier = modifier
+                modifier = modifier,
+                useFolderStyle = true,
+                aspectRatio = aspectRatio
             )
         }
         
@@ -558,7 +581,9 @@ internal fun WidgetRenderer(
                 graphData = graphData,
                 onRefresh = {},
                 onClick = onClick,
-                modifier = modifier
+                modifier = modifier,
+                useFolderStyle = true,
+                aspectRatio = aspectRatio
             )
         }
         
@@ -659,7 +684,9 @@ internal fun WidgetRenderer(
                 graphData = graphData,
                 onRefresh = {},
                 onClick = onClick,
-                modifier = modifier
+                modifier = modifier,
+                useFolderStyle = true,
+                aspectRatio = aspectRatio
             )
         }
         
@@ -706,7 +733,9 @@ internal fun WidgetRenderer(
                 graphData = graphData,
                 onRefresh = {},
                 onClick = onClick,
-                modifier = modifier
+                modifier = modifier,
+                useFolderStyle = true,
+                aspectRatio = aspectRatio
             )
         }
         
@@ -753,7 +782,9 @@ internal fun WidgetRenderer(
                 graphData = graphData,
                 onRefresh = {},
                 onClick = onClick,
-                modifier = modifier
+                modifier = modifier,
+                useFolderStyle = true,
+                aspectRatio = aspectRatio
             )
         }
         
@@ -778,7 +809,9 @@ internal fun WidgetRenderer(
                 distributionData = generateSampleDistributionData(),
                 onRefresh = {},
                 onClick = onClick,
-                modifier = modifier
+                modifier = modifier,
+                useFolderStyle = true,
+                aspectRatio = aspectRatio
             )
         }
         
@@ -825,7 +858,141 @@ internal fun WidgetRenderer(
                 graphData = graphData,
                 onRefresh = {},
                 onClick = onClick,
-                modifier = modifier
+                modifier = modifier,
+                useFolderStyle = true,
+                aspectRatio = aspectRatio
+            )
+        }
+        
+        AnalyticsWidget.VolumeAnalytics -> {
+            VolumeAnalyticsWidget(
+                data = null, // Will be provided by the data provider
+                onRefresh = {},
+                onClick = onClick,
+                modifier = modifier,
+                useFolderStyle = true,
+                aspectRatio = aspectRatio
+            )
+        }
+        
+        AnalyticsWidget.RecoveryMetrics -> {
+            RecoveryMetricsWidget(
+                data = null, // Will be provided by the data provider
+                onRefresh = {},
+                onClick = onClick,
+                modifier = modifier,
+                useFolderStyle = true,
+                aspectRatio = aspectRatio
+            )
+        }
+        
+        AnalyticsWidget.MonthlySummary -> {
+            MonthlySummaryWidget(
+                data = null, // Will be provided by the data provider
+                onRefresh = {},
+                onClick = onClick,
+                modifier = modifier,
+                useFolderStyle = true,
+                aspectRatio = aspectRatio
+            )
+        }
+        
+        AnalyticsWidget.StrengthAnalytics -> {
+            // Handle both BasicWidgetData and ChartWidgetData - similar to StrengthProgress
+            val basicData = widgetData as? BasicWidgetData
+            val chartData = widgetData as? ChartWidgetData
+            
+            val metricData = basicData?.let { basic ->
+                com.example.liftrix.domain.model.analytics.MetricWidgetData(
+                    widgetType = widget,
+                    lastUpdated = basic.lastUpdated,
+                    isLoading = isLoading,
+                    error = null,
+                    primaryValue = basic.primaryValue,
+                    unit = "kg",
+                    secondaryValue = basic.secondaryValue ?: "",
+                    trend = basic.trend ?: TrendDirection.STABLE,
+                    trendPercentage = 0f,
+                    comparisonPeriod = basic.secondaryValue ?: ""
+                )
+            } ?: chartData?.let { chart ->
+                // Extract metric data from ChartWidgetData
+                val strengthScore = chart.summary.peak.toInt()
+                com.example.liftrix.domain.model.analytics.MetricWidgetData(
+                    widgetType = widget,
+                    lastUpdated = chart.lastUpdated,
+                    isLoading = chart.isLoading,
+                    error = null,
+                    primaryValue = "$strengthScore",
+                    unit = chart.summary.unit,
+                    secondaryValue = chart.timeRange,
+                    trend = chart.summary.trend,
+                    trendPercentage = chart.summary.changePercentage,
+                    comparisonPeriod = chart.timeRange
+                )
+            }
+            
+            // Extract chart data for mini-graph
+            val graphData = chartData?.dataPoints?.map { it.y } ?: emptyList()
+            
+            EnhancedStrengthProgressWidget(
+                data = metricData,
+                graphData = graphData,
+                onRefresh = {},
+                onClick = onClick,
+                modifier = modifier,
+                useFolderStyle = true,
+                aspectRatio = aspectRatio
+            )
+        }
+        
+        AnalyticsWidget.FrequencyChart -> {
+            // Handle both BasicWidgetData and ChartWidgetData for FrequencyChart
+            val basicData = widgetData as? BasicWidgetData
+            val chartData = widgetData as? ChartWidgetData
+            
+            val metricData = basicData?.let { basic ->
+                com.example.liftrix.domain.model.analytics.MetricWidgetData(
+                    widgetType = widget,
+                    lastUpdated = basic.lastUpdated,
+                    isLoading = isLoading,
+                    error = null,
+                    primaryValue = basic.primaryValue,
+                    unit = "sessions",
+                    secondaryValue = basic.secondaryValue ?: "",
+                    trend = basic.trend ?: TrendDirection.STABLE,
+                    trendPercentage = 0f,
+                    comparisonPeriod = basic.secondaryValue ?: ""
+                )
+            } ?: chartData?.let { chart ->
+                // Extract metric data from ChartWidgetData
+                val totalSessions = chart.dataPoints.sumOf { it.y.toDouble() }.toInt()
+                com.example.liftrix.domain.model.analytics.MetricWidgetData(
+                    widgetType = widget,
+                    lastUpdated = chart.lastUpdated,
+                    isLoading = chart.isLoading,
+                    error = null,
+                    primaryValue = "$totalSessions sessions",
+                    unit = "sessions",
+                    secondaryValue = chart.timeRange,
+                    trend = chart.summary?.trend ?: TrendDirection.STABLE,
+                    trendPercentage = chart.summary?.changePercentage ?: 0f,
+                    comparisonPeriod = chart.timeRange
+                )
+            }
+            
+            // Extract chart data for mini-graph
+            val graphData = chartData?.dataPoints?.map { it.y } ?: emptyList()
+            
+            // Use Enhanced frequency widget with folder style
+            EnhancedWorkoutFrequencyWidget(
+                data = metricData,
+                graphData = graphData,
+                onRefresh = {},
+                onClick = onClick,
+                modifier = modifier,
+                useFolderStyle = true, // Enable folder style for frequency chart
+                aspectRatio = aspectRatio
             )
         }
         

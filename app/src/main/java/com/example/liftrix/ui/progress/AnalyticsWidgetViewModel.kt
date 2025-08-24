@@ -2,12 +2,16 @@ package com.example.liftrix.ui.progress
 
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.fold
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import javax.inject.Inject
+import com.example.liftrix.domain.model.SubscriptionStatus
+import com.example.liftrix.domain.model.SubscriptionTier
+import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.DashboardConfiguration
 import com.example.liftrix.domain.model.analytics.DashboardLayoutMode
@@ -15,16 +19,13 @@ import com.example.liftrix.domain.model.analytics.UserLevel
 import com.example.liftrix.domain.model.analytics.WidgetPreferences
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.model.User
-import com.example.liftrix.domain.model.SubscriptionTier
-import com.example.liftrix.domain.model.SubscriptionStatus
-import java.time.LocalDateTime
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.service.AnalyticsService
 import com.example.liftrix.service.WidgetResolver
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import com.example.liftrix.ui.common.state.UiState
+import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import com.example.liftrix.ui.progress.components.AnalyticsWidgetManager
+import java.time.LocalDateTime
 import timber.log.Timber
 
 /**
@@ -787,17 +788,14 @@ class AnalyticsWidgetViewModel @Inject constructor(
                     is CoordinatorEvent.UserAuthChanged -> {
                         val previousUserId = _currentUser.value?.uid
                         
-                        // STABILITY FIX: Only allow user changes under specific conditions
                         val shouldUpdateUser = when {
-                            // Always allow setting user if it was null
                             previousUserId == null && event.userId != null -> true
-                            // Allow clearing user only if explicitly requested (logout)
                             previousUserId != null && event.userId == null && !userStabilized -> true
-                            // Allow changing to different valid user
-                            previousUserId != null && event.userId != null && previousUserId != event.userId -> true
-                            // Reject null resets once user is stabilized
+                            previousUserId != null && event.userId != null && 
+                                previousUserId != event.userId -> true
                             previousUserId != null && event.userId == null && userStabilized -> {
-                                Timber.w("🔍 WIDGET-AUTH-DEBUG: Rejecting user null reset - already stabilized with $previousUserId")
+                                Timber.w("WIDGET-AUTH-DEBUG: Rejecting user null reset - " +
+                                    "already stabilized with $previousUserId")
                                 false
                             }
                             else -> false
@@ -811,27 +809,28 @@ class AnalyticsWidgetViewModel @Inject constructor(
                                     userStabilized = true
                                     com.example.liftrix.domain.model.User(
                                         uid = userId,
-                                        email = "temp@liftrix.app", // FIXED: Use valid email instead of blank
-                                    displayName = null,
-                                    photoUrl = null,
-                                    isAnonymous = false, // FIXED: Keep as false since we have a userId
-                                    subscriptionTier = SubscriptionTier.FREE,
-                                    subscriptionStatus = SubscriptionStatus.ACTIVE,
-                                    subscriptionExpiresAt = null,
-                                    premiumFeaturesEnabled = false,
-                                    onboardingCompleted = true,
-                                    profileVersion = 1L,
-                                    createdAt = LocalDateTime.now(),
-                                    lastSignInAt = LocalDateTime.now(),
-                                    updatedAt = LocalDateTime.now()
-                                )
+                                        email = "temp@liftrix.app",
+                                        displayName = null,
+                                        photoUrl = null,
+                                        isAnonymous = false,
+                                        subscriptionTier = SubscriptionTier.FREE,
+                                        subscriptionStatus = SubscriptionStatus.ACTIVE,
+                                        subscriptionExpiresAt = null,
+                                        premiumFeaturesEnabled = false,
+                                        onboardingCompleted = true,
+                                        profileVersion = 1L,
+                                        createdAt = LocalDateTime.now(),
+                                        lastSignInAt = LocalDateTime.now(),
+                                        updatedAt = LocalDateTime.now()
+                                    )
                             } else {
                                 userStabilized = false
                                 null
                             }
                         }
                         } else {
-                            Timber.d("🔍 WIDGET-AUTH-DEBUG: Ignored redundant or invalid user change: $previousUserId -> ${event.userId}")
+                            Timber.d("WIDGET-AUTH-DEBUG: Ignored redundant or invalid user change: " +
+                                "$previousUserId -> ${event.userId}")
                         }
                         
                         // Only trigger initial load if user changed  
@@ -1147,14 +1146,17 @@ class AnalyticsWidgetViewModel @Inject constructor(
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeChart,
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeTrends,
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeCalendar,
-            com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeLoadProgression -> {
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeLoadProgression,
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeAnalytics -> {
                 AnalyticsWidgetEvent.NavigateToVolumeDetail
             }
             
             // 1RM and Strength widgets → One RM Detail
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.OneRMProgression,
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.StrengthProgress,
-            com.example.liftrix.domain.model.analytics.AnalyticsWidget.PersonalRecords -> {
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.PersonalRecords,
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.StrengthAnalytics,
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.MonthlySummary -> {
                 AnalyticsWidgetEvent.NavigateToOneRmDetail
             }
             
@@ -1166,6 +1168,11 @@ class AnalyticsWidgetViewModel @Inject constructor(
             // Frequency widgets → Workout Frequency Detail
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutFrequency,
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.FrequencyChart -> {
+                AnalyticsWidgetEvent.NavigateToFrequencyDetail
+            }
+            
+            // Recovery widgets → Frequency Detail (recovery patterns are related to workout frequency)
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.RecoveryMetrics -> {
                 AnalyticsWidgetEvent.NavigateToFrequencyDetail
             }
             
@@ -1265,7 +1272,6 @@ class AnalyticsWidgetViewModel @Inject constructor(
             return
         }
         
-        // Get current ordered visible widgets
         val currentOrder = preferences.getOrderedVisibleWidgets().toMutableList()
         
         if (fromIndex >= currentOrder.size || toIndex >= currentOrder.size) {
@@ -1280,14 +1286,11 @@ class AnalyticsWidgetViewModel @Inject constructor(
         Timber.d("Reordering widget '$widgetToMove' from position $fromIndex to $toIndex")
         Timber.d("New widget order: ${currentOrder.joinToString(", ")}")
         
-        // Update preferences with new order
         val updatedPreferences = preferences.updateWidgetOrder(currentOrder)
         
-        // Update UI state immediately for smooth feedback
         updateState { currentUiState ->
             when (currentUiState) {
                 is UiState.Success -> {
-                    // Update resolved widgets to reflect new order
                     val reorderedWidgets = currentOrder.mapNotNull { widgetId ->
                         currentUiState.data.activeWidgets.find { it.id == widgetId }
                     }

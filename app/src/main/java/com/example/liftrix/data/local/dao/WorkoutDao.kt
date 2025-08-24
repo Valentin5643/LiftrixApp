@@ -30,6 +30,12 @@ interface WorkoutDao {
     @Query("SELECT COUNT(*) FROM workouts WHERE is_synced = 0 AND user_id = :userId")
     suspend fun getUnsyncedCountForUser(userId: String): Int
     
+    @Query("SELECT COUNT(*) FROM workouts WHERE is_synced = 1 AND user_id = :userId")
+    suspend fun getSyncedCountForUser(userId: String): Int
+    
+    @Query("UPDATE workouts SET is_synced = 0, sync_version = :version WHERE user_id = :userId")
+    suspend fun markAllWorkoutsAsUnsyncedForUser(userId: String, version: Long = System.currentTimeMillis()): Int
+    
     @Query("SELECT * FROM workouts WHERE status = 'IN_PROGRESS' AND user_id = :userId ORDER BY updated_at DESC LIMIT 1")
     suspend fun getActiveWorkoutForUser(userId: String): WorkoutEntity?
     
@@ -124,12 +130,6 @@ interface WorkoutDao {
     
     /**
      * Gets combined feed of personal and friends' completed workouts in chronological order
-     * 
-     * @param currentUserId The current user's ID
-     * @param friendIds List of friend user IDs to include in the feed
-     * @param limit Maximum number of workouts to return
-     * @param offset Number of workouts to skip for pagination
-     * @return Flow of workout entities ordered by completion time (newest first)
      */
     @Query("""
         SELECT w.* FROM workouts w 
@@ -148,11 +148,6 @@ interface WorkoutDao {
     
     /**
      * Gets personal completed workouts only for the current user
-     * 
-     * @param userId The user's ID
-     * @param limit Maximum number of workouts to return
-     * @param offset Number of workouts to skip for pagination
-     * @return Flow of personal workout entities ordered by completion time (newest first)
      */
     @Query("""
         SELECT * FROM workouts 
@@ -170,11 +165,6 @@ interface WorkoutDao {
     
     /**
      * Gets friends' completed workouts only
-     * 
-     * @param friendIds List of friend user IDs
-     * @param limit Maximum number of workouts to return
-     * @param offset Number of workouts to skip for pagination
-     * @return Flow of friends' workout entities ordered by completion time (newest first)
      */
     @Query("""
         SELECT * FROM workouts 
@@ -193,9 +183,6 @@ interface WorkoutDao {
     /**
      * Gets accepted friend user IDs for a given user
      * Used to retrieve friend IDs for feed queries
-     * 
-     * @param userId The user's ID
-     * @return List of friend user IDs with ACCEPTED status
      */
     @Query("""
         SELECT f.friend_user_id FROM friends f 
@@ -210,10 +197,6 @@ interface WorkoutDao {
     
     /**
      * Counts total available feed workouts for pagination logic
-     * 
-     * @param currentUserId The current user's ID
-     * @param friendIds List of friend user IDs to include in the feed
-     * @return Total count of completed workouts in the feed
      */
     @Query("""
         SELECT COUNT(*) FROM workouts w 
@@ -228,11 +211,6 @@ interface WorkoutDao {
     
     /**
      * Gets paginated workout history for a user ordered by date (newest first)
-     * 
-     * @param userId The user's ID
-     * @param limit Maximum number of workouts to return
-     * @param offset Number of workouts to skip for pagination
-     * @return Flow of workout entities ordered by date (newest first)
      */
     @Query("""
         SELECT * FROM workouts 
@@ -248,9 +226,6 @@ interface WorkoutDao {
     
     /**
      * Counts total workouts for a user for pagination logic
-     * 
-     * @param userId The user's ID
-     * @return Total count of workouts for the user
      */
     @Query("SELECT COUNT(*) FROM workouts WHERE user_id = :userId")
     suspend fun getWorkoutCountForUser(userId: String): Int
@@ -260,11 +235,6 @@ interface WorkoutDao {
     /**
      * Gets daily volume aggregation for analytics calendar view
      * Optimized for monthly calendar widget with volume-based color coding
-     * 
-     * @param userId The user's ID
-     * @param startDate Start date in LocalDate format (inclusive)
-     * @param endDate End date in LocalDate format (inclusive)
-     * @return List of daily volume results ordered by date
      */
     @Query("""
         SELECT 
@@ -307,10 +277,6 @@ interface WorkoutDao {
     /**
      * Gets workout statistics for analytics dashboard
      * Calculates average duration, volume, and workout count for specified period
-     * 
-     * @param userId The user's ID
-     * @param since Start date for statistics calculation (inclusive)
-     * @return Workout statistics result with averages and counts
      */
     @Query("""
         SELECT 
@@ -333,10 +299,6 @@ interface WorkoutDao {
     /**
      * Gets workout count by month for frequency analysis
      * Used for workout frequency patterns and consistency tracking
-     * 
-     * @param userId The user's ID
-     * @param year Year for frequency analysis (e.g., "2025")
-     * @return List of monthly workout counts
      */
     @Query("""
         SELECT 
@@ -354,11 +316,6 @@ interface WorkoutDao {
     /**
      * Gets maximum volume for a user in specified date range
      * Used for volume calendar intensity calculations
-     * 
-     * @param userId The user's ID
-     * @param startDate Start date (inclusive)
-     * @param endDate End date (inclusive)
-     * @return Maximum volume value or 0 if no workouts
      */
     @Query("""
         SELECT MAX(

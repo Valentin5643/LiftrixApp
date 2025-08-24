@@ -153,6 +153,9 @@ class FollowRepositoryImpl @Inject constructor(
                     createdAt = currentTime
                 )
                 
+                // Ensure both users exist before creating relationship (defensive against FK violations)
+                ensureUsersExist(followerId, targetUserId)
+                
                 followRelationshipDao.insertFollowRelationship(relationship)
                 
                 // Sync to Firebase
@@ -170,6 +173,9 @@ class FollowRepositoryImpl @Inject constructor(
                     createdAt = currentTime,
                     acceptedAt = currentTime
                 )
+                
+                // Ensure both users exist before creating relationship (defensive against FK violations)
+                ensureUsersExist(followerId, targetUserId)
                 
                 followRelationshipDao.insertFollowRelationship(relationship)
                 
@@ -827,6 +833,92 @@ class FollowRepositoryImpl @Inject constructor(
     }
     
     /**
+     * Syncs follow relationships from Firebase using upsert strategy to prevent feed flickering.
+     * This method preserves existing relationships while updating with new data from Firebase.
+     * 
+     * @param userId The user ID to sync relationships for
+     * @return The number of relationships synced
+     */
+    suspend fun syncFollowRelationshipsFromFirebaseUpsert(userId: String): Int {
+        return try {
+            Timber.d("🔥 SYNC-FIX: Starting upsert-based follow sync for user $userId")
+            
+            // Fetch follower relationships (where user is being followed)
+            val followerQuery = firestore.collection(FOLLOW_RELATIONSHIPS_COLLECTION)
+                .whereEqualTo("followingId", userId)
+                .whereEqualTo("status", "ACCEPTED")
+                .get()
+                .await()
+            
+            // Fetch following relationships (where user is following others)
+            val followingQuery = firestore.collection(FOLLOW_RELATIONSHIPS_COLLECTION)
+                .whereEqualTo("followerId", userId)
+                .whereEqualTo("status", "ACCEPTED")
+                .get()
+                .await()
+            
+            val relationshipsToUpsert = mutableListOf<FollowRelationshipEntity>()
+            val currentTime = System.currentTimeMillis()
+            
+            // Process follower relationships
+            followerQuery.documents.forEach { doc ->
+                val data = doc.data ?: return@forEach
+                relationshipsToUpsert.add(
+                    FollowRelationshipEntity(
+                        id = doc.id,
+                        followerId = data["followerId"] as String,
+                        followingId = data["followingId"] as String,
+                        status = data["status"] as String,
+                        createdAt = (data["createdAt"] as? com.google.firebase.Timestamp)?.toDate()?.time ?: currentTime,
+                        acceptedAt = (data["acceptedAt"] as? com.google.firebase.Timestamp)?.toDate()?.time,
+                        blockedAt = (data["blockedAt"] as? com.google.firebase.Timestamp)?.toDate()?.time,
+                        isSynced = true,
+                        syncVersion = (data["syncVersion"] as? Number)?.toInt() ?: 1,
+                        lastModified = currentTime
+                    )
+                )
+            }
+            
+            // Process following relationships
+            followingQuery.documents.forEach { doc ->
+                val data = doc.data ?: return@forEach
+                // Check if not already added (to avoid duplicates)
+                val id = doc.id
+                if (relationshipsToUpsert.none { it.id == id }) {
+                    relationshipsToUpsert.add(
+                        FollowRelationshipEntity(
+                            id = id,
+                            followerId = data["followerId"] as String,
+                            followingId = data["followingId"] as String,
+                            status = data["status"] as String,
+                            createdAt = (data["createdAt"] as? com.google.firebase.Timestamp)?.toDate()?.time ?: currentTime,
+                            acceptedAt = (data["acceptedAt"] as? com.google.firebase.Timestamp)?.toDate()?.time,
+                            blockedAt = (data["blockedAt"] as? com.google.firebase.Timestamp)?.toDate()?.time,
+                            isSynced = true,
+                            syncVersion = (data["syncVersion"] as? Number)?.toInt() ?: 1,
+                            lastModified = currentTime
+                        )
+                    )
+                }
+            }
+            
+            // 🔥 FIX: Use upsert instead of delete/insert to prevent feed flickering
+            if (relationshipsToUpsert.isNotEmpty()) {
+                followRelationshipDao.upsertFollowRelationships(relationshipsToUpsert)
+                Timber.d("🔥 SYNC-FIX: Upserted ${relationshipsToUpsert.size} follow relationships for user $userId")
+            } else {
+                Timber.d("🔥 SYNC-FIX: No follow relationships to upsert for user $userId")
+            }
+            
+            relationshipsToUpsert.size
+            
+        } catch (e: Exception) {
+            Timber.e(e, "🔥 SYNC-FIX: Failed to sync follow relationships from Firebase for user $userId")
+            0
+        }
+    }
+    
+    /**
      * Fetches a user's profile from Firebase and creates local database entries.
      * This is a fallback mechanism for when a user exists in Firebase but not locally.
      * Creates both UserProfileEntity (parent) and SocialProfileEntity (child) to satisfy foreign key constraints.
@@ -957,6 +1049,109 @@ class FollowRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Failed to fetch and create profiles from Firebase for user: $userId")
             null
+        }
+    }
+    
+    /**
+     * Ensures both users exist in the database before creating a follow relationship.
+     * This prevents foreign key constraint violations during sync operations.
+     * Creates minimal user stubs if users don't exist.
+     * 
+     * @param userId1 First user ID
+     * @param userId2 Second user ID
+     */
+    private suspend fun ensureUsersExist(userId1: String, userId2: String) {
+        try {
+            // Check if both users exist
+            val user1Exists = userProfileDao.hasProfile(userId1)
+            val user2Exists = userProfileDao.hasProfile(userId2)
+            
+            val currentDateTime = java.time.LocalDateTime.now()
+            
+            // Create minimal stub for user1 if doesn't exist
+            if (!user1Exists) {
+                Timber.w("User $userId1 doesn't exist, creating minimal stub to prevent FK violation")
+                val userStub = UserProfileEntity(
+                    id = userId1,
+                    userId = userId1,
+                    displayName = "User",
+                    age = null,
+                    weightKg = null,
+                    heightCm = null,
+                    fitnessLevel = null,
+                    goals = null,
+                    availableEquipment = null,
+                    workoutFrequency = null,
+                    preferredWorkoutDuration = null,
+                    completedAt = null,
+                    createdAt = currentDateTime,
+                    updatedAt = currentDateTime,
+                    isSynced = false, // Will be synced later by ProfileSyncWorker
+                    syncVersion = 0L,
+                    bio = null,
+                    isPublic = true,
+                    lastActiveAt = currentDateTime,
+                    totalWorkouts = 0,
+                    currentStreak = 0,
+                    longestStreak = 0,
+                    memberSince = currentDateTime,
+                    profileCompletionPercentage = 0,
+                    profileImageUrl = null,
+                    profileImageUpdatedAt = null,
+                    hasCustomProfileImage = false
+                )
+                
+                try {
+                    userProfileDao.insertProfile(userStub)
+                    Timber.i("Created user stub for $userId1")
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to create user stub for $userId1")
+                }
+            }
+            
+            // Create minimal stub for user2 if doesn't exist
+            if (!user2Exists) {
+                Timber.w("User $userId2 doesn't exist, creating minimal stub to prevent FK violation")
+                val userStub = UserProfileEntity(
+                    id = userId2,
+                    userId = userId2,
+                    displayName = "User",
+                    age = null,
+                    weightKg = null,
+                    heightCm = null,
+                    fitnessLevel = null,
+                    goals = null,
+                    availableEquipment = null,
+                    workoutFrequency = null,
+                    preferredWorkoutDuration = null,
+                    completedAt = null,
+                    createdAt = currentDateTime,
+                    updatedAt = currentDateTime,
+                    isSynced = false, // Will be synced later by ProfileSyncWorker
+                    syncVersion = 0L,
+                    bio = null,
+                    isPublic = true,
+                    lastActiveAt = currentDateTime,
+                    totalWorkouts = 0,
+                    currentStreak = 0,
+                    longestStreak = 0,
+                    memberSince = currentDateTime,
+                    profileCompletionPercentage = 0,
+                    profileImageUrl = null,
+                    profileImageUpdatedAt = null,
+                    hasCustomProfileImage = false
+                )
+                
+                try {
+                    userProfileDao.insertProfile(userStub)
+                    Timber.i("Created user stub for $userId2")
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to create user stub for $userId2")
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to ensure users exist for follow relationship")
+            // Don't throw - this is a defensive mechanism, let the FK constraint handle actual errors
         }
     }
 }

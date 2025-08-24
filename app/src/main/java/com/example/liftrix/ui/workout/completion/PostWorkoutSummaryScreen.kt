@@ -96,6 +96,7 @@ fun PostWorkoutSummaryScreen(
                     item {
                         HeroSummaryCard(
                             workoutName = state.workoutName,
+                            workoutDate = state.workoutDate,
                             duration = state.duration,
                             imageUrl = state.workoutImageUrl,
                             modifier = Modifier.fillMaxWidth()
@@ -211,6 +212,7 @@ fun PostWorkoutSummaryScreen(
 @Composable
 private fun HeroSummaryCard(
     workoutName: String,
+    workoutDate: java.time.LocalDate,
     duration: Duration,
     imageUrl: String?,
     modifier: Modifier = Modifier
@@ -293,7 +295,7 @@ private fun HeroSummaryCard(
                             )
                             Text(
                                 text = DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT)
-                                    .format(java.time.LocalDate.now()),
+                                    .format(workoutDate),
                                 color = Color.White.copy(alpha = 0.9f),
                                 fontSize = 13.sp
                             )
@@ -876,7 +878,6 @@ private fun formatDuration(duration: Duration): String {
     }
 }
 
-// Data classes for UI state
 data class PersonalRecord(
     val exerciseName: String,
     val type: String,

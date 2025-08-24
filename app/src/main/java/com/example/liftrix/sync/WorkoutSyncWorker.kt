@@ -22,6 +22,7 @@ import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.FieldValue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.flow.first
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
 import java.time.Instant
@@ -77,6 +78,9 @@ class WorkoutSyncWorker @AssistedInject constructor(
             // Check cancellation before starting
             checkCancellation()
             
+            val syncStartTime = System.currentTimeMillis()
+            Timber.d("[SYNC-CONFLICT] WorkoutSync started for user $userId at $syncStartTime")
+            
             // Validate authentication before sync operations
             val currentUser = auth.currentUser
             if (currentUser == null || currentUser.uid != userId) {
@@ -88,13 +92,48 @@ class WorkoutSyncWorker @AssistedInject constructor(
                 )
             }
             
+            val authDisplayName = currentUser.displayName
             Timber.d("WorkoutSyncWorker: Authentication validated for user $userId")
+
+            // 🔍 ENHANCED DEBUGGING: Check database state before sync
+            val totalWorkoutCount = workoutDao.getWorkoutCountForUser(userId)
+            val unsyncedCount = workoutDao.getUnsyncedCountForUser(userId)
+            val syncedCount = workoutDao.getSyncedCountForUser(userId)
+            
+            Timber.d("[SYNC-DEBUG] Database state for user $userId:")
+            Timber.d("[SYNC-DEBUG]   - Total workouts: $totalWorkoutCount")
+            Timber.d("[SYNC-DEBUG]   - Unsynced workouts: $unsyncedCount") 
+            Timber.d("[SYNC-DEBUG]   - Synced workouts: $syncedCount")
+            
+            // 🔍 Get sample workout data to verify user ID matching
+            if (totalWorkoutCount > 0) {
+                try {
+                    val allWorkoutsFlow = workoutDao.getAllWorkoutsForUser(userId)
+                    val sampleWorkouts = allWorkoutsFlow.first().take(3)
+                    Timber.d("[SYNC-DEBUG] Sample workouts for user verification:")
+                    sampleWorkouts.forEachIndexed { index, workout ->
+                        Timber.d("[SYNC-DEBUG]   Sample[$index]: id=${workout.id.take(8)}..., userId=${workout.userId}, name=${workout.name}, synced=${workout.isSynced}, status=${workout.status}")
+                    }
+                } catch (e: Exception) {
+                    Timber.w("[SYNC-DEBUG] Failed to get sample workouts: ${e.message}")
+                }
+            }
 
             // Get unsynced workouts for this specific user
             val unsyncedWorkouts = workoutDao.getUnsyncedWorkoutsForUser(userId)
             
             if (unsyncedWorkouts.isEmpty()) {
-                Timber.d("No unsynced workouts found for user $userId")
+                val syncEndTime = System.currentTimeMillis()
+                Timber.d("[SYNC-CONFLICT] WorkoutSync completed (no workouts) for user $userId in ${syncEndTime - syncStartTime}ms")
+                Timber.d("[SYNC-DEBUG] No unsynced workouts found for user $userId")
+                
+                // 🔍 Additional debugging when no unsynced workouts found
+                if (totalWorkoutCount > 0) {
+                    Timber.w("[SYNC-DEBUG] WARNING: User has $totalWorkoutCount total workouts but 0 unsynced - all workouts already synced?")
+                } else {
+                    Timber.w("[SYNC-DEBUG] WARNING: User has no workouts at all in database")
+                }
+                
                 return Result.success(
                     Data.Builder()
                         .putInt(KEY_SYNC_COUNT, 0)
@@ -152,7 +191,6 @@ class WorkoutSyncWorker @AssistedInject constructor(
                         }
                         
                         if (dataToSync != null) {
-                            // Parse exercises JSON to list for security rule validation
                             val exercisesList = try {
                                 if (workout.exercisesJson.isNullOrBlank()) {
                                     emptyList<ExerciseDto>()
@@ -160,11 +198,9 @@ class WorkoutSyncWorker @AssistedInject constructor(
                                     // Handle both wrapped and unwrapped formats
                                     val json = Json { ignoreUnknownKeys = true }
                                     try {
-                                        // First try the wrapped format (new enhanced format)
                                         val wrapper = json.decodeFromString<LegacyExerciseWrapper>(workout.exercisesJson)
                                         wrapper.exercises
                                     } catch (e: Exception) {
-                                        // Fallback to direct list format (legacy)
                                         json.decodeFromString<List<ExerciseDto>>(workout.exercisesJson)
                                     }
                                 }
@@ -173,7 +209,6 @@ class WorkoutSyncWorker @AssistedInject constructor(
                                 emptyList<ExerciseDto>()
                             }
                             
-                            // Convert ExerciseDto to Map for Firestore
                             val exercisesForFirestore = exercisesList.map { exercise ->
                                 mapOf(
                                     "id" to exercise.id,
@@ -207,7 +242,6 @@ class WorkoutSyncWorker @AssistedInject constructor(
                                 "notes" to workout.notes,
                                 "templateId" to workout.templateId,
                                 "createdAt" to Timestamp(workout.createdAt),
-                                // Required sync metadata fields for security rules
                                 "syncVersion" to System.currentTimeMillis(),
                                 "lastModified" to Timestamp.now(),
                                 "isSynced" to true,
@@ -242,6 +276,18 @@ class WorkoutSyncWorker @AssistedInject constructor(
                     Timber.e(e, "Batch sync failed for ${batch.size} workouts")
                     failureCount += batch.size
                 }
+            }
+            
+            val syncEndTime = System.currentTimeMillis()
+            val syncDuration = syncEndTime - syncStartTime
+            
+            val finalAuthUser = auth.currentUser
+            val finalAuthDisplayName = finalAuthUser?.displayName
+            
+            if (finalAuthUser?.uid != userId) {
+                Timber.e("[SYNC-CONFLICT] Auth changed during workout sync: userId=$userId vs finalAuth=${finalAuthUser?.uid}")
+            } else if (finalAuthDisplayName != authDisplayName) {
+                Timber.w("[SYNC-CONFLICT] Display name changed during workout sync: '$authDisplayName' -> '$finalAuthDisplayName'")
             }
             
             Timber.d("Workout sync complete - Success: $successCount, Failed: $failureCount")

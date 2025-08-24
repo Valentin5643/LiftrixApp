@@ -100,8 +100,7 @@ fun AdaptiveWidgetGrid(
         maxColumns = maxColumns
     )
     
-    // Use 12dp spacing as specified in SPEC-20250205 (FR-002, line 154)
-    val spacing = 12.dp // Consistent 12dp spacing across all breakpoints per specification
+    val spacing = 12.dp
     
     val contentPadding = calculateResponsivePadding(windowSizeClass)
     
@@ -163,7 +162,7 @@ private fun FixedWidgetGrid(
             .fillMaxWidth()
             .heightIn(max = 800.dp),
         contentPadding = contentPadding,
-        // Use Start arrangement to ensure odd widgets are left-aligned (SPEC FR-004)
+        // Use Start arrangement to ensure odd widgets are left-aligned
         horizontalArrangement = Arrangement.spacedBy(spacing, Alignment.Start),
         verticalArrangement = Arrangement.spacedBy(spacing)
     ) {
@@ -172,7 +171,7 @@ private fun FixedWidgetGrid(
             key = { index -> widgets[index].id },
             span = { index ->
                 val widget = widgets[index]
-                // CHARTS category widgets should span full width (FR-003)
+                // CHARTS category widgets should span full width
                 if (widget.category == com.example.liftrix.domain.model.analytics.WidgetCategory.CHARTS) {
                     androidx.compose.foundation.lazy.grid.GridItemSpan(columns)
                 } else {
@@ -271,8 +270,7 @@ fun AdaptiveWidgetGridWithMinWidth(
         else -> minOf(minColumnWidth, windowSizeClass.recommendedMinWidgetWidth) // Expanded
     }
     
-    // Use 12dp spacing as specified in SPEC-20250205 (FR-002, line 154)
-    val spacing = 12.dp // Consistent 12dp spacing across all breakpoints per specification
+    val spacing = 12.dp
     
     val contentPadding = calculateResponsivePadding(windowSizeClass)
     
@@ -282,7 +280,7 @@ fun AdaptiveWidgetGridWithMinWidth(
             .fillMaxWidth()
             .heightIn(max = 800.dp),
         contentPadding = contentPadding,
-        // Use Start arrangement to ensure odd widgets are left-aligned (SPEC FR-004)
+        // Use Start arrangement to ensure odd widgets are left-aligned
         horizontalArrangement = Arrangement.spacedBy(spacing, Alignment.Start),
         verticalArrangement = Arrangement.spacedBy(spacing)
     ) {
@@ -291,7 +289,7 @@ fun AdaptiveWidgetGridWithMinWidth(
             key = { index -> widgets[index].id },
             span = { index ->
                 val widget = widgets[index]
-                // CHARTS category widgets should span full width (FR-003)
+                // CHARTS category widgets should span full width
                 if (widget.category == com.example.liftrix.domain.model.analytics.WidgetCategory.CHARTS) {
                     androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan)
                 } else {

@@ -59,7 +59,6 @@ class AddExerciseToWorkoutUseCase @Inject constructor(
     ) {
         Timber.d("🔥 ADD-EXERCISE-DEBUG: Adding exercise $exerciseLibraryId to workout ${workoutId.value}")
         
-        // Get current user ID for security
         val userId = getCurrentUserIdUseCase()
         if (userId.isNullOrBlank()) {
             throw IllegalStateException("User not authenticated")
@@ -70,7 +69,6 @@ class AddExerciseToWorkoutUseCase @Inject constructor(
             throw IllegalArgumentException("Initial sets must be between 1 and 10")
         }
         
-        // Get the existing workout
         val workoutResult = workoutRepository.getWorkoutById(workoutId, userId)
         val existingWorkout = workoutResult.fold(
             onSuccess = { workout ->
@@ -81,7 +79,6 @@ class AddExerciseToWorkoutUseCase @Inject constructor(
             }
         )
         
-        // Check if exercise already exists in workout
         val existingExercise = existingWorkout.exercises.find { 
             it.libraryExercise.id == exerciseLibraryId 
         }
@@ -89,7 +86,6 @@ class AddExerciseToWorkoutUseCase @Inject constructor(
             throw IllegalArgumentException("Exercise already exists in this workout")
         }
         
-        // Get exercise from library
         val exercisesResult = exerciseRepository.getAllExercises().first()
         val allExercises = exercisesResult.fold(
             onSuccess = { it },

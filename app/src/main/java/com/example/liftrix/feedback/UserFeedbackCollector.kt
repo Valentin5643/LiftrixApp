@@ -468,7 +468,6 @@ class UserFeedbackCollector @Inject constructor(
     }
 }
 
-// Data classes and enums
 
 sealed class FeedbackCollectionState {
     object Inactive : FeedbackCollectionState()

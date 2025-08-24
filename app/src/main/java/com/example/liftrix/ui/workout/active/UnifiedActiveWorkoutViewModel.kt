@@ -810,7 +810,6 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                 
                 Timber.d("Updating template: $templateId with new exercises")
                 
-                // Get the original template
                 val templateResult = workoutTemplateRepository.getTemplateById(
                     WorkoutTemplateId.fromString(templateId),
                     userId
@@ -837,7 +836,6 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                                 )
                             }
                             
-                            // Update the template with new exercises
                             val updatedTemplate = originalTemplate.copy(
                                 exercises = updatedTemplateExercises,
                                 updatedAt = java.time.Instant.now()
@@ -934,7 +932,6 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
         // If session wasn't started from a template, can't have exercises added beyond template
         val templateId = session.templateId ?: return false
         
-        // Get the original template to compare with
         // For now, we'll use a simple heuristic based on exercise count and IDs
         // This could be enhanced to store original template data in session metadata
         

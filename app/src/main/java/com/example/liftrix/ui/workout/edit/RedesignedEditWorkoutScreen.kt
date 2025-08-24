@@ -42,6 +42,7 @@ fun RedesignedEditWorkoutScreen(
     onNavigateBack: () -> Unit,
     onNavigateToExerciseSelection: () -> Unit = {},
     onNavigateToExerciseSelectionWithReplacement: (Int) -> Unit = {},
+    onNavigateToPostCreation: (String) -> Unit = {},
     viewModel: EditWorkoutViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -56,6 +57,7 @@ fun RedesignedEditWorkoutScreen(
         viewModel.events.collect { event ->
             when (event) {
                 is EditWorkoutEvent.NavigateBack -> onNavigateBack()
+                is EditWorkoutEvent.NavigateToPostCreation -> onNavigateToPostCreation(event.workoutId)
                 else -> {}
             }
         }

@@ -126,7 +126,6 @@ fun RedesignedExerciseCard(
         
         Spacer(modifier = Modifier.height(16.dp))
         
-        // Set headers
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Start
@@ -175,7 +174,7 @@ fun RedesignedExerciseCard(
         
         Spacer(modifier = Modifier.height(12.dp))
         
-        // Set rows with stable keys to prevent index confusion during recomposition
+        // Stable keys prevent index confusion during recomposition
         sets.forEachIndexed { index, set ->
             // Use stable key based on setId to prevent Compose state confusion
             key(set.setId) {
@@ -296,7 +295,6 @@ private fun RedesignedSetRow(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Set number
         Text(
             text = "$setNumber",
             style = TextStyle(
@@ -334,7 +332,6 @@ private fun RedesignedSetRow(
         RedesignedInputField(
             value = setData.weight,
             onValueChange = { newValue ->
-                // Check for anomaly
                 var hasAnomaly = false
                 if (newValue.isNotEmpty() && newValue.toDoubleOrNull() != null) {
                     val weightValue = newValue.toDouble()
@@ -365,7 +362,6 @@ private fun RedesignedSetRow(
         RedesignedInputField(
             value = setData.reps,
             onValueChange = { newValue ->
-                // Check for reps anomaly
                 var hasAnomaly = false
                 if (newValue.isNotEmpty() && newValue.toIntOrNull() != null) {
                     val repsValue = newValue.toInt()

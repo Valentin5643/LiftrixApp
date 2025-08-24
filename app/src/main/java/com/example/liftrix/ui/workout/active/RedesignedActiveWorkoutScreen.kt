@@ -528,7 +528,6 @@ private fun ActiveWorkoutContent(
                     anomalyDetails = null
                 },
                 onCorrect = { correctedValue ->
-                    // Update the corrected value in the exercise
                     val exercise = session.exercises.find { it.exerciseId.value == anomalyExerciseId }
                     if (exercise != null && anomalySetIndex < exercise.sets.size) {
                         val set = exercise.sets[anomalySetIndex]

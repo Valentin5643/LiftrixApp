@@ -11,7 +11,7 @@ import org.junit.Assert.*
 /**
  * Unit tests for AdaptiveWidgetGrid component.
  * 
- * Tests the implementation of SPEC-20250205-progress-tab-ui-redesign:
+ * Tests the responsive grid implementation:
  * - 2-column grid on mobile (<600dp)
  * - 3-column grid on tablet (600-767dp)  
  * - 4-column grid on desktop (≥768dp)
@@ -36,7 +36,7 @@ class AdaptiveWidgetGridTest {
             maxColumns = 4
         )
         
-        assertEquals("Mobile should have 2 columns per SPEC-20250205", 2, columns)
+        assertEquals("Mobile should have 2 columns", 2, columns)
     }
     
     @Test
@@ -55,7 +55,7 @@ class AdaptiveWidgetGridTest {
             maxColumns = 4
         )
         
-        assertEquals("Tablet should have 3 columns per SPEC-20250205", 3, columns)
+        assertEquals("Tablet should have 3 columns", 3, columns)
     }
     
     @Test
@@ -74,7 +74,7 @@ class AdaptiveWidgetGridTest {
             maxColumns = 4
         )
         
-        assertEquals("Desktop should have 4 columns per SPEC-20250205", 4, columns)
+        assertEquals("Desktop should have 4 columns", 4, columns)
     }
     
     @Test
@@ -147,7 +147,7 @@ class AdaptiveWidgetGridTest {
     
     @Test
     fun `breakpoint values match specification`() {
-        // Test exact breakpoint values from SPEC-20250205
+        // Test exact breakpoint values
         assertTrue("400dp should be mobile", 400.dp < 600.dp)
         assertTrue("600dp should be tablet", 600.dp >= 600.dp && 600.dp < 768.dp)
         assertTrue("768dp should be desktop", 768.dp >= 768.dp)

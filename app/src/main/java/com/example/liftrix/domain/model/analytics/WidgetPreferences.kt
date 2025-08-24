@@ -71,31 +71,29 @@ data class WidgetPreferences(
         
         /**
          * Get default visible widgets for first-time users
-         * Note: Removed widgets that exist in Progress Summary:
-         * - TotalVolume
-         * - WorkoutFrequency
-         * - WorkoutStreak
-         * - AverageDuration
+         * Note: Updated to use consolidated widgets
+         * - Removed deprecated widgets: VolumeChart, StrengthProgress, PersonalRecords, OneRMProgression
+         * - Added consolidated widgets: StrengthAnalytics, VolumeAnalytics
          */
         private fun getDefaultVisibleWidgets(): Set<String> {
             return setOf(
-                AnalyticsWidget.VolumeChart.id,
-                AnalyticsWidget.StrengthProgress.id,
-                AnalyticsWidget.PersonalRecords.id,
-                AnalyticsWidget.OneRMProgression.id
+                AnalyticsWidget.StrengthAnalytics.id,
+                AnalyticsWidget.VolumeAnalytics.id,
+                AnalyticsWidget.FrequencyChart.id,
+                AnalyticsWidget.MuscleGroupDistribution.id
             )
         }
         
         /**
          * Get default widget order for consistent layout
-         * Note: Updated to exclude widgets shown in Progress Summary
+         * Note: Updated to use consolidated widgets with priority ordering
          */
         private fun getDefaultWidgetOrder(): List<String> {
             return listOf(
-                AnalyticsWidget.VolumeChart.id,
-                AnalyticsWidget.StrengthProgress.id,
-                AnalyticsWidget.PersonalRecords.id,
-                AnalyticsWidget.OneRMProgression.id
+                AnalyticsWidget.StrengthAnalytics.id,
+                AnalyticsWidget.VolumeAnalytics.id,
+                AnalyticsWidget.FrequencyChart.id,
+                AnalyticsWidget.MuscleGroupDistribution.id
             )
         }
         

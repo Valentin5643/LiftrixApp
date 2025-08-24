@@ -117,11 +117,22 @@ class WorkoutRepositoryImpl @Inject constructor(
             }
         ) {
             val entity = workoutMapper.toEntity(workout, isSynced = false)
+            
+            // 🔍 SYNC-DEBUG: Log workout creation details
+            Timber.d("[WORKOUT-CREATE-DEBUG] Creating workout for sync debugging:")
+            Timber.d("[WORKOUT-CREATE-DEBUG]   - Workout ID: ${workout.id.value}")
+            Timber.d("[WORKOUT-CREATE-DEBUG]   - User ID: ${workout.userId}")
+            Timber.d("[WORKOUT-CREATE-DEBUG]   - Name: ${workout.name}")
+            Timber.d("[WORKOUT-CREATE-DEBUG]   - Status: ${workout.status}")
+            Timber.d("[WORKOUT-CREATE-DEBUG]   - Entity isSynced: ${entity.isSynced}")
+            Timber.d("[WORKOUT-CREATE-DEBUG]   - Entity syncVersion: ${entity.syncVersion}")
+            
             val insertedId = workoutDao.insertWorkout(entity)
             
             // 🔥 CRITICAL FIX: For string primary keys, insertWorkout returns row count, not the ID
             
             if (insertedId > 0) {
+                Timber.d("[WORKOUT-CREATE-DEBUG] Successfully inserted workout with row count: $insertedId")
                 // 🔥 CRITICAL FIX: The workout ID is the original UUID string, not the insert return value
                 
                 // 🔥 NEW: Create ExerciseEntity and ExerciseSetEntity records for analytics queries
@@ -178,9 +189,17 @@ class WorkoutRepositoryImpl @Inject constructor(
                 // Verify the workout can be retrieved immediately
                 val verifyEntity = workoutDao.getWorkoutByIdForUser(workout.id.value, workout.userId)
                 if (verifyEntity == null) {
+                    Timber.e("[WORKOUT-CREATE-DEBUG] CRITICAL: Cannot retrieve workout immediately after insert!")
+                } else {
+                    Timber.d("[WORKOUT-CREATE-DEBUG] Verification successful - workout retrieved with:")
+                    Timber.d("[WORKOUT-CREATE-DEBUG]   - ID: ${verifyEntity.id}")
+                    Timber.d("[WORKOUT-CREATE-DEBUG]   - User ID: ${verifyEntity.userId}")
+                    Timber.d("[WORKOUT-CREATE-DEBUG]   - Is Synced: ${verifyEntity.isSynced}")
+                    Timber.d("[WORKOUT-CREATE-DEBUG]   - Sync Version: ${verifyEntity.syncVersion}")
                 }
                 
                 // Queue workout for sync after successful creation
+                Timber.d("[WORKOUT-CREATE-DEBUG] Queueing workout for sync...")
                 queueWorkoutForSync(workout)
                 
                 workout // Return original workout with preserved ID
@@ -1410,6 +1429,11 @@ class WorkoutRepositoryImpl @Inject constructor(
             // Create type-safe payload
             val payload = SyncPayloadFactory.createWorkoutPayload(workoutSyncDto)
             
+            Timber.d("[WORKOUT-SYNC-QUEUE-DEBUG] Queueing workout for sync:")
+            Timber.d("[WORKOUT-SYNC-QUEUE-DEBUG]   - Workout ID: ${workout.id.value}")
+            Timber.d("[WORKOUT-SYNC-QUEUE-DEBUG]   - User ID: ${workout.userId}")
+            Timber.d("[WORKOUT-SYNC-QUEUE-DEBUG]   - Sync DTO isSynced: ${workoutSyncDto.isSynced}")
+            
             offlineQueueManager.queueOperation(
                 userId = workout.userId,
                 entityType = "WORKOUT",
@@ -1418,16 +1442,21 @@ class WorkoutRepositoryImpl @Inject constructor(
                 data = payload
             )
             
+            Timber.d("[WORKOUT-SYNC-QUEUE-DEBUG] Successfully queued workout operation in offline queue")
+            
             // Trigger sync coordinator for background sync
             CoroutineScope(Dispatchers.IO).launch {
-                syncCoordinator.triggerEntitySync(workout.userId, "workout")
+                Timber.d("[WORKOUT-SYNC-QUEUE-DEBUG] Triggering immediate sync via coordinator...")
+                val syncResult = syncCoordinator.triggerEntitySync(workout.userId, "workout")
+                Timber.d("[WORKOUT-SYNC-QUEUE-DEBUG] Sync trigger result: ${if (syncResult.isSuccess) "SUCCESS" else "FAILURE"}")
                 
                 // 🚀 CRITICAL FIX: Also trigger public profile sync to update workout count
                 // This ensures that when users create/complete workouts, their workout stats become visible to other users
-                syncCoordinator.triggerEntitySync(workout.userId, "user_public")
+                val profileSyncResult = syncCoordinator.triggerEntitySync(workout.userId, "user_public")
+                Timber.d("[WORKOUT-SYNC-QUEUE-DEBUG] Profile sync trigger result: ${if (profileSyncResult.isSuccess) "SUCCESS" else "FAILURE"}")
             }
             
-            Timber.d("Queued workout ${workout.id.value} for sync and triggered public profile update")
+            Timber.d("[WORKOUT-SYNC-QUEUE-DEBUG] Queued workout ${workout.id.value} for sync and triggered public profile update")
         } catch (e: Exception) {
             Timber.e(e, "Failed to queue workout ${workout.id.value} for sync")
             // Don't fail the entire operation for sync queueing failure

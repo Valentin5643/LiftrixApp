@@ -52,9 +52,10 @@ fun WidgetPreviewGrid(
         return
     }
     
-    // Calculate grid columns based on layout mode
+    // Calculate grid columns based on layout mode and screen size context
+    // For AUTO mode, we need to simulate mobile behavior (1 column per row)
     val columns = when (layoutMode) {
-        DashboardLayoutMode.AUTO -> 3
+        DashboardLayoutMode.AUTO -> 1  // Simulate mobile single-column layout for AUTO mode
         DashboardLayoutMode.CUSTOM -> 3
         DashboardLayoutMode.GRID -> 3
         DashboardLayoutMode.SECTIONS -> 2
@@ -97,12 +98,20 @@ private fun PreviewWidgetCard(
     layoutMode: DashboardLayoutMode,
     onClick: (() -> Unit)? = null
 ) {
-    // Calculate card height based on layout mode
+    // Calculate card height based on layout mode and column count
+    val columns = when (layoutMode) {
+        DashboardLayoutMode.AUTO -> 3
+        DashboardLayoutMode.CUSTOM -> 3
+        DashboardLayoutMode.GRID -> 3
+        DashboardLayoutMode.SECTIONS -> 2
+    }
+    
+    // Use dynamic height calculation based on aspect ratio for single-column scenarios
     val cardHeight = when (layoutMode) {
-        DashboardLayoutMode.AUTO -> 80.dp
-        DashboardLayoutMode.CUSTOM -> 85.dp
-        DashboardLayoutMode.GRID -> 80.dp
-        DashboardLayoutMode.SECTIONS -> 90.dp
+        DashboardLayoutMode.AUTO -> if (columns == 1) 90.dp else 80.dp  // Rectangular for single column
+        DashboardLayoutMode.CUSTOM -> if (columns == 1) 95.dp else 85.dp
+        DashboardLayoutMode.GRID -> if (columns == 1) 90.dp else 80.dp
+        DashboardLayoutMode.SECTIONS -> if (columns == 1) 100.dp else 90.dp  // More space for sectioned single-column
     }
     
     val stableOnClick = remember(onClick) { onClick }
@@ -383,35 +392,29 @@ private fun PreviewEmptyState(
  */
 private fun AnalyticsWidget.getPreviewIcon(): ImageVector {
     return when (this) {
+        // Consolidated widgets
+        AnalyticsWidget.StrengthAnalytics -> Icons.Default.FitnessCenter
+        AnalyticsWidget.VolumeAnalytics -> Icons.Default.Analytics
+        
+        // Active widgets
+        AnalyticsWidget.FrequencyChart -> Icons.Default.BarChart
+        AnalyticsWidget.ProgressChart -> Icons.Default.TrendingUp
+        AnalyticsWidget.MuscleGroupDistribution -> Icons.Default.DonutLarge
+        AnalyticsWidget.RecoveryMetrics -> Icons.Default.SelfImprovement
+        AnalyticsWidget.MonthlySummary -> Icons.Default.CalendarMonth
+        
+        // Hidden/deprecated widgets
         AnalyticsWidget.WorkoutFrequency -> Icons.Default.Timeline
         AnalyticsWidget.TotalVolume -> Icons.Default.FitnessCenter
         AnalyticsWidget.VolumeCalendar -> Icons.Default.CalendarMonth
         AnalyticsWidget.StrengthProgress -> Icons.Default.TrendingUp
-        // ConsistencyStreak renamed to WorkoutStreak
         AnalyticsWidget.VolumeChart -> Icons.Default.BarChart
-        // DurationChart renamed to ProgressChart
-        AnalyticsWidget.FrequencyChart -> Icons.Default.Analytics
         AnalyticsWidget.WorkoutStreak -> Icons.Default.LocalFireDepartment
         AnalyticsWidget.PersonalRecords -> Icons.Default.EmojiEvents
         AnalyticsWidget.VolumeTrends -> Icons.Default.Analytics
-        AnalyticsWidget.RecoveryMetrics -> Icons.Default.Healing
-        // PerformanceAnalysis renamed to MonthlySummary
-        // CaloriesBurned widget removed
-        // DailyCalories widget removed
-        // WeeklyCalorieTrend widget removed
         AnalyticsWidget.AverageDuration -> Icons.Default.Timer
         AnalyticsWidget.VolumeLoadProgression -> Icons.Default.ShowChart
-        AnalyticsWidget.ProgressChart -> Icons.Default.BarChart
         AnalyticsWidget.OneRMProgression -> Icons.Default.Equalizer
-        // WeeklyTrends renamed to VolumeTrends
-        AnalyticsWidget.MuscleGroupDistribution -> Icons.Default.Category
-        // RecoveryPatterns renamed to RecoveryMetrics
-        // TrainingIntensity widget removed
-        // ExerciseVariety widget removed
-        // TimeOfDayAnalysis widget removed
-        // SetCompletionRate widget removed
-        AnalyticsWidget.MonthlySummary -> Icons.Default.CalendarViewMonth
-        // GoalAchievement widget removed
     }
 }
 
@@ -420,35 +423,29 @@ private fun AnalyticsWidget.getPreviewIcon(): ImageVector {
  */
 private fun generatePreviewData(widget: AnalyticsWidget): String {
     return when (widget) {
+        // Consolidated widgets
+        AnalyticsWidget.StrengthAnalytics -> "PRs & 1RM"
+        AnalyticsWidget.VolumeAnalytics -> "Trending ↗"
+        
+        // Active widgets
+        AnalyticsWidget.FrequencyChart -> "Weekly view"
+        AnalyticsWidget.ProgressChart -> "All-time"
+        AnalyticsWidget.MuscleGroupDistribution -> "Balanced"
+        AnalyticsWidget.RecoveryMetrics -> "Good"
+        AnalyticsWidget.MonthlySummary -> "Jan 2025"
+        
+        // Hidden/deprecated widgets
         AnalyticsWidget.WorkoutFrequency -> "4.2/week"
         AnalyticsWidget.TotalVolume -> "12.5K lbs"
         AnalyticsWidget.VolumeCalendar -> "Jan 2025"
         AnalyticsWidget.StrengthProgress -> "+8.2%"
-        // ConsistencyStreak renamed to WorkoutStreak
         AnalyticsWidget.VolumeChart -> "Trending ↗"
-        // DurationChart renamed to ProgressChart
-        AnalyticsWidget.FrequencyChart -> "Weekly view"
         AnalyticsWidget.WorkoutStreak -> "7 days"
         AnalyticsWidget.PersonalRecords -> "3 new PRs"
         AnalyticsWidget.VolumeTrends -> "↗ +15%"
-        AnalyticsWidget.RecoveryMetrics -> "Good"
-        // PerformanceAnalysis renamed to MonthlySummary
-        // CaloriesBurned widget removed
-        // DailyCalories widget removed
-        // WeeklyCalorieTrend widget removed
         AnalyticsWidget.AverageDuration -> "42 min"
         AnalyticsWidget.VolumeLoadProgression -> "Progressive"
-        AnalyticsWidget.ProgressChart -> "All-time"
         AnalyticsWidget.OneRMProgression -> "225 lbs"
-        // WeeklyTrends renamed to VolumeTrends
-        AnalyticsWidget.MuscleGroupDistribution -> "Balanced"
-        // RecoveryPatterns renamed to RecoveryMetrics
-        // TrainingIntensity widget removed
-        // ExerciseVariety widget removed
-        // TimeOfDayAnalysis widget removed
-        // SetCompletionRate widget removed
-        AnalyticsWidget.MonthlySummary -> "Jan recap"
-        // GoalAchievement widget removed
     }
 }
 

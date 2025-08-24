@@ -315,7 +315,6 @@ private fun WorkoutContent(
         }
     }
     
-    // Create Folder Dialog
     CreateFolderDialog(
         show = showCreateFolderDialog,
         onDismiss = { showCreateFolderDialog = false },
@@ -324,7 +323,6 @@ private fun WorkoutContent(
         }
     )
     
-    // Folder Edit Dialog
     FolderEditDialog(
         show = showEditFolderDialog,
         folder = selectedFolderForEdit,
@@ -504,7 +502,6 @@ private fun QuickActionsCard(
                 )
             }
             
-            // Create New Workout button - primary filled style
             FilledTonalButton(
                 onClick = { onCreateWorkout(null) },
                 modifier = Modifier

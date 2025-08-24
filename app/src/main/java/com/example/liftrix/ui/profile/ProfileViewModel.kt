@@ -16,6 +16,7 @@ import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.domain.usecase.common.ErrorHandler
+import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -65,6 +66,7 @@ class ProfileViewModel @Inject constructor(
     private val uploadProfileImageUseCase: UploadProfileImageUseCase,
     private val deleteProfileImageUseCase: DeleteProfileImageUseCase,
     private val profileRepository: ProfileRepository,
+    private val auth: FirebaseAuth,
     errorHandler: ErrorHandler
 ) : BaseViewModel<ProfileUiState, ProfileEvent>(
     errorHandler = errorHandler
@@ -76,6 +78,7 @@ class ProfileViewModel @Inject constructor(
     ))
     
     // Current user ID flow with enhanced error handling and cold-start resilience
+    // 🔍 FORENSIC MONITORING - Track userId flow emissions during profile changes
     private val currentUserId = flow {
         var retryCount = 0
         val maxRetries = 3
@@ -84,6 +87,7 @@ class ProfileViewModel @Inject constructor(
             try {
                 val userId = getCurrentUserIdUseCase()
                 if (userId != null) {
+                    Timber.d("[VIEWMODEL-STATE] currentUserId flow emitted: $userId (attempt ${retryCount + 1})")
                     emit(userId)
                     return@flow
                 } else if (retryCount < maxRetries) {
@@ -103,6 +107,7 @@ class ProfileViewModel @Inject constructor(
         }
         
         // Final attempt failed
+        Timber.e("[VIEWMODEL-STATE] ⚠️  currentUserId flow failed after $maxRetries attempts - emitting null")
         emit(null)
     }.stateIn(
         scope = viewModelScope,
@@ -227,6 +232,11 @@ class ProfileViewModel @Inject constructor(
                 profileLoadingState,
                 achievementsFlow
             ) { userId, profileDataState, achievements ->
+                // 🔍 FORENSIC MONITORING - Track UI state updates during profile operations
+                Timber.d("[VIEWMODEL-STATE] UI state update triggered:")
+                Timber.d("[VIEWMODEL-STATE] - userId: $userId")
+                Timber.d("[VIEWMODEL-STATE] - profileDataState: ${profileDataState.javaClass.simpleName}")
+                Timber.d("[VIEWMODEL-STATE] - achievements count: ${achievements.size}")
                 updateState { currentState ->
                     val profileState = when (profileDataState) {
                         is ProfileDataState.Loading -> ProfileLoadingState.Loading
@@ -238,6 +248,16 @@ class ProfileViewModel @Inject constructor(
                     
                     val shouldShowLoading = profileDataState is ProfileDataState.Loading || 
                                           profileDataState is ProfileDataState.NoAuth
+                    
+                    // 🚨 CRITICAL CHECK - Detect unexpected userId changes
+                    val previousUserId = currentState.userId
+                    if (previousUserId != null && userId != null && previousUserId != userId) {
+                        Timber.e("[VIEWMODEL-STATE] ⚠️  USER ID CHANGED UNEXPECTEDLY: $previousUserId -> $userId")
+                        Timber.e("[VIEWMODEL-STATE] This could cause data to appear missing!")
+                    } else if (previousUserId != null && userId == null) {
+                        Timber.e("[VIEWMODEL-STATE] ⚠️  USER ID BECAME NULL: $previousUserId -> null")
+                        Timber.e("[VIEWMODEL-STATE] User appears to have been logged out during profile operation!")
+                    }
                     
                     currentState.copy(
                         userId = userId,
@@ -635,6 +655,39 @@ class ProfileViewModel @Inject constructor(
                     return@launch
                 }
                 
+                // 🔍 FORENSIC LOGGING - Authentication State During Profile Update
+                val authUid = auth.currentUser?.uid
+                val authDisplayName = auth.currentUser?.displayName
+                val authEmail = auth.currentUser?.email
+                Timber.d("[DATA-INTEGRITY] Profile save initiated:")
+                Timber.d("[DATA-INTEGRITY] - userId from flow: $userId")
+                Timber.d("[DATA-INTEGRITY] - auth.currentUser.uid: $authUid")
+                Timber.d("[DATA-INTEGRITY] - auth.currentUser.displayName: $authDisplayName")
+                Timber.d("[DATA-INTEGRITY] - auth.currentUser.email: $authEmail")
+                Timber.d("[DATA-INTEGRITY] - profile.userId: ${profile.userId}")
+                Timber.d("[DATA-INTEGRITY] - profile.displayName: ${profile.displayName}")
+                
+                // 🚨 CRITICAL CHECK - Verify auth consistency
+                if (userId != authUid) {
+                    Timber.e("[DATA-INTEGRITY] ⚠️  AUTH MISMATCH DETECTED: userId=$userId vs authUid=$authUid")
+                    updateState { 
+                        it.copy(
+                            error = ProfileError.Authentication("Authentication state inconsistent. Please sign out and back in.")
+                        )
+                    }
+                    return@launch
+                }
+                
+                if (profile.userId != userId) {
+                    Timber.e("[DATA-INTEGRITY] ⚠️  PROFILE USERID MISMATCH: profile.userId=${profile.userId} vs currentUserId=$userId")
+                    updateState { 
+                        it.copy(
+                            error = ProfileError.ValidationError("Profile user ID mismatch. Please refresh and try again.")
+                        )
+                    }
+                    return@launch
+                }
+                
                 updateState { 
                     it.copy(
                         isLoading = true,
@@ -643,11 +696,29 @@ class ProfileViewModel @Inject constructor(
                     )
                 }
                 
-                Timber.d("Saving profile for user: $userId")
+                Timber.d("[DATA-INTEGRITY] Saving profile for user: $userId - all checks passed")
                 
                 val result = saveUserProfileUseCase(profile)
                 
                 if (result.isSuccess) {
+                    // 🔍 FORENSIC LOGGING - Verify auth state after save
+                    val postSaveAuthUid = auth.currentUser?.uid
+                    val postSaveAuthDisplayName = auth.currentUser?.displayName
+                    Timber.d("[DATA-INTEGRITY] Profile save successful:")
+                    Timber.d("[DATA-INTEGRITY] - post-save auth.uid: $postSaveAuthUid")
+                    Timber.d("[DATA-INTEGRITY] - post-save auth.displayName: $postSaveAuthDisplayName")
+                    
+                    if (postSaveAuthUid != userId) {
+                        Timber.e("[DATA-INTEGRITY] ⚠️  AUTH STATE CHANGED DURING SAVE: $userId -> $postSaveAuthUid")
+                        updateState { 
+                            it.copy(
+                                isLoading = false,
+                                error = ProfileError.Authentication("Authentication changed during save. Data may be inconsistent.")
+                            )
+                        }
+                        return@launch
+                    }
+                    
                     updateState { currentState ->
                         currentState.copy(
                             isLoading = false,
@@ -656,7 +727,7 @@ class ProfileViewModel @Inject constructor(
                             lastOperation = null
                         )
                     }
-                    Timber.i("Profile save successful for user: $userId")
+                    Timber.i("[DATA-INTEGRITY] Profile save successful for user: $userId - auth state stable")
                     
                     // Refresh achievements after profile save
                     refreshAchievements()
