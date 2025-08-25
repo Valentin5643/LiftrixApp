@@ -73,35 +73,17 @@ data class WorkoutAnomaly(
                 val previousText = previous?.let { " (was ${it.value} ${it.unit})" } ?: ""
                 "Weight increased significantly to ${current.value} ${current.unit}$previousText"
             }
-            AnomalyType.WEIGHT_DROP -> {
-                val current = currentValue as AnomalyValue.WeightValue
-                val previous = previousValue as? AnomalyValue.WeightValue
-                val previousText = previous?.let { " (was ${it.value} ${it.unit})" } ?: ""
-                "Weight decreased significantly to ${current.value} ${current.unit}$previousText"
-            }
             AnomalyType.REPS_SPIKE -> {
                 val current = currentValue as AnomalyValue.RepsValue
                 val previous = previousValue as? AnomalyValue.RepsValue
                 val previousText = previous?.let { " (was ${it.value})" } ?: ""
                 "Reps increased significantly to ${current.value}$previousText"
             }
-            AnomalyType.REPS_DROP -> {
-                val current = currentValue as AnomalyValue.RepsValue
-                val previous = previousValue as? AnomalyValue.RepsValue
-                val previousText = previous?.let { " (was ${it.value})" } ?: ""
-                "Reps decreased significantly to ${current.value}$previousText"
-            }
             AnomalyType.DURATION_SPIKE -> {
                 val current = currentValue as AnomalyValue.DurationValue
                 val previous = previousValue as? AnomalyValue.DurationValue
                 val previousText = previous?.let { " (was ${it.seconds}s)" } ?: ""
                 "Duration increased significantly to ${current.seconds}s$previousText"
-            }
-            AnomalyType.DURATION_DROP -> {
-                val current = currentValue as AnomalyValue.DurationValue
-                val previous = previousValue as? AnomalyValue.DurationValue
-                val previousText = previous?.let { " (was ${it.seconds}s)" } ?: ""
-                "Duration decreased significantly to ${current.seconds}s$previousText"
             }
             AnomalyType.IMPOSSIBLE_VALUE -> {
                 "Value appears to be impossible for this exercise type"
@@ -118,29 +100,15 @@ data class WorkoutAnomaly(
                 val current = currentValue as AnomalyValue.WeightValue
                 "That's a big jump! Did you mean to enter ${current.value} ${current.unit}?"
             }
-            AnomalyType.WEIGHT_DROP -> {
-                val current = currentValue as AnomalyValue.WeightValue
-                "That's a big drop! Did you mean to enter ${current.value} ${current.unit}?"
-            }
             AnomalyType.REPS_SPIKE -> {
                 val current = currentValue as AnomalyValue.RepsValue
                 "Wow, that's a lot of reps! Did you mean to enter ${current.value}?"
-            }
-            AnomalyType.REPS_DROP -> {
-                val current = currentValue as AnomalyValue.RepsValue
-                "That's quite a drop in reps. Did you mean to enter ${current.value}?"
             }
             AnomalyType.DURATION_SPIKE -> {
                 val current = currentValue as AnomalyValue.DurationValue
                 val minutes = current.seconds / 60
                 val seconds = current.seconds % 60
                 "That's a long time! Did you mean ${minutes}:${seconds.toString().padStart(2, '0')}?"
-            }
-            AnomalyType.DURATION_DROP -> {
-                val current = currentValue as AnomalyValue.DurationValue
-                val minutes = current.seconds / 60
-                val seconds = current.seconds % 60
-                "That's very quick! Did you mean ${minutes}:${seconds.toString().padStart(2, '0')}?"
             }
             AnomalyType.IMPOSSIBLE_VALUE -> {
                 "This value seems unusual for this exercise. Please double-check."
@@ -154,11 +122,8 @@ data class WorkoutAnomaly(
  */
 enum class AnomalyType {
     WEIGHT_SPIKE,      // Sudden increase in weight (e.g., 10x jump)
-    WEIGHT_DROP,       // Sudden decrease in weight
     REPS_SPIKE,        // Dramatic increase in reps
-    REPS_DROP,         // Dramatic decrease in reps
     DURATION_SPIKE,    // Unusually long exercise duration
-    DURATION_DROP,     // Unusually short exercise duration
     IMPOSSIBLE_VALUE   // Physically impossible or highly unlikely values
 }
 
@@ -190,11 +155,8 @@ sealed class AnomalyValue {
 data class AnomalyDetectionSettings(
     val userId: String,
     val weightSpikeThreshold: Float = 3.0f,    // 3x increase triggers warning
-    val weightDropThreshold: Float = 0.3f,     // Drop to 30% triggers warning
     val repsSpikeThreshold: Float = 2.0f,      // 2x increase triggers warning
-    val repsDropThreshold: Float = 0.5f,       // Drop to 50% triggers warning
     val durationSpikeThreshold: Float = 3.0f,  // 3x increase triggers warning
-    val durationDropThreshold: Float = 0.3f,   // Drop to 30% triggers warning
     val minWeightForDetection: Double = 5.0,   // Don't detect anomalies below 5 lbs
     val minRepsForDetection: Int = 1,          // Don't detect anomalies below 1 rep
     val minDurationForDetection: Long = 5,     // Don't detect anomalies below 5 seconds
@@ -205,11 +167,8 @@ data class AnomalyDetectionSettings(
     init {
         require(userId.isNotBlank()) { "User ID cannot be blank" }
         require(weightSpikeThreshold > 1.0f) { "Weight spike threshold must be greater than 1" }
-        require(weightDropThreshold > 0.0f && weightDropThreshold < 1.0f) { "Weight drop threshold must be between 0 and 1" }
         require(repsSpikeThreshold > 1.0f) { "Reps spike threshold must be greater than 1" }
-        require(repsDropThreshold > 0.0f && repsDropThreshold < 1.0f) { "Reps drop threshold must be between 0 and 1" }
         require(durationSpikeThreshold > 1.0f) { "Duration spike threshold must be greater than 1" }
-        require(durationDropThreshold > 0.0f && durationDropThreshold < 1.0f) { "Duration drop threshold must be between 0 and 1" }
     }
 
     companion object {
@@ -314,7 +273,6 @@ data class ExerciseHistory(
         val maxRecent = recentWeights.takeLast(5).maxOrNull() ?: 0.0
         
         return weight > recentAverage * settings.weightSpikeThreshold ||
-               weight < recentAverage * settings.weightDropThreshold ||
                weight > maxRecent * settings.weightSpikeThreshold
     }
 
@@ -328,7 +286,6 @@ data class ExerciseHistory(
         val maxRecent = recentReps.takeLast(5).maxOrNull() ?: 0
         
         return reps > recentAverage * settings.repsSpikeThreshold ||
-               reps < recentAverage * settings.repsDropThreshold ||
                reps > maxRecent * settings.repsSpikeThreshold
     }
 
@@ -342,7 +299,6 @@ data class ExerciseHistory(
         val maxRecent = recentDurations.takeLast(5).maxOrNull() ?: 0L
         
         return duration > recentAverage * settings.durationSpikeThreshold ||
-               duration < recentAverage * settings.durationDropThreshold ||
                duration > maxRecent * settings.durationSpikeThreshold
     }
 }

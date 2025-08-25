@@ -260,17 +260,6 @@ private fun SensitivitySettingsCard(
                 formatValue = { "${String.format("%.1f", it)}x increase" }
             )
             
-            // Weight drop threshold
-            ThresholdSlider(
-                label = "Weight Decrease Sensitivity",
-                value = 1f / settings.weightDropThreshold,
-                valueRange = 1.5f..5.0f,
-                steps = 6,
-                onValueChange = { newValue ->
-                    onUpdateSettings(settings.copy(weightDropThreshold = 1f / newValue))
-                },
-                formatValue = { "${String.format("%.1f", it)}x decrease" }
-            )
             
             // Reps spike threshold
             ThresholdSlider(
@@ -284,17 +273,6 @@ private fun SensitivitySettingsCard(
                 formatValue = { "${String.format("%.1f", it)}x increase" }
             )
             
-            // Reps drop threshold
-            ThresholdSlider(
-                label = "Reps Decrease Sensitivity",
-                value = 1f / settings.repsDropThreshold,
-                valueRange = 1.5f..3.0f,
-                steps = 5,
-                onValueChange = { newValue ->
-                    onUpdateSettings(settings.copy(repsDropThreshold = 1f / newValue))
-                },
-                formatValue = { "${String.format("%.1f", it)}x decrease" }
-            )
         }
     }
 }

@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 
 /**
  * Color Fallback Extensions for LiftrixColorsV2
@@ -96,7 +97,8 @@ fun Color?.orFallback(colorType: String = "unknown"): Color {
 
 /**
  * Direct LiftrixColorsV2 access with theme awareness
- * Use this when you need guaranteed V2 colors regardless of theme state
+ * FIXED: Now respects user's theme preference via ThemeManager instead of system theme
+ * Use this when you need guaranteed V2 colors that respect user's explicit theme choice
  */
 object DirectV2Colors {
     @Composable
@@ -106,7 +108,9 @@ object DirectV2Colors {
     
     @Composable
     fun getBackground(): Color {
-        val isDarkTheme = isSystemInDarkTheme()
+        val context = LocalContext.current
+        val themeManager = remember { ThemeManager.getInstance(context) }
+        val isDarkTheme = themeManager.getEffectiveThemeState(isSystemInDarkTheme())
         return if (isDarkTheme) {
             LiftrixColorsV2.Dark.BackgroundPrimary
         } else {
@@ -116,7 +120,9 @@ object DirectV2Colors {
     
     @Composable
     fun getSurface(): Color {
-        val isDarkTheme = isSystemInDarkTheme()
+        val context = LocalContext.current
+        val themeManager = remember { ThemeManager.getInstance(context) }
+        val isDarkTheme = themeManager.getEffectiveThemeState(isSystemInDarkTheme())
         return if (isDarkTheme) {
             LiftrixColorsV2.Dark.BackgroundSecondary
         } else {
@@ -126,7 +132,9 @@ object DirectV2Colors {
     
     @Composable
     fun getTextPrimary(): Color {
-        val isDarkTheme = isSystemInDarkTheme()
+        val context = LocalContext.current
+        val themeManager = remember { ThemeManager.getInstance(context) }
+        val isDarkTheme = themeManager.getEffectiveThemeState(isSystemInDarkTheme())
         return if (isDarkTheme) {
             LiftrixColorsV2.Dark.TextPrimary
         } else {
@@ -136,7 +144,9 @@ object DirectV2Colors {
     
     @Composable
     fun getTextSecondary(): Color {
-        val isDarkTheme = isSystemInDarkTheme()
+        val context = LocalContext.current
+        val themeManager = remember { ThemeManager.getInstance(context) }
+        val isDarkTheme = themeManager.getEffectiveThemeState(isSystemInDarkTheme())
         return if (isDarkTheme) {
             LiftrixColorsV2.Dark.TextSecondary
         } else {

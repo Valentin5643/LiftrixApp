@@ -24,6 +24,9 @@ import com.example.liftrix.domain.model.ExerciseSetId
 import com.example.liftrix.domain.model.Reps
 import com.example.liftrix.domain.model.RPE
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
+import com.example.liftrix.domain.repository.social.FeedRepository
+import com.example.liftrix.domain.model.social.CreateWorkoutPostRequest
+import com.example.liftrix.domain.model.social.PostVisibility
 import com.example.liftrix.core.cache.CacheManager
 import com.example.liftrix.core.cache.CacheKey
 import java.time.LocalDate
@@ -63,6 +66,7 @@ import javax.inject.Singleton
 class UnifiedWorkoutSessionManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val workoutRepository: WorkoutRepository,
+    private val feedRepository: FeedRepository,
     private val cacheManager: CacheManager,
     private val cacheInvalidationService: CacheInvalidationService
 ) {
@@ -222,6 +226,9 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                         
                         // Add small delay to ensure database transaction is fully committed
                         kotlinx.coroutines.delay(100)
+                        
+                        // 🔍 AUTO-POST: Automatically create feed post for completed workout
+                        createAutomaticWorkoutPost(savedWorkout)
                         
                         // Invalidate analytics cache after workout completion using enhanced invalidation service
                         invalidateWorkoutRelatedCache(savedWorkout)
@@ -874,6 +881,58 @@ class UnifiedWorkoutSessionManager @Inject constructor(
         data class RecoveryError(
             val error: String
         ) : RecoveryState()
+    }
+    
+    /**
+     * 🔍 AUTO-POST: Creates automatic workout post when workout is completed
+     */
+    private fun createAutomaticWorkoutPost(savedWorkout: Workout) {
+        scope.launch {
+            try {
+                Timber.d("🔍 WORKOUT-POSTS-DEBUG: Creating automatic post for workout ${savedWorkout.id.value}")
+                
+                // 🔥 FIX: Check if post already exists to prevent duplicates
+                val hasPostResult = feedRepository.hasPostForWorkout(savedWorkout.userId, savedWorkout.id.value)
+                hasPostResult.fold(
+                    onSuccess = { hasPost ->
+                        if (hasPost) {
+                            Timber.d("🔍 WORKOUT-POSTS-DEBUG: Skipping auto-post, already exists for workout ${savedWorkout.id.value}")
+                            return@launch
+                        }
+                        
+                        // Proceed with post creation
+                        val postRequest = CreateWorkoutPostRequest(
+                            workoutId = savedWorkout.id.value,
+                            caption = "Great workout completed! 💪",
+                            mediaUrls = emptyList(),
+                            visibility = PostVisibility.FOLLOWERS
+                        )
+                        
+                        val result = feedRepository.createPost(
+                            userId = savedWorkout.userId,
+                            request = postRequest
+                        )
+                        
+                        result.fold(
+                            onSuccess = { post ->
+                                Timber.d("🔍 WORKOUT-POSTS-DEBUG: Auto-post created successfully - ID=${post.id}")
+                            },
+                            onFailure = { error ->
+                                Timber.w("🔍 WORKOUT-POSTS-DEBUG: Auto-post creation failed: ${error.message}")
+                                // Don't fail workout completion if post creation fails
+                            }
+                        )
+                    },
+                    onFailure = { error ->
+                        Timber.w("🔍 WORKOUT-POSTS-DEBUG: Failed to check existing post: ${error.message}")
+                        // Don't fail workout completion if check fails
+                    }
+                )
+            } catch (e: Exception) {
+                Timber.w(e, "🔍 WORKOUT-POSTS-DEBUG: Exception during auto-post creation")
+                // Don't fail workout completion if post creation fails
+            }
+        }
     }
 
     companion object {

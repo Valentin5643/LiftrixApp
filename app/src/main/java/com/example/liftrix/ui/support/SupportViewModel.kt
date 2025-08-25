@@ -10,7 +10,6 @@ import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import com.example.liftrix.ui.settings.support.SupportUiState
-import com.example.liftrix.ui.settings.support.SupportSideEffect
 import com.example.liftrix.ui.settings.support.TicketForm
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -60,6 +59,7 @@ class SupportViewModel @Inject constructor(
             is SupportEvent.RemoveAttachment -> removeAttachment(event.uri)
             is SupportEvent.SubmitTicket -> submitTicket()
             is SupportEvent.ViewTicket -> viewTicket(event.ticketId)
+            is SupportEvent.AddReply -> { /* Handle AddReply - delegate to main SupportViewModel */ }
             is SupportEvent.ClearForm -> clearForm()
             is SupportEvent.Retry -> retry()
             is SupportEvent.ValidateForm -> validateForm()

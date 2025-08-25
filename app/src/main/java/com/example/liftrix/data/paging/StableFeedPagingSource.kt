@@ -33,12 +33,10 @@ class StableFeedPagingSource(
             params.key == null && // Only for initial load
             hasLocalPosts()) {
             
-            Timber.d("🔥 FEED-STABILITY: Empty initial load detected but posts exist, retrying after 100ms...")
             delay(100) // Brief delay to let transaction complete
             
             // Retry the load
             val retryResult = delegate.load(params)
-            Timber.d("🔥 FEED-STABILITY: Retry result contains ${(retryResult as? LoadResult.Page)?.data?.size ?: 0} posts")
             return retryResult
         }
         

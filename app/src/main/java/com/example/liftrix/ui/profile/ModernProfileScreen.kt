@@ -17,7 +17,11 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -191,7 +195,7 @@ private fun ModernProfileContent(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Avatar - 80px diameter
+                // Avatar - 80px diameter with consistent image handling
                 Box(
                     modifier = Modifier
                         .size(80.dp)
@@ -199,12 +203,30 @@ private fun ModernProfileContent(
                         .background(primaryTeal),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = profile.displayName.take(2).uppercase(),
-                        color = LiftrixColorsV2.Dark.BackgroundPrimary,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    val hasValidImageUrl = !profileImageUrl.isNullOrBlank()
+                    timber.log.Timber.d("Own profile avatar for ${profile.displayName}: imageUrl='$profileImageUrl', hasValid=$hasValidImageUrl")
+                    
+                    if (hasValidImageUrl) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(profileImageUrl)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = "Your profile picture",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                            onError = { 
+                                timber.log.Timber.e("Failed to load own profile image: $profileImageUrl")
+                            }
+                        )
+                    } else {
+                        Text(
+                            text = profile.displayName.take(2).uppercase(),
+                            color = LiftrixColorsV2.Dark.BackgroundPrimary,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
                 
                 // Profile Name

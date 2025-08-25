@@ -10,7 +10,10 @@ import com.example.liftrix.domain.service.AppInfoService
 import com.example.liftrix.domain.service.SupportService
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
+import com.example.liftrix.domain.usecase.support.AddReplyToSupportTicketUseCase
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.support.SupportEvent
+import com.example.liftrix.ui.support.SupportSideEffect
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +38,7 @@ class SupportViewModel @Inject constructor(
     private val supportService: SupportService,
     private val appInfoService: AppInfoService,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val addReplyToSupportTicketUseCase: AddReplyToSupportTicketUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<SupportUiState, SupportEvent>(errorHandler) {
     
@@ -59,6 +63,7 @@ class SupportViewModel @Inject constructor(
             is SupportEvent.RemoveAttachment -> removeAttachment(event.uri)
             is SupportEvent.SubmitTicket -> submitTicket()
             is SupportEvent.ViewTicket -> viewTicket(event.ticketId)
+            is SupportEvent.AddReply -> addReply(event.ticketId, event.content, event.attachments)
             is SupportEvent.ClearForm -> clearForm()
             is SupportEvent.Retry -> retry()
             is SupportEvent.ValidateForm -> validateForm()
@@ -314,6 +319,50 @@ class SupportViewModel @Inject constructor(
     private fun viewTicket(ticketId: String) {
         emitSideEffect(SupportSideEffect.NavigateToTicket(ticketId))
         Timber.d("Navigating to ticket: $ticketId")
+    }
+    
+    /**
+     * Adds a reply to an existing support ticket
+     */
+    private fun addReply(ticketId: String, content: String, attachments: List<String>) {
+        val currentData = getCurrentData()
+        updateState { SupportUiState.Success(currentData.copy(isSubmitting = true)) }
+        
+        executeUseCase(
+            useCase = {
+                addReplyToSupportTicketUseCase(
+                    ticketId = ticketId,
+                    content = content,
+                    attachments = attachments
+                ).fold(
+                    onSuccess = { /* Success */ },
+                    onFailure = { error -> throw error }
+                )
+                
+                // Refresh tickets to show the new reply
+                val updatedTickets = supportService.getUserTickets(currentData.ticketForm.userId).fold(
+                    onSuccess = { it },
+                    onFailure = { emptyList() }
+                )
+                
+                Result.success(currentData.copy(
+                    userTickets = updatedTickets,
+                    isSubmitting = false
+                ))
+            },
+            onSuccess = { data ->
+                updateState { SupportUiState.Success(data) }
+                emitSideEffect(SupportSideEffect.ShowReplySubmitted(ticketId))
+                Timber.d("Reply added successfully to ticket: $ticketId")
+            },
+            onError = { error ->
+                updateState { 
+                    SupportUiState.Error(error, currentData.copy(isSubmitting = false))
+                }
+                emitSideEffect(SupportSideEffect.ShowError("Failed to submit reply"))
+                Timber.e("Failed to add reply to ticket $ticketId: $error")
+            }
+        )
     }
     
     /**

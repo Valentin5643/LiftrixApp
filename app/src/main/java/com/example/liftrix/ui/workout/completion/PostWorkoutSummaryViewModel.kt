@@ -189,14 +189,6 @@ class PostWorkoutSummaryViewModel @Inject constructor(
         }
     }
     
-    fun repeatWorkout(workoutId: String) {
-        viewModelScope.launch {
-            // Start new workout with same template
-            // For now, just log the action
-            // TODO: Implement actual repeat workout functionality
-            Timber.d("Repeat workout requested for workout: $workoutId")
-        }
-    }
     
     private fun detectPersonalRecords(workout: com.example.liftrix.domain.model.Workout): List<PersonalRecord> {
         val records = mutableListOf<PersonalRecord>()

@@ -4,6 +4,9 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.fold
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
@@ -37,6 +40,16 @@ data class NavigationCallbacks(
     val onNavigateToMuscleGroupDetail: () -> Unit = {},
     val onNavigateToFrequencyDetail: () -> Unit = {}
 )
+
+/**
+ * Navigation events for fallback navigation handling.
+ */
+sealed class NavigationEvent {
+    data object NavigateToVolumeDetail : NavigationEvent()
+    data object NavigateToOneRmDetail : NavigationEvent()
+    data object NavigateToMuscleGroupDetail : NavigationEvent()
+    data object NavigateToFrequencyDetail : NavigationEvent()
+}
 
 /**
  * ViewModel for analytics widget management following the MVI pattern.
@@ -137,6 +150,13 @@ class AnalyticsWidgetViewModel @Inject constructor(
      * Set by the UI component to enable navigation from ViewModel.
      */
     private var navigationCallbacks: NavigationCallbacks? = null
+    
+    /**
+     * Navigation event flow for fallback navigation when callbacks are not set.
+     * UI components can observe this flow to handle navigation.
+     */
+    private val _navigationEvents = MutableSharedFlow<NavigationEvent>()
+    val navigationEvents: SharedFlow<NavigationEvent> = _navigationEvents.asSharedFlow()
 
     /**
      * Maximum number of retry attempts for failed operations.
@@ -934,16 +954,41 @@ class AnalyticsWidgetViewModel @Inject constructor(
                 Timber.d("=== PREFS LOAD: Got result from analyticsService")
                 
                 result.fold(
-                    onSuccess = { preferences ->
-                        Timber.d("📥 PREFS LOADED: preferences = $preferences")
-                        Timber.d("📥 PREFS LOADED: dashboardLayout = ${preferences.dashboardLayout}")
-                        Timber.d("=== WIDGET DEBUG: User Level = ${preferences.userLevel}, Visible Widgets = ${preferences.visibleWidgets.size}")
-                        Timber.d("=== WIDGET DEBUG: Visible Widget IDs = ${preferences.visibleWidgets}")
+                    onSuccess = { rawPreferences ->
+                        Timber.d("📥 PREFS LOADED: rawPreferences = $rawPreferences")
+                        Timber.d("📥 PREFS LOADED: dashboardLayout = ${rawPreferences.dashboardLayout}")
+                        Timber.d("=== WIDGET DEBUG: User Level = ${rawPreferences.userLevel}, Visible Widgets = ${rawPreferences.visibleWidgets.size}")
+                        Timber.d("=== WIDGET DEBUG: Raw Widget IDs = ${rawPreferences.visibleWidgets}")
+                        
+                        // CRITICAL BUG FIX: Clean up deprecated widgets from preferences
+                        val cleanedPreferences = widgetResolver.forceCleanupDeprecatedWidgets(rawPreferences)
+                        
+                        // Check if preferences were cleaned and persist changes
+                        val preferencesToUse = if (cleanedPreferences != rawPreferences) {
+                            Timber.i("Deprecated widgets found and cleaned, persisting updated preferences")
+                            
+                            // Persist cleaned preferences asynchronously
+                            viewModelScope.launch {
+                                try {
+                                    analyticsService.updateWidgetPreferences(cleanedPreferences)
+                                    Timber.d("Successfully persisted cleaned preferences")
+                                } catch (e: Exception) {
+                                    Timber.e(e, "Failed to persist cleaned preferences")
+                                }
+                            }
+                            
+                            cleanedPreferences
+                        } else {
+                            rawPreferences
+                        }
+                        
+                        Timber.d("=== WIDGET DEBUG: Using cleaned preferences with ${preferencesToUse.visibleWidgets.size} widgets")
+                        Timber.d("=== WIDGET DEBUG: Cleaned Widget IDs = ${preferencesToUse.visibleWidgets}")
                         
                         // CRITICAL FIX: Use WidgetResolver for proper widget resolution
                         val resolvedWidgets = widgetResolver.resolveWidgetsFromPreferences(
-                            preferences = preferences,
-                            userLevel = preferences.userLevel
+                            preferences = preferencesToUse,
+                            userLevel = preferencesToUse.userLevel
                         )
                         
                         Timber.d("=== WIDGET DEBUG: Resolved ${resolvedWidgets.size} widgets from WidgetResolver")
@@ -953,13 +998,13 @@ class AnalyticsWidgetViewModel @Inject constructor(
                             when (currentState) {
                                 is UiState.Success -> UiState.Success(
                                     currentState.data
-                                        .withPreferences(preferences)
+                                        .withPreferences(preferencesToUse)
                                         .withResolvedWidgets(resolvedWidgets)
                                         .withLoading(false)
                                 )
                                 else -> UiState.Success(
                                     AnalyticsWidgetState()
-                                        .withPreferences(preferences)
+                                        .withPreferences(preferencesToUse)
                                         .withResolvedWidgets(resolvedWidgets)
                                         .withLoading(false)
                                 )
@@ -969,8 +1014,8 @@ class AnalyticsWidgetViewModel @Inject constructor(
                         // Immediately load configuration after preferences are set
                         loadConfiguration()
                         
-                        // Load data for visible widgets
-                        preferences.visibleWidgets.forEach { widgetId ->
+                        // Load data for visible widgets (use cleaned preferences)
+                        preferencesToUse.visibleWidgets.forEach { widgetId ->
                             loadWidgetData(widgetId, forceRefresh = false)
                         }
                     },
@@ -1137,6 +1182,9 @@ class AnalyticsWidgetViewModel @Inject constructor(
      */
     private fun handleWidgetClick(widget: com.example.liftrix.domain.model.analytics.AnalyticsWidget) {
         val widgetId = widget.id
+        Timber.d("Widget clicked: $widgetId (${widget::class.simpleName})")
+        Timber.d("Navigation callbacks state: ${if (navigationCallbacks != null) "SET" else "NULL"}")
+        
         trackInteraction(widgetId, "click", emptyMap())
         
         // Map widget to appropriate detail screen navigation
@@ -1156,7 +1204,8 @@ class AnalyticsWidgetViewModel @Inject constructor(
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.StrengthProgress,
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.PersonalRecords,
             com.example.liftrix.domain.model.analytics.AnalyticsWidget.StrengthAnalytics,
-            com.example.liftrix.domain.model.analytics.AnalyticsWidget.MonthlySummary -> {
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.MonthlySummary,
+            com.example.liftrix.domain.model.analytics.AnalyticsWidget.ProgressChart -> {
                 AnalyticsWidgetEvent.NavigateToOneRmDetail
             }
             
@@ -1182,10 +1231,10 @@ class AnalyticsWidgetViewModel @Inject constructor(
         
         // Trigger navigation if a mapping exists
         navigationEvent?.let { event ->
-            Timber.d("Navigating to detail screen for widget: $widgetId")
+            Timber.d("Navigation event mapped for widget $widgetId: ${event::class.simpleName}")
             handleEvent(event)
         } ?: run {
-            Timber.d("Widget clicked without specific detail navigation: $widgetId")
+            Timber.w("Widget clicked without specific detail navigation: $widgetId (${widget::class.simpleName})")
         }
     }
     
@@ -1204,6 +1253,19 @@ class AnalyticsWidgetViewModel @Inject constructor(
     fun setNavigationCallbacks(callbacks: NavigationCallbacks) {
         this.navigationCallbacks = callbacks
         Timber.d("Navigation callbacks set for AnalyticsWidgetViewModel")
+        Timber.d("Callbacks verification - onNavigateToOneRmDetail: ${callbacks.onNavigateToOneRmDetail}")
+        
+        // Verify callbacks are properly set
+        val callbacksValid = callbacks.onNavigateToOneRmDetail != {} &&
+                            callbacks.onNavigateToVolumeDetail != {} &&
+                            callbacks.onNavigateToMuscleGroupDetail != {} &&
+                            callbacks.onNavigateToFrequencyDetail != {}
+        
+        if (!callbacksValid) {
+            Timber.w("Some navigation callbacks appear to be empty lambda functions")
+        } else {
+            Timber.d("All navigation callbacks validated successfully")
+        }
     }
     
     /**
@@ -1219,9 +1281,17 @@ class AnalyticsWidgetViewModel @Inject constructor(
      * Handles navigation to one rep max detail screen.
      */
     private fun handleNavigateToOneRmDetail() {
-        Timber.d("Navigating to one rep max detail screen")
-        navigationCallbacks?.onNavigateToOneRmDetail?.invoke()
-            ?: Timber.w("Navigation callbacks not set - cannot navigate to one RM detail")
+        Timber.d("Attempting navigation to one rep max detail screen")
+        
+        if (navigationCallbacks != null) {
+            Timber.d("Navigation callbacks found, invoking onNavigateToOneRmDetail")
+            navigationCallbacks?.onNavigateToOneRmDetail?.invoke()
+        } else {
+            Timber.w("Navigation callbacks not set - using fallback navigation event")
+            viewModelScope.launch {
+                _navigationEvents.emit(NavigationEvent.NavigateToOneRmDetail)
+            }
+        }
     }
     
     /**

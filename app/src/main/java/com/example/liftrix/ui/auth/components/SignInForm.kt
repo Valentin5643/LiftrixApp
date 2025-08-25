@@ -80,7 +80,11 @@ fun SignInForm(
     
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
-    val isDarkTheme = isSystemInDarkTheme()
+    
+    // FIXED: Use ThemeManager to respect user's explicit theme preference instead of system theme
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val themeManager = remember { com.example.liftrix.ui.theme.ThemeManager.getInstance(context) }
+    val isDarkTheme = themeManager.getEffectiveThemeState(isSystemInDarkTheme())
     
     // Validate form whenever inputs change
     LaunchedEffect(email, password) {
@@ -274,41 +278,41 @@ fun SignInForm(
                 
                 Spacer(modifier = Modifier.height(12.dp))
                 
-                // Remember me and Forgot password row
+                // Remember me checkbox
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = rememberMe,
-                            onCheckedChange = { rememberMe = it },
-                            enabled = !isLoading,
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = LiftrixColorsV2.Teal,
-                                uncheckedColor = if (isDarkTheme) LiftrixColorsV2.Dark.Outline else LiftrixColorsV2.Light.Outline,
-                                checkmarkColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundPrimary else LiftrixColorsV2.Light.BackgroundPrimary
-                            )
+                    Checkbox(
+                        checked = rememberMe,
+                        onCheckedChange = { rememberMe = it },
+                        enabled = !isLoading,
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = LiftrixColorsV2.Teal,
+                            uncheckedColor = if (isDarkTheme) LiftrixColorsV2.Dark.Outline else LiftrixColorsV2.Light.Outline,
+                            checkmarkColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundPrimary else LiftrixColorsV2.Light.BackgroundPrimary
                         )
-                        Text(
-                            text = "Remember me next time",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (isDarkTheme) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary
-                        )
-                    }
-                    
-                    TextButton(
-                        onClick = { showForgotPassword = true },
-                        enabled = !isLoading
-                    ) {
-                        Text(
-                            text = "Forgot password?",
-                            color = LiftrixColorsV2.Teal
-                        )
-                    }
+                    )
+                    Text(
+                        text = "Remember me next time",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (isDarkTheme) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                
+                // FIXED: Forgot password button with proper layout
+                TextButton(
+                    onClick = { showForgotPassword = true },
+                    enabled = !isLoading,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Forgot password?",
+                        color = LiftrixColorsV2.Teal,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1
+                    )
                 }
                 
                 Spacer(modifier = Modifier.height(16.dp))

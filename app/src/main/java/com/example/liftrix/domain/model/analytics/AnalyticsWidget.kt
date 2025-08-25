@@ -359,6 +359,22 @@ sealed class AnalyticsWidget(
         ).filter { !it.isDeprecated }
         
         /**
+         * ALL analytics widgets including deprecated ones - for internal lookup and migration
+         */
+        fun getAllWidgetsIncludingDeprecated(): List<AnalyticsWidget> = listOf(
+            // Active widgets
+            FrequencyChart, ProgressChart, StrengthAnalytics, MonthlySummary,
+            VolumeAnalytics, RecoveryMetrics, MuscleGroupDistribution,
+            
+            // Deprecated widgets (for migration lookup)
+            StrengthProgress, PersonalRecords, OneRMProgression,
+            VolumeChart, VolumeTrends, VolumeLoadProgression,
+            
+            // Hidden widgets (deprecated, for compatibility)
+            WorkoutFrequency, TotalVolume, VolumeCalendar, WorkoutStreak, AverageDuration
+        )
+        
+        /**
          * Gets widgets by category
          */
         fun getByCategory(category: WidgetCategory): List<AnalyticsWidget> = 

@@ -398,6 +398,13 @@ sealed class LiftrixRoute {
     data object GymBuddy : LiftrixRoute()
     
     /**
+     * User workouts screen showing all completed workouts with social engagement metrics
+     * Displays the user's workout history with likes, comments, and other engagement data
+     */
+    @Serializable
+    data object UserWorkouts : LiftrixRoute()
+    
+    /**
      * Post creation screen for creating and sharing workout posts
      * 
      * @param workoutId Unique identifier for the workout to create a post from

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "12fefe54d814d88573d6fb4bc066b83b",
+    "identityHash": "edd97b54ac50a3da93b753312a3bd073",
     "entities": [
       {
         "tableName": "workouts",
@@ -2159,7 +2159,7 @@
       },
       {
         "tableName": "anomaly_detection_settings",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `weight_spike_threshold` REAL NOT NULL, `weight_drop_threshold` REAL NOT NULL, `reps_spike_threshold` REAL NOT NULL, `reps_drop_threshold` REAL NOT NULL, `duration_spike_threshold` REAL NOT NULL, `duration_drop_threshold` REAL NOT NULL, `min_weight_for_detection` REAL NOT NULL, `min_reps_for_detection` INTEGER NOT NULL, `min_duration_for_detection` INTEGER NOT NULL, `learning_enabled` INTEGER NOT NULL, `last_updated` TEXT NOT NULL, PRIMARY KEY(`user_id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `weight_spike_threshold` REAL NOT NULL, `reps_spike_threshold` REAL NOT NULL, `duration_spike_threshold` REAL NOT NULL, `min_weight_for_detection` REAL NOT NULL, `min_reps_for_detection` INTEGER NOT NULL, `min_duration_for_detection` INTEGER NOT NULL, `learning_enabled` INTEGER NOT NULL, `last_updated` TEXT NOT NULL, PRIMARY KEY(`user_id`))",
         "fields": [
           {
             "fieldPath": "userId",
@@ -2174,32 +2174,14 @@
             "notNull": true
           },
           {
-            "fieldPath": "weightDropThreshold",
-            "columnName": "weight_drop_threshold",
-            "affinity": "REAL",
-            "notNull": true
-          },
-          {
             "fieldPath": "repsSpikeThreshold",
             "columnName": "reps_spike_threshold",
             "affinity": "REAL",
             "notNull": true
           },
           {
-            "fieldPath": "repsDropThreshold",
-            "columnName": "reps_drop_threshold",
-            "affinity": "REAL",
-            "notNull": true
-          },
-          {
             "fieldPath": "durationSpikeThreshold",
             "columnName": "duration_spike_threshold",
-            "affinity": "REAL",
-            "notNull": true
-          },
-          {
-            "fieldPath": "durationDropThreshold",
-            "columnName": "duration_drop_threshold",
             "affinity": "REAL",
             "notNull": true
           },
@@ -4073,6 +4055,16 @@
             "createSql": "CREATE INDEX IF NOT EXISTS `index_workout_posts_workout_id` ON `${TABLE_NAME}` (`workout_id`)"
           },
           {
+            "name": "idx_workout_posts_user_workout_unique",
+            "unique": true,
+            "columnNames": [
+              "user_id",
+              "workout_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `idx_workout_posts_user_workout_unique` ON `${TABLE_NAME}` (`user_id`, `workout_id`)"
+          },
+          {
             "name": "idx_workout_posts_feed_query",
             "unique": false,
             "columnNames": [
@@ -4392,7 +4384,7 @@
       },
       {
         "tableName": "feed_cache",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `post_id` TEXT NOT NULL, `score` REAL NOT NULL, `fetched_at` INTEGER NOT NULL, PRIMARY KEY(`user_id`, `post_id`), FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`post_id`) REFERENCES `workout_posts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `post_id` TEXT NOT NULL, `score` REAL NOT NULL, `fetched_at` INTEGER NOT NULL, `feed_type` TEXT NOT NULL DEFAULT 'HOME', PRIMARY KEY(`user_id`, `post_id`), FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`post_id`) REFERENCES `workout_posts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "userId",
@@ -4417,6 +4409,13 @@
             "columnName": "fetched_at",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "feedType",
+            "columnName": "feed_type",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'HOME'"
           }
         ],
         "primaryKey": {
@@ -7315,7 +7314,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '12fefe54d814d88573d6fb4bc066b83b')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'edd97b54ac50a3da93b753312a3bd073')"
     ]
   }
 }

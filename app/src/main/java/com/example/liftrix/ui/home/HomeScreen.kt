@@ -489,7 +489,7 @@ private fun EnhancedHomeHeader(
     ) {
         // Main header text
         Text(
-            text = "Track your progress and stay motivated with friends",
+            text = "Your fitness journey starts here",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Normal,
             color = MaterialTheme.colorScheme.primary
@@ -938,8 +938,8 @@ private fun EmptyState(
         verticalArrangement = Arrangement.Center
     ) {
         UnifiedWorkoutCard(
-            title = "Welcome to Liftrix!",
-            subtitle = "Start your fitness journey by creating your first workout or connecting with friends",
+            title = "No workouts yet",
+            subtitle = "Start by creating your first workout or explore the community",
             modifier = Modifier.padding(GridSystem.spacing5)
         ) {
             Row(

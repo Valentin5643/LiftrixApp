@@ -216,7 +216,7 @@ class RefactoredHomeViewModel @Inject constructor(
                     
                     // Load feed with proper filtering based on Following/Explore selection
                     val includeOthers = _showAllUsersInFeed.value
-                    Timber.d("🔥 HOME-FEED: Loading feed - includeOthers: $includeOthers")
+                    
                     
                     // Pass the includeOthers parameter to filter feed content
                     homeFeedManager.loadFeedWorkouts(userId, includeOthers).collect { result ->

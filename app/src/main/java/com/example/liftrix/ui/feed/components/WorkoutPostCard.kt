@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.feed.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -150,15 +151,37 @@ private fun PostHeader(
                 .clickable { onProfileClick() },
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Profile image
-            AsyncImage(
-                model = post.authorProfilePhotoUrl ?: "",
-                contentDescription = "Profile picture of ${post.authorDisplayName}",
+            // Profile image - consistent with profile screen behavior
+            Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
-            )
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                val hasValidImageUrl = !post.authorProfilePhotoUrl.isNullOrBlank()
+                timber.log.Timber.d("Workout post avatar for ${post.authorUsername}: imageUrl='${post.authorProfilePhotoUrl}', hasValid=$hasValidImageUrl")
+                
+                if (hasValidImageUrl) {
+                    AsyncImage(
+                        model = post.authorProfilePhotoUrl,
+                        contentDescription = "Profile picture of ${post.authorDisplayName}",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        onError = { 
+                            timber.log.Timber.e("Failed to load profile image: ${post.authorProfilePhotoUrl} for user: ${post.authorDisplayName}")
+                        }
+                    )
+                } else {
+                    // Fallback to initials like profile screen (consistent behavior)
+                    Text(
+                        text = (post.authorDisplayName ?: post.authorUsername ?: "?").take(2).uppercase(),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
             
             Spacer(modifier = Modifier.width(LiftrixSpacing.small))
             

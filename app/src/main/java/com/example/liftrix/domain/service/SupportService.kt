@@ -2,10 +2,12 @@ package com.example.liftrix.domain.service
 
 import android.net.Uri
 import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.model.support.AddSupportTicketReplyRequest
 import com.example.liftrix.domain.model.support.CreateSupportTicketRequest
 import com.example.liftrix.domain.model.support.SupportCategory
 import com.example.liftrix.domain.model.support.SupportStatus
 import com.example.liftrix.domain.model.support.SupportTicket
+import com.example.liftrix.domain.model.support.SupportTicketMessage
 
 /**
  * Service interface for support ticket functionality
@@ -108,6 +110,24 @@ interface SupportService {
         userId: String,
         comment: String
     ): LiftrixResult<Unit>
+    
+    /**
+     * Adds a reply to an existing support ticket
+     * @param request Complete reply request with validation
+     * @return LiftrixResult indicating success or failure
+     */
+    suspend fun addTicketReply(request: AddSupportTicketReplyRequest): LiftrixResult<Unit>
+    
+    /**
+     * Gets all messages for a specific support ticket
+     * @param ticketId Unique identifier for the ticket
+     * @param userId User identifier for security validation
+     * @return LiftrixResult containing list of ticket messages
+     */
+    suspend fun getTicketMessages(
+        ticketId: String,
+        userId: String
+    ): LiftrixResult<List<SupportTicketMessage>>
     
     /**
      * Uploads attachments for a support ticket

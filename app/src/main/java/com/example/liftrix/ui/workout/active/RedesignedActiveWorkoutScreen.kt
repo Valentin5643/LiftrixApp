@@ -323,7 +323,7 @@ private fun ActiveWorkoutContent(
                 RedesignedExerciseCard(
                     exerciseName = exercise.name,
                     exerciseSubtitle = null,
-                    sets = exercise.sets.map { set ->
+                    sets = exercise.sets.mapIndexed { setIndex, set ->
                         RedesignedSetData(
                             weight = set.actualWeight?.kilograms?.toString() 
                                 ?: set.targetWeight?.kilograms?.toString() ?: "",
@@ -334,7 +334,8 @@ private fun ActiveWorkoutContent(
                                 val prevReps = set.targetReps ?: 0
                                 append("$prevWeight x $prevReps")
                             },
-                            isCompleted = set.completedAt != null
+                            isCompleted = set.completedAt != null,
+                            setId = "${exercise.exerciseId.value}_set_$setIndex" // Stable ID
                         )
                     },
                     onAddSet = {

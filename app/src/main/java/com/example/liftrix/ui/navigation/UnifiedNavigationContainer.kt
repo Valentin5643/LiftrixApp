@@ -198,6 +198,9 @@ fun UnifiedNavigationContainer(
                             },
                             onNavigateToFriends = {
                                 navController.navigateToFriends()
+                            },
+                            onNavigateToMyWorkouts = {
+                                navController.navigate(LiftrixRoute.UserWorkouts)
                             }
                         )
                     }
@@ -252,6 +255,9 @@ fun UnifiedNavigationContainer(
                         },
                         onNavigateToQRCode = {
                             navController.navigateToQRCodeDisplay()
+                        },
+                        onNavigateToUserProfile = { userId ->
+                            navController.navigateToPublicProfile(userId)
                         }
                     )
                 }
@@ -942,6 +948,12 @@ fun UnifiedNavigationContainer(
                         onNavigateToQrScanner = {
                             // QR Scanner navigation placeholder
                         }
+                    )
+                }
+                
+                composable<LiftrixRoute.UserWorkouts> {
+                    com.example.liftrix.ui.workouts.UserWorkoutsScreen(
+                        navController = navController
                     )
                 }
                 

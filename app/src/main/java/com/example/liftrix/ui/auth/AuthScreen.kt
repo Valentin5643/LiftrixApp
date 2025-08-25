@@ -73,7 +73,10 @@ fun AuthScreen(
     val authState by viewModel.authState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
-    val isDarkTheme = isSystemInDarkTheme()
+    
+    // FIXED: Use ThemeManager to respect user's explicit theme preference instead of system theme
+    val themeManager = remember { com.example.liftrix.ui.theme.ThemeManager.getInstance(context) }
+    val isDarkTheme = themeManager.getEffectiveThemeState(isSystemInDarkTheme())
     
     var isSignUpMode by remember { mutableStateOf(initialSignUpMode) }
     
@@ -171,30 +174,6 @@ fun AuthScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceEvenly
             ) {
-                Spacer(modifier = Modifier.height(40.dp))
-                
-                // Top Section: Tagline and Hero Image
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "Your fitness journey",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Normal,
-                        color = if (isDarkTheme) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary,
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = "starts here",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Normal,
-                        color = if (isDarkTheme) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary,
-                        textAlign = TextAlign.Center
-                    )
-                    
-                }
-
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Auth form section

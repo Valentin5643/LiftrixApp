@@ -60,20 +60,6 @@ fun MuscleGroupDetailScreen(
         },
         onBackClick = { 
             navController.popBackStack()
-        },
-        topBarActions = {
-            // Export button
-            IconButton(
-                onClick = { 
-                    viewModel.handleEvent(MuscleGroupDetailViewModel.Event.ExportData)
-                }
-            ) {
-                Icon(
-                    Icons.Default.FileDownload, 
-                    contentDescription = "Export data",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
         }
     ) {
         Column(
@@ -86,6 +72,16 @@ fun MuscleGroupDetailScreen(
                 selectedTimeRange = currentTimeRange,
                 onTimeRangeChange = { newTimeRange ->
                     viewModel.handleEvent(MuscleGroupDetailViewModel.Event.UpdateTimeRange(newTimeRange))
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Muscle group controls card
+            MuscleGroupControlsCard(
+                onExportClick = {
+                    viewModel.handleEvent(MuscleGroupDetailViewModel.Event.ExportData)
                 },
                 modifier = Modifier.fillMaxWidth()
             )
@@ -340,5 +336,45 @@ private fun SummaryStatItem(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+/**
+ * Muscle group controls card with export functionality
+ */
+@Composable
+private fun MuscleGroupControlsCard(
+    onExportClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LiftrixCard(modifier = modifier) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Export button - compact design
+            OutlinedButton(
+                onClick = onExportClick,
+                modifier = Modifier
+                    .height(36.dp)
+                    .widthIn(min = 80.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Icon(
+                    Icons.Default.FileDownload,
+                    contentDescription = "Export data",
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Export",
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1
+                )
+            }
+        }
     }
 }

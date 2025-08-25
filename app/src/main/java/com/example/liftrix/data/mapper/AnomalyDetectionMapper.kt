@@ -79,11 +79,8 @@ object AnomalyDetectionMapper {
         return AnomalyDetectionSettingsEntity(
             userId = userId,
             weightSpikeThreshold = weightSpikeThreshold,
-            weightDropThreshold = weightDropThreshold,
             repsSpikeThreshold = repsSpikeThreshold,
-            repsDropThreshold = repsDropThreshold,
             durationSpikeThreshold = durationSpikeThreshold,
-            durationDropThreshold = durationDropThreshold,
             minWeightForDetection = minWeightForDetection,
             minRepsForDetection = minRepsForDetection,
             minDurationForDetection = minDurationForDetection,
@@ -99,11 +96,8 @@ object AnomalyDetectionMapper {
         return AnomalyDetectionSettings(
             userId = userId,
             weightSpikeThreshold = weightSpikeThreshold,
-            weightDropThreshold = weightDropThreshold,
             repsSpikeThreshold = repsSpikeThreshold,
-            repsDropThreshold = repsDropThreshold,
             durationSpikeThreshold = durationSpikeThreshold,
-            durationDropThreshold = durationDropThreshold,
             minWeightForDetection = minWeightForDetection,
             minRepsForDetection = minRepsForDetection,
             minDurationForDetection = minDurationForDetection,

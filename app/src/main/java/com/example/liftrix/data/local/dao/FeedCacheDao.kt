@@ -82,4 +82,22 @@ interface FeedCacheDao {
         )
     """)
     suspend fun removeInvalidCacheEntries(userId: String)
+    
+    @Query("""
+        SELECT post_id FROM feed_cache 
+        WHERE user_id = :userId 
+        AND feed_type = :feedType
+        ORDER BY score DESC
+        LIMIT :limit OFFSET :offset
+    """)
+    suspend fun getCachedPostIdsByType(userId: String, feedType: String, limit: Int, offset: Int): List<String>
+    
+    @Query("""
+        SELECT * FROM feed_cache 
+        WHERE user_id = :userId 
+        AND feed_type = :feedType
+        ORDER BY score DESC
+        LIMIT :limit OFFSET :offset
+    """)
+    suspend fun getCachedFeedEntriesByType(userId: String, feedType: String, limit: Int, offset: Int): List<FeedCacheEntity>
 }

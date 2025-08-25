@@ -3,6 +3,9 @@ package com.example.liftrix.data.repository
 import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.local.dao.UserSearchCacheDao
 import com.example.liftrix.data.local.dao.FollowRelationshipDao
+import com.example.liftrix.data.local.dao.WorkoutDao
+import com.example.liftrix.data.local.dao.WorkoutPostDao
+import com.example.liftrix.data.mapper.WorkoutPostMapper
 import com.example.liftrix.data.local.entity.UserSearchCacheEntity
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -55,6 +58,15 @@ class UserSearchRepositoryTest {
     private lateinit var followRelationshipDao: FollowRelationshipDao
     
     @MockK
+    private lateinit var workoutDao: WorkoutDao
+    
+    @MockK
+    private lateinit var workoutPostDao: WorkoutPostDao
+    
+    @MockK
+    private lateinit var workoutPostMapper: WorkoutPostMapper
+    
+    @MockK
     private lateinit var authRepository: AuthRepository
     
     @MockK
@@ -104,6 +116,9 @@ class UserSearchRepositoryTest {
             userProfileDao = userProfileDao,
             userSearchCacheDao = userSearchCacheDao,
             followRelationshipDao = followRelationshipDao,
+            workoutDao = workoutDao,
+            workoutPostDao = workoutPostDao,
+            workoutPostMapper = workoutPostMapper,
             authRepository = authRepository,
             firestore = firestore,
             gson = gson

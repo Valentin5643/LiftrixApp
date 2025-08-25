@@ -54,6 +54,15 @@ sealed class SupportEvent : ViewModelEvent {
     data class ViewTicket(val ticketId: String) : SupportEvent()
     
     /**
+     * Add a reply to an existing support ticket
+     */
+    data class AddReply(
+        val ticketId: String,
+        val content: String,
+        val attachments: List<String> = emptyList()
+    ) : SupportEvent()
+    
+    /**
      * Clear form and reset to initial state
      */
     data object ClearForm : SupportEvent()
@@ -107,4 +116,9 @@ sealed class SupportSideEffect {
      * Copy ticket ID to clipboard
      */
     data class CopyTicketId(val ticketId: String) : SupportSideEffect()
+    
+    /**
+     * Show reply submission success message
+     */
+    data class ShowReplySubmitted(val ticketId: String) : SupportSideEffect()
 }

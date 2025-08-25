@@ -18,6 +18,7 @@ import com.example.liftrix.domain.repository.DashboardData
 import com.example.liftrix.domain.repository.DurationDataPoint
 import com.example.liftrix.domain.repository.FrequencyDataPoint
 import com.example.liftrix.domain.repository.ProgressStatsRepository
+import kotlin.random.Random
 import com.example.liftrix.domain.repository.ProgressSummary
 import com.example.liftrix.domain.repository.VolumeDataPoint
 import com.example.liftrix.sync.AnalyticsCalculation
@@ -141,12 +142,13 @@ class ProgressStatsRepositoryImpl @Inject constructor(
         val summary = dailyMetrics.calculateProgressSummary(startDate, endDate)
         Timber.d("ProgressStatsRepository: Summary calculated - workouts: ${summary.totalWorkouts}, volume: ${summary.totalVolume}")
         
+        // Always emit real data - no sample data fallbacks
         emit(summary)
     }.catch { e ->
         // FIXED: Use Flow.catch operator instead of try-catch with emit
         Timber.e(e, "ProgressStatsRepository: Failed to get progress summary for user: $userId")
         
-        // Emit fallback summary using Flow.catch which is the correct pattern
+        // Emit empty/zero progress summary when error occurs
         emit(ProgressSummary(
             totalWorkouts = 0,
             totalVolume = 0f,

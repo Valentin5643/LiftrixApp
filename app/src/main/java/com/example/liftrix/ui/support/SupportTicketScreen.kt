@@ -15,7 +15,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.ui.settings.support.SupportViewModel
-import com.example.liftrix.ui.settings.support.SupportEvent
 import com.example.liftrix.ui.settings.support.SupportUiState
 import java.time.format.DateTimeFormatter
 
@@ -171,15 +170,17 @@ fun SupportTicketScreen(
                                 )
                             }
                             
-                            // TODO: Add support for ticket messages when implemented in domain model
-                            // items(ticket.messages) { message ->
-                            //     MessageCard(
-                            //         message = message.content,
-                            //         isFromSupport = message.isFromSupport,
-                            //         timestamp = message.timestamp,
-                            //         attachments = message.attachments
-                            //     )
-                            // }
+                            // Display conversation messages chronologically
+                            items(ticket.getMessagesChronologically()) { message ->
+                                MessageCard(
+                                    message = message.content,
+                                    isFromSupport = message.isFromSupport,
+                                    timestamp = message.createdAt,
+                                    attachments = message.attachments,
+                                    authorName = message.getAuthorDisplayName(),
+                                    isEdited = message.isEdited()
+                                )
+                            }
                         }
                         
                         // Reply section (only if ticket is open)
@@ -212,22 +213,28 @@ fun SupportTicketScreen(
                                         Button(
                                             onClick = {
                                                 if (replyText.isNotBlank()) {
-                                                    // TODO: Implement reply functionality when domain model supports it
-                                                    // viewModel.handleEvent(
-                                                    //     SupportEvent.AddReply(ticketId, replyText)
-                                                    // )
+                                                    viewModel.handleEvent(
+                                                        SupportEvent.AddReply(ticketId, replyText)
+                                                    )
                                                     replyText = ""
                                                 }
                                             },
-                                            enabled = replyText.isNotBlank()
+                                            enabled = replyText.isNotBlank() && !currentState.data.isSubmitting
                                         ) {
-                                            Icon(
-                                                Icons.Default.Send,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(18.dp)
-                                            )
+                                            if (currentState.data.isSubmitting) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(18.dp),
+                                                    strokeWidth = 2.dp
+                                                )
+                                            } else {
+                                                Icon(
+                                                    Icons.Default.Send,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
                                             Spacer(modifier = Modifier.width(8.dp))
-                                            Text("Send Reply")
+                                            Text(if (currentState.data.isSubmitting) "Sending..." else "Send Reply")
                                         }
                                     }
                                 }
@@ -339,7 +346,9 @@ private fun MessageCard(
     message: String,
     isFromSupport: Boolean,
     timestamp: java.time.Instant,
-    attachments: List<String> = emptyList()
+    attachments: List<String> = emptyList(),
+    authorName: String? = null,
+    isEdited: Boolean = false
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -359,19 +368,36 @@ private fun MessageCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = if (isFromSupport) "Support Team" else "You",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Medium,
-                    color = if (isFromSupport) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (isFromSupport) (authorName ?: "Support Team") else "You",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = if (isFromSupport) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
+                    )
+                    
+                    if (isEdited) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "(edited)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isFromSupport) {
+                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
                     }
-                )
+                }
                 
                 Text(
-                    text = timestamp.toString(),
+                    text = formatTimestamp(timestamp),
                     style = MaterialTheme.typography.bodySmall,
                     color = if (isFromSupport) {
                         MaterialTheme.colorScheme.onPrimaryContainer
@@ -421,4 +447,12 @@ private fun MessageCard(
             }
         }
     }
+}
+
+/**
+ * Formats a timestamp for display in the message card
+ */
+private fun formatTimestamp(timestamp: java.time.Instant): String {
+    val formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm")
+    return timestamp.atZone(java.time.ZoneId.systemDefault()).format(formatter)
 }

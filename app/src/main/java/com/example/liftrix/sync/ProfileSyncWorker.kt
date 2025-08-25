@@ -207,11 +207,9 @@ class ProfileSyncWorker @AssistedInject constructor(
             
             // 🔥 FIX: Sync follow relationships using upsert to prevent feed flickering
             try {
-                Timber.d("🔥 FEED-FIX: Syncing follow relationships using upsert for user $userId")
                 val followCount = followRepository.syncFollowRelationshipsFromFirebaseUpsert(userId)
-                Timber.d("🔥 FEED-FIX: Successfully synced $followCount follow relationships without clearing feed")
             } catch (e: Exception) {
-                Timber.e(e, "🔥 FEED-FIX: Failed to sync follow relationships during profile sync")
+                Timber.e(e, "Failed to sync follow relationships during profile sync")
                 // Don't fail the profile sync if follow sync fails
             }
             

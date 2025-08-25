@@ -11,11 +11,13 @@ import com.example.liftrix.data.mapper.SupportTicketMapper.toEntity
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.model.support.AddSupportTicketReplyRequest
 import com.example.liftrix.domain.model.support.CreateSupportTicketRequest
 import com.example.liftrix.domain.model.support.DeviceInfo
 import com.example.liftrix.domain.model.support.SupportCategory
 import com.example.liftrix.domain.model.support.SupportStatus
 import com.example.liftrix.domain.model.support.SupportTicket
+import com.example.liftrix.domain.model.support.SupportTicketMessage
 import com.example.liftrix.domain.service.AppInfoService
 import com.example.liftrix.domain.service.SupportService
 import com.example.liftrix.domain.service.SupportTicketStatistics
@@ -527,6 +529,79 @@ class SupportServiceImpl @Inject constructor(
     ) {
         withContext(Dispatchers.IO) {
             request.validate()
+        }
+    }
+    
+    override suspend fun addTicketReply(request: AddSupportTicketReplyRequest): LiftrixResult<Unit> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "TICKET_REPLY_ADD_FAILED",
+                errorMessage = "Failed to add ticket reply",
+                analyticsContext = mapOf(
+                    "operation" to "ADD_TICKET_REPLY",
+                    "ticket_id" to request.ticketId,
+                    "user_id" to request.userId,
+                    "error" to throwable.message.orEmpty()
+                )
+            )
+        }
+    ) {
+        withContext(Dispatchers.IO) {
+            // Verify ticket exists and belongs to user
+            val existingTicket = supportTicketDao.getTicketSync(request.ticketId, request.userId)
+                ?: throw LiftrixError.BusinessLogicError(
+                    code = "TICKET_NOT_FOUND",
+                    errorMessage = "Support ticket not found",
+                    analyticsContext = mapOf(
+                        "ticket_id" to request.ticketId,
+                        "user_id" to request.userId
+                    )
+                )
+            
+            // For now, we'll add the reply as a comment - in a full implementation,
+            // you would create a SupportTicketMessageEntity and save it to a messages table
+            addTicketComment(
+                ticketId = request.ticketId,
+                userId = request.userId,
+                comment = request.content
+            ).getOrThrow()
+            
+            Timber.d("Added reply to ticket ${request.ticketId}")
+        }
+    }
+    
+    override suspend fun getTicketMessages(
+        ticketId: String,
+        userId: String
+    ): LiftrixResult<List<SupportTicketMessage>> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "TICKET_MESSAGES_FETCH_FAILED",
+                errorMessage = "Failed to fetch ticket messages",
+                analyticsContext = mapOf(
+                    "operation" to "GET_TICKET_MESSAGES",
+                    "ticket_id" to ticketId,
+                    "user_id" to userId,
+                    "error" to throwable.message.orEmpty()
+                )
+            )
+        }
+    ) {
+        withContext(Dispatchers.IO) {
+            // Verify ticket exists and belongs to user
+            supportTicketDao.getTicketSync(ticketId, userId)
+                ?: throw LiftrixError.BusinessLogicError(
+                    code = "TICKET_NOT_FOUND",
+                    errorMessage = "Support ticket not found",
+                    analyticsContext = mapOf(
+                        "ticket_id" to ticketId,
+                        "user_id" to userId
+                    )
+                )
+            
+            // For now, return empty list - in a full implementation,
+            // you would query the SupportTicketMessageEntity table
+            emptyList<SupportTicketMessage>()
         }
     }
 }

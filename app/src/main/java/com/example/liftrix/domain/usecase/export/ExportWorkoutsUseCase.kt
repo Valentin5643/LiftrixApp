@@ -149,25 +149,62 @@ class ExportWorkoutsUseCase @Inject constructor(
     }
     
     private suspend fun getWorkoutData(userId: String, dateRange: DateRange?): List<WorkoutExportData> = withContext(Dispatchers.IO) {
-        val workouts = if (dateRange != null) {
-            workoutDao.getWorkoutsInDateRangeForUser(
+        val workoutEntities = if (dateRange != null) {
+            // Get workouts within date range
+            workoutDao.getWorkoutsInDateRangeForExport(
                 userId = userId,
                 startDate = dateRange.start.toString(),
                 endDate = dateRange.end.toString()
             )
         } else {
-            workoutDao.getAllWorkoutsForUser(userId).toString() // This would need proper implementation
-            emptyList() // Placeholder for now
+            // Get all workouts for the user
+            workoutDao.getAllWorkoutsForUserSync(userId)
         }
         
-        // Convert to export format (this would be properly implemented)
-        workouts.map { workout ->
+        // Convert entities to export format
+        workoutEntities.map { workoutEntity ->
+            // Parse exercises from JSON
+            val exercisesJson = try {
+                JSONArray(workoutEntity.exercisesJson)
+            } catch (e: Exception) {
+                JSONArray()
+            }
+            
+            val exercises = mutableListOf<ExerciseExportData>()
+            for (i in 0 until exercisesJson.length()) {
+                val exerciseJson = exercisesJson.getJSONObject(i)
+                val setsJson = exerciseJson.optJSONArray("sets") ?: JSONArray()
+                
+                val sets = mutableListOf<SetExportData>()
+                for (j in 0 until setsJson.length()) {
+                    val setJson = setsJson.getJSONObject(j)
+                    sets.add(SetExportData(
+                        reps = setJson.optInt("reps", 0).takeIf { it > 0 },
+                        weight = setJson.optDouble("weight", 0.0).takeIf { it > 0 },
+                        distance = null,
+                        duration = null,
+                        completed = setJson.optBoolean("completed", false)
+                    ))
+                }
+                
+                exercises.add(ExerciseExportData(
+                    name = exerciseJson.optString("name", "Unknown Exercise"),
+                    category = exerciseJson.optString("category", null),
+                    sets = sets
+                ))
+            }
+            
+            // Calculate duration if we have start and end times
+            val durationMillis = if (workoutEntity.startTime != null && workoutEntity.endTime != null) {
+                workoutEntity.endTime.toEpochMilli() - workoutEntity.startTime.toEpochMilli()
+            } else null
+            
             WorkoutExportData(
-                id = "workout.id",
-                name = "workout.name",
-                date = LocalDateTime.now(),
-                duration = 0L,
-                exercises = emptyList()
+                id = workoutEntity.id,
+                name = workoutEntity.name,
+                date = workoutEntity.date.atStartOfDay(),
+                duration = durationMillis?.div(1000), // Convert to seconds
+                exercises = exercises
             )
         }
     }

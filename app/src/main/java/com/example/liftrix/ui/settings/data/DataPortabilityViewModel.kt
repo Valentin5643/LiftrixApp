@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.settings.data
 
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.common.LiftrixResult
@@ -25,6 +26,7 @@ import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.state.dataOrNull
 import com.example.liftrix.ui.common.state.isLoading
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -67,6 +69,7 @@ class DataPortabilityViewModel @Inject constructor(
     private val exportWorkoutsUseCase: ExportWorkoutsUseCase,
     private val importWorkoutsUseCase: ImportWorkoutsUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    @ApplicationContext private val context: Context,
     errorHandler: ErrorHandler
 ) : BaseViewModel<DataPortabilityUiState, DataPortabilityEvent>(errorHandler) {
 
@@ -96,6 +99,7 @@ class DataPortabilityViewModel @Inject constructor(
             is DataPortabilityEvent.ValidateImportFile -> validateImportFile(event.uri, event.inputStream)
             is DataPortabilityEvent.SelectConflictStrategy -> selectConflictStrategy(event.strategy)
             is DataPortabilityEvent.StartImport -> startImport(event.uri, event.inputStream)
+            is DataPortabilityEvent.RequestImportStart -> requestImportStart(event.uri)
             is DataPortabilityEvent.CancelImport -> cancelImport()
             is DataPortabilityEvent.ShareExport -> shareExport(event.exportResult)
             is DataPortabilityEvent.DismissError -> dismissError()
@@ -279,6 +283,9 @@ class DataPortabilityViewModel @Inject constructor(
                     }
                     
                     Timber.d("Export completed successfully: ${exportResult.exportId}")
+                    
+                    // Automatically trigger share dialog after successful export
+                    shareExport(exportResult)
                 },
                 onFailure = { error ->
                     updateState { currentState ->
@@ -385,6 +392,12 @@ class DataPortabilityViewModel @Inject constructor(
                         currentState.copy(importState = UiState.Success(importData))
                     }
                     Timber.e("Import validation failed: $error")
+                    // Show error to user
+                    handleError(error as? LiftrixError ?: LiftrixError.BusinessLogicError(
+                        code = "IMPORT_VALIDATION_FAILED",
+                        errorMessage = "Failed to validate import file: ${error.message}",
+                        analyticsContext = mapOf("operation" to "VALIDATE_IMPORT")
+                    ))
                 }
             )
         }
@@ -397,6 +410,33 @@ class DataPortabilityViewModel @Inject constructor(
         }
     }
 
+    private fun requestImportStart(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                // Re-open the input stream from the URI
+                val inputStream = context.contentResolver.openInputStream(uri)
+                if (inputStream != null) {
+                    startImport(uri, inputStream)
+                } else {
+                    handleError(LiftrixError.BusinessLogicError(
+                        code = "OPEN_FILE_FAILED",
+                        errorMessage = "Failed to open selected file",
+                        analyticsContext = mapOf("operation" to "REQUEST_IMPORT_START")
+                    ))
+                }
+            } catch (e: Exception) {
+                handleError(LiftrixError.BusinessLogicError(
+                    code = "FILE_ACCESS_ERROR",
+                    errorMessage = "Cannot access the selected file: ${e.message}",
+                    analyticsContext = mapOf(
+                        "operation" to "REQUEST_IMPORT_START",
+                        "error" to e.message.orEmpty()
+                    )
+                ))
+            }
+        }
+    }
+    
     private fun startImport(uri: Uri, inputStream: InputStream) {
         val userId = currentUserId
         if (userId == null) {
@@ -689,6 +729,7 @@ sealed class DataPortabilityEvent : ViewModelEvent {
     data class ValidateImportFile(val uri: Uri, val inputStream: InputStream) : DataPortabilityEvent()
     data class SelectConflictStrategy(val strategy: ConflictStrategy) : DataPortabilityEvent()
     data class StartImport(val uri: Uri, val inputStream: InputStream) : DataPortabilityEvent()
+    data class RequestImportStart(val uri: Uri) : DataPortabilityEvent()
     object CancelImport : DataPortabilityEvent()
     
     // Common events

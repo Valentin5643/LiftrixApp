@@ -94,7 +94,7 @@ class GetVolumeAnalysisUseCase @Inject constructor(
             val averageVolume = calculateAverage(volumeData)
             val isEmpty = volumeData.isEmpty()
             
-            
+            // Return real data only - no mock/sample data fallbacks
             VolumeAnalysisData(
                 volumeData = volumeData,
                 totalVolume = totalVolume,
@@ -104,6 +104,10 @@ class GetVolumeAnalysisUseCase @Inject constructor(
                 groupBy = groupBy,
                 isEmpty = isEmpty
             ).also { result ->
+                Timber.d("Volume analysis returning ${result.volumeData.size} data points (isEmpty: ${result.isEmpty})")
+                if (isEmpty) {
+                    Timber.d("No volume data found for user $userId - returning empty analysis")
+                }
             }
         }
     }

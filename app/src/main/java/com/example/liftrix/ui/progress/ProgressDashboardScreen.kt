@@ -110,6 +110,7 @@ import com.example.liftrix.domain.usecase.analytics.CalorieAnalyticsUseCase
 import com.example.liftrix.ui.common.validation.ViewModelValidator
 import com.example.liftrix.core.extensions.collectAsOptimizedState
 import com.example.liftrix.ui.progress.NavigationCallbacks
+import com.example.liftrix.ui.progress.NavigationEvent
 
 /**
  * Maps domain DashboardLayoutMode to UI DashboardLayoutMode
@@ -187,15 +188,38 @@ fun ProgressDashboardScreen(
     // The ViewModel now monitors timeout from actual fetch start, not screen init
 
     // Set up navigation callbacks for AnalyticsWidgetViewModel
-    LaunchedEffect(onNavigateToVolumeDetail, onNavigateToOneRmDetail, onNavigateToMuscleGroupDetail, onNavigateToFrequencyDetail) {
-        widgetViewModel.setNavigationCallbacks(
-            NavigationCallbacks(
-                onNavigateToVolumeDetail = onNavigateToVolumeDetail,
-                onNavigateToOneRmDetail = onNavigateToOneRmDetail,
-                onNavigateToMuscleGroupDetail = onNavigateToMuscleGroupDetail,
-                onNavigateToFrequencyDetail = onNavigateToFrequencyDetail
-            )
+    // Use remember to create stable callbacks that don't change on every recomposition
+    val stableCallbacks = remember {
+        NavigationCallbacks(
+            onNavigateToVolumeDetail = onNavigateToVolumeDetail,
+            onNavigateToOneRmDetail = onNavigateToOneRmDetail,
+            onNavigateToMuscleGroupDetail = onNavigateToMuscleGroupDetail,
+            onNavigateToFrequencyDetail = onNavigateToFrequencyDetail
         )
+    }
+    
+    LaunchedEffect(stableCallbacks) {
+        widgetViewModel.setNavigationCallbacks(stableCallbacks)
+    }
+    
+    // Handle fallback navigation events when callbacks fail
+    LaunchedEffect(Unit) {
+        widgetViewModel.navigationEvents.collect { event ->
+            when (event) {
+                is NavigationEvent.NavigateToOneRmDetail -> {
+                    onNavigateToOneRmDetail()
+                }
+                is NavigationEvent.NavigateToVolumeDetail -> {
+                    onNavigateToVolumeDetail()
+                }
+                is NavigationEvent.NavigateToMuscleGroupDetail -> {
+                    onNavigateToMuscleGroupDetail()
+                }
+                is NavigationEvent.NavigateToFrequencyDetail -> {
+                    onNavigateToFrequencyDetail()
+                }
+            }
+        }
     }
     
     // Connect Coordinator events to ViewModels

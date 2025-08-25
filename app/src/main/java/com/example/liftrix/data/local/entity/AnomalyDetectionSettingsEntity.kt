@@ -23,20 +23,11 @@ data class AnomalyDetectionSettingsEntity(
     @ColumnInfo(name = "weight_spike_threshold")
     val weightSpikeThreshold: Float,
 
-    @ColumnInfo(name = "weight_drop_threshold")
-    val weightDropThreshold: Float,
-
     @ColumnInfo(name = "reps_spike_threshold")
     val repsSpikeThreshold: Float,
 
-    @ColumnInfo(name = "reps_drop_threshold")
-    val repsDropThreshold: Float,
-
     @ColumnInfo(name = "duration_spike_threshold")
     val durationSpikeThreshold: Float,
-
-    @ColumnInfo(name = "duration_drop_threshold")
-    val durationDropThreshold: Float,
 
     @ColumnInfo(name = "min_weight_for_detection")
     val minWeightForDetection: Double,

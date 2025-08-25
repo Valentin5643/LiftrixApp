@@ -8,87 +8,75 @@ import java.io.InputStream
 import java.io.InputStreamReader
 import javax.inject.Inject
 
+/**
+ * Implementation of FormatDetector service to detect the format of imported workout data files.
+ */
 class FormatDetectorImpl @Inject constructor() : FormatDetector {
     
+    /**
+     * Detects the format of the input stream content.
+     * 
+     * @param inputStream The input stream to analyze
+     * @return The detected format (JSON, CSV, TCX, GPX, FIT) or error
+     */
     override suspend fun detectFormat(inputStream: InputStream): LiftrixResult<String> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
                 code = "FORMAT_DETECTION_FAILED",
                 errorMessage = "Failed to detect file format",
-                analyticsContext = mapOf("error" to throwable.message.orEmpty())
+                analyticsContext = mapOf(
+                    "operation" to "DETECT_FORMAT",
+                    "error" to throwable.message.orEmpty()
+                )
             )
         }
     ) {
-        val bufferedReader = BufferedReader(InputStreamReader(inputStream))
+        // Mark the stream for reset if supported
+        if (inputStream.markSupported()) {
+            inputStream.mark(1024 * 10) // Mark first 10KB
+        }
+        
+        val reader = BufferedReader(InputStreamReader(inputStream))
         val firstLines = mutableListOf<String>()
         
-        // Read first 10 lines to analyze content
+        // Read first few lines to detect format
         repeat(10) {
-            val line = bufferedReader.readLine() ?: return@repeat
+            val line = reader.readLine() ?: return@repeat
             firstLines.add(line.trim())
+        }
+        
+        // Reset stream if possible
+        if (inputStream.markSupported()) {
+            inputStream.reset()
         }
         
         val content = firstLines.joinToString("\n")
         
         when {
             // JSON detection
-            content.trimStart().startsWith("{") || content.trimStart().startsWith("[") -> "JSON"
+            content.startsWith("{") || content.startsWith("[") -> "JSON"
             
-            // CSV detection - look for common patterns
-            firstLines.any { it.contains(",") } && 
-            (firstLines.firstOrNull()?.lowercase()?.contains("date") == true ||
-             firstLines.firstOrNull()?.lowercase()?.contains("exercise") == true ||
-             firstLines.firstOrNull()?.lowercase()?.contains("workout") == true) -> "CSV"
+            // XML-based formats (TCX)
+            content.contains("<?xml") && content.contains("TrainingCenterDatabase") -> "TCX"
             
-            // TCX detection - XML with TCX specific elements
-            content.contains("<TrainingCenterDatabase") ||
-            content.contains("<tcx:") ||
-            content.contains("xmlns=\"http://www.garmin.com/xmlschemas/TrainingCenterDatabase") -> "TCX"
+            // GPX detection
+            content.contains("<?xml") && content.contains("<gpx") -> "GPX"
             
-            // GPX detection - XML with GPX specific elements
-            content.contains("<gpx") ||
-            content.contains("xmlns=\"http://www.topografix.com/GPX") -> "GPX"
+            // CSV detection - look for comma or tab-separated values
+            firstLines.any { line ->
+                val hasCommas = line.split(",").size > 3
+                val hasTabs = line.split("\t").size > 3
+                (hasCommas || hasTabs) && 
+                (line.lowercase().contains("workout") || line.lowercase().contains("exercise") || 
+                 line.lowercase().contains("title") || line.lowercase().contains("date") || 
+                 line.lowercase().contains("reps") || line.lowercase().contains("weight") ||
+                 line.lowercase().contains("exercise_title") || line.lowercase().contains("start_time"))
+            } -> "CSV"
             
-            // FIT files are binary, check for FIT header
-            content.startsWith(".FIT") || firstLines.any { it.contains("FIT") && it.length < 20 } -> "FIT"
+            // FIT file detection (binary format, usually starts with specific bytes)
+            firstLines.firstOrNull()?.startsWith(".FIT") == true -> "FIT"
             
-            else -> throw IllegalArgumentException("Unsupported file format")
-        }
-    }
-    
-    override suspend fun detectFormat(filename: String, mimeType: String?): LiftrixResult<String> = liftrixCatching(
-        errorMapper = { throwable ->
-            LiftrixError.BusinessLogicError(
-                code = "FORMAT_DETECTION_FILENAME_FAILED",
-                errorMessage = "Failed to detect format from filename",
-                analyticsContext = mapOf(
-                    "filename" to filename,
-                    "mimeType" to mimeType.orEmpty(),
-                    "error" to throwable.message.orEmpty()
-                )
-            )
-        }
-    ) {
-        val extension = filename.substringAfterLast(".", "").lowercase()
-        
-        when (extension) {
-            "json" -> "JSON"
-            "csv" -> "CSV"
-            "tcx" -> "TCX"
-            "gpx" -> "GPX"
-            "fit" -> "FIT"
-            else -> {
-                // Fall back to MIME type
-                when (mimeType) {
-                    "application/json" -> "JSON"
-                    "text/csv" -> "CSV"
-                    "application/xml", "text/xml" -> {
-                        // Default to TCX for XML files in fitness context
-                        "TCX"
-                    }
-                    else -> throw IllegalArgumentException("Cannot determine format from filename '$filename' and MIME type '$mimeType'")
-                }
-            }
+            else -> throw IllegalArgumentException("Unable to detect file format. Supported formats: JSON, CSV, TCX, GPX, FIT")
         }
     }
 }

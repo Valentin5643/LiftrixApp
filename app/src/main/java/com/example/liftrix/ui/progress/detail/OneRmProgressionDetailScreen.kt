@@ -19,7 +19,6 @@ import androidx.navigation.NavController
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.progress.components.GlobalTimeRangeSelector
-import com.example.liftrix.ui.progress.components.TimeRangeSelector
 import com.example.liftrix.ui.common.components.LoadingIndicator
 import com.example.liftrix.ui.common.components.ErrorDisplay
 import com.example.liftrix.ui.common.components.EmptyState
@@ -78,33 +77,6 @@ fun OneRmProgressionDetailScreen(
         title = "1RM Progression",
         onBackClick = { 
             navController.popBackStack()
-        },
-        topBarActions = {
-            // Filter button
-            IconButton(
-                onClick = { 
-                    viewModel.handleEvent(OneRmDetailViewModel.Event.ShowExerciseFilterSheet)
-                }
-            ) {
-                Icon(
-                    Icons.Default.FilterList, 
-                    contentDescription = "Filter exercises",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            
-            // Export button
-            IconButton(
-                onClick = { 
-                    viewModel.handleEvent(OneRmDetailViewModel.Event.ExportData)
-                }
-            ) {
-                Icon(
-                    Icons.Default.FileDownload, 
-                    contentDescription = "Export data",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
         }
     ) {
         Column(
@@ -113,10 +85,23 @@ fun OneRmProgressionDetailScreen(
                 .padding(16.dp)
         ) {
             // Time range selector
-            TimeRangeSelector(
+            GlobalTimeRangeSelector(
                 selectedTimeRange = currentTimeRange,
                 onTimeRangeChange = { newTimeRange ->
                     viewModel.updateTimeRange(newTimeRange)
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // 1RM controls card
+            OneRmControlsCard(
+                onFilterClick = {
+                    viewModel.handleEvent(OneRmDetailViewModel.Event.ShowExerciseFilterSheet)
+                },
+                onExportClick = {
+                    viewModel.handleEvent(OneRmDetailViewModel.Event.ExportData)
                 },
                 modifier = Modifier.fillMaxWidth()
             )
@@ -493,6 +478,70 @@ private fun ExerciseDetailItem(
                 style = MaterialTheme.typography.bodySmall,
                 color = if (exercise.hasOneRmData) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
             )
+        }
+    }
+}
+
+/**
+ * 1RM controls card with filter and export functionality
+ */
+@Composable
+private fun OneRmControlsCard(
+    onFilterClick: () -> Unit,
+    onExportClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LiftrixCard(modifier = modifier) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Filter button - compact design
+            OutlinedButton(
+                onClick = onFilterClick,
+                modifier = Modifier
+                    .height(36.dp)
+                    .widthIn(min = 80.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Icon(
+                    Icons.Default.FilterList,
+                    contentDescription = "Filter exercises",
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Filter",
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(8.dp))
+            
+            // Export button - compact design
+            OutlinedButton(
+                onClick = onExportClick,
+                modifier = Modifier
+                    .height(36.dp)
+                    .widthIn(min = 80.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Icon(
+                    Icons.Default.FileDownload,
+                    contentDescription = "Export data",
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Export",
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1
+                )
+            }
         }
     }
 }

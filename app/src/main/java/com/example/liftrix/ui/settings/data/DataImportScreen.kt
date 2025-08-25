@@ -36,6 +36,7 @@ import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.theme.LiftrixSpacing
 import com.example.liftrix.ui.workout.components.PrimaryActionButton
 import com.example.liftrix.ui.workout.components.SecondaryActionButton
+import com.example.liftrix.ui.settings.data.formatDuration
 import java.io.InputStream
 
 /**
@@ -252,9 +253,9 @@ private fun ImportContent(
                             selectedStrategy = importData.selectedConflictStrategy,
                             onStartImport = {
                                 importData.selectedUri?.let { uri ->
-                                    // In a real implementation, we'd need to get the InputStream again
-                                    // For now, this is a placeholder for the start import action
-                                    // onEvent(DataPortabilityEvent.StartImport(uri, inputStream))
+                                    // Pass the URI and context to the parent composable
+                                    // The parent will handle re-opening the stream
+                                    onEvent(DataPortabilityEvent.RequestImportStart(uri))
                                 }
                             }
                         )
@@ -277,8 +278,7 @@ private fun ImportContent(
                     error = error,
                     onRetry = {
                         importData.selectedUri?.let { uri ->
-                            // Similar placeholder as above
-                            // onEvent(DataPortabilityEvent.StartImport(uri, inputStream))
+                            onEvent(DataPortabilityEvent.RequestImportStart(uri))
                         }
                     },
                     onDismiss = { onEvent(DataPortabilityEvent.DismissError) }
@@ -1026,17 +1026,6 @@ private fun ErrorState(
     }
 }
 
-private fun formatDuration(milliseconds: Long): String {
-    val seconds = milliseconds / 1000
-    val minutes = seconds / 60
-    val hours = minutes / 60
-    
-    return when {
-        hours > 0 -> "${hours}h ${minutes % 60}m"
-        minutes > 0 -> "${minutes}m ${seconds % 60}s"
-        else -> "${seconds}s"
-    }
-}
 
 /**
  * ★ Insight ─────────────────────────────────────

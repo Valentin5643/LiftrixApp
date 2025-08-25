@@ -625,23 +625,22 @@ service cloud.firestore {
                        request.resource.data.status in ['ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED'];
     }
     
-    // TEMPORARY: Legacy workout_sessions collection for backward compatibility
-    // TODO: Migrate to subcollections and remove this rule
-    match /workout_sessions/{sessionId} {
-      // Read: Allow if session document exists and user owns it
-      allow read: if isAuthenticated() && 
-                     resource.data.userId == request.auth.uid;
+    // Workout sessions subcollection - properly nested under user documents
+    // Migrated from legacy top-level collection for better data organization
+    match /users/{userId}/workout_sessions/{sessionId} {
+      // Read: Allow if user owns the parent document
+      allow read: if isAuthenticated() && isOwner(userId);
       
       // Write: Validate session structure and ownership
       allow write: if isAuthenticated() && 
-                      request.resource.data.userId == request.auth.uid &&
-                      request.resource.data.keys().hasAll(['userId', 'status', 'lastModified']) &&
+                      isOwner(userId) &&
+                      request.resource.data.keys().hasAll(['status', 'lastModified']) &&
                       request.resource.data.status in ['ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED'];
       
-      // Create: Ensure proper session creation with user ownership
+      // Create: Ensure proper session creation with ownership validation
       allow create: if isAuthenticated() && 
-                       request.resource.data.userId == request.auth.uid &&
-                       request.resource.data.keys().hasAll(['userId', 'status', 'lastModified']) &&
+                       isOwner(userId) &&
+                       request.resource.data.keys().hasAll(['status', 'lastModified']) &&
                        request.resource.data.status in ['ACTIVE', 'PAUSED', 'COMPLETED', 'CANCELLED'];
     }
     

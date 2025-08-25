@@ -306,7 +306,7 @@ fun ModernProfileContent(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Avatar - 80px diameter
+                    // Avatar - 80px diameter with consistent fallback handling
                     Box(
                         modifier = Modifier
                             .size(80.dp)
@@ -314,17 +314,25 @@ fun ModernProfileContent(
                             .background(primaryTeal),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (profile.profileImageUrl != null) {
+                        // Handle both null AND empty string consistently
+                        val hasValidImageUrl = !profile.profileImageUrl.isNullOrBlank()
+                        timber.log.Timber.d("Profile avatar for ${profile.username}: imageUrl='${profile.profileImageUrl}', hasValid=$hasValidImageUrl")
+                        
+                        if (hasValidImageUrl) {
                             AsyncImage(
                                 model = ImageRequest.Builder(LocalContext.current)
                                     .data(profile.profileImageUrl)
                                     .crossfade(true)
                                     .build(),
-                                contentDescription = null,
+                                contentDescription = "Profile picture of ${profile.displayName ?: profile.username}",
                                 contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier.fillMaxSize(),
+                                onError = { 
+                                    timber.log.Timber.e("Failed to load profile image: ${profile.profileImageUrl} for user: ${profile.username}")
+                                }
                             )
                         } else {
+                            // Fallback to initials when image is null or empty
                             Text(
                                 text = (profile.displayName ?: profile.username).take(2)
                                     .uppercase(),

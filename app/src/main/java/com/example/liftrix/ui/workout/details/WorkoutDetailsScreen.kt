@@ -133,10 +133,12 @@ fun WorkoutDetailsScreen(
                     }
                     
                     // Exercise Details
-                    itemsIndexed(state.exercises) { index, exercise ->
+                    itemsIndexed(state.exerciseDataWithPRs) { index, exerciseWithPRData ->
                         ExerciseDetailCard(
-                            exercise = exercise,
-                            exerciseNumber = index + 1
+                            exercise = exerciseWithPRData.exercise,
+                            exerciseNumber = exerciseWithPRData.exerciseNumber,
+                            setsWithPRData = exerciseWithPRData.setsWithPRData,
+                            totalPRsInExercise = exerciseWithPRData.totalPRsInExercise
                         )
                     }
                     
@@ -362,7 +364,9 @@ private fun StatChip(
 @Composable
 private fun ExerciseDetailCard(
     exercise: Exercise,
-    exerciseNumber: Int
+    exerciseNumber: Int,
+    setsWithPRData: List<SetWithPRData>,
+    totalPRsInExercise: Int
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -399,7 +403,7 @@ private fun ExerciseDetailCard(
                     )
                 }
                 
-                // Exercise Stats
+                // Exercise Stats with PR count
                 Column(horizontalAlignment = Alignment.End) {
                     val weightUnitManager = rememberWeightUnitManager()
                     val totalVolumeInKg = exercise.sets.sumOf { set ->
@@ -418,11 +422,30 @@ private fun ExerciseDetailCard(
                         fontWeight = FontWeight.Medium,
                         color = LiftrixColorsV2.Teal
                     )
-                    Text(
-                        text = "volume",
-                        fontSize = 11.sp,
-                        color = LiftrixColorsV2.Dark.TextSecondary
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "volume",
+                            fontSize = 11.sp,
+                            color = LiftrixColorsV2.Dark.TextSecondary
+                        )
+                        if (totalPRsInExercise > 0) {
+                            Icon(
+                                Icons.Default.Star,
+                                contentDescription = "PRs",
+                                tint = LiftrixColorsV2.Dark.Warning,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                text = totalPRsInExercise.toString(),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = LiftrixColorsV2.Dark.Warning
+                            )
+                        }
+                    }
                 }
             }
             
@@ -477,13 +500,15 @@ private fun ExerciseDetailCard(
             Divider(color = LiftrixColorsV2.Dark.TextSecondary.copy(alpha = 0.2f))
             Spacer(modifier = Modifier.height(8.dp))
             
-            exercise.sets.forEachIndexed { index, set ->
+            setsWithPRData.forEachIndexed { index, setWithPRData ->
                 SetRow(
                     setNumber = index + 1,
-                    set = set,
-                    isPersonalRecord = false // TODO: Implement PR detection
+                    set = setWithPRData.set,
+                    isPersonalRecord = setWithPRData.isPersonalRecord,
+                    previousSetData = setWithPRData.previousSetData,
+                    restTime = setWithPRData.restTime
                 )
-                if (index < exercise.sets.size - 1) {
+                if (index < setsWithPRData.size - 1) {
                     Spacer(modifier = Modifier.height(4.dp))
                 }
             }
@@ -519,7 +544,9 @@ private fun ExerciseDetailCard(
 private fun SetRow(
     setNumber: Int,
     set: ExerciseSet,
-    isPersonalRecord: Boolean
+    isPersonalRecord: Boolean,
+    previousSetData: com.example.liftrix.domain.usecase.workout.PreviousSetData?,
+    restTime: Duration?
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -557,7 +584,7 @@ private fun SetRow(
         
         // Previous
         Text(
-            text = "-", // TODO: Implement previous set tracking
+            text = previousSetData?.formatForDisplay() ?: "-",
             fontSize = 13.sp,
             color = LiftrixColorsV2.Dark.TextSecondary,
             modifier = Modifier.weight(1f),
@@ -599,7 +626,7 @@ private fun SetRow(
         
         // Rest Time
         Text(
-            text = "-", // TODO: Implement rest time tracking
+            text = restTime?.let { formatRestTime(it) } ?: "-",
             fontSize = 13.sp,
             color = LiftrixColorsV2.Dark.TextSecondary,
             modifier = Modifier.weight(1f),

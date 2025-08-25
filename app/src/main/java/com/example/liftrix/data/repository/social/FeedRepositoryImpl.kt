@@ -25,6 +25,10 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.service.FeedCacheService
+import com.example.liftrix.sync.WorkoutPostSyncWorker
+import androidx.work.WorkManager
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -52,7 +56,8 @@ class FeedRepositoryImpl @Inject constructor(
     private val workoutPostMapper: WorkoutPostMapper,
     private val feedCacheService: FeedCacheService,
     private val feedCacheDao: FeedCacheDao,
-    private val followRelationshipDao: FollowRelationshipDao
+    private val followRelationshipDao: FollowRelationshipDao,
+    @ApplicationContext private val context: Context
 ) : FeedRepository {
     
     // Cache for followed user IDs to prevent feed clearing during sync
@@ -78,20 +83,25 @@ class FeedRepositoryImpl @Inject constructor(
                     // This prevents feed from disappearing during sync operations
                     val finalIds = if (followedIds.isEmpty() && followedUserIdsCache.containsKey(userId)) {
                         // Use cached IDs if DB is temporarily empty during sync
-                        Timber.w("🔥 FEED-STABILITY: Database returned empty follow list, using cached IDs for user $userId")
                         followedUserIdsCache[userId] ?: emptyList()
                     } else {
                         // Update cache with fresh data
                         if (followedIds.isNotEmpty()) {
                             followedUserIdsCache[userId] = followedIds
-                            Timber.d("🔥 FEED-STABILITY: Updated follow cache with ${followedIds.size} users for $userId")
                         }
                         followedIds
                     }
                     
                     // Include the current user's own posts in their home feed
                     val allUserIds = finalIds + userId
-                    Timber.d("🔥 FEED-DEBUG: Loading HOME feed for userId=$userId with ${allUserIds.size} user IDs (${finalIds.size} followed + self)")
+                    
+                    // Check total posts for this user
+                    val userPostCount = workoutPostDao.getUserPostCount(userId)
+                    val publicCount = workoutPostDao.getUserPostCountByVisibility(userId, "PUBLIC")
+                    val followersCount = workoutPostDao.getUserPostCountByVisibility(userId, "FOLLOWERS") 
+                    val privateCount = workoutPostDao.getUserPostCountByVisibility(userId, "PRIVATE")
+                    Timber.d("🔍 WORKOUT-POSTS-DEBUG: User $userId posts - Total: $userPostCount, Public: $publicCount, Followers: $followersCount, Private: $privateCount")
+                    
                     allUserIds
                 }
                 
@@ -110,7 +120,6 @@ class FeedRepositoryImpl @Inject constructor(
                         // Use the new query that includes the current user's posts by default
                         val safeFollowedIds = if (followedUserIds.isEmpty()) {
                             // Empty list is fine with the new query since it always includes currentUserId
-                            Timber.d("🔥 FEED-STABILITY: User has no follows yet, showing only their own posts")
                             emptyList()
                         } else {
                             followedUserIds
@@ -135,7 +144,6 @@ class FeedRepositoryImpl @Inject constructor(
                     
                     // 🔥 FIX: Use cached IDs if DB is temporarily empty
                     val finalIds = if (followedIds.isEmpty() && followedUserIdsCache.containsKey(userId)) {
-                        Timber.w("🔥 FEED-STABILITY: Database returned empty follow list for DISCOVERY, using cached IDs")
                         followedUserIdsCache[userId] ?: emptyList()
                     } else {
                         if (followedIds.isNotEmpty()) {
@@ -144,15 +152,15 @@ class FeedRepositoryImpl @Inject constructor(
                         followedIds
                     }
                     
-                    // Exclude the current user and their followed users from discovery
-                    val excludeIds = finalIds + userId
-                    Timber.d("🔥 FEED-DEBUG: Loading DISCOVERY feed excluding ${excludeIds.size} user IDs")
+                    // Only exclude followed users from discovery (allow current user's PUBLIC posts)
+                    val excludeIds = finalIds
                     excludeIds
                 }
                 
                 Pager(
                     config = PagingConfig(
                         pageSize = pageSize,
+                        initialLoadSize = pageSize, // Load exactly pageSize items initially
                         enablePlaceholders = false,
                         prefetchDistance = pageSize / 2
                     ),
@@ -167,7 +175,10 @@ class FeedRepositoryImpl @Inject constructor(
                         } else {
                             followedUserIds
                         }
-                        workoutPostDao.getDiscoveryFeedPosts(safeExcludeIds)
+                        
+                        // 🔥 FIX: Use direct PUBLIC posts query with proper exclusion handling
+                        // TODO: Migrate to feed_cache once Firebase Functions are properly populating it
+                        createDiscoveryDirectPagingSource(userId, safeExcludeIds)
                     }
                 )
             }
@@ -186,9 +197,31 @@ class FeedRepositoryImpl @Inject constructor(
         
         emitAll(pager.flow.map { pagingData ->
             pagingData.map { entity ->
+                Timber.d("🔍 WORKOUT-POSTS-DEBUG: Feed delivering post ID=${entity.id}, user=${entity.userId}, visibility=${entity.visibility}, workout=${entity.workoutId}")
                 enhanceWithUserData(entity, userId)
             }
         })
+    }
+    
+    override suspend fun hasPostForWorkout(
+        userId: String, 
+        workoutId: String
+    ): LiftrixResult<Boolean> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "CHECK_WORKOUT_POST",
+                errorMessage = "Failed to check for existing workout post",
+                analyticsContext = mapOf(
+                    "user_id" to userId,
+                    "workout_id" to workoutId
+                )
+            )
+        }
+    ) {
+        withContext(Dispatchers.IO) {
+            val existingPost = workoutPostDao.getPostByWorkoutId(userId, workoutId)
+            existingPost != null
+        }
     }
     
     override suspend fun createPost(
@@ -209,6 +242,8 @@ class FeedRepositoryImpl @Inject constructor(
         withContext(Dispatchers.IO) {
             val postId = UUID.randomUUID().toString()
             
+            Timber.d("🔍 WORKOUT-POSTS-DEBUG: Creating post for user=$userId, workout=${request.workoutId}, visibility=${request.visibility}")
+            
             // Get workout details for metadata
             val workout = workoutDao.getWorkoutById(request.workoutId)
             
@@ -224,10 +259,12 @@ class FeedRepositoryImpl @Inject constructor(
             
             workoutPostDao.insertPost(entity)
             
-            // 🔥 FIX: Don't invalidate cache when creating posts
-            // The new post is already in the database and will show up
-            // automatically without needing to clear any cache
-            // feedCacheService.invalidateFeedCache(userId) // REMOVED
+            Timber.d("🔍 WORKOUT-POSTS-DEBUG: Post created successfully - ID=$postId, visibility=${entity.visibility}")
+            
+            // 🔥 FIX: Enqueue sync worker to upload post to Firebase
+            // This will trigger generateFeedOnPostCreation function to populate feed_cache
+            val syncWorkRequest = WorkoutPostSyncWorker.createWorkRequest(userId)
+            WorkManager.getInstance(context).enqueue(syncWorkRequest)
             
             enhanceWithUserData(entity, userId)
         }
@@ -434,6 +471,102 @@ class FeedRepositoryImpl @Inject constructor(
     }
     
     /**
+     * Creates a PagingSource for discovery feed using direct PUBLIC posts query
+     * This bypasses feed_cache and queries workout_posts directly for PUBLIC visibility
+     */
+    private fun createDiscoveryDirectPagingSource(userId: String, excludeUserIds: List<String>): PagingSource<Int, com.example.liftrix.data.local.entity.WorkoutPostEntity> {
+        return object : PagingSource<Int, com.example.liftrix.data.local.entity.WorkoutPostEntity>() {
+            override suspend fun load(params: LoadParams<Int>): LoadResult<Int, com.example.liftrix.data.local.entity.WorkoutPostEntity> {
+                return try {
+                    val page = params.key ?: 0
+                    val pageSize = params.loadSize
+                    val offset = page * pageSize
+                    
+                    // Query PUBLIC posts, excluding followed users + dummy user
+                    val posts = workoutPostDao.getPublicPostsExcludingUsers(
+                        excludeUserIds = excludeUserIds,
+                        limit = pageSize,
+                        offset = offset
+                    )
+                    
+                    
+                    LoadResult.Page(
+                        data = posts,
+                        prevKey = if (page > 0) page - 1 else null,
+                        nextKey = if (posts.size == pageSize) page + 1 else null
+                    )
+                    
+                } catch (e: Exception) {
+                    Timber.e(e, "Error loading discovery feed for user $userId")
+                    LoadResult.Error(e)
+                }
+            }
+            
+            override fun getRefreshKey(state: PagingState<Int, com.example.liftrix.data.local.entity.WorkoutPostEntity>): Int? {
+                return state.anchorPosition?.let { anchorPosition ->
+                    state.closestPageToPosition(anchorPosition)?.prevKey?.plus(1)
+                        ?: state.closestPageToPosition(anchorPosition)?.nextKey?.minus(1)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Creates a PagingSource for discovery feed using feed_cache populated by Firebase Functions
+     * DEPRECATED: Use createDiscoveryDirectPagingSource until Firebase Functions populate feed_cache
+     */
+    private fun createDiscoveryFeedPagingSource(userId: String): PagingSource<Int, com.example.liftrix.data.local.entity.WorkoutPostEntity> {
+        return object : PagingSource<Int, com.example.liftrix.data.local.entity.WorkoutPostEntity>() {
+            override suspend fun load(params: LoadParams<Int>): LoadResult<Int, com.example.liftrix.data.local.entity.WorkoutPostEntity> {
+                return try {
+                    val page = params.key ?: 0
+                    val pageSize = params.loadSize
+                    val offset = page * pageSize
+                    
+                    // Get post IDs from feed_cache ordered by relevance score
+                    val cachedPostIds = feedCacheDao.getCachedPostIdsByType(
+                        userId = userId,
+                        feedType = "DISCOVERY",
+                        limit = pageSize,
+                        offset = offset
+                    )
+                    
+                    if (cachedPostIds.isEmpty()) {
+                        return LoadResult.Page(
+                            data = emptyList(),
+                            prevKey = if (page > 0) page - 1 else null,
+                            nextKey = null
+                        )
+                    }
+                    
+                    // Get actual post entities using the cached post IDs
+                    val posts = cachedPostIds.mapNotNull { postId ->
+                        workoutPostDao.getPostById(postId)
+                    }
+                    
+                    
+                    LoadResult.Page(
+                        data = posts,
+                        prevKey = if (page > 0) page - 1 else null,
+                        nextKey = if (posts.size == pageSize) page + 1 else null
+                    )
+                    
+                } catch (e: Exception) {
+                    Timber.e(e, "Error loading discovery feed from cache for user $userId")
+                    LoadResult.Error(e)
+                }
+            }
+            
+            override fun getRefreshKey(state: PagingState<Int, com.example.liftrix.data.local.entity.WorkoutPostEntity>): Int? {
+                return state.anchorPosition?.let { anchorPosition ->
+                    state.closestPageToPosition(anchorPosition)?.prevKey?.plus(1)
+                        ?: state.closestPageToPosition(anchorPosition)?.nextKey?.minus(1)
+                }
+            }
+        }
+    }
+    
+    /**
      * Enhances post entity with user interaction data and author information
      */
     private suspend fun enhanceWithUserData(entity: com.example.liftrix.data.local.entity.WorkoutPostEntity, viewerId: String): WorkoutPost {
@@ -441,16 +574,32 @@ class FeedRepositoryImpl @Inject constructor(
         val isLiked = postLikeDao.isPostLikedByUser(entity.id, viewerId)
         val isSaved = savedPostDao.isPostSaved(viewerId, entity.id)
         
-        // Get author profile information
+        // Get author profile information - log error but don't crash
         val authorProfile = socialProfileDao.getSocialProfileByUserId(entity.userId)
+        
+        if (authorProfile == null) {
+            Timber.e("PROFILE_MISSING: Social profile not found for user ${entity.userId} in post ${entity.id}")
+        } else {
+            // Fix empty string profile photo URLs by converting them to null
+            val cleanedPhotoUrl = authorProfile.profilePhotoUrl?.takeIf { it.isNotBlank() }
+            if (authorProfile.profilePhotoUrl != cleanedPhotoUrl) {
+                Timber.w("PROFILE_FIX: Converting empty profile photo URL to null for user ${entity.userId}")
+                try {
+                    socialProfileDao.updateProfile(authorProfile.copy(profilePhotoUrl = cleanedPhotoUrl))
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to update profile photo URL for user ${entity.userId}")
+                }
+            }
+            Timber.d("Enhanced post ${entity.id} with profile: ${authorProfile.username}, photo: ${cleanedPhotoUrl}")
+        }
         
         return workoutPostMapper.toDomain(
             entity = entity,
             isLikedByViewer = isLiked,
             isSavedByViewer = isSaved,
-            authorUsername = authorProfile?.username,
-            authorDisplayName = authorProfile?.displayName,
-            authorProfilePhotoUrl = authorProfile?.profilePhotoUrl
+            authorUsername = authorProfile?.username ?: "ERROR_NO_PROFILE",
+            authorDisplayName = authorProfile?.displayName ?: "Missing Profile",
+            authorProfilePhotoUrl = authorProfile?.profilePhotoUrl?.takeIf { it.isNotBlank() }
         )
     }
     

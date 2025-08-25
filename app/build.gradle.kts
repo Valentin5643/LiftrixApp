@@ -205,8 +205,7 @@ dependencies {
     implementation(libs.hilt.work)
     implementation(libs.hilt.navigation.compose)
     ksp(libs.hilt.compiler)
-    // CRITICAL: Required for @HiltWorker annotation processing
-    ksp("androidx.hilt:hilt-compiler:1.2.0")
+    // Note: AndroidX Hilt compiler for @HiltWorker is already included in main Hilt compiler
     
     // WorkManager
     implementation(libs.work.runtime.ktx)

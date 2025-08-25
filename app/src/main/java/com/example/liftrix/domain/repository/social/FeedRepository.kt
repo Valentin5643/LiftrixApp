@@ -32,6 +32,16 @@ interface FeedRepository {
     ): Flow<PagingData<WorkoutPost>>
     
     /**
+     * Checks if a post already exists for a specific workout.
+     * Used to prevent duplicate posts during auto-creation.
+     * 
+     * @param userId User who completed the workout
+     * @param workoutId Workout to check for existing posts
+     * @return True if a post already exists, false otherwise
+     */
+    suspend fun hasPostForWorkout(userId: String, workoutId: String): LiftrixResult<Boolean>
+    
+    /**
      * Creates a new workout post.
      * 
      * @param userId Author of the post

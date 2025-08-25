@@ -36,6 +36,9 @@ interface WorkoutPostDao {
     @Query("SELECT * FROM workout_posts WHERE id = :postId")
     suspend fun getPostById(postId: String): WorkoutPostEntity?
     
+    @Query("SELECT * FROM workout_posts WHERE user_id = :userId AND workout_id = :workoutId LIMIT 1")
+    suspend fun getPostByWorkoutId(userId: String, workoutId: String): WorkoutPostEntity?
+    
     @Query("SELECT * FROM workout_posts WHERE user_id = :userId ORDER BY created_at DESC")
     fun getUserPosts(userId: String): Flow<List<WorkoutPostEntity>>
     
@@ -74,8 +77,7 @@ interface WorkoutPostDao {
     
     @Query("""
         SELECT * FROM workout_posts 
-        WHERE (user_id = :currentUserId OR user_id IN (:followedUserIds))
-        AND visibility IN ('PUBLIC', 'FOLLOWERS')
+        WHERE (user_id = :currentUserId OR (user_id IN (:followedUserIds) AND visibility IN ('PUBLIC', 'FOLLOWERS')))
         ORDER BY created_at DESC
     """)
     fun getHomeFeedPostsWithSelf(currentUserId: String, followedUserIds: List<String>): PagingSource<Int, WorkoutPostEntity>
@@ -91,6 +93,22 @@ interface WorkoutPostDao {
             END DESC
     """)
     fun getDiscoveryFeedPosts(excludeUserIds: List<String>): PagingSource<Int, WorkoutPostEntity>
+    
+    @Query("""
+        SELECT * FROM workout_posts 
+        WHERE visibility = 'PUBLIC'
+        AND user_id NOT IN (:excludeUserIds)
+        AND created_at >= :sinceTimestamp
+        ORDER BY 
+            CASE 
+                WHEN prs_count > 0 THEN created_at + (prs_count * 3600000)
+                ELSE created_at 
+            END DESC
+    """)
+    fun getDiscoveryFeedPostsWithTimeFilter(
+        excludeUserIds: List<String>, 
+        sinceTimestamp: Long
+    ): PagingSource<Int, WorkoutPostEntity>
     
     @Query("""
         SELECT * FROM workout_posts 
@@ -149,6 +167,9 @@ interface WorkoutPostDao {
     @Query("SELECT COUNT(*) FROM workout_posts WHERE user_id = :userId")
     suspend fun getUserPostCount(userId: String): Int
     
+    @Query("SELECT COUNT(*) FROM workout_posts WHERE user_id = :userId AND visibility = :visibility")
+    suspend fun getUserPostCountByVisibility(userId: String, visibility: String): Int
+    
     @Query("DELETE FROM workout_posts WHERE user_id = :userId")
     suspend fun deleteAllUserPosts(userId: String)
     
@@ -166,4 +187,17 @@ interface WorkoutPostDao {
         WHERE id = :postId
     """)
     suspend fun markAsSynced(postId: String, syncVersion: Int)
+    
+    @Query("""
+        SELECT * FROM workout_posts 
+        WHERE visibility = 'PUBLIC' 
+        AND user_id NOT IN (:excludeUserIds)
+        ORDER BY created_at DESC
+        LIMIT :limit OFFSET :offset
+    """)
+    suspend fun getPublicPostsExcludingUsers(
+        excludeUserIds: List<String>, 
+        limit: Int, 
+        offset: Int
+    ): List<WorkoutPostEntity>
 }

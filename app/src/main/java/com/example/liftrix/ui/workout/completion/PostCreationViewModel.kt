@@ -126,6 +126,10 @@ class PostCreationViewModel @Inject constructor(
             // Get user info from auth repository for profile creation
             val currentUser = authRepository.currentUser.first()
             
+            // Extract profile photo URL with better fallback handling
+            val profilePhotoUrl = currentUser?.photoUrl?.takeIf { it.isNotBlank() }
+            Timber.d("Creating social profile for user $userId with photo URL: $profilePhotoUrl")
+            
             // Create a basic social profile with default values
             // BUT use a flag to indicate this is temporary
             val newProfile = SocialProfileEntity(
@@ -133,7 +137,7 @@ class PostCreationViewModel @Inject constructor(
                 username = "", // Empty username indicates profile needs setup
                 displayName = currentUser?.displayName ?: "Liftrix User",
                 bio = null,
-                profilePhotoUrl = currentUser?.photoUrl,
+                profilePhotoUrl = profilePhotoUrl,
                 coverPhotoUrl = null,
                 workoutCount = 0,
                 followerCount = 0,

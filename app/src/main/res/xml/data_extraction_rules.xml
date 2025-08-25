@@ -1,19 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
+   Data extraction rules for Liftrix app backup and restore.
+   Configured to backup user preferences and workout data while excluding sensitive information.
    See https://developer.android.com/about/versions/12/backup-restore#xml-changes
    for details.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <!-- Include user preferences and non-sensitive data -->
+        <include domain="sharedpref" path="liftrix_preferences.xml"/>
+        <include domain="sharedpref" path="user_settings.xml"/>
+        <include domain="database" path="liftrix_database.db"/>
+        <include domain="file" path="workout_exports/"/>
+        
+        <!-- Exclude sensitive and cache data -->
+        <exclude domain="sharedpref" path="auth_tokens.xml"/>
+        <exclude domain="sharedpref" path="firebase_config.xml"/>
+        <exclude domain="database" path="liftrix_database.db-wal"/>
+        <exclude domain="database" path="liftrix_database.db-shm"/>
+        <exclude domain="cache" path="."/>
+        <exclude domain="file" path="cache/"/>
+        <exclude domain="file" path="temp/"/>
+        <exclude domain="file" path="media_cache/"/>
+        <exclude domain="external" path="."/>
+        <exclude domain="root" path="."/>
     </cloud-backup>
-    <!--
+    
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <!-- Include all user data for device-to-device transfer -->
+        <include domain="sharedpref" path="."/>
+        <include domain="database" path="."/>
+        <include domain="file" path="."/>
+        
+        <!-- Still exclude temporary and cache files -->
+        <exclude domain="cache" path="."/>
+        <exclude domain="file" path="cache/"/>
+        <exclude domain="file" path="temp/"/>
+        <exclude domain="database" path="liftrix_database.db-wal"/>
+        <exclude domain="database" path="liftrix_database.db-shm"/>
     </device-transfer>
-    -->
 </data-extraction-rules>

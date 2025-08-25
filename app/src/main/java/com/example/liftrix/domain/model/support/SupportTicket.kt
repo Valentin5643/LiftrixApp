@@ -17,6 +17,7 @@ data class SupportTicket(
     val status: SupportStatus = SupportStatus.OPEN,
     val createdAt: Instant,
     val updatedAt: Instant? = null,
+    val messages: List<SupportTicketMessage> = emptyList(),
     val isSynced: Boolean = false
 ) {
     /**
@@ -39,6 +40,47 @@ data class SupportTicket(
         val now = Instant.now()
         return java.time.Duration.between(createdAt, now).toDays()
     }
+    
+    /**
+     * Gets all messages in chronological order (oldest first)
+     * @return List of messages sorted by creation time
+     */
+    fun getMessagesChronologically(): List<SupportTicketMessage> = messages.sortedBy { it.createdAt }
+    
+    /**
+     * Gets the latest message in the conversation
+     * @return Most recent message or null if no messages
+     */
+    fun getLatestMessage(): SupportTicketMessage? = messages.maxByOrNull { it.createdAt }
+    
+    /**
+     * Gets the count of unsynced messages
+     * @return Number of messages that haven't been synced
+     */
+    fun getUnsyncedMessageCount(): Int = messages.count { !it.isSynced }
+    
+    /**
+     * Checks if the ticket has any messages from support
+     * @return True if there are messages from support team
+     */
+    fun hasSupportMessages(): Boolean = messages.any { it.isFromSupport }
+    
+    /**
+     * Gets the total number of messages in the conversation
+     * @return Total message count
+     */
+    fun getMessageCount(): Int = messages.size
+    
+    /**
+     * Adds a new message to the ticket
+     * @param message The message to add
+     * @return Updated ticket with the new message
+     */
+    fun addMessage(message: SupportTicketMessage): SupportTicket = copy(
+        messages = messages + message,
+        updatedAt = Instant.now(),
+        isSynced = false
+    )
     
     /**
      * Marks the ticket as updated

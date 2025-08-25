@@ -213,17 +213,11 @@ class DetectWorkoutAnomaliesUseCase @Inject constructor(
         // Check against previous set in current session
         previousWeight?.let { prev ->
             val spikeRatio = currentWeight / prev
-            val dropRatio = currentWeight / prev
 
             when {
                 spikeRatio >= settings.weightSpikeThreshold -> {
                     anomalyType = AnomalyType.WEIGHT_SPIKE
                     confidenceScore = calculateConfidenceScore(spikeRatio.toFloat(), settings.weightSpikeThreshold)
-                    previousValue = AnomalyValue.WeightValue(prev)
-                }
-                dropRatio <= settings.weightDropThreshold -> {
-                    anomalyType = AnomalyType.WEIGHT_DROP
-                    confidenceScore = calculateConfidenceScore((1f / dropRatio).toFloat(), (1f / settings.weightDropThreshold))
                     previousValue = AnomalyValue.WeightValue(prev)
                 }
             }
@@ -234,14 +228,10 @@ class DetectWorkoutAnomaliesUseCase @Inject constructor(
             val averageWeight = if (history.recentWeights.isNotEmpty()) history.recentWeights.average() else 0.0
             val ratio = if (averageWeight > 0) (currentWeight / averageWeight).toFloat() else 1.0f
 
-            anomalyType = if (ratio >= settings.weightSpikeThreshold) {
+            if (ratio >= settings.weightSpikeThreshold) {
+                anomalyType = AnomalyType.WEIGHT_SPIKE
                 confidenceScore = calculateConfidenceScore(ratio, settings.weightSpikeThreshold)
                 previousValue = AnomalyValue.WeightValue(averageWeight)
-                AnomalyType.WEIGHT_SPIKE
-            } else {
-                confidenceScore = calculateConfidenceScore(1f / ratio, 1f / settings.weightDropThreshold)
-                previousValue = AnomalyValue.WeightValue(averageWeight)
-                AnomalyType.WEIGHT_DROP
             }
         }
 
@@ -279,17 +269,11 @@ class DetectWorkoutAnomaliesUseCase @Inject constructor(
         // Check against previous set in current session
         previousReps?.let { prev ->
             val spikeRatio = currentReps.toFloat() / prev
-            val dropRatio = currentReps.toFloat() / prev
 
             when {
                 spikeRatio >= settings.repsSpikeThreshold -> {
                     anomalyType = AnomalyType.REPS_SPIKE
                     confidenceScore = calculateConfidenceScore(spikeRatio, settings.repsSpikeThreshold)
-                    previousValue = AnomalyValue.RepsValue(prev)
-                }
-                dropRatio <= settings.repsDropThreshold -> {
-                    anomalyType = AnomalyType.REPS_DROP
-                    confidenceScore = calculateConfidenceScore(1f / dropRatio, 1f / settings.repsDropThreshold)
                     previousValue = AnomalyValue.RepsValue(prev)
                 }
             }
@@ -300,14 +284,10 @@ class DetectWorkoutAnomaliesUseCase @Inject constructor(
             val averageReps = if (history.recentReps.isNotEmpty()) history.recentReps.average() else 0.0
             val ratio = if (averageReps > 0) currentReps / averageReps else 1.0
 
-            anomalyType = if (ratio >= settings.repsSpikeThreshold) {
+            if (ratio >= settings.repsSpikeThreshold) {
+                anomalyType = AnomalyType.REPS_SPIKE
                 confidenceScore = calculateConfidenceScore(ratio.toFloat(), settings.repsSpikeThreshold)
                 previousValue = AnomalyValue.RepsValue(averageReps.toInt())
-                AnomalyType.REPS_SPIKE
-            } else {
-                confidenceScore = calculateConfidenceScore(1f / ratio.toFloat(), 1f / settings.repsDropThreshold)
-                previousValue = AnomalyValue.RepsValue(averageReps.toInt())
-                AnomalyType.REPS_DROP
             }
         }
 
@@ -345,17 +325,11 @@ class DetectWorkoutAnomaliesUseCase @Inject constructor(
         // Check against previous set in current session
         previousDuration?.let { prev ->
             val spikeRatio = currentDuration.toFloat() / prev
-            val dropRatio = currentDuration.toFloat() / prev
 
             when {
                 spikeRatio >= settings.durationSpikeThreshold -> {
                     anomalyType = AnomalyType.DURATION_SPIKE
                     confidenceScore = calculateConfidenceScore(spikeRatio, settings.durationSpikeThreshold)
-                    previousValue = AnomalyValue.DurationValue(prev)
-                }
-                dropRatio <= settings.durationDropThreshold -> {
-                    anomalyType = AnomalyType.DURATION_DROP
-                    confidenceScore = calculateConfidenceScore(1f / dropRatio, 1f / settings.durationDropThreshold)
                     previousValue = AnomalyValue.DurationValue(prev)
                 }
             }
@@ -366,14 +340,10 @@ class DetectWorkoutAnomaliesUseCase @Inject constructor(
             val averageDuration = if (history.recentDurations.isNotEmpty()) history.recentDurations.average() else 0.0
             val ratio = if (averageDuration > 0) currentDuration / averageDuration else 1.0
 
-            anomalyType = if (ratio >= settings.durationSpikeThreshold) {
+            if (ratio >= settings.durationSpikeThreshold) {
+                anomalyType = AnomalyType.DURATION_SPIKE
                 confidenceScore = calculateConfidenceScore(ratio.toFloat(), settings.durationSpikeThreshold)
                 previousValue = AnomalyValue.DurationValue(averageDuration.toLong())
-                AnomalyType.DURATION_SPIKE
-            } else {
-                confidenceScore = calculateConfidenceScore(1f / ratio.toFloat(), 1f / settings.durationDropThreshold)
-                previousValue = AnomalyValue.DurationValue(averageDuration.toLong())
-                AnomalyType.DURATION_DROP
             }
         }
 

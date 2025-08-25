@@ -46,5 +46,8 @@ data class FeedCacheEntity(
     val score: Double, // Relevance score for ordering
 
     @ColumnInfo(name = "fetched_at")
-    val fetchedAt: Long
+    val fetchedAt: Long,
+    
+    @ColumnInfo(name = "feed_type", defaultValue = "'HOME'")
+    val feedType: String = "HOME" // HOME, DISCOVERY, etc.
 )

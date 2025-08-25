@@ -62,7 +62,10 @@ fun SignUpForm(
     isLoading: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val isDarkTheme = isSystemInDarkTheme()
+    // FIXED: Use ThemeManager to respect user's explicit theme preference instead of system theme
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val themeManager = remember { com.example.liftrix.ui.theme.ThemeManager.getInstance(context) }
+    val isDarkTheme = themeManager.getEffectiveThemeState(isSystemInDarkTheme())
     
     var username by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }

@@ -49,9 +49,8 @@ interface AnomalyDetectionSettingsDao {
     @Query("""
         SELECT COUNT(*) FROM anomaly_detection_settings 
         WHERE weight_spike_threshold != 3.0 
-           OR weight_drop_threshold != 0.3 
            OR reps_spike_threshold != 2.0 
-           OR reps_drop_threshold != 0.5
+           OR duration_spike_threshold != 1.5
     """)
     suspend fun getCustomSettingsCount(): Int
 }

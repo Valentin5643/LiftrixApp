@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
@@ -67,54 +68,7 @@ fun VolumeAnalysisDetailScreen(
 
     AnalyticsDetailScreen(
         title = "Volume Analysis",
-        onBackClick = { navController.popBackStack() },
-        topBarActions = {
-            // Volume grouping selector
-            var showGroupingMenu by remember { mutableStateOf(false) }
-            
-            IconButton(onClick = { showGroupingMenu = true }) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "Grouping Options"
-                )
-            }
-            
-            DropdownMenu(
-                expanded = showGroupingMenu,
-                onDismissRequest = { showGroupingMenu = false }
-            ) {
-                VolumeGrouping.values().forEach { grouping ->
-                    DropdownMenuItem(
-                        text = { Text(grouping.displayName) },
-                        onClick = {
-                            viewModel.handleEvent(VolumeAnalysisDetailViewModel.Event.UpdateGroupBy(grouping))
-                            showGroupingMenu = false
-                        },
-                        leadingIcon = if (currentGroupBy == grouping) {
-                            { Icon(Icons.Default.BarChart, null) }
-                        } else null
-                    )
-                }
-            }
-
-            // Export button
-            IconButton(
-                onClick = { viewModel.handleEvent(VolumeAnalysisDetailViewModel.Event.ExportData) },
-                enabled = !isExporting
-            ) {
-                if (isExporting) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.FileDownload,
-                        contentDescription = "Export Data"
-                    )
-                }
-            }
-        }
+        onBackClick = { navController.popBackStack() }
     ) {
         when (uiState) {
             is VolumeAnalysisDetailViewModel.UiState.Loading -> {
@@ -131,6 +85,7 @@ fun VolumeAnalysisDetailScreen(
                     groupBy = currentGroupBy,
                     timeRange = currentTimeRange,
                     showProjections = showProjections,
+                    isExporting = isExporting,
                     onTimeRangeChange = { newTimeRange ->
                         viewModel.handleEvent(VolumeAnalysisDetailViewModel.Event.UpdateTimeRange(newTimeRange))
                     },
@@ -166,6 +121,7 @@ private fun VolumeAnalysisContent(
     groupBy: VolumeGrouping,
     timeRange: TimeRangeType,
     showProjections: Boolean,
+    isExporting: Boolean,
     onTimeRangeChange: (TimeRangeType) -> Unit,
     onToggleProjections: () -> Unit,
     modifier: Modifier = Modifier,
@@ -198,6 +154,19 @@ private fun VolumeAnalysisContent(
         GlobalTimeRangeSelector(
             selectedTimeRange = timeRange,
             onTimeRangeChange = onTimeRangeChange,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        // Volume analysis controls card
+        VolumeAnalysisControlsCard(
+            currentGroupBy = groupBy,
+            isExporting = isExporting,
+            onGroupByChange = { newGroupBy ->
+                viewModel.handleEvent(VolumeAnalysisDetailViewModel.Event.UpdateGroupBy(newGroupBy))
+            },
+            onExportData = {
+                viewModel.handleEvent(VolumeAnalysisDetailViewModel.Event.ExportData)
+            },
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -532,5 +501,101 @@ private fun TrendInsight(data: VolumeAnalysisDetailViewModel.VolumeAnalysisData,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+    }
+}
+
+/**
+ * Volume analysis controls card with grouping options and export functionality
+ */
+@Composable
+private fun VolumeAnalysisControlsCard(
+    currentGroupBy: VolumeGrouping,
+    isExporting: Boolean,
+    onGroupByChange: (VolumeGrouping) -> Unit,
+    onExportData: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var showGroupingMenu by remember { mutableStateOf(false) }
+    
+    LiftrixCard(modifier = modifier) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Grouping selector - compact design
+            Box {
+                OutlinedButton(
+                    onClick = { showGroupingMenu = true },
+                    modifier = Modifier
+                        .height(36.dp)
+                        .widthIn(min = 100.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.BarChart,
+                        contentDescription = "Change grouping",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = currentGroupBy.displayName,
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                
+                DropdownMenu(
+                    expanded = showGroupingMenu,
+                    onDismissRequest = { showGroupingMenu = false }
+                ) {
+                    VolumeGrouping.values().forEach { grouping ->
+                        DropdownMenuItem(
+                            text = { Text(grouping.displayName) },
+                            onClick = {
+                                onGroupByChange(grouping)
+                                showGroupingMenu = false
+                            },
+                            leadingIcon = if (currentGroupBy == grouping) {
+                                { Icon(Icons.Default.BarChart, null) }
+                            } else null
+                        )
+                    }
+                }
+            }
+            
+            // Export button - compact design
+            OutlinedButton(
+                onClick = onExportData,
+                enabled = !isExporting,
+                modifier = Modifier
+                    .height(36.dp)
+                    .widthIn(min = 80.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                if (isExporting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.FileDownload,
+                        contentDescription = "Export data",
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Export",
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1
+                )
+            }
+        }
     }
 }

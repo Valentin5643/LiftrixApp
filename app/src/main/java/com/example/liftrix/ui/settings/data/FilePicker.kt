@@ -476,17 +476,6 @@ private fun detectFileFormat(fileName: String, mimeType: String?): FileFormat? {
     return null
 }
 
-/**
- * Utility function to format file size for display.
- */
-fun formatFileSize(bytes: Long): String {
-    return when {
-        bytes < 1024 -> "$bytes B"
-        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-        bytes < 1024 * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
-        else -> "${bytes / (1024 * 1024 * 1024)} GB"
-    }
-}
 
 /**
  * ★ Insight ─────────────────────────────────────

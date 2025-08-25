@@ -184,7 +184,7 @@ private fun FollowerListContent(
             FollowerListItem(
                 relationship = relationship,
                 onFollowToggle = { onFollowToggle(relationship.userId) },
-                onNavigateToProfile = { onNavigateToProfile(relationship.userId) }
+                onNavigateToProfile = onNavigateToProfile
             )
         }
         
@@ -225,12 +225,12 @@ private fun FollowerListContent(
 private fun FollowerListItem(
     relationship: FollowRelationship,
     onFollowToggle: () -> Unit,
-    onNavigateToProfile: () -> Unit
+    onNavigateToProfile: (String) -> Unit
 ) {
     UnifiedWorkoutCard(
         title = relationship.displayName ?: "Unknown User",
         subtitle = generateFollowerSubtitle(relationship),
-        onClick = onNavigateToProfile
+        onClick = { onNavigateToProfile(relationship.userId) }
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -243,7 +243,7 @@ private fun FollowerListItem(
                 displayName = relationship.displayName ?: "User",
                 userId = relationship.userId,
                 size = 48.dp,
-                onClick = onNavigateToProfile
+                onClick = { onNavigateToProfile(relationship.userId) }
             )
             
             // User Info

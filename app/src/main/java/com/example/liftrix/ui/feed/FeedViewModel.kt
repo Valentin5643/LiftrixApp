@@ -9,6 +9,7 @@ import com.example.liftrix.domain.model.social.WorkoutPost
 import com.example.liftrix.domain.repository.social.FeedRepository
 import com.example.liftrix.domain.repository.social.EngagementRepository
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.social.SeedWorkoutPostsUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.service.AnalyticsTracker
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
@@ -28,6 +29,7 @@ class FeedViewModel @Inject constructor(
     private val feedRepository: FeedRepository,
     private val engagementRepository: EngagementRepository,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val seedWorkoutPostsUseCase: SeedWorkoutPostsUseCase,
     private val analyticsTracker: AnalyticsTracker,
     errorHandler: ErrorHandler
 ) : BaseViewModel<FeedUiState, FeedEvent>(errorHandler) {
@@ -63,10 +65,26 @@ class FeedViewModel @Inject constructor(
             try {
                 val userId = getCurrentUserIdUseCase()
                 _uiState.value = _uiState.value.copy(currentUserId = userId)
-                Timber.d("🔥 FEED-DEBUG: Current user ID set to: $userId")
+                
+                // Skip seeding to show natural empty state
+                // seedSampleData(userId)
             } catch (e: Exception) {
                 Timber.e(e, "Failed to get current user ID")
             }
+        }
+    }
+    
+    private suspend fun seedSampleData(userId: String?) {
+        if (userId != null) {
+            seedWorkoutPostsUseCase(userId).fold(
+                onSuccess = { count ->
+                    if (count > 0) {
+                    }
+                },
+                onFailure = { error ->
+                    Timber.e("Failed to seed sample data: $error")
+                }
+            )
         }
     }
 
@@ -75,6 +93,8 @@ class FeedViewModel @Inject constructor(
             flow {
                 val userId = getCurrentUserIdUseCase()
                 if (userId != null) {
+                    Timber.d("🔍 WORKOUT-POSTS-DEBUG: FeedViewModel loading ${tab.name} feed for user $userId")
+                    
                     val feedFlow = when (tab) {
                         FeedTab.HOME -> feedRepository.getHomeFeed(
                             userId = userId,
@@ -82,7 +102,7 @@ class FeedViewModel @Inject constructor(
                         )
                         FeedTab.DISCOVERY -> feedRepository.getDiscoveryFeed(
                             userId = userId,
-                            pageSize = 20
+                            pageSize = 10  // Start with 10 items for Explore feed
                         )
                     }
                     emitAll(feedFlow)

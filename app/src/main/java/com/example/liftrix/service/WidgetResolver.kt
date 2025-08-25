@@ -46,44 +46,56 @@ class WidgetResolver @Inject constructor() {
      * widget resolution failures.
      */
     private val WIDGET_NAME_MIGRATION_MAP = mapOf(
-        // Legacy camelCase names → correct IDs (removed widgets excluded)
+        // Legacy camelCase names → modern consolidated widgets
         "progressChart" to AnalyticsWidget.ProgressChart.id,
-        "volumeLoadProgression" to AnalyticsWidget.VolumeLoadProgression.id,
-        "oneRMProgression" to AnalyticsWidget.OneRMProgression.id,
-        "volumeChart" to AnalyticsWidget.VolumeChart.id,
         "frequencyChart" to AnalyticsWidget.FrequencyChart.id,
-        "strengthProgress" to AnalyticsWidget.StrengthProgress.id,
-        "personalRecords" to AnalyticsWidget.PersonalRecords.id,
-        "volumeTrends" to AnalyticsWidget.VolumeTrends.id,
         "recoveryMetrics" to AnalyticsWidget.RecoveryMetrics.id,
         "muscleGroupDistribution" to AnalyticsWidget.MuscleGroupDistribution.id,
         "monthlySummary" to AnalyticsWidget.MonthlySummary.id,
         
-        // Incorrect names used in forceAdvancedUserLevel() → correct IDs (removed widgets excluded)
-        "VolumeLoadProgression" to AnalyticsWidget.VolumeLoadProgression.id,
-        "OneRMProgression" to AnalyticsWidget.OneRMProgression.id,
+        // Deprecated strength widgets → StrengthAnalytics (consolidated)
+        "strengthProgress" to AnalyticsWidget.StrengthAnalytics.id,
+        "personalRecords" to AnalyticsWidget.StrengthAnalytics.id,
+        "oneRMProgression" to AnalyticsWidget.StrengthAnalytics.id,
+        
+        // Deprecated volume widgets → VolumeAnalytics (consolidated)
+        "volumeLoadProgression" to AnalyticsWidget.VolumeAnalytics.id,
+        "volumeChart" to AnalyticsWidget.VolumeAnalytics.id,
+        "volumeTrends" to AnalyticsWidget.VolumeAnalytics.id,
+        
+        // Incorrect names used in forceAdvancedUserLevel() → modern consolidated widgets
         "ProgressChart" to AnalyticsWidget.ProgressChart.id,
-        "StrengthProgress" to AnalyticsWidget.StrengthProgress.id,
-        "VolumeChart" to AnalyticsWidget.VolumeChart.id,
         "FrequencyChart" to AnalyticsWidget.FrequencyChart.id,
-        "PersonalRecords" to AnalyticsWidget.PersonalRecords.id,
-        "MuscleGroupDistribution" to AnalyticsWidget.MuscleGroupDistribution.id,
-        "VolumeTrends" to AnalyticsWidget.VolumeTrends.id,
         "RecoveryMetrics" to AnalyticsWidget.RecoveryMetrics.id,
+        "MuscleGroupDistribution" to AnalyticsWidget.MuscleGroupDistribution.id,
         "MonthlySummary" to AnalyticsWidget.MonthlySummary.id,
         
-        // Display name variations → correct IDs (removed widgets excluded)
+        // Deprecated strength widgets → StrengthAnalytics (consolidated)
+        "StrengthProgress" to AnalyticsWidget.StrengthAnalytics.id,
+        "PersonalRecords" to AnalyticsWidget.StrengthAnalytics.id,
+        "OneRMProgression" to AnalyticsWidget.StrengthAnalytics.id,
+        
+        // Deprecated volume widgets → VolumeAnalytics (consolidated)
+        "VolumeLoadProgression" to AnalyticsWidget.VolumeAnalytics.id,
+        "VolumeChart" to AnalyticsWidget.VolumeAnalytics.id,
+        "VolumeTrends" to AnalyticsWidget.VolumeAnalytics.id,
+        
+        // Display name variations → modern consolidated widgets
         "Progress Chart" to AnalyticsWidget.ProgressChart.id,
-        "Volume Progression" to AnalyticsWidget.VolumeLoadProgression.id,
-        "1RM Progression" to AnalyticsWidget.OneRMProgression.id,
-        "Volume Chart" to AnalyticsWidget.VolumeChart.id,
         "Frequency Chart" to AnalyticsWidget.FrequencyChart.id,
-        "Strength Progress" to AnalyticsWidget.StrengthProgress.id,
-        "Personal Records" to AnalyticsWidget.PersonalRecords.id,
-        "Volume Trends" to AnalyticsWidget.VolumeTrends.id,
         "Recovery Metrics" to AnalyticsWidget.RecoveryMetrics.id,
         "Muscle Group Distribution" to AnalyticsWidget.MuscleGroupDistribution.id,
-        "Monthly Summary" to AnalyticsWidget.MonthlySummary.id
+        "Monthly Summary" to AnalyticsWidget.MonthlySummary.id,
+        
+        // Deprecated strength widgets → StrengthAnalytics (consolidated)
+        "Strength Progress" to AnalyticsWidget.StrengthAnalytics.id,
+        "Personal Records" to AnalyticsWidget.StrengthAnalytics.id,
+        "1RM Progression" to AnalyticsWidget.StrengthAnalytics.id,
+        "Volume Progression" to AnalyticsWidget.VolumeAnalytics.id,
+        
+        // Deprecated volume widgets → VolumeAnalytics (consolidated)
+        "Volume Chart" to AnalyticsWidget.VolumeAnalytics.id,
+        "Volume Trends" to AnalyticsWidget.VolumeAnalytics.id
     )
     
     /**
@@ -523,27 +535,33 @@ class WidgetResolver @Inject constructor() {
             // Try direct lookup first
             val byId = allWidgets.find { it.id == widgetName }
             if (byId != null) {
-                byId
+                // CRITICAL FIX: Ensure we don't include deprecated widgets even if they exist in preferences
+                if (!byId.isDeprecated) {
+                    byId
+                } else {
+                    Timber.w("Filtered out deprecated widget from preferences: '$widgetName' (${byId.displayName})")
+                    null
+                }
             } else {
                 // Try migration mapping
                 val migratedId = WIDGET_NAME_MIGRATION_MAP[widgetName]
                 if (migratedId != null) {
                     val byMigratedId = allWidgets.find { it.id == migratedId }
-                    if (byMigratedId != null) {
-                        Timber.d("Migrated widget name: '$widgetName' -> '${byMigratedId.id}'")
+                    if (byMigratedId != null && !byMigratedId.isDeprecated) {
+                        Timber.d("Migrated widget name: '$widgetName' -> '${byMigratedId.id}' (${byMigratedId.displayName})")
                         byMigratedId
                     } else {
-                        Timber.w("Migration target not found: '$widgetName' -> '$migratedId'")
+                        Timber.w("Migration target not found or deprecated: '$widgetName' -> '$migratedId'")
                         null
                     }
                 } else {
                     // Try display name match as final fallback
                     val byDisplayName = allWidgets.find { it.displayName == widgetName }
-                    if (byDisplayName != null) {
+                    if (byDisplayName != null && !byDisplayName.isDeprecated) {
                         Timber.d("Found widget by display name: '$widgetName' -> ${byDisplayName.id}")
                         byDisplayName
                     } else {
-                        Timber.w("Invalid widget name: '$widgetName' - no resolution available")
+                        Timber.w("Invalid widget name or deprecated: '$widgetName' - no resolution available")
                         null
                     }
                 }
@@ -574,6 +592,102 @@ class WidgetResolver @Inject constructor() {
         Timber.d("Final resolved widgets (${finalWidgets.size}): ${finalWidgets.map { it.id }.joinToString(", ")}")
         
         return finalWidgets.sortedBy { it.getLayoutPriority() }
+    }
+    
+    /**
+     * Forces cleanup of deprecated widgets from user preferences.
+     * 
+     * This method should be called during app startup or when widget duplication is detected
+     * to ensure all deprecated widgets are properly migrated to their modern counterparts.
+     * 
+     * @param preferences Current user preferences
+     * @return Cleaned preferences with deprecated widgets removed and migrated
+     */
+    fun forceCleanupDeprecatedWidgets(preferences: WidgetPreferences): WidgetPreferences {
+        Timber.d("Force cleaning deprecated widgets from preferences")
+        
+        val allWidgets = AnalyticsWidget.getAllWidgetsIncludingDeprecated() // Include deprecated for lookup
+        val activeWidgets = AnalyticsWidget.getActiveWidgets() // Only non-deprecated
+        val activeWidgetIds = activeWidgets.map { it.id }.toSet()
+        
+        // Check for deprecated widgets in current preferences
+        val deprecatedWidgets = preferences.visibleWidgets.filter { widgetId ->
+            val widget = allWidgets.find { it.id == widgetId }
+            widget?.isDeprecated == true
+        }
+        
+        if (deprecatedWidgets.isNotEmpty()) {
+            Timber.w("Found deprecated widgets in preferences: $deprecatedWidgets")
+            
+            // Migrate deprecated widgets to modern equivalents
+            val cleanedWidgetIds = preferences.visibleWidgets.mapNotNull { widgetId ->
+                val widget = allWidgets.find { it.id == widgetId }
+                when {
+                    widget == null -> {
+                        Timber.w("Widget not found, removing: $widgetId")
+                        null
+                    }
+                    widget.isDeprecated -> {
+                        // Find the modern replacement using migration mapping
+                        val modernReplacement = WIDGET_NAME_MIGRATION_MAP.entries
+                            .find { it.value == widgetId }
+                            ?.let { entry ->
+                                // Get the modern target the deprecated widget should migrate to
+                                WIDGET_NAME_MIGRATION_MAP[entry.key]
+                            }
+                            ?: run {
+                                // Direct migration mapping lookup
+                                WIDGET_NAME_MIGRATION_MAP[widgetId]
+                            }
+                            ?: run {
+                                // Smart fallback based on widget type
+                                when (widget) {
+                                    AnalyticsWidget.StrengthProgress,
+                                    AnalyticsWidget.PersonalRecords,
+                                    AnalyticsWidget.OneRMProgression -> AnalyticsWidget.StrengthAnalytics.id
+                                    
+                                    AnalyticsWidget.VolumeChart,
+                                    AnalyticsWidget.VolumeTrends,
+                                    AnalyticsWidget.VolumeLoadProgression -> AnalyticsWidget.VolumeAnalytics.id
+                                    
+                                    else -> {
+                                        Timber.w("No modern replacement for deprecated widget: ${widget.id}")
+                                        null
+                                    }
+                                }
+                            }
+                        
+                        if (modernReplacement != null && activeWidgetIds.contains(modernReplacement)) {
+                            Timber.i("Migrating deprecated widget: ${widget.id} -> $modernReplacement")
+                            modernReplacement
+                        } else {
+                            Timber.w("Removing deprecated widget without replacement: ${widget.id}")
+                            null
+                        }
+                    }
+                    else -> widgetId // Keep active widgets
+                }
+            }.toSet()
+            
+            // Remove duplicates that might have been created by migration
+            val deduplicatedWidgetIds = cleanedWidgetIds.toSet()
+            
+            // Update widget order to reflect changes
+            val cleanedWidgetOrder = preferences.widgetOrder.mapNotNull { widgetId ->
+                if (deduplicatedWidgetIds.contains(widgetId)) widgetId else null
+            }
+            
+            Timber.i("Cleaned ${deprecatedWidgets.size} deprecated widgets, ${cleanedWidgetIds.size} widgets remaining")
+            
+            return preferences.copy(
+                visibleWidgets = deduplicatedWidgetIds,
+                widgetOrder = cleanedWidgetOrder,
+                lastModified = kotlinx.datetime.Clock.System.now()
+            )
+        } else {
+            Timber.d("No deprecated widgets found in preferences")
+            return preferences
+        }
     }
 }
 

@@ -125,9 +125,9 @@ fun AnomalyConfirmationDialog(
                         label = { Text(getInputLabel(anomaly.anomalyType)) },
                         keyboardOptions = KeyboardOptions(
                             keyboardType = when (anomaly.anomalyType) {
-                                AnomalyType.WEIGHT_SPIKE, AnomalyType.WEIGHT_DROP -> KeyboardType.Decimal
-                                AnomalyType.REPS_SPIKE, AnomalyType.REPS_DROP -> KeyboardType.Number
-                                AnomalyType.DURATION_SPIKE, AnomalyType.DURATION_DROP -> KeyboardType.Number
+                                AnomalyType.WEIGHT_SPIKE -> KeyboardType.Decimal
+                                AnomalyType.REPS_SPIKE -> KeyboardType.Number
+                                AnomalyType.DURATION_SPIKE -> KeyboardType.Number
                                 AnomalyType.IMPOSSIBLE_VALUE -> KeyboardType.Decimal
                             }
                         ),
@@ -244,9 +244,9 @@ private fun getCurrentValueString(value: AnomalyValue): String {
  */
 private fun getInputLabel(anomalyType: AnomalyType): String {
     return when (anomalyType) {
-        AnomalyType.WEIGHT_SPIKE, AnomalyType.WEIGHT_DROP -> "Weight"
-        AnomalyType.REPS_SPIKE, AnomalyType.REPS_DROP -> "Reps"
-        AnomalyType.DURATION_SPIKE, AnomalyType.DURATION_DROP -> "Duration (seconds)"
+        AnomalyType.WEIGHT_SPIKE -> "Weight"
+        AnomalyType.REPS_SPIKE -> "Reps"
+        AnomalyType.DURATION_SPIKE -> "Duration (seconds)"
         AnomalyType.IMPOSSIBLE_VALUE -> "Value"
     }
 }
@@ -261,20 +261,20 @@ private fun parseCorrectionValue(
 ): AnomalyValue? {
     return try {
         when (anomalyType) {
-            AnomalyType.WEIGHT_SPIKE, AnomalyType.WEIGHT_DROP -> {
+            AnomalyType.WEIGHT_SPIKE -> {
                 val weight = input.toDouble()
                 if (weight >= 0) {
                     val unit = (originalValue as? AnomalyValue.WeightValue)?.unit ?: "lbs"
                     AnomalyValue.WeightValue(weight, unit)
                 } else null
             }
-            AnomalyType.REPS_SPIKE, AnomalyType.REPS_DROP -> {
+            AnomalyType.REPS_SPIKE -> {
                 val reps = input.toInt()
                 if (reps >= 0) {
                     AnomalyValue.RepsValue(reps)
                 } else null
             }
-            AnomalyType.DURATION_SPIKE, AnomalyType.DURATION_DROP -> {
+            AnomalyType.DURATION_SPIKE -> {
                 val duration = input.toLong()
                 if (duration >= 0) {
                     AnomalyValue.DurationValue(duration)

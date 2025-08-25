@@ -1,13 +1,18 @@
 package com.example.liftrix.ui.settings.data
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -36,6 +41,69 @@ fun DataPortabilityScreen(
     viewModel: DataPortabilityViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    
+    // File picker launcher for import functionality
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { selectedUri ->
+            try {
+                val inputStream = context.contentResolver.openInputStream(selectedUri)
+                inputStream?.let { stream ->
+                    viewModel.handleEvent(DataPortabilityEvent.ValidateImportFile(selectedUri, stream))
+                }
+            } catch (e: Exception) {
+                // Error would be handled by the ViewModel
+            }
+        }
+    }
+    
+    // Observe share export events
+    LaunchedEffect(viewModel) {
+        viewModel.shareExportEvent.collect { shareEvent ->
+            try {
+                val exportResult = shareEvent.exportResult
+                val file = exportResult.file
+                
+                // Copy file to cache directory for sharing
+                val shareFile = java.io.File(context.cacheDir, "exports/${file.name}")
+                shareFile.parentFile?.mkdirs()
+                file.copyTo(shareFile, overwrite = true)
+                
+                // Create file URI using FileProvider for sharing
+                val uri = androidx.core.content.FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    shareFile
+                )
+                
+                // Create share intent
+                val shareIntent = android.content.Intent().apply {
+                    action = android.content.Intent.ACTION_SEND
+                    type = shareEvent.shareIntent.mimeType
+                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                    putExtra(android.content.Intent.EXTRA_SUBJECT, shareEvent.shareIntent.fileName)
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                
+                // Launch share chooser
+                context.startActivity(
+                    android.content.Intent.createChooser(
+                        shareIntent,
+                        "Share Workout Export"
+                    )
+                )
+            } catch (e: Exception) {
+                // Show error toast or snackbar
+                android.widget.Toast.makeText(
+                    context,
+                    "Failed to share export: ${e.message}",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
     
     Scaffold(
         modifier = modifier,
@@ -129,8 +197,8 @@ fun DataPortabilityScreen(
                         PrimaryActionButton(
                             text = "Select File to Import",
                             onClick = { 
-                                // File selection would be handled through platform-specific APIs
-                                // For now, just show a message
+                                // Launch the file picker
+                                filePickerLauncher.launch("*/*")
                             },
                             leadingIcon = Icons.Default.FileUpload,
                             modifier = Modifier.fillMaxWidth()

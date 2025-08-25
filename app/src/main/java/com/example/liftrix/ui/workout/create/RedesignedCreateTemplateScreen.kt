@@ -223,7 +223,8 @@ fun RedesignedCreateTemplateScreen(
                                         weight = exercise.targetWeight?.kilograms?.toString() ?: "",
                                         reps = exercise.targetReps?.count?.toString() ?: "",
                                         previousValue = "0",
-                                        isCompleted = false  // Always false for templates
+                                        isCompleted = false,  // Always false for templates
+                                        setId = "${exercise.exerciseId.value}_template_set_$setIndex" // Stable ID for templates
                                     )
                                 },
                                 onAddSet = {

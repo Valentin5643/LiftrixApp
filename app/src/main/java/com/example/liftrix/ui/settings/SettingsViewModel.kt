@@ -1125,16 +1125,17 @@ class SettingsViewModel @Inject constructor(
                 cachedCurrentUser // Fall back to cached user on error
             }
             
-            // Sync theme manager with user settings only if not already in the correct mode
+            // Sync theme manager with user settings only if there's a mode mismatch
+            // Preserve SYSTEM mode - don't override user's choice to follow system theme
             settings?.let { userSettings ->
                 val currentMode = themeManager.themeMode.value
-                // Only sync if we're in SYSTEM mode or if the mode doesn't match the settings
-                if (currentMode == ThemeMode.SYSTEM || 
-                    (currentMode == ThemeMode.DARK && !userSettings.darkMode) ||
+                // Only sync if explicit mode doesn't match the settings (preserve SYSTEM mode)
+                if ((currentMode == ThemeMode.DARK && !userSettings.darkMode) ||
                     (currentMode == ThemeMode.LIGHT && userSettings.darkMode)) {
                     val themeMode = if (userSettings.darkMode) ThemeMode.DARK else ThemeMode.LIGHT
                     themeManager.switchTheme(themeMode)
                 }
+                // Note: SYSTEM mode is intentionally preserved and not overridden
             }
             
             // Calculate the effective theme state (what's actually being displayed)

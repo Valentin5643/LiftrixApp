@@ -89,6 +89,13 @@ interface WorkoutDao {
     @Query("SELECT EXISTS(SELECT 1 FROM workouts WHERE id = :workoutId AND user_id = :userId)")
     suspend fun workoutExistsByIdAndUser(workoutId: String, userId: String): Boolean
     
+    // Export support methods
+    @Query("SELECT * FROM workouts WHERE user_id = :userId ORDER BY date DESC")
+    suspend fun getAllWorkoutsForUserSync(userId: String): List<WorkoutEntity>
+    
+    @Query("SELECT * FROM workouts WHERE user_id = :userId AND date >= :startDate AND date <= :endDate ORDER BY date DESC")  
+    suspend fun getWorkoutsInDateRangeForExport(userId: String, startDate: String, endDate: String): List<WorkoutEntity>
+    
     // Legacy methods without user filtering - deprecated for migration
     @Deprecated("Use user-scoped methods instead")
     @Query("SELECT * FROM workouts ORDER BY date DESC, created_at DESC")

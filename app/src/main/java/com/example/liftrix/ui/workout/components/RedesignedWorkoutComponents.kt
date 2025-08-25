@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -341,7 +342,7 @@ private fun RedesignedSetRow(
                     // Check if we have a valid previous weight (not 0 or null)
                     if (previousWeight != null && previousWeight > 0) {
                         val ratio = weightValue / previousWeight
-                        if (ratio >= 2.0 || ratio <= 0.5) { // Default threshold
+                        if (ratio >= 2.0) { // Only check upward spikes, not downward
                             hasAnomaly = true
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onAnomalyDetected?.invoke(newValue, setNumber - 1)
@@ -370,7 +371,7 @@ private fun RedesignedSetRow(
                     
                     if (previousReps != null && previousReps > 0) {
                         val ratio = repsValue.toFloat() / previousReps
-                        if (ratio >= 2.0f || ratio <= 0.5f) { // Default threshold
+                        if (ratio >= 2.0f) { // Only check upward spikes, not downward
                             hasAnomaly = true
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onAnomalyDetected?.invoke(newValue, setNumber - 1)
@@ -425,32 +426,22 @@ private fun RedesignedInputField(
         value = value,
         onValueChange = onValueChange,
         textStyle = TextStyle(
-            color = if (hasAnomaly && !isFocused) MaterialTheme.colorScheme.error 
-                   else MaterialTheme.colorScheme.onSurface,
+            color = MaterialTheme.colorScheme.onSurface,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center
         ),
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        keyboardOptions = KeyboardOptions(
+            keyboardType = keyboardType,
+            imeAction = ImeAction.None  // Prevent keyboard dismissal during continuous input
+        ),
         singleLine = true,
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         modifier = modifier
             .height(36.dp)
             .background(
-                if (hasAnomaly && !isFocused) 
-                    MaterialTheme.colorScheme.error.copy(alpha = 0.1f)
-                else 
-                    MaterialTheme.colorScheme.surfaceVariant,
+                MaterialTheme.colorScheme.surfaceVariant,
                 RoundedCornerShape(6.dp)
-            )
-            .then(
-                if (hasAnomaly && !isFocused) 
-                    Modifier.border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(6.dp)
-                    )
-                else Modifier
             )
             .padding(horizontal = 8.dp)
             .onFocusChanged { focusState ->
@@ -873,7 +864,7 @@ data class RedesignedSetData(
     val hasWeightAnomaly: Boolean = false,
     val hasRepsAnomaly: Boolean = false,
     val anomalyConfidenceScore: Float = 0f,
-    val setId: String = java.util.UUID.randomUUID().toString() // Stable ID for Compose keys
+    val setId: String // Stable ID for Compose keys - must be provided externally
 )
 
 /**
@@ -1058,7 +1049,8 @@ fun AnomalyNudgeDialog(
                     label = { Text("Correct value") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
-                        keyboardType = if (anomalyType == "weight") KeyboardType.Decimal else KeyboardType.Number
+                        keyboardType = if (anomalyType == "weight") KeyboardType.Decimal else KeyboardType.Number,
+                        imeAction = ImeAction.Done  // Allow user to confirm correction
                     ),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(

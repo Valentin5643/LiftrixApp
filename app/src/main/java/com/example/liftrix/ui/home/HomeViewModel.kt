@@ -228,7 +228,6 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val userId = getAuthenticatedUserIdUseCase()
-                Timber.d("🔥 HOME-FEED-DEBUG: Loading feed for user: $userId, showAllUsers: $showAllUsersInRecentActivity")
 
                 updateHomeScreenData { it.copy(workoutFeedState = FeedState.Loading) }
                 currentFeedOffset = 0
@@ -240,7 +239,7 @@ class HomeViewModel @Inject constructor(
                     limit = FEED_LIMIT
                 )
                     .catch { throwable ->
-                        Timber.e(throwable, "🔥 HOME-FEED-DEBUG: Error in feed workouts flow")
+                        Timber.e(throwable, "Error in feed workouts flow")
                         updateHomeScreenData { 
                             it.copy(workoutFeedState = FeedState.Error("Failed to load workout feed: ${throwable.message}"))
                         }
@@ -252,9 +251,7 @@ class HomeViewModel @Inject constructor(
                                 val loadTime = System.currentTimeMillis() - startTime
                                 analyticsService.trackFeedLoadTime(loadTime)
                                 
-                                Timber.d("🔥 HOME-FEED-DEBUG: Received ${workouts.size} feed workouts from reactive flow")
                                 workouts.forEachIndexed { index, feedWorkout ->
-                                    Timber.d("🔥 HOME-FEED-DEBUG: FeedWorkout[$index] - name: ${feedWorkout.workout.name}, status: ${feedWorkout.workout.status}")
                                 }
                                 
                                 val hasMore = workouts.size == FEED_LIMIT
@@ -270,7 +267,7 @@ class HomeViewModel @Inject constructor(
                                 trackFeedLoaded(workouts.size)
                             },
                             onFailure = { exception ->
-                                Timber.e(exception, "🔥 HOME-FEED-DEBUG: Error in feed workouts result")
+                                Timber.e(exception, "Error in feed workouts result")
                                 val loadTime = System.currentTimeMillis() - startTime
                                 analyticsService.trackFeedLoadTime(loadTime)
                                 updateHomeScreenData { 
@@ -280,7 +277,7 @@ class HomeViewModel @Inject constructor(
                         )
                     }
             } catch (exception: Exception) {
-                Timber.e(exception, "🔥 HOME-FEED-DEBUG: Error setting up feed workouts observation")
+                Timber.e(exception, "Error setting up feed workouts observation")
                 updateHomeScreenData { 
                     it.copy(workoutFeedState = FeedState.Error("Failed to setup workout feed"))
                 }
@@ -299,7 +296,6 @@ class HomeViewModel @Inject constructor(
             return
         }
 
-        Timber.d("🔥 HOME-FEED-DEBUG: loadMoreWorkouts called - pagination disabled with reactive feeds")
         // With reactive feeds, we automatically get all available workouts
         // Pagination can be re-implemented later if needed with offset-based queries
         

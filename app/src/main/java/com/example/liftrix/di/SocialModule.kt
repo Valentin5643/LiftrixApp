@@ -181,9 +181,10 @@ abstract class SocialModule {
             workoutPostMapper: WorkoutPostMapper,
             feedCacheService: FeedCacheService,
             feedCacheDao: FeedCacheDao,
-            followRelationshipDao: FollowRelationshipDao
+            followRelationshipDao: FollowRelationshipDao,
+            @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context
             ): FeedRepository {
-                return FeedRepositoryImpl(workoutPostDao, postLikeDao, savedPostDao, socialProfileDao, workoutDao, workoutPostMapper, feedCacheService, feedCacheDao, followRelationshipDao)
+                return FeedRepositoryImpl(workoutPostDao, postLikeDao, savedPostDao, socialProfileDao, workoutDao, workoutPostMapper, feedCacheService, feedCacheDao, followRelationshipDao, context)
             }
 
         @Provides

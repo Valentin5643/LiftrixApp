@@ -111,6 +111,7 @@ class EditWorkoutViewModel @Inject constructor(
             is EditWorkoutEvent.SaveChanges -> saveChanges()
             is EditWorkoutEvent.DiscardChanges -> discardChanges()
             EditWorkoutEvent.NavigateBack -> navigateBack()
+            is EditWorkoutEvent.NavigateToPostCreation -> { /* Handled by navigation in UI layer */ }
             is EditWorkoutEvent.ShowError -> showError(event.message)
         }
     }
@@ -645,7 +646,8 @@ class EditWorkoutViewModel @Inject constructor(
 
             executeUseCase(
                 useCase = { 
-                    Timber.d("Saving workout changes for ${updatedWorkout.id.value}")
+                    Timber.d("Saving workout changes for ${updatedWorkout.id.value}, userId: ${updatedWorkout.userId}")
+                    Timber.d("Original workout ID: ${originalWorkout.id.value}, userId: ${originalWorkout.userId}")
                     workoutRepository.updateWorkout(updatedWorkout)
                 },
                 onSuccess = { savedWorkout ->

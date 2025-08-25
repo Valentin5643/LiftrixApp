@@ -340,43 +340,21 @@ class WorkoutRepositoryImpl @Inject constructor(
                 )
             }
         ) {
-            Timber.d("🔥 UPDATE-WORKOUT-DEBUG: Attempting to update workout - ID: ${workout.id.value}, Name: ${workout.name}, Status: ${workout.status}")
-            
-            // First, check if workout exists in database
-            val existsResult = workoutExists(workout.id, workout.userId)
-            val workoutExists = existsResult.fold(
-                onSuccess = { exists -> exists },
-                onFailure = { 
-                    Timber.w("🔥 UPDATE-WORKOUT-DEBUG: Failed to check workout existence, proceeding with update attempt")
-                    true // Assume exists to proceed with update
-                }
-            )
-            
-            if (!workoutExists) {
-                Timber.w("🔥 UPDATE-WORKOUT-DEBUG: Workout ${workout.id.value} does not exist in database, falling back to create")
-                // Fallback to create if workout doesn't exist
-                return@liftrixCatching createWorkout(workout).fold(
-                    onSuccess = { createdWorkout ->
-                        Timber.i("🔥 UPDATE-WORKOUT-DEBUG: Successfully created workout as fallback - ID: ${createdWorkout.id.value}")
-                        createdWorkout
-                    },
-                    onFailure = { error ->
-                        Timber.e("🔥 UPDATE-WORKOUT-DEBUG: Fallback create also failed")
-                        throw RuntimeException("Workout update failed: not found in database, and fallback create failed: ${error.message}")
-                    }
-                )
-            }
+            Timber.d("🔥 UPDATE-WORKOUT-DEBUG: Attempting to update workout - ID: ${workout.id.value}, Name: ${workout.name}, Status: ${workout.status}, UserId: ${workout.userId}")
             
             val entity = workoutMapper.toEntity(workout, isSynced = false)
-            Timber.d("🔥 UPDATE-WORKOUT-DEBUG: Updating entity with ID: ${entity.id}, Status: ${entity.status}")
+            Timber.d("🔥 UPDATE-WORKOUT-DEBUG: Updating entity with ID: ${entity.id}, Status: ${entity.status}, UserId: ${entity.userId}")
             
-            val updatedRows = workoutDao.updateWorkout(entity)
+            // Use insertWorkout with REPLACE strategy instead of updateWorkout
+            // This ensures the workout is either updated if it exists or created if it doesn't
+            val insertedId = workoutDao.insertWorkout(entity)
             
-            if (updatedRows > 0) {
-                Timber.i("🔥 UPDATE-WORKOUT-DEBUG: Successfully updated workout - ID: ${workout.id.value}, Rows affected: $updatedRows")
+            if (insertedId > 0) {
+                Timber.i("🔥 UPDATE-WORKOUT-DEBUG: Successfully updated workout - ID: ${workout.id.value}, Insert result: $insertedId")
                 
-                // 🔥 FIX: Also handle exercise sets during update 
-                // Delete all existing sets for this workout first, then recreate them
+                // 🔥 FIX: Also handle exercises and sets during update 
+                // Delete all existing exercises and sets for this workout first, then recreate them
+                exerciseDao.deleteExercisesForWorkout(workout.id.value)
                 exerciseSetDao.deleteSetsForWorkout(workout.id.value)
                 
                 workout.exercises.forEachIndexed { exerciseIndex, exercise ->
@@ -414,8 +392,8 @@ class WorkoutRepositoryImpl @Inject constructor(
                 
                 workout
             } else {
-                Timber.e("🔥 UPDATE-WORKOUT-DEBUG: Update affected 0 rows for workout ID: ${workout.id.value}")
-                throw RuntimeException("Workout update operation affected 0 rows for ID: ${workout.id.value}")
+                Timber.e("🔥 UPDATE-WORKOUT-DEBUG: Insert/Update failed for workout ID: ${workout.id.value}")
+                throw RuntimeException("Workout update operation failed for ID: ${workout.id.value}")
             }
         }
     }
@@ -833,7 +811,6 @@ class WorkoutRepositoryImpl @Inject constructor(
                 )
             }
         ) {
-            Timber.d("🔥 FEED-WORKOUTS-DEBUG: Getting feed workouts (legacy method) for user: $userId, limit: $limit")
             
             // Get personal completed workouts from database
             val workoutEntities = workoutDao.getRecentCompletedWorkouts(userId, limit)
@@ -843,10 +820,6 @@ class WorkoutRepositoryImpl @Inject constructor(
                 }
                 .first() // Get current value from Flow
             
-            Timber.d("🔥 FEED-WORKOUTS-DEBUG: Found ${workoutEntities.size} completed workout entities")
-            workoutEntities.forEachIndexed { index, entity ->
-                Timber.d("🔥 FEED-WORKOUTS-DEBUG: Entity[$index] - id: ${entity.id}, name: ${entity.name}, status: ${entity.status}")
-            }
             
             // Map entities to FeedWorkout domain models
             val feedWorkouts = workoutEntities.map { entity ->
@@ -854,21 +827,15 @@ class WorkoutRepositoryImpl @Inject constructor(
                 FeedWorkout.forPersonalWorkout(workout)
             }
             
-            Timber.d("🔥 FEED-WORKOUTS-DEBUG: Successfully mapped ${feedWorkouts.size} feed workouts")
             feedWorkouts
         }
     }
 
     override fun getFeedWorkoutsReactive(userId: String, limit: Int): Flow<LiftrixResult<List<FeedWorkout>>> {
-        Timber.d("🔥 FEED-WORKOUTS-DEBUG: Setting up reactive feed workouts for user: $userId, limit: $limit")
         
         return workoutDao.getRecentCompletedWorkouts(userId, limit)
             .map { entities ->
                 try {
-                    Timber.d("🔥 FEED-WORKOUTS-DEBUG: Received ${entities.size} completed workout entities from reactive flow")
-                    entities.forEachIndexed { index, entity ->
-                        Timber.d("🔥 FEED-WORKOUTS-DEBUG: Entity[$index] - id: ${entity.id}, name: ${entity.name}, status: ${entity.status}")
-                    }
                     
                     // Map entities to FeedWorkout domain models
                     val feedWorkouts = entities.map { entity ->
@@ -876,10 +843,9 @@ class WorkoutRepositoryImpl @Inject constructor(
                         FeedWorkout.forPersonalWorkout(workout)
                     }
                     
-                    Timber.d("🔥 FEED-WORKOUTS-DEBUG: Successfully mapped ${feedWorkouts.size} feed workouts")
-                    LiftrixResult.success(feedWorkouts)
+                            LiftrixResult.success(feedWorkouts)
                 } catch (throwable: Throwable) {
-                    Timber.e(throwable, "🔥 FEED-WORKOUTS-DEBUG: Error mapping workout entities to feed workouts")
+                    Timber.e(throwable, "Error mapping workout entities to feed workouts")
                     LiftrixResult.failure(
                         LiftrixError.DatabaseError(
                             errorMessage = "Failed to map feed workouts",
@@ -895,7 +861,7 @@ class WorkoutRepositoryImpl @Inject constructor(
                 }
             }
             .catch { throwable ->
-                Timber.e(throwable, "🔥 FEED-WORKOUTS-DEBUG: Database flow error for feed workouts")
+                Timber.e(throwable, "Database flow error for feed workouts")
                 emit(
                     LiftrixResult.failure(
                         LiftrixError.DatabaseError(

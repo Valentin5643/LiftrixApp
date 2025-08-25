@@ -19,6 +19,8 @@ import androidx.room.PrimaryKey
         Index(value = ["user_id", "created_at"], name = "idx_workout_posts_user_created"),
         Index(value = ["visibility", "created_at"], name = "idx_workout_posts_visibility"),
         Index(value = ["workout_id"]),
+        // Unique constraint to prevent duplicate posts for the same workout
+        Index(value = ["user_id", "workout_id"], name = "idx_workout_posts_user_workout_unique", unique = true),
         // Composite indexes for feed queries
         Index(value = ["user_id", "visibility", "created_at"], 
               name = "idx_workout_posts_feed_query"),

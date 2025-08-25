@@ -33,11 +33,8 @@ import com.example.liftrix.ui.common.ShimmerPlaceholder
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.components.cards.ElevatedLiftrixCard
 import com.example.liftrix.ui.theme.LiftrixTheme
-import com.example.liftrix.ui.settings.support.SupportViewModel
-import com.example.liftrix.ui.settings.support.SupportEvent
-import com.example.liftrix.ui.settings.support.SupportSideEffect
-import com.example.liftrix.ui.settings.support.SupportUiState
-import com.example.liftrix.ui.settings.support.TicketForm
+import com.example.liftrix.ui.support.SupportEvent
+import com.example.liftrix.ui.support.SupportSideEffect
 import eu.bambooapps.material3.pullrefresh.PullRefreshIndicator
 import eu.bambooapps.material3.pullrefresh.pullRefresh
 import eu.bambooapps.material3.pullrefresh.rememberPullRefreshState
@@ -108,6 +105,10 @@ fun ContactSupportScreen(
                 is SupportSideEffect.CopyTicketId -> {
                     clipboardManager.setText(AnnotatedString(effect.ticketId))
                     // Could show snackbar here
+                }
+                is SupportSideEffect.ShowReplySubmitted -> {
+                    // Reply submission success handled in UI
+                    Timber.d("Reply submitted to ticket: ${effect.ticketId}")
                 }
             }
         }

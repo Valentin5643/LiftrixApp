@@ -12,5 +12,4 @@ interface WorkoutParser {
 
 interface FormatDetector {
     suspend fun detectFormat(inputStream: InputStream): LiftrixResult<String>
-    suspend fun detectFormat(filename: String, mimeType: String?): LiftrixResult<String>
 }
