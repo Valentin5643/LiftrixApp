@@ -71,6 +71,9 @@ import com.example.liftrix.ui.workout.WorkoutScreen
 import com.example.liftrix.ui.workout.active.RedesignedActiveWorkoutScreen
 import com.example.liftrix.ui.workout.create.RedesignedCreateTemplateScreen
 import com.example.liftrix.ui.workout.edit.RedesignedEditWorkoutScreen
+import com.example.liftrix.ui.workout.custom.CustomExerciseCreationScreen
+import com.example.liftrix.ui.workout.custom.CustomExerciseEditScreen
+import com.example.liftrix.ui.workout.custom.CustomExerciseListScreen
 import com.example.liftrix.ui.progress.ProgressDashboardScreen
 import com.example.liftrix.ui.progress.detail.WorkoutFrequencyDetailScreen
 import com.example.liftrix.ui.coach.CoachScreen
@@ -237,6 +240,9 @@ fun UnifiedNavigationContainer(
                         },
                         onNavigateToFrequencyDetail = {
                             navController.navigate(LiftrixRoute.WorkoutFrequencyDetail)
+                        },
+                        onNavigateToDashboardCustomization = {
+                            navController.navigate(LiftrixRoute.DashboardCustomization)
                         }
                     )
                 }
@@ -369,8 +375,62 @@ fun UnifiedNavigationContainer(
                             }
                         },
                         onCreateCustomExercise = {
-                            // Custom exercise creation navigation placeholder
+                            navController.navigate(LiftrixRoute.CustomExerciseCreation)
+                        },
+                        onManageCustomExercises = {
+                            navController.navigate(LiftrixRoute.CustomExerciseList(selectionMode = false))
                         }
+                    )
+                }
+                
+                // Custom Exercise Management Routes
+                composable<LiftrixRoute.CustomExerciseCreation> {
+                    com.example.liftrix.ui.workout.custom.CustomExerciseCreationScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        },
+                        onExerciseCreated = { exerciseId ->
+                            // Navigate back to previous screen (likely exercise list) 
+                            // The list will refresh to show the newly created exercise
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.CustomExerciseEdit> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.CustomExerciseEdit>()
+                    com.example.liftrix.ui.workout.custom.CustomExerciseEditScreen(
+                        exerciseId = route.exerciseId,
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        },
+                        onExerciseUpdated = { exerciseId ->
+                            // Stay on the screen or navigate back based on UX needs
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+                
+                composable<LiftrixRoute.CustomExerciseList> { backStackEntry ->
+                    val route = backStackEntry.toRoute<LiftrixRoute.CustomExerciseList>()
+                    com.example.liftrix.ui.workout.custom.CustomExerciseListScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        },
+                        onCreateExercise = {
+                            navController.navigate(LiftrixRoute.CustomExerciseCreation)
+                        },
+                        onEditExercise = { exerciseId ->
+                            navController.navigate(LiftrixRoute.CustomExerciseEdit(exerciseId))
+                        },
+                        onExerciseSelected = if (route.selectionMode) { exerciseId ->
+                            // Pass selected custom exercise back to previous screen
+                            navController.previousBackStackEntry?.savedStateHandle?.set(
+                                "selected_custom_exercise", 
+                                exerciseId
+                            )
+                            navController.popBackStackSafely()
+                        } else null
                     )
                 }
                 
@@ -397,8 +457,6 @@ fun UnifiedNavigationContainer(
                 
                 composable<LiftrixRoute.TemplateCreation> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.TemplateCreation>()
-                    // 🔥 FIXED: Extract and log folderId from route
-                    timber.log.Timber.d("🔥 UNIFIED-NAV: TemplateCreation route folderId='${route.folderId}'")
                     
                     com.example.liftrix.ui.workout.create.RedesignedCreateTemplateScreen(
                         onNavigateBack = {
@@ -409,7 +467,7 @@ fun UnifiedNavigationContainer(
                         },
                         editTemplateId = null,
                         navBackStackEntry = backStackEntry,
-                        initialFolderId = route.folderId  // 🔥 NEW: Pass folder ID for initialization
+                        initialFolderId = route.folderId
                     )
                 }
                 
@@ -491,6 +549,9 @@ fun UnifiedNavigationContainer(
                         },
                         onNavigateToAdminBanManagement = {
                             navController.navigate(LiftrixRoute.AdminBanManagement)
+                        },
+                        onNavigateToUpgradeToPremium = {
+                            navController.navigate(LiftrixRoute.UpgradeToPremium)
                         }
                     )
                 }
@@ -1072,6 +1133,18 @@ fun UnifiedNavigationContainer(
                         }
                     )
                 }
+                
+                // Subscription Management Routes
+                composable<LiftrixRoute.UpgradeToPremium> {
+                    com.example.liftrix.ui.settings.upgrade.UpgradeToPremiumScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        },
+                        onContactSupport = {
+                            navController.navigate(LiftrixRoute.ContactSupport)
+                        }
+                    )
+                }
             }
             
             // Persistent live session bar - only show if session exists and not on active workout screen
@@ -1351,7 +1424,6 @@ class UnifiedNavigationViewModel @Inject constructor(
                 initialSets = 1 // Create one default set
             )
             sessionManager.addExerciseToSession(sessionExercise)
-            timber.log.Timber.i("Added exercise to current session: ${exerciseLibrary.name}")
         }
     }
     
@@ -1398,6 +1470,9 @@ private fun NavigationAwareTopAppBar(
         "TemplateCreation" to "Create Template",
         "EditWorkout" to "Edit Workout",
         "ExerciseSelection" to "Add Exercise",
+        "CustomExerciseCreation" to "Create Exercise",
+        "CustomExerciseEdit" to "Edit Exercise", 
+        "CustomExerciseList" to "My Exercises",
         "WorkoutDetails" to "Workout Details",
         "ExerciseDetails" to "Exercise Details",
         "AnomalyDashboard" to "Anomaly Detection",

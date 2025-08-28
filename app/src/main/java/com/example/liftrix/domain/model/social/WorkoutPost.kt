@@ -22,6 +22,7 @@ data class WorkoutPost(
     val prsCount: Int = 0,
     val achievements: List<WorkoutAchievement> = emptyList(),
     val workoutSummary: WorkoutSummary? = null,
+    val exercises: List<PostExercise> = emptyList(), // INT-004: Exercise details with custom exercise indicators
     
     // Engagement metrics
     val likeCount: Int = 0,
@@ -97,4 +98,34 @@ enum class FeedType {
     HOME,       // Posts from followed users
     DISCOVERY,  // Public posts for discovery
     USER        // Posts from a specific user
+}
+
+/**
+ * Exercise information for social posts (INT-004)
+ * Contains minimal data needed for displaying exercises in feed with custom exercise indicators
+ */
+data class PostExercise(
+    val name: String,
+    val isCustomExercise: Boolean = false,
+    val customExerciseId: String? = null,
+    val primaryMuscleGroup: com.example.liftrix.domain.model.ExerciseCategory? = null,
+    val setsCount: Int = 0,
+    val maxWeight: Double? = null,
+    val isPR: Boolean = false
+) {
+    /**
+     * Display name with custom exercise indicator
+     */
+    val displayName: String
+        get() = if (isCustomExercise) "$name 🔧" else name
+        
+    /**
+     * Short description for display
+     */
+    val description: String?
+        get() = when {
+            isPR && maxWeight != null -> "${maxWeight}kg PR!"
+            maxWeight != null -> "${maxWeight}kg"
+            else -> null
+        }
 }

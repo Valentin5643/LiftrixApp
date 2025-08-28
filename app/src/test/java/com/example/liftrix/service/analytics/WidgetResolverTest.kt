@@ -55,12 +55,12 @@ class WidgetResolverTest {
     }
 
     @Test
-    fun `resolveStandardWidgets returns 11 widgets for ADVANCED level`() {
+    fun `resolveStandardWidgets returns 12 widgets for ADVANCED level`() {
         // When
         val widgets = widgetResolver.resolveStandardWidgets(UserLevel.ADVANCED)
 
         // Then
-        assertEquals("Advanced should have exactly 11 widgets", 11, widgets.size)
+        assertEquals("Advanced should have exactly 12 widgets", 12, widgets.size)
         
         // Verify all widgets are active and valid
         widgets.forEach { widget ->
@@ -101,7 +101,7 @@ class WidgetResolverTest {
         )
 
         // Then
-        assertEquals("SECTIONS mode should return 11 widgets for advanced", 11, widgets.size)
+        assertEquals("SECTIONS mode should return 12 widgets for advanced", 12, widgets.size)
     }
 
     @Test
@@ -122,8 +122,8 @@ class WidgetResolverTest {
 
         // Test advanced limit
         assertEquals(
-            "Advanced should have max 11 widgets",
-            11,
+            "Advanced should have max 12 widgets",
+            12,
             widgetResolver.getMaxWidgetCount(UserLevel.ADVANCED)
         )
     }

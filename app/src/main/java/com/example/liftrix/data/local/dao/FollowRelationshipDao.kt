@@ -248,6 +248,7 @@ interface FollowRelationshipDao {
     @androidx.room.Transaction
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertFollowRelationships(relationships: List<FollowRelationshipEntity>)
+    
 
     @Update
     suspend fun updateFollowRelationship(relationship: FollowRelationshipEntity): Int

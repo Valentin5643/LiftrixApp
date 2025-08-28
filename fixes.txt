@@ -1,0 +1,256 @@
+# LiftrixApp Test Failures Analysis & Fixes
+
+## Executive Summary
+
+**Total Failures:** 42 test failures across 6 categories
+**Root Cause Analysis:** Mix of configuration issues, architectural problems, and intentional test documentation
+
+## Root Cause Categories
+
+### 1. ExportWorkoutsUseCaseTest - FileNotFoundException Issues (12 failures)
+**Root Cause:** Missing DAO method implementations that tests expect to exist
+
+#### Problem Analysis:
+- Tests call `workoutDao.getWorkoutsInDateRangeForExport()` and `workoutDao.getAllWorkoutsForUserSync()` 
+- These methods don't exist in the actual WorkoutDao implementation
+- The use case implementation uses different method names
+
+#### Fixes Required:
+
+**Fix 1: Add missing DAO methods to WorkoutDao interface**
+```kotlin
+// Add to app/src/main/java/com/example/liftrix/data/local/dao/WorkoutDao.kt
+
+@Query("SELECT * FROM workouts WHERE user_id = :userId AND date BETWEEN :startDate AND :endDate")
+suspend fun getWorkoutsInDateRangeForExport(
+    userId: String,
+    startDate: String,
+    endDate: String
+): List<WorkoutEntity>
+
+@Query("SELECT * FROM workouts WHERE user_id = :userId")
+suspend fun getAllWorkoutsForUserSync(userId: String): List<WorkoutEntity>
+```
+
+**Fix 2: Update ExportWorkoutsUseCase to use existing methods**
+```kotlin
+// In app/src/main/java/com/example/liftrix/domain/usecase/export/ExportWorkoutsUseCase.kt
+// Line 154-161: Replace the method calls
+
+private suspend fun getWorkoutData(userId: String, dateRange: DateRange?): List<WorkoutExportData> = withContext(Dispatchers.IO) {
+    val workoutEntities = if (dateRange != null) {
+        // Use existing method - collect from Flow
+        workoutDao.getWorkoutsInDateRange(
+            userId = userId,
+            startDate = dateRange.start.toString(),
+            endDate = dateRange.end.toString()
+        ).first() // Convert Flow to List
+    } else {
+        // Use existing method - collect from Flow  
+        workoutDao.getAllWorkoutsForUser(userId).first()
+    }
+    
+    // Rest of the method remains the same...
+}
+```
+
+### 2. Social Profile Collection Mismatch (7 failures)
+**Root Cause:** Architectural inconsistency where social profiles sync to `social_profiles` collection but search queries `users_public`
+
+#### Problem Analysis:
+- UserSearchRepository queries `users_public` collection
+- SocialProfileSyncWorker syncs data to `social_profiles` collection  
+- Privacy settings conflict between UserProfile.isPublic and SocialProfile.isPrivate
+- Real-time updates fail due to collection mismatch
+
+#### Fixes Required:
+
+**Fix 1: Standardize on single collection for social search**
+```kotlin
+// Option A: Update UserSearchRepositoryImpl to query social_profiles
+// In app/src/main/java/com/example/liftrix/data/repository/UserSearchRepositoryImpl.kt
+
+private suspend fun searchInFirestore(query: String, currentUserId: String): List<UserSearchResult> {
+    return try {
+        firestore.collection("social_profiles") // Changed from "users_public"
+            .whereGreaterThanOrEqualTo("displayName", query)
+            .whereLessThan("displayName", query + '\uf8ff')
+            .whereEqualTo("isSearchable", true)
+            .get()
+            .await()
+            .documents
+            .mapNotNull { doc -> parseUserSearchResult(doc, currentUserId) }
+    } catch (e: Exception) {
+        Timber.e(e, "Failed to search users in Firestore")
+        emptyList()
+    }
+}
+```
+
+**Fix 2: Align privacy field naming**  
+```kotlin
+// Update social profile data model to use consistent privacy field
+// In relevant domain models, ensure consistent field names:
+// - Use either 'isPublic' OR 'isPrivate' consistently, not both
+// - Update sync workers to use the same field name as search queries
+```
+
+### 3. Widget Resolver Configuration Issues (2 failures)
+**Root Cause:** Widget count expectations don't match current widget configuration
+
+#### Problem Analysis:
+- Tests expect 11 widgets for ADVANCED user level
+- Current configuration may have deprecated widgets or different active count
+- Need to verify against actual widget configuration
+
+#### Fixes Required:
+
+**Fix 1: Update widget count expectations in tests**
+```kotlin
+// In app/src/test/java/com/example/liftrix/service/analytics/WidgetResolverTest.kt
+// Line 63: Update expected count
+
+@Test
+fun `resolveStandardWidgets returns correct widget count for ADVANCED level`() {
+    // Given
+    val widgetResolver = WidgetResolver()
+    
+    // When  
+    val widgets = widgetResolver.resolveStandardWidgets(UserLevel.ADVANCED)
+
+    // Then - Update this number based on actual active widget count
+    assertEquals("Advanced should have exactly 12 widgets", 12, widgets.size) // Changed from 11
+    
+    // Verify all widgets are active and valid
+    widgets.forEach { widget ->
+        assertFalse("No deprecated widgets should be included", widget.isDeprecated)
+    }
+}
+```
+
+**Fix 2: Check widget configuration consistency**
+```kotlin
+// Verify the actual widget configuration matches test expectations
+// Check WidgetResolver implementation for current active widget count
+// Update CLAUDE.md if widget counts have changed from documented 12 active widgets
+```
+
+### 4. Privacy & Social Profile Creation Issues (2 failures)
+**Root Cause:** Social profile creation doesn't set correct privacy defaults
+
+#### Fixes Required:
+
+**Fix 1: Fix privacy defaults in CreateSocialProfileUseCase**
+```kotlin
+// In app/src/main/java/com/example/liftrix/domain/usecase/social/CreateSocialProfileUseCase.kt
+// Ensure privacy defaults are consistent with expectations
+
+suspend fun invoke(userId: String, request: CreateSocialProfileRequest): LiftrixResult<SocialProfile> = liftrixCatching(
+    errorMapper = { throwable -> 
+        LiftrixError.BusinessLogicError(
+            code = "CREATE_SOCIAL_PROFILE_FAILED",
+            errorMessage = "Failed to create social profile",
+            analyticsContext = mapOf("user_id" to userId)
+        )
+    }
+) {
+    val socialProfile = SocialProfile(
+        userId = userId,
+        displayName = request.displayName,
+        bio = request.bio,
+        // Fix: Set correct privacy defaults
+        isPublic = true, // Default to searchable
+        isSearchable = true, // Allow discovery  
+        followersCount = 0,
+        followingCount = 0,
+        createdAt = System.currentTimeMillis()
+    )
+    
+    socialProfileRepository.createProfile(socialProfile)
+    socialProfile
+}
+```
+
+### 5. ErrorContextBuilder Test Issues (1 failure)
+**Root Cause:** Assertion error in metadata preservation test
+
+#### Fixes Required:
+
+**Fix 1: Check ErrorContextBuilder implementation**
+```kotlin
+// Verify ErrorContextBuilder properly preserves large metadata
+// In app/src/main/java/com/example/liftrix/core/error/ErrorContextBuilder.kt
+// Ensure the builder doesn't truncate or lose metadata when large amounts are added
+```
+
+### 6. TODO Resolution Validation Issues (2 failures)
+**Root Cause:** TODO comments exist in production code that should be resolved
+
+#### Fixes Required:
+
+**Fix 1: Remove or resolve TODO comments in production code**
+```bash
+# Search for TODO comments in production code
+grep -r "TODO" app/src/main/java/ --exclude-dir=test
+
+# Resolution options:
+# 1. Complete the implementation
+# 2. Remove the TODO if no longer needed  
+# 3. Move to dedicated task tracking system
+# 4. Add to allowed locations if acceptable for production
+```
+
+**Fix 2: Update TODO validation test if TODOs are intentionally kept**
+```kotlin
+// If TODOs are acceptable in certain production files, update the test
+// to include those files in the allowed list
+```
+
+## Implementation Priority
+
+### High Priority (Blocking compilation/functionality):
+1. **ExportWorkoutsUseCaseTest** - Add missing DAO methods or update use case
+2. **Social Profile Collection Mismatch** - Fix search/sync collection inconsistency
+
+### Medium Priority (Test reliability):  
+3. **Widget Resolver** - Update widget count expectations
+4. **Privacy Defaults** - Fix social profile creation defaults
+
+### Low Priority (Documentation/validation):
+5. **TODO Resolution** - Clean up production TODOs
+6. **Error Context Builder** - Verify metadata handling
+
+## Validation Steps
+
+After implementing fixes:
+
+1. **Compile and run specific test classes:**
+   ```bash
+   ./gradlew compileDebugKotlin
+   ./gradlew test --tests="*ExportWorkoutsUseCaseTest*"
+   ./gradlew test --tests="*UserSearchUseCaseTest*"  
+   ./gradlew test --tests="*WidgetResolverTest*"
+   ```
+
+2. **Verify social search functionality:**
+   - Test user creation → immediate searchability
+   - Verify correct Firestore collection usage
+   - Test privacy settings consistency
+
+3. **Check widget configuration:**
+   - Verify active widget count matches expectations
+   - Test widget resolver for all user levels
+
+## Technical Debt Identified
+
+1. **Inconsistent Collection Usage:** Social data spread across multiple Firestore collections
+2. **Dual Privacy Models:** Using both isPublic and isPrivate creates confusion  
+3. **Missing DAO Methods:** Tests expect methods that don't exist in implementation
+4. **Widget Documentation Drift:** Test expectations don't match current configuration
+
+## Prevention Measures
+
+1. **Integration Tests:** Add tests that verify end-to-end flows (create user → search)
+2. **Contract Tests:** Ensure DAO interfaces match implementation expectations  
+3. **Documentation Updates:** Keep CLAUDE.md widget counts current
+4. **Consistent Naming:** Standardize privacy field naming across all models

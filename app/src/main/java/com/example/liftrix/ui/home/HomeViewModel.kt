@@ -125,11 +125,9 @@ class HomeViewModel @Inject constructor(
                 if (event.showFollowing) {
                     // Following selected - only show people you follow
                     showAllUsersInRecentActivity = false
-                    Timber.d("🔥 HOME-FILTER: Switched to Following (only people you follow)")
                 } else {
                     // Explore selected - show all users
                     showAllUsersInRecentActivity = true
-                    Timber.d("🔥 HOME-FILTER: Switched to Explore (all users)")
                 }
                 loadFeedWorkouts()
             }
@@ -170,7 +168,6 @@ class HomeViewModel @Inject constructor(
 
     /**
      * Loads home screen data including recent workouts and statistics
-     * 🔥 IMPROVED: Now used for manual refresh, reactive updates handled separately
      */
     fun loadHomeData() {
         executeUseCase(
@@ -180,10 +177,6 @@ class HomeViewModel @Inject constructor(
                 result
             },
             onSuccess = { recentWorkouts ->
-                Timber.d("🔥 HOME-VM-DEBUG: Successfully loaded ${recentWorkouts.size} recent workouts")
-                recentWorkouts.forEachIndexed { index, workout ->
-                    Timber.d("🔥 HOME-VM-DEBUG: Workout[$index] - name: ${workout.name}, status: ${workout.status}, date: ${workout.date}")
-                }
                 
                 updateHomeScreenData { it.copy(recentWorkouts = recentWorkouts) }
             },
@@ -222,10 +215,12 @@ class HomeViewModel @Inject constructor(
 
     /**
      * Sets up reactive workout feed data observation
-     * 🔥 IMPROVED: Now uses reactive Flow instead of one-time suspend calls
      */
     fun loadFeedWorkouts() {
-        viewModelScope.launch {
+        // Cancel previous feed observation job
+        feedObservationJob?.cancel()
+        
+        feedObservationJob = viewModelScope.launch {
             try {
                 val userId = getAuthenticatedUserIdUseCase()
 
@@ -239,9 +234,14 @@ class HomeViewModel @Inject constructor(
                     limit = FEED_LIMIT
                 )
                     .catch { throwable ->
-                        Timber.e(throwable, "Error in feed workouts flow")
-                        updateHomeScreenData { 
-                            it.copy(workoutFeedState = FeedState.Error("Failed to load workout feed: ${throwable.message}"))
+                        // Properly handle cancellation vs actual errors
+                        if (throwable !is kotlinx.coroutines.CancellationException) {
+                            Timber.e(throwable, "Error in feed workouts flow")
+                            updateHomeScreenData { 
+                                it.copy(workoutFeedState = FeedState.Error("Failed to load workout feed: ${throwable.message}"))
+                            }
+                        } else {
+                            throw throwable // Rethrow cancellation
                         }
                     }
                     .collect { result ->
@@ -287,7 +287,6 @@ class HomeViewModel @Inject constructor(
 
     /**
      * Loads more workout feed data for pagination
-     * 🔥 SIMPLIFIED: With reactive feeds, pagination is handled by the reactive flow
      */
     fun loadMoreWorkouts() {
         val currentData = _uiState.value.dataOrNull() ?: HomeScreenData()
@@ -306,7 +305,10 @@ class HomeViewModel @Inject constructor(
      * Loads user recommendations for discovery carousel
      */
     fun loadRecommendations() {
-        viewModelScope.launch {
+        // Cancel previous recommendations observation job
+        recommendationsObservationJob?.cancel()
+        
+        recommendationsObservationJob = viewModelScope.launch {
             try {
                 val userId = getAuthenticatedUserIdUseCase()
                 
@@ -314,9 +316,14 @@ class HomeViewModel @Inject constructor(
                 currentRecommendationsOffset = 0
                 socialRepository.getRecommendedUsers(RECOMMENDATIONS_LIMIT, 0)
                     .catch { exception ->
-                        Timber.e(exception, "Error loading recommendations")
-                        updateHomeScreenData { 
-                            it.copy(recommendationsState = RecommendationsState.Error(exception.message ?: "Failed to load user recommendations"))
+                        // Properly handle cancellation vs actual errors
+                        if (exception !is kotlinx.coroutines.CancellationException) {
+                            Timber.e(exception, "Error loading recommendations")
+                            updateHomeScreenData { 
+                                it.copy(recommendationsState = RecommendationsState.Error(exception.message ?: "Failed to load user recommendations"))
+                            }
+                        } else {
+                            throw exception // Rethrow cancellation
                         }
                     }
                     .collect { users ->
@@ -537,33 +544,44 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    // 🔥 FIXED: Track current user ID to prevent duplicate subscriptions
     private var currentObservedUserId: String? = null
+    private var workoutObservationJob: kotlinx.coroutines.Job? = null
+    private var feedObservationJob: kotlinx.coroutines.Job? = null
+    private var recommendationsObservationJob: kotlinx.coroutines.Job? = null
 
     /**
      * Observes authentication state and loads data when user is available
-     * 🔥 IMPROVED: Now reactively observes workout data changes but prevents duplicate subscriptions
      */
     private fun observeUserDataAndLoadHome() {
         viewModelScope.launch {
             authRepository.currentUser
                 .catch { throwable ->
-                    Timber.e(throwable, "Error observing auth state")
-                    updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.AuthenticationError(
-                        "Authentication error"
-                    ))
+                    // Properly handle cancellation vs actual errors
+                    if (throwable !is kotlinx.coroutines.CancellationException) {
+                        Timber.e(throwable, "Error observing auth state")
+                        updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.AuthenticationError(
+                            "Authentication error"
+                        ))
+                    } else {
+                        throw throwable // Rethrow cancellation to maintain structured concurrency
+                    }
                 }
                 .collect { user ->
                     if (user != null) {
-                        // 🔥 CRITICAL FIX: Only start new observation if user ID actually changed
+                        // Cancel previous observation job before starting new one
                         if (currentObservedUserId != user.uid) {
-                            Timber.d("🔥 WORKOUT-UI-DEBUG: User ID changed from $currentObservedUserId to ${user.uid} - starting new observation")
+                            
+                            // Cancel previous observation job if it exists
+                            workoutObservationJob?.cancel()
+                            workoutObservationJob = null
+                            
                             currentObservedUserId = user.uid
                             observeWorkoutDataReactively(user.uid)
-                        } else {
-                            Timber.d("🔥 WORKOUT-UI-DEBUG: User ID unchanged ($currentObservedUserId) - skipping duplicate observation")
                         }
                     } else {
+                        // Cancel observation job when user signs out
+                        workoutObservationJob?.cancel()
+                        workoutObservationJob = null
                         currentObservedUserId = null
                         updateHomeScreenData { 
                             it.copy(recentWorkouts = emptyList()) 
@@ -574,45 +592,45 @@ class HomeViewModel @Inject constructor(
     }
     
     /**
-     * 🔥 FIXED: Reactively observes USER'S workout data changes (not activity feed)
      * This ensures Home screen updates automatically when workouts are completed
      * Uses getRecentWorkouts for user's personal workout history
      */
     private fun observeWorkoutDataReactively(userId: String) {
-        viewModelScope.launch {
-            // 🔥 FORENSIC DEBUG - Track when this method is called
-            Timber.d("🔥 WORKOUT-UI-DEBUG: observeWorkoutDataReactively called for userId: $userId")
+        // Cancel previous observation job before starting new one
+        workoutObservationJob?.cancel()
+        
+        workoutObservationJob = viewModelScope.launch {
             
-            // 🔥 CRITICAL FIX: Use getRecentWorkouts for user's personal workouts, not activity feed
             workoutRepository.getRecentWorkouts(userId, RECENT_WORKOUTS_LIMIT)
                 .catch { throwable ->
-                    Timber.e(throwable, "Error observing recent workouts")
-                    updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.DataRetrievalError(
-                        "Failed to load recent workouts: ${throwable.message}"
-                    ))
+                    // Properly handle cancellation vs actual errors
+                    if (throwable !is kotlinx.coroutines.CancellationException) {
+                        Timber.e(throwable, "Error observing recent workouts")
+                        updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.DataRetrievalError(
+                            "Failed to load recent workouts: ${throwable.message}"
+                        ))
+                    } else {
+                        throw throwable // Rethrow cancellation to maintain structured concurrency
+                    }
                 }
                 .collect { result ->
                     result.fold(
                         onSuccess = { workouts ->
-                            // 🔥 FORENSIC DEBUG - Add UI layer workout debugging for personal workouts
-                            Timber.d("🔥 WORKOUT-UI-DEBUG: Received ${workouts.size} personal workouts from repository")
-                            workouts.forEachIndexed { index, workout ->
-                                Timber.d("🔥 WORKOUT-UI-DEBUG: Workout[$index]: id=${workout.id.value}, name=${workout.name}, status=${workout.status}")
-                            }
                             
                             updateHomeScreenData {
                                 it.copy(recentWorkouts = workouts)
                             }
                             
-                            Timber.d("🔥 WORKOUT-UI-DEBUG: UI updated with ${workouts.size} personal workouts")
                         },
                         onFailure = { throwable ->
-                            Timber.e(throwable, "Error in reactive workout observation")
-                            updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.DataRetrievalError(
-                                throwable.message ?: "Failed to load workouts"
-                            ))
-                            updateHomeScreenData {
-                                it.copy(recentWorkouts = emptyList())
+                            if (throwable !is kotlinx.coroutines.CancellationException) {
+                                Timber.e(throwable, "Error in reactive workout observation")
+                                updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.DataRetrievalError(
+                                    throwable.message ?: "Failed to load workouts"
+                                ))
+                                updateHomeScreenData {
+                                    it.copy(recentWorkouts = emptyList())
+                                }
                             }
                         }
                     )
@@ -626,7 +644,6 @@ class HomeViewModel @Inject constructor(
      */
     fun toggleRecentActivityFilter() {
         showAllUsersInRecentActivity = !showAllUsersInRecentActivity
-        Timber.d("🔥 HOME-FILTER: Toggled recent activity filter to: ${if (showAllUsersInRecentActivity) "All Users" else "My Workouts Only"}")
         
         // Get current user ID and refresh the feed
         viewModelScope.launch {

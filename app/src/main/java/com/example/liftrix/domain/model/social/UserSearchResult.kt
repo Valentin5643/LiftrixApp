@@ -65,7 +65,7 @@ enum class ConnectionStatus {
     NONE,              // No existing connection
     PENDING_SENT,      // Current user sent request
     PENDING_RECEIVED,  // Received request from this user
-    CONNECTED,         // Already connected/friends
+    CONNECTED,         // Currently following this user (one-way)
     MUTUAL_FOLLOW,     // Both users follow each other
     GYM_BUDDY,         // Inner circle gym buddy relationship
     BLOCKED,           // User is blocked

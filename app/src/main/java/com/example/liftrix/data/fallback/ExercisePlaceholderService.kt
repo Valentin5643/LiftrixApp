@@ -58,7 +58,6 @@ class ExercisePlaceholderService @Inject constructor(
             val exercises = jsonData.map { convertToDomain(it) }
             cachedExercises = exercises
             
-            Timber.d("Loaded ${exercises.size} placeholder exercises from JSON")
             exercises
         } catch (e: Exception) {
             Timber.e(e, "Failed to load placeholder exercises from JSON")

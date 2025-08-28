@@ -1,7 +1,7 @@
 {
   "indexes": [
     {
-      "collectionGroup": "users_public",
+      "collectionGroup": "social_profiles",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -15,7 +15,7 @@
       ]
     },
     {
-      "collectionGroup": "users_public",
+      "collectionGroup": "social_profiles",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -199,7 +199,7 @@
   ],
   "fieldOverrides": [
     {
-      "collectionGroup": "users_public",
+      "collectionGroup": "social_profiles",
       "fieldPath": "displayName",
       "indexes": [
         {

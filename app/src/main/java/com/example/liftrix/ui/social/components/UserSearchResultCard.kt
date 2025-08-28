@@ -374,7 +374,7 @@ private fun ConnectionAction(
             Spacer(modifier = Modifier.width(1.dp))
         }
         
-        // Connection button
+        // Follow button
         when (connectionStatus) {
             ConnectionStatus.NONE -> {
                 Button(
@@ -387,12 +387,12 @@ private fun ConnectionAction(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Connect")
+                    Text("Follow")
                 }
             }
             ConnectionStatus.PENDING_SENT -> {
                 OutlinedButton(
-                    onClick = { /* Handle cancel request */ },
+                    onClick = onConnectClick,
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Icon(
@@ -401,7 +401,7 @@ private fun ConnectionAction(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Pending")
+                    Text("Requested")
                 }
             }
             ConnectionStatus.PENDING_RECEIVED -> {
@@ -420,25 +420,25 @@ private fun ConnectionAction(
             }
             ConnectionStatus.CONNECTED -> {
                 OutlinedButton(
-                    onClick = { /* Handle view profile */ },
+                    onClick = onConnectClick,
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.CheckCircle,
+                        imageVector = Icons.Default.Check,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Connected")
+                    Text("Following")
                 }
             }
             ConnectionStatus.MUTUAL_FOLLOW -> {
                 OutlinedButton(
-                    onClick = { /* Handle view profile */ },
+                    onClick = onConnectClick,
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Favorite,
+                        imageVector = Icons.Default.Check,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp)
                     )

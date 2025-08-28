@@ -541,7 +541,10 @@ private fun updateExerciseFromSets(
     val firstSet = setInputs.firstOrNull()
     val updatedExercise = exercise.copy(
         targetSets = setInputs.size,
-        targetReps = firstSet?.reps?.toIntOrNull()?.let { com.example.liftrix.domain.model.Reps(it) },
+        targetReps = firstSet?.reps?.toIntOrNull()?.let { 
+            val safeReps = it.coerceIn(0, 1000)
+            com.example.liftrix.domain.model.Reps(safeReps)
+        },
         targetWeight = firstSet?.weight?.toDoubleOrNull()?.let { com.example.liftrix.domain.model.Weight.fromKilograms(it) }
     )
     onUpdate(updatedExercise)
@@ -559,7 +562,10 @@ private fun updateExercise(
 ) {
     val updatedExercise = exercise.copy(
         targetSets = sets.toIntOrNull(),
-        targetReps = reps.toIntOrNull()?.let { com.example.liftrix.domain.model.Reps(it) },
+        targetReps = reps.toIntOrNull()?.let { 
+            val safeReps = it.coerceIn(0, 1000)
+            com.example.liftrix.domain.model.Reps(safeReps)
+        },
         targetWeight = weight.toDoubleOrNull()?.let { com.example.liftrix.domain.model.Weight.fromKilograms(it) }
     )
     onUpdate(updatedExercise)

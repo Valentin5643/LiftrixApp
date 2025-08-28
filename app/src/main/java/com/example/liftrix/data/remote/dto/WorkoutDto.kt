@@ -1,7 +1,6 @@
 package com.example.liftrix.data.remote.dto
 
 import com.google.firebase.Timestamp
-import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.PropertyName
 import com.google.firebase.firestore.ServerTimestamp
 
@@ -9,14 +8,14 @@ import com.google.firebase.firestore.ServerTimestamp
  * Firestore DTO representing a workout document
  */
 data class WorkoutDto(
-    @DocumentId
+    @PropertyName("id")
     val id: String = "",
     
     @PropertyName("name")
     val name: String = "",
     
     @PropertyName("date")
-    val date: String = "", // ISO date string (yyyy-MM-dd)
+    val date: Timestamp? = null, // Firestore Timestamp for workout date
     
     @PropertyName("exercises")
     val exercises: List<ExerciseDto> = emptyList(),
@@ -43,7 +42,7 @@ data class WorkoutDto(
     @ServerTimestamp
     val updatedAt: Timestamp? = null,
     
-    @PropertyName("user_id")
+    @PropertyName("userId")
     val userId: String = "",
     
     @PropertyName("version")
@@ -53,7 +52,7 @@ data class WorkoutDto(
     constructor() : this(
         id = "",
         name = "",
-        date = "",
+        date = null,
         exercises = emptyList(),
         status = "",
         startTime = null,

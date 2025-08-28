@@ -18,6 +18,7 @@ import com.example.liftrix.data.mapper.AchievementMapper
 import com.example.liftrix.domain.model.UserAchievement
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.repository.AchievementRepository
+import com.example.liftrix.sync.AchievementSyncWorker
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -82,7 +83,6 @@ class AchievementRepositoryImpl @Inject constructor(
             ) != null
 
             if (exists) {
-                Timber.d("Achievement already exists for user ${achievement.userId}: ${achievement.title}")
                 return Result.success(Unit)
             }
 
@@ -93,7 +93,6 @@ class AchievementRepositoryImpl @Inject constructor(
             // Queue sync in background
             queueAchievementSync(achievement.userId)
 
-            Timber.d("Achievement saved successfully for user ${achievement.userId}: ${achievement.title}")
             Result.success(Unit)
 
         } catch (e: Exception) {
@@ -121,7 +120,6 @@ class AchievementRepositoryImpl @Inject constructor(
             }
 
             if (newAchievements.isEmpty()) {
-                Timber.d("No new achievements to save for user: $userId")
                 return Result.success(Unit)
             }
 
@@ -132,7 +130,6 @@ class AchievementRepositoryImpl @Inject constructor(
             // Queue sync in background
             queueAchievementSync(userId)
 
-            Timber.d("${newAchievements.size} achievements saved successfully for user: $userId")
             Result.success(Unit)
 
         } catch (e: Exception) {
@@ -146,7 +143,6 @@ class AchievementRepositoryImpl @Inject constructor(
             achievementDao.updateDisplayStatus(achievementId, userId, isDisplayed)
             queueAchievementSync(userId)
 
-            Timber.d("Achievement display status updated: $achievementId, displayed: $isDisplayed")
             Result.success(Unit)
 
         } catch (e: Exception) {
@@ -165,7 +161,6 @@ class AchievementRepositoryImpl @Inject constructor(
                 .delete()
                 .await()
 
-            Timber.d("Achievement deleted successfully: $achievementId")
             Result.success(Unit)
 
         } catch (e: Exception) {
@@ -209,64 +204,11 @@ class AchievementRepositoryImpl @Inject constructor(
                     ExistingWorkPolicy.REPLACE,
                     syncRequest
                 )
-                Timber.d("Queued achievement sync for user: $userId")
             }
             Result.success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "Failed to queue achievement sync for user: $userId")
             Result.failure(e)
         }
-    }
-}
-
-/**
- * WorkManager worker for syncing achievements to Firebase in the background.
- */
-@HiltWorker
-class AchievementSyncWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted workerParams: WorkerParameters
-) : CoroutineWorker(context, workerParams) {
-
-    override suspend fun doWork(): Result {
-        return try {
-            // Get the user ID from input data or use a generic sync for all users
-            // For now, we'll sync all unsynced achievements
-            syncUnsyncedAchievements()
-            
-            Timber.d("Achievement sync work completed successfully")
-            Result.success()
-        } catch (e: Exception) {
-            Timber.e(e, "Achievement sync work failed")
-            Result.retry()
-        }
-    }
-    
-    private suspend fun syncUnsyncedAchievements() {
-        // This would normally be injected but for now we'll access it directly
-        // In production, the worker would have proper dependency injection
-        val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-        
-        // Note: This is a simplified implementation
-        // In production, you'd inject the DAO and get user-specific unsynced achievements
-        try {
-            // Sync achievements to Firestore
-            // For now, just log that sync is happening
-            Timber.d("Syncing achievements to Firestore...")
-            
-            // In a full implementation, this would:
-            // 1. Get unsynced achievements from local database
-            // 2. Upload them to Firestore
-            // 3. Mark them as synced in local database
-            // 4. Handle conflicts and retries
-            
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to sync achievements to Firestore")
-            throw e
-        }
-    }
-
-    companion object {
-        const val WORK_NAME = "achievement_sync"
     }
 }

@@ -134,15 +134,16 @@ class ErrorContextBuilder {
      * - Validation context (context_size)
      */
     fun build(): Map<String, String> {
+        // Generate system-level context once if not already in builder context
+        if (!context.containsKey("timestamp")) {
+            context["timestamp"] = Clock.System.now().toString()
+        }
+        
         return buildMap {
-            // Add all user-provided context
+            // Add all user-provided context (including cached timestamp)
             putAll(context)
             
             // Add system-level context if not already present
-            if (!containsKey("timestamp")) {
-                put("timestamp", Clock.System.now().toString())
-            }
-            
             if (!containsKey("error_source")) {
                 put("error_source", "liftrix_app")
             }

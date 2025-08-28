@@ -521,6 +521,36 @@ sealed class LiftrixRoute {
     @Serializable
     data object AIChatSettings : LiftrixRoute()
     
+    // Custom Exercise Management Routes
+    
+    /**
+     * Custom exercise creation screen for creating personalized exercises
+     * Allows users to define exercises with custom metadata, images, and instructions
+     */
+    @Serializable
+    data object CustomExerciseCreation : LiftrixRoute()
+    
+    /**
+     * Custom exercise editing screen for modifying existing custom exercises
+     * 
+     * @param exerciseId Unique identifier for the custom exercise to edit
+     */
+    @Serializable
+    data class CustomExerciseEdit(val exerciseId: String) : LiftrixRoute()
+    
+    /**
+     * Custom exercise list screen showing all user's custom exercises
+     * Supports search, filtering, sorting, and management of custom exercises
+     * 
+     * @param selectionMode Whether the screen is in selection mode for exercise picking (default: false)
+     * @param returnRoute Optional route to return to after exercise selection
+     */
+    @Serializable
+    data class CustomExerciseList(
+        val selectionMode: Boolean = false,
+        val returnRoute: String? = null
+    ) : LiftrixRoute()
+    
     // Admin System Routes (Admin-only access)
     
     /**
@@ -529,4 +559,11 @@ sealed class LiftrixRoute {
      */
     @Serializable
     data object AdminBanManagement : LiftrixRoute()
+    
+    /**
+     * Upgrade to Premium screen showing premium features and subscription plans
+     * Accessible from settings screen to showcase premium benefits
+     */
+    @Serializable
+    data object UpgradeToPremium : LiftrixRoute()
 }

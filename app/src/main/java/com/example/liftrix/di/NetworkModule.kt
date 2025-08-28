@@ -20,6 +20,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import timber.log.Timber
 import javax.inject.Singleton
 
 @Module
@@ -37,10 +38,15 @@ abstract class NetworkModule {
         @Singleton
         fun provideFirebaseFirestore(): FirebaseFirestore {
             return FirebaseFirestore.getInstance().apply {
+                // Configure Firestore with proper settings
                 firestoreSettings = com.google.firebase.firestore.FirebaseFirestoreSettings.Builder()
-                    .setPersistenceEnabled(true)
+                    .setPersistenceEnabled(true) // Enable offline persistence
                     .setCacheSizeBytes(com.google.firebase.firestore.FirebaseFirestoreSettings.CACHE_SIZE_UNLIMITED)
+                    // Disable network for initial sync if needed
                     .build()
+                
+                // Log Firestore initialization
+                Timber.d("FirebaseFirestore initialized with offline persistence enabled")
             }
         }
 

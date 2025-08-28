@@ -94,7 +94,9 @@ fun ModernVolumeChart(
     modifier: Modifier = Modifier,
     onDataPointSelected: ((VolumeDataPoint) -> Unit)? = null,
     showPersonalRecords: Boolean = true,
-    animationDuration: Int = 300
+    animationDuration: Int = 300,
+    unit: String = "kg",
+    chartTitle: String = "Volume Progress"
 ) {
     var selectedPoint by remember { mutableStateOf<VolumeDataPoint?>(null) }
     val density = LocalDensity.current
@@ -132,11 +134,11 @@ fun ModernVolumeChart(
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
-            // Chart header
-            ChartHeader(
-                title = "Volume Progress",
+            // Chart metrics only (title removed to avoid duplication)
+            ChartMetricsOnly(
                 subtitle = timeRange.displayName,
-                metrics = chartMetrics
+                metrics = chartMetrics,
+                unit = unit
             )
             
             Spacer(modifier = Modifier.height(16.dp))
@@ -192,7 +194,8 @@ fun ModernVolumeChart(
                 Spacer(modifier = Modifier.height(8.dp))
                 SelectedPointInfo(
                     point = selectedPoint!!,
-                    onDismiss = { selectedPoint = null }
+                    onDismiss = { selectedPoint = null },
+                    unit = unit
                 )
             }
         }
@@ -480,48 +483,39 @@ private fun findNearestDataPoint(
 }
 
 /**
- * Chart header with title and metrics
+ * Chart metrics without title (title shown in widget container)
  */
 @Composable
-private fun ChartHeader(
-    title: String,
+private fun ChartMetricsOnly(
     subtitle: String,
-    metrics: ChartMetrics
+    metrics: ChartMetrics,
+    unit: String = "kg"
 ) {
-    Column {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface
+            text = subtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
         
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-            )
-            
-            if (metrics.isValid) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    MetricChip(
-                        label = "Peak",
-                        value = "${metrics.maxValue.toInt()}kg",
-                        color = ChartColorsV2.getSeriesColor(0)
-                    )
-                    MetricChip(
-                        label = "Avg",
-                        value = "${metrics.avgValue.toInt()}kg",
-                        color = ChartColorsV2.getSeriesColor(1)
-                    )
-                }
+        if (metrics.isValid) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                MetricChip(
+                    label = "Peak",
+                    value = "${metrics.maxValue.toInt()}$unit",
+                    color = ChartColorsV2.getSeriesColor(0)
+                )
+                MetricChip(
+                    label = "Avg",
+                    value = "${metrics.avgValue.toInt()}$unit",
+                    color = ChartColorsV2.getSeriesColor(1)
+                )
             }
         }
     }
@@ -560,7 +554,8 @@ private fun MetricChip(
 @Composable
 private fun SelectedPointInfo(
     point: VolumeDataPoint,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    unit: String = "kg"
 ) {
     Box(
         modifier = Modifier
@@ -576,7 +571,7 @@ private fun SelectedPointInfo(
         ) {
             Column {
                 Text(
-                    text = "${point.volume.value.toInt()}kg",
+                    text = "${point.volume.value.toInt()}$unit",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = ChartColorsV2.getSeriesColor(0)

@@ -38,7 +38,8 @@ data class NavigationCallbacks(
     val onNavigateToVolumeDetail: () -> Unit = {},
     val onNavigateToOneRmDetail: () -> Unit = {},
     val onNavigateToMuscleGroupDetail: () -> Unit = {},
-    val onNavigateToFrequencyDetail: () -> Unit = {}
+    val onNavigateToFrequencyDetail: () -> Unit = {},
+    val onNavigateToDashboardCustomization: () -> Unit = {}
 )
 
 /**
@@ -1243,7 +1244,7 @@ class AnalyticsWidgetViewModel @Inject constructor(
      */
     private fun handleNavigateToDashboardCustomization() {
         Timber.d("Navigating to dashboard customization")
-        // Navigation logic will be handled by the parent composable
+        navigationCallbacks?.onNavigateToDashboardCustomization?.invoke()
     }
     
     /**

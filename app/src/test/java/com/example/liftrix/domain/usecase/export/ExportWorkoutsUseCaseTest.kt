@@ -59,11 +59,15 @@ class ExportWorkoutsUseCaseTest {
         
         // Mock file creation for tests
         mockkStatic(File::class)
-        every { File.createTempFile(any(), any()) } returns mockk<File> {
-            every { absolutePath } returns "/tmp/test-export.json"
-            every { writeText(any()) } returns Unit
-            every { length() } returns 1024L
-        }
+        val mockFile = mockk<File>()
+        every { mockFile.absolutePath } returns "/tmp/test-export.json"
+        every { mockFile.writeText(any()) } returns Unit
+        every { mockFile.length() } returns 1024L
+        every { mockFile.exists() } returns true
+        every { mockFile.canRead() } returns true
+        every { mockFile.canWrite() } returns true
+        every { mockFile.delete() } returns true
+        every { File.createTempFile(any(), any()) } returns mockFile
     }
     
     @After

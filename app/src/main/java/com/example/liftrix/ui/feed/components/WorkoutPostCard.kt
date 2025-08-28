@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.feed.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -31,7 +32,6 @@ import com.example.liftrix.domain.model.WeightUnit
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.theme.LiftrixSpacing
 import com.example.liftrix.ui.theme.rememberWeightUnitManager
-import com.example.liftrix.ui.components.cards.LiftrixCard
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -50,6 +50,7 @@ fun WorkoutPostCard(
     onSaveClick: () -> Unit,
     onProfileClick: () -> Unit,
     onWorkoutCopyClick: () -> Unit,
+    onWorkoutClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     onBlockUser: () -> Unit = {},
     onReportPost: () -> Unit = {},
@@ -58,13 +59,16 @@ fun WorkoutPostCard(
 ) {
     val hapticFeedback = LocalHapticFeedback.current
 
-    LiftrixCard(
+    // Removed LiftrixCard wrapper for cleaner, more minimal appearance
+    Column(
         modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = LiftrixSpacing.small)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(LiftrixSpacing.medium)
+                .padding(horizontal = LiftrixSpacing.medium)
         ) {
             // Post header with user info
             PostHeader(
@@ -77,36 +81,37 @@ fun WorkoutPostCard(
                 modifier = Modifier.fillMaxWidth()
             )
             
-            Spacer(modifier = Modifier.height(LiftrixSpacing.small))
+            Spacer(modifier = Modifier.height(LiftrixSpacing.medium))
             
-            // Post caption
+            // Workout metrics - displayed prominently without box
+            WorkoutSummaryCard(
+                post = post,
+                onCopyClick = onWorkoutCopyClick,
+                onWorkoutClick = onWorkoutClick,
+                modifier = Modifier.fillMaxWidth()
+            )
+            
+            // Post caption - moved after metrics for better hierarchy
             if (post.caption.isNotBlank()) {
+                Spacer(modifier = Modifier.height(LiftrixSpacing.medium))
                 Text(
                     text = post.caption,
                     style = MaterialTheme.typography.bodyMedium,
                     color = LiftrixColorsV2.onSurface,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(modifier = Modifier.height(LiftrixSpacing.small))
             }
-            
-            // Workout summary card
-            WorkoutSummaryCard(
-                post = post,
-                onCopyClick = onWorkoutCopyClick,
-                modifier = Modifier.fillMaxWidth()
-            )
             
             // Media carousel if available
             if (post.mediaItems.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(LiftrixSpacing.small))
+                Spacer(modifier = Modifier.height(LiftrixSpacing.medium))
                 MediaCarousel(
                     mediaItems = post.mediaItems,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
             
-            Spacer(modifier = Modifier.height(LiftrixSpacing.medium))
+            Spacer(modifier = Modifier.height(LiftrixSpacing.small))
             
             // Engagement bar
             EngagementBar(
@@ -125,6 +130,14 @@ fun WorkoutPostCard(
                 modifier = Modifier.fillMaxWidth()
             )
         }
+        
+        // Add subtle divider at the bottom of each post
+        Spacer(modifier = Modifier.height(LiftrixSpacing.medium))
+        HorizontalDivider(
+            modifier = Modifier.fillMaxWidth(),
+            thickness = 0.5.dp,
+            color = LiftrixColorsV2.onSurfaceVariant.copy(alpha = 0.1f)
+        )
     }
 }
 
@@ -160,7 +173,10 @@ private fun PostHeader(
                 contentAlignment = Alignment.Center
             ) {
                 val hasValidImageUrl = !post.authorProfilePhotoUrl.isNullOrBlank()
-                timber.log.Timber.d("Workout post avatar for ${post.authorUsername}: imageUrl='${post.authorProfilePhotoUrl}', hasValid=$hasValidImageUrl")
+                timber.log.Timber.d("WorkoutPostCard: Profile image for ${post.authorDisplayName ?: post.authorUsername} (${post.userId}): " +
+                    "photoUrl='${post.authorProfilePhotoUrl}', " +
+                    "hasValidUrl=$hasValidImageUrl, " +
+                    "willShowInitials=${!hasValidImageUrl}")
                 
                 if (hasValidImageUrl) {
                     AsyncImage(
@@ -276,101 +292,95 @@ private fun PostHeader(
 private fun WorkoutSummaryCard(
     post: WorkoutPost,
     onCopyClick: () -> Unit,
+    onWorkoutClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Surface(
-        modifier = modifier,
-        color = LiftrixColorsV2.surfaceVariant,
-        shape = RoundedCornerShape(12.dp)
+    Column(
+        modifier = modifier
     ) {
+        // Workout metrics displayed directly without background box
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(LiftrixSpacing.medium),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .clickable { onWorkoutClick() },
+            horizontalArrangement = Arrangement.Start,
+            verticalAlignment = Alignment.Bottom
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    WorkoutStat(
-                        label = "Duration",
-                        value = formatDuration(post.workoutDuration),
-                        icon = Icons.Outlined.Schedule
-                    )
-                    
-                    val weightUnitManager = rememberWeightUnitManager()
-                    val volumeText = post.totalVolume?.let { volume ->
-                        // Assuming totalVolume is stored in the posting user's preferred unit
-                        // For social posts, we might want to show in viewer's preferred unit
-                        weightUnitManager?.formatWeightCompact(volume, WeightUnit.POUNDS) ?: "${volume.toInt()} lbs"
-                    } ?: "0"
-                    
-                    WorkoutStat(
-                        label = "Volume",
-                        value = volumeText,
-                        icon = Icons.Outlined.FitnessCenter
-                    )
-                    
-                    WorkoutStat(
-                        label = "Exercises",
-                        value = "${post.exercisesCount}",
-                        icon = Icons.Outlined.List
-                    )
-                }
-            }
+            // Duration
+            WorkoutMetric(
+                value = formatDuration(post.workoutDuration),
+                label = "Duration",
+                modifier = Modifier.padding(end = 32.dp)
+            )
             
-            Spacer(modifier = Modifier.width(LiftrixSpacing.medium))
+            // Volume
+            val weightUnitManager = rememberWeightUnitManager()
+            val volumeText = post.totalVolume?.let { volume ->
+                // Assuming totalVolume is stored in the posting user's preferred unit
+                // For social posts, we might want to show in viewer's preferred unit
+                weightUnitManager?.formatWeightCompact(volume, WeightUnit.POUNDS) ?: "${volume.toInt()} lbs"
+            } ?: "0 lbs"
             
-            // Copy workout button
+            WorkoutMetric(
+                value = volumeText,
+                label = "Volume",
+                modifier = Modifier.padding(end = 32.dp)
+            )
+            
+            // Exercises count
+            WorkoutMetric(
+                value = "${post.exercisesCount}",
+                label = if (post.exercisesCount == 1) "exercise" else "exercises",
+                modifier = Modifier.weight(1f)
+            )
+            
+            // Copy workout button - moved to the right
             IconButton(
                 onClick = onCopyClick,
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = LiftrixColorsV2.primary.copy(alpha = 0.1f),
-                    contentColor = LiftrixColorsV2.primary
-                )
+                modifier = Modifier.size(36.dp)
             ) {
                 Icon(
                     imageVector = Icons.Outlined.ContentCopy,
-                    contentDescription = "Copy workout"
+                    contentDescription = "Copy workout",
+                    tint = LiftrixColorsV2.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
                 )
             }
+        }
+        
+        // INT-004: Exercise list with custom exercise indicators
+        if (post.exercises.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(LiftrixSpacing.medium))
+            ExerciseList(
+                exercises = post.exercises,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
 
 @Composable
-private fun WorkoutStat(
-    label: String,
+private fun WorkoutMetric(
     value: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
+        verticalArrangement = Arrangement.Top
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = LiftrixColorsV2.primary,
-            modifier = Modifier.size(16.dp)
-        )
-        
-        Spacer(modifier = Modifier.height(2.dp))
-        
+        // Large value text - prominent like in reference image
         Text(
             text = value,
-            style = MaterialTheme.typography.labelMedium,
-            color = LiftrixColorsV2.onSurfaceVariant,
-            fontWeight = FontWeight.SemiBold
+            style = MaterialTheme.typography.headlineMedium,
+            color = LiftrixColorsV2.onSurface,
+            fontWeight = FontWeight.Bold
         )
         
+        // Smaller label text below
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.bodySmall,
             color = LiftrixColorsV2.onSurfaceVariant
         )
     }
@@ -381,18 +391,30 @@ private fun MediaCarousel(
     mediaItems: List<MediaItem>,
     modifier: Modifier = Modifier
 ) {
-    LazyRow(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.small),
-        contentPadding = PaddingValues(horizontal = 0.dp)
-    ) {
-        items(mediaItems) { mediaItem ->
-            MediaItem(
-                mediaItem = mediaItem,
-                modifier = Modifier
-                    .width(280.dp)
-                    .height(200.dp)
-            )
+    // Full-width media display for cleaner look
+    if (mediaItems.size == 1) {
+        // Single image - show full width
+        MediaItem(
+            mediaItem = mediaItems.first(),
+            modifier = modifier
+                .fillMaxWidth()
+                .height(300.dp)
+        )
+    } else {
+        // Multiple images - horizontal carousel
+        LazyRow(
+            modifier = modifier,
+            horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.small),
+            contentPadding = PaddingValues(horizontal = 0.dp)
+        ) {
+            items(mediaItems) { mediaItem ->
+                MediaItem(
+                    mediaItem = mediaItem,
+                    modifier = Modifier
+                        .width(280.dp)
+                        .height(200.dp)
+                )
+            }
         }
     }
 }
@@ -408,7 +430,7 @@ private fun MediaItem(
             contentDescription = "Post media",
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(12.dp)),
+                .clip(RoundedCornerShape(8.dp)),  // Slightly less rounded for modern look
             contentScale = ContentScale.Crop
         )
         
@@ -556,4 +578,117 @@ private fun formatCount(count: Int): String {
         count < 1000000 -> "${count / 1000}k"
         else -> "${count / 1000000}.${(count % 1000000) / 100000}M"
     }
+}
+
+// INT-004: Exercise list component with custom exercise indicators
+@Composable
+private fun ExerciseList(
+    exercises: List<com.example.liftrix.domain.model.social.PostExercise>,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(LiftrixSpacing.small)
+    ) {
+        Text(
+            text = "Exercises",
+            style = MaterialTheme.typography.labelMedium,
+            color = LiftrixColorsV2.onSurfaceVariant,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+        
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(LiftrixSpacing.small),
+            contentPadding = PaddingValues(horizontal = 0.dp)
+        ) {
+            items(exercises.take(5)) { exercise -> // Limit to 5 exercises for better UX
+                ExerciseChip(exercise = exercise)
+            }
+            
+            if (exercises.size > 5) {
+                item {
+                    ExerciseCountChip(remainingCount = exercises.size - 5)
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExerciseChip(
+    exercise: com.example.liftrix.domain.model.social.PostExercise,
+    modifier: Modifier = Modifier
+) {
+    AssistChip(
+        onClick = { /* Could navigate to exercise details */ },
+        label = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = exercise.name,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                
+                // Custom exercise indicator
+                if (exercise.isCustomExercise) {
+                    Text(
+                        text = "🔧",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                
+                // PR indicator
+                if (exercise.isPR) {
+                    Text(
+                        text = "💪",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        colors = AssistChipDefaults.assistChipColors(
+            containerColor = if (exercise.isCustomExercise) 
+                LiftrixColorsV2.primaryContainer.copy(alpha = 0.3f)
+            else 
+                LiftrixColorsV2.surfaceVariant,
+            labelColor = LiftrixColorsV2.onSurface
+        ),
+        border = if (exercise.isCustomExercise) 
+            BorderStroke(
+                width = 1.dp,
+                color = LiftrixColorsV2.primary.copy(alpha = 0.5f)
+            )
+        else 
+            null,
+        modifier = modifier
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExerciseCountChip(
+    remainingCount: Int,
+    modifier: Modifier = Modifier
+) {
+    AssistChip(
+        onClick = { /* Could expand to show all exercises */ },
+        label = {
+            Text(
+                text = "+$remainingCount more",
+                style = MaterialTheme.typography.bodySmall,
+                color = LiftrixColorsV2.onSurfaceVariant
+            )
+        },
+        colors = AssistChipDefaults.assistChipColors(
+            containerColor = LiftrixColorsV2.surfaceVariant.copy(alpha = 0.5f),
+            labelColor = LiftrixColorsV2.onSurfaceVariant
+        ),
+        modifier = modifier
+    )
 }

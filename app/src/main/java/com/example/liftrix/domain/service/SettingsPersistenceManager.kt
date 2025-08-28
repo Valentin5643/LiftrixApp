@@ -82,7 +82,6 @@ class SettingsPersistenceManager @Inject constructor(
             )
         }
     ) {
-        Timber.d("Persisting setting $key for user $userId")
         
         val oldValue = getCurrentSettingValue(userId, key)
         
@@ -144,7 +143,6 @@ class SettingsPersistenceManager @Inject constructor(
                     com.google.firebase.firestore.SetOptions.merge()
                 )
                 .await()
-            Timber.d("Settings synced to Firebase for user $userId")
         } catch (e: Exception) {
             Timber.w(e, "Firebase sync failed for user $userId, will retry later")
             // Don't fail the entire operation if Firebase sync fails
@@ -162,7 +160,6 @@ class SettingsPersistenceManager @Inject constructor(
         )
         auditDao.insert(auditEntry)
         
-        Timber.d("Setting $key persisted successfully for user $userId")
     }
     
     /**
@@ -182,7 +179,6 @@ class SettingsPersistenceManager @Inject constructor(
             )
         }
     ) {
-        Timber.d("Persisting complete settings for user $userId")
         
         // Persist each setting individually
         persistSetting(userId, "dark_mode", settings.darkMode).getOrThrow()
@@ -192,7 +188,6 @@ class SettingsPersistenceManager @Inject constructor(
         persistSetting(userId, "migration_completed", settings.migrationCompleted).getOrThrow()
         persistSetting(userId, "migration_explanation_seen", settings.migrationExplanationSeen).getOrThrow()
         
-        Timber.d("Complete settings persisted successfully for user $userId")
     }
     
     /**
@@ -201,7 +196,6 @@ class SettingsPersistenceManager @Inject constructor(
      * Implements the loading strategy with automatic repair when inconsistencies are detected.
      */
     suspend fun loadSettings(userId: String): UserSettings {
-        Timber.d("Loading settings for user $userId")
         
         // Priority 1: DataStore (fastest access)
         val dataStoreSettings = try {
@@ -562,6 +556,5 @@ class SettingsPersistenceManager @Inject constructor(
         )
         
         auditDao.insert(auditEntry)
-        Timber.d("Audit entry created for user $userId, operation: $operation")
     }
 }

@@ -164,7 +164,7 @@ class WidgetResolver @Inject constructor() {
                     .take(7)
             }
             UserLevel.ADVANCED -> {
-                // All 11 widgets for advanced users
+                // All 12 widgets for advanced users
                 allWidgets
                     .sortedBy { it.getLayoutPriority() }
             }
@@ -390,7 +390,7 @@ class WidgetResolver @Inject constructor() {
         return when (userLevel) {
             UserLevel.BEGINNER -> 4
             UserLevel.INTERMEDIATE -> 7
-            UserLevel.ADVANCED -> 11
+            UserLevel.ADVANCED -> 12
         }
     }
     

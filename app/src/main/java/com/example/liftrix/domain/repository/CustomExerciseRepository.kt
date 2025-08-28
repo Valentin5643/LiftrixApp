@@ -1,9 +1,11 @@
 package com.example.liftrix.domain.repository
 
+import android.net.Uri
 import com.example.liftrix.domain.model.CustomExercise
 import com.example.liftrix.domain.model.CustomExerciseId
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.ExerciseCategory
+import com.example.liftrix.domain.model.ExerciseType
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -12,15 +14,44 @@ import kotlinx.coroutines.flow.Flow
 interface CustomExerciseRepository {
     
     /**
-     * Creates a new custom exercise for the user
+     * Creates a new custom exercise for the user with image upload support
      */
     suspend fun createCustomExercise(
         userId: String,
         name: String,
+        description: String? = null,
+        exerciseType: ExerciseType,
         primaryMuscle: ExerciseCategory,
         equipment: Equipment,
         secondaryMuscles: Set<ExerciseCategory> = emptySet(),
         difficulty: Int? = null,
+        instructions: List<String> = emptyList(),
+        mainImage: Uri? = null,
+        additionalImages: List<Uri> = emptyList(),
+        videoUrl: String? = null,
+        tags: List<String> = emptyList(),
+        categories: List<ExerciseCategory> = emptyList(),
+        notes: String? = null
+    ): Result<CustomExercise>
+    
+    /**
+     * Creates a new custom exercise with already uploaded image URLs
+     */
+    suspend fun createCustomExerciseWithUrls(
+        userId: String,
+        name: String,
+        description: String? = null,
+        exerciseType: ExerciseType,
+        primaryMuscle: ExerciseCategory,
+        equipment: Equipment,
+        secondaryMuscles: Set<ExerciseCategory> = emptySet(),
+        difficulty: Int? = null,
+        instructions: List<String> = emptyList(),
+        mainImageUrl: String? = null,
+        additionalImageUrls: List<String> = emptyList(),
+        videoUrl: String? = null,
+        tags: List<String> = emptyList(),
+        categories: List<ExerciseCategory> = emptyList(),
         notes: String? = null
     ): Result<CustomExercise>
     
@@ -76,6 +107,53 @@ interface CustomExerciseRepository {
         userId: String,
         exerciseId: CustomExerciseId
     ): Result<Unit>
+    
+    /**
+     * Gets custom exercises by exercise type
+     */
+    fun getCustomExercisesByType(
+        userId: String,
+        exerciseType: ExerciseType
+    ): Flow<List<CustomExercise>>
+    
+    /**
+     * Searches custom exercises by tags
+     */
+    fun getCustomExercisesByTag(
+        userId: String,
+        tag: String
+    ): Flow<List<CustomExercise>>
+    
+    /**
+     * Updates the main image of a custom exercise
+     */
+    suspend fun updateMainImage(
+        userId: String,
+        exerciseId: CustomExerciseId,
+        imageUri: Uri
+    ): Result<String>
+    
+    /**
+     * Updates additional images of a custom exercise
+     */
+    suspend fun updateAdditionalImages(
+        userId: String,
+        exerciseId: CustomExerciseId,
+        imageUris: List<Uri>
+    ): Result<List<String>>
+    
+    /**
+     * Gets count of custom exercises for a user
+     */
+    suspend fun getCustomExerciseCount(userId: String): Int
+    
+    /**
+     * Gets count of custom exercises by type for a user
+     */
+    suspend fun getCustomExerciseCountByType(
+        userId: String,
+        exerciseType: ExerciseType
+    ): Int
     
     /**
      * Checks if a custom exercise name is unique for the user

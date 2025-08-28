@@ -29,6 +29,8 @@ import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
 import com.example.liftrix.ui.workout.components.SecondaryActionButton
 import com.example.liftrix.ui.workout.components.PrimaryActionButton
 import com.example.liftrix.ui.theme.LiftrixTheme
+import com.example.liftrix.ui.icons.LiftrixIcons
+import com.example.liftrix.ui.icons.CustomActionIcons
 import timber.log.Timber
 import java.time.LocalDateTime
 
@@ -83,6 +85,7 @@ fun SettingsScreen(
     onNavigateToDataPortability: (() -> Unit)? = null,
     onNavigateToAIChatSettings: (() -> Unit)? = null,
     onNavigateToAdminBanManagement: (() -> Unit)? = null,
+    onNavigateToUpgradeToPremium: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -174,6 +177,7 @@ fun SettingsScreen(
                             onNavigateToHelpCenter = stableOnNavigateToHelpCenter,
                             onNavigateToAbout = stableOnNavigateToAbout,
                             onNavigateToAdminBanManagement = onNavigateToAdminBanManagement,
+                            onNavigateToUpgradeToPremium = onNavigateToUpgradeToPremium,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -236,6 +240,7 @@ private fun SettingsContent(
     onNavigateToHelpCenter: (() -> Unit)? = null,
     onNavigateToAbout: (() -> Unit)? = null,
     onNavigateToAdminBanManagement: (() -> Unit)? = null,
+    onNavigateToUpgradeToPremium: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     // Stable callbacks and data to prevent unnecessary recompositions
@@ -291,7 +296,8 @@ private fun SettingsContent(
                     onNavigateToDataPortability = stableOnNavigateToDataPortability,
                     onNavigateToAdminBanManagement = onNavigateToAdminBanManagement,
                     onNavigateToHelpCenter = stableOnNavigateToHelpCenter,
-                    onNavigateToAbout = stableOnNavigateToAbout
+                    onNavigateToAbout = stableOnNavigateToAbout,
+                    onNavigateToUpgradeToPremium = onNavigateToUpgradeToPremium
                 )
             }
         }
@@ -311,7 +317,7 @@ private fun SettingsContent(
                 ) {
                     SecondaryActionButton(
                         text = "Sign Out",
-                        leadingIcon = Icons.Default.ExitToApp,
+                        leadingIcon = CustomActionIcons.SignOut,
                         onClick = { stableOnEvent(SettingsEvent.SignOutRequested) }
                     )
                 }
@@ -349,7 +355,8 @@ private fun SettingsCategoryContent(
     onNavigateToDataPortability: (() -> Unit)? = null,
     onNavigateToAdminBanManagement: (() -> Unit)? = null,
     onNavigateToHelpCenter: (() -> Unit)? = null,
-    onNavigateToAbout: (() -> Unit)? = null
+    onNavigateToAbout: (() -> Unit)? = null,
+    onNavigateToUpgradeToPremium: (() -> Unit)? = null
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -370,7 +377,8 @@ private fun SettingsCategoryContent(
             "subscription" -> {
                 SubscriptionSettings(
                     uiState = uiState,
-                    onEvent = onEvent
+                    onEvent = onEvent,
+                    onNavigateToUpgradeToPremium = onNavigateToUpgradeToPremium
                 )
             }
             
@@ -450,7 +458,7 @@ private fun GeneralSettings(
         SettingsNavigationItem(
             title = "Notifications",
             subtitle = if (uiState.currentNotificationSetting) "Enabled" else "Disabled",
-            icon = Icons.Default.Notifications,
+            icon = LiftrixIcons.State.Info,
             onClick = { 
                 // Trigger analytics event
                 stableOnEvent(SettingsEvent.NavigateToNotifications)
@@ -462,7 +470,7 @@ private fun GeneralSettings(
         SettingsNavigationItem(
             title = "AI Chat Settings",
             subtitle = "Configure AI assistant language, behavior, and data management",
-            icon = Icons.Default.SmartToy,
+            icon = LiftrixIcons.Workflow.Settings,
             onClick = { 
                 // Navigate to AI chat settings
                 stableOnNavigateToAIChatSettings?.invoke()
@@ -481,7 +489,7 @@ private fun GeneralSettings(
         SettingsNavigationItem(
             title = "Anomaly Detection",
             subtitle = "Configure error detection and sensitivity",
-            icon = Icons.Default.Warning,
+            icon = LiftrixIcons.State.Warning,
             onClick = { 
                 // Trigger analytics event
                 stableOnEvent(SettingsEvent.NavigateToAnomalyDetection)
@@ -493,7 +501,7 @@ private fun GeneralSettings(
         SettingsNavigationItem(
             title = "Anomaly Dashboard",
             subtitle = "View and manage detected anomalies",
-            icon = Icons.Default.Dashboard,
+            icon = LiftrixIcons.Fitness.Statistics,
             onClick = { 
                 // Trigger analytics event
                 stableOnEvent(SettingsEvent.NavigateToAnomalyDashboard)
@@ -505,7 +513,7 @@ private fun GeneralSettings(
         SettingsNavigationItem(
             title = "Customize Dashboard",
             subtitle = "Personalize your dashboard widgets and layout",
-            icon = Icons.Default.Widgets,
+            icon = LiftrixIcons.Workflow.Settings,
             onClick = { 
                 // Trigger analytics event
                 stableOnEvent(SettingsEvent.NavigateToWidgetSettings)
@@ -522,7 +530,8 @@ private fun GeneralSettings(
 @Composable
 private fun SubscriptionSettings(
     uiState: SettingsState,
-    onEvent: (SettingsEvent) -> Unit
+    onEvent: (SettingsEvent) -> Unit,
+    onNavigateToUpgradeToPremium: (() -> Unit)? = null
 ) {
     // Stable callback to prevent unnecessary recompositions
     val stableOnEvent = remember(onEvent) { onEvent }
@@ -553,12 +562,15 @@ private fun SubscriptionSettings(
                 SecondaryActionButton(
                     text = "Manage",
                     onClick = { stableOnEvent(SettingsEvent.ManageSubscription) },
-                    leadingIcon = com.example.liftrix.ui.icons.LiftrixIcons.Workflow.Settings
+                    leadingIcon = CustomActionIcons.Settings
                 )
             } else {
                 PrimaryActionButton(
                     text = "Upgrade",
-                    onClick = { stableOnEvent(SettingsEvent.UpgradeSubscription) },
+                    onClick = { 
+                        stableOnEvent(SettingsEvent.UpgradeSubscription)
+                        onNavigateToUpgradeToPremium?.invoke()
+                    },
                     leadingIcon = Icons.Default.Star
                 )
             }
@@ -569,7 +581,10 @@ private fun SubscriptionSettings(
                 title = "Upgrade to Premium",
                 subtitle = "Unlock advanced features and analytics",
                 icon = Icons.Default.Star,
-                onClick = { stableOnEvent(SettingsEvent.UpgradeSubscription) }
+                onClick = { 
+                    stableOnEvent(SettingsEvent.UpgradeSubscription)
+                    onNavigateToUpgradeToPremium?.invoke()
+                }
             )
         }
     }
@@ -616,7 +631,7 @@ private fun PrivacySettings(
         SettingsNavigationItem(
             title = "Change Email",
             subtitle = "Update your email address",
-            icon = Icons.Default.Email,
+            icon = LiftrixIcons.Workflow.Profile,
             onClick = { 
                 stableOnEvent(SettingsEvent.NavigateToEmailChange)
                 stableOnNavigateToEmailChange?.invoke()
@@ -626,7 +641,7 @@ private fun PrivacySettings(
         SettingsNavigationItem(
             title = "Change Password",
             subtitle = "Update your account password",
-            icon = Icons.Default.Lock,
+            icon = LiftrixIcons.Workflow.Settings,
             onClick = { 
                 stableOnEvent(SettingsEvent.NavigateToPasswordChange)
                 stableOnNavigateToPasswordChange?.invoke()
@@ -636,7 +651,7 @@ private fun PrivacySettings(
         SettingsNavigationItem(
             title = "Change Username",
             subtitle = "Update your username",
-            icon = Icons.Default.Person,
+            icon = LiftrixIcons.Workflow.Profile,
             onClick = { 
                 stableOnEvent(SettingsEvent.NavigateToUsernameChange)
                 stableOnNavigateToUsernameChange?.invoke()
@@ -655,7 +670,7 @@ private fun PrivacySettings(
         SettingsNavigationItem(
             title = "Privacy Policy",
             subtitle = "View our privacy policy",
-            icon = Icons.Default.Info,
+            icon = LiftrixIcons.State.Info,
             onClick = { 
                 stableOnEvent(SettingsEvent.NavigateToPrivacy)
                 stableOnNavigateToPrivacyPolicy?.invoke()
@@ -665,7 +680,7 @@ private fun PrivacySettings(
         SettingsNavigationItem(
             title = "Export Data",
             subtitle = "Download your workout data",
-            icon = Icons.Default.Assignment,
+            icon = LiftrixIcons.Actions.Share,
             onClick = { 
                 stableOnEvent(SettingsEvent.NavigateToDataPortability)
                 stableOnNavigateToDataPortability?.invoke()
@@ -685,7 +700,7 @@ private fun PrivacySettings(
             SettingsNavigationItem(
                 title = "User Management",
                 subtitle = "Ban and manage users",
-                icon = Icons.Default.AdminPanelSettings,
+                icon = LiftrixIcons.Workflow.Settings,
                 onClick = { 
                     stableOnNavigateToAdminBanManagement?.invoke()
                 }
@@ -744,7 +759,7 @@ private fun SupportSettings(
         SettingsNavigationItem(
             title = "About",
             subtitle = "App version and information",
-            icon = Icons.Default.Info,
+            icon = LiftrixIcons.State.Info,
             onClick = { 
                 stableOnEvent(SettingsEvent.NavigateToAbout)
                 stableOnNavigateToAbout?.invoke()
@@ -769,7 +784,7 @@ private fun ErrorState(
         verticalArrangement = Arrangement.Center
     ) {
         Icon(
-            imageVector = Icons.Default.Error,
+            imageVector = LiftrixIcons.State.Error,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(64.dp)
@@ -802,13 +817,13 @@ private fun ErrorState(
             SecondaryActionButton(
                 text = "Dismiss",
                 onClick = onDismiss,
-                leadingIcon = com.example.liftrix.ui.icons.LiftrixIcons.Actions.Cancel
+                leadingIcon = CustomActionIcons.Close
             )
             
             PrimaryActionButton(
                 text = "Retry",
                 onClick = onRetry,
-                leadingIcon = Icons.Default.Refresh
+                leadingIcon = CustomActionIcons.Refresh
             )
         }
     }
@@ -901,7 +916,7 @@ private fun SettingsScreenPreview() {
                     navigationIcon = {
                         IconButton(onClick = { }) {
                             Icon(
-                                imageVector = Icons.Default.ArrowBack,
+                                imageVector = LiftrixIcons.Navigation.Back,
                                 contentDescription = "Back"
                             )
                         }

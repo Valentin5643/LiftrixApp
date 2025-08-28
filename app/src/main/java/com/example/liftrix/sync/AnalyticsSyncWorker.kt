@@ -67,12 +67,13 @@ class AnalyticsSyncWorker @AssistedInject constructor(
             val authValidationResult = validateAuthentication()
             if (!authValidationResult.isValid) {
                 Timber.w("Analytics sync skipped: ${authValidationResult.reason}")
-                return Result.success(
+                val result = Result.success(
                     Data.Builder()
                         .putString(KEY_ERROR_MESSAGE, "Analytics sync skipped: ${authValidationResult.reason}")
                         .putInt(KEY_SYNC_COUNT, 0)
                         .build()
                 )
+                return result
             }
 
             val currentUserId = authValidationResult.userId!!

@@ -41,6 +41,45 @@ class ProfileSyncWorker @AssistedInject constructor(
     private val followRepository: FollowRepositoryImpl
 ) : BaseSyncWorker(context, params) {
 
+    // 🔧 HOTFIX: Fallback constructor for when Hilt factory generation fails
+    // This allows WorkManager to instantiate the worker via reflection
+    // TEMPORARY: Remove once Hilt assisted factories are confirmed working
+    constructor(context: Context, params: WorkerParameters) : this(
+        context,
+        params,
+        WorkerServiceLocator.getProfileSyncDependencies(context).run {
+            Timber.w("⚠️ ProfileSyncWorker using FALLBACK constructor - Hilt factory failed!")
+            return@run this
+        }
+    )
+    
+    // Helper constructor to unpack the dependency structure
+    private constructor(
+        context: Context,
+        params: WorkerParameters,
+        deps: WorkerServiceLocator.ProfileSyncDependencies
+    ) : this(
+        context, params,
+        deps.userProfileDao, deps.workoutDao, deps.achievementDao,
+        deps.userProfileMapper, deps.firestore, deps.auth,
+        deps.gson, deps.followRepository
+    )
+
+    init {
+        val processName = getProcessName()
+        Timber.d("✅ ProfileSyncWorker constructed with Hilt dependency injection in process: $processName")
+    }
+    
+    private fun getProcessName(): String {
+        return try {
+            val pid = android.os.Process.myPid()
+            val manager = applicationContext.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            manager.runningAppProcesses?.firstOrNull { it.pid == pid }?.processName ?: "unknown"
+        } catch (e: Exception) {
+            "error: ${e.message}"
+        }
+    }
+
     override val workerName: String = "ProfileSyncWorker"
     
     companion object {
@@ -63,8 +102,14 @@ class ProfileSyncWorker @AssistedInject constructor(
                     TimeUnit.SECONDS
                 )
                 .addTag("profile_sync")
+                .addTag("user_$userId") // Add user-specific tag for better tracking
                 .build()
         }
+        
+        /**
+         * Get unique work name per user to prevent job conflicts
+         */
+        fun getWorkName(userId: String): String = "${WORK_NAME}_$userId"
     }
 
     override suspend fun performSync(userId: String): Result {
@@ -328,4 +373,7 @@ class ProfileSyncWorker @AssistedInject constructor(
             throw e
         }
     }
-} 
+}
+
+
+ 

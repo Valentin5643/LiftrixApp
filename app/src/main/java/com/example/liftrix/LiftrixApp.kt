@@ -1,11 +1,15 @@
 package com.example.liftrix
 
+import android.app.ActivityManager
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Context
 import android.os.Build
+import android.os.Process
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import androidx.work.WorkManager
 import com.example.liftrix.BuildConfig
 import com.example.liftrix.domain.repository.WidgetPreferencesRepository
 import com.example.liftrix.service.CacheWarmingService
@@ -14,8 +18,9 @@ import com.example.liftrix.domain.usecase.settings.InitializeUserThemeUseCase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.Firebase
 import com.google.firebase.appcheck.appCheck
+import com.google.firebase.appcheck.AppCheckProviderFactory
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
-import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
+// Debug import handled conditionally in code
 import com.google.firebase.initialize
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -47,18 +52,10 @@ class LiftrixApp : Application(), Configuration.Provider {
     lateinit var firebaseAuth: FirebaseAuth
     
     @Inject
-    lateinit var workerFactory: HiltWorkerFactory
+    lateinit var hiltWorkerFactory: HiltWorkerFactory
     
     @Inject
     lateinit var initializeUserThemeUseCase: InitializeUserThemeUseCase
-    
-    // Lazy initialization to ensure workerFactory is injected before access
-    override val workManagerConfiguration: Configuration by lazy {
-        Configuration.Builder()
-            .setWorkerFactory(workerFactory)
-            .setMinimumLoggingLevel(android.util.Log.DEBUG)
-            .build()
-    }
     
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     
@@ -66,6 +63,15 @@ class LiftrixApp : Application(), Configuration.Provider {
     private val _isAppCheckInitialized = MutableStateFlow(false)
     val isAppCheckInitialized: StateFlow<Boolean> = _isAppCheckInitialized.asStateFlow()
     
+    override val workManagerConfiguration: Configuration get() =
+        Configuration.Builder()
+            .setWorkerFactory(hiltWorkerFactory)
+            .setMinimumLoggingLevel(
+                if (BuildConfig.DEBUG) android.util.Log.DEBUG 
+                else android.util.Log.INFO
+            )
+            .build()
+
     companion object {
         const val WORKOUT_TIMER_CHANNEL_ID = "workout_timer_channel"
         
@@ -90,6 +96,15 @@ class LiftrixApp : Application(), Configuration.Provider {
         // Initialize Timber for logging
         Timber.plant(Timber.DebugTree())
         
+        // WorkManager initialization is now handled automatically via Configuration.Provider
+        // The workManagerConfiguration property provides HiltWorkerFactory
+        Timber.d("WorkManager will be initialized automatically with HiltWorkerFactory")
+        
+        // 🔧 DEBUG: Test if HiltWorkerFactory can create workers (debug builds only)
+        if (BuildConfig.DEBUG) {
+            debugVerifyWorkerFactory()
+        }
+        
         // Initialize Firebase and App Check FIRST before any other Firebase services
         initializeFirebaseAppCheck()
         
@@ -98,10 +113,6 @@ class LiftrixApp : Application(), Configuration.Provider {
         
         // Create notification channels
         createNotificationChannels()
-        
-        // WorkManager is auto-initialized via Configuration.Provider
-        // No manual initialization needed - this prevents NoSuchMethodException in workers
-        Timber.d("WorkManager will auto-initialize with HiltWorkerFactory via Configuration.Provider")
         
         // Initialize widget migration system
         initializeWidgetMigration()
@@ -116,9 +127,23 @@ class LiftrixApp : Application(), Configuration.Provider {
     /**
      * Initialize Firebase and App Check with build-specific providers.
      * CRITICAL: This must be called before any Firebase AI service calls to ensure valid tokens.
+     * Thread-safe initialization with proper singleton check.
      */
     private fun initializeFirebaseAppCheck() {
         try {
+            // Check if Firebase is already initialized to prevent duplicate initialization
+            val existingApp = try {
+                com.google.firebase.FirebaseApp.getInstance()
+            } catch (e: IllegalStateException) {
+                null
+            }
+            
+            if (existingApp != null) {
+                Timber.w("Firebase already initialized, skipping re-initialization")
+                _isAppCheckInitialized.value = true
+                return
+            }
+            
             // CRITICAL: Initialize Firebase synchronously first
             Timber.d("Initializing Firebase synchronously...")
             Firebase.initialize(this@LiftrixApp)
@@ -130,26 +155,33 @@ class LiftrixApp : Application(), Configuration.Provider {
                     // Debug builds use DebugAppCheckProviderFactory for local development
                     Timber.d("Using DebugAppCheckProviderFactory for debug builds")
                     
-                    // Get the debug provider factory
-                    val debugFactory = DebugAppCheckProviderFactory.getInstance()
-                    
-                    // IMPORTANT: The debug token will be logged by Firebase automatically
-                    // Look for this in logcat: "Enter this debug token in the Firebase Console"
-                    Timber.e("═════════════════════════════════════════════════════════════")
-                    Timber.e("FIREBASE APP CHECK DEBUG MODE ACTIVE")
-                    Timber.e("═════════════════════════════════════════════════════════════")
-                    Timber.e("ACTION REQUIRED: Register debug token in Firebase Console")
-                    Timber.e("1. Search ALL logcat output (not filtered by app) for the token")
-                    Timber.e("2. Run this ADB command to find it:")
-                    Timber.e("   adb logcat | grep -i \"debug token\"")
-                    Timber.e("3. Or search for: 'DebugAppCheckProvider' in logcat")
-                    Timber.e("4. The token is a long alphanumeric string (e.g., 123ABC456DEF...)")
-                    Timber.e("5. Go to Firebase Console → App Check → Apps → Manage debug tokens")
-                    Timber.e("6. Add the token with a descriptive name (e.g., 'Development Device')")
-                    Timber.e("7. Restart the app after registering the token")
-                    Timber.e("═════════════════════════════════════════════════════════════")
-                    
-                    debugFactory
+                    try {
+                        // Use reflection to access DebugAppCheckProviderFactory to avoid compilation issues
+                        val debugFactoryClass = Class.forName("com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory")
+                        val getInstanceMethod = debugFactoryClass.getMethod("getInstance")
+                        val debugFactory = getInstanceMethod.invoke(null) as com.google.firebase.appcheck.AppCheckProviderFactory
+                        
+                        // IMPORTANT: The debug token will be logged by Firebase automatically
+                        // Look for this in logcat: "Enter this debug token in the Firebase Console"
+                        Timber.e("═════════════════════════════════════════════════════════════")
+                        Timber.e("FIREBASE APP CHECK DEBUG MODE ACTIVE")
+                        Timber.e("═════════════════════════════════════════════════════════════")
+                        Timber.e("ACTION REQUIRED: Register debug token in Firebase Console")
+                        Timber.e("1. Search ALL logcat output (not filtered by app) for the token")
+                        Timber.e("2. Run this ADB command to find it:")
+                        Timber.e("   adb logcat | grep -i \"debug token\"")
+                        Timber.e("3. Or search for: 'DebugAppCheckProvider' in logcat")
+                        Timber.e("4. The token is a long alphanumeric string (e.g., 123ABC456DEF...)")
+                        Timber.e("5. Go to Firebase Console → App Check → Apps → Manage debug tokens")
+                        Timber.e("6. Add the token with a descriptive name (e.g., 'Development Device')")
+                        Timber.e("7. Restart the app after registering the token")
+                        Timber.e("═════════════════════════════════════════════════════════════")
+                        
+                        debugFactory
+                    } catch (e: Exception) {
+                        Timber.w("DebugAppCheckProviderFactory not available, falling back to PlayIntegrity provider")
+                        PlayIntegrityAppCheckProviderFactory.getInstance()
+                    }
                 } else {
                     // Production builds use Play Integrity provider for security
                     Timber.d("Using PlayIntegrityAppCheckProviderFactory for release builds")
@@ -231,6 +263,21 @@ class LiftrixApp : Application(), Configuration.Provider {
             _isAppCheckInitialized.value = true
         }
     }
+    
+    /**
+     * Check if we're running in the main process to avoid multi-process WorkManager issues.
+     */
+    private fun isMainProcess(): Boolean {
+        val pid = Process.myPid()
+        val manager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val processName = manager.runningAppProcesses?.firstOrNull { it.pid == pid }?.processName
+        val isMain = processName == packageName
+        
+        Timber.d("Process check - PID: $pid, Process: $processName, Package: $packageName, IsMain: $isMain")
+        return isMain
+    }
+    
+    
     
     /**
      * Initialize the debug system for the application
@@ -333,14 +380,13 @@ class LiftrixApp : Application(), Configuration.Provider {
             try {
                 Timber.d("Initializing sync system...")
                 
-                // Add a small delay to ensure WorkManager is fully initialized
-                // This prevents the NoSuchMethodException for Hilt workers
-                delay(100)
+                // WorkManager is automatically initialized with HiltWorkerFactory
+                // No delay needed since Configuration.Provider handles initialization timing
                 
                 // Check if user is already authenticated
                 val currentUser = firebaseAuth.currentUser
                 if (currentUser != null) {
-                    Timber.d("User already authenticated, initializing theme and scheduling periodic sync: ${currentUser.uid}")
+                    Timber.d("User already authenticated, initializing theme and triggering startup sync: ${currentUser.uid}")
                     
                     // Initialize theme immediately
                     applicationScope.launch {
@@ -352,6 +398,21 @@ class LiftrixApp : Application(), Configuration.Provider {
                         }
                     }
                     
+                    // 🔥 NEW: Trigger full startup sync to ensure all workouts are synchronized
+                    applicationScope.launch {
+                        try {
+                            val syncResult = syncCoordinator.triggerStartupSync(currentUser.uid)
+                            if (syncResult.isSuccess) {
+                                Timber.i("Startup sync initiated successfully for user: ${currentUser.uid}")
+                            } else {
+                                Timber.w("Startup sync failed for user: ${currentUser.uid}")
+                            }
+                        } catch (e: Exception) {
+                            Timber.e(e, "Failed to trigger startup sync for user: ${currentUser.uid}")
+                        }
+                    }
+                    
+                    // Also schedule periodic sync for ongoing synchronization
                     syncCoordinator.schedulePeriodicSync(currentUser.uid)
                 } else {
                     Timber.d("No authenticated user found, sync will be initialized after authentication")
@@ -361,7 +422,7 @@ class LiftrixApp : Application(), Configuration.Provider {
                 firebaseAuth.addAuthStateListener { auth ->
                     val user = auth.currentUser
                     if (user != null) {
-                        Timber.d("User authenticated, initializing theme and scheduling periodic sync: ${user.uid}")
+                        Timber.d("User authenticated, initializing theme and triggering login sync: ${user.uid}")
                         applicationScope.launch {
                             // Initialize theme first (no delay needed)
                             try {
@@ -371,12 +432,26 @@ class LiftrixApp : Application(), Configuration.Provider {
                                 Timber.e(e, "Failed to initialize theme for user: ${user.uid}")
                             }
                             
-                            // Also delay here to ensure WorkManager is ready for sync
-                            delay(100)
+                            // 🔥 NEW: Trigger startup sync on login to ensure all workouts are synchronized
+                            try {
+                                val syncResult = syncCoordinator.triggerStartupSync(user.uid)
+                                if (syncResult.isSuccess) {
+                                    Timber.i("Login sync initiated successfully for user: ${user.uid}")
+                                } else {
+                                    Timber.w("Login sync failed for user: ${user.uid}")
+                                }
+                            } catch (e: Exception) {
+                                Timber.e(e, "Failed to trigger login sync for user: ${user.uid}")
+                            }
+                            
+                            // Schedule periodic sync for ongoing synchronization
                             syncCoordinator.schedulePeriodicSync(user.uid)
                         }
                     } else {
                         Timber.d("User signed out, canceling sync operations")
+                        // 🔥 ENHANCED: Cancel all sync operations for previous user
+                        // Note: We don't have the userId here, so we rely on WorkManager tagging
+                        // The sync coordinator should handle cleanup when users sign out
                     }
                 }
                 
@@ -387,4 +462,29 @@ class LiftrixApp : Application(), Configuration.Provider {
             }
         }
     }
-} 
+    
+    /**
+     * 🔧 DEBUG: Test if HiltWorkerFactory can create workers at runtime
+     * This helps diagnose if Hilt assisted factories are properly generated
+     */
+    private fun debugVerifyWorkerFactory() {
+        applicationScope.launch {
+            try {
+                Timber.d("🔧 DEBUG: Testing HiltWorkerFactory capabilities...")
+                
+                // Simple test: check if the factory class has the expected methods
+                val factoryClass = hiltWorkerFactory.javaClass
+                Timber.d("🔧 DEBUG: HiltWorkerFactory class: ${factoryClass.name}")
+                Timber.d("🔧 DEBUG: HiltWorkerFactory methods: ${factoryClass.declaredMethods.map { it.name }}")
+                
+                // Log that fallback constructors are available
+                Timber.d("🔧 DEBUG: Workers now have fallback constructors for WorkManager reflection")
+                Timber.d("🔧 DEBUG: If you see 'using FALLBACK constructor' messages, Hilt factories failed")
+                
+            } catch (e: Exception) {
+                Timber.e(e, "❌ DEBUG: Worker factory verification failed")
+            }
+        }
+    }
+}
+

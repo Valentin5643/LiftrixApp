@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.example.liftrix.service.ProfileImageCache
 import com.example.liftrix.ui.theme.LiftrixTheme
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /**
  * Enhanced profile image display component with comprehensive image loading capabilities.
@@ -71,6 +72,7 @@ fun ProfileImageDisplay(
     // Load image when URL changes
     LaunchedEffect(imageUrl, userId) {
         if (!imageUrl.isNullOrBlank() && userId != null) {
+            Timber.d("ProfileImageDisplay: Loading image for user $userId with URL: $imageUrl")
             scope.launch {
                 try {
                     isLoading = true
@@ -82,7 +84,11 @@ fun ProfileImageDisplay(
                     
                     loadedImage = bitmap
                     hasError = bitmap == null
+                    
+                    Timber.d("ProfileImageDisplay: Image load result for user $userId: " +
+                        "bitmap=${bitmap != null}, hasError=$hasError")
                 } catch (e: Exception) {
+                    Timber.e(e, "ProfileImageDisplay: Failed to load image for user $userId from URL: $imageUrl")
                     hasError = true
                     loadedImage = null
                 } finally {
@@ -90,6 +96,7 @@ fun ProfileImageDisplay(
                 }
             }
         } else {
+            Timber.d("ProfileImageDisplay: No image URL provided for user $userId (imageUrl='$imageUrl'), showing initials fallback")
             isLoading = false
             loadedImage = null
             hasError = false

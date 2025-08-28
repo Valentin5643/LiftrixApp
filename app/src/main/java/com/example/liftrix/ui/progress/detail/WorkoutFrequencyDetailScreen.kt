@@ -189,6 +189,8 @@ private fun WorkoutFrequencyContent(
                             Timber.d("Frequency data point selected: $point")
                         },
                         showPersonalRecords = false,
+                        unit = " workouts",
+                        chartTitle = "Workout Frequency",
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(200.dp)

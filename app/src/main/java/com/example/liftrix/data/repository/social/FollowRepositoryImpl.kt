@@ -7,6 +7,7 @@ import com.example.liftrix.data.local.dao.SocialProfileDao
 import com.example.liftrix.data.local.dao.BlockedUserDao
 import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.local.dao.EnrichedFollowRelationship
+import com.example.liftrix.data.local.dao.SafeFollowRelationshipDaoImpl
 import com.example.liftrix.data.local.entity.FollowRelationshipEntity
 import com.example.liftrix.data.local.entity.FollowRequestEntity
 import com.example.liftrix.data.local.entity.ProfileViewEntity
@@ -53,6 +54,7 @@ class FollowRepositoryImpl @Inject constructor(
     private val socialProfileDao: SocialProfileDao,
     private val blockedUserDao: BlockedUserDao,
     private val userProfileDao: UserProfileDao,
+    private val safeFollowDao: SafeFollowRelationshipDaoImpl,
     private val firestore: FirebaseFirestore
 ) : FollowRepository {
 
@@ -153,10 +155,8 @@ class FollowRepositoryImpl @Inject constructor(
                     createdAt = currentTime
                 )
                 
-                // Ensure both users exist before creating relationship (defensive against FK violations)
-                ensureUsersExist(followerId, targetUserId)
-                
-                followRelationshipDao.insertFollowRelationship(relationship)
+                // Use safe insert method that handles user validation automatically
+                safeFollowDao.insertFollowRelationshipsWithUserValidation(listOf(relationship))
                 
                 // Sync to Firebase
                 syncFollowRequestToFirebase(followRequest)
@@ -174,10 +174,8 @@ class FollowRepositoryImpl @Inject constructor(
                     acceptedAt = currentTime
                 )
                 
-                // Ensure both users exist before creating relationship (defensive against FK violations)
-                ensureUsersExist(followerId, targetUserId)
-                
-                followRelationshipDao.insertFollowRelationship(relationship)
+                // Use safe insert method that handles user validation automatically
+                safeFollowDao.insertFollowRelationshipsWithUserValidation(listOf(relationship))
                 
                 // Update follower counts
                 updateFollowerCounts(followerId, targetUserId, isFollow = true)
@@ -902,10 +900,10 @@ class FollowRepositoryImpl @Inject constructor(
                 }
             }
             
-            // 🔥 FIX: Use upsert instead of delete/insert to prevent feed flickering
+            // 🔥 FIX: Use safe upsert to prevent FK violations and feed flickering
             if (relationshipsToUpsert.isNotEmpty()) {
-                followRelationshipDao.upsertFollowRelationships(relationshipsToUpsert)
-                Timber.d("🔥 SYNC-FIX: Upserted ${relationshipsToUpsert.size} follow relationships for user $userId")
+                val insertedCount = safeFollowDao.insertFollowRelationshipsWithUserValidation(relationshipsToUpsert)
+                Timber.d("🔥 SYNC-FIX: Safely upserted $insertedCount/${relationshipsToUpsert.size} follow relationships for user $userId")
             } else {
                 Timber.d("🔥 SYNC-FIX: No follow relationships to upsert for user $userId")
             }
@@ -942,13 +940,9 @@ class FollowRepositoryImpl @Inject constructor(
                 .get()
                 .await()
             
-            // If not found in social_profiles, try users_public collection as fallback
+            // If not found in social_profiles, log warning (should not happen with unified collection)
             if (!profileData.exists()) {
-                Timber.d("Profile not found in social_profiles, trying users_public collection")
-                profileData = firestore.collection("users_public")
-                    .document(userId)
-                    .get()
-                    .await()
+                Timber.w("Profile not found in social_profiles collection for userId: $userId - this indicates sync issue")
             }
             
             if (!profileData.exists()) {

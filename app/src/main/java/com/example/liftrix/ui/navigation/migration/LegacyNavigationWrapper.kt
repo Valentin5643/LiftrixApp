@@ -234,6 +234,10 @@ class LegacyNavigationWrapper @Inject constructor(
                 LiftrixRoute.DataPortability -> "Replace with: navController.navigate(LiftrixRoute.DataPortability)"
                 LiftrixRoute.AIChatSettings -> "Replace with: navController.navigate(LiftrixRoute.AIChatSettings)"
                 LiftrixRoute.AdminBanManagement -> "Replace with: navController.navigate(LiftrixRoute.AdminBanManagement)"
+                LiftrixRoute.UpgradeToPremium -> "Replace with: navController.navigate(LiftrixRoute.UpgradeToPremium)"
+                LiftrixRoute.CustomExerciseCreation -> "Replace with: navController.navigate(LiftrixRoute.CustomExerciseCreation)"
+                is LiftrixRoute.CustomExerciseEdit -> "Replace with: navController.navigate(LiftrixRoute.CustomExerciseEdit(exerciseId))"
+                is LiftrixRoute.CustomExerciseList -> "Replace with: navController.navigate(LiftrixRoute.CustomExerciseList(workoutId, selectionMode))"
             }
         } else {
             null

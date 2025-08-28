@@ -10,8 +10,14 @@ import com.example.liftrix.domain.repository.ProgressSummary
 import com.example.liftrix.domain.repository.VolumeDataPoint
 import com.example.liftrix.domain.model.Exercise
 import com.example.liftrix.domain.model.ExerciseSet
+import com.example.liftrix.domain.model.CustomExercise
+import com.example.liftrix.domain.model.ExerciseLibrary
+import com.example.liftrix.domain.usecase.exercise.SearchableExercise
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -53,13 +59,14 @@ suspend fun List<WorkoutEntity>.calculateDailyMetrics(): Map<LocalDate, WorkoutD
         var exerciseCount = 0
         
         // Calculate volume and exercise counts
+        // Enhanced to properly handle both library and custom exercises (custom exercises
+        // are stored as simplified ExerciseLibrary objects after conversion)
         workouts.forEach { workout ->
-            val exercises: List<Exercise> = parseExercisesFromJson(workout.id, workout.exercisesJson, gson)
-            val workoutVolumeResult = calculateWorkoutVolume(workout.id, exercises)
+            val exercises: List<Exercise> = parseExercisesFromJsonLegacy(workout.id, workout.exercisesJson, gson)
+            val workoutVolumeResult = calculateWorkoutVolumeEnhanced(workout.id, exercises)
             totalVolume += workoutVolumeResult.totalVolume
             exerciseCount += workoutVolumeResult.validExerciseCount
             
-            timber.log.Timber.d("VolumeDebug Workout ${workout.id}: ${workoutVolumeResult.totalVolume}kg")
         }
         
         // Calculate duration metrics
@@ -80,7 +87,6 @@ suspend fun List<WorkoutEntity>.calculateDailyMetrics(): Map<LocalDate, WorkoutD
             averageDurationMinutes = averageDurationMinutes
         )
         
-        timber.log.Timber.d("VolumeDebug Daily total: ${metrics.totalVolume}kg from ${workouts.size} workouts")
         
         metrics
     }
@@ -99,7 +105,6 @@ fun Map<LocalDate, WorkoutDayMetrics>.toVolumeDataPoints(): List<VolumeDataPoint
     }.sortedBy { it.date }
     
     val totalVolumeSum = volumeDataPoints.sumOf { it.totalVolume.toDouble() }.toFloat()
-    timber.log.Timber.d("VolumeDebug Final VolumeDataPoints: ${volumeDataPoints.size} points, ${totalVolumeSum}kg total")
     
     return volumeDataPoints
 }
@@ -274,7 +279,63 @@ data class WorkoutVolumeResult(
 )
 
 /**
- * Calculate total volume for a workout with comprehensive validation and logging
+ * Enhanced calculate total volume for a workout that properly handles custom exercises.
+ * Custom exercises are stored as ExerciseLibrary objects after conversion, but with 
+ * simplified metadata. This function provides robust volume calculation regardless
+ * of whether the exercise was originally a library or custom exercise.
+ */
+private fun calculateWorkoutVolumeEnhanced(workoutId: String, exercises: List<Exercise>): WorkoutVolumeResult {
+    if (exercises.isEmpty()) return WorkoutVolumeResult(0f, 0, 0, 0)
+    
+    var totalVolume = 0f
+    var validExerciseCount = 0
+    var totalSets = 0
+    var validSets = 0
+    
+    exercises.forEach { exercise ->
+        if (exercise.sets.isEmpty()) return@forEach
+        
+        var exerciseVolume = 0f
+        var exerciseValidSets = 0
+        
+        exercise.sets.forEach { set ->
+            totalSets++
+            if (set.weight != null && set.reps != null) {
+                val setVolume = (set.weight.kilograms * set.reps.count).toFloat()
+                exerciseVolume += setVolume
+                exerciseValidSets++
+                validSets++
+            }
+        }
+        
+        if (exerciseValidSets > 0) {
+            validExerciseCount++
+            totalVolume += exerciseVolume
+            
+            // Enhanced logging to identify custom vs library exercises
+            val exerciseType = identifyExerciseType(exercise.libraryExercise)
+        }
+    }
+    
+    return WorkoutVolumeResult(totalVolume, validExerciseCount, totalSets, validSets)
+}
+
+/**
+ * Helper function to identify if an ExerciseLibrary object was originally a custom exercise.
+ * Custom exercises typically have simplified metadata after conversion.
+ */
+private fun identifyExerciseType(exerciseLibrary: ExerciseLibrary): String {
+    return when {
+        // Custom exercises often have "Custom Exercise" as movementPattern
+        exerciseLibrary.movementPattern == "Custom Exercise" -> "Custom"
+        // Custom exercises may have simplified metadata
+        exerciseLibrary.secondaryMuscleGroups.isEmpty() && exerciseLibrary.difficultyLevel == 3 -> "Custom (likely)"
+        else -> "Library"
+    }
+}
+
+/**
+ * Legacy calculate total volume for a workout with comprehensive validation and logging
  */
 private fun calculateWorkoutVolume(workoutId: String, exercises: List<Exercise>): WorkoutVolumeResult {
     if (exercises.isEmpty()) return WorkoutVolumeResult(0f, 0, 0, 0)
@@ -310,9 +371,53 @@ private fun calculateWorkoutVolume(workoutId: String, exercises: List<Exercise>)
 }
 
 /**
- * Enhanced JSON parsing for exercises with comprehensive error handling and fallbacks
+ * Enhanced JSON parsing for exercises with comprehensive error handling and fallbacks.
+ * Now supports both library exercises and custom exercises stored in SearchableExercise format.
  */
-private fun parseExercisesFromJson(workoutId: String, exercisesJson: String, gson: Gson): List<Exercise> {
+private fun parseExercisesFromJson(workoutId: String, exercisesJson: String, gson: Gson): List<SearchableExercise> {
+    if (exercisesJson.isBlank()) return emptyList()
+    
+    // Attempt 1: Parse as SearchableExercise list (new format)
+    try {
+        val searchableType = object : TypeToken<List<SearchableExercise>>() {}.type
+        val exercises = gson.fromJson<List<SearchableExercise>>(exercisesJson, searchableType)
+        if (exercises != null && exercises.isNotEmpty()) return exercises
+    } catch (e: Exception) {
+    }
+    
+    // Attempt 2: Parse as legacy Exercise list and convert
+    try {
+        val exercisesType = object : TypeToken<List<Exercise>>() {}.type
+        val legacyExercises = gson.fromJson<List<Exercise>>(exercisesJson, exercisesType)
+        if (legacyExercises != null && legacyExercises.isNotEmpty()) {
+            return legacyExercises.map { exercise ->
+                SearchableExercise.LibraryExercise(exercise.libraryExercise)
+            }
+        }
+    } catch (e: Exception) {
+    }
+    
+    // Attempt 3: Object with "exercises" key
+    try {
+        val mapType = object : TypeToken<Map<String, Any>>() {}.type
+        val dataMap = gson.fromJson<Map<String, Any>>(exercisesJson, mapType)
+        
+        if (dataMap?.containsKey("exercises") == true) {
+            val searchableType = object : TypeToken<List<SearchableExercise>>() {}.type
+            val exercises = gson.fromJson<List<SearchableExercise>>(gson.toJson(dataMap["exercises"]), searchableType)
+            if (exercises != null && exercises.isNotEmpty()) return exercises
+        }
+    } catch (e: Exception) {
+    }
+    
+    return emptyList()
+}
+
+/**
+ * Legacy JSON parsing for exercises with comprehensive error handling and fallbacks.
+ * Maintains backward compatibility with the original Exercise model format.
+ */
+private fun parseExercisesFromJsonLegacy(workoutId: String, exercisesJson: String, gson: Gson): List<Exercise> {
     if (exercisesJson.isBlank()) return emptyList()
     
     // Attempt 1: Direct array parsing

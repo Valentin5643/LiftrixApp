@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Info
@@ -34,6 +35,7 @@ import com.example.liftrix.domain.usecase.exercise.SearchableExercise
 import com.example.liftrix.ui.components.cards.LiftrixCard
 import com.example.liftrix.ui.components.cards.CardSpacing
 import com.example.liftrix.ui.theme.LiftrixTheme
+import com.example.liftrix.ui.theme.LiftrixColorsV2
 
 /**
  * Visual exercise preview component for professional training interface
@@ -85,7 +87,7 @@ fun ExercisePreviewCard(
                     )
                     
                     Text(
-                        text = exercise.libraryExercise.primaryMuscleGroup.toString(),
+                        text = exercise.libraryExercise.primaryMuscleGroup.displayName,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -95,7 +97,7 @@ fun ExercisePreviewCard(
                 
                 Icon(
                     imageVector = getExerciseIcon(exercise.libraryExercise.primaryMuscleGroup),
-                    contentDescription = exercise.libraryExercise.primaryMuscleGroup.name,
+                    contentDescription = exercise.libraryExercise.primaryMuscleGroup.displayName,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
@@ -112,7 +114,7 @@ fun ExercisePreviewCard(
                     // Exercise type
                     ExerciseDetailChip(
                         icon = getExerciseIcon(exercise.libraryExercise.primaryMuscleGroup),
-                        text = exercise.libraryExercise.primaryMuscleGroup.name,
+                        text = exercise.libraryExercise.primaryMuscleGroup.displayName,
                         modifier = Modifier.weight(1f)
                     )
                     
@@ -122,7 +124,7 @@ fun ExercisePreviewCard(
                     exercise.libraryExercise.equipment?.let { equipment ->
                         ExerciseDetailChip(
                             icon = Icons.Default.FitnessCenter,
-                            text = equipment.name,
+                            text = equipment.displayName,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -131,7 +133,7 @@ fun ExercisePreviewCard(
                 // Secondary muscle groups
                 if (exercise.libraryExercise.secondaryMuscleGroups.isNotEmpty()) {
                     Text(
-                        text = "Also targets: ${exercise.libraryExercise.secondaryMuscleGroups.joinToString(", ") { it.name }}",
+                        text = "Also targets: ${exercise.libraryExercise.secondaryMuscleGroups.joinToString(", ") { it.displayName }}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
@@ -198,7 +200,7 @@ fun CompactExercisePreviewCard(
                 )
                 
                 Text(
-                    text = exercise.libraryExercise.primaryMuscleGroup.name,
+                    text = exercise.libraryExercise.primaryMuscleGroup.displayName,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -208,7 +210,7 @@ fun CompactExercisePreviewCard(
             
             Icon(
                 imageVector = getExerciseIcon(exercise.libraryExercise.primaryMuscleGroup),
-                contentDescription = exercise.libraryExercise.primaryMuscleGroup.name,
+                contentDescription = exercise.libraryExercise.primaryMuscleGroup.displayName,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp)
             )
@@ -298,12 +300,29 @@ fun ExercisePreviewCard(
                     null
                 },
                 colors = if (isSelected) {
+                    val isDarkTheme = isSystemInDarkTheme()
                     androidx.compose.material3.CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        containerColor = if (isDarkTheme) {
+                            LiftrixColorsV2.TealContainer
+                        } else {
+                            LiftrixColorsV2.TealSurface
+                        },
+                        contentColor = if (isDarkTheme) {
+                            LiftrixColorsV2.TealLight
+                        } else {
+                            LiftrixColorsV2.TealDark
+                        }
                     )
                 } else {
-                    androidx.compose.material3.CardDefaults.cardColors()
+                    val isDarkTheme = isSystemInDarkTheme()
+                    androidx.compose.material3.CardDefaults.cardColors(
+                        containerColor = if (isDarkTheme) {
+                            LiftrixColorsV2.Dark.BackgroundSecondary
+                        } else {
+                            LiftrixColorsV2.Light.BackgroundSecondary
+                        },
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    )
                 },
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(CardSpacing.M)
             ) {
@@ -326,7 +345,7 @@ fun ExercisePreviewCard(
                             )
                             
                             Text(
-                                text = exercise.exercise.equipment.toString(),
+                                text = exercise.exercise.equipment.displayName,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
@@ -366,12 +385,29 @@ fun ExercisePreviewCard(
                     null
                 },
                 colors = if (isSelected) {
+                    val isDarkTheme = isSystemInDarkTheme()
                     androidx.compose.material3.CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        containerColor = if (isDarkTheme) {
+                            LiftrixColorsV2.TealContainer
+                        } else {
+                            LiftrixColorsV2.TealSurface
+                        },
+                        contentColor = if (isDarkTheme) {
+                            LiftrixColorsV2.TealLight
+                        } else {
+                            LiftrixColorsV2.TealDark
+                        }
                     )
                 } else {
-                    androidx.compose.material3.CardDefaults.cardColors()
+                    val isDarkTheme = isSystemInDarkTheme()
+                    androidx.compose.material3.CardDefaults.cardColors(
+                        containerColor = if (isDarkTheme) {
+                            LiftrixColorsV2.Dark.BackgroundSecondary
+                        } else {
+                            LiftrixColorsV2.Light.BackgroundSecondary
+                        },
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    )
                 },
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(CardSpacing.M)
             ) {

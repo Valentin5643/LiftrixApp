@@ -111,7 +111,6 @@ class SettingsValidator @Inject constructor() {
             )
         }
         
-        Timber.d("Settings validation passed for user: ${settings.userId}")
     }
     
     /**
@@ -399,7 +398,6 @@ class SettingsValidator @Inject constructor() {
             )
         }
         
-        Timber.d("Settings persistence validation passed for user: ${settings.userId}")
     }
     
     /**
@@ -427,7 +425,6 @@ class SettingsValidator @Inject constructor() {
     ) {
         // This is a simplified verification - in a real implementation,
         // you might want to read from the actual storage layers
-        Timber.d("Verifying setting $key for user $userId (expected: $expectedValue)")
         
         // For now, we'll always return true as this is primarily for
         // demonstrating the verification pattern

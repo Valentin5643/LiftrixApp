@@ -50,6 +50,7 @@ import com.example.liftrix.data.local.dao.SettingsAuditDao
 import com.example.liftrix.data.local.dao.SyncQueueDao
 import com.example.liftrix.data.local.dao.ChatPreferencesDao
 import com.example.liftrix.data.local.dao.ChatHistoryDao
+import com.example.liftrix.data.mapper.WorkoutPostMapper
 import com.example.liftrix.data.local.seed.ExerciseLibrarySeedData
 import com.example.liftrix.data.local.seed.MetDataSeedService
 
@@ -403,5 +404,18 @@ object DatabaseModule {
     @Provides
     fun provideChatHistoryDao(database: LiftrixDatabase): ChatHistoryDao {
         return database.chatHistoryDao()
+    }
+    
+    // ========================================
+    // Mappers (DAO-dependent)
+    // ========================================
+    
+    @Provides
+    @javax.inject.Singleton
+    fun provideWorkoutPostMapper(
+        workoutDao: WorkoutDao,
+        customExerciseDao: CustomExerciseDao
+    ): WorkoutPostMapper {
+        return WorkoutPostMapper(workoutDao, customExerciseDao)
     }
 }

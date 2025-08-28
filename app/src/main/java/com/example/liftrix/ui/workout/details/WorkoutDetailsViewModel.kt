@@ -17,6 +17,7 @@ import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.domain.service.PRComparison
 import com.example.liftrix.domain.service.PersonalRecord
+import com.example.liftrix.domain.service.PrivacyEnforcementService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,7 +40,8 @@ class WorkoutDetailsViewModel @Inject constructor(
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     private val workoutRepository: WorkoutRepository,
     private val prDetectionService: PRDetectionService,
-    private val getPreviousWorkoutDataUseCase: GetPreviousWorkoutDataUseCase
+    private val getPreviousWorkoutDataUseCase: GetPreviousWorkoutDataUseCase,
+    private val privacyEnforcementService: PrivacyEnforcementService
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow<WorkoutDetailsUiState>(WorkoutDetailsUiState.Loading)
@@ -50,90 +52,127 @@ class WorkoutDetailsViewModel @Inject constructor(
             _uiState.value = WorkoutDetailsUiState.Loading
             
             // Get current user ID
-            val userId = getCurrentUserIdUseCase() ?: run {
+            val currentUserId = getCurrentUserIdUseCase() ?: run {
                 _uiState.value = WorkoutDetailsUiState.Error(
                     message = "User not authenticated"
                 )
                 return@launch
             }
             
-            val request = GetWorkoutByIdRequest(
+            // First try to get workout for current user (most common case)
+            val userRequest = GetWorkoutByIdRequest(
                 workoutId = WorkoutId(workoutId),
-                userId = userId
+                userId = currentUserId
             )
             
-            getWorkoutByIdUseCase(request).fold(
-                onSuccess = { workout ->
-                    if (workout == null) {
-                        _uiState.value = WorkoutDetailsUiState.Error(
-                            message = "Workout not found"
-                        )
-                        return@fold
+            var workout: com.example.liftrix.domain.model.Workout? = null
+            var workoutOwnerId: String = currentUserId
+            
+            // Try to get workout as current user first
+            getWorkoutByIdUseCase(userRequest).fold(
+                onSuccess = { userWorkout ->
+                    if (userWorkout != null) {
+                        workout = userWorkout
+                        workoutOwnerId = userWorkout.userId
                     }
-                    
-                    // Calculate aggregate statistics
-                    val totalVolume = calculateTotalVolume(workout.exercises)
-                    val totalSets = workout.exercises.sumOf { exercise -> exercise.sets.size }
-                    val totalReps = workout.exercises.sumOf { exercise ->
-                        exercise.sets.sumOf { set -> set.reps?.count ?: 0 }
-                    }
-                    
-                    // Calculate average rest time from session exercises
-                    val avgRestTime = calculateAverageRestTime(workout.exercises)
-                    
-                    // Detect PRs using PR detection service
-                    val personalRecords = detectPersonalRecords(workout, userId)
-                    val prsCount = personalRecords.size
-                    
-                    // Get previous workout data for comparison
-                    val exerciseLibraryIds = workout.exercises.map { it.libraryExercise.id }
-                    val previousWorkoutData = getPreviousWorkoutData(userId, exerciseLibraryIds, workout.id.value)
-                    
-                    // Create exercise data with PR and previous set information
-                    val exerciseDataWithPRs = createExerciseDataWithPRs(workout.exercises, personalRecords, previousWorkoutData)
-                    
-                    // Format date
-                    val formattedDate = workout.date.format(
-                        DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)
-                    )
-                    
-                    // Get workout notes (if any)
-                    val notes = workout.notes ?: ""
-                    
-                    _uiState.value = WorkoutDetailsUiState.Success(
-                        workoutName = workout.name,
-                        date = formattedDate,
-                        duration = workout.getDuration() ?: Duration.ZERO,
-                        totalVolume = totalVolume,
-                        totalSets = totalSets,
-                        totalReps = totalReps,
-                        avgRestTime = avgRestTime,
-                        prsCount = prsCount,
-                        exercises = workout.exercises,
-                        exerciseDataWithPRs = exerciseDataWithPRs,
-                        personalRecords = personalRecords,
-                        previousWorkoutData = previousWorkoutData,
-                        notes = notes
-                    )
                 },
                 onFailure = { error ->
-                    _uiState.value = WorkoutDetailsUiState.Error(
-                        message = (error as? LiftrixError)?.getDisplayMessage() 
-                            ?: "Failed to load workout details"
-                    )
-                    Timber.e("Failed to load workout details: $error")
+                    Timber.d("Could not load workout for current user: $error")
                 }
             )
+            
+            // If not found as current user's workout, it might be another user's workout
+            // For now, we can only view our own workouts due to repository constraints
+            // This is a limitation that would need repository-level changes to support
+            if (workout == null) {
+                _uiState.value = WorkoutDetailsUiState.Error(
+                    message = "Workout not found or you don't have permission to view it"
+                )
+                return@launch
+            }
+            
+            val isOwnWorkout = workout.userId == currentUserId
+            
+            // Check privacy if not own workout (currently this won't happen due to repository constraints)
+            if (!isOwnWorkout) {
+                val canView = privacyEnforcementService.canViewWorkout(
+                    workoutOwnerId = workout.userId,
+                    viewerId = currentUserId
+                )
+                
+                if (!canView) {
+                    _uiState.value = WorkoutDetailsUiState.Error(
+                        message = "This workout is private or you don't have permission to view it"
+                    )
+                    return@launch
+                }
+            }
+            
+            // Load full workout details
+            loadFullWorkoutDetails(workout, currentUserId, isOwnWorkout)
         }
     }
     
-    fun repeatWorkout(workoutId: String) {
-        viewModelScope.launch {
-            // This would trigger navigation to start a new workout with the same template
-            // The actual navigation is handled by the UI layer
-            Timber.d("Repeating workout: $workoutId")
+    private suspend fun loadFullWorkoutDetails(
+        workout: com.example.liftrix.domain.model.Workout,
+        currentUserId: String,
+        isOwnWorkout: Boolean
+    ) {
+        // Calculate aggregate statistics
+        val totalVolume = calculateTotalVolume(workout.exercises)
+        val totalSets = workout.exercises.sumOf { exercise -> exercise.sets.size }
+        val totalReps = workout.exercises.sumOf { exercise ->
+            exercise.sets.sumOf { set -> set.reps?.count ?: 0 }
         }
+        
+        // Calculate average rest time from session exercises
+        val avgRestTime = calculateAverageRestTime(workout.exercises)
+        
+        // Detect PRs using PR detection service (only for own workouts)
+        val personalRecords = if (isOwnWorkout) {
+            detectPersonalRecords(workout, currentUserId)
+        } else {
+            emptyList()
+        }
+        val prsCount = personalRecords.size
+        
+        // Get previous workout data for comparison (only for own workouts)
+        val exerciseLibraryIds = workout.exercises.map { it.libraryExercise.id }
+        val previousWorkoutData = if (isOwnWorkout) {
+            getPreviousWorkoutData(currentUserId, exerciseLibraryIds, workout.id.value)
+        } else {
+            null
+        }
+        
+        // Create exercise data with PR and previous set information
+        val exerciseDataWithPRs = createExerciseDataWithPRs(workout.exercises, personalRecords, previousWorkoutData)
+        
+        // Format date
+        val formattedDate = workout.date.format(
+            DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)
+        )
+        
+        // Get workout notes (if any)
+        val notes = workout.notes ?: ""
+        
+        _uiState.value = WorkoutDetailsUiState.Success(
+            workoutName = workout.name,
+            date = formattedDate,
+            duration = workout.getDuration() ?: Duration.ZERO,
+            totalVolume = totalVolume,
+            totalSets = totalSets,
+            totalReps = totalReps,
+            avgRestTime = avgRestTime,
+            prsCount = prsCount,
+            exercises = workout.exercises,
+            exerciseDataWithPRs = exerciseDataWithPRs,
+            personalRecords = personalRecords,
+            previousWorkoutData = previousWorkoutData,
+            notes = notes,
+            isOwnWorkout = isOwnWorkout
+        )
     }
+    
     
     private fun calculateTotalVolume(exercises: List<com.example.liftrix.domain.model.Exercise>): Int {
         return exercises.sumOf { exercise ->
@@ -269,7 +308,8 @@ sealed class WorkoutDetailsUiState {
         val exerciseDataWithPRs: List<ExerciseWithPRData>,
         val personalRecords: List<PersonalRecord>,
         val previousWorkoutData: PreviousWorkoutData?,
-        val notes: String
+        val notes: String,
+        val isOwnWorkout: Boolean
     ) : WorkoutDetailsUiState()
     
     data class Error(

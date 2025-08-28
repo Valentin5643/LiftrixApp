@@ -50,37 +50,7 @@ fun WorkoutDetailsScreen(
         viewModel.loadWorkoutDetails(workoutId)
     }
     
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { 
-                    Text(
-                        text = "Workout Details",
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            navController.navigate(
-                                LiftrixRoute.ShareWorkout(workoutId)
-                            )
-                        }
-                    ) {
-                        Icon(Icons.Default.Share, contentDescription = "Share")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        }
-    ) { paddingValues ->
+    Scaffold { paddingValues ->
         when (val state = uiState) {
             is WorkoutDetailsUiState.Loading -> {
                 Box(
@@ -149,24 +119,33 @@ fun WorkoutDetailsScreen(
                         }
                     }
                     
-                    // Action Buttons
-                    item {
-                        ActionButtonsRow(
-                            onRepeatWorkout = {
-                                // Start new workout with same template
-                                viewModel.repeatWorkout(workoutId)
-                            },
-                            onEditWorkout = {
-                                navController.navigate(
-                                    LiftrixRoute.EditWorkout(workoutId)
-                                )
-                            },
-                            onShareWorkout = {
-                                navController.navigate(
-                                    LiftrixRoute.ShareWorkout(workoutId)
-                                )
-                            }
-                        )
+                    // Action Buttons - show only for own workouts
+                    if (state.isOwnWorkout) {
+                        item {
+                            ActionButtonsRow(
+                                onEditWorkout = {
+                                    navController.navigate(
+                                        LiftrixRoute.EditWorkout(workoutId)
+                                    )
+                                },
+                                onShareWorkout = {
+                                    navController.navigate(
+                                        LiftrixRoute.ShareWorkout(workoutId)
+                                    )
+                                }
+                            )
+                        }
+                    } else {
+                        // Show only Share button for others' workouts
+                        item {
+                            ShareOnlyButton(
+                                onShareWorkout = {
+                                    navController.navigate(
+                                        LiftrixRoute.ShareWorkout(workoutId)
+                                    )
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -676,7 +655,6 @@ private fun NotesCard(notes: String) {
 
 @Composable
 private fun ActionButtonsRow(
-    onRepeatWorkout: () -> Unit,
     onEditWorkout: () -> Unit,
     onShareWorkout: () -> Unit
 ) {
@@ -684,22 +662,6 @@ private fun ActionButtonsRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        OutlinedButton(
-            onClick = onRepeatWorkout,
-            modifier = Modifier.weight(1f),
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = LiftrixColorsV2.Teal
-            )
-        ) {
-            Icon(
-                Icons.Default.Repeat,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("Repeat", fontSize = 14.sp)
-        }
-        
         OutlinedButton(
             onClick = onEditWorkout,
             modifier = Modifier.weight(1f),
@@ -719,6 +681,32 @@ private fun ActionButtonsRow(
         Button(
             onClick = onShareWorkout,
             modifier = Modifier.weight(1f),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = LiftrixColorsV2.Teal
+            )
+        ) {
+            Icon(
+                Icons.Default.Share,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Share", fontSize = 14.sp)
+        }
+    }
+}
+
+@Composable
+private fun ShareOnlyButton(
+    onShareWorkout: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Button(
+            onClick = onShareWorkout,
+            modifier = Modifier.fillMaxWidth(0.5f),
             colors = ButtonDefaults.buttonColors(
                 containerColor = LiftrixColorsV2.Teal
             )

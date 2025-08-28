@@ -70,15 +70,12 @@ class ExerciseRepositoryImpl @Inject constructor(
             
             // Ensure database is populated before searching
             val dbExercises = exerciseLibraryDao.getAllExercises().first()
-            Timber.d("ExerciseRepo: Database contains ${dbExercises.size} exercises")
             
             if (dbExercises.isEmpty()) {
-                Timber.d("Database empty during search, triggering population")
                 exerciseLibrarySeedData.populateExerciseLibraryIfNeeded(database)
                 
                 // Get updated exercises after population
                 val updatedExercises = exerciseLibraryDao.getAllExercises().first()
-                Timber.d("ExerciseRepo: After population: ${updatedExercises.size} exercises")
                 
                 if (updatedExercises.isEmpty()) {
                     // Fallback to placeholder exercises
@@ -361,15 +358,12 @@ class ExerciseRepositoryImpl @Inject constructor(
         return flow {
             // First, check if database is populated
             val dbExercises = exerciseLibraryDao.getAllExercises().first()
-            Timber.d("ExerciseRepo.searchFlow: Database contains ${dbExercises.size} exercises")
             
             val exercises = if (dbExercises.isEmpty()) {
-                Timber.d("Database empty during flow search, triggering population")
                 exerciseLibrarySeedData.populateExerciseLibraryIfNeeded(database)
                 
                 // Get updated exercises from database after population
                 val updatedExercises = exerciseLibraryDao.getAllExercises().first()
-                Timber.d("ExerciseRepo.searchFlow: After population: ${updatedExercises.size} exercises")
                 
                 if (updatedExercises.isNotEmpty()) {
                     val domainExercises = updatedExercises.map { exerciseLibraryMapper.toDomain(it) }
@@ -491,33 +485,27 @@ class ExerciseRepositoryImpl @Inject constructor(
         return flow {
             // First, try to get exercises from database
             val dbExercises = exerciseLibraryDao.getAllExercises().first()
-            Timber.d("ExerciseRepo.getAllFlow: Database contains ${dbExercises.size} exercises")
             
             val exercises = if (dbExercises.isEmpty()) {
-                Timber.d("Database empty in getAllFlow, triggering population")
                 
                 // Trigger database population in background
                 exerciseLibrarySeedData.populateExerciseLibraryIfNeeded(database)
                 
                 // Get updated exercises from database
                 val updatedExercises = exerciseLibraryDao.getAllExercises().first()
-                Timber.d("ExerciseRepo.getAllFlow: After population: ${updatedExercises.size} exercises")
                 
                 if (updatedExercises.isNotEmpty()) {
                     val domainExercises = updatedExercises.map { exerciseLibraryMapper.toDomain(it) }
-                    Timber.d("ExerciseRepo.getAllFlow: Returning ${domainExercises.size} domain exercises")
                     domainExercises
                 } else {
                     // Use placeholders if population failed
                     Timber.w("ExerciseRepo.getAllFlow: Population failed, using placeholders")
                     val placeholderExercises = placeholderService.getPlaceholderExercises()
-                    Timber.d("ExerciseRepo.getAllFlow: Returning ${placeholderExercises.size} placeholder exercises")
                     placeholderExercises
                 }
             } else {
                 // Database has exercises, use them
                 val domainExercises = dbExercises.map { exerciseLibraryMapper.toDomain(it) }
-                Timber.d("ExerciseRepo.getAllFlow: Returning ${domainExercises.size} domain exercises from DB")
                 domainExercises
             }
             
@@ -526,7 +514,6 @@ class ExerciseRepositoryImpl @Inject constructor(
             Timber.e(e, "Error loading exercises in getAllFlow, falling back to placeholders")
             // Use placeholders if database fails
             val placeholderExercises = placeholderService.getPlaceholderExercises()
-            Timber.d("ExerciseRepo.getAllFlow: Returning ${placeholderExercises.size} placeholder exercises after error")
             emit(placeholderExercises)
         }
     }

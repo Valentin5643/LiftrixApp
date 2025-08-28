@@ -9,6 +9,7 @@ import androidx.room.Update
 import com.example.liftrix.data.local.entity.CustomExerciseEntity
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.ExerciseCategory
+import com.example.liftrix.domain.model.ExerciseType
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -101,8 +102,43 @@ interface CustomExerciseDao {
     suspend fun markCustomExercisesAsSynced(exerciseIds: List<String>): Int
     
     /**
+     * Get custom exercises by exercise type for a specific user
+     */
+    @Query("SELECT * FROM custom_exercises WHERE user_id = :userId AND exercise_type = :exerciseType ORDER BY name ASC")
+    fun getCustomExercisesByType(userId: String, exerciseType: ExerciseType): Flow<List<CustomExerciseEntity>>
+    
+    /**
+     * Search custom exercises by tags for a specific user
+     */
+    @Query("""
+        SELECT * FROM custom_exercises 
+        WHERE user_id = :userId 
+        AND tags LIKE '%' || :tag || '%'
+        ORDER BY name ASC
+    """)
+    fun getCustomExercisesByTag(userId: String, tag: String): Flow<List<CustomExerciseEntity>>
+    
+    /**
+     * Update main image URL for a custom exercise
+     */
+    @Query("UPDATE custom_exercises SET main_image_url = :imageUrl, last_modified = :timestamp WHERE id = :exerciseId AND user_id = :userId")
+    suspend fun updateMainImage(exerciseId: String, userId: String, imageUrl: String, timestamp: Long = System.currentTimeMillis())
+    
+    /**
+     * Update additional image URLs for a custom exercise
+     */
+    @Query("UPDATE custom_exercises SET additional_image_urls = :imageUrls, last_modified = :timestamp WHERE id = :exerciseId AND user_id = :userId")
+    suspend fun updateAdditionalImages(exerciseId: String, userId: String, imageUrls: String?, timestamp: Long = System.currentTimeMillis())
+    
+    /**
      * Get count of custom exercises for a user
      */
     @Query("SELECT COUNT(*) FROM custom_exercises WHERE user_id = :userId")
     suspend fun getCustomExerciseCount(userId: String): Int
+    
+    /**
+     * Get count of custom exercises by type for a user
+     */
+    @Query("SELECT COUNT(*) FROM custom_exercises WHERE user_id = :userId AND exercise_type = :exerciseType")
+    suspend fun getCustomExerciseCountByType(userId: String, exerciseType: ExerciseType): Int
 } 

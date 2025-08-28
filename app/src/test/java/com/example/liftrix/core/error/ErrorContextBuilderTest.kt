@@ -511,9 +511,11 @@ class ErrorContextBuilderTest {
             val context = builder.build()
             
             // Then: all metadata should be preserved
-            assertEquals(metadataCount, builder.size())
+            // Check that the context contains all user-provided metadata
             for (i in 1..metadataCount) {
                 assertEquals("value_$i", context["key_$i"])
             }
+            // Verify the builder size is correct (user metadata only, not system metadata)
+            assertEquals(metadataCount + 1, builder.size()) // +1 for timestamp added during build()
         }
 }

@@ -68,6 +68,17 @@ sealed class SyncPayload {
         val syncVersion: Long,
         val lastModified: Long
     ) : SyncPayload()
+    
+    /**
+     * 🔥 NEW: Payload for FETCH operations to download remote data
+     */
+    @Serializable
+    data class FetchPayload(
+        val userId: String,
+        val entityType: String,
+        val lastSyncTimestamp: Long = 0L,
+        val fetchAll: Boolean = true
+    ) : SyncPayload()
 }
 
 /**
@@ -120,6 +131,23 @@ object SyncPayloadFactory {
             isPublic = isPublic,
             syncVersion = syncVersion,
             lastModified = lastModified
+        )
+    }
+    
+    /**
+     * 🔥 NEW: Creates a FETCH payload for downloading remote data
+     */
+    fun createFetchPayload(
+        userId: String,
+        entityType: String,
+        lastSyncTimestamp: Long = 0L,
+        fetchAll: Boolean = true
+    ): SyncPayload.FetchPayload {
+        return SyncPayload.FetchPayload(
+            userId = userId,
+            entityType = entityType,
+            lastSyncTimestamp = lastSyncTimestamp,
+            fetchAll = fetchAll
         )
     }
 }

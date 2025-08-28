@@ -20,17 +20,63 @@
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
 
-# ProGuard rules for Liftrix
--keep class com.example.liftrix.** { *; }
--dontwarn com.example.liftrix.**
+# Keep WorkManager workers from being stripped by R8
+-keep class com.example.liftrix.sync.** { *; }
 
-# 🔥 CRITICAL FIX: Explicit Application class keep rules
+# Keep all Hilt workers and generated factories
+-keep class * extends androidx.work.ListenableWorker
+-keep @androidx.hilt.work.HiltWorker class *
+-keepclassmembers class * {
+    @dagger.assisted.AssistedInject <init>(...);
+}
+
+# Keep Hilt Worker factories and assisted injection
+-keep class * extends androidx.hilt.work.HiltWorkerFactory { *; }
+-keep class * extends androidx.work.CoroutineWorker { *; }
+
+# Keep WorkManager and Hilt annotations
+-keep class androidx.hilt.work.HiltWorker
+-keep class dagger.assisted.AssistedInject
+-keep class dagger.assisted.Assisted
+
+# Keep generated Hilt assisted factories
+-keep class **_AssistedFactory { *; }
+-keep class **_Factory { *; }
+
+# ProGuard rules for Liftrix - BALANCED FOR R8 PERFORMANCE & HILT COMPATIBILITY
+
+# Essential app classes
 -keep class com.example.liftrix.LiftrixApp { *; }
+-keep class com.example.liftrix.MainActivity { *; }
+
+# Keep ALL ViewModels (Hilt injects these)
+-keep class com.example.liftrix.ui.**.*ViewModel { *; }
+-keep class com.example.liftrix.ui.**.*ViewModel$* { *; }
+
+# Keep all Hilt modules and injected classes
+-keep class com.example.liftrix.di.** { *; }
+-keep @dagger.Module class * { *; }
+-keep @dagger.hilt.InstallIn class * { *; }
+-keep @javax.inject.Inject class * { *; }
+-keep @dagger.hilt.android.lifecycle.HiltViewModel class * { *; }
+
+# Keep data models
+-keep class com.example.liftrix.domain.model.** { *; }
+-keep class com.example.liftrix.data.local.entity.** { *; }
+-keep class com.example.liftrix.data.local.dao.** { *; }
+
+# Keep Firebase-related classes
+-keep class com.example.liftrix.service.LiftrixFirebaseMessagingService { *; }
+-keep class com.example.liftrix.data.remote.FirebaseDataSource* { *; }
+
+# Hilt dependency injection - comprehensive rules
 -keep class com.example.liftrix.LiftrixApp_* { *; }
--keep class dagger.hilt.android.** { *; }
+-keep class dagger.hilt.** { *; }
 -keep class **_HiltComponents { *; }
 -keep class **_HiltComponents$* { *; }
--keep class **Hilt** { *; }
+-keep class **_Factory { *; }
+-keep class **_Impl { *; }
+-keep class **_Impl$* { *; }
 
 # 🔥 FIX: Hilt Application class generation
 -keep @dagger.hilt.android.HiltAndroidApp class * { *; }
@@ -42,34 +88,62 @@
     <init>(...);
 }
 
+# Keep repositories and use cases (Hilt injects these)
+-keep class com.example.liftrix.data.repository.** { *; }
+-keep class com.example.liftrix.domain.repository.** { *; }
+-keep class com.example.liftrix.domain.usecase.** { *; }
+-keep class com.example.liftrix.domain.service.** { *; }
+-keep class com.example.liftrix.data.service.** { *; }
+
 # Vico chart library
 -keep class com.patrykandpatrick.vico.** { *; }
 -dontwarn com.patrykandpatrick.vico.**
 -keepclassmembers class com.patrykandpatrick.vico.** { *; }
 
-# PDF library (iText 7) ProGuard rules
--keep class com.itextpdf.** { *; }
--keep class com.itextpdf.bouncycastle.** { *; }
--keep class com.itextpdf.bouncycastlefips.** { *; }
--keep class com.itextpdf.commons.** { *; }
--keep class com.itextpdf.layout.** { *; }
--keep class com.itextpdf.kernel.** { *; }
--keep class com.itextpdf.io.** { *; }
--keep class com.itextpdf.svg.** { *; }
--keep class com.itextpdf.html2pdf.** { *; }
--keep class com.itextpdf.pdfcleanup.** { *; }
--keep class com.itextpdf.forms.** { *; }
--keep class com.itextpdf.signatures.** { *; }
--keep class com.itextpdf.barcodes.** { *; }
--keep class com.itextpdf.pdfa.** { *; }
--keep class com.itextpdf.pdfua.** { *; }
--keep class com.itextpdf.pdftest.** { *; }
+# PDF library (iText 7) - OPTIMIZED RULES
+# Only keep the specific iText classes we actually use
+-keep class com.itextpdf.kernel.pdf.** { *; }
+-keep class com.itextpdf.layout.element.** { *; }
+-keep class com.itextpdf.layout.Document { *; }
+-keep class com.itextpdf.io.font.constants.StandardFonts { *; }
+
+# Suppress warnings for unused iText features
 -dontwarn com.itextpdf.**
 -dontwarn javax.xml.**
 -dontwarn org.bouncycastle.**
 
-# BouncyCastle related classes
--keep class org.bouncycastle.** { *; }
--dontwarn org.bouncycastle.**
+# If BouncyCastle is actually needed (for PDF signing), uncomment:
+# -keep class org.bouncycastle.jce.provider.BouncyCastleProvider { *; }
+# -keep class org.bouncycastle.** { <init>(...); }
+
+# Native library handling
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
+
+# Prevent stripping of native method registrations
+-keepclasseswithmembers class * {
+    @com.facebook.jni.annotations.DoNotStrip *;
+}
+
+# System library exclusions - Don't obfuscate Android system classes
+-keep class android.** { *; }
+-keep class com.android.** { *; }
+-dontwarn android.**
+-dontwarn com.android.**
+
+# Prevent issues with native library loading
+-keep class java.lang.System {
+    public static void loadLibrary(java.lang.String);
+    public static void load(java.lang.String);
+}
+
+# ZXing QR code library native components
+-keep class com.google.zxing.** { *; }
+-keep class com.journeyapps.barcodescanner.** { *; }
+
+# CameraX native components
+-keep class androidx.camera.** { *; }
+-dontwarn androidx.camera.**
 
 # Additional rules as needed for libraries

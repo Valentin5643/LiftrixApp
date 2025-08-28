@@ -394,7 +394,6 @@ private fun ProfileActionSection(
             SecondaryActionButton(
                 text = "Settings",
                 onClick = onMessageClick, // Triggers settings menu in UserProfileScreen
-                leadingIcon = Icons.Default.Settings,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -437,7 +436,6 @@ private fun FollowButton(
             SecondaryActionButton(
                 text = "Following",
                 onClick = onClick,
-                leadingIcon = Icons.Default.Check,
                 modifier = buttonModifier,
                 enabled = enabled
             )

@@ -84,8 +84,8 @@ fun UserSearchScreen(
                         results = uiState.searchResults,
                         onUserClick = onNavigateToProfile,
                         onConnectClick = { userId ->
-                            // Handle connection action
-                            viewModel.handleEvent(UserSearchEvent.SelectUser(userId))
+                            // Handle follow action
+                            viewModel.handleEvent(UserSearchEvent.FollowUser(userId))
                         },
                         modifier = Modifier.fillMaxSize()
                     )
@@ -342,25 +342,28 @@ private fun InitialSearchState(
             imageVector = Icons.Default.People,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-            modifier = Modifier.size(64.dp)
+            modifier = Modifier.size(80.dp)
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "Discover fitness friends",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.SemiBold
+            text = "No new people\nto discover right now",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            lineHeight = MaterialTheme.typography.titleLarge.lineHeight * 1.2
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Text(
-            text = "Search for users by name, interests, or use filters to find your perfect workout partners",
+            text = "Check back later or explore\nyour existing connections",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             textAlign = TextAlign.Center,
+            lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.3,
             modifier = Modifier.padding(horizontal = 32.dp)
         )
     }

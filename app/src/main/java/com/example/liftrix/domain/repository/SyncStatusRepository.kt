@@ -69,7 +69,6 @@ class SyncStatusRepository @Inject constructor() {
         val statusFlow = getUserStatusFlow(userId)
         statusFlow.value = status
         
-        Timber.d("SyncStatusRepository: Updated status for user $userId: $status")
     }
     
     /**
@@ -82,7 +81,6 @@ class SyncStatusRepository @Inject constructor() {
         val statusFlow = getUserStatusFlow(userId)
         statusFlow.value = SyncStatus.Idle
         
-        Timber.d("SyncStatusRepository: Reset sync status for user $userId")
     }
     
     /**
@@ -104,7 +102,6 @@ class SyncStatusRepository @Inject constructor() {
      */
     fun cleanupUserStatus(userId: String) {
         _syncStatusMap.remove(userId)
-        Timber.d("SyncStatusRepository: Cleaned up status for user $userId")
     }
     
     /**

@@ -228,8 +228,8 @@ class SignUpWithEmailUseCase @Inject constructor(
                 publicUserData["bio"] = bio
             }
             
-            // Write to users_public collection
-            firestore.collection("users_public")
+            // Write to social_profiles collection
+            firestore.collection("social_profiles")
                 .document(userId)
                 .set(publicUserData, SetOptions.merge())
                 .await()

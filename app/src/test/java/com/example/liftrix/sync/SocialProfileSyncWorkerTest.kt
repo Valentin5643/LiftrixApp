@@ -96,23 +96,23 @@ class SocialProfileSyncWorkerTest {
     }
 
     @Test
-    fun `FAILING TEST - sync worker targets social_profiles but search looks in users_public`() = runTest {
-        // ISSUE: This test exposes that sync worker targets the wrong collection for searchability
+    fun `sync worker correctly targets social_profiles collection for searchability`() = runTest {
+        // FIXED: This test validates that sync worker targets the correct collection
         
         val testUsername = "synctest"
         val socialProfile = createTestSocialProfile(testUserId, testUsername)
         
-        Timber.w("🚨 FAILING TEST: Sync worker syncs to social_profiles but search expects users_public")
+        Timber.d("✅ FIXED TEST: Sync worker correctly syncs to social_profiles collection")
         
         // Mock successful profile retrieval from local database
         coEvery { socialProfileDao.getUnsyncedProfiles(testUserId) } returns listOf(socialProfile)
         
-        // Mock successful sync to 'social_profiles' collection (current behavior)
+        // Mock successful sync to 'social_profiles' collection (corrected behavior)
         coEvery { documentReference.set(any(), SetOptions.merge()).await() } returns null
         coEvery { documentReference.get().await() } returns documentSnapshot
         every { documentSnapshot.exists() } returns false
         
-        // Execute sync - this will target 'social_profiles' collection
+        // Execute sync - this now correctly targets 'social_profiles' collection
         val result = syncWorker.doWork()
         
         assertThat(result).isEqualTo(ListenableWorker.Result.success())

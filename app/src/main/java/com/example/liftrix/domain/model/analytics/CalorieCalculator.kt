@@ -582,7 +582,6 @@ class CalorieCalculator @Inject constructor(
         exerciseCaloriesCache.clear()
         bmrCache.clear()
         metValueCache.clear()
-        Timber.d("Cleared all CalorieCalculator memoization caches")
     }
     
     /**
@@ -601,7 +600,6 @@ class CalorieCalculator @Inject constructor(
         workoutCaloriesCache.clear() // Simple approach - clear all since keys contain userId
         exerciseCaloriesCache.clear() // Simple approach - clear all since keys contain userId
         
-        Timber.d("Invalidated calorie caches for user: $userId")
     }
     
     /**

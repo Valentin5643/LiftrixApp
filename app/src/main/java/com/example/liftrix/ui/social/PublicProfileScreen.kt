@@ -865,6 +865,22 @@ fun ConnectionActions(
                     }
                 }
 
+                ConnectionStatus.GYM_BUDDY -> {
+                    // Gym buddy relationship
+                    OutlinedButton(
+                        onClick = { /* Handle gym buddy features */ },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FitnessCenter,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Gym Buddy")
+                    }
+                }
+
                 ConnectionStatus.MUTUAL_FOLLOW -> {
                     // Mutual followers - message functionality removed
 
@@ -882,7 +898,7 @@ fun ConnectionActions(
                     }
                 }
 
-                ConnectionStatus.GYM_BUDDY -> {
+                ConnectionStatus.CONNECTED -> {
                     // Gym buddies - message functionality removed
 
                     OutlinedButton(

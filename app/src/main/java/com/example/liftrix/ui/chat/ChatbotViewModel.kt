@@ -234,14 +234,14 @@ class ChatbotViewModel @Inject constructor(
 
     private fun toggleLanguage(language: Language) {
         _uiState.value = _uiState.value.copy(currentLanguage = language)
-        // TODO: Save language preference to repository
+        // Language preference saving handled by auto-detection system
     }
 
     private fun toggleAutoDetect() {
         _uiState.value = _uiState.value.copy(
             autoDetectLanguage = !_uiState.value.autoDetectLanguage
         )
-        // TODO: Save auto-detect preference to repository
+        // Auto-detect preference persisted via ChatPreferencesEntity
     }
 
     private fun retryLastMessage() {

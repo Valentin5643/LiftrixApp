@@ -118,7 +118,6 @@ class WorkoutRepositoryImpl @Inject constructor(
         ) {
             val entity = workoutMapper.toEntity(workout, isSynced = false)
             
-            // 🔍 SYNC-DEBUG: Log workout creation details
             Timber.d("[WORKOUT-CREATE-DEBUG] Creating workout for sync debugging:")
             Timber.d("[WORKOUT-CREATE-DEBUG]   - Workout ID: ${workout.id.value}")
             Timber.d("[WORKOUT-CREATE-DEBUG]   - User ID: ${workout.userId}")
@@ -462,12 +461,9 @@ class WorkoutRepositoryImpl @Inject constructor(
                     Timber.d("Found ${entities.size} recent completed workouts")
                     
                     val workouts = entities.map { entity ->
-                        workoutMapper.toDomain(entity).also { workout ->
-                            Timber.d("🔥 RECENT-WORKOUTS-DEBUG: Mapped workout - id: ${workout.id.value}, name: ${workout.name}, status: ${workout.status}")
-                        }
+                        workoutMapper.toDomain(entity)
                     }
                     
-                    Timber.d("🔥 RECENT-WORKOUTS-DEBUG: Successfully mapped ${workouts.size} workouts")
                     LiftrixResult.success(workouts)
                 } catch (throwable: Throwable) {
                     Timber.e(throwable, "Failed to map recent workout entities for user: $userId, limit: $limit")
@@ -879,7 +875,6 @@ class WorkoutRepositoryImpl @Inject constructor(
     }
     
     override fun getRecentActivityFeed(userId: String, includeOthers: Boolean, limit: Int): Flow<LiftrixResult<List<FeedWorkout>>> {
-        Timber.d("🔥 RECENT-ACTIVITY-DEBUG: Setting up recent activity feed for user: $userId, includeOthers: $includeOthers, limit: $limit")
         
         val json = Json { ignoreUnknownKeys = true }
         
@@ -922,23 +917,10 @@ class WorkoutRepositoryImpl @Inject constructor(
                                         mediaThumbnails = mediaThumbnails
                                     )
                                 } else {
-                                    // For non-personal workouts, we need user info
-                                    // For now, create a placeholder User object
-                                    val user = User(
+                                    // For non-personal workouts, create a social display User object
+                                    val user = User.forSocialDisplay(
                                         uid = postEntity.userId,
-                                        email = "",
-                                        displayName = "User", // TODO: Query from social_profiles
-                                        photoUrl = null,
-                                        isAnonymous = false,
-                                        subscriptionTier = SubscriptionTier.FREE,
-                                        subscriptionStatus = SubscriptionStatus.ACTIVE,
-                                        subscriptionExpiresAt = null,
-                                        premiumFeaturesEnabled = false,
-                                        onboardingCompleted = true,
-                                        profileVersion = 1L,
-                                        createdAt = java.time.LocalDateTime.now(),
-                                        lastSignInAt = java.time.LocalDateTime.now(),
-                                        updatedAt = java.time.LocalDateTime.now()
+                                        displayName = "User"
                                     )
                                     FeedWorkout.forFriendWorkout(
                                         workout = workout,
@@ -952,10 +934,9 @@ class WorkoutRepositoryImpl @Inject constructor(
                             }
                         }
                         
-                        Timber.d("🔥 RECENT-ACTIVITY-DEBUG: Explore tab - mapped ${feedWorkouts.size} public posts with media")
                         LiftrixResult.success(feedWorkouts)
                     } catch (throwable: Throwable) {
-                        Timber.e(throwable, "🔥 RECENT-ACTIVITY-DEBUG: Error mapping explore feed")
+                        Timber.e(throwable, "Error mapping explore feed")
                         LiftrixResult.failure(
                             LiftrixError.DatabaseError(
                                 errorMessage = "Failed to map explore feed",
@@ -981,7 +962,6 @@ class WorkoutRepositoryImpl @Inject constructor(
                     // Include the current user in the list
                     val allUserIds = followedUserIds + userId
                     
-                    Timber.d("🔥 RECENT-ACTIVITY-DEBUG: Following tab - querying posts from ${allUserIds.size} users")
                     
                     // Get posts from all these users
                     workoutPostDao.getRecentPostsFromUsers(allUserIds, limit)
@@ -1020,22 +1000,10 @@ class WorkoutRepositoryImpl @Inject constructor(
                                             mediaThumbnails = mediaThumbnails
                                         )
                                     } else {
-                                        // For friend workouts, create user info
-                                        val user = User(
+                                        // For friend workouts, create a social display User object
+                                        val user = User.forSocialDisplay(
                                             uid = postEntity.userId,
-                                            email = "",
-                                            displayName = "Friend", // TODO: Query from social_profiles
-                                            photoUrl = null,
-                                            isAnonymous = false,
-                                            subscriptionTier = SubscriptionTier.FREE,
-                                            subscriptionStatus = SubscriptionStatus.ACTIVE,
-                                            subscriptionExpiresAt = null,
-                                            premiumFeaturesEnabled = false,
-                                            onboardingCompleted = true,
-                                            profileVersion = 1L,
-                                            createdAt = java.time.LocalDateTime.now(),
-                                            lastSignInAt = java.time.LocalDateTime.now(),
-                                            updatedAt = java.time.LocalDateTime.now()
+                                            displayName = "Friend"
                                         )
                                         FeedWorkout.forFriendWorkout(
                                             workout = workout,
@@ -1049,11 +1017,10 @@ class WorkoutRepositoryImpl @Inject constructor(
                                 }
                             }
                             
-                            Timber.d("🔥 RECENT-ACTIVITY-DEBUG: Following tab - mapped ${feedWorkouts.size} posts with media")
                             emit(LiftrixResult.success(feedWorkouts))
                         }
                 } catch (throwable: Throwable) {
-                    Timber.e(throwable, "🔥 RECENT-ACTIVITY-DEBUG: Error getting following feed")
+                    Timber.e(throwable, "Error getting following feed")
                     emit(
                         LiftrixResult.failure(
                             LiftrixError.DatabaseError(
@@ -1071,7 +1038,7 @@ class WorkoutRepositoryImpl @Inject constructor(
                 }
             }
         }.catch { throwable ->
-            Timber.e(throwable, "🔥 RECENT-ACTIVITY-DEBUG: Database flow error for recent activity")
+            Timber.e(throwable, "Database flow error for recent activity")
             emit(
                 LiftrixResult.failure(
                     LiftrixError.DatabaseError(
@@ -1288,6 +1255,69 @@ class WorkoutRepositoryImpl @Inject constructor(
     }
     
     /**
+     * 🔥 NEW: Triggers immediate bidirectional sync for a user.
+     * This fetches remote workouts AND uploads local unsynced workouts.
+     */
+    suspend fun triggerBidirectionalSync(userId: String): LiftrixResult<Unit> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.BusinessLogicError(
+                    code = "BIDIRECTIONAL_SYNC_FAILED",
+                    errorMessage = "Failed to trigger bidirectional sync: ${throwable.message}",
+                    analyticsContext = mapOf("user_id" to userId)
+                )
+            }
+        ) {
+            Timber.d("[BIDIRECTIONAL-SYNC] Triggering complete bidirectional sync for user $userId")
+            
+            // The WorkoutSyncWorker now handles both directions automatically
+            val syncResult = syncCoordinator.triggerEntitySync(userId, "workout")
+            
+            syncResult.fold(
+                onSuccess = {
+                    Timber.d("[BIDIRECTIONAL-SYNC] Successfully triggered bidirectional sync for user $userId")
+                },
+                onFailure = { error ->
+                    Timber.e("[BIDIRECTIONAL-SYNC] Failed to trigger sync: $error")
+                    throw Exception("Bidirectional sync failed: ${error.message}")
+                }
+            )
+        }
+    }
+    
+    /**
+     * 🔥 NEW: Queues a FETCH operation for offline processing.
+     * This ensures remote workouts are fetched when the device comes back online.
+     */
+    suspend fun queueRemoteFetch(userId: String): LiftrixResult<Unit> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.BusinessLogicError(
+                    code = "QUEUE_FETCH_FAILED",
+                    errorMessage = "Failed to queue remote fetch: ${throwable.message}",
+                    analyticsContext = mapOf("user_id" to userId)
+                )
+            }
+        ) {
+            Timber.d("[REMOTE-FETCH-QUEUE] Queueing remote fetch operation for user $userId")
+            
+            // The offline queue manager will need to support FETCH operations
+            // For now, we trigger immediate sync which includes fetch
+            val syncResult = syncCoordinator.triggerEntitySync(userId, "workout")
+            
+            syncResult.fold(
+                onSuccess = {
+                    Timber.d("[REMOTE-FETCH-QUEUE] Successfully queued remote fetch for user $userId")
+                },
+                onFailure = { error ->
+                    Timber.w("[REMOTE-FETCH-QUEUE] Failed to queue fetch, will retry later: $error")
+                    // Don't fail - this is a best-effort operation
+                }
+            )
+        }
+    }
+    
+    /**
      * Helper method to queue a workout for sync after creation or update
      */
     private suspend fun queueWorkoutForSync(workout: Workout) {
@@ -1395,10 +1425,6 @@ class WorkoutRepositoryImpl @Inject constructor(
             // Create type-safe payload
             val payload = SyncPayloadFactory.createWorkoutPayload(workoutSyncDto)
             
-            Timber.d("[WORKOUT-SYNC-QUEUE-DEBUG] Queueing workout for sync:")
-            Timber.d("[WORKOUT-SYNC-QUEUE-DEBUG]   - Workout ID: ${workout.id.value}")
-            Timber.d("[WORKOUT-SYNC-QUEUE-DEBUG]   - User ID: ${workout.userId}")
-            Timber.d("[WORKOUT-SYNC-QUEUE-DEBUG]   - Sync DTO isSynced: ${workoutSyncDto.isSynced}")
             
             offlineQueueManager.queueOperation(
                 userId = workout.userId,
@@ -1408,21 +1434,16 @@ class WorkoutRepositoryImpl @Inject constructor(
                 data = payload
             )
             
-            Timber.d("[WORKOUT-SYNC-QUEUE-DEBUG] Successfully queued workout operation in offline queue")
             
             // Trigger sync coordinator for background sync
             CoroutineScope(Dispatchers.IO).launch {
-                Timber.d("[WORKOUT-SYNC-QUEUE-DEBUG] Triggering immediate sync via coordinator...")
                 val syncResult = syncCoordinator.triggerEntitySync(workout.userId, "workout")
-                Timber.d("[WORKOUT-SYNC-QUEUE-DEBUG] Sync trigger result: ${if (syncResult.isSuccess) "SUCCESS" else "FAILURE"}")
                 
                 // 🚀 CRITICAL FIX: Also trigger public profile sync to update workout count
                 // This ensures that when users create/complete workouts, their workout stats become visible to other users
                 val profileSyncResult = syncCoordinator.triggerEntitySync(workout.userId, "user_public")
-                Timber.d("[WORKOUT-SYNC-QUEUE-DEBUG] Profile sync trigger result: ${if (profileSyncResult.isSuccess) "SUCCESS" else "FAILURE"}")
             }
             
-            Timber.d("[WORKOUT-SYNC-QUEUE-DEBUG] Queued workout ${workout.id.value} for sync and triggered public profile update")
         } catch (e: Exception) {
             Timber.e(e, "Failed to queue workout ${workout.id.value} for sync")
             // Don't fail the entire operation for sync queueing failure

@@ -121,28 +121,19 @@ fun HomeScreen(
                     .fillMaxSize()
                     .pullRefresh(pullRefreshState)
             ) {
-                when {
-                    screenData.shouldShowEmptyState -> {
-                        EmptyState(
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                    
-                    else -> {
-                        // Enhanced home content with modern card-based layout
-                        EnhancedHomeContent(
-                            navController = navController,
-                            screenData = screenData,
-                            onNavigateToWorkout = onNavigateToWorkout,
-                            onNavigateToFriends = onNavigateToFriends,
-                            onNavigateToMyWorkouts = onNavigateToMyWorkouts,
-                            onEvent = { event -> viewModel.handleEvent(event) },
-                            feedViewModel = feedViewModel,
-                            syncStatusViewModel = syncStatusViewModel,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                }
+                // Always show the main content which includes discover section
+                // The individual sections will handle their own empty states
+                EnhancedHomeContent(
+                    navController = navController,
+                    screenData = screenData,
+                    onNavigateToWorkout = onNavigateToWorkout,
+                    onNavigateToFriends = onNavigateToFriends,
+                    onNavigateToMyWorkouts = onNavigateToMyWorkouts,
+                    onEvent = { event -> viewModel.handleEvent(event) },
+                    feedViewModel = feedViewModel,
+                    syncStatusViewModel = syncStatusViewModel,
+                    modifier = Modifier.fillMaxSize()
+                )
                 
                 PullRefreshIndicator(
                     refreshing = screenData.isRefreshing,
@@ -160,10 +151,37 @@ fun HomeScreen(
             )
         }
         is UiState.Empty -> {
-            HomeEmptyScreen(
-                onCreateWorkout = onNavigateToMyWorkouts,
-                modifier = modifier
+            // Even in empty state, show the full content with discover section
+            // Individual sections will handle their empty states appropriately
+            val emptyScreenData = HomeScreenData()
+            val pullRefreshState = rememberPullRefreshState(
+                refreshing = false,
+                onRefresh = { viewModel.handleEvent(HomeEvent.RefreshData) }
             )
+            
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .pullRefresh(pullRefreshState)
+            ) {
+                EnhancedHomeContent(
+                    navController = navController,
+                    screenData = emptyScreenData,
+                    onNavigateToWorkout = onNavigateToWorkout,
+                    onNavigateToFriends = onNavigateToFriends,
+                    onNavigateToMyWorkouts = onNavigateToMyWorkouts,
+                    onEvent = { event -> viewModel.handleEvent(event) },
+                    feedViewModel = feedViewModel,
+                    syncStatusViewModel = syncStatusViewModel,
+                    modifier = Modifier.fillMaxSize()
+                )
+                
+                PullRefreshIndicator(
+                    refreshing = false,
+                    state = pullRefreshState,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
+            }
         }
         else -> {
             // Fallback for unknown states
@@ -418,6 +436,10 @@ private fun EnhancedHomeContent(
                     onWorkoutCopyClick = {
                         feedViewModel.onEvent(FeedEvent.HandlePostInteraction(PostInteraction.CopyWorkout(post)))
                     },
+                    onWorkoutClick = {
+                        // Navigate to workout details
+                        navController.navigate(LiftrixRoute.WorkoutDetails(post.workoutId))
+                    },
                     onEditWorkout = {
                         navController.navigateToEditWorkout(post.workoutId)
                     },
@@ -627,12 +649,12 @@ private fun EmptyDiscoveryState(
             horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.Top
         ) {
-            // Icon on the left
+            // Large icon on the left (keeping the bigger size)
             Icon(
                 imageVector = Icons.Default.People,
                 contentDescription = "No people to discover",
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(96.dp)
                     .padding(end = GridSystem.spacing3),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
@@ -923,39 +945,6 @@ private fun ErrorState(
     }
 }
 
-/**
- * Enhanced empty state component with modern design and call-to-action
- */
-@Composable
-private fun EmptyState(
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(GridSystem.spacing5),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        UnifiedWorkoutCard(
-            title = "No workouts yet",
-            subtitle = "Start by creating your first workout or explore the community",
-            modifier = Modifier.padding(GridSystem.spacing5)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.FitnessCenter,
-                    contentDescription = "Fitness center icon",
-                    modifier = Modifier.size(80.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-    }
-}
 
 /**
  * Helper function to calculate workout intensity from FeedWorkout data
@@ -992,13 +981,6 @@ private fun HomeErrorScreen(
     )
 }
 
-@Composable
-private fun HomeEmptyScreen(
-    onCreateWorkout: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    EmptyState(modifier = modifier)
-}
 
 @Preview(showBackground = true)
 @Composable

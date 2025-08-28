@@ -25,10 +25,10 @@ class GuestSessionRepositoryImpl @Inject constructor(
         return try {
             withContext(Dispatchers.IO) {
                 val entity = guestSessionDao.getGuestSession(userId)
-                LiftrixResult.success(entity?.toDomain())
+                Result.success(entity?.toDomain())
             }
         } catch (e: Exception) {
-            LiftrixResult.failure(
+            Result.failure(
                 LiftrixError.DatabaseError(
                     "Failed to get guest session for user $userId: ${e.message}",
                     isRecoverable = true,
@@ -42,10 +42,10 @@ class GuestSessionRepositoryImpl @Inject constructor(
         return try {
             withContext(Dispatchers.IO) {
                 guestSessionDao.insertOrUpdate(guestSession.toEntity())
-                LiftrixResult.success(Unit)
+                Result.success(Unit)
             }
         } catch (e: Exception) {
-            LiftrixResult.failure(
+            Result.failure(
                 LiftrixError.DatabaseError(
                     "Failed to save guest session: ${e.message}",
                     isRecoverable = true,
@@ -59,10 +59,10 @@ class GuestSessionRepositoryImpl @Inject constructor(
         return try {
             withContext(Dispatchers.IO) {
                 guestSessionDao.deleteByUserId(userId)
-                LiftrixResult.success(Unit)
+                Result.success(Unit)
             }
         } catch (e: Exception) {
-            LiftrixResult.failure(
+            Result.failure(
                 LiftrixError.DatabaseError(
                     "Failed to clear guest session for user $userId: ${e.message}",
                     isRecoverable = true,
@@ -76,10 +76,10 @@ class GuestSessionRepositoryImpl @Inject constructor(
         return try {
             withContext(Dispatchers.IO) {
                 val entities = guestSessionDao.getActiveGuestSessions()
-                LiftrixResult.success(entities.toDomain())
+                Result.success(entities.toDomain())
             }
         } catch (e: Exception) {
-            LiftrixResult.failure(
+            Result.failure(
                 LiftrixError.DatabaseError(
                     "Failed to get active guest sessions: ${e.message}",
                     isRecoverable = true,
@@ -95,10 +95,10 @@ class GuestSessionRepositoryImpl @Inject constructor(
                 // Consider sessions inactive if no activity for 7 days
                 val cutoffTime = Instant.now().minusSeconds(7 * 24 * 60 * 60)
                 val deletedCount = guestSessionDao.deleteInactiveSessions(cutoffTime)
-                LiftrixResult.success(deletedCount)
+                Result.success(deletedCount)
             }
         } catch (e: Exception) {
-            LiftrixResult.failure(
+            Result.failure(
                 LiftrixError.DatabaseError(
                     "Failed to cleanup expired sessions: ${e.message}",
                     isRecoverable = true,

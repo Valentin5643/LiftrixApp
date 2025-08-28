@@ -62,7 +62,7 @@ class UserSearchRepositoryImpl @Inject constructor(
 ) : UserSearchRepository {
 
     companion object {
-        private const val USERS_PUBLIC_COLLECTION = "users_public"
+        private const val USERS_PUBLIC_COLLECTION = "social_profiles"
         private const val USER_SEARCH_CACHE_COLLECTION = "user_search_cache"
         private const val QR_CODE_COLLECTION = "qr_codes"
         private const val PROFILE_VIEWS_COLLECTION = "profile_views"
@@ -147,12 +147,26 @@ class UserSearchRepositoryImpl @Inject constructor(
                 trackProfileView(userId, viewerId)
             }
             
-            // Parse comprehensive profile data
+            // Parse comprehensive profile data with enhanced profile image handling
             val memberSinceStr = data["memberSince"] as? String
             val lastActiveAtStr = data["lastActiveAt"] as? String
             val fitnessGoalsData = data["fitnessGoals"] as? List<String> ?: emptyList()
             val equipmentData = data["availableEquipment"] as? List<String> ?: emptyList()
             val achievementsData = data["publicAchievements"] as? List<Map<String, Any>> ?: emptyList()
+            
+            // Handle profile image URL with multiple possible field names for backward compatibility
+            val profileImageUrl = (data["profileImageUrl"] as? String) 
+                ?: (data["photoUrl"] as? String)
+                ?: (data["profilePhotoUrl"] as? String)
+                ?: (data["imageUrl"] as? String)
+            
+            // Debug logging for profile image resolution
+            Timber.d("Profile image resolution for $userId: " +
+                "profileImageUrl='${data["profileImageUrl"]}', " +
+                "photoUrl='${data["photoUrl"]}', " +
+                "profilePhotoUrl='${data["profilePhotoUrl"]}', " +
+                "imageUrl='${data["imageUrl"]}', " +
+                "resolved='$profileImageUrl'")
             
             // Get connection status and mutual connections
             val connectionStatus = calculateConnectionStatus(userId, viewerId)
@@ -242,7 +256,7 @@ class UserSearchRepositoryImpl @Inject constructor(
                 userId = userId,
                 username = data["username"] as? String ?: "",  // Don't generate temporary username
                 displayName = data["displayName"] as? String,
-                profileImageUrl = data["profileImageUrl"] as? String,
+                profileImageUrl = profileImageUrl,  // Use resolved profile image URL
                 coverImageUrl = data["coverImageUrl"] as? String,
                 bio = data["bio"] as? String,
                 age = data["age"] as? Int,
@@ -500,7 +514,7 @@ class UserSearchRepositoryImpl @Inject constructor(
             // Generated search tokens for query matching
             
             val searchQuery = firestore.collection(USER_SEARCH_CACHE_COLLECTION)
-                .whereEqualTo("isPublic", true)
+                .whereEqualTo("isSearchable", true)
                 .whereArrayContainsAny("searchTokens", searchTokens)
                 .orderBy("lastActiveAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
                 .limit(MAX_SEARCH_RESULTS.toLong())
@@ -525,7 +539,10 @@ class UserSearchRepositoryImpl @Inject constructor(
                 UserSearchResult(
                     userId = userId,
                     displayName = displayName,
-                    profileImageUrl = data["profileImageUrl"] as? String,
+                    profileImageUrl = (data["profileImageUrl"] as? String) 
+                        ?: (data["photoUrl"] as? String)
+                        ?: (data["profilePhotoUrl"] as? String)
+                        ?: (data["imageUrl"] as? String),
                     bio = data["bio"] as? String,
                     fitnessLevel = determineFitnessLevelFromData(data),
                     totalWorkouts = (data["totalWorkouts"] as? Number)?.toInt() ?: 0,
@@ -562,7 +579,7 @@ class UserSearchRepositoryImpl @Inject constructor(
             // Performing basic Firebase search
             
             val searchQuery = firestore.collection(USERS_PUBLIC_COLLECTION)
-                .whereEqualTo("isPublic", true)
+                .whereEqualTo("isSearchable", true)
                 .limit(MAX_SEARCH_RESULTS.toLong())
 
             // Executing basic search query
@@ -597,7 +614,10 @@ class UserSearchRepositoryImpl @Inject constructor(
                 UserSearchResult(
                     userId = userId,
                     displayName = displayName,
-                    profileImageUrl = data["profileImageUrl"] as? String,
+                    profileImageUrl = (data["profileImageUrl"] as? String) 
+                        ?: (data["photoUrl"] as? String)
+                        ?: (data["profilePhotoUrl"] as? String)
+                        ?: (data["imageUrl"] as? String),
                     bio = data["bio"] as? String,
                     fitnessLevel = determineFitnessLevelFromData(data),
                     totalWorkouts = (data["totalWorkouts"] as? Number)?.toInt() ?: 0,

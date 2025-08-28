@@ -124,7 +124,8 @@ fun ProfileEditScreen(
             ) {
                 SecondaryActionButton(
                     text = "Cancel",
-                    onClick = onNavigateBack
+                    onClick = onNavigateBack,
+                    leadingIcon = Icons.Default.Block
                 )
                 PrimaryActionButton(
                     text = "Save",
@@ -160,7 +161,8 @@ fun ProfileEditScreen(
                             }
                         }
                     },
-                    enabled = !uiState.isLoading
+                    enabled = !uiState.isLoading,
+                    leadingIcon = Icons.Default.Save
                 )
             }
         }

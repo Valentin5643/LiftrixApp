@@ -5,7 +5,6 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 
 /**
- * 🔥 NEW: Unified workout session model that eliminates dual state management
  * 
  * This replaces the complex ActiveWorkoutSession + Workout dual system with
  * a single, comprehensive model that handles both active and completed states.
@@ -81,8 +80,6 @@ data class UnifiedWorkoutSession(
 
         /**
          * Creates a new session from a template
-         * 🔥 FIX: Preserves template conversion while ensuring session-scoped exercises
-         * 🔥 ENHANCED: Stores original template data for proper change detection
          */
         fun fromTemplate(
             userId: String,
@@ -92,12 +89,12 @@ data class UnifiedWorkoutSession(
             val sessionName = customName?.trim()?.takeIf { it.isNotBlank() }
                 ?: "${template.name} - ${LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("MMM d"))}"
 
-            // 🔥 KEY FIX: Convert template exercises to session-scoped exercises
+            // Convert template exercises to session-scoped exercises
             val sessionExercises = template.exercises.mapIndexed { index, templateExercise ->
                 SessionExercise.fromTemplate(templateExercise).copy(orderIndex = index)
             }
 
-            // 🔥 CRITICAL FIX: Store original template metadata for change detection
+            // Store original template metadata for change detection
             val metadata = mapOf(
                 "originalExerciseCount" to template.exercises.size.toString(),
                 "originalTemplateName" to template.name,
@@ -264,7 +261,6 @@ data class UnifiedWorkoutSession(
     }
 
     /**
-     * 🔥 KEY FIX: Adds exercise to session-scoped list only
      */
     fun addExercise(exercise: SessionExercise): UnifiedWorkoutSession {
         require(sessionStatus != SessionStatus.COMPLETED) { "Cannot modify completed session" }
@@ -281,7 +277,6 @@ data class UnifiedWorkoutSession(
     }
 
     /**
-     * 🔥 KEY FIX: Removes exercise from session-scoped list only
      */
     fun removeExercise(exerciseId: ExerciseId): UnifiedWorkoutSession {
         require(sessionStatus != SessionStatus.COMPLETED) { "Cannot modify completed session" }
@@ -380,7 +375,6 @@ data class UnifiedWorkoutSession(
     fun getTotalSetsCount(): Int = exercises.sumOf { it.sets.size }
 
     /**
-     * 🔥 IMPROVED: Converts to completed workout for history with better error handling
      * No more complex dual conversion - session IS the workout
      */
     fun toCompletedWorkout(): Workout {
@@ -391,14 +385,10 @@ data class UnifiedWorkoutSession(
                 sessionExercise.toCompletedExercise()
             } catch (e: Exception) {
                 // Log error but don't crash entire conversion
-                timber.log.Timber.e(e, "🔥 WORKOUT-CONVERSION: Failed to convert exercise: ${sessionExercise.name}")
                 null
             }
         }
 
-        timber.log.Timber.d("🔥 WORKOUT-CONVERSION: Converting session to workout")
-        timber.log.Timber.d("🔥 WORKOUT-CONVERSION: Session: $name with ${exercises.size} exercises")
-        timber.log.Timber.d("🔥 WORKOUT-CONVERSION: Converted: ${completedExercises.size} exercises successfully")
 
         return Workout(
             id = WorkoutId(id.value), // Keep session ID for workout tracking

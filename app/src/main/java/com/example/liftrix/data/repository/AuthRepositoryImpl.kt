@@ -26,7 +26,8 @@ import javax.inject.Singleton
 @Singleton
 class AuthRepositoryImpl @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val syncCoordinator: com.example.liftrix.sync.SyncCoordinator
 ) : AuthRepository {
 
     override val currentUser: Flow<User?> = callbackFlow {
@@ -45,16 +46,9 @@ class AuthRepositoryImpl @Inject constructor(
                     }
                 }
                 
-                // 🔥 WORKOUT-ASSOCIATION-DEBUG: Track when auth state changes
-                Timber.d("🔥 AUTH-STATE-DEBUG: Firebase auth state changed")
-                Timber.d("🔥 AUTH-STATE-DEBUG:   - User ID: ${user?.uid}")
-                Timber.d("🔥 AUTH-STATE-DEBUG:   - Display Name: ${user?.displayName}")
-                Timber.d("🔥 AUTH-STATE-DEBUG:   - Email: ${user?.email}")
-                Timber.d("🔥 AUTH-STATE-DEBUG:   - Has emitted before: $hasEmitted")
                 
                 trySend(user)
                 hasEmitted = true
-                Timber.d("Auth state emitted: ${if (user != null) "User(${user.uid})" else "null"}")
             } catch (exception: Exception) {
                 Timber.e(exception, "Error creating User from Firebase user in auth state listener")
                 // Send null on error to prevent infinite loading, but only if we haven't emitted yet
@@ -100,13 +94,20 @@ class AuthRepositoryImpl @Inject constructor(
                 // Create profile if it doesn't exist (handles users created before fix)
                 Timber.w("User profile not found, creating one for uid: ${user.uid}")
                 createUserProfile(user).fold(
-                    onSuccess = { Timber.d("Successfully created missing user profile") },
-                    onFailure = { error -> Timber.e("Failed to create missing user profile: $error") }
+                    onSuccess = {
+                        Timber.i("User profile created successfully for uid: ${user.uid}")
+                    },
+                    onFailure = { error ->
+                        Timber.e("Failed to create missing user profile: $error")
+                    }
                 )
             } else {
                 // Update last sign in time in Firestore
                 updateLastSignInTime(user.uid)
             }
+            
+            // Trigger bidirectional sync on login to fetch remote workouts
+            triggerLoginSync(user.uid)
             
             user
         }
@@ -157,6 +158,9 @@ class AuthRepositoryImpl @Inject constructor(
                 Timber.e(lastError, "Failed to create user profile after 3 attempts, but auth account exists")
             }
             
+            // Trigger bidirectional sync on signup to initialize user data
+            triggerLoginSync(user.uid)
+            
             user
         }
     }
@@ -179,6 +183,9 @@ class AuthRepositoryImpl @Inject constructor(
                 updateLastSignInTime(user.uid)
             }
             
+            // Trigger bidirectional sync on Google sign-in
+            triggerLoginSync(user.uid)
+            
             user
         }
     }
@@ -195,6 +202,9 @@ class AuthRepositoryImpl @Inject constructor(
             
             // Create anonymous user profile in Firestore
             createUserProfile(user).getOrThrow()
+            
+            // Trigger bidirectional sync on anonymous sign-in
+            triggerLoginSync(user.uid)
             
             user
         }
@@ -213,7 +223,6 @@ class AuthRepositoryImpl @Inject constructor(
             errorMapper = { throwable -> FirebaseErrorMapper.handleFirebaseError(throwable) }
         ) {
             firebaseAuth.sendPasswordResetEmail(email).await()
-            Timber.d("Password reset email sent to: $email")
         }
     }
 
@@ -258,7 +267,6 @@ class AuthRepositoryImpl @Inject constructor(
                 return null
             }
             
-            Timber.d("Auth token refreshed for user ${currentUser.uid}")
             currentUser.uid
         } catch (e: Exception) {
             Timber.e(e, "Error refreshing auth token")
@@ -334,7 +342,6 @@ class AuthRepositoryImpl @Inject constructor(
             // Commit the batch
             batch.commit().await()
             
-            Timber.d("User profile created successfully for uid: ${user.uid}")
         }
     }
 
@@ -365,14 +372,12 @@ class AuthRepositoryImpl @Inject constructor(
                 "updated_at" to com.google.firebase.Timestamp.now()
             )
             
-            Timber.d("Updating last sign-in time for user $uid")
             
             firestore.collection("users")
                 .document(uid)
                 .set(updateMap, com.google.firebase.firestore.SetOptions.merge())
                 .await()
                 
-            Timber.d("Successfully updated last sign-in time for user $uid")
         } catch (exception: Exception) {
             Timber.e(exception, "CRITICAL: Failed to update last sign-in time for user $uid")
             
@@ -457,7 +462,6 @@ class AuthRepositoryImpl @Inject constructor(
             val credential = EmailAuthProvider.getCredential(email, password)
             user.reauthenticate(credential).await()
             
-            Timber.d("User reauthenticated successfully: ${user.uid}")
         }
     }
 
@@ -521,7 +525,6 @@ class AuthRepositoryImpl @Inject constructor(
                 // Don't fail the entire operation if Firestore update fails
             }
             
-            Timber.d("Email updated successfully from '$oldEmail' to '$newEmail' for user: ${user.uid}")
         }
     }
 
@@ -601,7 +604,6 @@ class AuthRepositoryImpl @Inject constructor(
                 // Don't fail the entire operation if Firestore update fails
             }
             
-            Timber.d("Password updated successfully for user: ${user.uid}")
         }
     }
 
@@ -681,7 +683,6 @@ class AuthRepositoryImpl @Inject constructor(
             try {
                 // Commit the batch delete
                 batch.commit().await()
-                Timber.d("Successfully deleted Firestore data for user: $userId")
             } catch (firestoreError: Exception) {
                 Timber.e(firestoreError, "Failed to delete Firestore data, but proceeding with auth account deletion")
                 // Don't fail the entire operation if Firestore cleanup fails
@@ -690,7 +691,41 @@ class AuthRepositoryImpl @Inject constructor(
             // Finally, delete the Firebase Auth account
             user.delete().await()
             
-            Timber.d("Account deleted successfully for user: $userId")
         }
     }
-} 
+    
+    /**
+     * This is the critical fix that ensures workouts are never lost when switching devices.
+     */
+    private fun triggerLoginSync(userId: String) {
+        try {
+            
+            // Use coroutine scope to avoid blocking the login process
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()).launch {
+                try {
+                    // Schedule periodic sync for this user (if not already scheduled)
+                    syncCoordinator.schedulePeriodicSync(userId)
+                    
+                    // Trigger immediate bidirectional sync to fetch remote data
+                    val syncResult = syncCoordinator.triggerImmediateSync(userId)
+                    
+                    syncResult.fold(
+                        onSuccess = {
+                        },
+                        onFailure = { error ->
+                            Timber.w("[LOGIN-SYNC] ⚠️ Login sync failed, but user can still proceed: $error")
+                            Timber.w("[LOGIN-SYNC]   - User will need to manually refresh or sync will retry in background")
+                        }
+                    )
+                } catch (e: Exception) {
+                    Timber.e(e, "[LOGIN-SYNC] ❌ Error during login sync for user: $userId")
+                    // Don't fail login if sync fails - it will retry in background
+                }
+            }
+            
+        } catch (e: Exception) {
+            Timber.e(e, "[LOGIN-SYNC] ❌ Failed to initiate login sync for user: $userId")
+            // Don't fail the login process if sync setup fails
+        }
+    }
+}

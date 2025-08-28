@@ -364,7 +364,10 @@ private fun EditWorkoutContent(
                                 
                                 val updatedSet = updatedSets[setIndex].copy(
                                     weight = weightValue?.let { com.example.liftrix.domain.model.Weight.fromKilograms(it) },
-                                    reps = repsValue?.let { com.example.liftrix.domain.model.Reps(it) },
+                                    reps = repsValue?.let { 
+                                        val safeReps = it.coerceIn(0, 1000)
+                                        com.example.liftrix.domain.model.Reps(safeReps)
+                                    },
                                     completedAt = if (setData.isCompleted) java.time.Instant.now() else null
                                 )
                                 // Use the event-driven system instead of direct method call

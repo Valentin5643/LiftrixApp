@@ -637,8 +637,8 @@ class UserProfileViewModel @Inject constructor(
             com.example.liftrix.domain.model.social.ConnectionStatus.PENDING_RECEIVED -> FollowStatus.PENDING_RECEIVED
             com.example.liftrix.domain.model.social.ConnectionStatus.BLOCKED -> FollowStatus.BLOCKED
             com.example.liftrix.domain.model.social.ConnectionStatus.NONE -> FollowStatus.NONE
-            com.example.liftrix.domain.model.social.ConnectionStatus.MUTUAL_FOLLOW -> FollowStatus.FOLLOWING
             com.example.liftrix.domain.model.social.ConnectionStatus.GYM_BUDDY -> FollowStatus.FOLLOWING
+            com.example.liftrix.domain.model.social.ConnectionStatus.MUTUAL_FOLLOW -> FollowStatus.FOLLOWING
             com.example.liftrix.domain.model.social.ConnectionStatus.SELF -> FollowStatus.NONE // Own profile, no follow status
         }
     }

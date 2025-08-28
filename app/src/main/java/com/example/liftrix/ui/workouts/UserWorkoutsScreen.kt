@@ -182,6 +182,12 @@ fun UserWorkoutsScreen(
                                     LiftrixRoute.CreateWorkout(folderId = null)
                                 )
                             },
+                            onWorkoutClick = {
+                                // Navigate to workout details
+                                navController.navigate(
+                                    LiftrixRoute.WorkoutDetails(workoutId = post.workoutId)
+                                )
+                            },
                             onEditWorkout = {
                                 // Navigate to edit workout
                                 navController.navigate(

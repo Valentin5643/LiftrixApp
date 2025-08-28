@@ -52,12 +52,28 @@ class UserPublicSyncWorker @AssistedInject constructor(
     private val gson: Gson
 ) : CoroutineWorker(context, params) {
 
+    // 🔥 FIX: Fallback constructor for WorkManager reflection when Hilt factory fails
+    // Uses EntryPoint pattern for proper dependency resolution
+    constructor(context: Context, params: WorkerParameters) : this(
+        context = context,
+        params = params,
+        userAccountDao = WorkerServiceLocator.getUserPublicSyncDependencies(context).userAccountDao,
+        userProfileDao = WorkerServiceLocator.getUserPublicSyncDependencies(context).userProfileDao,
+        workoutDao = WorkerServiceLocator.getUserPublicSyncDependencies(context).workoutDao,
+        firestore = WorkerServiceLocator.getUserPublicSyncDependencies(context).firestore,
+        auth = WorkerServiceLocator.getUserPublicSyncDependencies(context).auth,
+        gson = WorkerServiceLocator.getUserPublicSyncDependencies(context).gson
+    ) {
+        Timber.w("⚠️ UserPublicSyncWorker using FALLBACK constructor - Hilt factory failed!")
+        Timber.w("⚠️ Worker will function but this indicates assisted factory generation issue")
+    }
+
     companion object {
         const val WORK_NAME = "user_public_sync_work"
         const val KEY_SYNC_COUNT = "sync_count"
         const val KEY_ERROR_MESSAGE = "error_message"
         private const val MAX_RETRY_COUNT = 3
-        private const val USERS_PUBLIC_COLLECTION = "users_public"
+        private const val USERS_PUBLIC_COLLECTION = "social_profiles"
         private const val USER_SEARCH_CACHE_COLLECTION = "user_search_cache"
         
         fun createWorkRequest(userId: String, forceSync: Boolean = false): OneTimeWorkRequest {

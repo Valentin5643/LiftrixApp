@@ -180,7 +180,6 @@ class ChatRepositoryImpl @Inject constructor(
         val cutoffTimestamp = System.currentTimeMillis() - (prefs.autoClearDays * 24 * 60 * 60 * 1000L)
         val deletedCount = chatHistoryDao.deleteOldMessages(userId, cutoffTimestamp)
         
-        Timber.d("Deleted $deletedCount old messages for user $userId")
         deletedCount
     }
     
@@ -212,7 +211,6 @@ class ChatRepositoryImpl @Inject constructor(
         }
     ) {
         val deletedCount = chatHistoryDao.deleteConversation(userId, conversationId)
-        Timber.d("Deleted conversation $conversationId with $deletedCount messages")
         deletedCount
     }
     

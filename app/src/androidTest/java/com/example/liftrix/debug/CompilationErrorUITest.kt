@@ -39,7 +39,7 @@ class CompilationErrorUITest {
      * - FolderEditForms.kt (similar import issues)
      */
     @Test
-    fun `should fail to render CreateFolderDialog due to button import errors`() {
+    fun shouldFailToRenderCreateFolderDialogDueToButtonImportErrors() {
         // This test attempts to use the CreateFolderDialog component
         // which should fail due to missing button imports
         
@@ -87,7 +87,7 @@ class CompilationErrorUITest {
      * where dragOffset state management fails due to missing imports.
      */
     @Test  
-    fun `should fail to handle drag state due to type inference errors`() {
+    fun shouldFailToHandleDragStateDueToTypeInferenceErrors() {
         var compilationSucceeded = false
         
         try {
@@ -131,7 +131,7 @@ class CompilationErrorUITest {
      * - FolderDisplayComponents.kt:365 (estimatedDuration)
      */
     @Test
-    fun `should fail to display workout stats due to property access errors`() {
+    fun shouldFailToDisplayWorkoutStatsDueToPropertyAccessErrors() {
         var renderingSucceeded = false
         
         try {
@@ -182,7 +182,7 @@ class CompilationErrorUITest {
      * affect UI workflows that depend on this use case.
      */
     @Test
-    fun `should fail workflow due to use case compilation errors`() {
+    fun shouldFailWorkflowDueToUseCaseCompilationErrors() {
         var workflowSucceeded = false
         
         try {
@@ -221,7 +221,7 @@ class CompilationErrorUITest {
      * Validates that duplicate function definitions prevent proper UI component resolution.
      */
     @Test
-    fun `should fail to resolve components due to function overload conflicts`() {
+    fun shouldFailToResolveComponentsDueToFunctionOverloadConflicts() {
         var resolutionSucceeded = false
         
         try {
@@ -267,7 +267,7 @@ class CompilationErrorUITest {
      * impact on UI rendering and user experience.
      */
     @Test
-    fun `should demonstrate complete UI failure due to combined compilation errors`() {
+    fun shouldDemonstrateCompleteUIFailureDueToCombinedCompilationErrors() {
         var uiRenderingSucceeded = false
         
         try {
@@ -316,7 +316,7 @@ class CompilationErrorUITest {
      * the broken build state and prevents false positives.
      */
     @Test
-    fun `should validate that UI tests correctly identify broken build state`() {
+    fun shouldValidateThatUITestsCorrectlyIdentifyBrokenBuildState() {
         // This test ensures our testing approach is sound
         
         val expectedErrors = listOf(

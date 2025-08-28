@@ -13,6 +13,35 @@ plugins {
     id("kotlin-parcelize")
 }
 
+// Dependency resolution strategies for deterministic builds
+configurations.all {
+    resolutionStrategy {
+        // Force specific versions to avoid conflicts - aligned with project Kotlin version
+        force("org.jetbrains.kotlin:kotlin-stdlib:2.0.21")
+        force("org.jetbrains.kotlin:kotlin-stdlib-common:2.0.21")
+        force("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+        force("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+        
+        // Ensure consistent AndroidX versions
+        force("androidx.lifecycle:lifecycle-runtime:2.8.7")
+        force("androidx.lifecycle:lifecycle-viewmodel:2.8.7")
+        force("androidx.lifecycle:lifecycle-livedata:2.8.7")
+        force("androidx.collection:collection:1.5.0")
+        
+        // Prefer AndroidX over support libraries
+        preferProjectModules()
+        
+        // Cache for reproducible builds
+        cacheDynamicVersionsFor(0, "seconds")
+        cacheChangingModulesFor(0, "seconds")
+    }
+    
+    // Exclude duplicate classes
+    exclude(group = "com.intellij", module = "annotations")
+    exclude(group = "org.checkerframework", module = "checker-compat-qual")
+    exclude(group = "com.google.errorprone", module = "error_prone_annotations")
+}
+
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
@@ -37,7 +66,7 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
 android {
     namespace = "com.example.liftrix"
     compileSdk = 35
-    buildToolsVersion = "34.0.0"
+    buildToolsVersion = "35.0.0"  // Aligned with compileSdk
 
     defaultConfig {
         applicationId = "com.example.liftrix"
@@ -51,12 +80,36 @@ android {
         // Build optimizations
         vectorDrawables.useSupportLibrary = true
         multiDexEnabled = false
+        
+        // Native library configuration - specify supported ABIs
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+        }
+    }
+    
+    // ABI splits configuration for optimized APK size per architecture
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            isUniversalApk = true  // Also generate a universal APK with all ABIs
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("C:\\Users\\Administrator\\Liftrix\\liftrix-release.keystore")
+            storePassword = project.findProperty("KEYSTORE_PASSWORD") as String? ?: ""
+            keyAlias = "liftrix"
+            keyPassword = project.findProperty("KEY_PASSWORD") as String? ?: ""
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false  // Temporarily disabled to isolate issue
+            isShrinkResources = false  // Must also disable resource shrinking
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -73,6 +126,7 @@ android {
             
             // Secure OAuth configuration from properties
             buildConfigField("String", "GOOGLE_CLIENT_ID", "\"${project.findProperty("GOOGLE_CLIENT_ID_RELEASE") ?: ""}\"")
+            signingConfig = signingConfigs.getByName("release")  // ADD THIS LINE
         }
         
         debug {
@@ -124,6 +178,45 @@ android {
         // Optimize lint for faster builds
         checkDependencies = false
         checkGeneratedSources = false
+    }
+
+    packaging {
+        resources {
+            excludes += listOf(
+                "META-INF/LICENSE.md",
+                "META-INF/LICENSE-notice.md",
+                "META-INF/NOTICE.md",
+                "META-INF/DEPENDENCIES",
+                "META-INF/AL2.0",
+                "META-INF/LGPL2.1",
+                "META-INF/*.kotlin_module",
+                "META-INF/versions/9/previous-compilation-data.bin",
+                // Exclude duplicate Kotlin metadata
+                "kotlin/**",
+                "kotlinx/**",
+                // Exclude system libraries that shouldn't be bundled
+                "lib/*/libdigitalkey.so",
+                "lib/*/libtimesync.so",
+                "META-INF/com.android.support/**",
+                "META-INF/androidx/**"
+            )
+        }
+        
+        // Native library packaging configuration
+        jniLibs {
+            // Keep debug symbols for better crash reports
+            keepDebugSymbols += listOf("**/*.so")
+            
+            // Exclude system-provided native libraries
+            excludes += listOf(
+                "**/libandroid.so",
+                "**/liblog.so",
+                "**/libc.so",
+                "**/libm.so",
+                "**/libdl.so",
+                "**/libz.so"
+            )
+        }
     }
 }
 

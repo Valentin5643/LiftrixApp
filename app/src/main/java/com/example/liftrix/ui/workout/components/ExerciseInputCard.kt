@@ -668,7 +668,11 @@ private fun createExerciseSetFromInputs(
     rpeInput: String,
     notesInput: String
 ): ExerciseSet? {
-    val reps = repsInput.toIntOrNull()?.let { Reps(it) }
+    val reps = repsInput.toIntOrNull()?.let { 
+        // Clamp input to valid range to prevent crashes
+        val safeReps = it.coerceIn(0, 1000) 
+        Reps(safeReps)
+    }
     val weight = weightInput.toDoubleOrNull()?.let { Weight.fromKilograms(it) }
     val minutes = timeInputMinutes.toIntOrNull() ?: 0
     val seconds = timeInputSeconds.toIntOrNull() ?: 0

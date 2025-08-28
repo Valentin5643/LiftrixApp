@@ -10,6 +10,8 @@ import com.example.liftrix.domain.model.FitnessLevel
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.social.SearchUsersUseCase
 import com.example.liftrix.domain.usecase.social.SearchUsersRequest
+import com.example.liftrix.domain.usecase.social.FollowUserUseCase
+import com.example.liftrix.domain.usecase.social.FollowAction
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
@@ -34,6 +36,7 @@ import javax.inject.Inject
 @HiltViewModel
 class UserSearchViewModel @Inject constructor(
     private val searchUsersUseCase: SearchUsersUseCase,
+    private val followUserUseCase: FollowUserUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<UserSearchUiState, UserSearchEvent>(errorHandler) {
 
@@ -73,6 +76,9 @@ class UserSearchViewModel @Inject constructor(
             is UserSearchEvent.SelectUser -> {
                 // This event is handled by the UI navigation
                 Timber.d("User selected: ${event.userId}")
+            }
+            is UserSearchEvent.FollowUser -> {
+                handleFollowAction(event.userId)
             }
         }
     }
@@ -235,6 +241,61 @@ class UserSearchViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Handles follow/unfollow actions for users in search results
+     */
+    fun handleFollowAction(targetUserId: String) {
+        val currentResults = _uiState.value.searchResults
+        val user = currentResults.find { it.userId == targetUserId } ?: return
+        
+        val action = when (user.connectionStatus) {
+            com.example.liftrix.domain.model.social.ConnectionStatus.NONE -> FollowAction.FOLLOW
+            com.example.liftrix.domain.model.social.ConnectionStatus.PENDING_SENT -> FollowAction.CANCEL
+            com.example.liftrix.domain.model.social.ConnectionStatus.PENDING_RECEIVED -> FollowAction.ACCEPT
+            com.example.liftrix.domain.model.social.ConnectionStatus.MUTUAL_FOLLOW -> FollowAction.UNFOLLOW
+            else -> return // Don't handle other statuses in search
+        }
+
+        executeUseCase(
+            useCase = {
+                followUserUseCase(
+                    targetUserId = targetUserId,
+                    action = action,
+                    context = "SEARCH_RESULT"
+                )
+            },
+            onSuccess = { followStatus ->
+                // Update the user's connection status in search results
+                val newConnectionStatus = when (followStatus.name) {
+                    "NONE" -> com.example.liftrix.domain.model.social.ConnectionStatus.NONE
+                    "PENDING_SENT" -> com.example.liftrix.domain.model.social.ConnectionStatus.PENDING_SENT
+                    "PENDING_RECEIVED" -> com.example.liftrix.domain.model.social.ConnectionStatus.PENDING_RECEIVED
+                    "FOLLOWING" -> com.example.liftrix.domain.model.social.ConnectionStatus.MUTUAL_FOLLOW
+                    "BLOCKED" -> com.example.liftrix.domain.model.social.ConnectionStatus.BLOCKED
+                    else -> com.example.liftrix.domain.model.social.ConnectionStatus.NONE
+                }
+                
+                updateState { currentState ->
+                    currentState.copy(
+                        searchResults = currentState.searchResults.map { result ->
+                            if (result.userId == targetUserId) {
+                                result.copy(connectionStatus = newConnectionStatus)
+                            } else {
+                                result
+                            }
+                        }
+                    )
+                }
+                
+                Timber.d("Follow action completed: $action -> $followStatus")
+            },
+            onError = { error ->
+                Timber.e("Follow action failed: ${error.message}")
+                // Error handling is managed by BaseViewModel
+            }
+        )
+    }
+
     companion object {
         private const val SEARCH_DEBOUNCE_MS = 300L
         private const val MIN_SEARCH_LENGTH = 2
@@ -303,6 +364,11 @@ sealed class UserSearchEvent : ViewModelEvent {
      * User selected from search results
      */
     data class SelectUser(val userId: String) : UserSearchEvent()
+    
+    /**
+     * Follow/unfollow action for user in search results
+     */
+    data class FollowUser(val userId: String) : UserSearchEvent()
 }
 
 /**

@@ -8,7 +8,6 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.workDataOf
 import androidx.work.ExistingWorkPolicy
 import androidx.work.Data
-import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.domain.repository.SyncStatusRepository
 import com.example.liftrix.domain.model.common.LiftrixResult
 import dagger.assisted.Assisted
@@ -57,11 +56,30 @@ class MasterSyncWorker @AssistedInject constructor(
     private val syncStatusRepository: SyncStatusRepository
 ) : BaseSyncWorker(context, params) {
 
+    // 🔧 HOTFIX: Fallback constructor for when Hilt factory generation fails
+    // This allows WorkManager to instantiate the worker via reflection
+    // TEMPORARY: Remove once Hilt assisted factories are confirmed working
+    constructor(context: Context, params: WorkerParameters) : this(
+        context,
+        params,
+        WorkerServiceLocator.getSyncStatusRepository(context)
+    ) {
+        Timber.w("⚠️ MasterSyncWorker using FALLBACK constructor - Hilt factory failed!")
+    }
+
+    init {
+        Timber.d("✅ MasterSyncWorker constructed with Hilt DI")
+    }
+
     override val workerName: String = "MasterSyncWorker"
     
-    // Get WorkManager from the provider to ensure proper initialization
+    // Get WorkManager instance directly (initialized manually in Application.onCreate)
     private val workManager: WorkManager
-        get() = WorkManagerProvider.getInstance(applicationContext)
+        get() {
+            val instance = WorkManager.getInstance(applicationContext)
+            Timber.v("MasterSyncWorker accessing WorkManager instance: $instance, factory: ${instance.configuration.workerFactory}")
+            return instance
+        }
 
     companion object {
         const val WORK_NAME = "master_sync_work"
@@ -204,6 +222,9 @@ class MasterSyncWorker @AssistedInject constructor(
     
     /**
      * Syncs a specific entity type and returns the result.
+     * 
+     * FIXED: Now properly enqueues work with unique names per user and entity type.
+     * The unique naming prevents work cancellation due to duplicate work names.
      */
     private suspend fun syncEntity(entityType: String, userId: String): SyncResult {
         return try {
@@ -220,16 +241,21 @@ class MasterSyncWorker @AssistedInject constructor(
                 }
             }
             
-            // Execute sync work synchronously using WorkManager
-            workManager.enqueueUniqueWork(
-                "master_${entityType}_sync_$userId",
-                ExistingWorkPolicy.REPLACE,
-                workRequest
-            )
+            // FIXED: Use unique work name that includes both entity type and userId
+            // This prevents work replacement when multiple users or rapid sync calls occur
+            val uniqueWorkName = "master_${entityType}_sync_${userId}_${System.currentTimeMillis()}"
             
-            // For this implementation, we'll assume success if no exception is thrown
-            // In a production implementation, you would want to wait for the work to complete
-            // and get the actual result from the worker
+            // Execute sync work with KEEP policy to prevent cancellation
+            // KEEP ensures existing work completes before new work is enqueued
+            workManager.enqueueUniqueWork(
+                uniqueWorkName,
+                androidx.work.ExistingWorkPolicy.KEEP, // Changed from REPLACE to KEEP
+                workRequest
+            ).result.get() // Wait synchronously for the work to be enqueued
+            
+            // The sync was successfully enqueued
+            // Note: We're not waiting for completion, but at least ensuring enqueue succeeds
+            Timber.d("MasterSyncWorker: Successfully enqueued $entityType sync for user $userId")
             SyncResult(success = true, syncedCount = 1, failedCount = 0)
             
         } catch (e: Exception) {

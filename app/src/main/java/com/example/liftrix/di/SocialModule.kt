@@ -212,9 +212,10 @@ abstract class SocialModule {
             socialProfileDao: SocialProfileDao,
             blockedUserDao: BlockedUserDao,
             userProfileDao: UserProfileDao,
+            safeFollowDao: com.example.liftrix.data.local.dao.SafeFollowRelationshipDaoImpl,
             firestore: com.google.firebase.firestore.FirebaseFirestore
             ): FollowRepository {
-                return FollowRepositoryImpl(followRelationshipDao, followRequestDao, profileViewDao, socialProfileDao, blockedUserDao, userProfileDao, firestore)
+                return FollowRepositoryImpl(followRelationshipDao, followRequestDao, profileViewDao, socialProfileDao, blockedUserDao, userProfileDao, safeFollowDao, firestore)
             }
 
         @Provides
@@ -388,10 +389,5 @@ abstract class SocialModule {
             return EngagementMapper()
         }
 
-        @Provides
-        @Singleton
-        fun provideWorkoutPostMapper(): WorkoutPostMapper {
-                return WorkoutPostMapper()
-            }
         }
 }

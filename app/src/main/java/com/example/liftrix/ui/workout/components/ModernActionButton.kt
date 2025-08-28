@@ -1,11 +1,8 @@
 package com.example.liftrix.ui.workout.components
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -15,6 +12,11 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
@@ -23,22 +25,29 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import com.example.liftrix.ui.common.AccessibilityUtils.ensureMinimumTouchTarget
 import com.example.liftrix.ui.common.AccessibilityUtils.accessibilitySemantics
 import com.example.liftrix.ui.accessibility.AccessibilityEnhancements.enhancedAccessibilitySemantics
 import com.example.liftrix.ui.accessibility.AccessibilityEnhancements.ensureWcagTouchTarget
 import com.example.liftrix.ui.icons.LiftrixIcon
+import com.example.liftrix.ui.icons.CustomActionIcons
 import com.example.liftrix.ui.theme.LiftrixSpacing
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 
@@ -113,29 +122,35 @@ fun PrimaryActionButton(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             leadingIcon?.let { icon ->
-                val iconSymbol = when (icon) {
-                    Icons.Default.PlayArrow -> "▶"
-                    Icons.Default.Edit -> "✎"
-                    Icons.Default.Assignment -> "☰"
-                    Icons.Default.People -> "◉"
-                    Icons.Default.Add -> "+"
-                    Icons.Default.Save -> "⊡"
-                    Icons.Default.Refresh -> "↻"
-                    Icons.Default.PersonAdd -> "⊕"
-                    Icons.Default.Check -> "✓"
-                    Icons.Default.Block -> "⊗"
-                    Icons.Default.ExitToApp -> "↪"
-                    Icons.Default.MoreHoriz -> "⋯"
-                    Icons.Default.MoreVert -> "⋮"
-                    Icons.Default.Schedule -> "⏱"
-                    Icons.Default.Star -> "★"
-                    else -> "●"
+                // Professional text-based icons with bold, clear symbols
+                val iconText = when (icon) {
+                    CustomActionIcons.SignOut -> "→"     // Clean right arrow for exit
+                    Icons.Default.Edit -> "✎"            // Clean pencil for edit
+                    Icons.Default.Settings -> "⚙"        // Clean gear for settings
+                    Icons.Default.Add -> "+"             // Clean plus for add
+                    Icons.Default.Close -> "×"           // Clean multiplication sign for close
+                    Icons.Default.Refresh -> "↻"         // Clean circular arrow for refresh
+                    Icons.Default.PersonAdd -> "+"       // Clean plus for add person
+                    Icons.Default.Check -> "✓"           // Clean checkmark
+                    Icons.Default.Schedule -> "⏰"        // Clean clock for schedule
+                    Icons.Default.Favorite -> "♡"        // Clean heart for favorite
+                    Icons.Default.Block -> "⊗"           // Clean blocked symbol
+                    Icons.Default.Person -> "👤"          // Clean person symbol
+                    Icons.Default.Lock -> "🔒"           // Clean lock symbol
+                    Icons.Default.Star -> "★"            // Clean star
+                    Icons.Default.FitnessCenter -> "💪"   // Clean fitness symbol
+                    Icons.Default.Save -> "💾"           // Clean save symbol
+                    else -> "•"                          // Clean bullet as fallback
                 }
                 Text(
-                    text = iconSymbol,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = Color.White,
-                    modifier = Modifier.size(20.dp)
+                    text = iconText,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = LocalContentColor.current, // Match button's content color automatically
+                    modifier = Modifier
+                        .size(24.dp)
+                        .wrapContentSize(Alignment.Center),
+                    textAlign = TextAlign.Center
                 )
             }
             Text(
@@ -202,29 +217,35 @@ fun SecondaryActionButton(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             leadingIcon?.let { icon ->
-                val iconSymbol = when (icon) {
-                    Icons.Default.PlayArrow -> "▶"
-                    Icons.Default.Edit -> "✎"
-                    Icons.Default.Assignment -> "☰"
-                    Icons.Default.People -> "◉"
-                    Icons.Default.Add -> "+"
-                    Icons.Default.Save -> "⊡"
-                    Icons.Default.Refresh -> "↻"
-                    Icons.Default.PersonAdd -> "⊕"
-                    Icons.Default.Check -> "✓"
-                    Icons.Default.Block -> "⊗"
-                    Icons.Default.ExitToApp -> "↪"
-                    Icons.Default.MoreHoriz -> "⋯"
-                    Icons.Default.MoreVert -> "⋮"
-                    Icons.Default.Schedule -> "⏱"
-                    Icons.Default.Star -> "★"
-                    else -> "●"
+                // Professional text-based icons with bold, clear symbols
+                val iconText = when (icon) {
+                    CustomActionIcons.SignOut -> "→"     // Clean right arrow for exit
+                    Icons.Default.Edit -> "✎"            // Clean pencil for edit
+                    Icons.Default.Settings -> "⚙"        // Clean gear for settings
+                    Icons.Default.Add -> "+"             // Clean plus for add
+                    Icons.Default.Close -> "×"           // Clean multiplication sign for close
+                    Icons.Default.Refresh -> "↻"         // Clean circular arrow for refresh
+                    Icons.Default.PersonAdd -> "+"       // Clean plus for add person
+                    Icons.Default.Check -> "✓"           // Clean checkmark
+                    Icons.Default.Schedule -> "⏰"        // Clean clock for schedule
+                    Icons.Default.Favorite -> "♡"        // Clean heart for favorite
+                    Icons.Default.Block -> "⊗"           // Clean blocked symbol
+                    Icons.Default.Person -> "👤"          // Clean person symbol
+                    Icons.Default.Lock -> "🔒"           // Clean lock symbol
+                    Icons.Default.Star -> "★"            // Clean star
+                    Icons.Default.FitnessCenter -> "💪"   // Clean fitness symbol
+                    Icons.Default.Save -> "💾"           // Clean save symbol
+                    else -> "•"                          // Clean bullet as fallback
                 }
                 Text(
-                    text = iconSymbol,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = LiftrixColorsV2.Teal,
-                    modifier = Modifier.size(20.dp)
+                    text = iconText,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = LocalContentColor.current, // Match button's content color automatically
+                    modifier = Modifier
+                        .size(24.dp)
+                        .wrapContentSize(Alignment.Center),
+                    textAlign = TextAlign.Center
                 )
             }
             Text(
@@ -286,29 +307,35 @@ fun TertiaryActionButton(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             leadingIcon?.let { icon ->
-                val iconSymbol = when (icon) {
-                    Icons.Default.PlayArrow -> "▶"
-                    Icons.Default.Edit -> "✎"
-                    Icons.Default.Assignment -> "☰"
-                    Icons.Default.People -> "◉"
-                    Icons.Default.Add -> "+"
-                    Icons.Default.Save -> "⊡"
-                    Icons.Default.Refresh -> "↻"
-                    Icons.Default.PersonAdd -> "⊕"
-                    Icons.Default.Check -> "✓"
-                    Icons.Default.Block -> "⊗"
-                    Icons.Default.ExitToApp -> "↪"
-                    Icons.Default.MoreHoriz -> "⋯"
-                    Icons.Default.MoreVert -> "⋮"
-                    Icons.Default.Schedule -> "⏱"
-                    Icons.Default.Star -> "★"
-                    else -> "●"
+                // Professional text-based icons with bold, clear symbols
+                val iconText = when (icon) {
+                    CustomActionIcons.SignOut -> "→"     // Clean right arrow for exit
+                    Icons.Default.Edit -> "✎"            // Clean pencil for edit
+                    Icons.Default.Settings -> "⚙"        // Clean gear for settings
+                    Icons.Default.Add -> "+"             // Clean plus for add
+                    Icons.Default.Close -> "×"           // Clean multiplication sign for close
+                    Icons.Default.Refresh -> "↻"         // Clean circular arrow for refresh
+                    Icons.Default.PersonAdd -> "+"       // Clean plus for add person
+                    Icons.Default.Check -> "✓"           // Clean checkmark
+                    Icons.Default.Schedule -> "⏰"        // Clean clock for schedule
+                    Icons.Default.Favorite -> "♡"        // Clean heart for favorite
+                    Icons.Default.Block -> "⊗"           // Clean blocked symbol
+                    Icons.Default.Person -> "👤"          // Clean person symbol
+                    Icons.Default.Lock -> "🔒"           // Clean lock symbol
+                    Icons.Default.Star -> "★"            // Clean star
+                    Icons.Default.FitnessCenter -> "💪"   // Clean fitness symbol
+                    Icons.Default.Save -> "💾"           // Clean save symbol
+                    else -> "•"                          // Clean bullet as fallback
                 }
                 Text(
-                    text = iconSymbol,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = LiftrixColorsV2.Teal.copy(alpha = 0.8f),
-                    modifier = Modifier.size(20.dp)
+                    text = iconText,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = LocalContentColor.current, // Match button's content color automatically
+                    modifier = Modifier
+                        .size(24.dp)
+                        .wrapContentSize(Alignment.Center),
+                    textAlign = TextAlign.Center
                 )
             }
             Text(

@@ -55,6 +55,8 @@ abstract class BaseSyncWorker(
      * Main work function that handles cancellation properly
      */
     final override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        // Enhanced lifecycle logging for debugging worker instantiation
+        
         val userId = inputData.getString(KEY_USER_ID)
         
         if (userId.isNullOrEmpty()) {
@@ -103,51 +105,124 @@ abstract class BaseSyncWorker(
     protected abstract suspend fun performSync(userId: String): Result
 
     /**
-     * Handle sync errors with appropriate retry logic
-     * Can be overridden for custom error handling
+     * Handle sync errors with enhanced retry logic and exponential backoff
+     * 🔥 ENHANCED: Now includes more sophisticated retry strategies based on error type
      */
     protected open fun handleSyncError(error: Exception, userId: String): Result {
+        // Calculate exponential backoff delay
+        val backoffDelaySeconds = calculateBackoffDelay(runAttemptCount)
+        
         return when (error) {
             is com.google.firebase.firestore.FirebaseFirestoreException -> {
-                handleFirestoreError(error, userId)
+                handleFirestoreError(error, userId, backoffDelaySeconds)
             }
             is java.net.UnknownHostException,
             is java.net.SocketTimeoutException,
+            is java.net.ConnectException,
+            is javax.net.ssl.SSLException,
             is java.io.IOException -> {
-                // Network errors - retry with backoff
-                if (runAttemptCount < maxRetryCount) {
-                    Timber.d("$workerName: Network error, retrying... (attempt ${runAttemptCount + 1}/$maxRetryCount)")
-                    Result.retry()
-                } else {
-                    Result.failure(
-                        Data.Builder()
-                            .putString(KEY_ERROR_MESSAGE, "Network error after $maxRetryCount attempts: ${error.message}")
-                            .build()
-                    )
-                }
+                // Network errors - retry with enhanced backoff
+                handleNetworkError(error, userId, backoffDelaySeconds)
+            }
+            is java.util.concurrent.CancellationException,
+            is kotlinx.coroutines.CancellationException -> {
+                // Cancellation - don't retry, let WorkManager handle appropriately
+                Timber.d("$workerName: Operation cancelled by system for user $userId")
+                Result.failure(
+                    Data.Builder()
+                        .putString(KEY_ERROR_MESSAGE, "Operation cancelled")
+                        .putBoolean(KEY_CANCELLATION, true)
+                        .build()
+                )
+            }
+            is SecurityException,
+            is IllegalArgumentException,
+            is IllegalStateException -> {
+                // Logic errors - don't retry as they won't succeed
+                Timber.e(error, "$workerName: Logic error for user $userId - not retrying")
+                Result.failure(
+                    Data.Builder()
+                        .putString(KEY_ERROR_MESSAGE, "Logic error: ${error.message}")
+                        .build()
+                )
             }
             else -> {
-                // Other errors - retry if attempts remaining
-                if (runAttemptCount < maxRetryCount) {
-                    Timber.d("$workerName: Error occurred, retrying... (attempt ${runAttemptCount + 1}/$maxRetryCount)")
-                    Result.retry()
-                } else {
-                    Result.failure(
-                        Data.Builder()
-                            .putString(KEY_ERROR_MESSAGE, error.message ?: "Unknown error after $maxRetryCount attempts")
-                            .build()
-                    )
-                }
+                // Other errors - retry with backoff if attempts remaining
+                handleGenericError(error, userId, backoffDelaySeconds)
             }
+        }
+    }
+    
+    /**
+     * 🔥 NEW: Calculate exponential backoff delay with jitter to prevent thundering herd
+     */
+    private fun calculateBackoffDelay(attemptCount: Int): Long {
+        val baseDelaySeconds = 15L // Base delay from WorkManager configuration
+        val maxDelaySeconds = 300L // Cap at 5 minutes
+        
+        // Exponential backoff: base * 2^attemptCount
+        val exponentialDelay = (baseDelaySeconds * Math.pow(2.0, attemptCount.toDouble())).toLong()
+        
+        // Add jitter (±20%) to prevent all workers retrying at the same time
+        val jitterRange = (exponentialDelay * 0.2).toLong()
+        val jitter = (-jitterRange..jitterRange).random()
+        
+        return (exponentialDelay + jitter).coerceAtMost(maxDelaySeconds)
+    }
+    
+    /**
+     * 🔥 NEW: Enhanced network error handling with specific retry strategies
+     */
+    private fun handleNetworkError(error: Exception, userId: String, backoffDelaySeconds: Long): Result {
+        return if (runAttemptCount < maxRetryCount) {
+            val errorType = when (error) {
+                is java.net.UnknownHostException -> "DNS resolution failed"
+                is java.net.SocketTimeoutException -> "Connection timeout" 
+                is java.net.ConnectException -> "Connection refused"
+                is javax.net.ssl.SSLException -> "SSL/TLS error"
+                else -> "Network I/O error"
+            }
+            
+            Timber.d("$workerName: $errorType for user $userId, retrying in ${backoffDelaySeconds}s... (attempt ${runAttemptCount + 1}/$maxRetryCount)")
+            Result.retry()
+        } else {
+            Timber.e(error, "$workerName: Network error failed after $maxRetryCount attempts for user $userId")
+            Result.failure(
+                Data.Builder()
+                    .putString(KEY_ERROR_MESSAGE, "Network error after $maxRetryCount attempts: ${error.message}")
+                    .putInt("final_attempt_count", runAttemptCount)
+                    .build()
+            )
+        }
+    }
+    
+    /**
+     * 🔥 NEW: Enhanced generic error handling
+     */
+    private fun handleGenericError(error: Exception, userId: String, backoffDelaySeconds: Long): Result {
+        return if (runAttemptCount < maxRetryCount) {
+            Timber.d("$workerName: Generic error for user $userId, retrying in ${backoffDelaySeconds}s... (attempt ${runAttemptCount + 1}/$maxRetryCount): ${error.message}")
+            Result.retry()
+        } else {
+            Timber.e(error, "$workerName: Generic error failed after $maxRetryCount attempts for user $userId")
+            Result.failure(
+                Data.Builder()
+                    .putString(KEY_ERROR_MESSAGE, "Error after $maxRetryCount attempts: ${error.message ?: "Unknown error"}")
+                    .putInt("final_attempt_count", runAttemptCount)
+                    .putString("error_type", error.javaClass.simpleName)
+                    .build()
+            )
         }
     }
 
     /**
-     * Handle Firestore-specific errors
+     * Handle Firestore-specific errors with enhanced backoff information
+     * 🔥 ENHANCED: Now includes backoff delay information
      */
     private fun handleFirestoreError(
         error: com.google.firebase.firestore.FirebaseFirestoreException,
-        userId: String
+        userId: String,
+        backoffDelaySeconds: Long
     ): Result {
         return when (error.code) {
             com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED -> {
@@ -162,14 +237,22 @@ abstract class BaseSyncWorker(
             com.google.firebase.firestore.FirebaseFirestoreException.Code.UNAVAILABLE,
             com.google.firebase.firestore.FirebaseFirestoreException.Code.DEADLINE_EXCEEDED,
             com.google.firebase.firestore.FirebaseFirestoreException.Code.RESOURCE_EXHAUSTED -> {
-                // Transient errors - retry with backoff
+                // Transient errors - retry with enhanced backoff
                 if (runAttemptCount < maxRetryCount) {
-                    Timber.d("$workerName: Firestore transient error, retrying... (attempt ${runAttemptCount + 1}/$maxRetryCount)")
+                    val errorType = when (error.code) {
+                        com.google.firebase.firestore.FirebaseFirestoreException.Code.UNAVAILABLE -> "Service unavailable"
+                        com.google.firebase.firestore.FirebaseFirestoreException.Code.DEADLINE_EXCEEDED -> "Request timeout"
+                        com.google.firebase.firestore.FirebaseFirestoreException.Code.RESOURCE_EXHAUSTED -> "Rate limit exceeded"
+                        else -> "Transient error"
+                    }
+                    Timber.d("$workerName: Firestore $errorType for user $userId, retrying in ${backoffDelaySeconds}s... (attempt ${runAttemptCount + 1}/$maxRetryCount)")
                     Result.retry()
                 } else {
                     Result.failure(
                         Data.Builder()
                             .putString(KEY_ERROR_MESSAGE, "Firestore error after $maxRetryCount attempts: ${error.message}")
+                            .putInt("final_attempt_count", runAttemptCount)
+                            .putString("firestore_error_code", error.code.name)
                             .build()
                     )
                 }

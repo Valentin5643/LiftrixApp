@@ -47,22 +47,17 @@ class ExerciseLibrarySeedData @Inject constructor(
         withContext(Dispatchers.IO) {
             try {
                 val exerciseCount = database.exerciseLibraryDao().getExerciseCount()
-                Timber.d("🔥 SEED-DEBUG: Current exercise count: $exerciseCount")
                 
                 // Debug database state
                 if (exerciseCount == 0) {
-                    Timber.d("🔥 SEED-DEBUG: Database is empty - will populate with seed data")
                 } else {
-                    Timber.d("🔥 SEED-DEBUG: Database already has $exerciseCount exercises - skipping population")
                 }
                 
                 if (exerciseCount == 0) {
-                    Timber.d("Exercise library empty, populating with seed data")
                     populateExerciseLibrary(database)
                     
                     // Verify population succeeded
                     val newCount = database.exerciseLibraryDao().getExerciseCount()
-                    Timber.d("ExerciseLibrarySeedData: After population, exercise count: $newCount")
                     
                     if (newCount == 0) {
                         Timber.e("ExerciseLibrarySeedData: Population failed - no exercises were inserted")
@@ -70,13 +65,11 @@ class ExerciseLibrarySeedData @Inject constructor(
                         Timber.i("ExerciseLibrarySeedData: Successfully populated $newCount exercises")
                     }
                 } else {
-                    Timber.d("Exercise library already populated with $exerciseCount exercises")
                 }
             } catch (e: Exception) {
                 Timber.e(e, "Error checking exercise library count or populating")
                 // Try to populate anyway if count check failed
                 try {
-                    Timber.d("ExerciseLibrarySeedData: Attempting population after count check failure")
                     populateExerciseLibrary(database)
                 } catch (populateException: Exception) {
                     Timber.e(populateException, "ExerciseLibrarySeedData: Population also failed")
@@ -91,29 +84,23 @@ class ExerciseLibrarySeedData @Inject constructor(
     suspend fun populateExerciseLibrary(database: LiftrixDatabase) {
         withContext(Dispatchers.IO) {
             try {
-                Timber.d("ExerciseLibrarySeedData: Starting to load exercises from JSON")
                 val exercises = loadExercisesFromJson()
-                Timber.d("🔥 SEED-DEBUG: Loaded ${exercises.size} exercises from JSON")
                 
                 // Debug sample exercises
                 if (exercises.isNotEmpty()) {
                     exercises.take(3).forEach { exercise ->
-                        Timber.d("🔥 SEED-DEBUG: JSON exercise: ${exercise.name} (${exercise.id})")
                     }
                 }
                 
                 val entities = exercises.map { convertToEntity(it) }
-                Timber.d("🔥 SEED-DEBUG: Converted to ${entities.size} entities")
                 
                 // Debug sample entities
                 if (entities.isNotEmpty()) {
                     entities.take(3).forEach { entity ->
-                        Timber.d("🔥 SEED-DEBUG: Entity: ${entity.name} (${entity.id})")
                     }
                 }
                 
                 val insertResults = database.exerciseLibraryDao().insertExercises(entities)
-                Timber.d("🔥 SEED-DEBUG: Insert results: ${insertResults.size} IDs returned")
                 
                 // Verify actual insertion
                 val finalCount = database.exerciseLibraryDao().getExerciseCount()
@@ -136,11 +123,9 @@ class ExerciseLibrarySeedData @Inject constructor(
     private fun loadExercisesFromJson(): List<ExerciseJsonData> {
         return try {
             val jsonString = context.assets.open("exercise_library.json").bufferedReader().use { it.readText() }
-            Timber.d("🔥 JSON-DEBUG: Loaded JSON string length: ${jsonString.length}")
             
             val listType = object : TypeToken<List<ExerciseJsonData>>() {}.type
             val exercises = gson.fromJson<List<ExerciseJsonData>>(jsonString, listType)
-            Timber.d("🔥 JSON-DEBUG: Parsed ${exercises.size} exercises from JSON")
             
             exercises
         } catch (e: Exception) {

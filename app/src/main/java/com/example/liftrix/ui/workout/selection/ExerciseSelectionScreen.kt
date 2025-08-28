@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -33,10 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -76,44 +74,21 @@ fun ExerciseSelectionScreen(
     onNavigateBack: () -> Unit,
     onExerciseSelected: (ExerciseLibrary) -> Unit,
     onCreateCustomExercise: () -> Unit = {},
+    onManageCustomExercises: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: ExerciseSelectionViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     
-    Scaffold(
-        modifier = modifier,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Select Exercise",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Navigate back"
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
-        }
-    ) { paddingValues ->
+    Column(
+        modifier = modifier.fillMaxSize()
+    ) {
         
         if (uiState.isLoading) {
             // Show loading indicator
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
+                    .fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
@@ -132,8 +107,7 @@ fun ExerciseSelectionScreen(
             // Show error state
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
+                    .fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
@@ -188,12 +162,12 @@ fun ExerciseSelectionScreen(
                     }
                 },
                 onCreateCustomExercise = onCreateCustomExercise,
+                onManageCustomExercises = onManageCustomExercises,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
             )
         }
-    } // Close Scaffold
+    } // Close Column
 }
 
 @Composable
@@ -208,6 +182,7 @@ private fun ExerciseSelectionContent(
     onMuscleGroupSelectionChange: (Set<ExerciseCategory>) -> Unit,
     onExerciseSelected: (SearchableExercise) -> Unit,
     onCreateCustomExercise: () -> Unit,
+    onManageCustomExercises: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val focusRequester = remember { FocusRequester() }
@@ -313,20 +288,39 @@ private fun ExerciseSelectionContent(
                     fontWeight = FontWeight.Medium
                 )
                 
-                // Custom exercise creation button
-                OutlinedButton(
-                    onClick = onCreateCustomExercise,
-                    modifier = Modifier.semantics {
-                        contentDescription = "Create custom exercise"
-                    }
+                // Custom exercise buttons
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Custom")
+                    OutlinedButton(
+                        onClick = onCreateCustomExercise,
+                        modifier = Modifier.semantics {
+                            contentDescription = "Create custom exercise"
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("New")
+                    }
+                    
+                    OutlinedButton(
+                        onClick = { onManageCustomExercises() },
+                        modifier = Modifier.semantics {
+                            contentDescription = "Manage custom exercises"
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.List,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Manage")
+                    }
                 }
             }
         }
@@ -454,7 +448,8 @@ private fun ExerciseSelectionScreenPreview() {
             selectedMuscleGroups = emptySet(),
             onMuscleGroupSelectionChange = {},
             onExerciseSelected = {},
-            onCreateCustomExercise = {}
+            onCreateCustomExercise = {},
+            onManageCustomExercises = {}
         )
     }
 }

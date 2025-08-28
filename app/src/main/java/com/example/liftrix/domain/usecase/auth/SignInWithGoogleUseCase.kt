@@ -9,6 +9,7 @@ import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.UserAccountRepository
 import com.example.liftrix.domain.repository.ProfileRepository
 import com.example.liftrix.sync.UserPublicSyncWorker
+import com.example.liftrix.sync.FollowRelationshipSyncWorker
 import com.example.liftrix.domain.model.common.LiftrixResult
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.LocalDateTime
@@ -113,6 +114,9 @@ class SignInWithGoogleUseCase @Inject constructor(
                 
                 // ONBOARDING FIX: Sync profile data after successful Google login
                 syncOnboardingProfileAfterLogin(user.uid)
+                
+                // 🔥 FOLLOW-SYNC-FIX: Restore follow relationships after Google login
+                restoreFollowRelationshipsAfterLogin(user.uid)
                 
             } catch (e: Exception) {
                 android.util.Log.e("SignInWithGoogleUseCase", "Error handling UserAccount for Google sign-in", e)
@@ -220,6 +224,28 @@ class SignInWithGoogleUseCase @Inject constructor(
             } catch (e: Exception) {
                 android.util.Log.e("SignInWithGoogleUseCase", "Error syncing onboarding profile: ${e.message}")
                 // Non-critical failure - profile will sync eventually through background workers
+            }
+        }
+    }
+    
+    /**
+     * 🔥 FOLLOW-SYNC-FIX: Restores follow relationships from Firebase after Google login.
+     * This ensures that follow relationships persist even if local database was cleared during logout.
+     */
+    private suspend fun restoreFollowRelationshipsAfterLogin(userId: String) {
+        withContext(Dispatchers.IO) {
+            try {
+                android.util.Log.d("SignInWithGoogleUseCase", "🔥 FOLLOW-SYNC-FIX: Starting follow relationship restoration for user $userId")
+                
+                // Schedule follow relationship restoration work
+                val restoreWorkRequest = FollowRelationshipSyncWorker.createRestoreWorkRequest(userId)
+                workManager.enqueue(restoreWorkRequest)
+                
+                android.util.Log.d("SignInWithGoogleUseCase", "🔥 FOLLOW-SYNC-FIX: Queued follow relationship restoration work for user $userId")
+                
+            } catch (e: Exception) {
+                android.util.Log.e("SignInWithGoogleUseCase", "🔥 FOLLOW-SYNC-FIX: Error queuing follow restoration work: ${e.message}")
+                // Non-critical failure - follow relationships may be restored later by regular sync
             }
         }
     }

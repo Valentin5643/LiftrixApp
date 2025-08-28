@@ -40,12 +40,49 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
     private val postDao: WorkoutPostDao,
     private val firestore: FirebaseFirestore,
     private val gson: Gson
-) : CoroutineWorker(context, params) {
+) : BaseSyncWorker(context, params) {
+    
+    // 🔧 HOTFIX: Fallback constructor for when Hilt factory generation fails
+    // This allows WorkManager to instantiate the worker via reflection
+    // TEMPORARY: Remove once Hilt assisted factories are confirmed working
+    constructor(context: Context, params: WorkerParameters) : this(
+        context,
+        params,
+        WorkerServiceLocator.getWorkoutPostSyncDependencies(context).run {
+            Timber.w("⚠️ WorkoutPostSyncWorker using FALLBACK constructor - Hilt factory failed!")
+            return@run this
+        }
+    )
+    
+    // Helper constructor to unpack the dependency structure
+    private constructor(
+        context: Context,
+        params: WorkerParameters,
+        deps: WorkerServiceLocator.WorkoutPostSyncDependencies
+    ) : this(
+        context, params,
+        deps.postDao, deps.firestore, deps.gson
+    )
+
+    init {
+        val processName = getProcessName()
+        Timber.d("✅ WorkoutPostSyncWorker constructed with Hilt dependency injection in process: $processName")
+    }
+    
+    private fun getProcessName(): String {
+        return try {
+            val pid = android.os.Process.myPid()
+            val manager = applicationContext.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            manager.runningAppProcesses?.firstOrNull { it.pid == pid }?.processName ?: "unknown"
+        } catch (e: Exception) {
+            "error: ${e.message}"
+        }
+    }
+
+    override val workerName: String = "WorkoutPostSyncWorker"
 
     companion object {
         const val WORK_NAME = "workout_post_sync_work"
-        const val KEY_SYNC_COUNT = "sync_count"
-        const val KEY_ERROR_MESSAGE = "error_message"
         private const val MAX_RETRY_COUNT = 3
         
         fun createWorkRequest(userId: String, forceSync: Boolean = false): OneTimeWorkRequest {
@@ -65,64 +102,77 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
                     TimeUnit.SECONDS
                 )
                 .addTag("workout_post_sync")
+                .addTag("user_$userId") // 🔥 NEW: User-specific tagging for job management
                 .build()
         }
+        
+        /**
+         * 🔥 NEW: Get unique work name per user to prevent job conflicts
+         */
+        fun getWorkName(userId: String): String = "${WORK_NAME}_$userId"
     }
 
-    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+    override suspend fun performSync(userId: String): Result {
         try {
-            val userId = inputData.getString("userId") ?: return@withContext Result.failure(
-                Data.Builder()
-                    .putString(KEY_ERROR_MESSAGE, "User ID not provided")
-                    .build()
-            )
+            // Check cancellation before starting
+            checkCancellation()
             
             val forceSync = inputData.getBoolean("forceSync", false)
 
+            // 🔥 ENHANCED: Comprehensive logging for workout post sync
+            Timber.i("[POST-SYNC] 🔍 Starting WorkoutPostSyncWorker for user $userId (forceSync: $forceSync)")
+            
             val unsyncedPosts = postDao.getUnsyncedPosts(userId)
             
             if (unsyncedPosts.isEmpty() && !forceSync) {
-                Timber.d("No unsynced workout posts found for user $userId")
-                return@withContext Result.success(
+                Timber.i("[POST-SYNC] ✅ No unsynced workout posts found for user $userId")
+                return Result.success(
                     Data.Builder()
                         .putInt(KEY_SYNC_COUNT, 0)
                         .build()
                 )
             }
 
-            Timber.d("Syncing ${unsyncedPosts.size} workout posts for user $userId")
-            
-            // Process posts in batches of 10 to avoid Firestore batch write limits
-            val processed = unsyncedPosts.chunked(10).fold(0) { total, batch ->
-                syncPostBatch(batch) + total
+            Timber.i("[POST-SYNC] 📊 Found ${unsyncedPosts.size} unsynced workout posts for user $userId")
+            unsyncedPosts.forEachIndexed { index, post ->
+                Timber.d("[POST-SYNC]   - Post ${index + 1}: ${post.id} (workout: ${post.workoutId})")
+                Timber.d("[POST-SYNC]     - Caption: '${post.caption?.take(50) ?: "No caption"}${if (post.caption?.length ?: 0 > 50) "..." else ""}'")
+                Timber.d("[POST-SYNC]     - Visibility: ${post.visibility}")
+                Timber.d("[POST-SYNC]     - Engagement: ${post.likeCount} likes, ${post.commentCount} comments")
             }
             
-            Timber.d("Successfully synced $processed workout posts for user $userId")
+            // Use batch processing with cancellation checks
+            var processed = 0
+            processBatchesWithCancellation(
+                items = unsyncedPosts,
+                batchSize = 10
+            ) { batch ->
+                processed += syncPostBatch(batch)
+            }
             
-            return@withContext Result.success(
+            Timber.i("[POST-SYNC] ✅ Successfully synced $processed/${unsyncedPosts.size} workout posts for user $userId")
+            
+            return Result.success(
                 Data.Builder()
                     .putInt(KEY_SYNC_COUNT, processed)
                     .build()
             )
             
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // Re-throw cancellation to maintain cancellation chain
+            throw e
         } catch (e: Exception) {
-            Timber.e(e, "WorkoutPostSyncWorker failed for user ${inputData.getString("userId")}")
-            
-            return@withContext if (runAttemptCount < MAX_RETRY_COUNT) {
-                Result.retry()
-            } else {
-                Result.failure(
-                    Data.Builder()
-                        .putString(KEY_ERROR_MESSAGE, e.message ?: "Unknown error")
-                        .build()
-                )
-            }
+            // Let base class handle the error
+            throw e
         }
     }
     
     private suspend fun syncPostBatch(posts: List<com.example.liftrix.data.local.entity.WorkoutPostEntity>): Int {
         val batch: WriteBatch = firestore.batch()
         val timestamp = System.currentTimeMillis()
+        
+        // 🔥 ENHANCED: Log batch processing start
+        Timber.d("[POST-BATCH] 🚀 Processing batch of ${posts.size} workout posts")
         
         posts.forEach { post ->
             val docRef = firestore
@@ -159,17 +209,40 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
             batch.set(docRef, postData, SetOptions.merge())
         }
         
-        // Commit the batch
-        batch.commit().await()
+        // 🔥 ENHANCED: Log batch commit with timing
+        val batchCommitStart = System.currentTimeMillis()
+        Timber.d("[POST-BATCH] 📤 Committing batch of ${posts.size} posts to Firestore")
         
-        // Mark posts as synced in local database
-        posts.forEach { post ->
-            postDao.markAsSynced(
-                postId = post.id,
-                syncVersion = timestamp.toInt()
-            )
+        try {
+            batch.commit().await()
+            
+            val batchCommitDuration = System.currentTimeMillis() - batchCommitStart
+            Timber.i("[POST-BATCH] ✅ Batch commit successful in ${batchCommitDuration}ms")
+            
+            // Mark posts as synced in local database
+            posts.forEach { post ->
+                try {
+                    postDao.markAsSynced(
+                        postId = post.id,
+                        syncVersion = timestamp.toInt()
+                    )
+                    Timber.d("[POST-BATCH] ✅ Marked post as synced: ${post.id}")
+                } catch (e: Exception) {
+                    Timber.w(e, "[POST-BATCH] ⚠️ Failed to mark post as synced: ${post.id}")
+                }
+            }
+            
+            Timber.i("[POST-BATCH] 📊 Successfully synced batch of ${posts.size} workout posts")
+            return posts.size
+            
+        } catch (e: Exception) {
+            Timber.e(e, "[POST-BATCH] ❌ Failed to commit batch of ${posts.size} workout posts")
+            Timber.e("[POST-BATCH]   - Error type: ${e.javaClass.simpleName}")
+            Timber.e("[POST-BATCH]   - Error message: ${e.message}")
+            posts.forEach { post ->
+                Timber.w("[POST-BATCH]   - Failed post: ${post.id} (workout: ${post.workoutId})")
+            }
+            throw e
         }
-        
-        return posts.size
     }
 }

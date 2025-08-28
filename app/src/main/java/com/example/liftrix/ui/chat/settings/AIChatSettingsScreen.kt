@@ -74,7 +74,7 @@ fun AIChatSettingsScreen(
                 is UiState.Error -> {
                     ErrorState(
                         error = preferencesState.error,
-                        onRetry = { /* TODO: Implement retry */ },
+                        onRetry = { }, // No retry needed for preferences loading
                         modifier = Modifier.align(Alignment.Center)
                     )
                 }

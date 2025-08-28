@@ -309,6 +309,13 @@ private fun FollowActionButton(
                 leadingIcon = Icons.Default.Check
             )
         }
+        ConnectionStatus.GYM_BUDDY -> {
+            SecondaryActionButton(
+                text = "Gym Buddy",
+                onClick = onClick,
+                leadingIcon = Icons.Default.FitnessCenter
+            )
+        }
         ConnectionStatus.PENDING_SENT -> {
             TertiaryActionButton(
                 text = "Requested",
@@ -338,7 +345,7 @@ private fun FollowActionButton(
                 leadingIcon = Icons.Default.Favorite
             )
         }
-        ConnectionStatus.GYM_BUDDY -> {
+        ConnectionStatus.CONNECTED -> {
             PrimaryActionButton(
                 text = "Gym Buddy",
                 onClick = onClick,

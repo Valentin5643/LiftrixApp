@@ -1,5 +1,6 @@
 package com.example.liftrix.data.repository
 
+import android.net.Uri
 import com.example.liftrix.data.local.dao.CustomExerciseDao
 import com.example.liftrix.data.mapper.CustomExerciseMapper
 import androidx.room.withTransaction
@@ -8,7 +9,9 @@ import com.example.liftrix.domain.model.CustomExercise
 import com.example.liftrix.domain.model.CustomExerciseId
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.ExerciseCategory
+import com.example.liftrix.domain.model.ExerciseType
 import com.example.liftrix.domain.repository.CustomExerciseRepository
+import com.example.liftrix.domain.service.MediaUploadService
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,7 +32,8 @@ class CustomExerciseRepositoryImpl @Inject constructor(
     private val database: LiftrixDatabase,
     private val dao: CustomExerciseDao,
     private val mapper: CustomExerciseMapper,
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val mediaUploadService: MediaUploadService
 ) : CustomExerciseRepository {
     
     // Repository-scoped coroutine scope for structured concurrency
@@ -45,21 +49,97 @@ class CustomExerciseRepositoryImpl @Inject constructor(
     override suspend fun createCustomExercise(
         userId: String,
         name: String,
+        description: String?,
+        exerciseType: ExerciseType,
         primaryMuscle: ExerciseCategory,
         equipment: Equipment,
         secondaryMuscles: Set<ExerciseCategory>,
         difficulty: Int?,
+        instructions: List<String>,
+        mainImage: Uri?,
+        additionalImages: List<Uri>,
+        videoUrl: String?,
+        tags: List<String>,
+        categories: List<ExerciseCategory>,
         notes: String?
     ): Result<CustomExercise> = withContext(Dispatchers.IO) {
         try {
-            // Create entity
-            val entity = mapper.createEntity(
+            // Upload images first if provided
+            val mainImageUrl = mainImage?.let { uri ->
+                val uploadResult = mediaUploadService.uploadImage(uri, "exercises/$userId")
+                uploadResult.fold(
+                    onSuccess = { it },
+                    onFailure = { return@withContext Result.failure(it) }
+                )
+            }
+            
+            val additionalImageUrls = mutableListOf<String>()
+            for (imageUri in additionalImages) {
+                val uploadResult = mediaUploadService.uploadImage(imageUri, "exercises/$userId")
+                uploadResult.fold(
+                    onSuccess = { additionalImageUrls.add(it) },
+                    onFailure = { return@withContext Result.failure(it) }
+                )
+            }
+            
+            return@withContext createCustomExerciseWithUrls(
                 userId = userId,
                 name = name,
+                description = description,
+                exerciseType = exerciseType,
                 primaryMuscle = primaryMuscle,
                 equipment = equipment,
                 secondaryMuscles = secondaryMuscles,
                 difficulty = difficulty,
+                instructions = instructions,
+                mainImageUrl = mainImageUrl,
+                additionalImageUrls = additionalImageUrls,
+                videoUrl = videoUrl,
+                tags = tags,
+                categories = categories,
+                notes = notes
+            )
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to create custom exercise with image uploads")
+            Result.failure(e)
+        }
+    }
+    
+    override suspend fun createCustomExerciseWithUrls(
+        userId: String,
+        name: String,
+        description: String?,
+        exerciseType: ExerciseType,
+        primaryMuscle: ExerciseCategory,
+        equipment: Equipment,
+        secondaryMuscles: Set<ExerciseCategory>,
+        difficulty: Int?,
+        instructions: List<String>,
+        mainImageUrl: String?,
+        additionalImageUrls: List<String>,
+        videoUrl: String?,
+        tags: List<String>,
+        categories: List<ExerciseCategory>,
+        notes: String?
+    ): Result<CustomExercise> = withContext(Dispatchers.IO) {
+        try {
+            // Create entity with all new fields
+            val entity = mapper.createEntity(
+                userId = userId,
+                name = name,
+                description = description,
+                exerciseType = exerciseType,
+                primaryMuscle = primaryMuscle,
+                equipment = equipment,
+                secondaryMuscles = secondaryMuscles,
+                difficulty = difficulty,
+                instructions = instructions,
+                mainImageUrl = mainImageUrl,
+                additionalImageUrls = additionalImageUrls,
+                videoUrl = videoUrl,
+                tags = tags,
+                categories = categories,
                 notes = notes,
                 isSynced = false
             )
@@ -72,16 +152,6 @@ class CustomExerciseRepositoryImpl @Inject constructor(
             
             // Sync to Firestore in background (outside transaction)
             try {
-                val entity = mapper.createEntity(
-                    userId = userId,
-                    name = name,
-                    primaryMuscle = primaryMuscle,
-                    equipment = equipment,
-                    secondaryMuscles = secondaryMuscles,
-                    difficulty = difficulty,
-                    notes = notes,
-                    isSynced = false
-                )
                 syncToFirestore(entity)
             } catch (e: Exception) {
                 Timber.w(e, "Failed to sync custom exercise to Firestore, will retry later")
@@ -203,6 +273,90 @@ class CustomExerciseRepositoryImpl @Inject constructor(
         }
     }
     
+    override fun getCustomExercisesByType(
+        userId: String,
+        exerciseType: ExerciseType
+    ): Flow<List<CustomExercise>> {
+        return dao.getCustomExercisesByType(userId, exerciseType)
+            .map { entities -> mapper.toDomainList(entities) }
+    }
+    
+    override fun getCustomExercisesByTag(
+        userId: String,
+        tag: String
+    ): Flow<List<CustomExercise>> {
+        return dao.getCustomExercisesByTag(userId, tag)
+            .map { entities -> mapper.toDomainList(entities) }
+    }
+    
+    override suspend fun updateMainImage(
+        userId: String,
+        exerciseId: CustomExerciseId,
+        imageUri: Uri
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            // Upload new image
+            val uploadResult = mediaUploadService.uploadImage(imageUri, "exercises/$userId")
+            val imageUrl = uploadResult.fold(
+                onSuccess = { it },
+                onFailure = { return@withContext Result.failure(it) }
+            )
+            
+            // Update database
+            dao.updateMainImage(exerciseId.value, userId, imageUrl)
+            
+            Result.success(imageUrl)
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to update main image")
+            Result.failure(e)
+        }
+    }
+    
+    override suspend fun updateAdditionalImages(
+        userId: String,
+        exerciseId: CustomExerciseId,
+        imageUris: List<Uri>
+    ): Result<List<String>> = withContext(Dispatchers.IO) {
+        try {
+            val imageUrls = mutableListOf<String>()
+            
+            // Upload all images
+            for (imageUri in imageUris) {
+                val uploadResult = mediaUploadService.uploadImage(imageUri, "exercises/$userId")
+                val imageUrl = uploadResult.fold(
+                    onSuccess = { it },
+                    onFailure = { return@withContext Result.failure(it) }
+                )
+                imageUrls.add(imageUrl)
+            }
+            
+            // Update database with JSON array of URLs
+            val imageUrlsJson = if (imageUrls.isNotEmpty()) {
+                com.google.gson.Gson().toJson(imageUrls)
+            } else null
+            
+            dao.updateAdditionalImages(exerciseId.value, userId, imageUrlsJson)
+            
+            Result.success(imageUrls)
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to update additional images")
+            Result.failure(e)
+        }
+    }
+    
+    override suspend fun getCustomExerciseCount(userId: String): Int {
+        return dao.getCustomExerciseCount(userId)
+    }
+    
+    override suspend fun getCustomExerciseCountByType(
+        userId: String,
+        exerciseType: ExerciseType
+    ): Int {
+        return dao.getCustomExerciseCountByType(userId, exerciseType)
+    }
+    
     override suspend fun isExerciseNameUnique(
         userId: String,
         name: String,
@@ -236,26 +390,33 @@ class CustomExerciseRepositoryImpl @Inject constructor(
                 "id" to entity.id,
                 FIELD_USER_ID to entity.userId,
                 FIELD_NAME to entity.name,
+                "description" to entity.description,
+                "exerciseType" to entity.exerciseType.name,
                 "primaryMuscleGroup" to entity.primaryMuscleGroup.name,
                 "equipment" to entity.equipment.name,
                 "secondaryMuscleGroups" to (entity.secondaryMuscleGroups?.map { it.name } ?: emptyList()),
                 "difficulty" to entity.difficulty,
+                "instructions" to (entity.instructions ?: emptyList()),
+                "mainImageUrl" to entity.mainImageUrl,
+                "additionalImageUrls" to (entity.additionalImageUrls ?: emptyList()),
+                "videoUrl" to entity.videoUrl,
+                "tags" to (entity.tags ?: emptyList()),
+                "categories" to (entity.categories?.map { it.name } ?: emptyList()),
                 "notes" to entity.notes,
                 FIELD_CREATED_AT to entity.createdAt,
                 "updatedAt" to entity.updatedAt,
-                "syncVersion" to entity.syncVersion
+                "syncVersion" to entity.syncVersion,
+                "lastModified" to entity.lastModified
             )
             
             firestore.collection(COLLECTION_CUSTOM_EXERCISES)
                 .document(entity.id)
                 .set(firestoreData)
                 .addOnSuccessListener {
-                    Timber.d("Successfully synced custom exercise ${entity.id} to Firestore")
                     // Mark as synced in local database using repository scope for structured concurrency
                     repositoryScope.launch {
                         try {
                             dao.markCustomExercisesAsSynced(listOf(entity.id))
-                            Timber.d("Marked exercise ${entity.id} as synced")
                         } catch (e: Exception) {
                             Timber.w(e, "Failed to mark exercise as synced")
                         }
@@ -280,7 +441,6 @@ class CustomExerciseRepositoryImpl @Inject constructor(
                 .document(exerciseId)
                 .delete()
                 .addOnSuccessListener {
-                    Timber.d("Successfully deleted custom exercise $exerciseId from Firestore")
                 }
                 .addOnFailureListener { e ->
                     Timber.w(e, "Failed to delete custom exercise $exerciseId from Firestore")

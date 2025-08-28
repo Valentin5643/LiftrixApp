@@ -158,7 +158,8 @@ fun ProgressDashboardScreen(
     onNavigateToVolumeDetail: () -> Unit = {},
     onNavigateToOneRmDetail: () -> Unit = {},
     onNavigateToMuscleGroupDetail: () -> Unit = {},
-    onNavigateToFrequencyDetail: () -> Unit = {}
+    onNavigateToFrequencyDetail: () -> Unit = {},
+    onNavigateToDashboardCustomization: () -> Unit = {}
 ) {
     // Validate ViewModels for debugging (only in debug builds)
     LaunchedEffect(Unit) {
@@ -194,7 +195,8 @@ fun ProgressDashboardScreen(
             onNavigateToVolumeDetail = onNavigateToVolumeDetail,
             onNavigateToOneRmDetail = onNavigateToOneRmDetail,
             onNavigateToMuscleGroupDetail = onNavigateToMuscleGroupDetail,
-            onNavigateToFrequencyDetail = onNavigateToFrequencyDetail
+            onNavigateToFrequencyDetail = onNavigateToFrequencyDetail,
+            onNavigateToDashboardCustomization = onNavigateToDashboardCustomization
         )
     }
     

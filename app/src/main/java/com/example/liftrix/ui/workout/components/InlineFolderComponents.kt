@@ -396,11 +396,6 @@ private fun FolderWorkoutCard(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Text(
-                    text = "${workout.exercises.size} exercises",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
                 
                 // Compact stats row
                 Row(
@@ -414,10 +409,6 @@ private fun FolderWorkoutCard(
                     WorkoutStatChip(
                         label = "Duration",
                         value = "${workout.estimatedDurationMinutes ?: 30}min"
-                    )
-                    WorkoutStatChip(
-                        label = "Used",
-                        value = "${workout.usageCount}x"
                     )
                 }
                 }
@@ -604,16 +595,6 @@ private fun FolderWorkoutCardLegacy(
                 WorkoutStatItem(
                     label = "Duration",
                     value = "${duration}min"
-                )
-            } ?: WorkoutStatItem(
-                label = "Exercises",
-                value = workout.exercises.size.toString()
-            )
-            
-            if (workout.usageCount > 0) {
-                WorkoutStatItem(
-                    label = "Used",
-                    value = "${workout.usageCount}x"
                 )
             }
         }

@@ -654,9 +654,9 @@ class EditWorkoutViewModel @Inject constructor(
                     Timber.i("Successfully saved workout changes: ${savedWorkout.name}")
                     // Update original workout reference for future change tracking
                     this.originalWorkout = savedWorkout
-                    // Navigate to post creation screen to share the edited workout
+                    // Navigate back after successful template edit (templates should not auto-share)
                     viewModelScope.launch {
-                        _events.emit(EditWorkoutEvent.NavigateToPostCreation(savedWorkout.id.value))
+                        _events.emit(EditWorkoutEvent.NavigateBack)
                     }
                 },
                 onError = { error ->

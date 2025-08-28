@@ -119,7 +119,7 @@ class WorkoutMapper @Inject constructor(
         WorkoutDto(
             id = id.value,
             name = name,
-            date = date.format(DATE_FORMATTER),
+            date = Timestamp(date.atStartOfDay().toInstant(java.time.ZoneOffset.UTC)),
             exercises = exercises.map(exerciseMapper::toFirestoreDto),
             status = status.name,
             startTime = startTime?.let { Timestamp(it.epochSecond, it.nano) },
@@ -141,7 +141,8 @@ class WorkoutMapper @Inject constructor(
             userId = userId,
             id = WorkoutId(id),
             name = name,
-            date = LocalDate.parse(date, DATE_FORMATTER),
+            date = date?.toDate()?.toInstant()?.atZone(java.time.ZoneOffset.UTC)?.toLocalDate() 
+                ?: LocalDate.now(), // Convert Timestamp to LocalDate with fallback
             exercises = emptyList(), // Exercise conversion handled by separate service
             status = WorkoutStatus.valueOf(status),
             startTime = startTime?.toInstant(),
@@ -161,7 +162,8 @@ class WorkoutMapper @Inject constructor(
             id = dto.id,
             userId = dto.userId,
             name = dto.name,
-            date = LocalDate.parse(dto.date, DATE_FORMATTER),
+            date = dto.date?.toDate()?.toInstant()?.atZone(java.time.ZoneOffset.UTC)?.toLocalDate()
+                ?: LocalDate.now(), // Convert Timestamp to LocalDate with fallback
             exercisesJson = gson.toJson(emptyList<Exercise>()), // Exercise conversion handled by separate service
             status = WorkoutStatus.valueOf(dto.status),
             startTime = dto.startTime?.toInstant(),
