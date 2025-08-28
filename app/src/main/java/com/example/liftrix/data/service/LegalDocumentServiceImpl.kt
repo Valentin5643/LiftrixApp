@@ -15,6 +15,9 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import timber.log.Timber
+import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -479,27 +482,24 @@ These terms are governed by the laws of [Your Jurisdiction].
                 remoteConfigManager.initialize().getOrThrow()
                 remoteConfigManager.fetchAndActivate(forceRefresh).getOrThrow()
                 
-                // For now, we'll use default content since remote config returns URLs not JSON
-                // TODO: Implement URL fetching and content parsing when backend is ready
+                // Fetch document from URL if available, otherwise use default content
                 val document = when (type) {
                     LegalDocumentType.PRIVACY_POLICY -> {
-                        LegalDocument(
+                        fetchDocumentFromRemoteUrl(
                             type = type,
                             title = "Privacy Policy",
-                            content = DEFAULT_PRIVACY_POLICY,
-                            version = "1.0",
-                            effectiveDate = Instant.now(),
-                            lastModified = Instant.now()
+                            urlFetcher = { remoteConfigManager.getPrivacyPolicyUrl() },
+                            versionFetcher = { remoteConfigManager.getPrivacyPolicyVersion() },
+                            fallbackContent = DEFAULT_PRIVACY_POLICY
                         )
                     }
                     LegalDocumentType.TERMS_OF_SERVICE -> {
-                        LegalDocument(
+                        fetchDocumentFromRemoteUrl(
                             type = type,
                             title = "Terms of Service",
-                            content = DEFAULT_TERMS_OF_SERVICE,
-                            version = "1.0",
-                            effectiveDate = Instant.now(),
-                            lastModified = Instant.now()
+                            urlFetcher = { remoteConfigManager.getTermsOfServiceUrl() },
+                            versionFetcher = { remoteConfigManager.getTermsVersion() },
+                            fallbackContent = DEFAULT_TERMS_OF_SERVICE
                         )
                     }
                     else -> {
@@ -605,5 +605,108 @@ These terms are governed by the laws of [Your Jurisdiction].
         } catch (e: Exception) {
             true // Consider expired if we can't determine
         }
+    }
+    
+    /**
+     * Fetches a legal document from remote URL with fallback to default content
+     */
+    private suspend fun fetchDocumentFromRemoteUrl(
+        type: LegalDocumentType,
+        title: String,
+        urlFetcher: suspend () -> LiftrixResult<String>,
+        versionFetcher: suspend () -> LiftrixResult<String>,
+        fallbackContent: String
+    ): LegalDocument = withContext(Dispatchers.IO) {
+        try {
+            // Get URL from Remote Config
+            val urlResult = urlFetcher()
+            val url = urlResult.getOrNull()
+            
+            if (url.isNullOrBlank()) {
+                Timber.w("No URL configured for ${type.name}, using fallback content")
+                return@withContext createFallbackDocument(type, title, fallbackContent)
+            }
+            
+            Timber.d("Fetching ${type.name} from URL: $url")
+            
+            // Fetch content from URL
+            val content = fetchContentFromUrl(url)
+            
+            // Get version from Remote Config
+            val version = versionFetcher().getOrElse { "1.0" }
+            
+            LegalDocument(
+                type = type,
+                title = title,
+                content = content,
+                version = version,
+                effectiveDate = Instant.now(),
+                lastModified = Instant.now()
+            )
+            
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to fetch ${type.name} from remote URL, using fallback")
+            createFallbackDocument(type, title, fallbackContent)
+        }
+    }
+    
+    /**
+     * Fetches content from a URL using HttpURLConnection
+     */
+    private suspend fun fetchContentFromUrl(url: String): String = withContext(Dispatchers.IO) {
+        val connection = URL(url).openConnection() as HttpURLConnection
+        try {
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 10000 // 10 seconds
+            connection.readTimeout = 30000 // 30 seconds
+            connection.setRequestProperty("User-Agent", "LiftrixApp/1.0")
+            connection.setRequestProperty("Accept", "text/html,text/plain,application/json")
+            
+            val responseCode = connection.responseCode
+            if (responseCode != HttpURLConnection.HTTP_OK) {
+                throw IOException("HTTP error code: $responseCode")
+            }
+            
+            val content = connection.inputStream.bufferedReader().use { it.readText() }
+            
+            if (content.isBlank()) {
+                throw IOException("Fetched content is empty")
+            }
+            
+            // Basic content validation and cleaning
+            val cleanedContent = content.trim()
+                .replace(Regex("\\s+"), " ") // Normalize whitespace
+                .replace("\\n", "\n") // Fix line breaks
+            
+            Timber.d("Successfully fetched ${cleanedContent.length} characters from URL")
+            return@withContext cleanedContent
+            
+        } catch (e: IOException) {
+            Timber.e(e, "Failed to fetch content from URL: $url")
+            throw e
+        } catch (e: Exception) {
+            Timber.e(e, "Unexpected error fetching content from URL: $url")
+            throw IOException("Failed to fetch content: ${e.message}", e)
+        } finally {
+            connection.disconnect()
+        }
+    }
+    
+    /**
+     * Creates a fallback document with default content
+     */
+    private fun createFallbackDocument(
+        type: LegalDocumentType,
+        title: String,
+        fallbackContent: String
+    ): LegalDocument {
+        return LegalDocument(
+            type = type,
+            title = title,
+            content = fallbackContent,
+            version = "1.0-fallback",
+            effectiveDate = Instant.now(),
+            lastModified = Instant.now()
+        )
     }
 }

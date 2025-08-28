@@ -176,9 +176,8 @@ class FeedRepositoryImpl @Inject constructor(
                             followedUserIds
                         }
                         
-                        // 🔥 FIX: Use direct PUBLIC posts query with proper exclusion handling
-                        // TODO: Migrate to feed_cache once Firebase Functions are properly populating it
-                        createDiscoveryDirectPagingSource(userId, safeExcludeIds)
+                        // 🔥 FIX: Use hybrid approach - feed_cache first, fallback to direct query
+                        createHybridDiscoveryPagingSource(userId, safeExcludeIds)
                     }
                 )
             }
@@ -643,6 +642,100 @@ class FeedRepositoryImpl @Inject constructor(
             feedType = FeedType.DISCOVERY,
             targetUserId = null,
             pageSize = pageSize
+        )
+    }
+    
+    /**
+     * Creates a hybrid PagingSource for discovery feed that intelligently chooses between
+     * feed_cache and direct queries based on cache availability and population.
+     * This provides the performance benefits of caching while maintaining robustness.
+     */
+    private fun createHybridDiscoveryPagingSource(userId: String, excludeUserIds: List<String>): PagingSource<Int, com.example.liftrix.data.local.entity.WorkoutPostEntity> {
+        return object : PagingSource<Int, com.example.liftrix.data.local.entity.WorkoutPostEntity>() {
+            override suspend fun load(params: LoadParams<Int>): LoadResult<Int, com.example.liftrix.data.local.entity.WorkoutPostEntity> {
+                return try {
+                    val page = params.key ?: 0
+                    val pageSize = params.loadSize
+                    val offset = page * pageSize
+                    
+                    // Check if user has sufficient cached content for discovery feed
+                    val hasSufficientCache = feedCacheService.hasSufficientCache(
+                        userId = userId,
+                        minCacheSize = 20 // Minimum 20 posts for good user experience
+                    ).getOrElse { false }
+                    
+                    val posts = if (hasSufficientCache) {
+                        // Use feed_cache for optimal relevance scoring when available
+                        Timber.d("🔍 FEED-CACHE-DEBUG: Using cached feed for user=$userId, page=$page")
+                        
+                        val cachedPostIds = feedCacheDao.getCachedPostIdsByType(
+                            userId = userId,
+                            feedType = "DISCOVERY",
+                            limit = pageSize,
+                            offset = offset
+                        )
+                        
+                        if (cachedPostIds.isEmpty()) {
+                            Timber.w("🔍 FEED-CACHE-DEBUG: Cache insufficient, falling back to direct query for user=$userId")
+                            // Fallback to direct query if cache is empty despite hasSufficientCache check
+                            getDirectDiscoveryPosts(userId, excludeUserIds, pageSize, offset)
+                        } else {
+                            // Get actual post entities using the cached post IDs
+                            cachedPostIds.mapNotNull { postId ->
+                                workoutPostDao.getPostById(postId)
+                            }
+                        }
+                    } else {
+                        // Fallback to direct query for immediate results
+                        Timber.d("🔍 FEED-CACHE-DEBUG: Using direct query for user=$userId, page=$page (insufficient cache)")
+                        getDirectDiscoveryPosts(userId, excludeUserIds, pageSize, offset)
+                    }
+                    
+                    // Background cache population for better future performance
+                    if (!hasSufficientCache && page == 0) {
+                        // Trigger background cache update for next time (fire and forget)
+                        try {
+                            feedCacheService.updateFeedCache(userId, forceRefresh = false)
+                        } catch (e: Exception) {
+                            Timber.w(e, "🔍 FEED-CACHE-DEBUG: Background cache update failed for user=$userId")
+                        }
+                    }
+                    
+                    LoadResult.Page(
+                        data = posts,
+                        prevKey = if (page > 0) page - 1 else null,
+                        nextKey = if (posts.size == pageSize) page + 1 else null
+                    )
+                    
+                } catch (e: Exception) {
+                    Timber.e(e, "Error loading hybrid discovery feed for user $userId")
+                    LoadResult.Error(e)
+                }
+            }
+            
+            override fun getRefreshKey(state: PagingState<Int, com.example.liftrix.data.local.entity.WorkoutPostEntity>): Int? {
+                return state.anchorPosition?.let { anchorPosition ->
+                    state.closestPageToPosition(anchorPosition)?.prevKey?.plus(1)
+                        ?: state.closestPageToPosition(anchorPosition)?.nextKey?.minus(1)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Helper method to get discovery posts directly from workout_posts table
+     * Used as fallback when feed_cache is not available or insufficient
+     */
+    private suspend fun getDirectDiscoveryPosts(
+        userId: String,
+        excludeUserIds: List<String>,
+        pageSize: Int,
+        offset: Int
+    ): List<com.example.liftrix.data.local.entity.WorkoutPostEntity> {
+        return workoutPostDao.getPublicPostsExcludingUsers(
+            excludeUserIds = excludeUserIds,
+            limit = pageSize,
+            offset = offset
         )
     }
 }

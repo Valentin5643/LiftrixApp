@@ -14,6 +14,8 @@ import com.example.liftrix.domain.model.Exercise
 import com.example.liftrix.domain.model.ExerciseSet
 import com.example.liftrix.data.serialization.ExerciseDeserializer
 import com.example.liftrix.data.serialization.ExerciseSetDeserializer
+import com.example.liftrix.data.remote.PRNotificationFirebaseService
+import kotlinx.serialization.json.Json
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -70,6 +72,17 @@ abstract class NetworkModule {
                 // Default timeout is 70 seconds which should be sufficient for admin operations
             }
         }
+
+        @Provides
+        @Singleton
+        fun providePRNotificationFirebaseService(
+            firestore: FirebaseFirestore,
+            auth: FirebaseAuth,
+            json: Json
+        ): PRNotificationFirebaseService {
+            return PRNotificationFirebaseService(firestore, auth, json)
+        }
+
 
         // REMOVED: WorkManager provider
         // WorkManager MUST NOT be provided through Hilt to prevent early initialization.

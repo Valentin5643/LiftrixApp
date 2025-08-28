@@ -552,8 +552,34 @@ fun UnifiedNavigationContainer(
                         },
                         onNavigateToUpgradeToPremium = {
                             navController.navigate(LiftrixRoute.UpgradeToPremium)
+                        },
+                        onNavigateToSyncSettings = {
+                            navController.navigate(LiftrixRoute.SyncSettings)
                         }
                     )
+                }
+                
+                composable<LiftrixRoute.SyncSettings> {
+                    // TODO: Create dedicated SyncSettingsScreen
+                    // For now, use existing SettingsSyncIntegration composable
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp)
+                    ) {
+                        TopAppBar(
+                            title = { Text("Sync Settings") },
+                            navigationIcon = {
+                                IconButton(onClick = { navController.popBackStackSafely() }) {
+                                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                                }
+                            }
+                        )
+                        
+                        com.example.liftrix.ui.common.sync.SettingsSyncIntegration(
+                            userId = "current_user_id" // TODO: Get from authenticated user
+                        )
+                    }
                 }
                 
                 composable<LiftrixRoute.WidgetSettings> {

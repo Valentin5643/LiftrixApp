@@ -50,6 +50,9 @@ import com.example.liftrix.data.local.dao.SettingsAuditDao
 import com.example.liftrix.data.local.dao.SyncQueueDao
 import com.example.liftrix.data.local.dao.ChatPreferencesDao
 import com.example.liftrix.data.local.dao.ChatHistoryDao
+import com.example.liftrix.data.local.dao.PRNotificationDao
+import com.example.liftrix.data.local.dao.PRReactionDao
+import com.example.liftrix.data.local.dao.PRNotificationPreferencesDao
 import com.example.liftrix.data.mapper.WorkoutPostMapper
 import com.example.liftrix.data.local.seed.ExerciseLibrarySeedData
 import com.example.liftrix.data.local.seed.MetDataSeedService
@@ -303,6 +306,21 @@ object DatabaseModule {
     @Provides
     fun provideGymBuddyDao(database: LiftrixDatabase): GymBuddyDao {
         return database.gymBuddyDao()
+    }
+
+    @Provides
+    fun providePRNotificationDao(database: LiftrixDatabase): PRNotificationDao {
+        return database.prNotificationDao()
+    }
+
+    @Provides
+    fun providePRReactionDao(database: LiftrixDatabase): PRReactionDao {
+        return database.prReactionDao()
+    }
+
+    @Provides
+    fun providePRNotificationPreferencesDao(database: LiftrixDatabase): PRNotificationPreferencesDao {
+        return database.prNotificationPreferencesDao()
     }
 
     @Provides

@@ -13,6 +13,7 @@ import androidx.work.workDataOf
 import androidx.work.WorkInfo
 import androidx.work.Operation
 import com.example.liftrix.data.sync.RealtimeSyncService
+import com.example.liftrix.data.service.ProfileCleanupService
 import com.example.liftrix.domain.repository.SyncStatusRepository
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixSuccess
@@ -57,7 +58,8 @@ import javax.inject.Singleton
 class SyncCoordinator @Inject constructor(
     @ApplicationContext private val context: Context,
     private val realtimeSyncService: RealtimeSyncService,
-    private val syncStatusRepository: SyncStatusRepository
+    private val syncStatusRepository: SyncStatusRepository,
+    private val profileCleanupService: ProfileCleanupService
 ) {
     // Use standard WorkManager instance (initialized manually in Application.onCreate)
     private val workManager: WorkManager
@@ -345,10 +347,11 @@ class SyncCoordinator @Inject constructor(
      * This ensures workouts are always synchronized across devices and recovers after app restarts or cache clears.
      * 
      * Process:
-     * 1. Fetches remote workouts and merges them with local database
-     * 2. Resolves conflicts in favor of most recently updated workout
-     * 3. Uploads any local changes to Firebase
-     * 4. Provides comprehensive logging for sync operations
+     * 1. Performs startup cleanup to remove orphaned profiles
+     * 2. Fetches remote workouts and merges them with local database
+     * 3. Resolves conflicts in favor of most recently updated workout
+     * 4. Uploads any local changes to Firebase
+     * 5. Provides comprehensive logging for sync operations
      * 
      * @param userId The user ID to perform startup sync for
      * @return LiftrixResult indicating success or failure
@@ -356,6 +359,25 @@ class SyncCoordinator @Inject constructor(
     suspend fun triggerStartupSync(userId: String): LiftrixResult<Unit> {
         return try {
             Timber.i("SyncCoordinator: Starting full bidirectional sync for user $userId (startup/login)")
+            
+            // 🧹 CLEANUP: Perform startup cleanup to remove orphaned profiles
+            Timber.d("SyncCoordinator: Performing startup cleanup before sync for user $userId")
+            try {
+                val cleanupResult = profileCleanupService.performStartupCleanup(userId)
+                when {
+                    cleanupResult.isSuccess -> {
+                        val result = cleanupResult.getOrNull()
+                        if (result != null && result.orphanedProfilesRemoved > 0) {
+                            Timber.i("🧹 SyncCoordinator: Startup cleanup removed ${result.orphanedProfilesRemoved} orphaned profiles")
+                        }
+                    }
+                    cleanupResult.isFailure -> {
+                        Timber.w("🧹 SyncCoordinator: Startup cleanup failed but continuing with sync: ${cleanupResult.exceptionOrNull()?.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "🧹 SyncCoordinator: Startup cleanup threw exception but continuing with sync")
+            }
             
             // Update sync status to indicate startup sync in progress
             syncStatusRepository.updateSyncStatus(userId, isInProgress = true)

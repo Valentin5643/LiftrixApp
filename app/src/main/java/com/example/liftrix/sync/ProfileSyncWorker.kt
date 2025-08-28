@@ -15,6 +15,7 @@ import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.local.dao.AchievementDao
 import com.example.liftrix.data.mapper.UserProfileMapper
 import com.example.liftrix.data.repository.social.FollowRepositoryImpl
+import com.example.liftrix.data.service.ProfileCleanupService
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -38,7 +39,8 @@ class ProfileSyncWorker @AssistedInject constructor(
     private val firestore: FirebaseFirestore,
     private val auth: FirebaseAuth,
     private val gson: Gson,
-    private val followRepository: FollowRepositoryImpl
+    private val followRepository: FollowRepositoryImpl,
+    private val profileCleanupService: ProfileCleanupService
 ) : BaseSyncWorker(context, params) {
 
     // 🔧 HOTFIX: Fallback constructor for when Hilt factory generation fails
@@ -62,7 +64,7 @@ class ProfileSyncWorker @AssistedInject constructor(
         context, params,
         deps.userProfileDao, deps.workoutDao, deps.achievementDao,
         deps.userProfileMapper, deps.firestore, deps.auth,
-        deps.gson, deps.followRepository
+        deps.gson, deps.followRepository, deps.profileCleanupService
     )
 
     init {
@@ -155,12 +157,55 @@ class ProfileSyncWorker @AssistedInject constructor(
             
             val forceSync = inputData.getBoolean("forceSync", false)
 
-            val profile = userProfileDao.getProfileForUserSuspend(userId) 
-                ?: return Result.failure(
-                    Data.Builder()
-                        .putString(KEY_ERROR_MESSAGE, "Profile not found for user $userId")
-                        .build()
-                )
+            val profile = userProfileDao.getProfileForUserSuspend(userId)
+            
+            // 🧹 ORPHAN CLEANUP: If profile not found, check if user is orphaned and trigger cleanup
+            if (profile == null) {
+                Timber.w("🧹 ProfileSyncWorker: Profile not found for user $userId - checking if orphaned")
+                
+                try {
+                    val isOrphaned = profileCleanupService.isUserOrphaned(userId)
+                    if (isOrphaned) {
+                        Timber.w("🧹 ProfileSyncWorker: User $userId confirmed as orphaned - triggering cleanup")
+                        val cleanupResult = profileCleanupService.performOrphanedProfileCleanup(excludeUserId = null)
+                        
+                        Timber.i("🧹 ProfileSyncWorker: Cleanup completed - removed ${cleanupResult.orphanedProfilesRemoved} orphaned profiles")
+                        
+                        return Result.failure(
+                            Data.Builder()
+                                .putString(KEY_ERROR_MESSAGE, "Orphaned user $userId cleaned up - sync no longer needed")
+                                .putBoolean("orphan_cleanup_performed", true)
+                                .putInt("orphaned_profiles_removed", cleanupResult.orphanedProfilesRemoved)
+                                .build()
+                        )
+                    } else {
+                        Timber.w("🧹 ProfileSyncWorker: User $userId not orphaned but profile missing - possible sync issue")
+                        
+                        // 🚨 ANTI-LOOP: Don't retry indefinitely for missing profiles
+                        // This prevents infinite retry loops when profiles are genuinely missing
+                        val retryCount = inputData.getInt("retry_count", 0)
+                        if (retryCount >= 3) {
+                            Timber.w("🧹 ProfileSyncWorker: Max retries reached for missing profile $userId - stopping")
+                            return Result.failure(
+                                Data.Builder()
+                                    .putString(KEY_ERROR_MESSAGE, "Profile missing after $retryCount retries - giving up")
+                                    .putInt("max_retries_reached", retryCount)
+                                    .build()
+                            )
+                        } else {
+                            Timber.d("🧹 ProfileSyncWorker: Retrying profile sync for $userId (attempt ${retryCount + 1}/3)")
+                            return Result.retry() // Limited retry with counter
+                        }
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "🧹 ProfileSyncWorker: Failed to check orphan status for user $userId")
+                    return Result.failure(
+                        Data.Builder()
+                            .putString(KEY_ERROR_MESSAGE, "Profile not found and cleanup check failed for user $userId")
+                            .build()
+                    )
+                }
+            }
             
             if (profile.isSynced && !forceSync) {
                 Timber.d("Profile already synced for user $userId")
@@ -237,7 +282,33 @@ class ProfileSyncWorker @AssistedInject constructor(
                 key !in listOf("workout_sync_status", "last_workout_sync", "workout_count", "total_workouts")
             }
             
-            docRef.set(profileOnlyData, SetOptions.merge()).await()
+            try {
+                docRef.set(profileOnlyData, SetOptions.merge()).await()
+            } catch (e: Exception) {
+                // 🚨 PERMISSION_DENIED FIX: Handle Firestore security rule violations
+                if (e.message?.contains("PERMISSION_DENIED", ignoreCase = true) == true) {
+                    Timber.e("🧹 ProfileSyncWorker: PERMISSION_DENIED for user $userId - security rules prevent client write")
+                    Timber.e("🧹 ProfileSyncWorker: ⚠️  This may indicate orphaned Firebase Auth user trying to sync")
+                    
+                    // Record metrics for server-side cleanup tracking
+                    try {
+                        profileCleanupService.metricsCollector.recordPermissionDeniedError("ProfileSyncWorker", userId)
+                    } catch (metricsError: Exception) {
+                        Timber.w(metricsError, "Failed to record PERMISSION_DENIED metrics")
+                    }
+                    
+                    return Result.failure(
+                        Data.Builder()
+                            .putString(KEY_ERROR_MESSAGE, "Permission denied - user may be orphaned or security rules block access")
+                            .putString("error_type", "PERMISSION_DENIED")
+                            .putBoolean("requires_server_cleanup", true)
+                            .build()
+                    )
+                } else {
+                    // Re-throw other Firestore errors for normal retry handling
+                    throw e
+                }
+            }
             
             Timber.d("[DATA-INTEGRITY] Profile sync completed with field isolation - ${profileOnlyData.size} fields updated")
             

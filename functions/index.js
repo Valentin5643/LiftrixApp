@@ -2347,3 +2347,379 @@ exports.onSupportTicketCreated = onDocumentWritten(
         return null;
       }
     });
+
+// ================================
+// ORPHANED PROFILE CLEANUP FUNCTIONS
+// ================================
+
+/**
+ * 🔥 AUTOMATIC CLEANUP FUNCTION
+ * =============================
+ * 
+ * This function runs when a cleanup request document is created.
+ * It cleans up all associated Firestore data for orphaned profiles.
+ * 
+ * To trigger cleanup, create a document in 'user_cleanup_requests/{uid}' with:
+ * { reason: 'user_deleted', timestamp: Date.now(), user_id: uid }
+ */
+exports.cleanupDeletedUser = onDocumentWritten(
+  "user_cleanup_requests/{uid}",
+  async (event) => {
+    const uid = event.params.uid;
+    const cleanupData = event.data?.after?.data();
+    
+    if (!cleanupData) {
+      logger.info(`🧹 CLEANUP: Cleanup request deleted for user: ${uid}`);
+      return;
+    }
+    
+    logger.info(`🧹 CLEANUP: Starting cleanup for user: ${uid} (reason: ${cleanupData.reason || 'unknown'})`);
+  
+  try {
+    const batch = db.batch();
+    let operationCount = 0;
+    
+    // 1. Delete main user profile document
+    logger.info(`🧹 CLEANUP: Deleting user profile for ${uid}`);
+    const userDocRef = db.collection("users").doc(uid);
+    batch.delete(userDocRef);
+    operationCount++;
+    
+    // 2. Delete social profile document
+    logger.info(`🧹 CLEANUP: Deleting social profile for ${uid}`);
+    const socialDocRef = db.collection("social_profiles").doc(uid);
+    batch.delete(socialDocRef);
+    operationCount++;
+    
+    // 3. Delete user's workouts subcollection (limit to 500 per batch)
+    logger.info(`🧹 CLEANUP: Deleting workouts for ${uid}`);
+    const workoutsQuery = await db.collection("users").doc(uid)
+      .collection("workouts").limit(500).get();
+    
+    workoutsQuery.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      operationCount++;
+    });
+    
+    if (workoutsQuery.docs.length > 0) {
+      logger.info(`🧹 CLEANUP: Found ${workoutsQuery.docs.length} workouts to delete for ${uid}`);
+    }
+    
+    // 4. Delete user's templates subcollection
+    logger.info(`🧹 CLEANUP: Deleting templates for ${uid}`);
+    const templatesQuery = await db.collection("users").doc(uid)
+      .collection("templates").limit(500).get();
+    
+    templatesQuery.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      operationCount++;
+    });
+    
+    if (templatesQuery.docs.length > 0) {
+      console.log(`🧹 CLEANUP: Found ${templatesQuery.docs.length} templates to delete for ${uid}`);
+    }
+    
+    // 5. Delete user's achievements subcollection
+    console.log(`🧹 CLEANUP: Deleting achievements for ${uid}`);
+    const achievementsQuery = await db.collection("users").doc(uid)
+      .collection("achievements").limit(500).get();
+    
+    achievementsQuery.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      operationCount++;
+    });
+    
+    if (achievementsQuery.docs.length > 0) {
+      console.log(`🧹 CLEANUP: Found ${achievementsQuery.docs.length} achievements to delete for ${uid}`);
+    }
+    
+    // 6. Clean up follow relationships where user is follower
+    console.log(`🧹 CLEANUP: Deleting follow relationships (as follower) for ${uid}`);
+    const followingQuery = await db.collection("follow_relationships")
+      .where("follower_user_id", "==", uid).limit(500).get();
+    
+    followingQuery.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      operationCount++;
+    });
+    
+    if (followingQuery.docs.length > 0) {
+      console.log(`🧹 CLEANUP: Found ${followingQuery.docs.length} following relationships to delete for ${uid}`);
+    }
+    
+    // 7. Clean up follow relationships where user is followed
+    console.log(`🧹 CLEANUP: Deleting follow relationships (as followed) for ${uid}`);
+    const followersQuery = await db.collection("follow_relationships")
+      .where("following_user_id", "==", uid).limit(500).get();
+    
+    followersQuery.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      operationCount++;
+    });
+    
+    if (followersQuery.docs.length > 0) {
+      console.log(`🧹 CLEANUP: Found ${followersQuery.docs.length} follower relationships to delete for ${uid}`);
+    }
+    
+    // 8. Clean up workout posts by the user
+    console.log(`🧹 CLEANUP: Deleting workout posts for ${uid}`);
+    const workoutPostsQuery = await db.collection("workout_posts")
+      .where("user_id", "==", uid).limit(500).get();
+    
+    workoutPostsQuery.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      operationCount++;
+    });
+    
+    if (workoutPostsQuery.docs.length > 0) {
+      logger.info(`🧹 CLEANUP: Found ${workoutPostsQuery.docs.length} workout posts to delete for ${uid}`);
+    }
+    
+    // 9. Clean up support tickets
+    logger.info(`🧹 CLEANUP: Deleting support tickets for ${uid}`);
+    const ticketsQuery = await db.collection("support_tickets")
+      .where("user_id", "==", uid).limit(100).get();
+    
+    ticketsQuery.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      operationCount++;
+    });
+    
+    if (ticketsQuery.docs.length > 0) {
+      logger.info(`🧹 CLEANUP: Found ${ticketsQuery.docs.length} support tickets to delete for ${uid}`);
+    }
+    
+    // 10. Clean up FCM tokens
+    logger.info(`🧹 CLEANUP: Deleting FCM tokens for ${uid}`);
+    const tokensQuery = await db.collection("fcm_tokens")
+      .where("user_id", "==", uid).limit(100).get();
+    
+    tokensQuery.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      operationCount++;
+    });
+    
+    if (tokensQuery.docs.length > 0) {
+      logger.info(`🧹 CLEANUP: Found ${tokensQuery.docs.length} FCM tokens to delete for ${uid}`);
+    }
+    
+    // 11. Clean up notification preferences and history
+    logger.info(`🧹 CLEANUP: Deleting notification data for ${uid}`);
+    const notificationPrefsQuery = await db.collection("notification_preferences")
+      .where("user_id", "==", uid).limit(100).get();
+    
+    notificationPrefsQuery.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      operationCount++;
+    });
+    
+    const notificationHistoryQuery = await db.collection("notification_history")
+      .where("user_id", "==", uid).limit(100).get();
+    
+    notificationHistoryQuery.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+      operationCount++;
+    });
+    
+    // Execute all deletions in a single batch
+    logger.info(`🧹 CLEANUP: Executing batch delete of ${operationCount} operations for ${uid}`);
+    await batch.commit();
+    
+    logger.info(`✅ CLEANUP SUCCESS: Cleaned up ${operationCount} documents/subcollections for user ${uid}`);
+    
+    // Log metrics for monitoring
+    logger.info(`🧹 CLEANUP_METRICS | user_id=${uid} | operations=${operationCount} | status=success | timestamp=${Date.now()}`);
+    
+    // Clean up the cleanup request document itself
+    try {
+      await event.data.after.ref.delete();
+      logger.info(`🧹 CLEANUP: Deleted cleanup request document for ${uid}`);
+    } catch (deleteError) {
+      logger.error(`⚠️ CLEANUP: Could not delete cleanup request for ${uid}:`, deleteError);
+    }
+    
+  } catch (error) {
+    logger.error(`❌ CLEANUP ERROR: Failed to clean up data for user ${uid}:`, error);
+    logger.info(`🧹 CLEANUP_METRICS | user_id=${uid} | status=error | error="${error.message}" | timestamp=${Date.now()}`);
+    
+    // Don't throw the error - log and continue
+  }
+});
+
+/**
+ * 🔧 BULK CLEANUP FUNCTION
+ * =========================
+ * 
+ * This function allows you to clean up existing orphaned data.
+ * Call this function manually when you need to clean up orphaned profiles.
+ */
+exports.bulkCleanupOrphanedData = onCall(async (request) => {
+  logger.info("🧹 BULK_CLEANUP: Starting bulk cleanup of orphaned data");
+  
+  // Allow testing from Firebase Console (request.auth may be undefined)
+  // In production, you should add proper admin authentication
+  if (request.auth) {
+    logger.info(`🧹 BULK_CLEANUP: Authenticated user ${request.auth.uid} running cleanup`);
+  } else {
+    logger.info("🧹 BULK_CLEANUP: Running cleanup from Firebase Console (unauthenticated)");
+  }
+  
+  try {
+    const results = [];
+    let totalCleaned = 0;
+    
+    // Get all user documents from Firestore
+    logger.info("🧹 BULK_CLEANUP: Fetching all user documents from Firestore");
+    const usersSnapshot = await db.collection("users").get();
+    logger.info(`🧹 BULK_CLEANUP: Found ${usersSnapshot.docs.length} user documents in Firestore`);
+    
+    // Check each user document to see if the Firebase Auth user still exists
+    for (const doc of usersSnapshot.docs) {
+      const uid = doc.id;
+      
+      try {
+        // Check if user exists in Firebase Auth
+        await auth.getUser(uid);
+        // User exists, not orphaned - skip
+        logger.info(`🧹 BULK_CLEANUP: User ${uid} exists in Auth - skipping`);
+        results.push({ uid, status: "active", action: "skipped" });
+        
+      } catch (authError) {
+        if (authError.code === "auth/user-not-found") {
+          // User is orphaned - clean up their data
+          logger.info(`🧹 BULK_CLEANUP: User ${uid} not found in Auth - cleaning up orphaned data`);
+          
+          try {
+            // Use the same cleanup logic as the automatic function
+            const batch = db.batch();
+            let operationCount = 0;
+            
+            // Delete user profile
+            batch.delete(db.collection("users").doc(uid));
+            operationCount++;
+            
+            // Delete social profile
+            batch.delete(db.collection("social_profiles").doc(uid));
+            operationCount++;
+            
+            // Delete subcollections (limited to prevent timeout)
+            const collections = ["workouts", "templates", "achievements"];
+            
+            for (const collectionName of collections) {
+              const subcollectionSnapshot = await db.collection("users").doc(uid)
+                .collection(collectionName).limit(100).get(); // Reduced limit for bulk operation
+              
+              subcollectionSnapshot.docs.forEach(subDoc => {
+                batch.delete(subDoc.ref);
+                operationCount++;
+              });
+            }
+            
+            // Delete follow relationships
+            const followingSnapshot = await db.collection("follow_relationships")
+              .where("follower_user_id", "==", uid).limit(100).get();
+            
+            followingSnapshot.docs.forEach(followDoc => {
+              batch.delete(followDoc.ref);
+              operationCount++;
+            });
+            
+            const followersSnapshot = await db.collection("follow_relationships")
+              .where("following_user_id", "==", uid).limit(100).get();
+            
+            followersSnapshot.docs.forEach(followDoc => {
+              batch.delete(followDoc.ref);
+              operationCount++;
+            });
+            
+            // Delete workout posts
+            const postsSnapshot = await db.collection("workout_posts")
+              .where("user_id", "==", uid).limit(100).get();
+            
+            postsSnapshot.docs.forEach(postDoc => {
+              batch.delete(postDoc.ref);
+              operationCount++;
+            });
+            
+            // Execute batch delete
+            await batch.commit();
+            
+            totalCleaned++;
+            logger.info(`✅ BULK_CLEANUP: Successfully cleaned up ${operationCount} operations for orphaned user ${uid}`);
+            results.push({ uid, status: "orphaned", action: "cleaned", operations: operationCount });
+            
+          } catch (cleanupError) {
+            logger.error(`❌ BULK_CLEANUP: Error cleaning up user ${uid}:`, cleanupError);
+            results.push({ uid, status: "orphaned", action: "error", error: cleanupError.message });
+          }
+          
+        } else {
+          // Other auth error - skip this user
+          logger.error(`🧹 BULK_CLEANUP: Auth error for user ${uid}:`, authError);
+          results.push({ uid, status: "auth_error", action: "skipped", error: authError.message });
+        }
+      }
+    }
+    
+    logger.info(`✅ BULK_CLEANUP COMPLETE: Cleaned up ${totalCleaned} orphaned users out of ${usersSnapshot.docs.length} total users`);
+    logger.info(`🧹 BULK_CLEANUP_METRICS | total_users=${usersSnapshot.docs.length} | cleaned=${totalCleaned} | timestamp=${Date.now()}`);
+    
+    return {
+      success: true,
+      totalUsers: usersSnapshot.docs.length,
+      orphanedCleaned: totalCleaned,
+      results: results
+    };
+    
+  } catch (error) {
+    logger.error("❌ BULK_CLEANUP FAILED:", error);
+    throw new Error(`Bulk cleanup failed: ${error.message}`);
+  }
+});
+
+/**
+ * 📊 MONITORING FUNCTION
+ * =======================
+ * 
+ * Daily scheduled function to check for orphaned data and alert if needed.
+ */
+exports.detectOrphanedData = onSchedule(
+    {
+      schedule: "0 2 * * *", // Daily at 2 AM UTC
+      timeZone: "UTC",
+    },
+    async (event) => {
+      logger.info("📊 MONITORING: Starting daily orphaned data detection");
+      
+      try {
+        let orphanedCount = 0;
+        
+        // Get sample of user documents (limit to prevent timeout)
+        const usersSnapshot = await db.collection("users").limit(100).get();
+        
+        for (const doc of usersSnapshot.docs) {
+          const uid = doc.id;
+          
+          try {
+            await auth.getUser(uid);
+            // User exists, not orphaned
+          } catch (authError) {
+            if (authError.code === "auth/user-not-found") {
+              orphanedCount++;
+            }
+          }
+        }
+        
+        logger.info(`📊 MONITORING: Found ${orphanedCount} orphaned profiles out of ${usersSnapshot.docs.length} checked`);
+        
+        // Alert if high number of orphaned profiles
+        if (orphanedCount > 5) {
+          logger.error(`🚨 ALERT: HIGH ORPHANED DATA COUNT: ${orphanedCount} profiles detected - consider running bulk cleanup`);
+        }
+        
+        logger.info(`📊 MONITORING_METRICS | orphaned_count=${orphanedCount} | total_checked=${usersSnapshot.docs.length} | timestamp=${Date.now()}`);
+        
+      } catch (error) {
+        logger.error("📊 MONITORING ERROR:", error);
+      }
+    });

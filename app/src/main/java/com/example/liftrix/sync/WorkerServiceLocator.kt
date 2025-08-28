@@ -31,6 +31,8 @@ object WorkerServiceLocator {
         fun firebaseAuth(): com.google.firebase.auth.FirebaseAuth
         fun gson(): com.google.gson.Gson
         fun followRepository(): com.example.liftrix.data.repository.social.FollowRepositoryImpl
+        fun profileCleanupService(): com.example.liftrix.data.service.ProfileCleanupService
+        fun cleanupMetricsCollector(): com.example.liftrix.analytics.CleanupMetricsCollector
     }
     
     private fun getEntryPoint(context: Context): WorkerDependencies {
@@ -63,7 +65,8 @@ object WorkerServiceLocator {
         val firestore: com.google.firebase.firestore.FirebaseFirestore,
         val auth: com.google.firebase.auth.FirebaseAuth,
         val gson: com.google.gson.Gson,
-        val followRepository: com.example.liftrix.data.repository.social.FollowRepositoryImpl
+        val followRepository: com.example.liftrix.data.repository.social.FollowRepositoryImpl,
+        val profileCleanupService: com.example.liftrix.data.service.ProfileCleanupService
     )
     
     fun getProfileSyncDependencies(context: Context): ProfileSyncDependencies {
@@ -78,7 +81,8 @@ object WorkerServiceLocator {
                 firestore = entryPoint.firestore(),
                 auth = entryPoint.firebaseAuth(),
                 gson = entryPoint.gson(),
-                followRepository = entryPoint.followRepository()
+                followRepository = entryPoint.followRepository(),
+                profileCleanupService = entryPoint.profileCleanupService()
             )
         } catch (e: Exception) {
             Timber.e(e, "WorkerServiceLocator: Failed to get ProfileSync dependencies via Hilt")

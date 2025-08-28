@@ -158,6 +158,13 @@ sealed class LiftrixRoute {
     data object Settings : LiftrixRoute()
     
     /**
+     * Sync settings screen for managing data synchronization preferences
+     * Provides comprehensive sync controls, status monitoring, and troubleshooting
+     */
+    @Serializable
+    data object SyncSettings : LiftrixRoute()
+    
+    /**
      * Widget settings screen for customizing dashboard widgets
      */
     @Serializable

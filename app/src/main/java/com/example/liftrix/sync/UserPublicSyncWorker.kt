@@ -73,7 +73,7 @@ class UserPublicSyncWorker @AssistedInject constructor(
         const val KEY_SYNC_COUNT = "sync_count"
         const val KEY_ERROR_MESSAGE = "error_message"
         private const val MAX_RETRY_COUNT = 3
-        private const val USERS_PUBLIC_COLLECTION = "social_profiles"
+        private const val USERS_PUBLIC_COLLECTION = "users_public"
         private const val USER_SEARCH_CACHE_COLLECTION = "user_search_cache"
         
         fun createWorkRequest(userId: String, forceSync: Boolean = false): OneTimeWorkRequest {
