@@ -175,6 +175,26 @@ class SettingsRepositoryImpl @Inject constructor(
         }
     }
     
+    override suspend fun updateAutoSyncEnabled(userId: String, enabled: Boolean): Result<Unit> {
+        return try {
+            // Use SettingsPersistenceManager for reliable triple-store persistence
+            val result = persistenceManager.persistSetting(userId, "auto_sync_enabled", enabled)
+            
+            result.fold(
+                onSuccess = {
+                    Timber.d("Auto-sync setting updated successfully: $enabled for user: $userId")
+                    Result.success(Unit)
+                },
+                onFailure = { error ->
+                    Timber.e(error, "Failed to update auto-sync setting for user: $userId")
+                    Result.failure(error)
+                }
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Exception updating auto-sync setting for user: $userId")
+            Result.failure(e)
+        }
+    }
     
     override suspend fun saveSettings(settings: UserSettings): Result<Unit> {
         return try {

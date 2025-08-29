@@ -69,6 +69,14 @@ data class Workout(
     }
     
     /**
+     * Gets the effective timestamp for sorting and display.
+     * Falls back to createdAt when updatedAt is missing or zero (sync migration case).
+     */
+    fun getEffectiveTimestamp(): Instant {
+        return if (updatedAt.epochSecond > 0) updatedAt else createdAt
+    }
+    
+    /**
      * Calculates total volume across all exercises
      */
     fun calculateTotalVolume(): Weight {

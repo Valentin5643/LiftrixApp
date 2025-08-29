@@ -26,6 +26,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withTimeout
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -666,31 +670,70 @@ class CalorieTrackingViewModel @Inject constructor(
             weeklyTrend = AsyncData.Loading()
         )
 
-        // Launch concurrent data loading with timeout
+        // Launch concurrent data loading with structured concurrency and proper timeout handling
         viewModelScope.launch {
             try {
-                // Add timeout for service calls
-                kotlinx.coroutines.withTimeout(15000) { // 15 second timeout
-                    loadCalorieSummaryInternal(userId)
-                    loadDailyCaloriesInternal(userId, timeRange)
-                    loadWeeklyTrendInternal(userId)
+                // Use structured concurrency with individual timeouts for each operation
+                coroutineScope {
+                    val summaryDeferred = async { 
+                        withTimeout(30000) { // 30 second individual timeout
+                            loadCalorieSummaryInternal(userId)
+                        }
+                    }
+                    val dailyDeferred = async { 
+                        withTimeout(30000) { // 30 second individual timeout
+                            loadDailyCaloriesInternal(userId, timeRange)
+                        }
+                    }
+                    val weeklyDeferred = async { 
+                        withTimeout(30000) { // 30 second individual timeout
+                            loadWeeklyTrendInternal(userId)
+                        }
+                    }
+                    
+                    // Await all results with individual error handling
+                    val results = listOf(
+                        async { 
+                            try { summaryDeferred.await(); "summary_success" } 
+                            catch (e: Exception) { 
+                                Timber.w(e, "Summary load failed, using fallback")
+                                updateCalorieDataStates(calorieSummary = AsyncData.Success(createFallbackCalorieSummary()))
+                                "summary_fallback" 
+                            }
+                        },
+                        async { 
+                            try { dailyDeferred.await(); "daily_success" } 
+                            catch (e: Exception) { 
+                                Timber.w(e, "Daily load failed, using fallback")
+                                updateCalorieDataStates(dailyCalories = AsyncData.Success(emptyList()))
+                                "daily_fallback" 
+                            }
+                        },
+                        async { 
+                            try { weeklyDeferred.await(); "weekly_success" } 
+                            catch (e: Exception) { 
+                                Timber.w(e, "Weekly load failed, using fallback")
+                                updateCalorieDataStates(weeklyTrend = AsyncData.Success(createFallbackWeeklyTrend()))
+                                "weekly_fallback" 
+                            }
+                        }
+                    )
+                    
+                    // Await all with overall timeout
+                    withTimeout(60000) { // 1 minute overall timeout
+                        results.awaitAll()
+                    }
                 }
             } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-                Timber.w("CalorieTrackingViewModel: Service call timeout, providing fallback data")
-                // Provide fallback data instead of staying in loading state
-                updateCalorieDataStates(
-                    calorieSummary = AsyncData.Success(createFallbackCalorieSummary()),
-                    dailyCalories = AsyncData.Success(emptyList()),
-                    weeklyTrend = AsyncData.Success(createFallbackWeeklyTrend())
-                )
+                Timber.w("CalorieTrackingViewModel: Overall timeout reached, ensuring all data has fallbacks")
+                ensureFallbackDataIsProvided()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                Timber.d("CalorieTrackingViewModel: Coroutine cancelled (normal during navigation)")
+                // Don't provide fallback on cancellation - let it be cancelled
+                throw e
             } catch (e: Exception) {
-                Timber.e(e, "CalorieTrackingViewModel: Error loading initial data")
-                // Provide fallback data instead of staying in loading state
-                updateCalorieDataStates(
-                    calorieSummary = AsyncData.Success(createFallbackCalorieSummary()),
-                    dailyCalories = AsyncData.Success(emptyList()),
-                    weeklyTrend = AsyncData.Success(createFallbackWeeklyTrend())
-                )
+                Timber.e(e, "CalorieTrackingViewModel: Unexpected error loading initial data")
+                ensureFallbackDataIsProvided()
             }
         }
     }
@@ -991,6 +1034,29 @@ class CalorieTrackingViewModel @Inject constructor(
             lowWeek = null,
             consistency = 0
         )
+    }
+
+    /**
+     * Ensures all data states have fallback values instead of staying in loading state.
+     */
+    private fun ensureFallbackDataIsProvided() {
+        val currentUiState = _uiState.value
+        val currentState = currentUiState.dataOrNull()
+        
+        if (currentState != null) {
+            val needsSummaryFallback = currentState.calorieSummary is AsyncData.Loading
+            val needsDailyFallback = currentState.dailyCalories is AsyncData.Loading
+            val needsWeeklyFallback = currentState.weeklyTrend is AsyncData.Loading
+            
+            if (needsSummaryFallback || needsDailyFallback || needsWeeklyFallback) {
+                updateCalorieDataStates(
+                    calorieSummary = if (needsSummaryFallback) AsyncData.Success(createFallbackCalorieSummary()) else null,
+                    dailyCalories = if (needsDailyFallback) AsyncData.Success(emptyList()) else null,
+                    weeklyTrend = if (needsWeeklyFallback) AsyncData.Success(createFallbackWeeklyTrend()) else null
+                )
+                Timber.d("CalorieTrackingViewModel: Provided fallback data for stuck loading states")
+            }
+        }
     }
 
     override fun onCleared() {

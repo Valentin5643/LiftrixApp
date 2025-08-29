@@ -70,9 +70,9 @@ class EnhancedCacheManager @Inject constructor(
         }
     }
     
-    // Disk cache directory
+    // Disk cache directory with robust creation
     private val cacheDir = File(context.cacheDir, "enhanced_cache").apply {
-        if (!exists()) mkdirs()
+        ensureDirectoryExists()
     }
     
     // Thread-safe access coordination
@@ -376,6 +376,15 @@ class EnhancedCacheManager @Inject constructor(
                         file.delete()
                         null
                     }
+                } catch (e: IOException) {
+                    Timber.e(e, "$TAG: I/O error reading disk cache: $key")
+                    // Try to delete corrupted file
+                    try {
+                        File(cacheDir, "$key.cache").delete()
+                    } catch (deleteException: Exception) {
+                        Timber.w(deleteException, "$TAG: Failed to delete corrupted cache file: $key")
+                    }
+                    null
                 } catch (e: Exception) {
                     Timber.e(e, "$TAG: Error reading disk cache: $key")
                     null
@@ -388,10 +397,27 @@ class EnhancedCacheManager @Inject constructor(
         withContext(ioDispatcher) {
             diskMutex.withLock {
                 try {
+                    // Ensure cache directory exists before writing
+                    if (!cacheDir.ensureDirectoryExists()) {
+                        Timber.e("$TAG: Cannot create cache directory: ${cacheDir.absolutePath}")
+                        return@withLock
+                    }
+                    
                     val entry = CacheEntry(value, Clock.System.now(), ttl)
                     val json = gson.toJson(entry)
                     val file = File(cacheDir, "$key.cache")
-                    file.writeText(json)
+                    
+                    // Use atomic write with temporary file to prevent corruption
+                    val tempFile = File(cacheDir, "$key.cache.tmp")
+                    tempFile.writeText(json)
+                    
+                    // Atomic rename to final file
+                    if (!tempFile.renameTo(file)) {
+                        tempFile.delete() // Clean up temp file if rename failed
+                        Timber.w("$TAG: Failed to rename temp file for key: $key")
+                    }
+                } catch (e: IOException) {
+                    Timber.e(e, "$TAG: I/O error writing disk cache: $key")
                 } catch (e: Exception) {
                     Timber.e(e, "$TAG: Error writing disk cache: $key")
                 }
@@ -449,6 +475,36 @@ class EnhancedCacheManager @Inject constructor(
             cacheDir.listFiles()?.sumOf { it.length() } ?: 0L
         } catch (e: Exception) {
             0L
+        }
+    }
+    
+    /**
+     * Ensures the cache directory exists with proper error handling.
+     * 
+     * @return true if directory exists or was created successfully, false otherwise
+     */
+    private fun File.ensureDirectoryExists(): Boolean {
+        return try {
+            when {
+                exists() && isDirectory -> true
+                exists() && isFile -> {
+                    Timber.w("$TAG: Cache path exists but is a file, not directory: $absolutePath")
+                    false
+                }
+                else -> {
+                    val created = mkdirs()
+                    if (!created) {
+                        Timber.e("$TAG: Failed to create cache directory: $absolutePath")
+                    }
+                    created
+                }
+            }
+        } catch (e: SecurityException) {
+            Timber.e(e, "$TAG: Security exception creating cache directory: $absolutePath")
+            false
+        } catch (e: Exception) {
+            Timber.e(e, "$TAG: Exception creating cache directory: $absolutePath")
+            false
         }
     }
 }

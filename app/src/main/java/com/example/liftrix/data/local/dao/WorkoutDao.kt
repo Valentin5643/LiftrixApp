@@ -12,10 +12,25 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface WorkoutDao {
     
-    @Query("SELECT * FROM workouts WHERE user_id = :userId ORDER BY date DESC, created_at DESC")
+    @Query("""
+        SELECT * FROM workouts 
+        WHERE user_id = :userId 
+        ORDER BY 
+            CASE WHEN updated_at > 0 THEN updated_at ELSE created_at END DESC,
+            date DESC,
+            created_at DESC
+    """)
     fun getAllWorkoutsForUser(userId: String): Flow<List<WorkoutEntity>>
     
-    @Query("SELECT * FROM workouts WHERE user_id = :userId AND status = 'COMPLETED' ORDER BY date DESC, created_at DESC LIMIT :limit")
+    @Query("""
+        SELECT * FROM workouts 
+        WHERE user_id = :userId 
+        ORDER BY 
+            CASE WHEN updated_at > 0 THEN updated_at ELSE created_at END DESC,
+            date DESC,
+            created_at DESC 
+        LIMIT :limit
+    """)
     fun getRecentCompletedWorkouts(userId: String, limit: Int): Flow<List<WorkoutEntity>>
     
     @Query("SELECT * FROM workouts WHERE id = :id AND user_id = :userId")
@@ -154,14 +169,15 @@ interface WorkoutDao {
     ): Flow<List<WorkoutEntity>>
     
     /**
-     * Gets personal completed workouts only for the current user
+     * Gets personal workouts for the current user (all statuses)
      */
     @Query("""
         SELECT * FROM workouts 
         WHERE user_id = :userId 
-        AND status = 'COMPLETED' 
-        AND end_time IS NOT NULL
-        ORDER BY end_time DESC 
+        ORDER BY 
+            CASE WHEN updated_at > 0 THEN updated_at ELSE created_at END DESC,
+            date DESC,
+            created_at DESC
         LIMIT :limit OFFSET :offset
     """)
     fun getPersonalCompletedWorkouts(
@@ -217,12 +233,16 @@ interface WorkoutDao {
     ): Int
     
     /**
-     * Gets paginated workout history for a user ordered by date (newest first)
+     * Gets paginated workout history for a user ordered by effective timestamp (newest first)
+     * Uses updatedAt when available, falls back to createdAt for workouts with updatedAt = 0
      */
     @Query("""
         SELECT * FROM workouts 
         WHERE user_id = :userId 
-        ORDER BY date DESC, created_at DESC 
+        ORDER BY 
+            CASE WHEN updated_at > 0 THEN updated_at ELSE created_at END DESC,
+            date DESC,
+            created_at DESC
         LIMIT :limit OFFSET :offset
     """)
     fun getWorkoutHistoryPaginated(

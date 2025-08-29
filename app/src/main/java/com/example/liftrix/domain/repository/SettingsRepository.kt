@@ -65,6 +65,18 @@ interface SettingsRepository {
     suspend fun updateWeightUnit(userId: String, weightUnit: WeightUnit): Result<Unit>
     
     /**
+     * Updates the auto-sync preference for a user.
+     * 
+     * This operation will immediately persist to DataStore for instant UI updates
+     * and asynchronously sync to Room for offline availability.
+     * 
+     * @param userId The ID of the user whose setting to update
+     * @param enabled Whether auto-sync should be enabled
+     * @return A Result indicating success or failure
+     */
+    suspend fun updateAutoSyncEnabled(userId: String, enabled: Boolean): Result<Unit>
+    
+    /**
      * Saves complete user settings.
      * 
      * This operation will validate the settings and persist them to both

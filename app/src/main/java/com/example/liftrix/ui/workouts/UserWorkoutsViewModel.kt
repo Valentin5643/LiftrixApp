@@ -4,9 +4,13 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.social.WorkoutPost
+import com.example.liftrix.domain.model.social.PostVisibility
+import com.example.liftrix.domain.model.social.PostExercise
+import com.example.liftrix.domain.model.social.WorkoutSummary as SocialWorkoutSummary
 import com.example.liftrix.domain.model.common.LiftrixResult
-import com.example.liftrix.domain.repository.social.FeedRepository
+import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.repository.social.EngagementRepository
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
@@ -19,6 +23,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -30,6 +36,7 @@ import javax.inject.Inject
 data class UserWorkoutsUiState(
     val isLoading: Boolean = false,
     val error: LiftrixError? = null,
+    val workoutPosts: List<WorkoutPost> = emptyList(),
     val totalWorkouts: Int = 0,
     val likedPosts: Set<String> = emptySet(),
     val savedPosts: Set<String> = emptySet(),
@@ -48,17 +55,17 @@ sealed class UserWorkoutsEvent : ViewModelEvent {
 
 /**
  * ViewModel for the User Workouts screen.
- * Manages the display of all user's completed workouts with social engagement metrics.
+ * Manages the display of all user's completed workouts in social feed format.
  * 
  * This ViewModel handles:
- * - Loading paginated user workout posts from the feed repository
+ * - Loading all user workouts from the workout repository
+ * - Converting workouts to WorkoutPost format with default social values
  * - Managing like/save states with optimistic updates
- * - Sharing workouts to social platforms
- * - Tracking total workout count for the user
+ * - Providing workout count and social engagement
  */
 @HiltViewModel
 class UserWorkoutsViewModel @Inject constructor(
-    private val feedRepository: FeedRepository,
+    private val workoutRepository: WorkoutRepository,
     private val engagementRepository: EngagementRepository,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     errorHandler: ErrorHandler
@@ -66,10 +73,10 @@ class UserWorkoutsViewModel @Inject constructor(
     
     override val _uiState = MutableStateFlow(UserWorkoutsUiState())
     
-    private val _userWorkouts = MutableStateFlow<Flow<PagingData<WorkoutPost>>>(emptyFlow())
-    val userWorkouts: Flow<PagingData<WorkoutPost>> = _userWorkouts
-        .flatMapLatest { it }
-        .cachedIn(viewModelScope)
+    // Expose workout posts from UI state
+    val userWorkouts: Flow<List<WorkoutPost>> = _uiState
+        .map { it.workoutPosts }
+        .distinctUntilChanged()
     
     init {
         loadUserData()
@@ -109,26 +116,94 @@ class UserWorkoutsViewModel @Inject constructor(
             try {
                 val userId = getCurrentUserIdUseCase()
                 if (userId != null) {
-                    // Load user's workout posts using the feed repository
-                    // Pass userId as both userId and viewerId since we're viewing our own posts
-                    val userPostsFlow = feedRepository.getUserPosts(
-                        userId = userId,
-                        viewerId = userId,
-                        pageSize = 20
-                    )
+                    // 🔍 ENHANCED LOGGING: Track workout loading
+                    Timber.d("[WORKOUTS-DEBUG] Loading workouts for user: $userId")
                     
-                    // Update the flow properly
-                    _userWorkouts.value = userPostsFlow
-                    
-                    _uiState.update { 
-                        it.copy(
-                            isLoading = false,
-                            totalWorkouts = 0 // Will be updated as posts are loaded
+                    // Collect workouts from the workout repository and convert to WorkoutPost format
+                    workoutRepository.getWorkoutsByUser(userId).collect { result ->
+                        result.fold(
+                            onSuccess = { workouts ->
+                                Timber.d("[WORKOUTS-DEBUG] Successfully loaded ${workouts.size} workouts")
+                                workouts.forEachIndexed { index, workout ->
+                                    Timber.d("[WORKOUTS-DEBUG]   [$index] ${workout.name} - ${workout.date} - Status: ${workout.status}")
+                                }
+                                
+                                // Convert workouts to WorkoutPost format with default social values
+                                val workoutPosts = workouts.map { workout ->
+                                    val totalVolume = workout.exercises.sumOf { exercise ->
+                                        exercise.sets.sumOf { set -> 
+                                            (set.reps?.count ?: 0) * (set.weight?.kilograms ?: 0.0)
+                                        }
+                                    }
+                                    
+                                    val durationMinutes = if (workout.startTime != null && workout.endTime != null) {
+                                        java.time.Duration.between(workout.startTime, workout.endTime).toMinutes().toInt()
+                                    } else null
+                                    
+                                    WorkoutPost(
+                                        id = "post_${workout.id.value}", // Generate post ID from workout ID
+                                        workoutId = workout.id.value,
+                                        userId = workout.userId,
+                                        authorUsername = "You", // Default username for own workouts
+                                        authorDisplayName = "You",
+                                        authorProfilePhotoUrl = null,
+                                        caption = workout.notes ?: "",
+                                        exercises = workout.exercises.map { exercise ->
+                                            PostExercise(
+                                                name = exercise.libraryExercise.name,
+                                                isCustomExercise = false, // Default to false for now
+                                                setsCount = exercise.sets.size,
+                                                maxWeight = exercise.sets.maxOfOrNull { it.weight?.kilograms ?: 0.0 },
+                                                isPR = false // Default to false for now
+                                            )
+                                        },
+                                        totalVolume = totalVolume,
+                                        workoutDuration = durationMinutes,
+                                        exercisesCount = workout.exercises.size,
+                                        mediaUrls = emptyList(), // No media for regular workouts
+                                        likeCount = 0, // Default social values
+                                        commentCount = 0,
+                                        isLikedByViewer = false,
+                                        isSavedByViewer = false,
+                                        visibility = PostVisibility.PRIVATE, // Default to private for non-social workouts
+                                        createdAt = workout.createdAt.epochSecond,
+                                        updatedAt = workout.updatedAt.epochSecond,
+                                        workoutSummary = SocialWorkoutSummary(
+                                            totalSets = workout.exercises.sumOf { it.sets.size },
+                                            totalReps = workout.exercises.sumOf { exercise ->
+                                                exercise.sets.sumOf { set -> set.reps?.count ?: 0 }
+                                            },
+                                            totalVolume = totalVolume,
+                                            exerciseCount = workout.exercises.size,
+                                            duration = durationMinutes
+                                        )
+                                    )
+                                }
+                                
+                                _uiState.update { 
+                                    it.copy(
+                                        isLoading = false,
+                                        workoutPosts = workoutPosts,
+                                        totalWorkouts = workouts.size,
+                                        error = null
+                                    )
+                                }
+                            },
+                            onFailure = { error ->
+                                val liftrixError = error as? LiftrixError ?: LiftrixError.UnknownError("Failed to load workouts: ${error.message}")
+                                Timber.e("[WORKOUTS-DEBUG] Failed to load workouts: $liftrixError")
+                                _uiState.update { 
+                                    it.copy(
+                                        isLoading = false,
+                                        error = liftrixError
+                                    )
+                                }
+                            }
                         )
                     }
                 } else {
                     val error = LiftrixError.AuthenticationError("User not authenticated")
-                    Timber.e("Failed to get current user ID: $error")
+                    Timber.e("[WORKOUTS-DEBUG] Failed to get current user ID: $error")
                     _uiState.update { 
                         it.copy(
                             isLoading = false,
@@ -138,7 +213,7 @@ class UserWorkoutsViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 val error = LiftrixError.UnknownError("Failed to load user workouts: ${e.message}")
-                Timber.e(e, "Failed to load user workouts")
+                Timber.e(e, "[WORKOUTS-DEBUG] Exception loading user workouts")
                 _uiState.update { 
                     it.copy(
                         isLoading = false,
@@ -162,7 +237,14 @@ class UserWorkoutsViewModel @Inject constructor(
             }
             _uiState.update { it.copy(likedPosts = currentLikedPosts) }
             
-            // Perform actual operation  
+            // For workout-generated posts, we just update local state since they're not real social posts
+            if (postId.startsWith("post_")) {
+                // This is a workout-generated post, just keep the optimistic update
+                Timber.d("Toggled like for workout-generated post: $postId")
+                return@launch
+            }
+            
+            // For real social posts, perform actual operation  
             engagementRepository.toggleLike(postId, userId).fold(
                 onSuccess = { 
                     // Already updated optimistically
@@ -196,7 +278,14 @@ class UserWorkoutsViewModel @Inject constructor(
             }
             _uiState.update { it.copy(savedPosts = currentSavedPosts) }
             
-            // Perform actual operation
+            // For workout-generated posts, we just update local state since they're not real social posts
+            if (postId.startsWith("post_")) {
+                // This is a workout-generated post, just keep the optimistic update
+                Timber.d("Toggled save for workout-generated post: $postId")
+                return@launch
+            }
+            
+            // For real social posts, perform actual operation
             engagementRepository.toggleSave(postId, userId).fold(
                 onSuccess = { 
                     // Already updated optimistically

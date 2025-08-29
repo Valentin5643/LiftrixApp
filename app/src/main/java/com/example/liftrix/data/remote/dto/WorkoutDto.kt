@@ -6,6 +6,7 @@ import com.google.firebase.firestore.ServerTimestamp
 
 /**
  * Firestore DTO representing a workout document
+ * Supports both Timestamp and Long (epoch millis) for backward compatibility
  */
 data class WorkoutDto(
     @PropertyName("id")
@@ -15,7 +16,7 @@ data class WorkoutDto(
     val name: String = "",
     
     @PropertyName("date")
-    val date: Timestamp? = null, // Firestore Timestamp for workout date
+    val date: Any? = null, // Can be Timestamp or Long epoch millis
     
     @PropertyName("exercises")
     val exercises: List<ExerciseDto> = emptyList(),
@@ -23,30 +24,40 @@ data class WorkoutDto(
     @PropertyName("status")
     val status: String = "",
     
-    @PropertyName("start_time")
-    val startTime: Timestamp? = null,
+    @PropertyName("startTime")
+    val startTime: Any? = null, // Can be Timestamp or Long epoch millis
     
-    @PropertyName("end_time")
-    val endTime: Timestamp? = null,
+    @PropertyName("endTime")
+    val endTime: Any? = null, // Can be Timestamp or Long epoch millis
     
     @PropertyName("notes")
     val notes: String? = null,
     
-    @PropertyName("template_id")
+    @PropertyName("templateId")
     val templateId: String? = null,
     
-    @PropertyName("created_at")
-    val createdAt: Timestamp = Timestamp.now(),
+    @PropertyName("createdAt")
+    val createdAt: Any = Timestamp.now(), // Can be Timestamp or Long epoch millis
     
-    @PropertyName("updated_at")
+    @PropertyName("updatedAt")
     @ServerTimestamp
-    val updatedAt: Timestamp? = null,
+    val updatedAt: Timestamp? = null, // Server-managed timestamp
     
     @PropertyName("userId")
     val userId: String = "",
     
     @PropertyName("version")
-    val version: Long = 1L
+    val version: Long = 1L,
+    
+    // Sync metadata fields for Firestore sync compatibility
+    @PropertyName("syncVersion")
+    val syncVersion: Long = 1L,
+    
+    @PropertyName("isSynced")
+    val isSynced: Boolean = false,
+    
+    @PropertyName("lastModified")
+    val lastModified: Any? = null // Can be Timestamp or Long epoch millis
 ) {
     // No-argument constructor required by Firestore
     constructor() : this(
@@ -62,6 +73,9 @@ data class WorkoutDto(
         createdAt = Timestamp.now(),
         updatedAt = null,
         userId = "",
-        version = 1L
+        version = 1L,
+        syncVersion = 1L,
+        isSynced = false,
+        lastModified = null
     )
 } 

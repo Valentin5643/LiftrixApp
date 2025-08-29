@@ -77,6 +77,13 @@ fun ProfileScreenSyncEnhanced(
         )
     )
     
+    // Get connectivity status and sync metrics from ProfileViewModel
+    val isConnected by viewModel.isConnected.collectAsStateWithLifecycle(initialValue = true)
+    val isOffline = !isConnected
+    val achievementSyncStatus by viewModel.getAchievementSyncStatus().collectAsStateWithLifecycle()
+    val unsyncedItemCount by viewModel.getUnsyncedItemCount().collectAsStateWithLifecycle()
+    val isAutoSyncEnabled by viewModel.getAutoSyncEnabled().collectAsStateWithLifecycle()
+    
     // Image picker dialog state
     var showImagePickerDialog by remember { mutableStateOf(false) }
     
@@ -85,7 +92,7 @@ fun ProfileScreenSyncEnhanced(
     // Wrap entire screen with sync awareness
     WithSyncAwareness(
         syncManager = syncManager,
-        isOffline = false, // TODO: Get from connectivity manager
+        isOffline = isOffline,
         showCompactIndicator = false
     ) {
         Column(
@@ -112,6 +119,10 @@ fun ProfileScreenSyncEnhanced(
                         profileImageUrl = uiState.profile!!.profileImageUrl,
                         imageUploadState = uiState.imageUploadState,
                         combinedSyncStatus = combinedSyncStatus,
+                        achievementSyncStatus = achievementSyncStatus,
+                        unsyncedItemCount = unsyncedItemCount,
+                        isAutoSyncEnabled = isAutoSyncEnabled,
+                        lastSyncTime = viewModel.getLastSyncTime(),
                         onNavigateToEdit = onNavigateToEdit,
                         onNavigateToImageCrop = onNavigateToImageCrop,
                         onNavigateToSettings = onNavigateToSettings,
@@ -125,13 +136,13 @@ fun ProfileScreenSyncEnhanced(
                             viewModel.handleEvent(ProfileEvent.UpdatePrivacy(isPublic))
                         },
                         onSyncNow = {
-                            // TODO: Trigger profile sync
+                            viewModel.triggerProfileSync()
                         },
                         onForceSyncAll = {
-                            // TODO: Trigger force sync
+                            viewModel.triggerForceSyncAll()
                         },
                         onToggleAutoSync = { enabled ->
-                            // TODO: Toggle auto-sync for profile
+                            viewModel.toggleAutoSync(enabled)
                         },
                         onSyncSettings = onNavigateToSettings,
                         showImagePickerDialog = showImagePickerDialog,
@@ -173,6 +184,10 @@ private fun ProfileContentWithSync(
     profileImageUrl: String?,
     imageUploadState: ImageUploadState,
     combinedSyncStatus: CombinedSyncStatus,
+    achievementSyncStatus: SyncStatus,
+    unsyncedItemCount: Int,
+    isAutoSyncEnabled: Boolean,
+    lastSyncTime: LocalDateTime,
     onNavigateToEdit: () -> Unit,
     onNavigateToImageCrop: (String) -> Unit,
     onNavigateToSettings: () -> Unit,
@@ -294,7 +309,7 @@ private fun ProfileContentWithSync(
             actions = {
                 // Achievement sync status
                 SyncStatusIndicator(
-                    syncStatus = SyncStatus.Idle, // TODO: Get achievement sync status
+                    syncStatus = achievementSyncStatus,
                     showText = false,
                     autoHideSuccess = true,
                     contentDescription = "Achievement sync status"
@@ -364,9 +379,9 @@ private fun ProfileContentWithSync(
     // NEW: Sync Controls Section
     ManualSyncControls(
         combinedStatus = combinedSyncStatus,
-        lastSyncTime = LocalDateTime.now().minusMinutes(5), // TODO: Get actual last sync time
-        unsyncedItemCount = 0, // TODO: Get actual unsynced count
-        isAutoSyncEnabled = true, // TODO: Get actual auto-sync setting
+        lastSyncTime = lastSyncTime,
+        unsyncedItemCount = unsyncedItemCount,
+        isAutoSyncEnabled = isAutoSyncEnabled,
         onSyncNow = onSyncNow,
         onForceSyncAll = onForceSyncAll,
         onToggleAutoSync = onToggleAutoSync,

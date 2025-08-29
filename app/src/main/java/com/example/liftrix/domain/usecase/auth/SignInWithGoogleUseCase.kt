@@ -38,10 +38,10 @@ class SignInWithGoogleUseCase @Inject constructor(
             return Result.failure(IllegalArgumentException("Google ID token cannot be blank"))
         }
         
-        // Authenticate with Google
+        // Authenticate with Google - this now handles profile creation gracefully
         val authResult = authRepository.signInWithGoogle(idToken)
         
-        // Handle successful authentication
+        // Handle successful authentication - profile creation is now handled in the repository
         authResult.onSuccess { user ->
             try {
                 // Check if UserAccount exists in local database

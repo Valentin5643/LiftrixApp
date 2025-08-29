@@ -445,8 +445,11 @@ class WorkoutRepositoryImpl @Inject constructor(
                 if (totalCount > 0) {
                     val allWorkoutsFlow = workoutDao.getAllWorkoutsForUser(userId)
                     allWorkoutsFlow.first().let { allEntities ->
+                        Timber.d("WORKOUT-DEBUG: All workouts query returned ${allEntities.size} entities")
                         allEntities.forEach { entity ->
-                            Timber.d("WORKOUT-DEBUG: Found entity - ID: ${entity.id.take(8)}..., Status: ${entity.status}")
+                            val updatedAtMillis = entity.updatedAt.toEpochMilli()
+                            val createdAtMillis = entity.createdAt.toEpochMilli()
+                            Timber.d("WORKOUT-DEBUG: Entity - ID: ${entity.id.take(8)}..., Status: ${entity.status}, updatedAt: $updatedAtMillis, createdAt: $createdAtMillis")
                         }
                     }
                 }
@@ -458,12 +461,18 @@ class WorkoutRepositoryImpl @Inject constructor(
         return workoutDao.getRecentCompletedWorkouts(userId, limit)
             .map { entities ->
                 try {
-                    Timber.d("Found ${entities.size} recent completed workouts")
+                    Timber.d("WORKOUT-DEBUG: Found ${entities.size} workouts from getRecentCompletedWorkouts (limit: $limit)")
+                    entities.forEach { entity ->
+                        val updatedAtMillis = entity.updatedAt.toEpochMilli()
+                        val createdAtMillis = entity.createdAt.toEpochMilli()
+                        Timber.d("WORKOUT-DEBUG: Recent workout - ID: ${entity.id.take(8)}..., Status: ${entity.status}, updatedAt: $updatedAtMillis, createdAt: $createdAtMillis, isSynced: ${entity.isSynced}")
+                    }
                     
                     val workouts = entities.map { entity ->
                         workoutMapper.toDomain(entity)
                     }
                     
+                    Timber.d("WORKOUT-DEBUG: Successfully mapped ${workouts.size} workouts to domain models")
                     LiftrixResult.success(workouts)
                 } catch (throwable: Throwable) {
                     Timber.e(throwable, "Failed to map recent workout entities for user: $userId, limit: $limit")

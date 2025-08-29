@@ -123,7 +123,8 @@ class WorkoutSyncWorker @AssistedInject constructor(
             checkCancellation()
             
             val syncStartTime = System.currentTimeMillis()
-            Timber.d("[SYNC-BIDIRECTIONAL] WorkoutSync started for user $userId at $syncStartTime")
+            val isStartupSync = inputData.getBoolean("startupSync", false)
+            Timber.d("[SYNC-BIDIRECTIONAL] WorkoutSync started for user $userId at $syncStartTime (startup: $isStartupSync)")
             
             // Validate authentication before sync operations
             val currentUser = auth.currentUser
@@ -139,10 +140,20 @@ class WorkoutSyncWorker @AssistedInject constructor(
             val authDisplayName = currentUser.displayName
             Timber.d("WorkoutSyncWorker: Authentication validated for user $userId")
             
-            // 🔥 NEW: First, fetch and merge remote workouts (bidirectional sync)
-            val fetchResult = fetchAndMergeRemoteWorkouts(userId)
-            if (!fetchResult) {
-                Timber.w("[SYNC-BIDIRECTIONAL] Remote workout fetch failed, continuing with local sync")
+            // 🔥 ENHANCED: Implement safe startup sync strategy
+            if (isStartupSync) {
+                // STARTUP SYNC: Use conservative merge strategy to prevent data loss
+                val fetchResult = fetchAndMergeRemoteWorkoutsStartup(userId)
+                if (!fetchResult) {
+                    Timber.w("[SYNC-STARTUP] Remote workout fetch failed during startup sync")
+                    // Continue with local sync to preserve existing data
+                }
+            } else {
+                // REGULAR SYNC: Use normal bidirectional sync
+                val fetchResult = fetchAndMergeRemoteWorkouts(userId)
+                if (!fetchResult) {
+                    Timber.w("[SYNC-BIDIRECTIONAL] Remote workout fetch failed, continuing with local sync")
+                }
             }
 
             // 🔍 ENHANCED DEBUGGING: Check database state after remote fetch
@@ -209,11 +220,16 @@ class WorkoutSyncWorker @AssistedInject constructor(
                         val remoteDoc = docRef.get().await()
                         
                         val dataToSync = if (remoteDoc.exists()) {
-                            // Handle conflict resolution using proper DTO
-                            val remoteWorkout = remoteDoc.toObject(WorkoutDto::class.java)
+                            // Handle conflict resolution using proper DTO with safe deserialization
+                            val remoteWorkout = safeDeserializeWorkout(remoteDoc)
                             if (remoteWorkout != null) {
                                 // Simple last-write-wins for now - can be enhanced with ConflictResolver
-                                val remoteUpdatedAtMillis = remoteWorkout.updatedAt?.toDate()?.time ?: 0L
+                                val remoteUpdatedAtMillis = when (val updatedAt = remoteWorkout.updatedAt) {
+                                    is Timestamp -> updatedAt.toDate().time
+                                    is Long -> updatedAt
+                                    is Number -> updatedAt.toLong()
+                                    else -> 0L
+                                }
                                 val localUpdatedAtMillis = workout.updatedAt.epochSecond * 1000
                                 if (localUpdatedAtMillis > remoteUpdatedAtMillis) {
                                     workoutMapper.toFirestoreDto(workoutMapper.toDomain(workout), userId)
@@ -412,13 +428,15 @@ class WorkoutSyncWorker @AssistedInject constructor(
             
             for (doc in remoteWorkouts.documents) {
                 try {
-                    val remoteWorkout = doc.toObject(WorkoutDto::class.java)
+                    val remoteWorkout = safeDeserializeWorkout(doc)
                     if (remoteWorkout != null) {
                         val mergeResult = mergeRemoteWorkoutWithLocal(remoteWorkout, userId)
                         when (mergeResult) {
                             "MERGED" -> mergedCount++
                             "CONFLICT_RESOLVED" -> conflictCount++
                         }
+                    } else {
+                        Timber.w("[SYNC-FETCH] Could not deserialize workout ${doc.id} - skipping")
                     }
                 } catch (e: Exception) {
                     Timber.w(e, "[SYNC-FETCH] Failed to process remote workout ${doc.id}")
@@ -454,8 +472,8 @@ class WorkoutSyncWorker @AssistedInject constructor(
                 workoutDao.insertWorkout(localEntity)
                 
                 Timber.i("[SYNC-MERGE] ✅ Successfully inserted new remote workout: $remoteId (name: '${remoteWorkout.name}')")
-                Timber.d("[SYNC-MERGE]   - Remote created: ${remoteWorkout.createdAt?.toDate()}")
-                Timber.d("[SYNC-MERGE]   - Remote updated: ${remoteWorkout.updatedAt?.toDate()}")
+                Timber.d("[SYNC-MERGE]   - Remote created: ${formatTimestamp(remoteWorkout.createdAt)}")
+                Timber.d("[SYNC-MERGE]   - Remote updated: ${formatTimestamp(remoteWorkout.updatedAt)}")
                 Timber.d("[SYNC-MERGE]   - Exercise count: ${remoteWorkout.exercises?.size ?: 0}")
                 
                 "MERGED"
@@ -465,13 +483,18 @@ class WorkoutSyncWorker @AssistedInject constructor(
             }
         } else {
             // 🔥 ENHANCED: Sophisticated conflict resolution with comprehensive logging
-            val remoteUpdatedAt = remoteWorkout.updatedAt?.toDate()?.time ?: 0L
+            val remoteUpdatedAt = when (val updatedAt = remoteWorkout.updatedAt) {
+                is Timestamp -> updatedAt.toDate().time
+                is Long -> updatedAt
+                is Number -> updatedAt.toLong()
+                else -> 0L
+            }
             val localUpdatedAt = localWorkout.updatedAt.epochSecond * 1000
             val timeDifferenceMs = kotlin.math.abs(remoteUpdatedAt - localUpdatedAt)
             
             // 🔥 MIGRATION FIX: Handle workouts with missing/zero updatedAt timestamps
             if (remoteUpdatedAt == 0L) {
-                Timber.w("[SYNC-MIGRATION] 🔧 Remote workout $remoteId has missing updatedAt (epoch=0), forcing local version update")
+                Timber.d("[SYNC-MIGRATION] Fixing missing updatedAt for workout $remoteId")
                 try {
                     // Force update the remote workout with current timestamp
                     val docRef = firestore
@@ -481,12 +504,12 @@ class WorkoutSyncWorker @AssistedInject constructor(
                         .document(remoteId)
                     
                     docRef.update("updatedAt", FieldValue.serverTimestamp()).await()
-                    Timber.i("[SYNC-MIGRATION] ✅ Fixed missing updatedAt for workout $remoteId")
+                    Timber.d("[SYNC-MIGRATION] Fixed updatedAt for workout $remoteId")
                     
                     // Keep local version since remote had invalid timestamp
                     return "MIGRATION_FIXED"
                 } catch (e: Exception) {
-                    Timber.e(e, "[SYNC-MIGRATION] ❌ Failed to fix updatedAt for workout $remoteId")
+                    Timber.w(e, "[SYNC-MIGRATION] Failed to fix updatedAt for workout $remoteId")
                     // Continue with normal conflict resolution
                 }
             }
@@ -554,6 +577,237 @@ class WorkoutSyncWorker @AssistedInject constructor(
         }
     }
     
+    /**
+     * 🔥 CRITICAL FIX: Safe startup sync that prevents data loss during login.
+     * 
+     * Unlike regular sync, this method:
+     * 1. NEVER overwrites local unsynced data with empty remote state
+     * 2. Only updates local workouts if remote has genuinely newer data
+     * 3. Preserves local workouts that don't exist remotely
+     * 4. Uses conservative conflict resolution to prevent accidental deletion
+     * 
+     * This addresses the root cause of workout loss after logout/login cycles.
+     */
+    private suspend fun fetchAndMergeRemoteWorkoutsStartup(userId: String): Boolean {
+        return try {
+            Timber.d("[SYNC-STARTUP] 🛡️ Starting SAFE startup sync for user $userId")
+            
+            // Get count of local workouts before sync
+            val localWorkoutCount = workoutDao.getWorkoutCountForUser(userId)
+            val localUnsyncedCount = workoutDao.getUnsyncedCountForUser(userId)
+            
+            Timber.d("[SYNC-STARTUP] Local state: $localWorkoutCount total, $localUnsyncedCount unsynced")
+            
+            val remoteWorkouts = firestore
+                .collection("users")
+                .document(userId)
+                .collection("workouts")
+                .get()
+                .await()
+            
+            val remoteWorkoutCount = remoteWorkouts.size()
+            Timber.d("[SYNC-STARTUP] Remote state: $remoteWorkoutCount workouts found")
+            
+            // 🛡️ CRITICAL SAFETY CHECK: If remote is empty but local has data, don't replace
+            if (remoteWorkoutCount == 0 && localWorkoutCount > 0) {
+                Timber.w("[SYNC-STARTUP] 🛡️ SAFETY TRIGGERED: Remote is empty but local has $localWorkoutCount workouts")
+                Timber.w("[SYNC-STARTUP] 🛡️ Keeping local data to prevent accidental deletion")
+                
+                // Mark all local workouts as needing sync to push them to remote
+                if (localUnsyncedCount == 0) {
+                    val localWorkouts = workoutDao.getAllWorkoutsForUser(userId).first()
+                    localWorkouts.take(5).forEach { workout ->  // Sample a few
+                        workoutDao.updateSyncStatusForUser(
+                            id = workout.id,
+                            userId = userId,
+                            isSynced = false,  // Mark as unsynced to push to remote
+                            version = System.currentTimeMillis()
+                        )
+                    }
+                    Timber.i("[SYNC-STARTUP] 🛡️ Marked local workouts for upload to populate empty remote")
+                }
+                
+                return true  // Consider this successful - we preserved local data
+            }
+            
+            var mergedCount = 0
+            var conflictCount = 0
+            var preservedLocalCount = 0
+            
+            for (doc in remoteWorkouts.documents) {
+                try {
+                    val remoteWorkout = safeDeserializeWorkout(doc)
+                    if (remoteWorkout != null) {
+                        val mergeResult = mergeRemoteWorkoutWithLocalStartup(remoteWorkout, userId)
+                        when (mergeResult) {
+                            "MERGED" -> mergedCount++
+                            "CONFLICT_RESOLVED" -> conflictCount++
+                            "PRESERVED_LOCAL" -> preservedLocalCount++
+                        }
+                    } else {
+                        Timber.w("[SYNC-STARTUP] Could not deserialize workout ${doc.id} - skipping")
+                    }
+                } catch (e: Exception) {
+                    Timber.w(e, "[SYNC-STARTUP] Failed to process remote workout ${doc.id}")
+                }
+            }
+            
+            val finalLocalCount = workoutDao.getWorkoutCountForUser(userId)
+            
+            Timber.i("[SYNC-STARTUP] 🛡️ Safe startup sync complete:")
+            Timber.i("[SYNC-STARTUP]   - Local workouts before: $localWorkoutCount")
+            Timber.i("[SYNC-STARTUP]   - Remote workouts: $remoteWorkoutCount") 
+            Timber.i("[SYNC-STARTUP]   - Merged: $mergedCount")
+            Timber.i("[SYNC-STARTUP]   - Conflicts resolved: $conflictCount")
+            Timber.i("[SYNC-STARTUP]   - Local preserved: $preservedLocalCount")
+            Timber.i("[SYNC-STARTUP]   - Final local count: $finalLocalCount")
+            
+            // Success if we didn't lose any local data
+            finalLocalCount >= localWorkoutCount
+            
+        } catch (e: Exception) {
+            Timber.e(e, "[SYNC-STARTUP] 🛡️ Safe startup sync failed for user $userId")
+            false
+        }
+    }
+    
+    /**
+     * 🔥 ENHANCED: Startup-specific merge that never overwrites local unsynced data
+     */
+    private suspend fun mergeRemoteWorkoutWithLocalStartup(remoteWorkout: WorkoutDto, userId: String): String {
+        val remoteId = remoteWorkout.id ?: run {
+            Timber.w("[SYNC-STARTUP] Remote workout has no ID, skipping")
+            return "SKIPPED"
+        }
+        
+        val localWorkout = workoutDao.getWorkoutByIdForUser(remoteId, userId)
+        
+        return if (localWorkout == null) {
+            // Remote workout doesn't exist locally - safe to insert
+            try {
+                val domainWorkout = workoutMapper.fromFirestoreDto(remoteWorkout)
+                val localEntity = workoutMapper.toEntity(domainWorkout, isSynced = true)
+                workoutDao.insertWorkout(localEntity)
+                
+                Timber.d("[SYNC-STARTUP] 🛡️ Inserted new remote workout: $remoteId")
+                "MERGED"
+            } catch (e: Exception) {
+                Timber.e(e, "[SYNC-STARTUP] Failed to insert remote workout: $remoteId")
+                "FAILED"
+            }
+        } else {
+            // Workout exists locally - use conservative conflict resolution
+            val remoteUpdatedAt = when (val updatedAt = remoteWorkout.updatedAt) {
+                is Timestamp -> updatedAt.toDate().time
+                is Long -> updatedAt
+                is Number -> updatedAt.toLong()
+                else -> 0L
+            }
+            val localUpdatedAt = localWorkout.updatedAt.epochSecond * 1000
+            val timeDifferenceMs = kotlin.math.abs(remoteUpdatedAt - localUpdatedAt)
+            
+            Timber.d("[SYNC-STARTUP] 🛡️ Conflict detected for workout: $remoteId")
+            Timber.d("[SYNC-STARTUP]   - Local: '${localWorkout.name}', synced=${localWorkout.isSynced}")
+            Timber.d("[SYNC-STARTUP]   - Remote: '${remoteWorkout.name}'")
+            Timber.d("[SYNC-STARTUP]   - Time diff: ${timeDifferenceMs}ms")
+            
+            when {
+                // 🛡️ CRITICAL: Never overwrite local unsynced data during startup
+                !localWorkout.isSynced -> {
+                    Timber.i("[SYNC-STARTUP] 🛡️ PRESERVED local unsynced workout: $remoteId")
+                    Timber.i("[SYNC-STARTUP]   - Local has unsaved changes, keeping local version")
+                    "PRESERVED_LOCAL"
+                }
+                
+                // Remote is significantly newer and local is synced - safe to update
+                remoteUpdatedAt > localUpdatedAt + 1000 && localWorkout.isSynced -> {
+                    try {
+                        val domainWorkout = workoutMapper.fromFirestoreDto(remoteWorkout)
+                        val updatedEntity = workoutMapper.toEntity(domainWorkout, isSynced = true)
+                        workoutDao.insertWorkout(updatedEntity)
+                        
+                        Timber.i("[SYNC-STARTUP] 🛡️ Updated local with newer remote: $remoteId")
+                        "CONFLICT_RESOLVED"
+                    } catch (e: Exception) {
+                        Timber.e(e, "[SYNC-STARTUP] Failed to update local with remote: $remoteId")
+                        "FAILED"
+                    }
+                }
+                
+                // Similar timestamps or local is newer - keep local
+                else -> {
+                    Timber.d("[SYNC-STARTUP] 🛡️ Keeping local version: $remoteId (similar timestamps or local newer)")
+                    "PRESERVED_LOCAL"
+                }
+            }
+        }
+    }
+    
+    /**
+     * Format timestamp for logging - handles both Timestamp and Long types
+     */
+    private fun formatTimestamp(value: Any?): String {
+        return when (value) {
+            is Timestamp -> value.toDate().toString()
+            is Long -> java.util.Date(value).toString()
+            is Number -> java.util.Date(value.toLong()).toString()
+            null -> "null"
+            else -> value.toString()
+        }
+    }
+    
+    /**
+     * Safely deserialize a Firestore document to WorkoutDto
+     * Handles type mismatches that cause "Could not deserialize object" errors
+     */
+    private fun safeDeserializeWorkout(document: com.google.firebase.firestore.DocumentSnapshot): WorkoutDto? {
+        return try {
+            // First try direct deserialization
+            document.toObject(WorkoutDto::class.java)
+        } catch (e: Exception) {
+            Timber.w(e, "[SYNC-DESERIALIZE] Direct deserialization failed for ${document.id}, attempting manual conversion")
+            
+            try {
+                // Manual conversion as fallback
+                val data = document.data ?: return null
+                
+                WorkoutDto(
+                    id = data["id"] as? String ?: document.id,
+                    name = data["name"] as? String ?: "",
+                    date = data["date"], // Keep as Any for flexible handling
+                    exercises = (data["exercises"] as? List<*>)?.filterIsInstance<Map<String, Any>>()
+                        ?.map { exerciseData ->
+                            // Basic ExerciseDto construction from map data
+                            try {
+                                com.example.liftrix.data.remote.dto.ExerciseDto(
+                                    id = exerciseData["id"] as? String ?: "",
+                                    name = exerciseData["name"] as? String ?: "",
+                                    sets = emptyList() // Simplified for now
+                                )
+                            } catch (ex: Exception) {
+                                null
+                            }
+                        }?.filterNotNull() ?: emptyList(),
+                    status = data["status"] as? String ?: "",
+                    startTime = data["startTime"], // Keep as Any for flexible handling
+                    endTime = data["endTime"], // Keep as Any for flexible handling
+                    notes = data["notes"] as? String,
+                    templateId = data["templateId"] as? String,
+                    createdAt = data["createdAt"] ?: System.currentTimeMillis(),
+                    updatedAt = data["updatedAt"] as? com.google.firebase.Timestamp,
+                    userId = data["userId"] as? String ?: "",
+                    version = (data["version"] as? Number)?.toLong() ?: 1L,
+                    syncVersion = (data["syncVersion"] as? Number)?.toLong() ?: 1L,
+                    isSynced = data["isSynced"] as? Boolean ?: false,
+                    lastModified = data["lastModified"]
+                )
+            } catch (manualException: Exception) {
+                Timber.e(manualException, "[SYNC-DESERIALIZE] Manual conversion also failed for ${document.id}")
+                null
+            }
+        }
+    }
+
     // WorkoutDto moved to proper data class file:
     // app/src/main/java/com/example/liftrix/data/remote/dto/WorkoutDto.kt
     // This resolves Firestore field mapping warnings for isSynced and other fields

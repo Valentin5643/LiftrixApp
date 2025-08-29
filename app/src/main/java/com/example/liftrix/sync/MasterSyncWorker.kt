@@ -95,6 +95,20 @@ class MasterSyncWorker @AssistedInject constructor(
             // Check cancellation before starting
             checkCancellation()
             
+            // 🔥 CRITICAL FIX: Validate sync pipeline before starting
+            val pipelineValidation = validateSyncPipeline(userId)
+            if (!pipelineValidation.isValid) {
+                Timber.e("MasterSyncWorker: Sync pipeline validation failed for user $userId")
+                Timber.e("MasterSyncWorker: Validation errors: ${pipelineValidation.errors}")
+                
+                return Result.failure(
+                    Data.Builder()
+                        .putString(KEY_ERROR_MESSAGE, "Sync pipeline validation failed: ${pipelineValidation.errors.joinToString()}")
+                        .putStringArray("validation_errors", pipelineValidation.errors.toTypedArray())
+                        .build()
+                )
+            }
+            
             // Update sync status to indicate sync in progress
             updateSyncStatus(userId, isInProgress = true)
             
@@ -295,4 +309,97 @@ class MasterSyncWorker @AssistedInject constructor(
         val failedCount: Int,
         val error: String? = null
     )
+    
+    /**
+     * 🔥 CRITICAL: Validation result for sync pipeline health check
+     */
+    private data class PipelineValidationResult(
+        val isValid: Boolean,
+        val errors: List<String>
+    )
+    
+    /**
+     * 🔥 CRITICAL FIX: Validates that all sync workers can be instantiated before starting sync.
+     * This prevents the scenario where some workers fail to instantiate, leading to incomplete sync.
+     */
+    private fun validateSyncPipeline(userId: String): PipelineValidationResult {
+        val errors = mutableListOf<String>()
+        
+        try {
+            Timber.d("MasterSyncWorker: Validating sync pipeline for user $userId")
+            
+            val context = applicationContext
+            
+            // Validate WorkerServiceLocator dependencies (lighter approach)
+            // This will fail if critical dependencies like database, firestore, etc. can't be resolved
+            try {
+                WorkerServiceLocator.getWorkoutSyncDependencies(context)
+                Timber.d("✅ WorkoutSyncWorker dependencies: SUCCESS")
+            } catch (e: Exception) {
+                val error = "WorkoutSyncWorker dependency resolution failed: ${e.message}"
+                errors.add(error)
+                Timber.e(e, "❌ WorkoutSyncWorker dependencies: FAILED")
+            }
+            
+            try {
+                WorkerServiceLocator.getTemplateSyncDependencies(context)
+                Timber.d("✅ TemplateSyncWorker dependencies: SUCCESS")
+            } catch (e: Exception) {
+                val error = "TemplateSyncWorker dependency resolution failed: ${e.message}"
+                errors.add(error)
+                Timber.e(e, "❌ TemplateSyncWorker dependencies: FAILED")
+            }
+            
+            try {
+                WorkerServiceLocator.getAchievementSyncDependencies(context)
+                Timber.d("✅ AchievementSyncWorker dependencies: SUCCESS")
+            } catch (e: Exception) {
+                val error = "AchievementSyncWorker dependency resolution failed: ${e.message}"
+                errors.add(error)
+                Timber.e(e, "❌ AchievementSyncWorker dependencies: FAILED")
+            }
+            
+            try {
+                WorkerServiceLocator.getProfileSyncDependencies(context)
+                Timber.d("✅ ProfileSyncWorker dependencies: SUCCESS")
+            } catch (e: Exception) {
+                val error = "ProfileSyncWorker dependency resolution failed: ${e.message}"
+                errors.add(error)
+                Timber.e(e, "❌ ProfileSyncWorker dependencies: FAILED")
+            }
+            
+            // Test that Firebase services are available
+            try {
+                val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+                if (auth.currentUser == null) {
+                    errors.add("Firebase Auth: User not authenticated")
+                    Timber.w("❌ Firebase Auth: User not authenticated")
+                } else {
+                    Timber.d("✅ Firebase services: SUCCESS")
+                }
+            } catch (e: Exception) {
+                val error = "Firebase services unavailable: ${e.message}"
+                errors.add(error)
+                Timber.e(e, "❌ Firebase services: FAILED")
+            }
+            
+            val isValid = errors.isEmpty()
+            if (isValid) {
+                Timber.i("✅ Sync pipeline validation PASSED for user $userId")
+            } else {
+                Timber.e("❌ Sync pipeline validation FAILED for user $userId - ${errors.size} errors")
+                errors.forEach { error ->
+                    Timber.e("   - $error")
+                }
+            }
+            
+            return PipelineValidationResult(isValid, errors)
+            
+        } catch (e: Exception) {
+            val error = "Pipeline validation exception: ${e.message}"
+            Timber.e(e, "MasterSyncWorker: Pipeline validation failed with exception")
+            return PipelineValidationResult(false, listOf(error))
+        }
+    }
 }

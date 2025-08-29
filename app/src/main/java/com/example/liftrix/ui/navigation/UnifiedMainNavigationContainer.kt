@@ -281,8 +281,7 @@ fun UnifiedMainNavigationContainer(
                             navController.navigateUp()
                         },
                         onCreateCustomExercise = {
-                            // TODO: Navigate to custom exercise creation screen when route is implemented
-                            // navController.navigate(LiftrixRoute.CustomExerciseCreation)
+                            navController.navigate(LiftrixRoute.CustomExerciseCreation)
                         }
                     )
                 }
@@ -299,8 +298,7 @@ fun UnifiedMainNavigationContainer(
                             navController.navigateUp()
                         },
                         onCreateCustomExercise = {
-                            // TODO: Navigate to custom exercise creation screen when route is implemented
-                            // navController.navigate(LiftrixRoute.CustomExerciseCreation)
+                            navController.navigate(LiftrixRoute.CustomExerciseCreation)
                         }
                     )
                 }

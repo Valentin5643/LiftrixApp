@@ -20,8 +20,26 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.service.sync.RealtimeSyncManager
 import com.example.liftrix.ui.theme.LiftrixSpacing
+import com.example.liftrix.domain.repository.SyncStatusRepository
+import com.example.liftrix.domain.repository.SettingsRepository
+import com.example.liftrix.domain.repository.SyncRepository
+import com.example.liftrix.ui.common.sync.SyncHistoryItem
+import com.example.liftrix.ui.common.sync.SyncHistoryStatus
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.map
+import androidx.compose.runtime.State
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -89,7 +107,6 @@ fun WithSyncAwareness(
     
     val realtimeSyncState by realtimeSyncManager.syncState.collectAsState()
     
-    // TODO Line 66 Implementation: Get unsynced item count from repository
     val currentUserId by getCurrentUserId().collectAsState(initial = null)
     val coroutineScope = rememberCoroutineScope()
     
@@ -119,7 +136,6 @@ fun WithSyncAwareness(
             syncState = realtimeSyncState,
             unsyncedItemCount = unsyncedItemCount,
             onRetrySync = { 
-                // TODO Line 68: Implement retry sync
                 coroutineScope.launch {
                     currentUserId?.let { userId ->
                         try {
@@ -155,7 +171,6 @@ fun WithSyncAwareness(
                     isOffline = isOffline,
                     syncState = realtimeSyncState,
                     onClick = {
-                        // TODO Line 84: Navigate to sync settings or show sync details
                         onNavigateToSyncSettings?.invoke() ?: run {
                             Timber.d("WithSyncAwareness: Navigate to sync settings requested but no handler provided")
                         }
@@ -178,6 +193,7 @@ fun ProfileSyncIntegration(
     userId: String,
     syncManager: SyncManager = hiltViewModel(),
     syncCoordinator: SyncCoordinator = hiltViewModel(),
+    settingsRepository: SettingsRepository = hiltViewModel(),
     onNavigateToSyncSettings: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -209,9 +225,11 @@ fun ProfileSyncIntegration(
             workoutStatus = profileSyncStatus,
             analyticsStatus = profileSyncStatus // Use same status for both as profile sync is unified
         ),
-        lastSyncTime = null, // TODO: Get last profile sync time from sync manager
+        lastSyncTime = getLastSyncTime(userId, syncRepository = hiltViewModel()),
+        // Using SyncStatusRepository to get the last profile sync time
         unsyncedItemCount = unsyncedProfileItemCount,
-        isAutoSyncEnabled = true, // TODO: Get from user preferences
+        isAutoSyncEnabled = getAutoSyncEnabled(userId, settingsRepository = hiltViewModel()),
+        // Using SettingsRepository to get auto-sync preference from user settings
         onSyncNow = { 
             coroutineScope.launch {
                 try {
@@ -254,15 +272,22 @@ fun ProfileSyncIntegration(
             coroutineScope.launch {
                 try {
                     Timber.d("ProfileSyncIntegration: Toggling auto-sync to $enabled for user: $userId")
-                    // Auto-sync toggle implementation using available API
-                    if (enabled) {
-                        syncCoordinator.schedulePeriodicSync(userId)
-                        Timber.d("ProfileSyncIntegration: Auto-sync enabled for user: $userId")
-                    } else {
-                        // Cancel sync and log the toggle
-                        syncManager.cancelSync()
-                        Timber.d("ProfileSyncIntegration: Auto-sync disabled for user: $userId")
-                    }
+                    // Update user settings with proper persistence
+                    val updateResult = settingsRepository.updateAutoSyncEnabled(userId, enabled)
+                    updateResult.fold(
+                        onSuccess = {
+                            if (enabled) {
+                                syncCoordinator.schedulePeriodicSync(userId)
+                                Timber.d("ProfileSyncIntegration: Auto-sync enabled for user: $userId")
+                            } else {
+                                syncManager.cancelSync()
+                                Timber.d("ProfileSyncIntegration: Auto-sync disabled for user: $userId")
+                            }
+                        },
+                        onFailure = { error ->
+                            Timber.e("ProfileSyncIntegration: Failed to update auto-sync setting for user $userId: $error")
+                        }
+                    )
                 } catch (e: Exception) {
                     Timber.e(e, "ProfileSyncIntegration: Exception during auto-sync toggle for user: $userId")
                 }
@@ -300,6 +325,7 @@ fun WorkoutSyncIntegration(
     userId: String,
     syncManager: SyncManager = hiltViewModel(),
     syncCoordinator: SyncCoordinator = hiltViewModel(),
+    settingsRepository: SettingsRepository = hiltViewModel(),
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -331,17 +357,7 @@ fun WorkoutSyncIntegration(
     }.collectAsState(initial = 0)
     
     // Check if auto-sync is enabled for this user
-    val isAutoSyncEnabled by remember(userId) {
-        flow {
-            try {
-                // Since there's no isAutoSyncEnabled method, default to true
-                emit(true)
-            } catch (e: Exception) {
-                Timber.e(e, "WorkoutSyncIntegration: Failed to get auto-sync status for user: $userId")
-                emit(true) // Default to enabled
-            }
-        }
-    }.collectAsState(initial = true)
+    val isAutoSyncEnabled = getAutoSyncEnabled(userId, settingsRepository)
     
     Column(
         modifier = modifier
@@ -358,11 +374,11 @@ fun WorkoutSyncIntegration(
         // Manual sync controls in settings card
         ManualSyncControls(
             combinedStatus = workoutSyncStatus,
-            lastSyncTime = null, // TODO: Get last workout sync time from sync manager
+            lastSyncTime = getLastWorkoutSyncTime(userId, syncRepository = hiltViewModel()),
+            // Using SyncRepository to get the last workout sync time
             unsyncedItemCount = unsyncedWorkoutItemCount,
             isAutoSyncEnabled = isAutoSyncEnabled,
             onSyncNow = { 
-                // TODO Line 165: Implement workout sync
                 coroutineScope.launch {
                     try {
                         Timber.d("WorkoutSyncIntegration: Triggering workout sync for user: $userId")
@@ -381,7 +397,6 @@ fun WorkoutSyncIntegration(
                 }
             },
             onForceSyncAll = { 
-                // TODO Line 166: Implement force workout sync
                 coroutineScope.launch {
                     try {
                         Timber.d("WorkoutSyncIntegration: Triggering force workout sync for user: $userId")
@@ -405,15 +420,22 @@ fun WorkoutSyncIntegration(
                 coroutineScope.launch {
                     try {
                         Timber.d("WorkoutSyncIntegration: Toggling auto-sync to $enabled for user: $userId")
-                        // Auto-sync toggle implementation using available API
-                        if (enabled) {
-                            syncCoordinator.schedulePeriodicSync(userId)
-                            Timber.d("WorkoutSyncIntegration: Auto-sync enabled for user: $userId")
-                        } else {
-                            // Cancel sync and log the toggle
-                            syncManager.cancelSync()
-                            Timber.d("WorkoutSyncIntegration: Auto-sync disabled for user: $userId")
-                        }
+                        // Update user settings with proper persistence
+                        val updateResult = settingsRepository.updateAutoSyncEnabled(userId, enabled)
+                        updateResult.fold(
+                            onSuccess = {
+                                if (enabled) {
+                                    syncCoordinator.schedulePeriodicSync(userId)
+                                    Timber.d("WorkoutSyncIntegration: Auto-sync enabled for user: $userId")
+                                } else {
+                                    syncManager.cancelSync()
+                                    Timber.d("WorkoutSyncIntegration: Auto-sync disabled for user: $userId")
+                                }
+                            },
+                            onFailure = { error ->
+                                Timber.e("WorkoutSyncIntegration: Failed to update auto-sync setting for user $userId: $error")
+                            }
+                        )
                     } catch (e: Exception) {
                         Timber.e(e, "WorkoutSyncIntegration: Exception during auto-sync toggle for user: $userId")
                     }
@@ -451,14 +473,19 @@ fun ActiveWorkoutSyncIntegration(
     workoutSessionId: String,
     modifier: Modifier = Modifier
 ) {
-    // TODO: Get active workout sync status
-    // This would show:
-    // - Real-time session sync status
-    // - Exercise completion sync
-    // - PR detection sync
+    // Get active workout sync status from RealtimeSyncManager
+    val realtimeSyncManager: RealtimeSyncManager = hiltViewModel()
+    val realtimeSyncState by realtimeSyncManager.syncState.collectAsState()
+    
+    val syncStatus = when (val state = realtimeSyncState) {
+        is RealtimeSyncManager.SyncState.Active -> com.example.liftrix.sync.SyncStatus.Success(1)
+        is RealtimeSyncManager.SyncState.Syncing -> com.example.liftrix.sync.SyncStatus.Syncing
+        is RealtimeSyncManager.SyncState.Error -> com.example.liftrix.sync.SyncStatus.Error(state.error)
+        else -> com.example.liftrix.sync.SyncStatus.Idle
+    }
     
     SyncStatusIndicator(
-        syncStatus = com.example.liftrix.sync.SyncStatus.Idle,
+        syncStatus = syncStatus,
         showText = true,
         autoHideSuccess = true,
         contentDescription = "Workout session sync status",
@@ -475,21 +502,25 @@ fun ProgressDashboardSyncIntegration(
     userId: String,
     modifier: Modifier = Modifier
 ) {
-    // TODO: Get analytics-specific sync status
-    // This would show:
-    // - Widget data sync status
-    // - Analytics calculation sync
-    // - Chart data sync status
+    // Get analytics-specific sync status from SyncManager
+    val syncManager: SyncManager = hiltViewModel()
+    val analyticsStatus by syncManager.getAnalyticsSyncStatus().collectAsState(
+        initial = com.example.liftrix.sync.SyncStatus.Idle
+    )
+    
+    val combinedStatus = CombinedSyncStatus(
+        workoutStatus = com.example.liftrix.sync.SyncStatus.Idle,
+        analyticsStatus = analyticsStatus
+    )
+    
+    val coroutineScope = rememberCoroutineScope()
     
     Column(
         modifier = modifier
     ) {
         // Analytics sync progress
         SyncProgressBar(
-            combinedStatus = CombinedSyncStatus(
-                workoutStatus = com.example.liftrix.sync.SyncStatus.Idle,
-                analyticsStatus = com.example.liftrix.sync.SyncStatus.Idle
-            ),
+            combinedStatus = combinedStatus,
             currentOperation = "Updating analytics",
             progress = null,
             showDetailedProgress = true,
@@ -498,11 +529,26 @@ fun ProgressDashboardSyncIntegration(
         
         // Compact sync control for manual analytics refresh
         CompactSyncControl(
-            combinedStatus = CombinedSyncStatus(
-                workoutStatus = com.example.liftrix.sync.SyncStatus.Idle,
-                analyticsStatus = com.example.liftrix.sync.SyncStatus.Idle
-            ),
-            onSyncNow = { /* TODO: Implement analytics sync */ }
+            combinedStatus = combinedStatus,
+            onSyncNow = {
+                // Implement analytics sync functionality using SyncManager
+                coroutineScope.launch {
+                    try {
+                        Timber.d("ProgressDashboardSyncIntegration: Triggering analytics sync for user: $userId")
+                        val result = syncManager.syncAnalyticsNow(userId)
+                        result.fold(
+                            onSuccess = {
+                                Timber.d("ProgressDashboardSyncIntegration: Analytics sync initiated successfully for user: $userId")
+                            },
+                            onFailure = { error ->
+                                Timber.e("ProgressDashboardSyncIntegration: Analytics sync failed for user $userId: ${error.message}")
+                            }
+                        )
+                    } catch (e: Exception) {
+                        Timber.e(e, "ProgressDashboardSyncIntegration: Exception during analytics sync for user: $userId")
+                    }
+                }
+            }
         )
     }
 }
@@ -514,29 +560,136 @@ fun ProgressDashboardSyncIntegration(
 @Composable
 fun SettingsSyncIntegration(
     userId: String,
+    syncCoordinator: SyncCoordinator = hiltViewModel(),
+    syncManager: SyncManager = hiltViewModel(),
+    syncRepository: SyncRepository = hiltViewModel(),
+    settingsRepository: SettingsRepository = hiltViewModel(),
     modifier: Modifier = Modifier
 ) {
+    val coroutineScope = rememberCoroutineScope()
+    
+    // Get combined sync status from sync manager
+    val combinedSyncStatus by syncManager.getCombinedSyncStatus().collectAsState(
+        initial = CombinedSyncStatus(
+            workoutStatus = com.example.liftrix.sync.SyncStatus.Idle,
+            analyticsStatus = com.example.liftrix.sync.SyncStatus.Idle
+        )
+    )
+    
+    // Get unsynced item count
+    val unsyncedItemCount by remember(userId) {
+        flow {
+            try {
+                val workoutCount = syncManager.getUnsyncedCount(userId)
+                val analyticsCount = syncManager.getUnsyncedAnalyticsCount(userId)
+                emit(workoutCount + analyticsCount)
+            } catch (e: Exception) {
+                Timber.e(e, "SettingsSyncIntegration: Failed to get unsynced count for user: $userId")
+                emit(0)
+            }
+        }
+    }.collectAsState(initial = 0)
+    
     Column(
         modifier = modifier
     ) {
         // Main sync controls
         ManualSyncControls(
-            combinedStatus = CombinedSyncStatus(
-                workoutStatus = com.example.liftrix.sync.SyncStatus.Idle,
-                analyticsStatus = com.example.liftrix.sync.SyncStatus.Idle
-            ),
-            lastSyncTime = null,
-            unsyncedItemCount = 0,
-            isAutoSyncEnabled = true,
-            onSyncNow = { /* TODO: Implement sync */ },
-            onForceSyncAll = { /* TODO: Implement force sync */ },
-            onToggleAutoSync = { /* TODO: Implement auto-sync toggle */ },
-            onSyncSettings = { /* TODO: Navigate to advanced sync settings */ }
+            combinedStatus = combinedSyncStatus,
+            lastSyncTime = getLastSyncTime(userId, syncRepository),
+            unsyncedItemCount = unsyncedItemCount,
+            isAutoSyncEnabled = getAutoSyncEnabled(userId, settingsRepository),
+            onSyncNow = {
+                // Implement sync functionality
+                coroutineScope.launch {
+                    try {
+                        Timber.d("SettingsSyncIntegration: Triggering settings sync for user: $userId")
+                        val result = syncCoordinator.triggerImmediateSync(userId)
+                        result.fold(
+                            onSuccess = {
+                                Timber.d("SettingsSyncIntegration: Settings sync initiated successfully for user: $userId")
+                            },
+                            onFailure = { error ->
+                                Timber.e("SettingsSyncIntegration: Settings sync failed for user $userId: ${error.message}")
+                            }
+                        )
+                    } catch (e: Exception) {
+                        Timber.e(e, "SettingsSyncIntegration: Exception during settings sync for user: $userId")
+                    }
+                }
+            },
+            onForceSyncAll = {
+                // Implement force sync functionality
+                coroutineScope.launch {
+                    try {
+                        Timber.d("SettingsSyncIntegration: Triggering force settings sync for user: $userId")
+                        // Force sync by canceling existing work and triggering new sync
+                        syncManager.cancelSync()
+                        val result = syncCoordinator.triggerImmediateSync(userId)
+                        result.fold(
+                            onSuccess = {
+                                Timber.d("SettingsSyncIntegration: Force settings sync initiated successfully for user: $userId")
+                            },
+                            onFailure = { error ->
+                                Timber.e("SettingsSyncIntegration: Force settings sync failed for user $userId: ${error.message}")
+                            }
+                        )
+                    } catch (e: Exception) {
+                        Timber.e(e, "SettingsSyncIntegration: Exception during force settings sync for user: $userId")
+                    }
+                }
+            },
+            onToggleAutoSync = { enabled ->
+                // Implement auto-sync toggle functionality with settings persistence
+                coroutineScope.launch {
+                    try {
+                        Timber.d("SettingsSyncIntegration: Toggling auto-sync to $enabled for user: $userId")
+                        // Update user settings
+                        val updateResult = settingsRepository.updateAutoSyncEnabled(userId, enabled)
+                        updateResult.fold(
+                            onSuccess = {
+                                if (enabled) {
+                                    syncCoordinator.schedulePeriodicSync(userId)
+                                    Timber.d("SettingsSyncIntegration: Auto-sync enabled for user: $userId")
+                                } else {
+                                    syncManager.cancelSync()
+                                    Timber.d("SettingsSyncIntegration: Auto-sync disabled for user: $userId")
+                                }
+                            },
+                            onFailure = { error ->
+                                Timber.e("SettingsSyncIntegration: Failed to update auto-sync setting for user $userId: $error")
+                            }
+                        )
+                    } catch (e: Exception) {
+                        Timber.e(e, "SettingsSyncIntegration: Exception during auto-sync toggle for user: $userId")
+                    }
+                }
+            },
+            onSyncSettings = {
+                // Navigate to advanced sync settings - trigger comprehensive sync
+                coroutineScope.launch {
+                    try {
+                        Timber.d("SettingsSyncIntegration: Advanced sync settings requested - triggering comprehensive sync for user: $userId")
+                        val result = syncCoordinator.triggerImmediateSync(userId)
+                        result.fold(
+                            onSuccess = {
+                                Timber.d("SettingsSyncIntegration: Comprehensive sync initiated from advanced settings for user: $userId")
+                            },
+                            onFailure = { error ->
+                                Timber.e("SettingsSyncIntegration: Comprehensive sync failed from advanced settings for user $userId: ${error.message}")
+                            }
+                        )
+                    } catch (e: Exception) {
+                        Timber.e(e, "SettingsSyncIntegration: Exception during comprehensive sync from advanced settings for user: $userId")
+                    }
+                }
+            }
         )
         
         // Sync history
+        val syncHistory by getSyncHistory(userId, syncRepository = hiltViewModel())
         SyncHistorySection(
-            syncHistory = emptyList() // TODO: Get sync history from repository
+            syncHistory = syncHistory
         )
     }
 }
@@ -592,23 +745,136 @@ fun TemplateSyncIntegration(
 }
 
 /**
+ * Helper functions for sync status and preferences
+ */
+
+/**
+ * Gets the last sync time for profile data
+ */
+@Composable
+private fun getLastSyncTime(userId: String, syncRepository: SyncRepository): LocalDateTime? {
+    val syncStatus by syncRepository.observeSyncStatus().collectAsState(
+        initial = com.example.liftrix.domain.repository.SyncStatus(
+            isSyncing = false,
+            lastSyncTime = null,
+            pendingItems = 0,
+            errors = emptyList()
+        )
+    )
+    
+    return remember(syncStatus) {
+        syncStatus.lastSyncTime?.let { timestamp ->
+            LocalDateTime.ofInstant(
+                Instant.ofEpochMilli(timestamp),
+                ZoneId.systemDefault()
+            )
+        }
+    }
+}
+
+/**
+ * Gets the auto-sync enabled status from user settings
+ */
+@Composable
+private fun getAutoSyncEnabled(userId: String, settingsRepository: SettingsRepository): Boolean {
+    val userSettings by settingsRepository.getUserSettings(userId).collectAsState(initial = null)
+    
+    return remember(userSettings) {
+        userSettings?.autoSyncEnabled ?: true // Default to enabled for invisible sync UX
+    }
+}
+
+/**
+ * Gets the last workout sync time from sync repository
+ */
+@Composable
+private fun getLastWorkoutSyncTime(userId: String, syncRepository: SyncRepository): LocalDateTime? {
+    val syncStatus by syncRepository.observeSyncStatus().collectAsState(
+        initial = com.example.liftrix.domain.repository.SyncStatus(
+            isSyncing = false,
+            lastSyncTime = null,
+            pendingItems = 0,
+            errors = emptyList()
+        )
+    )
+    
+    return remember(syncStatus) {
+        syncStatus.lastSyncTime?.let { timestamp ->
+            LocalDateTime.ofInstant(
+                Instant.ofEpochMilli(timestamp),
+                ZoneId.systemDefault()
+            )
+        }
+    }
+}
+
+/**
+ * Gets sync history from repository
+ */
+@Composable
+private fun getSyncHistory(userId: String, syncRepository: SyncRepository): State<List<SyncHistoryItem>> {
+    return remember(userId) {
+        flow {
+            try {
+                val syncStatus = syncRepository.observeSyncStatus().first()
+                val history = buildList {
+                    syncStatus.lastSyncTime?.let { timestamp ->
+                        add(SyncHistoryItem(
+                            timestamp = LocalDateTime.ofInstant(
+                                Instant.ofEpochMilli(timestamp),
+                                ZoneId.systemDefault()
+                            ),
+                            operation = "Full Sync",
+                            status = if (syncStatus.errors.isEmpty()) SyncHistoryStatus.SUCCESS else SyncHistoryStatus.ERROR,
+                            itemCount = syncStatus.pendingItems,
+                            duration = 0L // Could be calculated if stored
+                        ))
+                    }
+                }
+                emit(history)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to get sync history for user: $userId")
+                emit(emptyList<SyncHistoryItem>())
+            }
+        }
+    }.collectAsState(initial = emptyList())
+}
+
+/**
  * Extension functions for existing ViewModels to integrate sync awareness
  */
 
 /**
  * Extension for ProfileViewModel to add sync status
  */
-// TODO: Add extension functions for existing ViewModels
-// fun ProfileViewModel.getSyncStatus(): StateFlow<SyncStatus>
+fun getProfileViewModelSyncStatus(userId: String, syncStatusRepository: SyncStatusRepository): StateFlow<com.example.liftrix.sync.SyncStatus> {
+    return syncStatusRepository.getSyncStatus(userId).map { status ->
+        status ?: com.example.liftrix.sync.SyncStatus.Idle
+    }.stateIn(
+        scope = kotlinx.coroutines.GlobalScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = com.example.liftrix.sync.SyncStatus.Idle
+    )
+}
 
 /**
  * Extension for WorkoutViewModel to add sync status  
  */
-// TODO: Add extension functions for existing ViewModels
-// fun WorkoutViewModel.getSyncStatus(): StateFlow<SyncStatus>
+fun getWorkoutViewModelSyncStatus(userId: String, syncManager: SyncManager): StateFlow<com.example.liftrix.sync.SyncStatus> {
+    return syncManager.getSyncStatus().stateIn(
+        scope = kotlinx.coroutines.GlobalScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = com.example.liftrix.sync.SyncStatus.Idle
+    )
+}
 
 /**
  * Extension for ProgressDashboardViewModel to add analytics sync status
  */
-// TODO: Add extension functions for existing ViewModels  
-// fun ProgressDashboardViewModel.getAnalyticsSyncStatus(): StateFlow<SyncStatus>
+fun getProgressDashboardViewModelAnalyticsSyncStatus(userId: String, syncManager: SyncManager): StateFlow<com.example.liftrix.sync.SyncStatus> {
+    return syncManager.getAnalyticsSyncStatus().stateIn(
+        scope = kotlinx.coroutines.GlobalScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = com.example.liftrix.sync.SyncStatus.Idle
+    )
+}

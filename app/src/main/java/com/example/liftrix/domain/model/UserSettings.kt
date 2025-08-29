@@ -23,6 +23,7 @@ data class UserSettings(
     val terminologyPreference: String = "NEW", // NEW or LEGACY
     val migrationCompleted: Boolean = false,
     val migrationExplanationSeen: Boolean = false,
+    val autoSyncEnabled: Boolean = true, // Auto-sync preference for invisible sync UX
     val updatedAt: Instant = Instant.now()
 ) {
     companion object {
@@ -40,6 +41,7 @@ data class UserSettings(
             terminologyPreference = "NEW",
             migrationCompleted = false,
             migrationExplanationSeen = false,
+            autoSyncEnabled = true, // Default to enabled for invisible sync UX
             updatedAt = Instant.now()
         )
     }

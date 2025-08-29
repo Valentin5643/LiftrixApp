@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -67,6 +68,10 @@ import com.example.liftrix.domain.model.ProgressPhoto
 import com.example.liftrix.domain.model.BodyPart
 import com.example.liftrix.domain.model.PhotoType
 import com.example.liftrix.ui.home.HomeScreen
+import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.ui.settings.sync.SyncSettingsViewModel
+import com.example.liftrix.ui.share.ShareWorkoutViewModel
+import com.example.liftrix.ui.progress.ProgressComparisonViewModel
 import com.example.liftrix.ui.workout.WorkoutScreen
 import com.example.liftrix.ui.workout.active.RedesignedActiveWorkoutScreen
 import com.example.liftrix.ui.workout.create.RedesignedCreateTemplateScreen
@@ -560,25 +565,52 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.SyncSettings> {
-                    // TODO: Create dedicated SyncSettingsScreen
-                    // For now, use existing SettingsSyncIntegration composable
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp)
-                    ) {
-                        TopAppBar(
-                            title = { Text("Sync Settings") },
-                            navigationIcon = {
-                                IconButton(onClick = { navController.popBackStackSafely() }) {
-                                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                                }
+                    val getCurrentUserIdUseCase: GetCurrentUserIdUseCase = hiltViewModel<SyncSettingsViewModel>().getCurrentUserIdUseCase
+                    var currentUserId by remember { mutableStateOf<String?>(null) }
+                    var isLoading by remember { mutableStateOf(true) }
+                    
+                    LaunchedEffect(Unit) {
+                        currentUserId = getCurrentUserIdUseCase()
+                        isLoading = false
+                    }
+                    
+                    when {
+                        isLoading -> {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator()
                             }
-                        )
-                        
-                        com.example.liftrix.ui.common.sync.SettingsSyncIntegration(
-                            userId = "current_user_id" // TODO: Get from authenticated user
-                        )
+                        }
+                        currentUserId != null -> {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(16.dp)
+                            ) {
+                                TopAppBar(
+                                    title = { Text("Sync Settings") },
+                                    navigationIcon = {
+                                        IconButton(onClick = { navController.popBackStackSafely() }) {
+                                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                                        }
+                                    }
+                                )
+                                
+                                com.example.liftrix.ui.common.sync.SettingsSyncIntegration(
+                                    userId = currentUserId!!
+                                )
+                            }
+                        }
+                        else -> {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("Authentication required")
+                            }
+                        }
                     }
                 }
                 
@@ -992,8 +1024,6 @@ fun UnifiedNavigationContainer(
                     )
                 }
                 
-                // TODO: ShareWorkout route disabled - ShareWorkoutViewModel not implemented
-                /*
                 composable<LiftrixRoute.ShareWorkout> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.ShareWorkout>()
                     ShareWorkoutContainer(
@@ -1003,10 +1033,7 @@ fun UnifiedNavigationContainer(
                         }
                     )
                 }
-                */
                 
-                // TODO: ProgressComparison route disabled - ProgressComparisonViewModel not implemented
-                /*
                 composable<LiftrixRoute.ProgressComparison> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.ProgressComparison>()
                     ProgressComparisonContainer(
@@ -1017,7 +1044,6 @@ fun UnifiedNavigationContainer(
                         }
                     )
                 }
-                */
                 
                 // SocialFeed route removed - feed is now integrated into Home screen
                 // If you need to navigate to the feed, use LiftrixRoute.Home instead
@@ -1650,8 +1676,6 @@ private fun NavigationAwareTopAppBar(
     )
 }
 
-// TODO: ShareWorkoutContainer disabled - ShareWorkoutViewModel not implemented
-/*
 /**
  * Container composable for ShareWorkout screen that bridges the gap between
  * navigation parameters (workoutId) and the actual screen requirements (ShareableContent).
@@ -1689,7 +1713,7 @@ private fun ShareWorkoutContainer(
         onNavigateBack = onNavigateBack,
         onShareToPlatform = { platform, message ->
             // Implement platform-specific sharing
-            viewModel.shareWorkout(platform, message, shareUrl)
+            viewModel.shareWorkout(platform, message ?: "", shareUrl)
         },
         onGenerateQRCode = {
             // Generate QR code for workout sharing
@@ -1698,10 +1722,7 @@ private fun ShareWorkoutContainer(
         modifier = modifier
     )
 }
-*/
 
-// TODO: ProgressComparisonContainer disabled - ProgressComparisonViewModel not implemented
-/*
 /**
  * Container composable for ProgressComparison screen that bridges the gap between
  * navigation parameters and the actual screen requirements.
@@ -1761,12 +1782,13 @@ private fun ProgressComparisonContainer(
         modifier = modifier,
         onImageTap = { photo ->
             // Handle image tap - open in full screen viewer
-            viewModel.openPhotoInViewer(photo)
+            // For now, just log the action since the methods don't exist yet
+            timber.log.Timber.d("Image tap requested for photo: ${photo.id}")
         },
-        onComparisonModeToggle = { mode ->
+        onComparisonModeToggle = {
             // Handle comparison mode toggle (side-by-side vs overlay)
-            viewModel.setComparisonMode(mode)
+            // For now, just log the action since the methods don't exist yet
+            timber.log.Timber.d("Comparison mode toggle requested")
         }
     )
 }
-*/

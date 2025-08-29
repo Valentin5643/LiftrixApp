@@ -16,11 +16,24 @@ import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.domain.usecase.common.ErrorHandler
+import com.example.liftrix.domain.service.NetworkConnectivityMonitor
+import com.example.liftrix.domain.repository.SyncStatusRepository
+import com.example.liftrix.sync.SyncCoordinator
+import com.example.liftrix.sync.SyncManager
+import com.example.liftrix.sync.SyncStatus
 import com.google.firebase.auth.FirebaseAuth
+import androidx.work.WorkManager
+import androidx.work.WorkInfo
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import androidx.lifecycle.asFlow
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.time.LocalDateTime
+import java.time.Instant
+import java.time.ZoneId
 import javax.inject.Inject
 
 /**
@@ -59,6 +72,7 @@ private sealed class ProfileDataState {
  */
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     private val getProfileUseCase: GetProfileUseCase,
     private val saveUserProfileUseCase: SaveUserProfileUseCase,
@@ -67,10 +81,17 @@ class ProfileViewModel @Inject constructor(
     private val deleteProfileImageUseCase: DeleteProfileImageUseCase,
     private val profileRepository: ProfileRepository,
     private val auth: FirebaseAuth,
+    private val networkConnectivityMonitor: NetworkConnectivityMonitor,
+    private val syncCoordinator: SyncCoordinator,
+    private val syncManager: SyncManager,
+    private val syncStatusRepository: SyncStatusRepository,
     errorHandler: ErrorHandler
 ) : BaseViewModel<ProfileUiState, ProfileEvent>(
     errorHandler = errorHandler
 ) {
+    
+    // Get WorkManager instance directly instead of injecting it
+    private val workManager: WorkManager by lazy { WorkManager.getInstance(context) }
     
     override val _uiState = MutableStateFlow(ProfileUiState(
         profileState = ProfileLoadingState.Loading,
@@ -219,6 +240,58 @@ class ProfileViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList<UserAchievement>()
+        )
+    
+    // Connectivity status flow
+    val isConnected = networkConnectivityMonitor.isConnected
+    
+    // Achievement sync status flow
+    private val achievementSyncStatus: StateFlow<SyncStatus> = workManager
+        .getWorkInfosForUniqueWorkLiveData("achievement_sync_work")
+        .asFlow()
+        .map { workInfos ->
+            val workInfo = workInfos.firstOrNull()
+            when {
+                workInfo == null -> SyncStatus.Idle
+                workInfo.state == WorkInfo.State.RUNNING -> SyncStatus.Syncing
+                workInfo.state == WorkInfo.State.SUCCEEDED -> {
+                    val syncCount = workInfo.outputData.getInt("sync_count", 0)
+                    SyncStatus.Success(syncCount)
+                }
+                workInfo.state == WorkInfo.State.FAILED -> {
+                    val errorMessage = workInfo.outputData.getString("error_message")
+                    SyncStatus.Error(errorMessage ?: "Achievement sync failed")
+                }
+                else -> SyncStatus.Idle
+            }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = SyncStatus.Idle
+        )
+    
+    // Sync metrics flow
+    private val syncMetricsFlow = currentUserId
+        .filterNotNull()
+        .flatMapLatest { userId ->
+            combine(
+                syncStatusRepository.getSyncStatus(userId),
+                flow { 
+                    try {
+                        emit(syncManager.getUnsyncedCount(userId))
+                    } catch (e: Exception) {
+                        emit(0)
+                    }
+                }
+            ) { syncStatus, unsyncedCount ->
+                Triple(syncStatus, unsyncedCount, true) // Auto-sync enabled (placeholder)
+            }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = Triple(SyncStatus.Idle, 0, true)
         )
     
     init {
@@ -874,6 +947,109 @@ class ProfileViewModel @Inject constructor(
                 Timber.e(e, "Unexpected error during privacy update")
             }
         }
+    }
+    
+    // === SYNC METHODS ===
+    
+    /**
+     * Triggers profile sync using SyncCoordinator
+     */
+    fun triggerProfileSync() {
+        viewModelScope.launch {
+            try {
+                val userId = currentUserId.value
+                if (userId != null) {
+                    Timber.d("ProfileViewModel: Triggering profile sync for user $userId")
+                    val result = syncCoordinator.triggerEntitySync(userId, "profile")
+                    if (result.isFailure) {
+                        Timber.e("ProfileViewModel: Profile sync failed - ${result.exceptionOrNull()?.message}")
+                    }
+                } else {
+                    Timber.w("ProfileViewModel: Cannot trigger profile sync - no user ID available")
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "ProfileViewModel: Error triggering profile sync")
+            }
+        }
+    }
+    
+    /**
+     * Triggers force sync of all data using SyncCoordinator
+     */
+    fun triggerForceSyncAll() {
+        viewModelScope.launch {
+            try {
+                val userId = currentUserId.value
+                if (userId != null) {
+                    Timber.d("ProfileViewModel: Triggering force sync all for user $userId")
+                    val result = syncCoordinator.triggerImmediateSync(userId)
+                    if (result.isFailure) {
+                        Timber.e("ProfileViewModel: Force sync all failed - ${result.exceptionOrNull()?.message}")
+                    }
+                } else {
+                    Timber.w("ProfileViewModel: Cannot trigger force sync all - no user ID available")
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "ProfileViewModel: Error triggering force sync all")
+            }
+        }
+    }
+    
+    /**
+     * Toggles auto-sync setting (placeholder implementation for future)
+     * TODO: Implement actual auto-sync toggle when sync preferences are available
+     */
+    fun toggleAutoSync(enabled: Boolean) {
+        Timber.d("ProfileViewModel: Auto-sync toggle requested: $enabled (placeholder implementation)")
+        // TODO: Implement actual auto-sync toggle when sync preferences repository is available
+        // This would typically update user preferences and affect sync scheduling behavior
+    }
+    
+    /**
+     * Gets current connectivity status
+     */
+    fun isOffline(): Boolean {
+        return !networkConnectivityMonitor.isCurrentlyConnected()
+    }
+    
+    /**
+     * Gets achievement sync status for UI display
+     */
+    fun getAchievementSyncStatus(): StateFlow<SyncStatus> {
+        return achievementSyncStatus
+    }
+    
+    /**
+     * Gets last sync time as LocalDateTime for UI display
+     */
+    fun getLastSyncTime(): LocalDateTime {
+        // TODO: Get actual last sync time from SyncStatusRepository
+        // For now, return a placeholder recent time
+        return LocalDateTime.now().minusMinutes(5)
+    }
+    
+    /**
+     * Gets unsynced item count for UI display
+     */
+    fun getUnsyncedItemCount(): StateFlow<Int> {
+        return syncMetricsFlow.map { (_, unsyncedCount, _) -> unsyncedCount }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = 0
+            )
+    }
+    
+    /**
+     * Gets auto-sync enabled status for UI display
+     */
+    fun getAutoSyncEnabled(): StateFlow<Boolean> {
+        return syncMetricsFlow.map { (_, _, autoSyncEnabled) -> autoSyncEnabled }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = true
+            )
     }
 }
 

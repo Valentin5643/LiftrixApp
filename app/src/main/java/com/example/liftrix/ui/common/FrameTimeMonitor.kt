@@ -22,6 +22,10 @@ class FrameTimeMonitor {
     private val frameTimesBuffer = mutableListOf<Long>()
     private val bufferSize = 60 // Track last 60 frames (1 second at 60fps)
     
+    // Logging configuration - set to false to reduce log spam
+    private val enableVerboseLogging = false
+    private val logInterval = 50 // Log every N dropped frames instead of every drop
+    
     // Performance metrics
     var averageFrameTime = 0.0
         private set
@@ -98,7 +102,10 @@ class FrameTimeMonitor {
         // Check for dropped frame
         if (frameTimeMs > FRAME_DROP_THRESHOLD_MS) {
             droppedFrames++
-            Timber.w("FrameTimeMonitor: Dropped frame detected - ${frameTimeMs}ms")
+            // Only log if verbose logging is enabled and at appropriate intervals
+            if (enableVerboseLogging && (droppedFrames % logInterval == 0)) {
+                Timber.w("FrameTimeMonitor: ${droppedFrames} dropped frames detected (last: ${frameTimeMs}ms)")
+            }
         }
     }
     
@@ -196,10 +203,9 @@ inline fun <T> measureFrameTime(
     
     val frameTimeMs = (endTime - startTime) / 1_000_000
     
-    if (frameTimeMs > FrameTimeMonitor.TARGET_FRAME_TIME_MS) {
-        Timber.w("$tag: Operation took ${frameTimeMs}ms (target: ${FrameTimeMonitor.TARGET_FRAME_TIME_MS}ms)")
-    } else {
-        Timber.v("$tag: Operation took ${frameTimeMs}ms")
+    // Only log if the operation significantly exceeds the frame time target (>2x)
+    if (frameTimeMs > FrameTimeMonitor.TARGET_FRAME_TIME_MS * 2) {
+        Timber.w("$tag: Slow operation detected - ${frameTimeMs}ms (target: ${FrameTimeMonitor.TARGET_FRAME_TIME_MS}ms)")
     }
     
     return result

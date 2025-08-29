@@ -51,6 +51,44 @@ class TemplateSyncWorker @AssistedInject constructor(
     private val conflictResolver: ConflictResolver,
     private val auth: FirebaseAuth
 ) : BaseSyncWorker(context, params) {
+    
+    // 🔧 HOTFIX: Fallback constructor for when Hilt factory generation fails
+    // This allows WorkManager to instantiate the worker via reflection
+    // TEMPORARY: Remove once Hilt assisted factories are confirmed working
+    constructor(context: Context, params: WorkerParameters) : this(
+        context,
+        params,
+        WorkerServiceLocator.getTemplateSyncDependencies(context).run {
+            Timber.w("⚠️ TemplateSyncWorker using FALLBACK constructor - Hilt factory failed!")
+            return@run this
+        }
+    )
+    
+    // Helper constructor to unpack the dependency structure
+    private constructor(
+        context: Context,
+        params: WorkerParameters,
+        deps: WorkerServiceLocator.TemplateSyncDependencies
+    ) : this(
+        context, params,
+        deps.templateDao, deps.firestore, deps.conflictResolver, deps.auth
+    )
+
+    init {
+        val processName = getProcessName()
+        Timber.d("✅ TemplateSyncWorker constructed with Hilt dependency injection in process: $processName")
+    }
+    
+    private fun getProcessName(): String {
+        return try {
+            val processName = applicationContext.packageManager
+                .getApplicationLabel(applicationContext.applicationInfo)
+                .toString()
+            processName
+        } catch (e: Exception) {
+            "unknown"
+        }
+    }
 
     override val workerName: String = "TemplateSyncWorker"
 

@@ -45,6 +45,10 @@ object PerformanceOptimizations {
     private const val STARTUP_TIME_TARGET_MS = 2000L
     private const val MEMORY_INCREASE_THRESHOLD = 0.1f // 10% increase limit
     
+    // Logging configuration
+    private const val ENABLE_VERBOSE_FRAME_LOGGING = false // Set to false to reduce log spam
+    private const val FRAME_LOG_INTERVAL = 100 // Log every N frame drops instead of every drop
+    
     // Performance tracking state
     private val frameDropCount = AtomicInteger(0)
     private val totalFrameCount = AtomicLong(0)
@@ -88,8 +92,12 @@ object PerformanceOptimizations {
                     
                     // Check for frame drops (missed 60fps target)
                     if (deltaTime > FRAME_TIME_THRESHOLD_MS * 1.5f) {
-                        frameDropCount.incrementAndGet()
-                        Timber.d("Frame drop detected: ${deltaTime.roundToInt()}ms (target: ${FRAME_TIME_THRESHOLD_MS}ms)")
+                        val currentDropCount = frameDropCount.incrementAndGet()
+                        
+                        // Only log if verbose logging is enabled and at appropriate intervals
+                        if (ENABLE_VERBOSE_FRAME_LOGGING && (currentDropCount % FRAME_LOG_INTERVAL == 0)) {
+                            Timber.d("Frame drop summary: ${currentDropCount} drops detected (last drop: ${deltaTime.roundToInt()}ms, target: ${FRAME_TIME_THRESHOLD_MS}ms)")
+                        }
                     }
                 }
                 

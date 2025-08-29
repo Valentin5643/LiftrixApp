@@ -11,11 +11,14 @@ import androidx.work.BackoffPolicy
 import androidx.work.workDataOf
 import com.example.liftrix.data.local.dao.AchievementDao
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.FieldValue
+import com.google.firebase.auth.FirebaseAuth
 import androidx.hilt.work.HiltWorker
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import dagger.assisted.AssistedFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.tasks.await
@@ -42,8 +45,54 @@ class AchievementSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val achievementDao: AchievementDao,
-    private val firestore: FirebaseFirestore
-) : CoroutineWorker(context, params) {
+    private val firestore: FirebaseFirestore,
+    private val firebaseAuth: FirebaseAuth
+) : BaseSyncWorker(context, params) {
+
+    // 🔧 HOTFIX: Fallback constructor for when Hilt factory generation fails
+    // This allows WorkManager to instantiate the worker via reflection
+    // TEMPORARY: Remove once Hilt assisted factories are confirmed working
+    constructor(context: Context, params: WorkerParameters) : this(
+        context,
+        params,
+        WorkerServiceLocator.getAchievementSyncDependencies(context).run {
+            Timber.w("⚠️ AchievementSyncWorker using FALLBACK constructor - Hilt factory failed!")
+            return@run this
+        }
+    )
+    
+    // Helper constructor to unpack the dependency structure
+    private constructor(
+        context: Context,
+        params: WorkerParameters,
+        deps: WorkerServiceLocator.AchievementSyncDependencies
+    ) : this(
+        context, params,
+        deps.achievementDao, deps.firestore, deps.firebaseAuth
+    )
+
+    init {
+        val processName = getProcessName()
+        Timber.d("✅ AchievementSyncWorker constructed with Hilt dependency injection in process: $processName")
+    }
+    
+    private fun getProcessName(): String {
+        return try {
+            val processName = applicationContext.packageManager
+                .getApplicationLabel(applicationContext.applicationInfo)
+                .toString()
+            processName
+        } catch (e: Exception) {
+            "unknown"
+        }
+    }
+
+    override val workerName: String = "AchievementSyncWorker"
+
+    @AssistedFactory
+    interface Factory {
+        fun create(context: Context, params: WorkerParameters): AchievementSyncWorker
+    }
 
     companion object {
         const val WORK_NAME = "achievement_sync_work"
@@ -70,10 +119,33 @@ class AchievementSyncWorker @AssistedInject constructor(
         }
     }
 
-    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+    override suspend fun performSync(userId: String): Result = withContext(Dispatchers.IO) {
         try {
-            val userId = inputData.getString("userId") ?: return@withContext Result.failure()
-
+            // 🔥 CRITICAL: Validate Firebase Auth state before attempting Firestore operations
+            val currentUser = firebaseAuth.currentUser
+            if (currentUser == null) {
+                Timber.e("$workerName: No authenticated user found for sync operation")
+                return@withContext Result.failure(
+                    workDataOf(
+                        KEY_ERROR_MESSAGE to "User not authenticated - sync aborted",
+                        "error_type" to "AUTHENTICATION_REQUIRED",
+                        "requires_signin" to true
+                    )
+                )
+            }
+            
+            if (currentUser.uid != userId) {
+                Timber.e("$workerName: Auth user ID (${currentUser.uid}) doesn't match sync user ID ($userId)")
+                return@withContext Result.failure(
+                    workDataOf(
+                        KEY_ERROR_MESSAGE to "User ID mismatch - sync aborted",
+                        "error_type" to "USER_ID_MISMATCH",
+                        "requires_signin" to true
+                    )
+                )
+            }
+            
+            Timber.d("$workerName: Auth validation passed for user $userId")
             val unsyncedAchievements = achievementDao.getUnsyncedAchievements(userId)
             
             if (unsyncedAchievements.isEmpty()) {
@@ -170,8 +242,26 @@ class AchievementSyncWorker @AssistedInject constructor(
                         Timber.d("Successfully synced batch of ${achievementsToSync.size} achievements")
                     }
                     
+                } catch (e: FirebaseFirestoreException) {
+                    when (e.code) {
+                        FirebaseFirestoreException.Code.PERMISSION_DENIED -> {
+                            Timber.e("$workerName: PERMISSION_DENIED for user $userId on achievements path: /users/$userId/achievements/")
+                            Timber.e("$workerName: Auth user: ${firebaseAuth.currentUser?.uid}, Email: ${firebaseAuth.currentUser?.email}")
+                            Timber.e("$workerName: Check Firestore security rules for achievements collection")
+                            // Don't retry permission errors - they won't succeed
+                            throw e
+                        }
+                        FirebaseFirestoreException.Code.UNAUTHENTICATED -> {
+                            Timber.e("$workerName: UNAUTHENTICATED error - Firebase Auth token expired")
+                            throw e
+                        }
+                        else -> {
+                            Timber.e(e, "$workerName: Batch sync failed for ${achievementsToSync.size} achievements")
+                            failureCount += achievementsToSync.size
+                        }
+                    }
                 } catch (e: Exception) {
-                    Timber.e(e, "Batch sync failed for ${achievementsToSync.size} achievements")
+                    Timber.e(e, "$workerName: Batch sync failed for ${achievementsToSync.size} achievements")
                     failureCount += achievementsToSync.size
                 }
             }
@@ -180,27 +270,24 @@ class AchievementSyncWorker @AssistedInject constructor(
             
             return@withContext when {
                 failureCount > 0 && successCount == 0 -> {
-                    // All failed
-                    if (runAttemptCount < MAX_RETRY_COUNT) {
-                        Result.retry()
-                    } else {
-                        Result.failure()
-                    }
+                    // All failed - let BaseSyncWorker handle retry logic
+                    throw Exception("All achievement syncs failed. Success: $successCount, Failed: $failureCount")
                 }
                 else -> {
                     // Some or all succeeded
-                    Result.success()
+                    Result.success(
+                        workDataOf(
+                            KEY_SYNC_COUNT to successCount,
+                            "failed_count" to failureCount,
+                            "deduplicated_count" to deduplicatedCount
+                        )
+                    )
                 }
             }
             
         } catch (e: Exception) {
-            Timber.e(e, "AchievementSyncWorker failed with exception")
-            
-            if (runAttemptCount < MAX_RETRY_COUNT) {
-                Result.retry()
-            } else {
-                Result.failure()
-            }
+            // Let base class handle the error
+            throw e
         }
     }
 }

@@ -33,6 +33,7 @@ object WorkerServiceLocator {
         fun followRepository(): com.example.liftrix.data.repository.social.FollowRepositoryImpl
         fun profileCleanupService(): com.example.liftrix.data.service.ProfileCleanupService
         fun cleanupMetricsCollector(): com.example.liftrix.analytics.CleanupMetricsCollector
+        fun achievementDao(): com.example.liftrix.data.local.dao.AchievementDao
     }
     
     private fun getEntryPoint(context: Context): WorkerDependencies {
@@ -174,6 +175,32 @@ object WorkerServiceLocator {
     }
 
     /**
+     * Get TemplateSyncWorker dependencies bundle
+     */
+    data class TemplateSyncDependencies(
+        val templateDao: com.example.liftrix.data.local.dao.WorkoutTemplateDao,
+        val firestore: com.google.firebase.firestore.FirebaseFirestore,
+        val conflictResolver: com.example.liftrix.service.sync.ConflictResolver,
+        val auth: com.google.firebase.auth.FirebaseAuth
+    )
+    
+    fun getTemplateSyncDependencies(context: Context): TemplateSyncDependencies {
+        return try {
+            val entryPoint = getEntryPoint(context)
+            val database = entryPoint.database()
+            TemplateSyncDependencies(
+                templateDao = database.workoutTemplateDao(),
+                firestore = entryPoint.firestore(),
+                conflictResolver = entryPoint.conflictResolver(),
+                auth = entryPoint.firebaseAuth()
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "WorkerServiceLocator: Failed to get TemplateSync dependencies via Hilt")
+            throw IllegalStateException("Cannot provide TemplateSync dependencies for worker fallback", e)
+        }
+    }
+
+    /**
      * Get UserPublicSyncWorker dependencies bundle
      */
     data class UserPublicSyncDependencies(
@@ -200,6 +227,30 @@ object WorkerServiceLocator {
         } catch (e: Exception) {
             Timber.e(e, "WorkerServiceLocator: Failed to get UserPublicSync dependencies via Hilt")
             throw IllegalStateException("Cannot provide UserPublicSync dependencies for worker fallback", e)
+        }
+    }
+
+    /**
+     * Get AchievementSyncWorker dependencies bundle
+     */
+    data class AchievementSyncDependencies(
+        val achievementDao: com.example.liftrix.data.local.dao.AchievementDao,
+        val firestore: com.google.firebase.firestore.FirebaseFirestore,
+        val firebaseAuth: com.google.firebase.auth.FirebaseAuth
+    )
+    
+    fun getAchievementSyncDependencies(context: Context): AchievementSyncDependencies {
+        return try {
+            val entryPoint = getEntryPoint(context)
+            val database = entryPoint.database()
+            AchievementSyncDependencies(
+                achievementDao = database.achievementDao(),
+                firestore = entryPoint.firestore(),
+                firebaseAuth = entryPoint.firebaseAuth()
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "WorkerServiceLocator: Failed to get AchievementSync dependencies via Hilt")
+            throw IllegalStateException("Cannot provide AchievementSync dependencies for worker fallback", e)
         }
     }
 }

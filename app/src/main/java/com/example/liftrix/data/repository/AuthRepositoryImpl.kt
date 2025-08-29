@@ -22,6 +22,7 @@ import kotlinx.coroutines.delay
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.pow
 
 @Singleton
 class AuthRepositoryImpl @Inject constructor(
@@ -166,27 +167,74 @@ class AuthRepositoryImpl @Inject constructor(
     }
 
     override suspend fun signInWithGoogle(idToken: String): LiftrixResult<User> {
-        return liftrixCatching(
-            errorMapper = { throwable -> FirebaseErrorMapper.handleFirebaseError(throwable) }
-        ) {
+        // SEAMLESS FIRST-TIME FIX: Separate Firebase Auth from profile operations
+        return try {
+            // Step 1: Authenticate with Firebase Auth (this should never fail due to profile issues)
             val credential = GoogleAuthProvider.getCredential(idToken, null)
             val authResult = firebaseAuth.signInWithCredential(credential).await()
             val firebaseUser = authResult.user
-                ?: throw RuntimeException("Google sign in failed: User is null")
+                ?: return LiftrixResult.failure(
+                    LiftrixError.AuthenticationError(
+                        errorMessage = "Google sign in failed: User is null",
+                        errorCode = "NULL_USER",
+                        analyticsContext = mapOf("operation" to "GOOGLE_SIGNIN")
+                    )
+                )
 
             val user = UserMapper.fromFirebaseUser(firebaseUser)
+            Timber.i("Google authentication successful for user: ${user.uid}")
+
+            // Step 2: Handle profile creation/update gracefully (non-blocking)
+            handleProfileOperationsGracefully(user)
             
-            // Create or update user profile in Firestore
-            if (authResult.additionalUserInfo?.isNewUser == true) {
-                createUserProfile(user).getOrThrow()
-            } else {
-                updateLastSignInTime(user.uid)
-            }
-            
-            // Trigger bidirectional sync on Google sign-in
+            // Step 3: Always trigger sync regardless of profile creation status
             triggerLoginSync(user.uid)
             
-            user
+            // Step 4: Always return successful authentication
+            LiftrixResult.success(user)
+            
+        } catch (authException: Exception) {
+            // Only fail for actual Firebase Auth errors, not profile creation errors
+            Timber.e(authException, "Google authentication failed at Firebase Auth level")
+            LiftrixResult.failure(FirebaseErrorMapper.handleFirebaseError(authException))
+        }
+    }
+
+    /**
+     * Handles profile creation and updates gracefully without blocking authentication.
+     * This ensures that Firestore permission errors don't prevent successful login.
+     */
+    private suspend fun handleProfileOperationsGracefully(user: User) {
+        try {
+            // Check if profile actually exists rather than relying on isNewUser flag
+            val profileExists = checkUserProfileExists(user.uid)
+            
+            if (!profileExists) {
+                Timber.i("Creating profile for new Google user: ${user.uid}")
+                // Try to create profile, but don't fail authentication if it fails
+                createUserProfile(user).fold(
+                    onSuccess = {
+                        Timber.i("Profile created successfully for Google user: ${user.uid}")
+                    },
+                    onFailure = { error ->
+                        Timber.w("Profile creation failed for Google user ${user.uid}, will retry in background: $error")
+                        // Schedule background profile creation retry
+                        scheduleBackgroundProfileCreation(user)
+                    }
+                )
+            } else {
+                Timber.d("Profile exists for Google user: ${user.uid}, updating last sign-in time")
+                // Update last sign-in time, but don't fail if this fails either
+                try {
+                    updateLastSignInTime(user.uid)
+                } catch (updateError: Exception) {
+                    Timber.w(updateError, "Failed to update last sign-in time for ${user.uid}, continuing with authentication")
+                }
+            }
+        } catch (profileError: Exception) {
+            Timber.w(profileError, "Profile operations failed for Google user ${user.uid}, but authentication will still succeed")
+            // Schedule background profile creation as fallback
+            scheduleBackgroundProfileCreation(user)
         }
     }
 
@@ -694,6 +742,79 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
     
+    /**
+     * Schedules background profile creation with retry logic for users where initial profile creation failed.
+     * This ensures that authentication never fails due to profile creation issues, while still ensuring
+     * the user profile gets created eventually.
+     */
+    private fun scheduleBackgroundProfileCreation(user: User) {
+        try {
+            Timber.i("Scheduling background profile creation for user: ${user.uid}")
+            
+            // Use coroutine scope to avoid blocking the authentication process
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()).launch {
+                // Add a small delay to avoid immediate retry of a potentially failing operation
+                kotlinx.coroutines.delay(2000) // 2 second delay
+                
+                var retryAttempts = 0
+                val maxRetries = 3
+                var lastError: Exception? = null
+                
+                while (retryAttempts < maxRetries) {
+                    try {
+                        Timber.d("Background profile creation attempt ${retryAttempts + 1}/$maxRetries for user: ${user.uid}")
+                        
+                        // Check if profile was created by another process in the meantime
+                        val profileExists = checkUserProfileExists(user.uid)
+                        if (profileExists) {
+                            Timber.i("Profile already exists for user ${user.uid}, background creation no longer needed")
+                            return@launch
+                        }
+                        
+                        // Attempt to create the profile
+                        val result = createUserProfile(user)
+                        result.fold(
+                            onSuccess = {
+                                Timber.i("Background profile creation successful for user: ${user.uid}")
+                                return@launch // Success, exit the retry loop
+                            },
+                            onFailure = { error ->
+                                lastError = Exception(error.toString())
+                                retryAttempts++
+                                Timber.w("Background profile creation attempt $retryAttempts failed for user ${user.uid}: $error")
+                                
+                                if (retryAttempts < maxRetries) {
+                                    // Exponential backoff: 5s, 15s, 45s
+                                    val backoffDelay = (5000 * 3.0.pow((retryAttempts - 1).toDouble())).toLong()
+                                    Timber.d("Waiting ${backoffDelay}ms before next retry for user: ${user.uid}")
+                                    kotlinx.coroutines.delay(backoffDelay)
+                                }
+                            }
+                        )
+                    } catch (e: Exception) {
+                        lastError = e
+                        retryAttempts++
+                        Timber.w(e, "Exception during background profile creation attempt $retryAttempts for user: ${user.uid}")
+                        
+                        if (retryAttempts < maxRetries) {
+                            val backoffDelay = (5000 * 3.0.pow((retryAttempts - 1).toDouble())).toLong()
+                            kotlinx.coroutines.delay(backoffDelay)
+                        }
+                    }
+                }
+                
+                // All retry attempts failed
+                if (retryAttempts >= maxRetries) {
+                    Timber.e(lastError, "All background profile creation attempts failed for user: ${user.uid}. Profile creation will be attempted on next login.")
+                    // The user is still authenticated and can use the app, but their profile might be incomplete
+                    // This will be resolved on next login attempt or by periodic sync workers
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to schedule background profile creation for user: ${user.uid}")
+        }
+    }
+
     /**
      * This is the critical fix that ensures workouts are never lost when switching devices.
      */

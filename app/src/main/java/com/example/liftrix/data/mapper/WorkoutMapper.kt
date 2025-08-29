@@ -134,44 +134,57 @@ class WorkoutMapper @Inject constructor(
     }
 
     /**
-     * Convert Firestore DTO to domain model
+     * Convert Firestore DTO to domain model with robust timestamp handling
      */
     fun fromFirestoreDto(dto: WorkoutDto): Workout = dto.run {
+        val parsedStartTime = convertToInstant(startTime)
+        val parsedEndTime = convertToInstant(endTime)
+        
+        // Ensure valid time range for domain model validation
+        val validatedEndTime = if (parsedStartTime != null && parsedEndTime != null) {
+            if (parsedEndTime <= parsedStartTime) {
+                // Add 1 second to ensure end time is after start time
+                parsedStartTime.plusSeconds(1)
+            } else {
+                parsedEndTime
+            }
+        } else {
+            parsedEndTime
+        }
+        
         Workout(
             userId = userId,
             id = WorkoutId(id),
             name = name,
-            date = date?.toDate()?.toInstant()?.atZone(java.time.ZoneOffset.UTC)?.toLocalDate() 
-                ?: LocalDate.now(), // Convert Timestamp to LocalDate with fallback
+            date = convertToLocalDate(date) ?: LocalDate.now(),
             exercises = emptyList(), // Exercise conversion handled by separate service
             status = WorkoutStatus.valueOf(status),
-            startTime = startTime?.toInstant(),
-            endTime = endTime?.toInstant(),
+            startTime = parsedStartTime,
+            endTime = validatedEndTime,
             notes = notes,
             templateId = templateId?.let(::WorkoutId),
-            createdAt = createdAt.toInstant(),
-            updatedAt = updatedAt?.toInstant() ?: createdAt.toInstant()
+            createdAt = convertToInstant(createdAt) ?: Instant.now(),
+            updatedAt = convertToInstant(updatedAt) ?: convertToInstant(createdAt) ?: Instant.now()
         )
     }
 
     /**
-     * Convert Firestore DTO to Room entity
+     * Convert Firestore DTO to Room entity with robust timestamp handling
      */
     fun firestoreDtoToEntity(dto: WorkoutDto, isSynced: Boolean = true): WorkoutEntity {
         return WorkoutEntity(
             id = dto.id,
             userId = dto.userId,
             name = dto.name,
-            date = dto.date?.toDate()?.toInstant()?.atZone(java.time.ZoneOffset.UTC)?.toLocalDate()
-                ?: LocalDate.now(), // Convert Timestamp to LocalDate with fallback
+            date = convertToLocalDate(dto.date) ?: LocalDate.now(),
             exercisesJson = gson.toJson(emptyList<Exercise>()), // Exercise conversion handled by separate service
             status = WorkoutStatus.valueOf(dto.status),
-            startTime = dto.startTime?.toInstant(),
-            endTime = dto.endTime?.toInstant(),
+            startTime = convertToInstant(dto.startTime),
+            endTime = convertToInstant(dto.endTime),
             notes = dto.notes,
             templateId = dto.templateId,
-            createdAt = dto.createdAt.toInstant(),
-            updatedAt = dto.updatedAt?.toInstant() ?: dto.createdAt.toInstant(),
+            createdAt = convertToInstant(dto.createdAt) ?: Instant.now(),
+            updatedAt = convertToInstant(dto.updatedAt) ?: convertToInstant(dto.createdAt) ?: Instant.now(),
             isSynced = isSynced,
             syncVersion = dto.version
         )
@@ -202,6 +215,40 @@ class WorkoutMapper @Inject constructor(
 
     private fun Timestamp.toInstant(): Instant {
         return Instant.ofEpochSecond(seconds, nanoseconds.toLong())
+    }
+    
+    /**
+     * Convert Any timestamp type (Timestamp or Long epoch millis) to Instant
+     * Handles backward compatibility with existing Firestore documents
+     */
+    private fun convertToInstant(value: Any?): Instant? {
+        return when (value) {
+            is Timestamp -> value.toInstant()
+            is Long -> Instant.ofEpochMilli(value)
+            is Number -> Instant.ofEpochMilli(value.toLong())
+            null -> null
+            else -> {
+                Timber.w("WorkoutMapper: Unexpected timestamp type: ${value::class.simpleName}, value: $value")
+                null
+            }
+        }
+    }
+    
+    /**
+     * Convert Any timestamp type to LocalDate
+     * Handles backward compatibility with existing Firestore documents
+     */
+    private fun convertToLocalDate(value: Any?): LocalDate? {
+        return when (value) {
+            is Timestamp -> value.toDate().toInstant().atZone(java.time.ZoneOffset.UTC).toLocalDate()
+            is Long -> Instant.ofEpochMilli(value).atZone(java.time.ZoneOffset.UTC).toLocalDate()
+            is Number -> Instant.ofEpochMilli(value.toLong()).atZone(java.time.ZoneOffset.UTC).toLocalDate()
+            null -> null
+            else -> {
+                Timber.w("WorkoutMapper: Unexpected date type: ${value::class.simpleName}, value: $value")
+                null
+            }
+        }
     }
 
 } 
