@@ -99,10 +99,10 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("C:\\Users\\Administrator\\Liftrix\\liftrix-release.keystore")
-            storePassword = project.findProperty("KEYSTORE_PASSWORD") as String? ?: ""
+            storeFile = file("../liftrix-release.keystore")
+            storePassword = "Valentin1234#"
             keyAlias = "liftrix"
-            keyPassword = project.findProperty("KEY_PASSWORD") as String? ?: ""
+            keyPassword = "Valentin1234#"
         }
     }
 
@@ -277,9 +277,8 @@ dependencies {
     implementation(libs.room.ktx)
     implementation("androidx.room:room-paging:2.5.2")
     implementation(libs.firebase.storage)
-    // Switch to KSP for better compatibility with SDK 35
+    // KSP for better compatibility with SDK 35 and faster compilation
     ksp(libs.room.compiler)
-    // kapt(libs.room.compiler)
     
     // Paging3 for social feed
     implementation("androidx.paging:paging-runtime:3.2.1")

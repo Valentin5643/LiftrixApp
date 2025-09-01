@@ -34,6 +34,8 @@ object WorkerServiceLocator {
         fun profileCleanupService(): com.example.liftrix.data.service.ProfileCleanupService
         fun cleanupMetricsCollector(): com.example.liftrix.analytics.CleanupMetricsCollector
         fun achievementDao(): com.example.liftrix.data.local.dao.AchievementDao
+        fun offlineQueueManager(): com.example.liftrix.data.sync.OfflineQueueManager
+        fun syncOperationManager(): SyncOperationManager
     }
     
     private fun getEntryPoint(context: Context): WorkerDependencies {
@@ -251,6 +253,27 @@ object WorkerServiceLocator {
         } catch (e: Exception) {
             Timber.e(e, "WorkerServiceLocator: Failed to get AchievementSync dependencies via Hilt")
             throw IllegalStateException("Cannot provide AchievementSync dependencies for worker fallback", e)
+        }
+    }
+    
+    /**
+     * Get UnifiedSyncWorker dependencies bundle
+     */
+    data class UnifiedSyncDependencies(
+        val syncOperationManager: SyncOperationManager,
+        val offlineQueueManager: com.example.liftrix.data.sync.OfflineQueueManager
+    )
+    
+    fun getUnifiedSyncDependencies(context: Context): UnifiedSyncDependencies {
+        return try {
+            val entryPoint = getEntryPoint(context)
+            UnifiedSyncDependencies(
+                syncOperationManager = entryPoint.syncOperationManager(),
+                offlineQueueManager = entryPoint.offlineQueueManager()
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "WorkerServiceLocator: Failed to get UnifiedSync dependencies via Hilt")
+            throw IllegalStateException("Cannot provide UnifiedSync dependencies for worker fallback", e)
         }
     }
 }

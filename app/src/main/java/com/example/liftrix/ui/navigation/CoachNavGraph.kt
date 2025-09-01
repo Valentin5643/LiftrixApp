@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Icon
@@ -42,10 +41,9 @@ fun NavGraphBuilder.coachGraph(
 ) {
     navigation(
         startDestination = CoachRoutes.COACH_MAIN,
-        route = MainNavigationItem.COACH.route
+        route = "coach"
     ) {
         composable(CoachRoutes.COACH_MAIN) {
-            // Placeholder for AI Coach main screen - will be implemented in future tasks
             CoachScreenPlaceholder()
         }
         
@@ -115,7 +113,7 @@ private fun CoachScreenPlaceholder(
             modifier = Modifier.padding(32.dp)
         ) {
             Icon(
-                imageVector = Icons.Filled.Psychology,
+                imageVector = Icons.Filled.Lightbulb,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
@@ -155,9 +153,9 @@ private fun CoachScreenPlaceholder(
                 )
                 
                 FeaturePreviewItem(
-                    icon = Icons.Filled.Psychology,
-                    title = "Personal Coaching",
-                    description = "24/7 AI coach for guidance and motivation"
+                    icon = Icons.Filled.Lightbulb,
+                    title = "Personal Coaching", 
+                    description = "Guidance and motivation features"
                 )
             }
         }

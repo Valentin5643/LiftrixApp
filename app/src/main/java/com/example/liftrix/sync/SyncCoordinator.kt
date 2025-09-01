@@ -74,23 +74,74 @@ class SyncCoordinator @Inject constructor(
     companion object {
         private const val PERIODIC_SYNC_WORK_NAME = "liftrix_periodic_sync"
         private const val IMMEDIATE_SYNC_WORK_NAME = "liftrix_immediate_sync"
+        private const val UNIFIED_SYNC_WORK_NAME = "liftrix_unified_sync"
         private const val SYNC_INTERVAL_MINUTES = 15L
         private const val SYNC_TIMEOUT_MS = 30_000L // 30 seconds timeout
         private const val WORKER_INSTANTIATION_CHECK_DELAY_MS = 1_000L // 1 second
+        
+        // Feature flags for gradual migration
+        private const val USE_UNIFIED_SYNC = true // Set to false to use legacy workers
     }
     
     /**
      * Schedules periodic background sync for all entities.
      * This should be called once during app initialization.
      * 
-     * FIXED: Ensures unique periodic work name per user and uses KEEP policy
-     * to prevent cancellation of in-progress sync operations.
+     * ENHANCED: Now uses UnifiedSyncWorker when enabled, with fallback to legacy workers
      * 
      * @param userId The user ID to sync data for
      */
     fun schedulePeriodicSync(userId: String) {
-        Timber.d("SyncCoordinator: Scheduling periodic sync for user $userId")
+        Timber.d("SyncCoordinator: Scheduling periodic sync for user $userId (unified: $USE_UNIFIED_SYNC)")
         
+        if (USE_UNIFIED_SYNC) {
+            scheduleUnifiedPeriodicSync(userId)
+        } else {
+            scheduleLegacyPeriodicSync(userId)
+        }
+    }
+    
+    /**
+     * Schedule periodic sync using UnifiedSyncWorker
+     */
+    private fun scheduleUnifiedPeriodicSync(userId: String) {
+        val periodicSyncRequest = PeriodicWorkRequestBuilder<UnifiedSyncWorker>(
+            SYNC_INTERVAL_MINUTES, TimeUnit.MINUTES
+        )
+            .setInputData(workDataOf(
+                "userId" to userId,
+                "sync_type" to "all",
+                "max_priority" to SyncOperationManager.PRIORITY_LOW
+            ))
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .setRequiresBatteryNotLow(true)
+                    .setRequiresDeviceIdle(false)
+                    .build()
+            )
+            .setBackoffCriteria(
+                BackoffPolicy.EXPONENTIAL,
+                30, TimeUnit.SECONDS
+            )
+            .addTag("periodic_sync")
+            .addTag("unified_sync")
+            .addTag("user_$userId")
+            .build()
+        
+        workManager.enqueueUniquePeriodicWork(
+            "${UNIFIED_SYNC_WORK_NAME}_periodic_$userId",
+            ExistingPeriodicWorkPolicy.KEEP,
+            periodicSyncRequest
+        )
+        
+        Timber.d("SyncCoordinator: Unified periodic sync scheduled for user $userId")
+    }
+    
+    /**
+     * Schedule periodic sync using legacy MasterSyncWorker (fallback)
+     */
+    private fun scheduleLegacyPeriodicSync(userId: String) {
         val periodicSyncRequest = PeriodicWorkRequestBuilder<MasterSyncWorker>(
             SYNC_INTERVAL_MINUTES, TimeUnit.MINUTES
         )
@@ -99,7 +150,7 @@ class SyncCoordinator @Inject constructor(
                 Constraints.Builder()
                     .setRequiredNetworkType(NetworkType.CONNECTED)
                     .setRequiresBatteryNotLow(true)
-                    .setRequiresDeviceIdle(false) // Allow sync when device is active
+                    .setRequiresDeviceIdle(false)
                     .build()
             )
             .setBackoffCriteria(
@@ -108,63 +159,39 @@ class SyncCoordinator @Inject constructor(
             )
             .addTag("periodic_sync")
             .addTag("user_$userId")
-            .addTag("master_sync") // Additional tag for master sync identification
+            .addTag("master_sync")
             .build()
         
-        // FIXED: Use KEEP policy instead of REPLACE to prevent cancelling in-progress work
         workManager.enqueueUniquePeriodicWork(
             "${PERIODIC_SYNC_WORK_NAME}_$userId",
-            ExistingPeriodicWorkPolicy.KEEP, // Changed from REPLACE to KEEP
+            ExistingPeriodicWorkPolicy.KEEP,
             periodicSyncRequest
         )
         
-        Timber.d("SyncCoordinator: Periodic sync scheduled for user $userId with KEEP policy")
+        Timber.d("SyncCoordinator: Legacy periodic sync scheduled for user $userId")
     }
     
     /**
      * Triggers immediate sync of all entities for a user.
      * This bypasses the periodic schedule and syncs immediately.
      * 
+     * ENHANCED: Now uses UnifiedSyncWorker when enabled, with fallback to legacy workers
+     * 
      * @param userId The user ID to sync data for
      * @return LiftrixResult indicating success or failure
      */
     suspend fun triggerImmediateSync(userId: String): LiftrixResult<Unit> {
         return try {
-            Timber.d("SyncCoordinator: Triggering immediate sync for user $userId")
+            Timber.d("SyncCoordinator: Triggering immediate sync for user $userId (unified: $USE_UNIFIED_SYNC)")
             
             // Update sync status to indicate sync in progress
             syncStatusRepository.updateSyncStatus(userId, isInProgress = true)
             
-            // Create sync work requests for all entity types using unique names per user
-            val profileSync = ProfileSyncWorker.createWorkRequest(userId, forceSync = true)
-            val userPublicSync = UserPublicSyncWorker.createWorkRequest(userId, forceSync = true)
-            val followRelationshipSync = FollowRelationshipSyncWorker.createWorkRequest(userId, forceSync = true) // 🔥 FIX: Include follow relationships
-            val workoutSync = WorkoutSyncWorker.createWorkRequest(userId)
-            val templateSync = TemplateSyncWorker.createWorkRequest(userId)
-            val achievementSync = AchievementSyncWorker.createWorkRequest(userId)
-            val workoutPostSync = WorkoutPostSyncWorker.createWorkRequest(userId, forceSync = true) // 🔥 NEW: Include workout posts
-            
-            // Chain sync operations with dependencies:
-            // Profile first (foundational data)
-            // Then UserPublicSync (for searchability)
-            // Then FollowRelationshipSync (which fetches missing user profiles)
-            // Finally parallel sync of workouts, templates, achievements, and workout posts
-            val operation = workManager.beginUniqueWork(
-                "${IMMEDIATE_SYNC_WORK_NAME}_$userId",
-                ExistingWorkPolicy.REPLACE,
-                profileSync
-            )
-                .then(userPublicSync)
-                .then(followRelationshipSync) // 🔥 FIX: Add follow relationship sync to chain
-                .then(listOf(workoutSync, templateSync, achievementSync, workoutPostSync))
-                .enqueue()
-            
-            // 🔥 NEW: Monitor work operation and add watchdog
-            startWorkMonitoring(operation, "${IMMEDIATE_SYNC_WORK_NAME}_$userId", userId)
-            
-            Timber.d("SyncCoordinator: Immediate sync work enqueued for user $userId")
-            
-            liftrixSuccess(Unit)
+            if (USE_UNIFIED_SYNC) {
+                triggerUnifiedImmediateSync(userId)
+            } else {
+                triggerLegacyImmediateSync(userId)
+            }
             
         } catch (e: Exception) {
             Timber.e(e, "SyncCoordinator: Failed to trigger immediate sync for user $userId")
@@ -184,56 +211,72 @@ class SyncCoordinator @Inject constructor(
     }
     
     /**
+     * Trigger immediate sync using UnifiedSyncWorker
+     */
+    private suspend fun triggerUnifiedImmediateSync(userId: String): LiftrixResult<Unit> {
+        val immediateSync = UnifiedSyncWorker.createImmediateWorkRequest(userId)
+        
+        val operation = workManager.enqueueUniqueWork(
+            "${UNIFIED_SYNC_WORK_NAME}_immediate_$userId",
+            ExistingWorkPolicy.REPLACE,
+            immediateSync
+        )
+        
+        startWorkMonitoring(operation, "${UNIFIED_SYNC_WORK_NAME}_immediate_$userId", userId)
+        
+        Timber.d("SyncCoordinator: Unified immediate sync work enqueued for user $userId")
+        return liftrixSuccess(Unit)
+    }
+    
+    /**
+     * Trigger immediate sync using legacy workers (fallback)
+     */
+    private suspend fun triggerLegacyImmediateSync(userId: String): LiftrixResult<Unit> {
+        // Create sync work requests for all entity types using unique names per user
+        val profileSync = ProfileSyncWorker.createWorkRequest(userId, forceSync = true)
+        val userPublicSync = UserPublicSyncWorker.createWorkRequest(userId, forceSync = true)
+        val followRelationshipSync = FollowRelationshipSyncWorker.createWorkRequest(userId, forceSync = true)
+        val workoutSync = WorkoutSyncWorker.createWorkRequest(userId)
+        val templateSync = TemplateSyncWorker.createWorkRequest(userId)
+        val achievementSync = AchievementSyncWorker.createWorkRequest(userId)
+        val workoutPostSync = WorkoutPostSyncWorker.createWorkRequest(userId, forceSync = true)
+        
+        // Chain sync operations with dependencies
+        val operation = workManager.beginUniqueWork(
+            "${IMMEDIATE_SYNC_WORK_NAME}_$userId",
+            ExistingWorkPolicy.REPLACE,
+            profileSync
+        )
+            .then(userPublicSync)
+            .then(followRelationshipSync)
+            .then(listOf(workoutSync, templateSync, achievementSync, workoutPostSync))
+            .enqueue()
+        
+        startWorkMonitoring(operation, "${IMMEDIATE_SYNC_WORK_NAME}_$userId", userId)
+        
+        Timber.d("SyncCoordinator: Legacy immediate sync work enqueued for user $userId")
+        return liftrixSuccess(Unit)
+    }
+    
+    /**
      * Triggers sync for a specific entity type only.
      * Useful for targeted sync after specific user actions.
      * 
+     * ENHANCED: Now uses UnifiedSyncWorker when enabled, with fallback to specialized workers
+     * 
      * @param userId The user ID to sync data for
-     * @param entityType The specific entity type to sync ("workout", "template", "achievement", "profile")
+     * @param entityType The specific entity type to sync ("workout", "template", "achievement", "profile", "social")
      * @return LiftrixResult indicating success or failure
      */
     suspend fun triggerEntitySync(userId: String, entityType: String): LiftrixResult<Unit> {
         return try {
-            Timber.d("SyncCoordinator: Triggering $entityType sync for user $userId")
+            Timber.d("SyncCoordinator: Triggering $entityType sync for user $userId (unified: $USE_UNIFIED_SYNC)")
             
-            val workRequest = when (entityType.lowercase()) {
-                "workout" -> WorkoutSyncWorker.createWorkRequest(userId)
-                "workout_post" -> WorkoutPostSyncWorker.createWorkRequest(userId) // 🔥 NEW: Support workout post sync
-                "template" -> TemplateSyncWorker.createWorkRequest(userId)
-                "achievement" -> AchievementSyncWorker.createWorkRequest(userId)
-                "profile" -> ProfileSyncWorker.createWorkRequest(userId, forceSync = true)
-                "user_public" -> UserPublicSyncWorker.createWorkRequest(userId, forceSync = true)
-                "follow_relationship" -> FollowRelationshipSyncWorker.createWorkRequest(userId, forceSync = true) // 🔥 FIX: Add follow sync
-                else -> {
-                    return liftrixFailure(
-                        LiftrixError.ValidationError(
-                            field = "entityType",
-                            violations = listOf("Unknown entity type: $entityType")
-                        )
-                    )
-                }
+            if (USE_UNIFIED_SYNC) {
+                triggerUnifiedEntitySync(userId, entityType)
+            } else {
+                triggerLegacyEntitySync(userId, entityType)
             }
-            
-            // FIXED: Use standardized getWorkName methods for all workers
-            val uniqueWorkName = when (entityType.lowercase()) {
-                "workout" -> WorkoutSyncWorker.getWorkName(userId)
-                "profile" -> ProfileSyncWorker.getWorkName(userId)
-                "workout_post" -> "${entityType}_sync_$userId" // Will add getWorkName to this worker too
-                "template" -> "${entityType}_sync_$userId"
-                "achievement" -> "${entityType}_sync_$userId"
-                "user_public" -> "${entityType}_sync_$userId"
-                "follow_relationship" -> "${entityType}_sync_$userId" // 🔥 FIX: Add follow relationship work name
-                else -> "${entityType}_sync_$userId"
-            }
-            
-            workManager.enqueueUniqueWork(
-                uniqueWorkName,
-                ExistingWorkPolicy.REPLACE,
-                workRequest
-            )
-            
-            Timber.d("SyncCoordinator: $entityType sync work enqueued for user $userId")
-            
-            liftrixSuccess(Unit)
             
         } catch (e: Exception) {
             Timber.e(e, "SyncCoordinator: Failed to trigger $entityType sync for user $userId")
@@ -249,6 +292,84 @@ class SyncCoordinator @Inject constructor(
                 )
             )
         }
+    }
+    
+    /**
+     * Trigger entity sync using UnifiedSyncWorker
+     */
+    private suspend fun triggerUnifiedEntitySync(userId: String, entityType: String): LiftrixResult<Unit> {
+        // Map entity types to sync types and priorities
+        val (syncType, priority) = when (entityType.lowercase()) {
+            "workout", "workouts" -> "workouts" to SyncOperationManager.PRIORITY_HIGH
+            "template", "templates" -> "all" to SyncOperationManager.PRIORITY_HIGH
+            "achievement", "achievements" -> "all" to SyncOperationManager.PRIORITY_LOW
+            "profile" -> "profile" to SyncOperationManager.PRIORITY_CRITICAL
+            "social", "social_profile", "follow_relationship", "workout_post" -> "social" to SyncOperationManager.PRIORITY_MEDIUM
+            else -> {
+                return liftrixFailure(
+                    LiftrixError.ValidationError(
+                        field = "entityType",
+                        violations = listOf("Unknown entity type: $entityType")
+                    )
+                )
+            }
+        }
+        
+        val workRequest = UnifiedSyncWorker.createWorkRequest(
+            userId = userId,
+            syncType = syncType,
+            maxPriority = priority,
+            forceSync = true
+        )
+        
+        val uniqueWorkName = UnifiedSyncWorker.getWorkName(userId, "${entityType}_$syncType")
+        
+        workManager.enqueueUniqueWork(
+            uniqueWorkName,
+            ExistingWorkPolicy.REPLACE,
+            workRequest
+        )
+        
+        Timber.d("SyncCoordinator: Unified $entityType sync work enqueued for user $userId")
+        return liftrixSuccess(Unit)
+    }
+    
+    /**
+     * Trigger entity sync using legacy specialized workers (fallback)
+     */
+    private suspend fun triggerLegacyEntitySync(userId: String, entityType: String): LiftrixResult<Unit> {
+        val workRequest = when (entityType.lowercase()) {
+            "workout" -> WorkoutSyncWorker.createWorkRequest(userId)
+            "workout_post" -> WorkoutPostSyncWorker.createWorkRequest(userId)
+            "template" -> TemplateSyncWorker.createWorkRequest(userId)
+            "achievement" -> AchievementSyncWorker.createWorkRequest(userId)
+            "profile" -> ProfileSyncWorker.createWorkRequest(userId, forceSync = true)
+            "user_public" -> UserPublicSyncWorker.createWorkRequest(userId, forceSync = true)
+            "follow_relationship" -> FollowRelationshipSyncWorker.createWorkRequest(userId, forceSync = true)
+            else -> {
+                return liftrixFailure(
+                    LiftrixError.ValidationError(
+                        field = "entityType",
+                        violations = listOf("Unknown entity type: $entityType")
+                    )
+                )
+            }
+        }
+        
+        val uniqueWorkName = when (entityType.lowercase()) {
+            "workout" -> WorkoutSyncWorker.getWorkName(userId)
+            "profile" -> ProfileSyncWorker.getWorkName(userId)
+            else -> "${entityType}_sync_$userId"
+        }
+        
+        workManager.enqueueUniqueWork(
+            uniqueWorkName,
+            ExistingWorkPolicy.REPLACE,
+            workRequest
+        )
+        
+        Timber.d("SyncCoordinator: Legacy $entityType sync work enqueued for user $userId")
+        return liftrixSuccess(Unit)
     }
     
     /**
@@ -298,26 +419,32 @@ class SyncCoordinator @Inject constructor(
      * Cancels all sync operations for a user.
      * Useful during user logout or app cleanup.
      * 
+     * ENHANCED: Now handles both unified and legacy workers
+     * 
      * @param userId The user ID to cancel sync for
      */
     fun cancelSyncForUser(userId: String) {
         Timber.d("SyncCoordinator: Cancelling all sync operations for user $userId")
         
         try {
-            // Cancel periodic sync
+            // Cancel unified sync operations
+            workManager.cancelUniqueWork("${UNIFIED_SYNC_WORK_NAME}_periodic_$userId")
+            workManager.cancelUniqueWork("${UNIFIED_SYNC_WORK_NAME}_immediate_$userId")
+            
+            // Cancel legacy sync operations (for backward compatibility)
             workManager.cancelUniqueWork("${PERIODIC_SYNC_WORK_NAME}_$userId")
-            
-            // Cancel any pending immediate sync
             workManager.cancelUniqueWork("${IMMEDIATE_SYNC_WORK_NAME}_$userId")
+            workManager.cancelUniqueWork("startup_sync_$userId")
             
-            // Cancel entity-specific syncs
+            // Cancel entity-specific syncs (both unified and legacy)
             workManager.cancelUniqueWork("workout_sync_$userId")
             workManager.cancelUniqueWork("template_sync_$userId")
             workManager.cancelUniqueWork("achievement_sync_$userId")
             workManager.cancelUniqueWork("profile_sync_$userId")
             
-            // Cancel by tag for any additional work
+            // Cancel by tag for any additional work (this handles all user-specific work)
             workManager.cancelAllWorkByTag("user_$userId")
+            workManager.cancelAllWorkByTag("unified_sync")
             
             coordinatorScope.launch {
                 // Stop any real-time sync

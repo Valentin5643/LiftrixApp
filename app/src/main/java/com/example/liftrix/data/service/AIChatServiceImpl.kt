@@ -161,9 +161,8 @@ class AIChatServiceImpl @Inject constructor(
             val appCheckToken = obtainAppCheckTokenWithRetry()
             
             if (appCheckToken == null) {
-                Timber.w("AIChatService: Failed to obtain App Check token after retries - proceeding without token")
-                // Continue without App Check token - Firebase AI might still work in debug mode
-                // or with less strict security settings
+                Timber.e("AIChatService: Failed to obtain App Check token after retries - cannot proceed")
+                throw Exception("AI service requires valid security tokens. Please restart the app and ensure proper network connectivity.")
             } else {
                 Timber.d("AIChatService: App Check token obtained successfully (${if (appCheckToken.fromCache) "cached" else "refreshed"}): ${appCheckToken.token.take(10)}...")
             }

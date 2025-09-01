@@ -3,11 +3,9 @@ package com.example.liftrix.ui.navigation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.TrendingUp
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -46,10 +44,4 @@ enum class MainNavigationItem(
         icon = Icons.Outlined.TrendingUp,
         selectedIcon = Icons.Filled.TrendingUp
     ),
-    COACH(
-        route = "coach",
-        label = "Coach",
-        icon = Icons.Outlined.Psychology,
-        selectedIcon = Icons.Filled.Psychology
-    )
 } 

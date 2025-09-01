@@ -22,7 +22,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.liftrix.domain.model.SessionExercise
 import androidx.compose.material3.MaterialTheme
-import com.example.liftrix.ui.navigation.navigateToAIChatbot
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.workout.components.*
 import com.example.liftrix.ui.workout.components.SaveQuickWorkoutAsTemplateDialog
@@ -162,7 +161,7 @@ private fun ActiveWorkoutContent(
     }
     
     Column(modifier = Modifier.fillMaxSize()) {
-        // Workout name, AI coach button, and timer
+        // Workout name and timer
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -181,21 +180,6 @@ private fun ActiveWorkoutContent(
                 modifier = Modifier.weight(1f)
             )
             
-            // AI Coach Button
-            IconButton(
-                onClick = {
-                    val workoutContext = "active_workout:${session.name}:${session.exercises.size}_exercises"
-                    navController.navigateToAIChatbot(workoutContext = workoutContext)
-                },
-                modifier = Modifier.size(40.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Psychology,
-                    contentDescription = "AI Coach",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
             
             // Timer
             Text(

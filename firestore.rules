@@ -73,7 +73,7 @@ service cloud.firestore {
     // Helper functions for sync infrastructure
     function isValidSyncMetadata() {
       return request.resource.data.keys().hasAll(['syncVersion', 'lastModified', 'isSynced']) &&
-             request.resource.data.syncVersion is int &&
+             (request.resource.data.syncVersion is int || request.resource.data.syncVersion is number) &&
              request.resource.data.syncVersion >= 0 &&
              request.resource.data.lastModified is timestamp &&
              request.resource.data.isSynced is bool;
@@ -90,9 +90,9 @@ service cloud.firestore {
              request.resource.data.title.size() > 0 &&
              request.resource.data.title.size() <= 100 &&
              (!('description' in request.resource.data) || request.resource.data.description is string) &&
-             (!('unlockedAt' in request.resource.data) || request.resource.data.unlockedAt is int) &&
+             (!('unlockedAt' in request.resource.data) || (request.resource.data.unlockedAt is int || request.resource.data.unlockedAt is number)) &&
              (!('isDisplayed' in request.resource.data) || request.resource.data.isDisplayed is bool) &&
-             (!('syncVersion' in request.resource.data) || request.resource.data.syncVersion is int) &&
+             (!('syncVersion' in request.resource.data) || (request.resource.data.syncVersion is int || request.resource.data.syncVersion is number)) &&
              (!('createdAt' in request.resource.data) || request.resource.data.createdAt is timestamp) &&
              (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is timestamp);
     }
@@ -181,16 +181,14 @@ service cloud.firestore {
     match /users/{userId}/achievements/{achievementId} {
       allow read: if isAuthenticated() && isOwner(userId);
       
-      // Allow client-side achievement writes with validation
+      // Allow client-side achievement writes with basic validation
       allow write: if isAuthenticated() && 
                       isOwner(userId) && 
-                      isValidAchievement() && 
-                      isValidSyncMetadata();
+                      isValidAchievement();
       
       allow create: if isAuthenticated() && 
                        isOwner(userId) && 
-                       isValidAchievement() && 
-                       isValidSyncMetadata();
+                       isValidAchievement();
     }
     
     // Users public profiles - publicly accessible profile data

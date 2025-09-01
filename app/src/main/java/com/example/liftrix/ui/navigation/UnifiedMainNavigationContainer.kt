@@ -8,7 +8,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.TrendingUp
-import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Sync
@@ -634,8 +633,7 @@ private fun BottomNavigationBar(
     val items = listOf(
         LegacyBottomNavItem("home", "Home", Icons.Default.Home),
         LegacyBottomNavItem("workout", "Workout", Icons.Default.FitnessCenter),
-        LegacyBottomNavItem("progress", "Progress", Icons.Default.TrendingUp),
-        LegacyBottomNavItem("coach", "Coach", Icons.Default.Psychology)
+        LegacyBottomNavItem("progress", "Progress", Icons.Default.TrendingUp)
     )
     
     NavigationBar(

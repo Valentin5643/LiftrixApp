@@ -7,6 +7,5 @@ plugins {
     alias(libs.plugins.google.firebase.crashlytics) apply false
     alias(libs.plugins.google.firebase.firebase.perf) apply false
     alias(libs.plugins.ksp) apply false
-    alias(libs.plugins.kapt) apply false
     alias(libs.plugins.hilt.android) apply false
 }
