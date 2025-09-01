@@ -1,6 +1,8 @@
 package com.example.liftrix.di
 
 import com.example.liftrix.data.service.WeightMemoryServiceImpl
+import com.example.liftrix.data.service.ShareContentFactory
+import com.example.liftrix.data.service.PlatformIntentService
 import com.example.liftrix.domain.model.analytics.CalorieCalculator
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.MetDataRepository
@@ -164,6 +166,28 @@ abstract class ServiceModule {
     abstract fun bindExerciseMappingService(
         exerciseMappingServiceImpl: com.example.liftrix.domain.service.ExerciseMappingServiceImpl
     ): com.example.liftrix.domain.service.ExerciseMappingService
+
+    /**
+     * Binds PdfGenerationService interface to its implementation.
+     * 
+     * Provides PDF generation functionality using WebView-based rendering.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindPdfGenerationService(
+        pdfGenerationServiceImpl: com.example.liftrix.data.service.PdfGenerationServiceImpl
+    ): com.example.liftrix.domain.service.PdfGenerationService
+
+    /**
+     * Binds DownloadManagerService interface to its implementation.
+     * 
+     * Provides file download management using Android Download Manager.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindDownloadManagerService(
+        downloadManagerServiceImpl: com.example.liftrix.data.service.DownloadManagerServiceImpl
+    ): com.example.liftrix.domain.service.DownloadManagerService
     
     companion object {
         

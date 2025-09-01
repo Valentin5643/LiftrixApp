@@ -48,6 +48,7 @@ import com.example.liftrix.data.local.dao.SupportTicketDao
 import com.example.liftrix.data.local.dao.AppConfigDao
 import com.example.liftrix.data.local.dao.SettingsAuditDao
 import com.example.liftrix.data.local.dao.SyncQueueDao
+import com.example.liftrix.data.local.dao.SyncPreferencesDao
 import com.example.liftrix.data.local.dao.ChatPreferencesDao
 import com.example.liftrix.data.local.dao.ChatHistoryDao
 import com.example.liftrix.data.local.dao.PRNotificationDao
@@ -412,6 +413,11 @@ object DatabaseModule {
     @Provides
     fun provideSyncQueueDao(database: LiftrixDatabase): com.example.liftrix.data.local.dao.SyncQueueDao {
         return database.syncQueueDao()
+    }
+    
+    @Provides
+    fun provideSyncPreferencesDao(database: LiftrixDatabase): SyncPreferencesDao {
+        return database.syncPreferencesDao()
     }
     
     @Provides

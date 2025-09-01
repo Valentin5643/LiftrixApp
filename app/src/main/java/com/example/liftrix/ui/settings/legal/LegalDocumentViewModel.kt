@@ -5,7 +5,10 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.service.LegalDocumentService
+import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
+import com.example.liftrix.domain.usecase.legal.DownloadPdfUseCase
+import com.example.liftrix.domain.usecase.legal.DownloadPdfResult
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -30,6 +33,8 @@ import javax.inject.Inject
 @HiltViewModel
 class LegalDocumentViewModel @Inject constructor(
     private val legalDocumentService: LegalDocumentService,
+    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val downloadPdfUseCase: DownloadPdfUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<LegalDocumentUiState, LegalDocumentEvent>(errorHandler) {
     
@@ -221,53 +226,83 @@ class LegalDocumentViewModel @Inject constructor(
     }
     
     /**
-     * Downloads document as PDF
+     * Downloads document as PDF with full implementation
      */
     private fun downloadAsPdf(documentType: String) {
         viewModelScope.launch {
             val currentData = getCurrentData()
             updateState { 
-                LegalDocumentUiState.Success(currentData.copy(downloadInProgress = true))
+                LegalDocumentUiState.Success(currentData.copy(downloadInProgress = true, downloadProgress = 0f))
             }
             
             try {
-                val filePath = when (documentType) {
-                    "privacy_policy" -> {
-                        val document = legalDocumentService.getPrivacyPolicy().fold(
-                            onSuccess = { it },
-                            onFailure = { error -> throw Exception("Failed to get privacy policy: $error") }
-                        )
-                        // TODO: Implement PDF download functionality
-                        "privacy_policy.pdf" // Placeholder
-                    }
-                    "terms_of_service" -> {
-                        val document = legalDocumentService.getTermsOfService().fold(
-                            onSuccess = { it },
-                            onFailure = { error -> throw Exception("Failed to get terms of service: $error") }
-                        )
-                        // TODO: Implement PDF download functionality
-                        "terms_of_service.pdf" // Placeholder
-                    }
-                    else -> throw Exception("Invalid document type: $documentType")
+                val userId = getCurrentUserIdUseCase() ?: throw LiftrixError.BusinessLogicError(
+                    code = "USER_NOT_AUTHENTICATED",
+                    errorMessage = "User must be authenticated to download documents",
+                    analyticsContext = mapOf("operation" to "DOWNLOAD_PDF_DOCUMENT")
+                )
+                
+                val displayName = when (documentType) {
+                    "privacy_policy" -> "Privacy Policy"
+                    "terms_of_service" -> "Terms of Service"
+                    "eula" -> "End User License Agreement"
+                    "data_processing_agreement" -> "Data Processing Agreement"
+                    else -> documentType.replace("_", " ").split(" ")
+                        .joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
                 }
                 
-                val data = currentData.copy(
+                // Start PDF download with progress tracking
+                downloadPdfUseCase(userId, documentType, displayName).collect { result ->
+                    when (result) {
+                        is DownloadPdfResult.Progress -> {
+                            val data = getCurrentData().copy(
+                                downloadInProgress = true,
+                                downloadProgress = result.progress / 100f
+                            )
+                            updateState { LegalDocumentUiState.Success(data) }
+                            Timber.d("PDF download progress: ${result.progress}% - ${result.message}")
+                        }
+                        is DownloadPdfResult.Success -> {
+                            val data = getCurrentData().copy(
+                                downloadInProgress = false,
+                                downloadProgress = 1.0f
+                            )
+                            updateState { LegalDocumentUiState.Success(data) }
+                            emitSideEffect(LegalDocumentSideEffect.ShowDownloadComplete(result.filePath))
+                            Timber.d("PDF download completed: ${result.filePath} (${result.fileSize} bytes)")
+                        }
+                        is DownloadPdfResult.Error -> {
+                            val data = getCurrentData().copy(
+                                downloadInProgress = false,
+                                downloadProgress = 0f
+                            )
+                            updateState { 
+                                LegalDocumentUiState.Error(result.error, data)
+                            }
+                            emitSideEffect(LegalDocumentSideEffect.ShowError("Failed to download PDF: ${result.error.message}"))
+                            Timber.e("PDF download failed: ${result.error}")
+                        }
+                    }
+                }
+                
+            } catch (e: Exception) {
+                val error = when (e) {
+                    is LiftrixError -> e
+                    else -> LiftrixError.BusinessLogicError(
+                        code = "DOWNLOAD_FAILED",
+                        errorMessage = "Failed to download document: ${e.message}",
+                        analyticsContext = mapOf(
+                            "operation" to "DOWNLOAD_LEGAL_DOCUMENT_PDF",
+                            "document_type" to documentType
+                        )
+                    )
+                }
+                val data = getCurrentData().copy(
                     downloadInProgress = false,
                     downloadProgress = 0f
                 )
-                
-                updateState { LegalDocumentUiState.Success(data) }
-                // Note: filePath would be returned in a real implementation
-                emitSideEffect(LegalDocumentSideEffect.ShowDownloadComplete(""))
-                Timber.d("Document downloaded as PDF: $documentType")
-            } catch (e: Exception) {
-                val error = LiftrixError.BusinessLogicError(
-                    code = "DOWNLOAD_FAILED",
-                    errorMessage = "Failed to download document: ${e.message}",
-                    analyticsContext = mapOf("operation" to "DOWNLOAD_LEGAL_DOCUMENT", "type" to documentType)
-                )
                 updateState { 
-                    LegalDocumentUiState.Error(error, currentData.copy(downloadInProgress = false))
+                    LegalDocumentUiState.Error(error, data)
                 }
                 emitSideEffect(LegalDocumentSideEffect.ShowError("Failed to download document"))
                 Timber.e(e, "Failed to download document as PDF")
@@ -334,8 +369,13 @@ class LegalDocumentViewModel @Inject constructor(
                             onSuccess = { it },
                             onFailure = { error -> throw error }
                         )
+                        val userId = getCurrentUserIdUseCase() ?: throw LiftrixError.BusinessLogicError(
+                            code = "USER_NOT_AUTHENTICATED",
+                            errorMessage = "User must be authenticated to accept legal documents",
+                            analyticsContext = mapOf("operation" to "ACCEPT_PRIVACY_POLICY")
+                        )
                         legalDocumentService.recordDocumentAcceptance(
-                            userId = "current_user", // TODO: Get actual user ID
+                            userId = userId,
                             documentType = com.example.liftrix.domain.service.LegalDocumentType.PRIVACY_POLICY,
                             version = document.version
                         ).fold(
@@ -348,8 +388,13 @@ class LegalDocumentViewModel @Inject constructor(
                             onSuccess = { it },
                             onFailure = { error -> throw error }
                         )
+                        val userId = getCurrentUserIdUseCase() ?: throw LiftrixError.BusinessLogicError(
+                            code = "USER_NOT_AUTHENTICATED",
+                            errorMessage = "User must be authenticated to accept legal documents",
+                            analyticsContext = mapOf("operation" to "ACCEPT_TERMS_OF_SERVICE")
+                        )
                         legalDocumentService.recordDocumentAcceptance(
-                            userId = "current_user", // TODO: Get actual user ID
+                            userId = userId,
                             documentType = com.example.liftrix.domain.service.LegalDocumentType.TERMS_OF_SERVICE,
                             version = document.version
                         ).fold(

@@ -171,6 +171,12 @@ fun UserProfileScreen(
                 onActivityClick = { workoutPost -> viewModel.handleActivityClick(workoutPost) },
                 onSeeAllActivitiesClick = { viewModel.showAllActivities() },
                 onSeeAllAchievementsClick = { viewModel.showAllAchievements() },
+                onLikeClick = { postId -> viewModel.handleEvent(UserProfileEvent.ToggleLike(postId)) },
+                onSaveClick = { postId -> viewModel.handleEvent(UserProfileEvent.ToggleSave(postId)) },
+                onCommentClick = { postId -> viewModel.handleEvent(UserProfileEvent.CreateComment(postId, "")) },
+                onShareClick = { postId -> viewModel.handleEvent(UserProfileEvent.SharePost(postId, "copy_link")) },
+                onCopyWorkoutClick = { postId -> viewModel.handleEvent(UserProfileEvent.CopyWorkout(postId)) },
+                onLoadEngagementStatus = { postId -> viewModel.loadEngagementStatus(postId) },
                 modifier = modifier
             )
         }
@@ -471,6 +477,12 @@ private fun ModernUserProfileContent(
     onActivityClick: (com.example.liftrix.domain.model.social.WorkoutPost) -> Unit,
     onSeeAllActivitiesClick: () -> Unit,
     onSeeAllAchievementsClick: () -> Unit,
+    onLikeClick: (String) -> Unit,
+    onSaveClick: (String) -> Unit,
+    onCommentClick: (String) -> Unit,
+    onShareClick: (String) -> Unit,
+    onCopyWorkoutClick: (String) -> Unit,
+    onLoadEngagementStatus: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -625,16 +637,46 @@ private fun ModernUserProfileContent(
             // Display workout posts in feed style
             items(profile.recentWorkoutPosts.size) { index ->
                 val post = profile.recentWorkoutPosts[index]
+                
+                // Load engagement status on first appearance
+                LaunchedEffect(post.id) {
+                    onLoadEngagementStatus(post.id)
+                }
+                
+                val isLiked = uiState.likedPosts.contains(post.id)
+                val isSaved = uiState.savedPosts.contains(post.id)
+                val isEngagementLoading = uiState.engagementLoadingPosts.contains(post.id)
+                
                 WorkoutPostCard(
                     post = post,
-                    isLiked = false, // TODO: Get actual like status
-                    isSaved = false, // TODO: Get actual save status
-                    onLikeClick = { /* TODO: Handle like */ },
-                    onCommentClick = { /* TODO: Handle comment */ },
-                    onShareClick = { /* TODO: Handle share */ },
-                    onSaveClick = { /* TODO: Handle save */ },
+                    isLiked = isLiked,
+                    isSaved = isSaved,
+                    onLikeClick = { 
+                        if (!isEngagementLoading) {
+                            onLikeClick(post.id)
+                        }
+                    },
+                    onCommentClick = { 
+                        if (!isEngagementLoading) {
+                            onCommentClick(post.id)
+                        }
+                    },
+                    onShareClick = { 
+                        if (!isEngagementLoading) {
+                            onShareClick(post.id)
+                        }
+                    },
+                    onSaveClick = { 
+                        if (!isEngagementLoading) {
+                            onSaveClick(post.id)
+                        }
+                    },
                     onProfileClick = { /* Already on profile */ },
-                    onWorkoutCopyClick = { /* TODO: Handle copy */ },
+                    onWorkoutCopyClick = { 
+                        if (!isEngagementLoading) {
+                            onCopyWorkoutClick(post.id)
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 8.dp)
@@ -694,16 +736,45 @@ private fun ModernUserProfileContent(
                     updatedAt = System.currentTimeMillis()
                 )
                 
+                // Load engagement status for synthetic posts too
+                LaunchedEffect(syntheticPost.id) {
+                    onLoadEngagementStatus(syntheticPost.id)
+                }
+                
+                val isLiked = uiState.likedPosts.contains(syntheticPost.id)
+                val isSaved = uiState.savedPosts.contains(syntheticPost.id)
+                val isEngagementLoading = uiState.engagementLoadingPosts.contains(syntheticPost.id)
+                
                 WorkoutPostCard(
                     post = syntheticPost,
-                    isLiked = false,
-                    isSaved = false,
-                    onLikeClick = { /* Not available for synthetic posts */ },
-                    onCommentClick = { /* Not available for synthetic posts */ },
-                    onShareClick = { /* Not available for synthetic posts */ },
-                    onSaveClick = { /* Not available for synthetic posts */ },
+                    isLiked = isLiked,
+                    isSaved = isSaved,
+                    onLikeClick = { 
+                        if (!isEngagementLoading) {
+                            onLikeClick(syntheticPost.id)
+                        }
+                    },
+                    onCommentClick = { 
+                        if (!isEngagementLoading) {
+                            onCommentClick(syntheticPost.id)
+                        }
+                    },
+                    onShareClick = { 
+                        if (!isEngagementLoading) {
+                            onShareClick(syntheticPost.id)
+                        }
+                    },
+                    onSaveClick = { 
+                        if (!isEngagementLoading) {
+                            onSaveClick(syntheticPost.id)
+                        }
+                    },
                     onProfileClick = { /* Already on profile */ },
-                    onWorkoutCopyClick = { /* TODO: Handle copy */ },
+                    onWorkoutCopyClick = { 
+                        if (!isEngagementLoading) {
+                            onCopyWorkoutClick(syntheticPost.id)
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 8.dp)

@@ -8,6 +8,11 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.service.MediaProcessingService
 import com.example.liftrix.domain.service.PRDetectionService
+import com.example.liftrix.domain.usecase.sharing.ShareToExternalPlatformUseCase
+import com.example.liftrix.domain.usecase.sharing.ShareRequest
+import com.example.liftrix.domain.usecase.sharing.SharePlatform
+import com.example.liftrix.domain.usecase.sharing.ShareContentType
+import com.example.liftrix.domain.usecase.sharing.ShareWorkoutData
 import com.example.liftrix.domain.usecase.workout.GetWorkoutByIdUseCase
 import com.example.liftrix.domain.usecase.workout.GetWorkoutByIdRequest
 import com.example.liftrix.domain.model.WorkoutId
@@ -33,7 +38,8 @@ class PostWorkoutSummaryViewModel @Inject constructor(
     private val getWorkoutByIdUseCase: GetWorkoutByIdUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     private val prDetectionService: PRDetectionService,
-    private val mediaProcessingService: MediaProcessingService
+    private val mediaProcessingService: MediaProcessingService,
+    private val shareToExternalPlatformUseCase: ShareToExternalPlatformUseCase
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow<PostWorkoutUiState>(PostWorkoutUiState.Loading)
@@ -190,55 +196,50 @@ class PostWorkoutSummaryViewModel @Inject constructor(
     }
     
     
-    private fun detectPersonalRecords(workout: com.example.liftrix.domain.model.Workout): List<PersonalRecord> {
-        val records = mutableListOf<PersonalRecord>()
+    private suspend fun detectPersonalRecords(workout: com.example.liftrix.domain.model.Workout): List<PersonalRecord> {
+        val userId = currentUserId ?: return emptyList()
         
-        workout.exercises.forEach { exercise ->
-            // Check for 1RM PR
-            val maxWeight = exercise.sets.maxOfOrNull { set ->
-                set.weight?.kilograms ?: 0.0
-            } ?: 0.0
-            
-            // Check if this is a PR (simplified - would need historical data)
-            if (maxWeight > 0) {
-                // TODO: Implement actual PR detection when service is ready
-                val isPR = false // Placeholder
-                
-                if (isPR) {
-                    records.add(
-                        PersonalRecord(
-                            exerciseName = exercise.libraryExercise.name,
-                            type = "Max Weight",
-                            value = "${maxWeight}kg"
-                        )
+        // Use the PRDetectionService to detect actual personal records
+        val detectionResult = prDetectionService.detectPersonalRecords(workout, userId)
+        
+        return detectionResult.fold(
+            onSuccess = { domainRecords ->
+                // Map domain PersonalRecords to UI PersonalRecords
+                domainRecords.map { domainRecord ->
+                    PersonalRecord(
+                        exerciseName = domainRecord.exerciseName,
+                        type = domainRecord.prType.displayName,
+                        value = formatPRValue(domainRecord)
                     )
                 }
+            },
+            onFailure = { error ->
+                Timber.e("Failed to detect personal records: $error")
+                emptyList()
             }
-            
-            // Check for volume PR
-            val totalVolume = exercise.sets.sumOf { set ->
-                val weight = set.weight?.kilograms ?: 0.0
-                val reps = set.reps?.count ?: 0
-                (weight * reps).toInt()
+        )
+    }
+    
+    /**
+     * Formats a PR value for UI display based on the PR type
+     */
+    private fun formatPRValue(record: com.example.liftrix.domain.service.PersonalRecord): String {
+        return when (record.prType) {
+            com.example.liftrix.domain.service.PRType.ONE_RM -> {
+                val oneRM = record.estimatedOneRM ?: (record.weight ?: 0.0)
+                "${String.format("%.1f", oneRM)}kg 1RM"
             }
-            
-            if (totalVolume > 0) {
-                // TODO: Implement actual volume PR detection when service is ready
-                val isVolumePR = false // Placeholder
-                
-                if (isVolumePR) {
-                    records.add(
-                        PersonalRecord(
-                            exerciseName = exercise.libraryExercise.name,
-                            type = "Volume PR",
-                            value = "${totalVolume}kg"
-                        )
-                    )
-                }
+            com.example.liftrix.domain.service.PRType.MAX_WEIGHT -> {
+                "${String.format("%.1f", record.weight ?: 0.0)}kg"
+            }
+            com.example.liftrix.domain.service.PRType.VOLUME -> {
+                val volume = record.volume ?: 0.0
+                "${String.format("%.0f", volume)}kg total volume"
+            }
+            com.example.liftrix.domain.service.PRType.REPS -> {
+                "${record.reps} reps @ ${String.format("%.1f", record.weight ?: 0.0)}kg"
             }
         }
-        
-        return records
     }
     
     private fun calculateTotalVolume(workout: com.example.liftrix.domain.model.Workout): Int {
@@ -277,40 +278,132 @@ class PostWorkoutSummaryViewModel @Inject constructor(
     private suspend fun shareToInstagramStory(workoutId: String, userId: String) {
         val state = _uiState.value as? PostWorkoutUiState.Success ?: return
         
-        // For now, just log the share action
-        // TODO: Implement actual Instagram sharing when ShareToExternalPlatformUseCase is available
-        Timber.d("Share to Instagram Story requested for workout: $workoutId")
+        // Create ShareWorkoutData from current workout state
+        val workoutData = ShareWorkoutData(
+            workoutName = state.workoutName,
+            duration = state.duration.toString(),
+            totalVolume = "${state.totalVolume}kg",
+            exercises = state.exercises.map { it.name },
+            personalRecords = state.personalRecords.map { "${it.exerciseName}: ${it.type} - ${it.value}" },
+            imageUrl = state.workoutImageUrl
+        )
         
-        // Generate the workout image if not already done
-        state.workoutImageUrl?.let { imageUrl ->
-            // Open Instagram with the image
-            Timber.d("Would share image to Instagram: $imageUrl")
-        }
+        // Create share request for Instagram Story
+        val shareRequest = ShareRequest(
+            userId = userId,
+            platform = SharePlatform.INSTAGRAM_STORY,
+            contentType = ShareContentType.WORKOUT_SUMMARY,
+            workoutId = workoutId,
+            workoutData = workoutData,
+            customMessage = "Just crushed this workout! 💪"
+        )
+        
+        // Use ShareToExternalPlatformUseCase to handle the sharing
+        val shareResult = shareToExternalPlatformUseCase.invoke(shareRequest)
+        shareResult.fold(
+            onSuccess = { result ->
+                Timber.d("Successfully created Instagram Story share intent")
+                try {
+                    // The result.intent can be used to launch Instagram
+                    // In a real implementation, this would be handled by the UI layer
+                    // For now, we'll emit a side effect or update UI state
+                    _uiState.value = state.copy(
+                        // Add any success indicators if needed
+                    )
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to launch Instagram Story intent")
+                }
+            },
+            onFailure = { error ->
+                Timber.e("Failed to share to Instagram Story: $error")
+                _uiState.value = PostWorkoutUiState.Error(
+                    message = (error as? LiftrixError)?.getDisplayMessage() ?: "Failed to share to Instagram Story"
+                )
+            }
+        )
     }
     
     private suspend fun copyWorkoutLink(workoutId: String, userId: String) {
-        // TODO: Implement when ShareWorkoutUseCase is available
-        Timber.d("Copy workout link requested for workout: $workoutId")
+        val state = _uiState.value as? PostWorkoutUiState.Success ?: return
         
-        // For now, generate a simple shareable link
-        val link = "https://liftrix.app/workout/$workoutId"
-        Timber.d("Generated workout link: $link")
+        // Create share request for generic link sharing
+        val shareRequest = ShareRequest(
+            userId = userId,
+            platform = SharePlatform.GENERIC,
+            contentType = ShareContentType.WORKOUT_LINK,
+            workoutId = workoutId,
+            customMessage = "Check out my workout!"
+        )
+        
+        // Use ShareToExternalPlatformUseCase to handle link generation
+        val shareResult = shareToExternalPlatformUseCase.invoke(shareRequest)
+        shareResult.fold(
+            onSuccess = { result ->
+                Timber.d("Successfully generated workout link: ${result.shareableContent.linkUrl}")
+                
+                // In a real implementation, this would copy to clipboard
+                // For now, we'll log and update the UI state
+                val link = result.shareableContent.linkUrl ?: "https://liftrix.app/workout/$workoutId"
+                Timber.d("Workout link ready to copy: $link")
+                
+                _uiState.value = state.copy(
+                    // Add any success indicators if needed
+                )
+            },
+            onFailure = { error ->
+                Timber.e("Failed to generate workout link: $error")
+                _uiState.value = PostWorkoutUiState.Error(
+                    message = (error as? LiftrixError)?.getDisplayMessage() ?: "Failed to generate workout link"
+                )
+            }
+        )
     }
     
     private suspend fun shareToWhatsApp(workoutId: String, userId: String) {
         val state = _uiState.value as? PostWorkoutUiState.Success ?: return
         
-        // TODO: Implement actual WhatsApp sharing when ShareToExternalPlatformUseCase is available
-        Timber.d("Share to WhatsApp requested for workout: $workoutId")
+        // Create ShareWorkoutData from current workout state
+        val workoutData = ShareWorkoutData(
+            workoutName = state.workoutName,
+            duration = formatDuration(state.duration),
+            totalVolume = "${state.totalVolume/1000.0} tons",
+            exercises = state.exercises.map { it.name },
+            personalRecords = state.personalRecords.map { "${it.exerciseName}: ${it.type} - ${it.value}" },
+            imageUrl = state.workoutImageUrl
+        )
         
-        val message = """
-            Just completed: ${state.workoutName} 💪
-            Duration: ${formatDuration(state.duration)}
-            Volume: ${state.totalVolume/1000.0} tons
-            Exercises: ${state.exercises.size}
-        """.trimIndent()
+        // Create share request for WhatsApp
+        val shareRequest = ShareRequest(
+            userId = userId,
+            platform = SharePlatform.WHATSAPP,
+            contentType = ShareContentType.WORKOUT_SUMMARY,
+            workoutId = workoutId,
+            workoutData = workoutData,
+            customMessage = "Check out my latest workout session!"
+        )
         
-        Timber.d("Would share to WhatsApp: $message")
+        // Use ShareToExternalPlatformUseCase to handle the sharing
+        val shareResult = shareToExternalPlatformUseCase.invoke(shareRequest)
+        shareResult.fold(
+            onSuccess = { result ->
+                Timber.d("Successfully created WhatsApp share intent")
+                try {
+                    // The result.intent can be used to launch WhatsApp
+                    // In a real implementation, this would be handled by the UI layer
+                    _uiState.value = state.copy(
+                        // Add any success indicators if needed
+                    )
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to launch WhatsApp intent")
+                }
+            },
+            onFailure = { error ->
+                Timber.e("Failed to share to WhatsApp: $error")
+                _uiState.value = PostWorkoutUiState.Error(
+                    message = (error as? LiftrixError)?.getDisplayMessage() ?: "Failed to share to WhatsApp"
+                )
+            }
+        )
     }
     
     private suspend fun saveWorkoutImage(workoutId: String, userId: String) {

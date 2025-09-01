@@ -14,6 +14,9 @@ import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.repository.social.EngagementRepository
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
+import com.example.liftrix.domain.usecase.sharing.ShareToExternalPlatformUseCase
+import com.example.liftrix.domain.usecase.sharing.SharePlatform
+import com.example.liftrix.domain.usecase.sharing.ShareContentType
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -68,6 +71,7 @@ class UserWorkoutsViewModel @Inject constructor(
     private val workoutRepository: WorkoutRepository,
     private val engagementRepository: EngagementRepository,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val shareToExternalPlatformUseCase: ShareToExternalPlatformUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<UserWorkoutsUiState, UserWorkoutsEvent>(errorHandler) {
     
@@ -308,9 +312,39 @@ class UserWorkoutsViewModel @Inject constructor(
     
     fun shareWorkout(workoutId: String) {
         viewModelScope.launch {
-            // TODO: Implement when ShareWorkoutUseCase is available
-            // For now, just log the request
-            Timber.d("Share workout requested for workout: $workoutId")
+            val userId = getCurrentUserIdUseCase()
+            if (userId == null) {
+                Timber.e("Cannot share workout: User not authenticated")
+                return@launch
+            }
+
+            // Get the workout details for sharing
+            val workout = _uiState.value.workoutPosts.find { it.id == workoutId }
+            if (workout == null) {
+                Timber.e("Cannot share workout: Workout not found with id $workoutId")
+                return@launch
+            }
+
+            // Use the ShareToExternalPlatformUseCase to share the workout
+            val result = shareToExternalPlatformUseCase.invoke(
+                com.example.liftrix.domain.usecase.sharing.ShareRequest(
+                    workoutId = workoutId,
+                    userId = userId,
+                    platform = SharePlatform.GENERIC, // Let user choose platform
+                    contentType = ShareContentType.WORKOUT_SUMMARY
+                )
+            )
+
+            result.fold(
+                onSuccess = { 
+                    Timber.d("Workout shared successfully: $workoutId")
+                },
+                onFailure = { error ->
+                    val liftrixError = error as? LiftrixError ?: LiftrixError.UnknownError("Failed to share workout: ${error.message}")
+                    Timber.e("Failed to share workout: $liftrixError")
+                    handleError(liftrixError)
+                }
+            )
         }
     }
 }

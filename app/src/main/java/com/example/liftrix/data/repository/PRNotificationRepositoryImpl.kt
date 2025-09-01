@@ -7,6 +7,9 @@ import com.example.liftrix.data.local.dao.GymBuddyDao
 import com.example.liftrix.data.local.entity.PRReactionEntity
 import com.example.liftrix.data.local.entity.PRNotificationPreferencesEntity
 import com.example.liftrix.data.remote.PRNotificationFirebaseService
+import com.example.liftrix.data.service.UserProfileCacheService
+import com.example.liftrix.data.service.PRDescriptionGeneratorService
+import com.example.liftrix.data.service.ExerciseMetadataService
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -40,7 +43,10 @@ class PRNotificationRepositoryImpl @Inject constructor(
     private val prReactionDao: PRReactionDao,
     private val prPreferencesDao: PRNotificationPreferencesDao,
     private val gymBuddyDao: GymBuddyDao,
-    private val firebaseService: PRNotificationFirebaseService
+    private val firebaseService: PRNotificationFirebaseService,
+    private val userProfileCacheService: UserProfileCacheService,
+    private val prDescriptionService: PRDescriptionGeneratorService,
+    private val exerciseMetadataService: ExerciseMetadataService
 ) : PRNotificationRepository {
 
     override suspend fun saveReaction(
@@ -101,6 +107,9 @@ class PRNotificationRepositoryImpl @Inject constructor(
     override fun getReactionsForPR(prId: String): Flow<List<PRReaction>> {
         return prReactionDao.getReactionsForPR(prId).map { entities ->
             entities.map { entity ->
+                val userProfile = userProfileCacheService.getUserProfile(entity.userId)
+                    .fold(onSuccess = { it }, onFailure = { null })
+                
                 PRReaction(
                     id = entity.id,
                     userId = entity.userId,
@@ -108,8 +117,8 @@ class PRNotificationRepositoryImpl @Inject constructor(
                     prId = entity.prId,
                     reactionType = entity.reactionType,
                     timestamp = entity.timestamp,
-                    userName = null, // TODO: Fetch from user profile
-                    userProfileImage = null // TODO: Fetch from user profile
+                    userName = userProfile?.displayName,
+                    userProfileImage = userProfile?.profileImageUrl
                 )
             }
         }
@@ -170,14 +179,23 @@ class PRNotificationRepositoryImpl @Inject constructor(
         val sinceTimestamp = System.currentTimeMillis() - (daysSince * 24 * 60 * 60 * 1000L)
         return prReactionDao.getUserReactions(userId, sinceTimestamp).map { entities ->
             entities.map { entity ->
+                val buddyProfile = userProfileCacheService.getUserProfile(entity.buddyUserId)
+                    .fold(onSuccess = { it }, onFailure = { null })
+                val prDescription = prDescriptionService.generateDescription(
+                    entity.prId, entity.buddyUserId
+                ).fold(onSuccess = { it }, onFailure = { "Personal Record" })
+                val exerciseName = exerciseMetadataService.getExerciseName(
+                    entity.prId, userId // Using prId as exerciseId fallback, should be improved with proper PR data
+                ).fold(onSuccess = { it }, onFailure = { "Unknown Exercise" })
+                
                 UserReaction(
                     prId = entity.prId,
                     buddyUserId = entity.buddyUserId,
-                    buddyName = "Unknown", // TODO: Fetch from user profile
+                    buddyName = buddyProfile?.displayName ?: "Unknown",
                     reactionType = entity.reactionType,
                     timestamp = entity.timestamp,
-                    prDescription = "Personal Record", // TODO: Generate from PR data
-                    exerciseName = "Unknown" // TODO: Fetch from PR notification
+                    prDescription = prDescription,
+                    exerciseName = exerciseName
                 )
             }
         }

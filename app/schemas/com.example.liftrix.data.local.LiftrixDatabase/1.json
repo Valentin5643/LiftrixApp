@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "6581e648fcba23464947442cf61fa7c6",
+    "identityHash": "ac927f1176c40fe7b04bc59b2ef9bb20",
     "entities": [
       {
         "tableName": "workouts",
@@ -7128,6 +7128,135 @@
         "foreignKeys": []
       },
       {
+        "tableName": "sync_preferences",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `auto_sync_enabled` INTEGER NOT NULL, `sync_interval_minutes` INTEGER NOT NULL, `sync_on_wifi_only` INTEGER NOT NULL, `sync_on_battery_saver` INTEGER NOT NULL, `last_sync_timestamp` INTEGER, `sync_workout_data` INTEGER NOT NULL, `sync_profile_data` INTEGER NOT NULL, `sync_social_data` INTEGER NOT NULL, `sync_settings` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL, `sync_version` INTEGER NOT NULL, `last_modified` INTEGER NOT NULL, PRIMARY KEY(`user_id`))",
+        "fields": [
+          {
+            "fieldPath": "userId",
+            "columnName": "user_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "autoSyncEnabled",
+            "columnName": "auto_sync_enabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncIntervalMinutes",
+            "columnName": "sync_interval_minutes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncOnWifiOnly",
+            "columnName": "sync_on_wifi_only",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncOnBatterySaver",
+            "columnName": "sync_on_battery_saver",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSyncTimestamp",
+            "columnName": "last_sync_timestamp",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "syncWorkoutData",
+            "columnName": "sync_workout_data",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncProfileData",
+            "columnName": "sync_profile_data",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncSocialData",
+            "columnName": "sync_social_data",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncSettings",
+            "columnName": "sync_settings",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isSynced",
+            "columnName": "is_synced",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncVersion",
+            "columnName": "sync_version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "user_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_sync_preferences_user_id",
+            "unique": true,
+            "columnNames": [
+              "user_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_sync_preferences_user_id` ON `${TABLE_NAME}` (`user_id`)"
+          },
+          {
+            "name": "index_sync_preferences_last_modified",
+            "unique": false,
+            "columnNames": [
+              "last_modified"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_sync_preferences_last_modified` ON `${TABLE_NAME}` (`last_modified`)"
+          },
+          {
+            "name": "index_sync_preferences_is_synced",
+            "unique": false,
+            "columnNames": [
+              "is_synced"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_sync_preferences_is_synced` ON `${TABLE_NAME}` (`is_synced`)"
+          },
+          {
+            "name": "index_sync_preferences_auto_sync_enabled",
+            "unique": false,
+            "columnNames": [
+              "auto_sync_enabled"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_sync_preferences_auto_sync_enabled` ON `${TABLE_NAME}` (`auto_sync_enabled`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
         "tableName": "chat_preferences",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `preferred_language` TEXT NOT NULL DEFAULT 'en', `auto_detect_language` INTEGER NOT NULL DEFAULT 1, `chat_notifications_enabled` INTEGER NOT NULL DEFAULT 1, `conversation_history_enabled` INTEGER NOT NULL DEFAULT 1, `workout_context_sharing` INTEGER NOT NULL DEFAULT 1, `max_messages_per_day` INTEGER NOT NULL DEFAULT 100, `max_tokens_per_month` INTEGER NOT NULL DEFAULT 10000, `auto_clear_days` INTEGER NOT NULL DEFAULT 30, `user_context_prompt` TEXT, `ai_response_style` TEXT NOT NULL DEFAULT 'balanced', `include_workout_history` INTEGER NOT NULL DEFAULT 1, `include_exercise_form_tips` INTEGER NOT NULL DEFAULT 1, `usage_notifications_threshold` INTEGER NOT NULL DEFAULT 80, `conversation_save_enabled` INTEGER NOT NULL DEFAULT 1, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`user_id`))",
         "fields": [
@@ -7382,176 +7511,6 @@
           }
         ],
         "foreignKeys": []
-      },
-      {
-        "tableName": "pr_notifications",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `from_user_id` TEXT NOT NULL, `to_user_id` TEXT NOT NULL, `workout_id` TEXT NOT NULL, `exercise_name` TEXT NOT NULL, `pr_weight` REAL, `pr_reps` INTEGER, `pr_type` TEXT NOT NULL, `previous_best` REAL, `improvement_percent` REAL, `sent_at` INTEGER NOT NULL, `read_at` INTEGER, `reacted_with` TEXT, `cooldown_key` TEXT NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`from_user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`to_user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`workout_id`) REFERENCES `workouts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
-        "fields": [
-          {
-            "fieldPath": "id",
-            "columnName": "id",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "fromUserId",
-            "columnName": "from_user_id",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "toUserId",
-            "columnName": "to_user_id",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "workoutId",
-            "columnName": "workout_id",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "exerciseName",
-            "columnName": "exercise_name",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "prWeight",
-            "columnName": "pr_weight",
-            "affinity": "REAL",
-            "notNull": false
-          },
-          {
-            "fieldPath": "prReps",
-            "columnName": "pr_reps",
-            "affinity": "INTEGER",
-            "notNull": false
-          },
-          {
-            "fieldPath": "prType",
-            "columnName": "pr_type",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "previousBest",
-            "columnName": "previous_best",
-            "affinity": "REAL",
-            "notNull": false
-          },
-          {
-            "fieldPath": "improvementPercent",
-            "columnName": "improvement_percent",
-            "affinity": "REAL",
-            "notNull": false
-          },
-          {
-            "fieldPath": "sentAt",
-            "columnName": "sent_at",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "readAt",
-            "columnName": "read_at",
-            "affinity": "INTEGER",
-            "notNull": false
-          },
-          {
-            "fieldPath": "reactedWith",
-            "columnName": "reacted_with",
-            "affinity": "TEXT",
-            "notNull": false
-          },
-          {
-            "fieldPath": "cooldownKey",
-            "columnName": "cooldown_key",
-            "affinity": "TEXT",
-            "notNull": true
-          }
-        ],
-        "primaryKey": {
-          "autoGenerate": false,
-          "columnNames": [
-            "id"
-          ]
-        },
-        "indices": [
-          {
-            "name": "index_pr_notifications_cooldown_key",
-            "unique": true,
-            "columnNames": [
-              "cooldown_key"
-            ],
-            "orders": [],
-            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_pr_notifications_cooldown_key` ON `${TABLE_NAME}` (`cooldown_key`)"
-          },
-          {
-            "name": "index_pr_notifications_to_user_id_sent_at",
-            "unique": false,
-            "columnNames": [
-              "to_user_id",
-              "sent_at"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_pr_notifications_to_user_id_sent_at` ON `${TABLE_NAME}` (`to_user_id`, `sent_at`)"
-          },
-          {
-            "name": "index_pr_notifications_from_user_id",
-            "unique": false,
-            "columnNames": [
-              "from_user_id"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_pr_notifications_from_user_id` ON `${TABLE_NAME}` (`from_user_id`)"
-          },
-          {
-            "name": "index_pr_notifications_workout_id",
-            "unique": false,
-            "columnNames": [
-              "workout_id"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_pr_notifications_workout_id` ON `${TABLE_NAME}` (`workout_id`)"
-          }
-        ],
-        "foreignKeys": [
-          {
-            "table": "social_profiles",
-            "onDelete": "CASCADE",
-            "onUpdate": "NO ACTION",
-            "columns": [
-              "from_user_id"
-            ],
-            "referencedColumns": [
-              "user_id"
-            ]
-          },
-          {
-            "table": "social_profiles",
-            "onDelete": "CASCADE",
-            "onUpdate": "NO ACTION",
-            "columns": [
-              "to_user_id"
-            ],
-            "referencedColumns": [
-              "user_id"
-            ]
-          },
-          {
-            "table": "workouts",
-            "onDelete": "CASCADE",
-            "onUpdate": "NO ACTION",
-            "columns": [
-              "workout_id"
-            ],
-            "referencedColumns": [
-              "id"
-            ]
-          }
-        ]
       },
       {
         "tableName": "pr_reactions",
@@ -7814,7 +7773,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '6581e648fcba23464947442cf61fa7c6')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ac927f1176c40fe7b04bc59b2ef9bb20')"
     ]
   }
 }

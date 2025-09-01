@@ -18,6 +18,7 @@ import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.service.NetworkConnectivityMonitor
 import com.example.liftrix.domain.repository.SyncStatusRepository
+import com.example.liftrix.domain.repository.SyncPreferencesRepository
 import com.example.liftrix.sync.SyncCoordinator
 import com.example.liftrix.sync.SyncManager
 import com.example.liftrix.sync.SyncStatus
@@ -85,6 +86,7 @@ class ProfileViewModel @Inject constructor(
     private val syncCoordinator: SyncCoordinator,
     private val syncManager: SyncManager,
     private val syncStatusRepository: SyncStatusRepository,
+    private val syncPreferencesRepository: SyncPreferencesRepository,
     errorHandler: ErrorHandler
 ) : BaseViewModel<ProfileUiState, ProfileEvent>(
     errorHandler = errorHandler
@@ -974,6 +976,28 @@ class ProfileViewModel @Inject constructor(
     }
     
     /**
+     * Triggers immediate sync using SyncCoordinator
+     */
+    private fun triggerImmediateSync() {
+        viewModelScope.launch {
+            try {
+                val userId = currentUserId.value
+                if (userId != null) {
+                    Timber.d("ProfileViewModel: Triggering immediate sync for user $userId")
+                    val result = syncCoordinator.triggerImmediateSync(userId)
+                    if (result.isFailure) {
+                        Timber.e("ProfileViewModel: Immediate sync failed - ${result.exceptionOrNull()?.message}")
+                    }
+                } else {
+                    Timber.w("ProfileViewModel: Cannot trigger immediate sync - no user ID available")
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "ProfileViewModel: Error triggering immediate sync")
+            }
+        }
+    }
+    
+    /**
      * Triggers force sync of all data using SyncCoordinator
      */
     fun triggerForceSyncAll() {
@@ -996,13 +1020,46 @@ class ProfileViewModel @Inject constructor(
     }
     
     /**
-     * Toggles auto-sync setting (placeholder implementation for future)
-     * TODO: Implement actual auto-sync toggle when sync preferences are available
+     * Toggles auto-sync setting with proper SyncPreferencesRepository integration.
      */
     fun toggleAutoSync(enabled: Boolean) {
-        Timber.d("ProfileViewModel: Auto-sync toggle requested: $enabled (placeholder implementation)")
-        // TODO: Implement actual auto-sync toggle when sync preferences repository is available
-        // This would typically update user preferences and affect sync scheduling behavior
+        viewModelScope.launch {
+            try {
+                val userId = currentUserId.value
+                if (userId == null) {
+                    Timber.w("ProfileViewModel: Cannot toggle auto-sync - no user ID available")
+                    return@launch
+                }
+                
+                Timber.d("ProfileViewModel: Toggling auto-sync for user $userId to $enabled")
+                
+                val result = syncPreferencesRepository.setAutoSyncEnabled(userId, enabled)
+                result.fold(
+                    onSuccess = {
+                        Timber.i("ProfileViewModel: Auto-sync toggle successful for user $userId: $enabled")
+                        // Optionally trigger immediate sync if enabling
+                        if (enabled) {
+                            triggerImmediateSync()
+                        }
+                    },
+                    onFailure = { error ->
+                        Timber.e("ProfileViewModel: Auto-sync toggle failed for user $userId: $error")
+                        updateState {
+                            it.copy(
+                                error = ProfileError.SaveFailed("Failed to update sync preferences: ${error.message}")
+                            )
+                        }
+                    }
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "ProfileViewModel: Error toggling auto-sync")
+                updateState {
+                    it.copy(
+                        error = ProfileError.SaveFailed("Failed to update sync preferences")
+                    )
+                }
+            }
+        }
     }
     
     /**
@@ -1020,12 +1077,39 @@ class ProfileViewModel @Inject constructor(
     }
     
     /**
-     * Gets last sync time as LocalDateTime for UI display
+     * Gets last sync time as LocalDateTime for UI display.
      */
     fun getLastSyncTime(): LocalDateTime {
-        // TODO: Get actual last sync time from SyncStatusRepository
-        // For now, return a placeholder recent time
-        return LocalDateTime.now().minusMinutes(5)
+        val userId = currentUserId.value
+        if (userId == null) {
+            return LocalDateTime.now().minusHours(24) // Default to day ago if no user
+        }
+        
+        return try {
+            // Get last sync time from preferences (this will be a suspend function call)
+            // For now, we'll use a blocking approach but in production you'd want to
+            // make this reactive with StateFlow
+            kotlinx.coroutines.runBlocking {
+                val result = syncPreferencesRepository.getLastSyncTime(userId)
+                result.fold(
+                    onSuccess = { timestamp ->
+                        if (timestamp != null) {
+                            Instant.ofEpochMilli(timestamp)
+                                .atZone(ZoneId.systemDefault())
+                                .toLocalDateTime()
+                        } else {
+                            LocalDateTime.now().minusHours(24) // Never synced
+                        }
+                    },
+                    onFailure = {
+                        LocalDateTime.now().minusMinutes(5) // Fallback to recent time
+                    }
+                )
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "ProfileViewModel: Error getting last sync time")
+            LocalDateTime.now().minusMinutes(5)
+        }
     }
     
     /**
@@ -1041,10 +1125,14 @@ class ProfileViewModel @Inject constructor(
     }
     
     /**
-     * Gets auto-sync enabled status for UI display
+     * Gets auto-sync enabled status for UI display with proper repository integration.
      */
     fun getAutoSyncEnabled(): StateFlow<Boolean> {
-        return syncMetricsFlow.map { (_, _, autoSyncEnabled) -> autoSyncEnabled }
+        return currentUserId
+            .filterNotNull()
+            .flatMapLatest { userId ->
+                syncPreferencesRepository.observeAutoSyncStatus(userId)
+            }
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000),

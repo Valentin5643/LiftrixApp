@@ -18,6 +18,7 @@ import com.example.liftrix.data.repository.AchievementRepositoryImpl
 import com.example.liftrix.data.repository.PRNotificationRepositoryImpl
 import com.example.liftrix.data.repository.social.BlockRepositoryImpl
 import com.example.liftrix.data.repository.social.ReportRepositoryImpl
+import com.example.liftrix.data.repository.SyncPreferencesRepositoryImpl
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.CustomExerciseRepository
 import com.example.liftrix.domain.repository.ProfileRepository
@@ -36,6 +37,7 @@ import com.example.liftrix.domain.repository.AchievementRepository
 import com.example.liftrix.domain.repository.PRNotificationRepository
 import com.example.liftrix.domain.repository.social.BlockRepository
 import com.example.liftrix.domain.repository.social.ReportRepository
+import com.example.liftrix.domain.repository.SyncPreferencesRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -159,5 +161,11 @@ abstract class RepositoryModule {
     abstract fun bindReportRepository(
         reportRepositoryImpl: ReportRepositoryImpl
     ): ReportRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindSyncPreferencesRepository(
+        syncPreferencesRepositoryImpl: SyncPreferencesRepositoryImpl
+    ): SyncPreferencesRepository
 
 } 

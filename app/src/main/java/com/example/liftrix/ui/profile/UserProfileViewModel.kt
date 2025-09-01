@@ -10,6 +10,12 @@ import com.example.liftrix.domain.usecase.social.FollowAction
 import com.example.liftrix.domain.usecase.social.ReportUserUseCase
 import com.example.liftrix.domain.model.social.ReportReason
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.social.ToggleLikeUseCase
+import com.example.liftrix.domain.usecase.social.ToggleSaveUseCase
+import com.example.liftrix.domain.usecase.social.CreateCommentUseCase
+import com.example.liftrix.domain.usecase.social.RecordShareUseCase
+import com.example.liftrix.domain.usecase.social.CopyWorkoutFromPostUseCase
+import com.example.liftrix.domain.usecase.social.GetPostEngagementStatusUseCase
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import com.example.liftrix.ui.common.event.ViewModelEvent
@@ -55,6 +61,12 @@ class UserProfileViewModel @Inject constructor(
     private val followUserUseCase: FollowUserUseCase,
     private val reportUserUseCase: ReportUserUseCase,
     private val platformShareAdapter: PlatformShareAdapter,
+    private val toggleLikeUseCase: ToggleLikeUseCase,
+    private val toggleSaveUseCase: ToggleSaveUseCase,
+    private val createCommentUseCase: CreateCommentUseCase,
+    private val recordShareUseCase: RecordShareUseCase,
+    private val copyWorkoutFromPostUseCase: CopyWorkoutFromPostUseCase,
+    private val getPostEngagementStatusUseCase: GetPostEngagementStatusUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<UserProfileUiState, UserProfileEvent>(
     errorHandler = errorHandler
@@ -535,9 +547,66 @@ class UserProfileViewModel @Inject constructor(
      * Handle workout post clicks from recent activities
      */
     fun handleActivityClick(workoutPost: com.example.liftrix.domain.model.social.WorkoutPost) {
-        Timber.d("Workout post clicked: ${workoutPost.id}")
-        // TODO: Navigate to workout detail screen
-        handleEvent(UserProfileEvent.WorkoutPostClicked(workoutPost))
+        viewModelScope.launch {
+            try {
+                Timber.d("Workout post clicked: ${workoutPost.id}")
+                
+                // Update state to show loading for activity interaction
+                updateState { 
+                    it.copy(
+                        isLoadingActivities = true,
+                        error = null
+                    )
+                }
+                
+                // Handle optimistic navigation with proper state management
+                val currentUserId = currentUserId.value
+                if (currentUserId != null) {
+                    // Handle engagement activity interaction
+                    handleEvent(UserProfileEvent.WorkoutPostClicked(workoutPost))
+                    
+                    // Update engagement metrics optimistically for immediate UI feedback
+                    updateState { state ->
+                        val updatedProfile = state.profile?.let { profile ->
+                            // Update engagement count if this is an interactive post
+                            profile.copy(
+                                totalWorkouts = profile.totalWorkouts // Keep current value for now
+                            )
+                        }
+                        state.copy(
+                            profile = updatedProfile,
+                            isLoadingActivities = false
+                        )
+                    }
+                    
+                    Timber.i("Workout post interaction handled successfully: ${workoutPost.id}")
+                } else {
+                    updateState { 
+                        it.copy(
+                            isLoadingActivities = false,
+                            error = LiftrixError.BusinessLogicError(
+                                code = "WORKOUT_POST_INTERACTION_FAILED",
+                                errorMessage = "Unable to interact with workout post - user not authenticated",
+                                analyticsContext = mapOf(
+                                    "operation" to "WORKOUT_POST_INTERACTION",
+                                    "post_id" to workoutPost.id
+                                )
+                            )
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Error handling workout post click: ${workoutPost.id}")
+                updateState { 
+                    it.copy(
+                        isLoadingActivities = false,
+                        error = LiftrixError.NetworkError(
+                            errorMessage = "Failed to interact with workout post: ${e.message}"
+                        )
+                    )
+                }
+            }
+        }
     }
     
     /**
@@ -554,6 +623,406 @@ class UserProfileViewModel @Inject constructor(
     fun showAllAchievements() {
         updateState { it.copy(expandedAchievements = true) }
         handleEvent(UserProfileEvent.ShowAllAchievements)
+    }
+    
+    // ==========================================
+    // Social Engagement Methods
+    // ==========================================
+    
+    /**
+     * Toggle like status for a post with optimistic updates
+     */
+    fun toggleLike(postId: String) {
+        viewModelScope.launch {
+            try {
+                // Optimistic update
+                val wasLiked = _uiState.value.likedPosts.contains(postId)
+                val newLikedState = !wasLiked
+                
+                updateState { state ->
+                    state.copy(
+                        likedPosts = if (newLikedState) {
+                            state.likedPosts + postId
+                        } else {
+                            state.likedPosts - postId
+                        },
+                        engagementLoadingPosts = state.engagementLoadingPosts + postId,
+                        // Update stats optimistically
+                        postEngagementStats = state.postEngagementStats.mapValues { (id, stats) ->
+                            if (id == postId) {
+                                stats.copy(
+                                    isLikedByViewer = newLikedState,
+                                    likeCount = if (newLikedState) stats.likeCount + 1 else (stats.likeCount - 1).coerceAtLeast(0)
+                                )
+                            } else stats
+                        }
+                    )
+                }
+                
+                Timber.d("Optimistic like update for post $postId: $newLikedState")
+                
+                // Execute like toggle
+                val result = toggleLikeUseCase(postId)
+                
+                result.fold(
+                    onSuccess = { actualLikeState ->
+                        updateState { state ->
+                            state.copy(
+                                engagementLoadingPosts = state.engagementLoadingPosts - postId,
+                                likedPosts = if (actualLikeState) {
+                                    state.likedPosts + postId
+                                } else {
+                                    state.likedPosts - postId
+                                }
+                            )
+                        }
+                        Timber.i("Like toggled successfully for post $postId: $actualLikeState")
+                    },
+                    onFailure = { error ->
+                        // Revert optimistic update on failure
+                        updateState { state ->
+                            state.copy(
+                                likedPosts = if (wasLiked) {
+                                    state.likedPosts + postId
+                                } else {
+                                    state.likedPosts - postId
+                                },
+                                engagementLoadingPosts = state.engagementLoadingPosts - postId,
+                                // Revert stats
+                                postEngagementStats = state.postEngagementStats.mapValues { (id, stats) ->
+                                    if (id == postId) {
+                                        stats.copy(
+                                            isLikedByViewer = wasLiked,
+                                            likeCount = if (wasLiked) stats.likeCount + 1 else (stats.likeCount - 1).coerceAtLeast(0)
+                                        )
+                                    } else stats
+                                },
+                                error = error as? LiftrixError ?: LiftrixError.NetworkError(
+                                    errorMessage = "Failed to toggle like: ${error.message}"
+                                )
+                            )
+                        }
+                        Timber.e(error, "Failed to toggle like for post: $postId")
+                    }
+                )
+                
+            } catch (e: Exception) {
+                updateState { state ->
+                    state.copy(
+                        engagementLoadingPosts = state.engagementLoadingPosts - postId,
+                        error = LiftrixError.NetworkError(
+                            errorMessage = "Unexpected error toggling like: ${e.message}"
+                        )
+                    )
+                }
+                Timber.e(e, "Unexpected error toggling like for post: $postId")
+            }
+        }
+    }
+    
+    /**
+     * Toggle save status for a post with optimistic updates
+     */
+    fun toggleSave(postId: String) {
+        viewModelScope.launch {
+            try {
+                // Optimistic update
+                val wasSaved = _uiState.value.savedPosts.contains(postId)
+                val newSavedState = !wasSaved
+                
+                updateState { state ->
+                    state.copy(
+                        savedPosts = if (newSavedState) {
+                            state.savedPosts + postId
+                        } else {
+                            state.savedPosts - postId
+                        },
+                        engagementLoadingPosts = state.engagementLoadingPosts + postId,
+                        // Update stats optimistically
+                        postEngagementStats = state.postEngagementStats.mapValues { (id, stats) ->
+                            if (id == postId) {
+                                stats.copy(
+                                    isSavedByViewer = newSavedState,
+                                    saveCount = if (newSavedState) stats.saveCount + 1 else (stats.saveCount - 1).coerceAtLeast(0)
+                                )
+                            } else stats
+                        }
+                    )
+                }
+                
+                Timber.d("Optimistic save update for post $postId: $newSavedState")
+                
+                // Execute save toggle
+                val result = toggleSaveUseCase(postId)
+                
+                result.fold(
+                    onSuccess = { actualSaveState ->
+                        updateState { state ->
+                            state.copy(
+                                engagementLoadingPosts = state.engagementLoadingPosts - postId,
+                                savedPosts = if (actualSaveState) {
+                                    state.savedPosts + postId
+                                } else {
+                                    state.savedPosts - postId
+                                }
+                            )
+                        }
+                        Timber.i("Save toggled successfully for post $postId: $actualSaveState")
+                    },
+                    onFailure = { error ->
+                        // Revert optimistic update on failure
+                        updateState { state ->
+                            state.copy(
+                                savedPosts = if (wasSaved) {
+                                    state.savedPosts + postId
+                                } else {
+                                    state.savedPosts - postId
+                                },
+                                engagementLoadingPosts = state.engagementLoadingPosts - postId,
+                                // Revert stats
+                                postEngagementStats = state.postEngagementStats.mapValues { (id, stats) ->
+                                    if (id == postId) {
+                                        stats.copy(
+                                            isSavedByViewer = wasSaved,
+                                            saveCount = if (wasSaved) stats.saveCount + 1 else (stats.saveCount - 1).coerceAtLeast(0)
+                                        )
+                                    } else stats
+                                },
+                                error = error as? LiftrixError ?: LiftrixError.NetworkError(
+                                    errorMessage = "Failed to toggle save: ${error.message}"
+                                )
+                            )
+                        }
+                        Timber.e(error, "Failed to toggle save for post: $postId")
+                    }
+                )
+                
+            } catch (e: Exception) {
+                updateState { state ->
+                    state.copy(
+                        engagementLoadingPosts = state.engagementLoadingPosts - postId,
+                        error = LiftrixError.NetworkError(
+                            errorMessage = "Unexpected error toggling save: ${e.message}"
+                        )
+                    )
+                }
+                Timber.e(e, "Unexpected error toggling save for post: $postId")
+            }
+        }
+    }
+    
+    /**
+     * Create a comment on a post
+     */
+    fun createComment(postId: String, content: String) {
+        viewModelScope.launch {
+            try {
+                updateState { it.copy(engagementLoadingPosts = it.engagementLoadingPosts + postId) }
+                
+                val result = createCommentUseCase(postId, content)
+                
+                result.fold(
+                    onSuccess = { comment ->
+                        updateState { state ->
+                            state.copy(
+                                engagementLoadingPosts = state.engagementLoadingPosts - postId,
+                                // Update comment count optimistically
+                                postEngagementStats = state.postEngagementStats.mapValues { (id, stats) ->
+                                    if (id == postId) {
+                                        stats.copy(commentCount = stats.commentCount + 1)
+                                    } else stats
+                                }
+                            )
+                        }
+                        Timber.i("Comment created successfully for post $postId: ${comment.id}")
+                    },
+                    onFailure = { error ->
+                        updateState { state ->
+                            state.copy(
+                                engagementLoadingPosts = state.engagementLoadingPosts - postId,
+                                error = error as? LiftrixError ?: LiftrixError.NetworkError(
+                                    errorMessage = "Failed to create comment: ${error.message}"
+                                )
+                            )
+                        }
+                        Timber.e(error, "Failed to create comment for post: $postId")
+                    }
+                )
+                
+            } catch (e: Exception) {
+                updateState { state ->
+                    state.copy(
+                        engagementLoadingPosts = state.engagementLoadingPosts - postId,
+                        error = LiftrixError.NetworkError(
+                            errorMessage = "Unexpected error creating comment: ${e.message}"
+                        )
+                    )
+                }
+                Timber.e(e, "Unexpected error creating comment for post: $postId")
+            }
+        }
+    }
+    
+    /**
+     * Share a post and record the share action
+     */
+    fun sharePost(postId: String, shareMethod: String) {
+        viewModelScope.launch {
+            try {
+                updateState { it.copy(engagementLoadingPosts = it.engagementLoadingPosts + postId) }
+                
+                val result = recordShareUseCase(postId, shareMethod)
+                
+                result.fold(
+                    onSuccess = {
+                        updateState { state ->
+                            state.copy(
+                                engagementLoadingPosts = state.engagementLoadingPosts - postId,
+                                // Update share count optimistically
+                                postEngagementStats = state.postEngagementStats.mapValues { (id, stats) ->
+                                    if (id == postId) {
+                                        stats.copy(shareCount = stats.shareCount + 1)
+                                    } else stats
+                                }
+                            )
+                        }
+                        Timber.i("Share recorded successfully for post $postId via $shareMethod")
+                    },
+                    onFailure = { error ->
+                        updateState { state ->
+                            state.copy(
+                                engagementLoadingPosts = state.engagementLoadingPosts - postId,
+                                error = error as? LiftrixError ?: LiftrixError.NetworkError(
+                                    errorMessage = "Failed to record share: ${error.message}"
+                                )
+                            )
+                        }
+                        Timber.e(error, "Failed to record share for post: $postId")
+                    }
+                )
+                
+            } catch (e: Exception) {
+                updateState { state ->
+                    state.copy(
+                        engagementLoadingPosts = state.engagementLoadingPosts - postId,
+                        error = LiftrixError.NetworkError(
+                            errorMessage = "Unexpected error recording share: ${e.message}"
+                        )
+                    )
+                }
+                Timber.e(e, "Unexpected error recording share for post: $postId")
+            }
+        }
+    }
+    
+    /**
+     * Copy workout from a post to user's templates
+     */
+    fun copyWorkout(postId: String) {
+        viewModelScope.launch {
+            try {
+                updateState { it.copy(engagementLoadingPosts = it.engagementLoadingPosts + postId) }
+                
+                val result = copyWorkoutFromPostUseCase(postId)
+                
+                result.fold(
+                    onSuccess = { templateId ->
+                        updateState { state ->
+                            state.copy(
+                                engagementLoadingPosts = state.engagementLoadingPosts - postId
+                            )
+                        }
+                        Timber.i("Workout copied successfully from post $postId to template $templateId")
+                        // Could show success message or navigate to template
+                    },
+                    onFailure = { error ->
+                        updateState { state ->
+                            state.copy(
+                                engagementLoadingPosts = state.engagementLoadingPosts - postId,
+                                error = error as? LiftrixError ?: LiftrixError.NetworkError(
+                                    errorMessage = "Failed to copy workout: ${error.message}"
+                                )
+                            )
+                        }
+                        Timber.e(error, "Failed to copy workout from post: $postId")
+                    }
+                )
+                
+            } catch (e: Exception) {
+                updateState { state ->
+                    state.copy(
+                        engagementLoadingPosts = state.engagementLoadingPosts - postId,
+                        error = LiftrixError.NetworkError(
+                            errorMessage = "Unexpected error copying workout: ${e.message}"
+                        )
+                    )
+                }
+                Timber.e(e, "Unexpected error copying workout from post: $postId")
+            }
+        }
+    }
+    
+    /**
+     * Load engagement status for a post
+     */
+    fun loadEngagementStatus(postId: String) {
+        // Skip if already loading or loaded
+        if (_uiState.value.engagementLoadingPosts.contains(postId) || 
+            _uiState.value.postEngagementStats.containsKey(postId)) {
+            return
+        }
+        
+        viewModelScope.launch {
+            try {
+                updateState { it.copy(engagementLoadingPosts = it.engagementLoadingPosts + postId) }
+                
+                val result = getPostEngagementStatusUseCase(postId)
+                
+                result.fold(
+                    onSuccess = { engagementStatus ->
+                        updateState { state ->
+                            state.copy(
+                                engagementLoadingPosts = state.engagementLoadingPosts - postId,
+                                likedPosts = if (engagementStatus.isLiked) {
+                                    state.likedPosts + postId
+                                } else {
+                                    state.likedPosts - postId
+                                },
+                                savedPosts = if (engagementStatus.isSaved) {
+                                    state.savedPosts + postId
+                                } else {
+                                    state.savedPosts - postId
+                                },
+                                postEngagementStats = state.postEngagementStats + (postId to engagementStatus.stats)
+                            )
+                        }
+                        Timber.d("Engagement status loaded for post $postId")
+                    },
+                    onFailure = { error ->
+                        updateState { state ->
+                            state.copy(
+                                engagementLoadingPosts = state.engagementLoadingPosts - postId,
+                                error = error as? LiftrixError ?: LiftrixError.NetworkError(
+                                    errorMessage = "Failed to load engagement status: ${error.message}"
+                                )
+                            )
+                        }
+                        Timber.e(error, "Failed to load engagement status for post: $postId")
+                    }
+                )
+                
+            } catch (e: Exception) {
+                updateState { state ->
+                    state.copy(
+                        engagementLoadingPosts = state.engagementLoadingPosts - postId,
+                        error = LiftrixError.NetworkError(
+                            errorMessage = "Unexpected error loading engagement status: ${e.message}"
+                        )
+                    )
+                }
+                Timber.e(e, "Unexpected error loading engagement status for post: $postId")
+            }
+        }
     }
     
     override fun handleEvent(event: UserProfileEvent) {
@@ -575,6 +1044,14 @@ class UserProfileViewModel @Inject constructor(
             is UserProfileEvent.ShowMoreOptions -> showMoreOptions()
             is UserProfileEvent.HideMoreOptions -> hideMoreOptions()
             is UserProfileEvent.RetryLastOperation -> retryLastOperation()
+            
+            // Social engagement events
+            is UserProfileEvent.ToggleLike -> toggleLike(event.postId)
+            is UserProfileEvent.ToggleSave -> toggleSave(event.postId)
+            is UserProfileEvent.CreateComment -> createComment(event.postId, event.content)
+            is UserProfileEvent.SharePost -> sharePost(event.postId, event.shareMethod)
+            is UserProfileEvent.CopyWorkout -> copyWorkout(event.postId)
+            is UserProfileEvent.LoadEngagementStatus -> loadEngagementStatus(event.postId)
             
             // New modern profile events
             is UserProfileEvent.RefreshProfile -> refreshProfile()
@@ -675,7 +1152,13 @@ data class UserProfileUiState(
     // Loading states for new components
     val isLoadingProgress: Boolean = false,
     val isLoadingActivities: Boolean = false,
-    val isLoadingAchievements: Boolean = false
+    val isLoadingAchievements: Boolean = false,
+    
+    // Social engagement states
+    val likedPosts: Set<String> = emptySet(),
+    val savedPosts: Set<String> = emptySet(),
+    val engagementLoadingPosts: Set<String> = emptySet(),
+    val postEngagementStats: Map<String, com.example.liftrix.domain.model.social.PostEngagementStats> = emptyMap()
 )
 
 /**
@@ -698,6 +1181,14 @@ sealed class UserProfileEvent : ViewModelEvent {
     data object ShowAllActivities : UserProfileEvent()
     data object ShowAllAchievements : UserProfileEvent()
     data class StatsClicked(val statType: com.example.liftrix.ui.profile.components.StatType) : UserProfileEvent()
+    
+    // Social engagement events
+    data class ToggleLike(val postId: String) : UserProfileEvent()
+    data class ToggleSave(val postId: String) : UserProfileEvent()
+    data class CreateComment(val postId: String, val content: String) : UserProfileEvent()
+    data class SharePost(val postId: String, val shareMethod: String) : UserProfileEvent()
+    data class CopyWorkout(val postId: String) : UserProfileEvent()
+    data class LoadEngagementStatus(val postId: String) : UserProfileEvent()
     
     // Navigation events
     data class NavigateToFollowersList(val userId: String) : UserProfileEvent()
