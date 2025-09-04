@@ -68,24 +68,24 @@ data class SocialPrivacySettings(
     }
 
     /**
-     * Returns privacy-first defaults for a new user
+     * Returns social-enabled defaults for a new user
      */
     companion object {
         fun createDefault(userId: String): SocialPrivacySettings = SocialPrivacySettings(
             userId = userId,
-            socialEnabled = false,
-            profileVisibility = ProfileVisibility.PRIVATE,
-            allowFollowRequests = false,
-            workoutSharingEnabled = false,
-            gymBuddiesEnabled = false,
-            communityParticipation = false,
+            socialEnabled = true,
+            profileVisibility = ProfileVisibility.PUBLIC,
+            allowFollowRequests = true,
+            workoutSharingEnabled = true,
+            gymBuddiesEnabled = true,
+            communityParticipation = true,
             challengeParticipation = false,
-            routineSharingEnabled = false,
-            defaultWorkoutVisibility = WorkoutVisibility.PRIVATE,
+            routineSharingEnabled = true,
+            defaultWorkoutVisibility = WorkoutVisibility.FOLLOWERS,
             showWorkoutStats = true,
             showAchievements = true,
             showWorkoutStreak = true,
-            hideFromSuggestions = true,
+            hideFromSuggestions = false,
             hideFromSearch = false,
             notificationSettings = emptyMap(),
             updatedAt = System.currentTimeMillis()

@@ -362,6 +362,49 @@ interface WorkoutDao {
         startDate: String,
         endDate: String
     ): Double?
+    
+    /**
+     * Gets the last completed workouts containing a specific exercise for previous set data retrieval.
+     * 
+     * Searches for completed workouts that contain the specified exercise ID in their exercises_json.
+     * Used by GetPreviousSetDataUseCase to find historical performance data for workout comparison.
+     * 
+     * Security: User-scoped query prevents data leakage between users
+     * Performance: Uses LIKE for JSON search with proper indexing on user_id and date
+     * Ordering: Returns most recent workouts first for optimal previous data relevance
+     * 
+     * ENHANCED: Searches multiple JSON fields for robust exercise matching:
+     * - Direct exercise fields: id, exerciseId, name
+     * - Nested library exercise: libraryExercise.id, libraryExercise.name
+     * - Handles both wrapped {"exercises": [...]} and direct [...] JSON formats
+     * 
+     * @param userId The user ID for data scoping (MANDATORY for security)
+     * @param exerciseId The exercise ID to search for in JSON data
+     * @param limit Maximum number of workouts to return (default: 5 for performance)
+     * @param excludeWorkoutId Optional workout ID to exclude (current active session)
+     * @return List of WorkoutEntity ordered by date DESC, updated_at DESC
+     */
+    @Query("""
+        SELECT * FROM workouts 
+        WHERE user_id = :userId 
+        AND status = 'COMPLETED'
+        AND (
+            exercises_json LIKE '%"id":"' || :exerciseId || '"%' OR
+            exercises_json LIKE '%"exerciseId":"' || :exerciseId || '"%' OR  
+            exercises_json LIKE '%"name":"' || :exerciseId || '"%' OR
+            exercises_json LIKE '%"libraryExercise":{"id":"' || :exerciseId || '"%' OR
+            exercises_json LIKE '%"libraryExercise":{"name":"' || :exerciseId || '"%'
+        )
+        AND (:excludeWorkoutId IS NULL OR id != :excludeWorkoutId)
+        ORDER BY date DESC, updated_at DESC 
+        LIMIT :limit
+    """)
+    suspend fun getLastCompletedWorkoutsWithExercise(
+        userId: String,
+        exerciseId: String,
+        limit: Int = 5,
+        excludeWorkoutId: String? = null
+    ): List<WorkoutEntity>
 }
 
 // DailyVolumeResult is defined in ExerciseSetDao.kt - no duplicate needed

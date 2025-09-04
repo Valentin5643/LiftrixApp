@@ -1,5 +1,6 @@
 package com.example.liftrix.domain.model
 
+import timber.log.Timber
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -380,14 +381,26 @@ data class UnifiedWorkoutSession(
     fun toCompletedWorkout(): Workout {
         require(sessionStatus == SessionStatus.COMPLETED) { "Session must be completed first" }
         
+        // 🔥 SETS-DEBUG: Log session exercises before conversion to completed workout
+        Timber.d("[SETS-DEBUG-6] UnifiedWorkoutSession.toCompletedWorkout: Converting ${exercises.size} session exercises")
+        exercises.forEach { sessionExercise ->
+            Timber.d("[SETS-DEBUG-6a] SessionExercise '${sessionExercise.name}' has ${sessionExercise.sets.size} session sets")
+        }
+        
         val completedExercises = exercises.mapNotNull { sessionExercise ->
             try {
-                sessionExercise.toCompletedExercise()
+                val completedExercise = sessionExercise.toCompletedExercise()
+                Timber.d("[SETS-DEBUG-6b] Successfully converted '${sessionExercise.name}' to Exercise with ${completedExercise.sets.size} sets")
+                completedExercise
             } catch (e: Exception) {
-                // Log error but don't crash entire conversion
+                // 🔥 SETS-DEBUG: Log conversion failures
+                Timber.e(e, "[SETS-DEBUG-6c] Failed to convert SessionExercise '${sessionExercise.name}' to Exercise: ${e.message}")
                 null
             }
         }
+        
+        // 🔥 SETS-DEBUG: Log final completed exercises count
+        Timber.d("[SETS-DEBUG-6d] Final workout has ${completedExercises.size} completed exercises")
 
 
         return Workout(

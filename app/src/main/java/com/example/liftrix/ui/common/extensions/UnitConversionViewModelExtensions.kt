@@ -142,3 +142,52 @@ suspend fun convertKgToUserUnit(
     val weightUnit = unitConversionService.getCurrentWeightUnit(userId)
     return unitConversionService.kgToUserUnit(weightKg, weightUnit)
 }
+
+/**
+ * Extension to get current weight unit symbol reactively
+ */
+fun ViewModel.observeWeightUnitSymbol(
+    userId: String,
+    settingsRepository: SettingsRepository
+): StateFlow<String> {
+    return settingsRepository.observeWeightUnit(userId)
+        .map { it.symbol }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = WeightUnit.getSystemDefault().symbol
+        )
+}
+
+/**
+ * Extension to get weight unit from coordinatorPreferences if available
+ */
+fun getWeightUnitFromPreferences(
+    coordinatorPreferences: Map<String, Any>,
+    fallback: WeightUnit = WeightUnit.getSystemDefault()
+): WeightUnit {
+    return coordinatorPreferences["weightUnit"] as? WeightUnit ?: fallback
+}
+
+/**
+ * Extension to format weight using coordinator preferences
+ */
+fun formatWeightWithPreferences(
+    weightKg: Double,
+    coordinatorPreferences: Map<String, Any>,
+    unitConversionService: UnitConversionService,
+    precision: Int = 1
+): String {
+    val weightUnit = getWeightUnitFromPreferences(coordinatorPreferences)
+    return unitConversionService.formatWeight(weightKg, weightUnit, precision)
+}
+
+/**
+ * Extension to get weight unit symbol from coordinator preferences
+ */
+fun getWeightUnitSymbolFromPreferences(
+    coordinatorPreferences: Map<String, Any>
+): String {
+    val weightUnit = getWeightUnitFromPreferences(coordinatorPreferences)
+    return weightUnit.symbol
+}

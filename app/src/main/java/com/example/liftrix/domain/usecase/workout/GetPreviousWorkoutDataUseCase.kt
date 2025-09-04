@@ -6,6 +6,7 @@ import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -35,12 +36,18 @@ class GetPreviousWorkoutDataUseCase @Inject constructor(
                 val previousSetDataMap = mutableMapOf<String, List<PreviousSetData>>()
                 
                 for (exerciseLibraryId in request.exerciseLibraryIds) {
+                    // 🔥 DEBUG: Log query parameters for exercise history
+                    Timber.d("[SETS-DEBUG-QUERY] Fetching history for userId='${request.userId}', exerciseLibraryId='$exerciseLibraryId', limit=10")
+                    
                     // Get the last workout data for this exercise (excluding current workout)
                     val historicalSets = exerciseSetDao.getExerciseHistory(
                         userId = request.userId,
                         exerciseLibraryId = exerciseLibraryId,
                         limit = 10 // Get recent sets to find the most recent workout
                     )
+                    
+                    // 🔥 DEBUG: Log query results
+                    Timber.d("[SETS-DEBUG-QUERY-RESULT] Query returned ${historicalSets.size} sets for exerciseLibraryId='$exerciseLibraryId'")
                     
                     // Filter out sets from the current workout if workoutId is provided
                     val filteredSets = if (request.excludeWorkoutId != null) {

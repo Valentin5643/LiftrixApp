@@ -255,6 +255,7 @@ fun ProgressDashboardScreen(
             calorieState = (calorieState as? UiState.Success)?.data ?: CalorieTrackingState(),
             featuresState = (featuresState as? UiState.Success)?.data ?: FeatureConfigurationState(),
             coordinatorState = (coordinatorState as? UiState.Success)?.data ?: CoordinatorState(),
+            coordinator = coordinator,
             onChartsEvent = chartsViewModel::handleEvent,
             onWidgetEvent = widgetViewModel::handleEvent,
             onPreferencesEvent = preferencesViewModel::handleEvent,
@@ -286,6 +287,7 @@ private fun ProgressDashboardContent(
     calorieState: CalorieTrackingState,
     featuresState: FeatureConfigurationState,
     coordinatorState: CoordinatorState,
+    coordinator: ProgressDashboardCoordinator,
     onChartsEvent: (ProgressChartsEvent) -> Unit,
     onWidgetEvent: (AnalyticsWidgetEvent) -> Unit,
     onPreferencesEvent: (UserPreferencesEvent) -> Unit,
@@ -321,6 +323,10 @@ private fun ProgressDashboardContent(
             showMigrationNotification = widgetPreferences?.hasSeenWidgetMigrationNotice == false
         }
     }
+    
+    // Get unit conversion service for widgets
+    val unitConversionService = coordinator.getUnitConversionService()
+    
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -446,6 +452,8 @@ private fun ProgressDashboardContent(
                 ResponsiveWidgetsSection(
                     widgetState = widgetState,
                     onEvent = onWidgetEvent,
+                    coordinatorPreferences = coordinatorState.coordinatorPreferences,
+                    unitConversionService = coordinator.getUnitConversionService(),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -872,8 +880,17 @@ private fun ChartsSection(
 private fun WidgetsSection(
     widgetState: AnalyticsWidgetState,
     onEvent: (AnalyticsWidgetEvent) -> Unit,
+    coordinator: ProgressDashboardCoordinator,
     modifier: Modifier = Modifier
 ) {
+    // Get coordinator preferences for unit conversion
+    var coordinatorPreferences by remember { mutableStateOf<Map<String, Any>>(emptyMap()) }
+    val unitConversionService = coordinator.getUnitConversionService()
+    
+    LaunchedEffect(coordinator) {
+        coordinatorPreferences = coordinator.getCurrentPreferences()
+    }
+    
     // Only show widgets if we have configuration and widgets available
     if (widgetState.activeWidgets.isNotEmpty() && widgetState.configuration != null) {
         WidgetContainer(
@@ -888,6 +905,8 @@ private fun WidgetsSection(
             },
             isLoading = widgetState.isLoading,
             enableCollapsibleSections = true,
+            coordinatorPreferences = coordinatorPreferences,
+            unitConversionService = unitConversionService,
             modifier = modifier
         )
     }
@@ -901,6 +920,8 @@ private fun WidgetsSection(
 private fun ResponsiveWidgetsSection(
     widgetState: AnalyticsWidgetState,
     onEvent: (AnalyticsWidgetEvent) -> Unit,
+    coordinatorPreferences: Map<String, Any> = emptyMap(),
+    unitConversionService: com.example.liftrix.domain.service.UnitConversionService? = null,
     modifier: Modifier = Modifier
 ) {
     val windowSizeClass = rememberWindowSizeClass()
@@ -978,7 +999,9 @@ private fun ResponsiveWidgetsSection(
                 },
                 isLoading = widgetState.isLoading,
                 enableDragAndDrop = mapDomainLayoutModeToUI(widgetState.preferences?.dashboardLayout) == DashboardLayoutMode.CUSTOM || windowSizeClass.supportsDragAndDrop,
-                windowSizeClass = windowSizeClass
+                windowSizeClass = windowSizeClass,
+                coordinatorPreferences = coordinatorPreferences,
+                unitConversionService = unitConversionService
             )
         } else {
             // Empty state with customization prompt
@@ -1160,15 +1183,15 @@ private fun CalorieSection(
 private fun createDefaultWidgetData(widget: com.example.liftrix.domain.model.analytics.AnalyticsWidget): WidgetData {
     // Clean zero-state display with appropriate units per FR-004
     val (defaultValue, defaultUnit) = when (widget) {
-        com.example.liftrix.domain.model.analytics.AnalyticsWidget.TotalVolume -> "0" to "kg"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.TotalVolume -> "0" to WeightUnit.getSystemDefault().symbol
         com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutStreak -> "0" to "days"
         com.example.liftrix.domain.model.analytics.AnalyticsWidget.AverageDuration -> "0" to "min"
         com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutFrequency -> "0" to "workouts"
-        com.example.liftrix.domain.model.analytics.AnalyticsWidget.StrengthProgress -> "0" to "kg"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.StrengthProgress -> "0" to WeightUnit.getSystemDefault().symbol
         com.example.liftrix.domain.model.analytics.AnalyticsWidget.PersonalRecords -> "0" to "records"
-        com.example.liftrix.domain.model.analytics.AnalyticsWidget.OneRMProgression -> "0" to "kg"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.OneRMProgression -> "0" to WeightUnit.getSystemDefault().symbol
         com.example.liftrix.domain.model.analytics.AnalyticsWidget.MuscleGroupDistribution -> "0" to "%"
-        com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeLoadProgression -> "0" to "kg"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.VolumeLoadProgression -> "0" to WeightUnit.getSystemDefault().symbol
         com.example.liftrix.domain.model.analytics.AnalyticsWidget.RecoveryMetrics -> "0" to "h"
         else -> "0" to ""
     }

@@ -61,6 +61,7 @@ class ProgressDashboardCoordinator @Inject constructor(
     private val sessionManager: UnifiedWorkoutSessionManager,
     private val authRepository: AuthRepository,
     private val getWeightUnitPreferenceUseCase: com.example.liftrix.domain.usecase.settings.GetWeightUnitPreferenceUseCase,
+    private val unitConversionService: com.example.liftrix.domain.service.UnitConversionService,
     errorHandler: ErrorHandler
 ) : BaseViewModel<UiState<CoordinatorState>, CoordinatorEvent>(errorHandler) {
 
@@ -671,6 +672,35 @@ class ProgressDashboardCoordinator @Inject constructor(
             // This is a placeholder for the actual cancellation functionality
         } catch (exception: Exception) {
             Timber.e(exception, "Failed to cancel export")
+        }
+    }
+
+    /**
+     * Provides access to unit conversion service for UI components
+     */
+    fun getUnitConversionService(): com.example.liftrix.domain.service.UnitConversionService {
+        return unitConversionService
+    }
+
+    /**
+     * Gets current coordinator preferences including weight unit
+     */
+    suspend fun getCurrentPreferences(): Map<String, Any> {
+        return try {
+            authRepository.currentUser.first().let { currentUser ->
+                if (currentUser != null) {
+                    val weightUnit = unitConversionService.getCurrentWeightUnit(currentUser.uid)
+                    mapOf(
+                        "weightUnit" to weightUnit,
+                        "userId" to currentUser.uid
+                    )
+                } else {
+                    emptyMap()
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get current preferences")
+            emptyMap()
         }
     }
 }

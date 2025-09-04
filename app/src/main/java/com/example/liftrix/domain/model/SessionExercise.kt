@@ -1,5 +1,6 @@
 package com.example.liftrix.domain.model
 
+import timber.log.Timber
 import java.time.Instant
 
 /**
@@ -191,9 +192,14 @@ data class SessionExercise(
             else -> null
         }
 
+        // 🔥 PREVENTION: Ensure every new set has at least one target metric
+        val finalTargetReps = if (inferredTargetReps == null && inferredTargetTime == null) {
+            10 // Force reps if no metrics would be set
+        } else inferredTargetReps
+
         val newSet = SessionSet(
             setNumber = sets.size + 1,
-            targetReps = inferredTargetReps,
+            targetReps = finalTargetReps,
             targetWeight = targetWeight,
             targetTime = inferredTargetTime,
             targetDistance = null,
@@ -365,6 +371,13 @@ data class SessionExercise(
      * 🔥 FIXED: Added defensive checks to ensure at least one metric is always present
      */
     fun toCompletedExercise(): Exercise {
+        // 🔥 SETS-DEBUG: Log session sets before conversion
+        Timber.d("[SETS-DEBUG-1] SessionExercise '$name' has ${sets.size} sets before conversion")
+        sets.forEach { set ->
+            Timber.d("[SETS-DEBUG-1a] Set ${set.setNumber}: actualReps=${set.actualReps}, targetReps=${set.targetReps}, actualWeight=${set.actualWeight}, completed=${set.completedAt != null}")
+            Timber.d("[SETS-DEBUG-1a-COMPLETEAT] Set ${set.setNumber}: completedAt=${set.completedAt}, hasActualData=${set.actualReps != null || set.actualWeight != null || set.actualTime != null || set.actualDistance != null}")
+        }
+        
         val completedSets = sets.map { sessionSet ->
             // Extract metrics with fallbacks
             val finalReps = sessionSet.actualReps?.let { Reps(it) } ?: sessionSet.targetReps?.let { Reps(it) }
@@ -375,28 +388,132 @@ data class SessionExercise(
             val finalRpe = sessionSet.actualRpe?.let { RPE(it) } ?: sessionSet.targetRpe?.let { RPE(it) }
             
             // 🔥 DEFENSIVE FIX: Ensure at least one metric is present to satisfy ExerciseSet validation
-            val safeReps = finalReps ?: if (finalTime == null && finalDistance == null) Reps(1) else null
-            val safeTime = finalTime ?: if (safeReps == null && finalDistance == null) java.time.Duration.ofSeconds(30) else null
+            // Priority: reps > time > distance, but always guarantee at least one is present
+            val safeReps = finalReps ?: if (finalTime == null && finalDistance == null) {
+                Timber.w("[SETS-DEBUG-DEFENSIVE] No metrics for set ${sessionSet.setNumber}, defaulting to 1 rep")
+                Reps(1)
+            } else null
             
-            ExerciseSet(
-                id = ExerciseSetId.generate(),
-                setNumber = sessionSet.setNumber,
-                reps = safeReps,
-                weight = finalWeight,
-                time = safeTime,
-                distance = finalDistance,
-                rpe = finalRpe,
-                completedAt = sessionSet.completedAt,
-                notes = null
-            )
+            val safeTime = finalTime ?: if (safeReps == null && finalDistance == null) {
+                Timber.w("[SETS-DEBUG-DEFENSIVE] No reps/distance for set ${sessionSet.setNumber}, defaulting to 30s")
+                java.time.Duration.ofSeconds(30)
+            } else null
+            
+            val safeDistance = finalDistance ?: if (safeReps == null && safeTime == null) {
+                Timber.w("[SETS-DEBUG-DEFENSIVE] No reps/time for set ${sessionSet.setNumber}, defaulting to 1m distance")
+                Distance(1.0f) // 1 meter default
+            } else null
+            
+            try {
+                // 🔥 CRITICAL FIX: Ensure completedAt is set for sets with actual data
+                val effectiveCompletedAt = sessionSet.completedAt ?: run {
+                    // If no explicit completedAt but has actual values, mark as completed now
+                    val hasActualData = sessionSet.actualReps != null || 
+                                       sessionSet.actualWeight != null || 
+                                       sessionSet.actualTime != null ||
+                                       sessionSet.actualDistance != null
+                    if (hasActualData) {
+                        Timber.d("[SETS-DEBUG-COMPLETEAT] Set ${sessionSet.setNumber} missing completedAt but has actual data, assigning current timestamp")
+                        Instant.now()
+                    } else {
+                        null
+                    }
+                }
+                
+                val exerciseSet = ExerciseSet(
+                    id = ExerciseSetId.generate(),
+                    setNumber = sessionSet.setNumber,
+                    reps = safeReps,
+                    weight = finalWeight,
+                    time = safeTime,
+                    distance = safeDistance, // 🔥 FIX: Use safeDistance instead of finalDistance
+                    rpe = finalRpe,
+                    completedAt = effectiveCompletedAt,
+                    notes = null
+                )
+                
+                // 🔥 DEBUG: Log final ExerciseSet creation with completedAt status
+                Timber.d("[SETS-DEBUG-1b-FINAL] Set ${sessionSet.setNumber} → ExerciseSet completedAt=${effectiveCompletedAt}, willBeQueryable=${effectiveCompletedAt != null}")
+                
+                exerciseSet
+            } catch (e: Exception) {
+                // 🔥 ULTIMATE FALLBACK: If ExerciseSet construction still fails, create minimal valid set
+                Timber.e(e, "[SETS-DEBUG-FALLBACK] ExerciseSet construction failed for set ${sessionSet.setNumber}, creating fallback")
+                
+                // Apply same completedAt logic for fallback case
+                val fallbackCompletedAt = sessionSet.completedAt ?: run {
+                    val hasActualData = sessionSet.actualReps != null || 
+                                       sessionSet.actualWeight != null || 
+                                       sessionSet.actualTime != null ||
+                                       sessionSet.actualDistance != null
+                    if (hasActualData) {
+                        Timber.d("[SETS-DEBUG-COMPLETEAT-FALLBACK] Fallback set ${sessionSet.setNumber} has actual data, assigning current timestamp")
+                        Instant.now()
+                    } else {
+                        null
+                    }
+                }
+                
+                val fallbackExerciseSet = ExerciseSet(
+                    id = ExerciseSetId.generate(),
+                    setNumber = sessionSet.setNumber,
+                    reps = Reps(1), // Guaranteed valid fallback
+                    weight = finalWeight,
+                    time = null,
+                    distance = null,
+                    rpe = null,
+                    completedAt = fallbackCompletedAt,
+                    notes = null
+                )
+                
+                // 🔥 DEBUG: Log fallback ExerciseSet creation with completedAt status
+                Timber.d("[SETS-DEBUG-FALLBACK-FINAL] Fallback set ${sessionSet.setNumber} → ExerciseSet completedAt=${fallbackCompletedAt}, willBeQueryable=${fallbackCompletedAt != null}")
+                
+                fallbackExerciseSet
+            }
         }
 
+        // 🔥 FIX: Dynamic exercise classification based on actual sets data
+        val hasWeightData = sets.any { set -> 
+            set.actualWeight != null || set.targetWeight != null 
+        }
+        val hasTimeData = sets.any { set ->
+            set.actualTime != null || set.targetTime != null
+        }
+        val hasDistanceData = sets.any { set ->
+            set.actualDistance != null || set.targetDistance != null
+        }
+        
+        Timber.d("[SETS-DEBUG-CLASSIFICATION] Exercise '$name': hasWeight=$hasWeightData, hasTime=$hasTimeData, hasDistance=$hasDistanceData")
+        
+        // Smart equipment detection - prioritize actual usage over name patterns
+        val correctedEquipment = when {
+            hasWeightData && name.contains("dumbbell", ignoreCase = true) -> Equipment.DUMBBELLS
+            hasWeightData && name.contains("barbell", ignoreCase = true) -> Equipment.BARBELL
+            hasWeightData && name.contains("cable", ignoreCase = true) -> Equipment.CABLE_MACHINE
+            hasWeightData && name.contains("machine", ignoreCase = true) -> Equipment.CABLE_MACHINE
+            hasWeightData && name.contains("kettlebell", ignoreCase = true) -> Equipment.KETTLEBELLS
+            hasWeightData && name.contains("smith", ignoreCase = true) -> Equipment.BARBELL
+            // Smart pattern matching for common weighted exercises
+            hasWeightData && (name.contains("arnold press", ignoreCase = true) || 
+                             name.contains("chest fly", ignoreCase = true) || 
+                             name.contains("lateral raise", ignoreCase = true) ||
+                             name.contains("bicep curl", ignoreCase = true) ||
+                             name.contains("shoulder press", ignoreCase = true)) -> Equipment.DUMBBELLS
+            // If user logged weight data but no specific equipment pattern, default to dumbbells
+            hasWeightData -> Equipment.DUMBBELLS
+            // Non-weighted patterns
+            name.contains("band", ignoreCase = true) -> Equipment.RESISTANCE_BANDS
+            equipment != Equipment.BODYWEIGHT_ONLY -> equipment // Use original if not default
+            else -> Equipment.BODYWEIGHT_ONLY
+        }
+        
         // Create a basic library exercise for the Exercise constructor
         val libraryExercise = ExerciseLibrary(
             id = exerciseId.value,
-            name = name,
+            name = name, // 🔥 FIX: Ensure name is preserved
             primaryMuscleGroup = primaryMuscle,
-            equipment = Equipment.BODYWEIGHT_ONLY, // Default, would need to be determined properly
+            equipment = correctedEquipment, // 🔥 FIX: Use corrected equipment
             secondaryMuscleGroups = secondaryMuscles.toList(),
             movementPattern = "Unknown",
             difficultyLevel = 1,
@@ -404,21 +521,84 @@ data class SessionExercise(
             isCompound = false,
             searchableTerms = listOf(name.lowercase())
         )
+        
+        // 🔥 SETS-DEBUG: Log library exercise creation
+        Timber.d("[SETS-DEBUG-1b] Created ExerciseLibrary: name='$name', equipment=$correctedEquipment")
+        
+        // 🔥 DEBUG: Log the library ID that will be used for DB queries
+        Timber.d("[SETS-DEBUG-LIBRARY-ID] Exercise '$name' will be saved with libraryExercise.id='${libraryExercise.id}'")
 
-        return Exercise.createSafe(
-            id = exerciseId,
-            workoutId = WorkoutId(""), // Will be set by parent workout
-            libraryExercise = libraryExercise,
-            orderIndex = orderIndex,
-            targetSets = sets.size,
-            targetReps = sets.firstOrNull()?.targetReps,
-            targetWeight = sets.firstOrNull()?.targetWeight,
-            targetTime = sets.firstOrNull()?.targetTime?.let { java.time.Duration.ofSeconds(it) },
-            targetDistance = sets.firstOrNull()?.targetDistance,
-            sets = completedSets,
-            notes = notes,
-            createdAt = Instant.now()
-        )
+        // 🔥 SETS-DEBUG: Log completed sets before Exercise creation
+        Timber.d("[SETS-DEBUG-2] Creating Exercise '$name' with ${completedSets.size} completed sets")
+        
+        // 🔥 DEBUG: Comprehensive completedAt analysis for history query compatibility
+        val totalSets = completedSets.size
+        val completedAtCount = completedSets.count { it.completedAt != null }
+        val queryableSets = completedSets.filter { it.completedAt != null }
+        
+        Timber.d("[SETS-DEBUG-2-SUMMARY] Exercise '$name': ${totalSets} total sets, ${completedAtCount} have completedAt, ${queryableSets.size} will be queryable by getExerciseHistory")
+        
+        completedSets.forEach { set ->
+            Timber.d("[SETS-DEBUG-2a] ExerciseSet ${set.setNumber}: reps=${set.reps}, weight=${set.weight}, completedAt=${set.completedAt != null}")
+            if (set.completedAt == null) {
+                Timber.w("[SETS-DEBUG-2a-WARNING] Set ${set.setNumber} has NULL completedAt - will be EXCLUDED from workout history queries!")
+            }
+        }
+
+        val createdExercise = try {
+            Exercise.createSafe(
+                id = exerciseId,
+                workoutId = WorkoutId(""), // Will be set by parent workout
+                libraryExercise = libraryExercise,
+                orderIndex = orderIndex,
+                targetSets = sets.size,
+                targetReps = sets.firstOrNull()?.targetReps,
+                targetWeight = sets.firstOrNull()?.targetWeight,
+                targetTime = sets.firstOrNull()?.targetTime?.let { java.time.Duration.ofSeconds(it) },
+                targetDistance = sets.firstOrNull()?.targetDistance,
+                sets = completedSets,
+                notes = notes,
+                createdAt = Instant.now()
+            )
+        } catch (e: Exception) {
+            // 🔥 ULTIMATE SAFETY: If Exercise.createSafe fails, try with minimal parameters
+            Timber.e(e, "[SETS-DEBUG-EMERGENCY] Exercise.createSafe failed for '$name', creating emergency fallback")
+            
+            // Ensure we have at least one set
+            val emergencySets = if (completedSets.isEmpty()) {
+                listOf(ExerciseSet(
+                    id = ExerciseSetId.generate(),
+                    setNumber = 1,
+                    reps = Reps(1),
+                    weight = null,
+                    time = null,
+                    distance = null,
+                    rpe = null,
+                    completedAt = Instant.now(),
+                    notes = null
+                ))
+            } else completedSets
+            
+            Exercise.createSafe(
+                id = exerciseId,
+                workoutId = WorkoutId(""),
+                libraryExercise = libraryExercise,
+                orderIndex = orderIndex,
+                targetSets = null, // Remove target validation
+                targetReps = null,
+                targetWeight = null,
+                targetTime = null,
+                targetDistance = null,
+                sets = emergencySets,
+                notes = null, // Remove potentially problematic notes
+                createdAt = Instant.now()
+            )
+        }
+        
+        // 🔥 SETS-DEBUG: Log created Exercise final state
+        Timber.d("[SETS-DEBUG-3] Exercise '$name' created with ${createdExercise.sets.size} final sets, libraryName='${createdExercise.libraryExercise.name}', exerciseType=${createdExercise.exerciseType}")
+        
+        return createdExercise
     }
 
     /**

@@ -10,6 +10,7 @@ import com.example.liftrix.domain.usecase.GetProfileUseCase
 import com.example.liftrix.domain.usecase.SaveProfileUseCase
 import com.example.liftrix.domain.usecase.ValidateProfileInputUseCase
 import com.example.liftrix.domain.usecase.ValidationResult
+import com.example.liftrix.domain.service.OnboardingDataStore
 import com.example.liftrix.ui.onboarding.model.OnboardingStep
 import com.example.liftrix.ui.onboarding.model.UserProfileData
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,7 +31,8 @@ class OnboardingViewModel @Inject constructor(
     private val validateProfileInputUseCase: ValidateProfileInputUseCase,
     private val getProfileUseCase: GetProfileUseCase,
     private val savedStateHandle: SavedStateHandle,
-    private val profileRepository: com.example.liftrix.domain.repository.ProfileRepository
+    private val profileRepository: com.example.liftrix.domain.repository.ProfileRepository,
+    private val onboardingDataStore: OnboardingDataStore
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<OnboardingState>(OnboardingState.Loading)
@@ -328,25 +330,40 @@ class OnboardingViewModel @Inject constructor(
         try {
             _state.value = OnboardingState.Loading
             
-            val result = validateAndSaveProfile()
-
-            if (result.isSuccess) {
-                val profileData = currentState.profileData
+            val profileData = currentState.profileData
+            
+            // ONBOARDING DATA PERSISTENCE FIX: Store data temporarily instead of saving directly
+            // This approach ensures data survives guest→authenticated user transitions
+            Timber.d("Storing onboarding data temporarily for user: ${profileData.userId}")
+            
+            val storeResult = onboardingDataStore.storeOnboardingData(profileData)
+            
+            if (storeResult.isSuccess) {
+                // Data stored successfully - proceed to authentication
+                // The actual profile save will happen after successful authentication
                 val domainProfile = profileData.toDomainModel()
-                
-                // CRITICAL FIX: Trigger immediate sync after successful profile save
-                Timber.d("Triggering immediate sync for newly saved profile: ${profileData.userId}")
-                triggerImmediateProfileSync(profileData.userId)
-                
                 _state.value = OnboardingState.Completed(domainProfile)
-                Timber.d("Profile saved and sync triggered successfully for user: ${profileData.userId}")
+                
+                Timber.d("Onboarding data stored temporarily, user can proceed to authentication")
+                Timber.d("Summary: ${onboardingDataStore.getPendingDataSummary()}")
             } else {
-                val exception = result.exceptionOrNull() ?: Exception("Unknown error occurred")
-                _state.value = OnboardingState.Error(exception, canRetry = true)
-                Timber.e(exception, "Failed to save profile")
+                // If temporary storage fails, fall back to direct save (for already authenticated users)
+                Timber.w("Temporary storage failed, attempting direct profile save as fallback")
+                val directSaveResult = validateAndSaveDirectlyToProfile(profileData)
+                
+                if (directSaveResult.isSuccess) {
+                    val domainProfile = profileData.toDomainModel()
+                    triggerImmediateProfileSync(profileData.userId)
+                    _state.value = OnboardingState.Completed(domainProfile)
+                    Timber.d("Direct profile save successful for user: ${profileData.userId}")
+                } else {
+                    val exception = directSaveResult.exceptionOrNull() ?: Exception("Profile save failed")
+                    _state.value = OnboardingState.Error(exception, canRetry = true)
+                    Timber.e(exception, "Both temporary storage and direct save failed")
+                }
             }
         } catch (e: Exception) {
-            Timber.e(e, "Exception while saving profile")
+            Timber.e(e, "Exception while processing onboarding data")
             _state.value = OnboardingState.Error(e, canRetry = true)
         }
     }
@@ -513,15 +530,10 @@ class OnboardingViewModel @Inject constructor(
     }
 
     /**
-     * Validates and saves profile using comprehensive validation.
+     * Validates and saves profile directly to database (fallback method).
+     * This is used when temporary storage fails or for already authenticated users.
      */
-    private suspend fun validateAndSaveProfile(): Result<Unit> {
-        val currentState = _state.value
-        if (currentState !is OnboardingState.StepActive) {
-            return Result.failure(IllegalStateException("Invalid state for profile saving"))
-        }
-
-        val profileData = currentState.profileData
+    private suspend fun validateAndSaveDirectlyToProfile(profileData: UserProfileData): Result<Unit> {
         
         // Enhanced validation with detailed error reporting
         try {
@@ -557,8 +569,26 @@ class OnboardingViewModel @Inject constructor(
             // Convert to domain model and save
             Timber.d("Converting profile data to domain model for user: ${profileData.userId}")
             val domainProfile = profileData.toDomainModel()
+            
             Timber.d("Calling SaveProfileUseCase for user: ${profileData.userId}")
-            return saveProfileUseCase(domainProfile)
+            val saveResult = saveProfileUseCase(domainProfile)
+            
+            if (saveResult.isSuccess) {
+                // ONBOARDING COMPLETION FIX: Add verification delay to ensure database commit
+                Timber.d("Profile save successful, verifying persistence for user: ${profileData.userId}")
+                kotlinx.coroutines.delay(500L) // Allow database transaction to fully commit
+                
+                // Verify the profile was actually saved
+                val hasProfile = getProfileUseCase.hasProfile(profileData.userId)
+                if (!hasProfile) {
+                    Timber.e("CRITICAL: Profile save verification failed - profile not found after save!")
+                    return Result.failure(IllegalStateException("Profile save verification failed"))
+                } else {
+                    Timber.d("Profile save verification successful for user: ${profileData.userId}")
+                }
+            }
+            
+            return saveResult
         } catch (e: Exception) {
             Timber.e(e, "Exception during profile validation and saving")
             return Result.failure(e)
@@ -726,6 +756,60 @@ class OnboardingViewModel @Inject constructor(
             Timber.d("Saved state cleared")
         } catch (e: Exception) {
             Timber.e(e, "Failed to clear saved state")
+        }
+    }
+    
+    /**
+     * Transfer pending onboarding data to an authenticated user profile.
+     * This method is called after successful authentication to ensure onboarding data
+     * survives the guest→authenticated user transition.
+     */
+    suspend fun transferPendingOnboardingData(authenticatedUserId: String): Result<Boolean> {
+        return try {
+            Timber.d("Checking for pending onboarding data to transfer to user: $authenticatedUserId")
+            
+            if (!onboardingDataStore.hasPendingOnboardingData()) {
+                Timber.d("No pending onboarding data to transfer")
+                return Result.success(false)
+            }
+            
+            val pendingDataResult = onboardingDataStore.retrievePendingOnboardingData(authenticatedUserId)
+            
+            pendingDataResult.fold(
+                onSuccess = { pendingData ->
+                    if (pendingData != null) {
+                        Timber.d("Found pending onboarding data, transferring to authenticated user: $authenticatedUserId")
+                        
+                        // Validate and save the pending data with the authenticated user ID
+                        val saveResult = validateAndSaveDirectlyToProfile(pendingData)
+                        
+                        if (saveResult.isSuccess) {
+                            // Clear pending data after successful transfer
+                            onboardingDataStore.clearPendingOnboardingData()
+                            
+                            // Trigger immediate sync
+                            triggerImmediateProfileSync(authenticatedUserId)
+                            
+                            Timber.d("Successfully transferred onboarding data to authenticated user: $authenticatedUserId")
+                            Result.success(true)
+                        } else {
+                            val exception = saveResult.exceptionOrNull() ?: Exception("Transfer failed")
+                            Timber.e(exception, "Failed to save transferred onboarding data")
+                            Result.failure(exception)
+                        }
+                    } else {
+                        Timber.d("No valid pending data found")
+                        Result.success(false)
+                    }
+                },
+                onFailure = { error ->
+                    Timber.e("Failed to retrieve pending onboarding data: ${error.message}")
+                    Result.failure(Exception("Failed to retrieve pending data", error))
+                }
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Exception during onboarding data transfer")
+            Result.failure(e)
         }
     }
 

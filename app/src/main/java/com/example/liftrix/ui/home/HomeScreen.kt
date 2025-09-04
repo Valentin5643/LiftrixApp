@@ -645,7 +645,10 @@ private fun EmptyDiscoveryState(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(GridSystem.spacing2),
+                .padding(
+                    horizontal = GridSystem.spacing2,
+                    vertical = 6.dp  // Subtle reduction from 12dp for ~1mm height savings
+                ),
             horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.Top
         ) {

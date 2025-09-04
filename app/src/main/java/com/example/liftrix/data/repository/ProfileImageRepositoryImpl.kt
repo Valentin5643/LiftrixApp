@@ -3,6 +3,7 @@ package com.example.liftrix.data.repository
 import android.content.Context
 import com.example.liftrix.data.local.converter.DateTimeConverters
 import com.example.liftrix.data.local.dao.UserProfileDao
+import com.example.liftrix.data.local.dao.SocialProfileDao
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.FitnessGoal
@@ -44,6 +45,7 @@ class ProfileImageRepositoryImpl @Inject constructor(
     private val firebaseStorage: FirebaseStorage,
     private val firebaseAuth: FirebaseAuth,
     private val userProfileDao: UserProfileDao,
+    private val socialProfileDao: SocialProfileDao,
     private val dateTimeConverters: DateTimeConverters,
     @ApplicationContext private val context: Context
 ) : ProfileImageRepository {
@@ -183,6 +185,37 @@ class ProfileImageRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Failed to trigger sync after profile image update for user: $userId")
             // Don't fail the operation - sync will eventually happen via periodic sync
+        }
+
+        // 🔥 PROFILE PHOTO SYNC FIX: Sync profile photo from UserProfile to SocialProfile
+        // This ensures social features (posts, feed) show the updated profile photo
+        try {
+            Timber.d("[PROFILE-PHOTO-SYNC] Starting sync for user: $userId, imageUrl: ${imageUrl ?: "null"}")
+            
+            // Check if social profile exists before attempting update
+            val hasSocialProfile = socialProfileDao.hasProfile(userId)
+            
+            if (hasSocialProfile) {
+                // Update social profile photo to match main profile
+                val updatedAt = System.currentTimeMillis()
+                val rowsUpdated = socialProfileDao.updateProfilePhoto(userId, imageUrl, updatedAt)
+                
+                if (rowsUpdated > 0) {
+                    Timber.i("[PROFILE-PHOTO-SYNC] ✅ Social profile photo updated successfully")
+                    
+                    // Trigger social profile sync to Firebase to make changes searchable
+                    val socialSyncRequest = com.example.liftrix.sync.SocialProfileSyncWorker.createWorkRequest(userId, forceSync = true)
+                    workManager.enqueue(socialSyncRequest)
+                    Timber.d("[PROFILE-PHOTO-SYNC] Social profile sync to Firebase triggered")
+                } else {
+                    Timber.w("[PROFILE-PHOTO-SYNC] No social profile rows updated - profile may not exist")
+                }
+            } else {
+                Timber.i("[PROFILE-PHOTO-SYNC] No social profile found - will be created with photo during next feed access")
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "[PROFILE-PHOTO-SYNC] Failed to sync profile photo to social profile for user: $userId")
+            // Don't fail the main operation - social profile sync is not critical for profile image upload
         }
     }
     

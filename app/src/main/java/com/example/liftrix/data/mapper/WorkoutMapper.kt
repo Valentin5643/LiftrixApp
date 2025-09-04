@@ -76,6 +76,15 @@ class WorkoutMapper @Inject constructor(
      * Convert domain model to Room entity
      */
     fun toEntity(workout: Workout, isSynced: Boolean = false): WorkoutEntity = workout.run {
+        // 🔥 SETS-DEBUG: Log workout exercises before serialization
+        Timber.d("[SETS-DEBUG-4] WorkoutMapper.toEntity: Workout '$name' has ${exercises.size} exercises")
+        exercises.forEach { exercise ->
+            Timber.d("[SETS-DEBUG-4a] Exercise '${exercise.libraryExercise.name}' has ${exercise.sets.size} sets, type=${exercise.exerciseType}")
+            exercise.sets.forEach { set ->
+                Timber.d("[SETS-DEBUG-4b] ExerciseSet ${set.setNumber}: reps=${set.reps}, weight=${set.weight}, completed=${set.completedAt}")
+            }
+        }
+        
         // Create enhanced JSON that includes calculated totalVolume
         val exercisesWithVolume = exercises.map { exercise ->
             val volumeInKg = exercise.getTotalVolume()?.kilograms ?: 0.0
@@ -94,12 +103,23 @@ class WorkoutMapper @Inject constructor(
             "exercisesWithVolume" to exercisesWithVolume
         )
         
+        // 🔥 SETS-DEBUG: Log the serialized JSON to detect serialization issues
+        val serializedJson = gson.toJson(enhancedJson)
+        Timber.d("[SETS-DEBUG-5] WorkoutMapper.toEntity: Generated JSON length=${serializedJson.length}")
+        
+        // Log first part of JSON to see structure without overwhelming logs
+        if (serializedJson.length > 500) {
+            Timber.d("[SETS-DEBUG-5a] JSON preview: ${serializedJson.substring(0, 500)}...")
+        } else {
+            Timber.d("[SETS-DEBUG-5a] Full JSON: $serializedJson")
+        }
+        
         WorkoutEntity(
             id = id.value,
             userId = userId,
             name = name,
             date = date,
-            exercisesJson = gson.toJson(enhancedJson),
+            exercisesJson = serializedJson,
             status = status,
             startTime = startTime,
             endTime = endTime,

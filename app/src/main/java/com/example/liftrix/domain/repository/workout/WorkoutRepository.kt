@@ -275,4 +275,23 @@ interface WorkoutRepository {
         startDate: kotlinx.datetime.LocalDate,
         endDate: kotlinx.datetime.LocalDate
     ): List<WorkoutData>
+    
+    /**
+     * Get the last completed workouts containing a specific exercise for previous set data retrieval.
+     * 
+     * Used by GetPreviousSetDataUseCase to find historical performance data for workout comparison.
+     * Returns completed workouts that contain the specified exercise ID, ordered by recency.
+     * 
+     * @param userId The user ID for data scoping (MANDATORY for security)
+     * @param exerciseId The exercise ID to search for
+     * @param limit Maximum number of workouts to return (default: 5)
+     * @param excludeWorkoutId Optional workout ID to exclude (current active session)
+     * @return LiftrixResult with list of WorkoutEntity containing the exercise
+     */
+    suspend fun getLastCompletedWorkoutsWithExercise(
+        userId: String,
+        exerciseId: String,
+        limit: Int = 5,
+        excludeWorkoutId: String? = null
+    ): LiftrixResult<List<com.example.liftrix.data.local.entity.WorkoutEntity>>
 }

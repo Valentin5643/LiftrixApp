@@ -71,7 +71,7 @@ data class SessionSet(
     }
 
     companion object {
-        const val MAX_REPS = 500
+        const val MAX_REPS = 2000 // Increased to support high-rep exercises (endurance, bodyweight, rehabilitation)
         const val MAX_TIME_SECONDS = 3600L // 1 hour
         const val MIN_RPE = 1
         const val MAX_RPE = 10

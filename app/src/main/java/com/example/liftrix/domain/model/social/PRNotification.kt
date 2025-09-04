@@ -24,7 +24,7 @@ data class PRNotification(
     val prType: String, // '1RM', 'VOLUME', 'REPS', 'MAX_WEIGHT'
     val previousBest: Float?,
     val improvementPercent: Float?,
-    val weightUnit: String? = "lbs",
+    val weightUnit: String? = null, // Should be populated from user's weight unit preference
     
     // Notification state
     val sentAt: Long,

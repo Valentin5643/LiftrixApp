@@ -487,7 +487,11 @@ class SyncCoordinator @Inject constructor(
         return try {
             Timber.i("SyncCoordinator: Starting full bidirectional sync for user $userId (startup/login)")
             
-            // 🧹 CLEANUP: Perform startup cleanup to remove orphaned profiles
+            // 🧹 CLEANUP: Add delay to allow onboarding completion before cleanup validation
+            Timber.d("SyncCoordinator: Waiting briefly to allow onboarding completion before cleanup check")
+            kotlinx.coroutines.delay(2000L) // 2-second grace period for onboarding completion
+            
+            // 🧹 CLEANUP: Perform startup cleanup to remove orphaned profiles (non-blocking)
             Timber.d("SyncCoordinator: Performing startup cleanup before sync for user $userId")
             try {
                 val cleanupResult = profileCleanupService.performStartupCleanup(userId)
@@ -496,6 +500,8 @@ class SyncCoordinator @Inject constructor(
                         val result = cleanupResult.getOrNull()
                         if (result != null && result.orphanedProfilesRemoved > 0) {
                             Timber.i("🧹 SyncCoordinator: Startup cleanup removed ${result.orphanedProfilesRemoved} orphaned profiles")
+                        } else {
+                            Timber.d("🧹 SyncCoordinator: No orphaned profiles found during startup cleanup")
                         }
                     }
                     cleanupResult.isFailure -> {

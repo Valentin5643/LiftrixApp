@@ -91,8 +91,11 @@ class ProfileCleanupService @Inject constructor(
             val currentUserProfileExists = userProfileDao.getProfileForUserSuspend(currentUserId) != null
             
             if (!currentUserProfileExists) {
-                Timber.w("🧹 CLEANUP: Current user $currentUserId missing local profile - sync system may be blocked")
-                // Don't cleanup current user, but log the issue
+                Timber.d("🧹 CLEANUP: Current user $currentUserId has no local profile yet - likely in onboarding or first login")
+                Timber.d("🧹 CLEANUP: This is normal for new users and does not indicate a sync issue")
+                // Don't cleanup current user - missing profile during first login is expected
+            } else {
+                Timber.d("🧹 CLEANUP: Current user $currentUserId has local profile - sync system ready")
             }
             
             // Perform general orphaned profile cleanup (excludes current user)

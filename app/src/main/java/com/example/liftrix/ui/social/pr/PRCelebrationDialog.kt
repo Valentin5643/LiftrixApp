@@ -31,6 +31,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.domain.model.social.PRNotification
+import com.example.liftrix.domain.model.WeightUnit
 import com.example.liftrix.ui.theme.LiftrixTheme
 import kotlinx.coroutines.delay
 import kotlin.math.cos
@@ -330,7 +331,7 @@ private fun PRDetailsCard(
                 if (notification.prWeight != null) {
                     PRStatColumn(
                         label = "Weight",
-                        value = "${notification.prWeight} ${notification.weightUnit ?: "lbs"}",
+                        value = "${notification.prWeight} ${notification.weightUnit ?: WeightUnit.getSystemDefault().symbol}",
                         icon = Icons.Default.FitnessCenter
                     )
                 }
@@ -373,7 +374,7 @@ private fun PRDetailsCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "${notification.previousBest} ${notification.weightUnit ?: "lbs"}",
+                        text = "${notification.previousBest} ${notification.weightUnit ?: WeightUnit.getSystemDefault().symbol}",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium
                     )
@@ -651,7 +652,7 @@ private fun PRCelebrationDialogPreview() {
             prType = "1RM",
             previousBest = 205.0f,
             improvementPercent = 9.8f,
-            weightUnit = "lbs",
+            weightUnit = WeightUnit.getSystemDefault().symbol,
             sentAt = System.currentTimeMillis(),
             readAt = null,
             reactedWith = null,

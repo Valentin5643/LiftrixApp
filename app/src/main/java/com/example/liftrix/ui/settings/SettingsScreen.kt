@@ -86,7 +86,6 @@ fun SettingsScreen(
     onNavigateToAIChatSettings: (() -> Unit)? = null,
     onNavigateToAdminBanManagement: (() -> Unit)? = null,
     onNavigateToUpgradeToPremium: (() -> Unit)? = null,
-    onNavigateToSyncSettings: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -117,7 +116,6 @@ fun SettingsScreen(
         val stableOnNavigateToTermsOfService = remember(onNavigateToTermsOfService) { onNavigateToTermsOfService }
         val stableOnNavigateToDataPortability = remember(onNavigateToDataPortability) { onNavigateToDataPortability }
         val stableOnNavigateToAIChatSettings = remember(onNavigateToAIChatSettings) { onNavigateToAIChatSettings }
-        val stableOnNavigateToSyncSettings = remember(onNavigateToSyncSettings) { onNavigateToSyncSettings }
         
         // Optimized LaunchedEffect with stable key
         LaunchedEffect(uiState.isSigningOut, uiState.error) {
@@ -170,7 +168,6 @@ fun SettingsScreen(
                             onNavigateToWidgetSettings = stableOnNavigateToWidgetSettings,
                             onNavigateToNotifications = stableOnNavigateToNotifications,
                             onNavigateToAIChatSettings = stableOnNavigateToAIChatSettings,
-                            onNavigateToSyncSettings = stableOnNavigateToSyncSettings,
                             onNavigateToEmailChange = stableOnNavigateToEmailChange,
                             onNavigateToPasswordChange = stableOnNavigateToPasswordChange,
                             onNavigateToUsernameChange = stableOnNavigateToUsernameChange,
@@ -234,7 +231,6 @@ private fun SettingsContent(
     onNavigateToWidgetSettings: (() -> Unit)? = null,
     onNavigateToNotifications: (() -> Unit)? = null,
     onNavigateToAIChatSettings: (() -> Unit)? = null,
-    onNavigateToSyncSettings: (() -> Unit)? = null,
     onNavigateToEmailChange: (() -> Unit)? = null,
     onNavigateToPasswordChange: (() -> Unit)? = null,
     onNavigateToUsernameChange: (() -> Unit)? = null,
@@ -292,7 +288,6 @@ private fun SettingsContent(
                     onNavigateToWidgetSettings = onNavigateToWidgetSettings,
                     onNavigateToNotifications = stableOnNavigateToNotifications,
                     onNavigateToAIChatSettings = onNavigateToAIChatSettings,
-                    onNavigateToSyncSettings = onNavigateToSyncSettings,
                     onNavigateToEmailChange = onNavigateToEmailChange,
                     onNavigateToPasswordChange = onNavigateToPasswordChange,
                     onNavigateToUsernameChange = onNavigateToUsernameChange,
@@ -352,7 +347,6 @@ private fun SettingsCategoryContent(
     onNavigateToWidgetSettings: (() -> Unit)? = null,
     onNavigateToNotifications: (() -> Unit)? = null,
     onNavigateToAIChatSettings: (() -> Unit)? = null,
-    onNavigateToSyncSettings: (() -> Unit)? = null,
     onNavigateToEmailChange: (() -> Unit)? = null,
     onNavigateToPasswordChange: (() -> Unit)? = null,
     onNavigateToUsernameChange: (() -> Unit)? = null,
@@ -376,8 +370,7 @@ private fun SettingsCategoryContent(
                     onNavigateToAnomalyDashboard = onNavigateToAnomalyDashboard,
                     onNavigateToWidgetSettings = onNavigateToWidgetSettings,
                     onNavigateToNotifications = onNavigateToNotifications,
-                    onNavigateToAIChatSettings = onNavigateToAIChatSettings,
-                    onNavigateToSyncSettings = onNavigateToSyncSettings
+                    onNavigateToAIChatSettings = onNavigateToAIChatSettings
                 )
             }
             
@@ -426,8 +419,7 @@ private fun GeneralSettings(
     onNavigateToAnomalyDashboard: (() -> Unit)? = null,
     onNavigateToWidgetSettings: (() -> Unit)? = null,
     onNavigateToNotifications: (() -> Unit)? = null,
-    onNavigateToAIChatSettings: (() -> Unit)? = null,
-    onNavigateToSyncSettings: (() -> Unit)? = null
+    onNavigateToAIChatSettings: (() -> Unit)? = null
 ) {
     // Get system theme state for proper toggle handling
     val isSystemInDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
@@ -530,15 +522,6 @@ private fun GeneralSettings(
             }
         )
         
-        SettingsNavigationItem(
-            title = "Data Sync Settings",
-            subtitle = "Manage sync preferences and troubleshoot sync issues",
-            icon = Icons.Default.Sync,
-            onClick = { 
-                // Navigate to sync settings
-                onNavigateToSyncSettings?.invoke()
-            }
-        )
     }
 }
 

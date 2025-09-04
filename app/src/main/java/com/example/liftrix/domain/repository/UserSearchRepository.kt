@@ -40,6 +40,14 @@ interface UserSearchRepository {
     ): LiftrixResult<PublicUserProfile?>
     
     /**
+     * Check if a profile exists (regardless of privacy settings)
+     * 
+     * @param userId ID of user whose profile existence to check
+     * @return LiftrixResult containing true if profile exists, false otherwise
+     */
+    suspend fun profileExists(userId: String): LiftrixResult<Boolean>
+    
+    /**
      * Generate QR code data for profile sharing
      * 
      * @param userId ID of user whose profile to share

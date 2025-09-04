@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material3.MaterialTheme
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.domain.model.SessionSet
+import com.example.liftrix.domain.model.WeightUnit
 import timber.log.Timber
 
 /**
@@ -65,6 +66,7 @@ fun RedesignedExerciseCard(
     onNotesClick: (() -> Unit)? = null,
     onAnomalyDetected: ((String, Int) -> Unit)? = null,
     context: ExerciseCardContext = ExerciseCardContext.ACTIVE_WORKOUT,
+    weightUnit: WeightUnit = WeightUnit.getSystemDefault(),
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -151,7 +153,7 @@ fun RedesignedExerciseCard(
                 textAlign = TextAlign.Center
             )
             Text(
-                text = "KG",
+                text = weightUnit.symbol.uppercase(),
                 style = TextStyle(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp,
@@ -359,13 +361,21 @@ private fun RedesignedSetRow(
         
         Spacer(modifier = Modifier.width(8.dp))
         
-        // Reps input with anomaly detection
+        // Reps input with anomaly detection and validation
         RedesignedInputField(
             value = setData.reps,
             onValueChange = { newValue ->
                 var hasAnomaly = false
+                
+                // Validate reps don't exceed maximum (2000)
                 if (newValue.isNotEmpty() && newValue.toIntOrNull() != null) {
                     val repsValue = newValue.toInt()
+                    
+                    // Don't allow values above MAX_REPS
+                    if (repsValue > 2000) {
+                        return@RedesignedInputField // Don't update if above limit
+                    }
+                    
                     // Parse previous value format: "50 x 10" where 50 is weight, 10 is reps
                     val previousReps = setData.previousValue?.split(" x ")?.lastOrNull()?.trim()?.toIntOrNull()
                     

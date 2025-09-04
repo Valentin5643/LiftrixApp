@@ -25,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.workout.components.*
 import com.example.liftrix.ui.workout.components.SaveQuickWorkoutAsTemplateDialog
+import com.example.liftrix.ui.workout.components.ExerciseCardContext
 import kotlinx.coroutines.delay
 import timber.log.Timber
 
@@ -49,6 +50,7 @@ fun RedesignedActiveWorkoutScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val currentSession by viewModel.currentSession.collectAsStateWithLifecycle()
+    val previousSetData by viewModel.previousSetData.collectAsStateWithLifecycle()
     
     // Initialize session on first composition based on parameters
     LaunchedEffect(Unit) {
@@ -306,20 +308,21 @@ private fun ActiveWorkoutContent(
                 
                 RedesignedExerciseCard(
                     exerciseName = exercise.name,
-                    exerciseSubtitle = null,
+                    exerciseSubtitle = exercise.primaryMuscle.name,
                     sets = exercise.sets.mapIndexed { setIndex, set ->
                         RedesignedSetData(
                             weight = set.actualWeight?.kilograms?.toString() 
                                 ?: set.targetWeight?.kilograms?.toString() ?: "",
                             reps = set.actualReps?.toString() 
                                 ?: set.targetReps?.toString() ?: "",
-                            previousValue = buildString {
-                                val prevWeight = set.targetWeight?.kilograms ?: 0
-                                val prevReps = set.targetReps ?: 0
-                                append("$prevWeight x $prevReps")
-                            },
+                            previousValue = viewModel.getPreviousValueForSet(
+                                exerciseId = exercise.exerciseId.value,
+                                setNumber = setIndex + 1
+                            ),
                             isCompleted = set.completedAt != null,
-                            setId = "${exercise.exerciseId.value}_set_$setIndex" // Stable ID
+                            setId = "${exercise.exerciseId.value}_${setIndex}",
+                            hasWeightAnomaly = false,
+                            hasRepsAnomaly = false
                         )
                     },
                     onAddSet = {

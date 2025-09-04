@@ -32,6 +32,7 @@ import com.example.liftrix.domain.model.Exercise
 import com.example.liftrix.domain.model.ExerciseSet
 import com.example.liftrix.domain.model.Weight
 import com.example.liftrix.domain.model.Reps
+import com.example.liftrix.domain.model.WeightUnit
 import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
 import com.example.liftrix.ui.workout.components.UnifiedExerciseCard
 import com.example.liftrix.ui.workout.components.SessionProgressCard
@@ -392,7 +393,7 @@ private fun SessionMetricsCard(session: UnifiedWorkoutSession) {
             // Total volume
             MetricItem(
                 label = "Volume",
-                value = "${calculateSessionVolume(session)} lbs"
+                value = "${calculateSessionVolume(session)} ${WeightUnit.getSystemDefault().symbol}"
             )
             
             // Total sets
@@ -513,7 +514,7 @@ private fun EditableSetRow(
                         }
                     },
                     label = "Weight",
-                    suffix = "lbs",
+                    suffix = WeightUnit.getSystemDefault().symbol,
                     validationResult = weightValidation,
                     modifier = Modifier.weight(1f),
                     isRequired = false,

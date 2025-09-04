@@ -396,7 +396,11 @@ private fun PlanSelectionCard(
                 }
             }
             
-            Column {
+            Column(
+                modifier = Modifier.padding(
+                    top = if (plan.isPopular) 16.dp else 0.dp
+                )
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,

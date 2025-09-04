@@ -124,4 +124,11 @@ interface SyncQueueDao {
         currentTime: Long = System.currentTimeMillis(),
         maxRetries: Int = 5
     ): List<SyncQueueEntity>
+
+    /**
+     * 🔥 FIX: Gets ALL queue entries for legacy cleanup validation.
+     * Used during app startup to identify and remove entries with serialization issues.
+     */
+    @Query("SELECT * FROM sync_queue ORDER BY created_at ASC")
+    suspend fun getAllQueueEntries(): List<SyncQueueEntity>
 }

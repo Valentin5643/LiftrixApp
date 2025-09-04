@@ -556,9 +556,6 @@ fun UnifiedNavigationContainer(
                         },
                         onNavigateToUpgradeToPremium = {
                             navController.navigate(LiftrixRoute.UpgradeToPremium)
-                        },
-                        onNavigateToSyncSettings = {
-                            navController.navigate(LiftrixRoute.SyncSettings)
                         }
                     )
                 }

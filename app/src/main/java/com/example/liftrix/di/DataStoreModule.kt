@@ -37,6 +37,13 @@ object DataStoreModule {
     private val Context.widgetPreferencesDataStore: DataStore<Preferences> by preferencesDataStore(name = "liftrix_widget_preferences")
     
     /**
+     * Extension property to create onboarding temporary data DataStore instance.
+     * This creates a separate DataStore instance specifically for temporary onboarding data
+     * that survives authentication transitions (guest → authenticated user).
+     */
+    private val Context.onboardingDataStore: DataStore<Preferences> by preferencesDataStore(name = "liftrix_onboarding_temp")
+    
+    /**
      * Provides a singleton DataStore instance for user preferences.
      * 
      * @param context The application context
@@ -59,5 +66,18 @@ object DataStoreModule {
     @Named("widgetPreferences")
     fun provideWidgetPreferencesDataStore(@ApplicationContext context: Context): DataStore<Preferences> {
         return context.widgetPreferencesDataStore
+    }
+    
+    /**
+     * Provides a singleton DataStore instance for temporary onboarding data.
+     * 
+     * @param context The application context
+     * @return DataStore instance for onboarding temporary storage
+     */
+    @Provides
+    @Singleton
+    @Named("onboardingDataStore")
+    fun provideOnboardingDataStore(@ApplicationContext context: Context): DataStore<Preferences> {
+        return context.onboardingDataStore
     }
 }

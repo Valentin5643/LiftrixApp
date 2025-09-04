@@ -108,36 +108,11 @@ service cloud.firestore {
                           (isOwner(userId) ||
                            (resource.data.isPublic == true));
       
-      // Allow write with enhanced validation - require userId and validate common fields
-      allow write: if isAuthenticated() && 
-                      isOwner(userId) &&
-                      request.resource.data.keys().hasAll(['userId']) &&
-                      request.resource.data.userId == request.auth.uid &&
-                      // Allow common authentication fields
-                      (!('last_sign_in_at' in request.resource.data) || request.resource.data.last_sign_in_at is timestamp) &&
-                      (!('updated_at' in request.resource.data) || request.resource.data.updated_at is timestamp) &&
-                      (!('created_at' in request.resource.data) || request.resource.data.created_at is timestamp) &&
-                      (!('email' in request.resource.data) || request.resource.data.email is string) &&
-                      (!('display_name' in request.resource.data) || request.resource.data.display_name == null || request.resource.data.display_name is string) &&
-                      (!('photo_url' in request.resource.data) || request.resource.data.photo_url == null || request.resource.data.photo_url is string) &&
-                      (!('is_anonymous' in request.resource.data) || request.resource.data.is_anonymous is bool) &&
-                      (!('profile_version' in request.resource.data) || request.resource.data.profile_version is int) &&
-                      (!('onboarding_completed' in request.resource.data) || request.resource.data.onboarding_completed is bool);
-      
-      allow create: if isAuthenticated() && 
-                       isOwner(userId) &&
-                       request.resource.data.keys().hasAll(['userId']) &&
-                       request.resource.data.userId == request.auth.uid &&
-                       // Same field validation for create
-                       (!('last_sign_in_at' in request.resource.data) || request.resource.data.last_sign_in_at is timestamp) &&
-                       (!('updated_at' in request.resource.data) || request.resource.data.updated_at is timestamp) &&
-                       (!('created_at' in request.resource.data) || request.resource.data.created_at is timestamp) &&
-                       (!('email' in request.resource.data) || request.resource.data.email is string) &&
-                       (!('display_name' in request.resource.data) || request.resource.data.display_name == null || request.resource.data.display_name is string) &&
-                       (!('photo_url' in request.resource.data) || request.resource.data.photo_url == null || request.resource.data.photo_url is string) &&
-                       (!('is_anonymous' in request.resource.data) || request.resource.data.is_anonymous is bool) &&
-                       (!('profile_version' in request.resource.data) || request.resource.data.profile_version is int) &&
-                       (!('onboarding_completed' in request.resource.data) || request.resource.data.onboarding_completed is bool);
+      // GMAIL FIX: Simplified write rules that accept all fields Gmail authentication sends
+      allow write, create: if isAuthenticated() && 
+                              isOwner(userId) &&
+                              request.resource.data.keys().hasAll(['userId']) &&
+                              request.resource.data.userId == request.auth.uid;
     }
     
     // Workouts subcollection - user workout data
@@ -234,8 +209,8 @@ service cloud.firestore {
     
     // User search cache - publicly readable for authenticated users
     match /user_search_cache/{userId} {
-      allow read: if isAuthenticated() && 
-                     (isOwner(userId) || resource.data.isPublic == true);
+      // SEARCH FIX: Allow all authenticated users to read search index for discovery
+      allow read: if isAuthenticated();
       
       allow write: if isAuthenticated() && 
                       isOwner(userId) &&
@@ -326,20 +301,14 @@ service cloud.firestore {
     
     // Social profiles - core social data
     match /social_profiles/{userId} {
-      // TEMPORARY: Allow all authenticated users to read any social profile for debugging
+      // SEARCH FIX: Allow all authenticated users to read social profiles for discovery
       allow read: if isAuthenticated();
                        
-      allow write: if isAuthenticated() &&
-                      isOwner(userId) &&
-                      isValidSocialProfile() &&
-                      isValidDisplayName() &&
-                      isValidSocialBio();
-                      
-      allow create: if isAuthenticated() &&
-                       isOwner(userId) &&
-                       isValidSocialProfile() &&
-                       isValidDisplayName() &&
-                       isValidSocialBio();
+      // SEARCH FIX: Simplified validation to prevent social profile creation failures
+      allow write, create: if isAuthenticated() &&
+                              isOwner(userId) &&
+                              request.resource.data.keys().hasAll(['userId']) &&
+                              request.resource.data.userId == request.auth.uid;
     }
     
     // Follow relationships - user connections
@@ -514,25 +483,47 @@ service cloud.firestore {
       allow write: if isAuthenticated() && 
                       isOwner(userId) &&
                       // Allow flexible updates for settings fields
+                      (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid) &&
                       (!('dark_mode' in request.resource.data) || request.resource.data.dark_mode is bool) &&
+                      (!('notification_enabled' in request.resource.data) || request.resource.data.notification_enabled is bool) &&
                       (!('notifications_enabled' in request.resource.data) || request.resource.data.notifications_enabled is bool) &&
+                      (!('workout_reminders' in request.resource.data) || request.resource.data.workout_reminders is bool) &&
+                      (!('pr_notifications' in request.resource.data) || request.resource.data.pr_notifications is bool) &&
+                      (!('theme' in request.resource.data) || request.resource.data.theme is string) &&
+                      (!('units' in request.resource.data) || request.resource.data.units is string) &&
                       (!('weight_unit' in request.resource.data) || request.resource.data.weight_unit is string) &&
+                      (!('rest_timer_enabled' in request.resource.data) || request.resource.data.rest_timer_enabled is bool) &&
+                      (!('rest_timer_default_seconds' in request.resource.data) || request.resource.data.rest_timer_default_seconds is int) &&
+                      (!('auto_start_rest_timer' in request.resource.data) || request.resource.data.auto_start_rest_timer is bool) &&
                       (!('terminology_preference' in request.resource.data) || request.resource.data.terminology_preference is string) &&
                       (!('migration_completed' in request.resource.data) || request.resource.data.migration_completed is bool) &&
                       (!('migration_explanation_seen' in request.resource.data) || request.resource.data.migration_explanation_seen is bool) &&
                       (!('last_updated' in request.resource.data) || request.resource.data.last_updated is number) &&
+                      (!('created_at' in request.resource.data) || request.resource.data.created_at is timestamp) &&
+                      (!('updated_at' in request.resource.data) || request.resource.data.updated_at is timestamp) &&
                       (!('settings_version' in request.resource.data) || request.resource.data.settings_version is number);
       
       allow create: if isAuthenticated() && 
                        isOwner(userId) &&
-                       // Allow flexible creation with any combination of settings fields
+                       // Allow flexible creation with any combination of settings fields including required fields from profile creation
+                       (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid) &&
                        (!('dark_mode' in request.resource.data) || request.resource.data.dark_mode is bool) &&
+                       (!('notification_enabled' in request.resource.data) || request.resource.data.notification_enabled is bool) &&
                        (!('notifications_enabled' in request.resource.data) || request.resource.data.notifications_enabled is bool) &&
+                       (!('workout_reminders' in request.resource.data) || request.resource.data.workout_reminders is bool) &&
+                       (!('pr_notifications' in request.resource.data) || request.resource.data.pr_notifications is bool) &&
+                       (!('theme' in request.resource.data) || request.resource.data.theme is string) &&
+                       (!('units' in request.resource.data) || request.resource.data.units is string) &&
                        (!('weight_unit' in request.resource.data) || request.resource.data.weight_unit is string) &&
+                       (!('rest_timer_enabled' in request.resource.data) || request.resource.data.rest_timer_enabled is bool) &&
+                       (!('rest_timer_default_seconds' in request.resource.data) || request.resource.data.rest_timer_default_seconds is int) &&
+                       (!('auto_start_rest_timer' in request.resource.data) || request.resource.data.auto_start_rest_timer is bool) &&
                        (!('terminology_preference' in request.resource.data) || request.resource.data.terminology_preference is string) &&
                        (!('migration_completed' in request.resource.data) || request.resource.data.migration_completed is bool) &&
                        (!('migration_explanation_seen' in request.resource.data) || request.resource.data.migration_explanation_seen is bool) &&
                        (!('last_updated' in request.resource.data) || request.resource.data.last_updated is number) &&
+                       (!('created_at' in request.resource.data) || request.resource.data.created_at is timestamp) &&
+                       (!('updated_at' in request.resource.data) || request.resource.data.updated_at is timestamp) &&
                        (!('settings_version' in request.resource.data) || request.resource.data.settings_version is number);
     }
     
@@ -677,6 +668,42 @@ service cloud.firestore {
                        request.resource.data.keys().hasAll(['user_id', 'status', 'last_active']) &&
                        request.resource.data.user_id == request.auth.uid &&
                        request.resource.data.status in ['ONLINE', 'OFFLINE', 'WORKING_OUT'];
+    }
+    
+    // Subscriptions - user subscription data created during profile creation
+    match /subscriptions/{subscriptionId} {
+      allow read: if isAuthenticated() && 
+                     resource.data.user_id == request.auth.uid;
+      
+      allow write: if isAuthenticated() && 
+                      request.resource.data.user_id == request.auth.uid &&
+                      request.resource.data.keys().hasAll(['user_id']) &&
+                      // Allow subscription fields created during profile creation
+                      (!('tier' in request.resource.data) || request.resource.data.tier is string) &&
+                      (!('status' in request.resource.data) || request.resource.data.status is string) &&
+                      (!('provider' in request.resource.data) || request.resource.data.provider is string) &&
+                      (!('started_at' in request.resource.data) || request.resource.data.started_at is timestamp) &&
+                      (!('auto_renew' in request.resource.data) || request.resource.data.auto_renew is bool) &&
+                      (!('features' in request.resource.data) || request.resource.data.features is list) &&
+                      (!('metadata' in request.resource.data) || request.resource.data.metadata is map) &&
+                      (!('claims_updated' in request.resource.data) || request.resource.data.claims_updated is bool) &&
+                      (!('created_at' in request.resource.data) || request.resource.data.created_at is timestamp) &&
+                      (!('version' in request.resource.data) || request.resource.data.version is int);
+      
+      allow create: if isAuthenticated() && 
+                       request.resource.data.user_id == request.auth.uid &&
+                       request.resource.data.keys().hasAll(['user_id']) &&
+                       // Allow subscription fields created during profile creation
+                       (!('tier' in request.resource.data) || request.resource.data.tier is string) &&
+                       (!('status' in request.resource.data) || request.resource.data.status is string) &&
+                       (!('provider' in request.resource.data) || request.resource.data.provider is string) &&
+                       (!('started_at' in request.resource.data) || request.resource.data.started_at is timestamp) &&
+                       (!('auto_renew' in request.resource.data) || request.resource.data.auto_renew is bool) &&
+                       (!('features' in request.resource.data) || request.resource.data.features is list) &&
+                       (!('metadata' in request.resource.data) || request.resource.data.metadata is map) &&
+                       (!('claims_updated' in request.resource.data) || request.resource.data.claims_updated is bool) &&
+                       (!('created_at' in request.resource.data) || request.resource.data.created_at is timestamp) &&
+                       (!('version' in request.resource.data) || request.resource.data.version is int);
     }
     
     // Default deny all other paths

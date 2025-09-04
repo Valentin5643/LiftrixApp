@@ -108,9 +108,11 @@ class UserPublicSyncWorker @AssistedInject constructor(
             val forceSync = inputData.getBoolean("forceSync", false)
 
             // AUTHENTICATION FIX: Verify auth state and user context
+            Timber.d("[USER-PUBLIC-SYNC] 🔐 Verifying authentication for user: $userId")
             val currentUser = auth.currentUser
             if (currentUser == null) {
-                Timber.e("UserPublicSyncWorker", "No authenticated user found")
+                Timber.e("[USER-PUBLIC-SYNC] ❌ No authenticated user found")
+                Timber.e("[USER-PUBLIC-SYNC]   - User will not be discoverable until authenticated")
                 return@withContext Result.failure(
                     Data.Builder()
                         .putString(KEY_ERROR_MESSAGE, "User not authenticated")
@@ -119,7 +121,10 @@ class UserPublicSyncWorker @AssistedInject constructor(
             }
             
             if (currentUser.uid != userId) {
-                Timber.e("UserPublicSyncWorker", "Authentication UID mismatch: auth=${currentUser.uid}, requested=$userId")
+                Timber.e("[USER-PUBLIC-SYNC] ❌ Authentication UID mismatch")
+                Timber.e("[USER-PUBLIC-SYNC]   - Auth UID: ${currentUser.uid}")
+                Timber.e("[USER-PUBLIC-SYNC]   - Requested: $userId")
+                Timber.e("[USER-PUBLIC-SYNC]   - User will not be discoverable until resolved")
                 return@withContext Result.failure(
                     Data.Builder()
                         .putString(KEY_ERROR_MESSAGE, "User ID mismatch with authentication")
@@ -127,12 +132,18 @@ class UserPublicSyncWorker @AssistedInject constructor(
                 )
             }
 
-            Timber.i("Starting user public sync for: $userId (authenticated)")
+            Timber.i("[USER-PUBLIC-SYNC] 🔄 Starting user public sync for: $userId")
+            Timber.d("[USER-PUBLIC-SYNC]   - Force sync: $forceSync")
+            Timber.d("[USER-PUBLIC-SYNC]   - Target collections: $USERS_PUBLIC_COLLECTION, $USER_SEARCH_CACHE_COLLECTION")
+            Timber.d("[USER-PUBLIC-SYNC]   - This sync is critical for user discoverability")
             
             // Get user account data (username, email, display name)
+            Timber.d("[USER-PUBLIC-SYNC] 📋 Fetching user account data for: $userId")
             val userAccount = userAccountDao.getAccountForUserSuspend(userId)
             if (userAccount == null) {
-                Timber.w("No user account found for: $userId - This may be expected during initial user creation")
+                Timber.w("[USER-PUBLIC-SYNC] ⚠️ No user account found for: $userId")
+                Timber.w("[USER-PUBLIC-SYNC]   - This may be expected during initial user creation")
+                Timber.w("[USER-PUBLIC-SYNC]   - Creating minimal profile to ensure basic discoverability")
                 
                 // Create a minimal public profile for new users without a full account yet
                 // This prevents sync failures during the sign-up process
@@ -143,6 +154,7 @@ class UserPublicSyncWorker @AssistedInject constructor(
                     "bio" to null,
                     "isPublic" to true,
                     "isPrivate" to false,
+                    "isSearchable" to true, // 🔥 CRITICAL FIX: Make minimal profiles searchable
                     "totalWorkouts" to 0,
                     "currentStreak" to 0,
                     "longestStreak" to 0,
@@ -169,7 +181,9 @@ class UserPublicSyncWorker @AssistedInject constructor(
                 
                 publicDocRef.set(minimalPublicData, SetOptions.merge()).await()
                 
-                Timber.i("Created minimal public profile for new user: $userId")
+                Timber.i("[USER-PUBLIC-SYNC] ✅ Created minimal public profile for new user: $userId")
+                Timber.i("[USER-PUBLIC-SYNC]   - User is now discoverable with basic information")
+                Timber.i("[USER-PUBLIC-SYNC]   - Profile will be enhanced when full account data is available")
                 
                 return@withContext Result.success(
                     Data.Builder()
@@ -180,21 +194,36 @@ class UserPublicSyncWorker @AssistedInject constructor(
             }
             
             // Get user profile data (bio, fitness level, etc.)
+            Timber.d("[USER-PUBLIC-SYNC] 📋 Fetching user profile data for: $userId")
             val userProfile = userProfileDao.getProfileForUserSuspend(userId)
+            Timber.d("[USER-PUBLIC-SYNC]   - Account username: ${userAccount.username}")
+            Timber.d("[USER-PUBLIC-SYNC]   - Profile found: ${userProfile != null}")
             if (userAccount.username == null) {
-                Timber.w("UserAccount has null username for user: $userId")
+                Timber.w("[USER-PUBLIC-SYNC] ⚠️ UserAccount has null username for user: $userId")
+                Timber.w("[USER-PUBLIC-SYNC]   - User may not be fully discoverable without username")
             }
             
             // Calculate workout statistics
+            Timber.d("[USER-PUBLIC-SYNC] 📊 Calculating workout statistics for: $userId")
             val totalWorkouts = workoutDao.getWorkoutCountForUser(userId)
             val workoutStats = calculateWorkoutStats(userId)
+            Timber.d("[USER-PUBLIC-SYNC]   - Total workouts: $totalWorkouts")
+            Timber.d("[USER-PUBLIC-SYNC]   - Current streak: ${workoutStats.currentStreak}")
+            Timber.d("[USER-PUBLIC-SYNC]   - Longest streak: ${workoutStats.longestStreak}")
             
             // Generate search tokens for better searchability
+            Timber.d("[USER-PUBLIC-SYNC] 🔍 Generating search tokens and keywords for: $userId")
             val searchTokens = generateSearchTokens(userAccount, userProfile)
             val searchKeywords = generateSearchKeywords(userAccount, userProfile)
+            Timber.d("[USER-PUBLIC-SYNC]   - Search tokens: $searchTokens")
+            Timber.d("[USER-PUBLIC-SYNC]   - Search keywords: $searchKeywords")
             
             // Prepare public user data
             val isPublicProfile = userProfile?.isPublic ?: true
+            Timber.d("[USER-PUBLIC-SYNC] 📝 Preparing public user data")
+            Timber.d("[USER-PUBLIC-SYNC]   - Is public profile: $isPublicProfile")
+            Timber.d("[USER-PUBLIC-SYNC]   - Display name: ${userAccount.displayName ?: userProfile?.displayName}")
+            Timber.d("[USER-PUBLIC-SYNC]   - Username: ${userAccount.username}")
             
             val publicUserData = mutableMapOf<String, Any?>(
                 "userId" to userId,
@@ -243,7 +272,9 @@ class UserPublicSyncWorker @AssistedInject constructor(
                 .collection(USERS_PUBLIC_COLLECTION)
                 .document(userId)
             
+            Timber.d("[USER-PUBLIC-SYNC] 📦 Uploading to $USERS_PUBLIC_COLLECTION/$userId")
             publicDocRef.set(publicUserData, SetOptions.merge()).await()
+            Timber.i("[USER-PUBLIC-SYNC] ✅ Successfully uploaded to users_public collection")
             
             // Also sync to user_search_cache collection for tokenized search
             val searchCacheData = mapOf(
@@ -257,6 +288,7 @@ class UserPublicSyncWorker @AssistedInject constructor(
                 "lastActiveAt" to publicUserData["lastActiveAt"],
                 "profileImageUrl" to userProfile?.profileImageUrl,
                 "isPublic" to (userProfile?.isPublic ?: true),
+                "isSearchable" to true, // 🔥 CRITICAL FIX: Missing field that search queries require
                 "searchTokens" to searchTokens,
                 "keywords" to searchKeywords,
                 "updatedAt" to FieldValue.serverTimestamp()
@@ -266,9 +298,13 @@ class UserPublicSyncWorker @AssistedInject constructor(
                 .collection(USER_SEARCH_CACHE_COLLECTION)
                 .document(userId)
             
+            Timber.d("[USER-PUBLIC-SYNC] 📦 Uploading to $USER_SEARCH_CACHE_COLLECTION/$userId")
             searchCacheDocRef.set(searchCacheData, SetOptions.merge()).await()
+            Timber.i("[USER-PUBLIC-SYNC] ✅ Successfully uploaded to user_search_cache collection")
             
-            Timber.i("User public data sync completed successfully for user: $userId")
+            Timber.i("[USER-PUBLIC-SYNC] ✅ User public data sync completed successfully for user: $userId")
+            Timber.i("[USER-PUBLIC-SYNC]   - User is now discoverable in search with ${searchTokens.size} tokens")
+            Timber.i("[USER-PUBLIC-SYNC]   - Profile available in both collections for optimal search performance")
             
             return@withContext Result.success(
                 Data.Builder()
@@ -297,7 +333,10 @@ class UserPublicSyncWorker @AssistedInject constructor(
                 }
             }
             
-            Timber.e(e, "UserPublicSyncWorker failed for user $userId: $errorMessage")
+            Timber.e(e, "[USER-PUBLIC-SYNC] ❌ UserPublicSyncWorker failed for user $userId")
+            Timber.e("[USER-PUBLIC-SYNC]   - Error: $errorMessage")
+            Timber.e("[USER-PUBLIC-SYNC]   - User will remain undiscoverable until sync succeeds")
+            Timber.e("[USER-PUBLIC-SYNC]   - Retry attempt: ${runAttemptCount + 1}/$MAX_RETRY_COUNT")
             
             if (runAttemptCount < MAX_RETRY_COUNT) {
                 Result.retry()

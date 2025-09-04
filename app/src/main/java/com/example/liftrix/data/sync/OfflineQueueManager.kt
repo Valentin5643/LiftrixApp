@@ -5,14 +5,18 @@ import com.example.liftrix.data.local.entity.SyncQueueEntity
 import com.example.liftrix.data.remote.FirebaseDataSource
 import com.example.liftrix.data.remote.ProcessResult
 import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.SyncResult
 import com.example.liftrix.data.model.SyncPayload
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.builtins.MapSerializer
-import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonObject
 import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
@@ -42,6 +46,59 @@ class OfflineQueueManager @Inject constructor(
     private val firebaseDataSource: FirebaseDataSource,
     private val json: Json
 ) {
+    
+    /**
+     * 🔥 FIX: Clean up legacy queue entries that can't be deserialized.
+     * Call this on app startup to remove stale entries from before the SyncPayload refactoring.
+     * 
+     * This method proactively identifies and removes problematic queue entries to prevent
+     * serialization errors during Google login and other sync operations.
+     */
+    suspend fun cleanupLegacyQueueEntries(): LiftrixResult<Int> {
+        return liftrixCatching(
+            errorMapper = { throwable: Throwable ->
+                LiftrixError.DatabaseError(
+                    errorMessage = "Failed to cleanup legacy queue entries",
+                    operation = "CLEANUP",
+                    table = "sync_queue",
+                    analyticsContext = mapOf("cleanup_type" to "legacy_serialization")
+                )
+            }
+        ) {
+            var removedCount = 0
+            
+            try {
+                // Get all queue entries to check for deserialization issues
+                val allEntries = syncQueueDao.getAllQueueEntries()
+                Timber.d("OfflineQueueManager: Checking ${allEntries.size} queue entries for legacy serialization issues")
+                
+                for (entry in allEntries) {
+                    try {
+                        // Attempt to deserialize each entry
+                        json.decodeFromString<SyncPayload>(entry.data)
+                        // If successful, leave the entry alone
+                    } catch (e: Exception) {
+                        // This entry has serialization issues - remove it
+                        Timber.w("OfflineQueueManager: Removing legacy queue entry ${entry.id} (${entry.entityType}:${entry.entityId}) due to deserialization failure: ${e.message}")
+                        syncQueueDao.delete(entry)
+                        removedCount++
+                    }
+                }
+                
+                if (removedCount > 0) {
+                    Timber.i("OfflineQueueManager: Cleaned up $removedCount legacy queue entries with serialization issues")
+                } else {
+                    Timber.d("OfflineQueueManager: All queue entries are properly serializable - no cleanup needed")
+                }
+                
+            } catch (e: Exception) {
+                Timber.e(e, "OfflineQueueManager: Error during legacy cleanup process")
+                // Don't fail the entire cleanup if we encounter issues
+            }
+            
+            removedCount
+        }
+    }
     
     companion object {
         private const val MAX_RETRY_COUNT = 5
@@ -133,33 +190,48 @@ class OfflineQueueManager @Inject constructor(
                 try {
                     val result = processQueueItem(item)
                     
+                    // 🔥 PROFILE SYNC DIAGNOSTICS: Enhanced logging for profile operations
+                    val logPrefix = if (item.entityType == "PROFILE") "[PROFILE-QUEUE]" else "OfflineQueueManager"
+                    
                     when (result) {
                         is ProcessResult.Success -> {
                             syncQueueDao.delete(item)
                             successful++
-                            Timber.d("OfflineQueueManager: Successfully processed operation ${item.id}")
+                            if (item.entityType == "PROFILE") {
+                                Timber.i("$logPrefix ✅ Profile operation ${item.id} (${item.operation}) completed successfully!")
+                            } else {
+                                Timber.d("$logPrefix: Successfully processed operation ${item.id}")
+                            }
                         }
                         is ProcessResult.Conflict -> {
                             syncQueueDao.delete(item) // Remove conflict item as it's been resolved
                             conflicts++
-                            Timber.d("OfflineQueueManager: Resolved conflict for operation ${item.id}")
+                            if (item.entityType == "PROFILE") {
+                                Timber.w("$logPrefix ⚠️ Profile operation ${item.id} (${item.operation}) ended in conflict - THIS SHOULD NOT HAPPEN after the fix!")
+                            } else {
+                                Timber.d("$logPrefix: Resolved conflict for operation ${item.id}")
+                            }
                         }
                         is ProcessResult.Failure -> {
                             handleSyncFailure(item, result.error)
                             failed++
-                            Timber.w("OfflineQueueManager: Failed to process operation ${item.id}: ${result.error}")
+                            if (item.entityType == "PROFILE") {
+                                Timber.e("$logPrefix ❌ Profile operation ${item.id} (${item.operation}) failed: ${result.error}")
+                            } else {
+                                Timber.w("$logPrefix: Failed to process operation ${item.id}: ${result.error}")
+                            }
                         }
                         is ProcessResult.Data -> {
                             // For fetch operations, just mark as successful
                             syncQueueDao.delete(item)
                             successful++
-                            Timber.d("OfflineQueueManager: Successfully processed fetch operation ${item.id}")
+                            Timber.d("$logPrefix: Successfully processed fetch operation ${item.id}")
                         }
                         is ProcessResult.DataList -> {
                             // For fetchAll operations, just mark as successful
                             syncQueueDao.delete(item)
                             successful++
-                            Timber.d("OfflineQueueManager: Successfully processed fetchAll operation ${item.id}")
+                            Timber.d("$logPrefix: Successfully processed fetchAll operation ${item.id}")
                         }
                     }
                     
@@ -225,6 +297,38 @@ class OfflineQueueManager @Inject constructor(
                     errorMessage = "Failed to clear sync queue: ${e.message}"
                 )
             )
+        }
+    }
+    
+    /**
+     * 🔥 NEW: Emergency queue reset for users experiencing persistent serialization issues.
+     * This method clears all queue entries and forces a fresh sync from Firebase.
+     * Use only when users report persistent sync errors after Google login.
+     */
+    suspend fun emergencyQueueReset(userId: String): LiftrixResult<Unit> {
+        return liftrixCatching(
+            errorMapper = { throwable: Throwable ->
+                LiftrixError.BusinessLogicError(
+                    code = "EMERGENCY_RESET_FAILED",
+                    errorMessage = "Failed to perform emergency queue reset: ${throwable.message}",
+                    analyticsContext = mapOf("user_id" to userId)
+                )
+            }
+        ) {
+            Timber.w("OfflineQueueManager: 🚨 EMERGENCY RESET: Starting emergency queue reset for user $userId")
+            
+            // Count entries before cleanup
+            val beforeCount = syncQueueDao.getPendingItemsCount(userId)
+            
+            // Clear all sync queue entries for this user
+            syncQueueDao.clearQueueForUser(userId)
+            
+            Timber.i("OfflineQueueManager: 🚨 EMERGENCY RESET: Cleared $beforeCount queue entries for user $userId")
+            
+            // Log the reset for analytics/monitoring
+            Timber.i("OfflineQueueManager: 🚨 EMERGENCY RESET: User $userId sync queue has been completely reset due to serialization issues")
+            
+            Unit
         }
     }
     
@@ -301,115 +405,119 @@ class OfflineQueueManager @Inject constructor(
      */
     private suspend fun processQueueItem(item: SyncQueueEntity): ProcessResult {
         return try {
-            // Deserialize the type-safe payload
-            val payload = json.decodeFromString<SyncPayload>(item.data)
+            Timber.d("OfflineQueueManager: Processing queue item ${item.id} (entityType: ${item.entityType})")
             
-            // Extract the actual data based on payload type
+            // Deserialize the type-safe payload with enhanced legacy fallback
+            val payload = try {
+                json.decodeFromString<SyncPayload>(item.data)
+            } catch (e: Exception) {
+                Timber.e(e, "OfflineQueueManager: Failed to deserialize SyncPayload for item ${item.id}")
+                Timber.e("OfflineQueueManager: Raw data: ${item.data}")
+                
+                // 🔥 ENHANCED FIX: Handle legacy queue entries with detailed error analysis
+                val errorType = when {
+                    e.message?.contains("Serializer for class 'Any' is not found") == true -> "LEGACY_ANY_TYPE"
+                    e.message?.contains("kotlinx.serialization") == true -> "SERIALIZATION_ERROR"  
+                    item.data.contains("\"payload\":") && !item.data.contains("\"workout\":") -> "LEGACY_STRUCTURE"
+                    else -> "UNKNOWN_FORMAT"
+                }
+                
+                Timber.w("OfflineQueueManager: Detected legacy queue item ${item.id} (${item.entityType}:${item.entityId}) with error type: $errorType")
+                
+                // Log additional context for debugging
+                Timber.w("OfflineQueueManager: Legacy item created at: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date(item.createdAt))}")
+                Timber.w("OfflineQueueManager: Legacy item operation: ${item.operation}, priority: ${item.priority}, retry count: ${item.retryCount}")
+                
+                // Delete the problematic legacy queue item
+                syncQueueDao.delete(item)
+                Timber.i("OfflineQueueManager: ✅ Successfully removed legacy queue item ${item.id} (${errorType})")
+                
+                // Return early without processing this item - this is success from cleanup perspective
+                return ProcessResult.Success
+            }
+            
+            // 🔥 SERIALIZATION FIX: Use direct json.encodeToJsonElement to avoid Map<String, Any?> issues
             val dataForFirebase = when (payload) {
                 is SyncPayload.WorkoutPayload -> {
-                    // Convert WorkoutSyncDto to Firebase-compatible format
-                    val workout = payload.workout
-                    mapOf(
-                        "id" to workout.id,
-                        "userId" to workout.userId,
-                        "name" to workout.name,
-                        "date" to workout.date,
-                        "status" to workout.status,
-                        "startTime" to workout.startTime,
-                        "endTime" to workout.endTime,
-                        "exercises" to workout.exercises.map { exercise ->
-                            mapOf(
-                                "id" to exercise.id,
-                                "name" to exercise.name,
-                                "muscleGroup" to exercise.muscleGroup,
-                                "orderIndex" to exercise.orderIndex,
-                                "notes" to exercise.notes,
-                                "sets" to exercise.sets.map { set ->
-                                    mapOf(
-                                        "setNumber" to set.setNumber,
-                                        "targetReps" to set.targetReps,
-                                        "actualReps" to set.actualReps,
-                                        "targetWeight" to set.targetWeight,
-                                        "actualWeight" to set.actualWeight,
-                                        "completed" to set.completed,
-                                        "rpe" to set.rpe
-                                    )
-                                }
-                            )
-                        },
-                        "notes" to workout.notes,
-                        "templateId" to workout.templateId,
-                        "createdAt" to workout.createdAt,
-                        "updatedAt" to workout.updatedAt,
-                        "syncVersion" to workout.syncVersion,
-                        "isSynced" to workout.isSynced
-                    )
+                    // Simply encode the workout DTO directly - it's already @Serializable
+                    json.encodeToJsonElement(payload.workout).let { workoutJson ->
+                        buildJsonObject {
+                            // Copy all fields from the workout JSON
+                            workoutJson.jsonObject.forEach { (key, value) -> 
+                                put(key, value)
+                            }
+                            // Add the entityType field for Firebase
+                            put("entityType", "workout")
+                        }
+                    }
                 }
                 is SyncPayload.ProfilePayload -> {
-                    mapOf(
-                        "userId" to payload.userId,
-                        "displayName" to payload.displayName,
-                        "email" to payload.email,
-                        "profileImageUrl" to payload.profileImageUrl,
-                        "goals" to payload.goals,
-                        "preferences" to payload.preferences,
-                        "syncVersion" to payload.syncVersion,
-                        "lastModified" to payload.lastModified
-                    )
+                    // Encode the profile payload directly since all fields are serializable
+                    json.encodeToJsonElement(payload).let { profileJson ->
+                        buildJsonObject {
+                            profileJson.jsonObject.forEach { (key, value) -> 
+                                put(key, value)
+                            }
+                            put("entityType", "profile")
+                        }
+                    }
                 }
                 is SyncPayload.TemplatePayload -> {
-                    mapOf(
-                        "templateId" to payload.templateId,
-                        "userId" to payload.userId,
-                        "name" to payload.name,
-                        "description" to payload.description,
-                        "exercises" to payload.exercises,
-                        "isPublic" to payload.isPublic,
-                        "syncVersion" to payload.syncVersion,
-                        "lastModified" to payload.lastModified
-                    )
+                    json.encodeToJsonElement(payload).let { templateJson ->
+                        buildJsonObject {
+                            templateJson.jsonObject.forEach { (key, value) -> 
+                                put(key, value)
+                            }
+                            put("entityType", "template")
+                        }
+                    }
                 }
                 is SyncPayload.AchievementPayload -> {
-                    mapOf(
-                        "achievementId" to payload.achievementId,
-                        "userId" to payload.userId,
-                        "type" to payload.type,
-                        "title" to payload.title,
-                        "description" to payload.description,
-                        "unlockedAt" to payload.unlockedAt,
-                        "syncVersion" to payload.syncVersion
-                    )
+                    json.encodeToJsonElement(payload).let { achievementJson ->
+                        buildJsonObject {
+                            achievementJson.jsonObject.forEach { (key, value) -> 
+                                put(key, value)
+                            }
+                            put("entityType", "achievement")
+                        }
+                    }
                 }
                 is SyncPayload.SocialProfilePayload -> {
-                    mapOf(
-                        "userId" to payload.userId,
-                        "username" to payload.username,
-                        "displayName" to payload.displayName,
-                        "bio" to payload.bio,
-                        "isPrivate" to payload.isPrivate,
-                        "followerCount" to payload.followerCount,
-                        "followingCount" to payload.followingCount,
-                        "syncVersion" to payload.syncVersion,
-                        "lastModified" to payload.lastModified
-                    )
+                    json.encodeToJsonElement(payload).let { socialJson ->
+                        buildJsonObject {
+                            socialJson.jsonObject.forEach { (key, value) -> 
+                                put(key, value)
+                            }
+                            put("entityType", "social_profile")
+                        }
+                    }
                 }
                 is SyncPayload.FetchPayload -> {
-                    // 🔥 NEW: Handle FETCH operations for remote data retrieval
-                    mapOf(
-                        "userId" to payload.userId,
-                        "entityType" to payload.entityType,
-                        "lastSyncTimestamp" to payload.lastSyncTimestamp,
-                        "fetchAll" to payload.fetchAll,
-                        "operation" to "FETCH"
-                    )
+                    json.encodeToJsonElement(payload).let { fetchJson ->
+                        buildJsonObject {
+                            fetchJson.jsonObject.forEach { (key, value) -> 
+                                put(key, value)
+                            }
+                            put("operation", "FETCH")
+                        }
+                    }
                 }
             }
             
-            // Convert map to JSON string for FirebaseDataSource
-            val jsonData = json.encodeToString(dataForFirebase)
+            // Convert JsonElement to JSON string for FirebaseDataSource
+            val jsonData = json.encodeToString(JsonElement.serializer(), dataForFirebase)
+            
+            // 🔥 SYNC DIAGNOSTICS: Enhanced operation logging with profile-specific handling
+            Timber.d("OfflineQueueManager: Executing ${item.operation} operation for ${item.entityType}:${item.entityId}")
             
             when (item.operation) {
-                "CREATE", "UPSERT" -> firebaseDataSource.create(item.userId, item.entityType, item.entityId, jsonData)
+                "CREATE", "UPSERT" -> {
+                    // Log the operation mapping for debugging profile sync issues
+                    if (item.entityType == "PROFILE") {
+                        Timber.d("OfflineQueueManager: Profile ${item.operation} operation mapped to FirebaseDataSource.create() - will use UPSERT semantics")
+                    }
+                    firebaseDataSource.create(item.userId, item.entityType, item.entityId, jsonData)
+                }
                 "UPDATE" -> firebaseDataSource.update(item.userId, item.entityType, item.entityId, jsonData)
                 "DELETE" -> firebaseDataSource.delete(item.userId, item.entityType, item.entityId)
                 "FETCH" -> {

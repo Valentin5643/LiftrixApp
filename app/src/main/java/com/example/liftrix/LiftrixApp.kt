@@ -57,6 +57,9 @@ class LiftrixApp : Application(), Configuration.Provider {
     @Inject
     lateinit var initializeUserThemeUseCase: InitializeUserThemeUseCase
     
+    @Inject 
+    lateinit var offlineQueueManager: com.example.liftrix.data.sync.OfflineQueueManager
+    
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     
     // App Check initialization state
@@ -120,6 +123,9 @@ class LiftrixApp : Application(), Configuration.Provider {
         
         // Initialize sync system after WorkManager is ready
         initializeSyncSystem()
+        
+        // 🔥 FIX: Clean up legacy queue entries from before SyncPayload refactoring
+        cleanupLegacyQueueEntries()
     }
     
     /**
@@ -398,6 +404,36 @@ class LiftrixApp : Application(), Configuration.Provider {
                 
             } catch (e: Exception) {
                 Timber.e(e, "❌ DEBUG: Worker factory verification failed")
+            }
+        }
+    }
+    
+    /**
+     * 🔥 FIX: Clean up legacy queue entries on app startup.
+     * Removes any stale entries from before the SyncPayload refactoring that can't be deserialized.
+     */
+    private fun cleanupLegacyQueueEntries() {
+        applicationScope.launch(Dispatchers.IO) {
+            try {
+                Timber.d("🔧 LEGACY-CLEANUP: Starting legacy queue cleanup...")
+                
+                val result = offlineQueueManager.cleanupLegacyQueueEntries()
+                result.fold(
+                    onSuccess = { removedCount ->
+                        if (removedCount > 0) {
+                            Timber.i("🔧 LEGACY-CLEANUP: ✅ Removed $removedCount legacy queue entries")
+                        } else {
+                            Timber.d("🔧 LEGACY-CLEANUP: ✅ No legacy entries found - queue is clean")
+                        }
+                    },
+                    onFailure = { error ->
+                        Timber.w("🔧 LEGACY-CLEANUP: ⚠️ Cleanup failed: ${error.message}")
+                        // Non-critical failure - app can continue normally
+                    }
+                )
+            } catch (e: Exception) {
+                Timber.w(e, "🔧 LEGACY-CLEANUP: ⚠️ Cleanup exception - continuing app startup")
+                // Non-critical failure - app can continue normally
             }
         }
     }

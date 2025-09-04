@@ -126,7 +126,11 @@ class WorkoutRepositoryImpl @Inject constructor(
             Timber.d("[WORKOUT-CREATE-DEBUG]   - Entity isSynced: ${entity.isSynced}")
             Timber.d("[WORKOUT-CREATE-DEBUG]   - Entity syncVersion: ${entity.syncVersion}")
             
+            // 🔥 DEBUG: Log before database insertion
+            Timber.d("[WORKOUT-DB-INSERT] About to insert workout entity to database at ${System.currentTimeMillis()}")
             val insertedId = workoutDao.insertWorkout(entity)
+            // 🔥 DEBUG: Log after database insertion
+            Timber.d("[WORKOUT-DB-INSERT] ✅ Database insertion completed at ${System.currentTimeMillis()}, result: $insertedId")
             
             // 🔥 CRITICAL FIX: For string primary keys, insertWorkout returns row count, not the ID
             
@@ -150,12 +154,17 @@ class WorkoutRepositoryImpl @Inject constructor(
                         throw RuntimeException("Failed to map exercise to entity: ${e.message}", e)
                     }
                     
+                    // 🔥 DEBUG: Log exercise entity before DB insert
+                    Timber.d("[SETS-DEBUG-DB-EX] Exercise '${exercise.libraryExercise.name}' entity: exerciseLibraryId='${exerciseEntity.exerciseLibraryId}', workoutId='${exerciseEntity.workoutId}'")
                     
                     val exerciseId = try {
                         exerciseDao.insertExercise(exerciseEntity)
                     } catch (e: Exception) {
                         throw e // Re-throw to preserve error propagation
                     }
+                    
+                    // 🔥 DEBUG: Log successful exercise insert
+                    Timber.d("[SETS-DEBUG-DB-EX-INSERTED] Exercise inserted with ID: $exerciseId")
                     
                     
                     // Create ExerciseSetEntity records for each set
@@ -177,10 +186,17 @@ class WorkoutRepositoryImpl @Inject constructor(
                                 completedAt = set.completedAt?.toEpochMilli()
                             )
                             
+                            // 🔥 DEBUG: Log set entity before DB insert
+                            Timber.d("[SETS-DEBUG-DB] Saving set for exerciseLibraryId='${exerciseEntity.exerciseLibraryId}': exerciseId=$exerciseId, setNumber=${setIndex + 1}, completedAt=${set.completedAt}, completedAtEpoch=${set.completedAt?.toEpochMilli()}")
                             
                             val insertedSetId = exerciseSetDao.insertSet(setEntity)
+                            
+                            // 🔥 DEBUG: Log successful set insert
+                            Timber.d("[SETS-DEBUG-DB-SET-INSERTED] Set inserted with ID: $insertedSetId")
                         }
                     } catch (e: Exception) {
+                        Timber.e(e, "[SETS-DEBUG-DB-ERROR] Failed to insert sets for exercise: ${exercise.libraryExercise.name}")
+                        throw e
                     }
                     
                 }
@@ -346,7 +362,11 @@ class WorkoutRepositoryImpl @Inject constructor(
             
             // Use insertWorkout with REPLACE strategy instead of updateWorkout
             // This ensures the workout is either updated if it exists or created if it doesn't
+            // 🔥 DEBUG: Log before database update
+            Timber.d("[WORKOUT-DB-UPDATE] About to update workout entity in database at ${System.currentTimeMillis()}")
             val insertedId = workoutDao.insertWorkout(entity)
+            // 🔥 DEBUG: Log after database update
+            Timber.d("[WORKOUT-DB-UPDATE] ✅ Database update completed at ${System.currentTimeMillis()}, result: $insertedId")
             
             if (insertedId > 0) {
                 Timber.i("🔥 UPDATE-WORKOUT-DEBUG: Successfully updated workout - ID: ${workout.id.value}, Insert result: $insertedId")
@@ -560,20 +580,31 @@ class WorkoutRepositoryImpl @Inject constructor(
 
     override suspend fun saveWorkout(workout: Workout): Result<Unit> {
         return try {
+            // 🔥 DEBUG: Log save operation start
+            Timber.d("[WORKOUT-SAVE-DEBUG] Starting saveWorkout for '${workout.name}' (${workout.id.value}) with ${workout.exercises.size} exercises")
+            
             // Check if workout already exists in database
             val existingWorkout = getWorkoutById(workout.id, workout.userId).getOrNull()
             
             val result = if (workout.id.value.isBlank() || existingWorkout == null) {
                 // Create new workout if ID is blank OR workout doesn't exist
+                Timber.d("[WORKOUT-SAVE-DEBUG] Creating new workout (no existing found)")
                 createWorkout(workout)
             } else {
-                // Only update if workout actually exists
+                // Only update if workout already exists
+                Timber.d("[WORKOUT-SAVE-DEBUG] Updating existing workout")
                 updateWorkoutWithRetry(workout)
             }
             
             result.fold(
-                onSuccess = { Result.success(Unit) },
-                onFailure = { throwable -> Result.failure(throwable) }
+                onSuccess = { 
+                    Timber.d("[WORKOUT-SAVE-DEBUG] ✅ Successfully saved workout '${workout.name}' to database")
+                    Result.success(Unit) 
+                },
+                onFailure = { throwable -> 
+                    Timber.e("[WORKOUT-SAVE-DEBUG] ❌ Failed to save workout '${workout.name}': $throwable")
+                    Result.failure(throwable) 
+                }
             )
         } catch (e: Exception) {
             Result.failure(e)
@@ -1456,6 +1487,43 @@ class WorkoutRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Failed to queue workout ${workout.id.value} for sync")
             // Don't fail the entire operation for sync queueing failure
+        }
+    }
+    
+    override suspend fun getLastCompletedWorkoutsWithExercise(
+        userId: String,
+        exerciseId: String,
+        limit: Int,
+        excludeWorkoutId: String?
+    ): LiftrixResult<List<com.example.liftrix.data.local.entity.WorkoutEntity>> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.DatabaseError(
+                    errorMessage = "Failed to get last completed workouts with exercise",
+                    operation = "READ",
+                    table = "workouts",
+                    analyticsContext = mapOf(
+                        "user_id" to userId,
+                        "exercise_id" to exerciseId,
+                        "limit" to limit.toString(),
+                        "exclude_workout_id" to (excludeWorkoutId ?: "null")
+                    )
+                )
+            }
+        ) {
+            withContext(Dispatchers.IO) {
+                Timber.d("Getting last completed workouts with exercise $exerciseId for user $userId")
+                
+                val workoutEntities = workoutDao.getLastCompletedWorkoutsWithExercise(
+                    userId = userId,
+                    exerciseId = exerciseId,
+                    limit = limit,
+                    excludeWorkoutId = excludeWorkoutId
+                )
+                
+                Timber.d("Found ${workoutEntities.size} completed workouts with exercise $exerciseId")
+                workoutEntities
+            }
         }
     }
 }

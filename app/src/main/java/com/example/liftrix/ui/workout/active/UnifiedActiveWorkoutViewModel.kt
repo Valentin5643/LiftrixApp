@@ -16,6 +16,9 @@ import java.time.Instant
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
 import com.example.liftrix.domain.usecase.session.AddExerciseToSessionUseCase
 import com.example.liftrix.domain.usecase.template.CreateTemplateFromSessionUseCase
+import com.example.liftrix.domain.usecase.workout.GetPreviousSetDataUseCase
+import com.example.liftrix.domain.usecase.workout.PreviousSetDataRequest
+import com.example.liftrix.domain.usecase.workout.PreviousSetDataResponse
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -45,7 +48,8 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
     private val workoutTemplateRepository: WorkoutTemplateRepository,
     private val authRepository: AuthRepository,
     private val addExerciseToSessionUseCase: AddExerciseToSessionUseCase,
-    private val createTemplateFromSessionUseCase: CreateTemplateFromSessionUseCase
+    private val createTemplateFromSessionUseCase: CreateTemplateFromSessionUseCase,
+    private val getPreviousSetDataUseCase: GetPreviousSetDataUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<UnifiedActiveWorkoutUiState>(
@@ -63,6 +67,10 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
     }
 
     val currentSession: StateFlow<UnifiedWorkoutSession?> = sessionManager.currentSession
+    
+    // Previous set data management
+    private val _previousSetData = MutableStateFlow<Map<String, PreviousSetDataResponse>>(emptyMap())
+    val previousSetData: StateFlow<Map<String, PreviousSetDataResponse>> = _previousSetData.asStateFlow()
 
     init {
         
@@ -94,6 +102,12 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                             )
                         }
                         session != null -> {
+                            // Load previous set data when session becomes active
+                            if (session.sessionStatus == UnifiedWorkoutSession.SessionStatus.ACTIVE &&
+                                _previousSetData.value.isEmpty() && session.exercises.isNotEmpty()) {
+                                loadPreviousSetData()
+                            }
+                            
                             // Don't override WorkoutCompleted state when session is completed
                             val currentState = _uiState.value
                             if (currentState is UnifiedActiveWorkoutUiState.WorkoutCompleted && 
@@ -341,6 +355,10 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                 updatedSets[setIndex] = updatedSet
                 val updatedExercise = exercise.copy(sets = updatedSets)
                 
+                // 🔥 SETS-DEBUG: Log set update in ViewModel
+                Timber.d("[SETS-DEBUG-VM] Updating set ${setNumber} in exercise '${exercise.name}': reps=${updatedSet.actualReps}, weight=${updatedSet.actualWeight}")
+                Timber.d("[SETS-DEBUG-VM] Exercise now has ${updatedSets.size} sets total")
+                
                 sessionManager.updateExerciseInSession(ExerciseId(exerciseId), updatedExercise)
             } catch (e: Exception) {
                 Timber.e(e, "Failed to update set in exercise: $exerciseId")
@@ -414,6 +432,8 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                         // Verify the exercise was actually added
                         val updatedSession = sessionManager.currentSession.value
                         if (updatedSession != null) {
+                            // Load previous data for the newly added exercise
+                            refreshPreviousSetDataForExercise(exerciseLibrary.id)
                         }
                     },
                     onFailure = { error ->
@@ -965,6 +985,155 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
         sessionManager.clearSavedWorkoutId()
     }
     
+    /**
+     * Loads previous set data for all exercises in the current session.
+     * 
+     * This method is called when a session starts to populate the PREVIOUS column
+     * in RedesignedExerciseCard with historical performance data for comparison.
+     * 
+     * Uses structured concurrency to load data for multiple exercises in parallel
+     * while respecting the ViewModelScope lifecycle and error handling patterns.
+     */
+    fun loadPreviousSetData() {
+        viewModelScope.launch {
+            try {
+                val currentSession = sessionManager.getCurrentSession()
+                if (currentSession == null) {
+                    Timber.w("Cannot load previous set data - no active session")
+                    return@launch
+                }
+                
+                val userId = authRepository.getCurrentUserId()
+                if (userId == null) {
+                    Timber.w("Cannot load previous set data - no authenticated user")
+                    return@launch
+                }
+                
+                Timber.d("Loading previous set data for ${currentSession.exercises.size} exercises")
+                
+                // Load previous data for all exercises in parallel
+                val previousDataMap = mutableMapOf<String, PreviousSetDataResponse>()
+                
+                // Process exercises in parallel with structured concurrency
+                currentSession.exercises.forEach { exercise ->
+                    // 🔥 FIX: Use canonical library ID for history queries instead of display name
+                    // The exerciseId should contain the canonical library ID like "core-ab-wheel-rollout"
+                    val canonicalLibraryId = exercise.exerciseId.value
+                    
+                    // Debug logging for exercise ID investigation
+                    Timber.d("[PREV_SET_DEBUG] Exercise '${exercise.name}' - Using canonical ID: '$canonicalLibraryId' for history query")
+                    Timber.d("[PREV_SET_ID_FIX] Switching from display name '${exercise.name}' to canonical ID '$canonicalLibraryId'")
+                    
+                    val request = PreviousSetDataRequest(
+                        userId = userId,
+                        exerciseId = canonicalLibraryId, // 🔥 FIX: Use canonical library ID instead of display name
+                        setNumber = 1, // Load for all sets initially
+                        excludeWorkoutId = currentSession.id.value // Exclude current active session
+                    )
+                    
+                    // Launch concurrent requests for each exercise
+                    launch {
+                        getPreviousSetDataUseCase(request).fold(
+                            onSuccess = { response ->
+                                if (response.hasPreviousData()) {
+                                    previousDataMap[exercise.exerciseId.value] = response
+                                    Timber.d("Loaded previous data for exercise ${exercise.name}: ${response.previousSets.size} sets")
+                                } else {
+                                    Timber.d("No previous data found for exercise ${exercise.name}")
+                                }
+                            },
+                            onFailure = { error ->
+                                Timber.w("Failed to load previous set data for exercise ${exercise.name}: ${error.message}")
+                                // Don't fail the entire operation for individual exercise failures
+                            }
+                        )
+                    }
+                }
+                
+                // Wait for all parallel requests to complete, then update state
+                // Using a small delay to allow all parallel operations to complete
+                delay(100)
+                _previousSetData.value = previousDataMap
+                
+                Timber.d("Previous set data loading completed: ${previousDataMap.size} exercises with data")
+                
+            } catch (e: Exception) {
+                Timber.e(e, "Error loading previous set data")
+                // Don't show error to user - this is enhancement data, not critical
+            }
+        }
+    }
+    
+    /**
+     * Gets the formatted previous value for a specific set.
+     * 
+     * Used by UI components (RedesignedExerciseCard) to populate the PREVIOUS column
+     * with formatted strings like "50kg x 10" or "Bodyweight x 12".
+     * 
+     * @param exerciseId The exercise ID to look up
+     * @param setNumber The set number (1-based) to get previous data for
+     * @return Formatted display string or null if no previous data available
+     */
+    fun getPreviousValueForSet(exerciseId: String, setNumber: Int): String? {
+        val exerciseData = _previousSetData.value[exerciseId]
+        return exerciseData?.getPreviousSetInfo(setNumber)?.formattedDisplay
+    }
+    
+    /**
+     * Checks if previous data is available for an exercise.
+     * 
+     * Used by UI to show loading states or handle no-data scenarios gracefully.
+     */
+    fun hasPreviousDataForExercise(exerciseId: String): Boolean {
+        return _previousSetData.value[exerciseId]?.hasPreviousData() == true
+    }
+    
+    /**
+     * Refreshes previous set data for a specific exercise.
+     * 
+     * Called when exercises are added dynamically to the session to ensure
+     * all exercises have their previous data loaded for UI display.
+     */
+    fun refreshPreviousSetDataForExercise(exerciseId: String) {
+        viewModelScope.launch {
+            try {
+                val userId = authRepository.getCurrentUserId() ?: return@launch
+                val currentSession = sessionManager.getCurrentSession() ?: return@launch
+                
+                // 🔥 FIX: The exerciseId parameter should already be the canonical library ID
+                // since it comes from the exercise selection. Add logging to verify.
+                Timber.d("[PREV_SET_REFRESH_FIX] Refreshing previous data for canonical ID: '$exerciseId'")
+                
+                val request = PreviousSetDataRequest(
+                    userId = userId,
+                    exerciseId = exerciseId, // Should already be canonical library ID
+                    setNumber = 1,
+                    excludeWorkoutId = currentSession.id.value
+                )
+                
+                getPreviousSetDataUseCase(request).fold(
+                    onSuccess = { response ->
+                        val currentMap = _previousSetData.value.toMutableMap()
+                        if (response.hasPreviousData()) {
+                            currentMap[exerciseId] = response
+                        } else {
+                            currentMap.remove(exerciseId)
+                        }
+                        _previousSetData.value = currentMap
+                        
+                        Timber.d("Refreshed previous data for exercise $exerciseId")
+                    },
+                    onFailure = { error ->
+                        Timber.w("Failed to refresh previous data for exercise $exerciseId: ${error.message}")
+                    }
+                )
+                
+            } catch (e: Exception) {
+                Timber.e(e, "Error refreshing previous set data for exercise $exerciseId")
+            }
+        }
+    }
+
     /**
      * Removes a set from an exercise in the current session
      */

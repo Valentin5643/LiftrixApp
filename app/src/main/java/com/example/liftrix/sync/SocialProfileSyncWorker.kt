@@ -75,7 +75,10 @@ class SocialProfileSyncWorker @AssistedInject constructor(
             
             val forceSync = inputData.getBoolean("forceSync", false)
             
-            Timber.d("Starting social profile sync for user: $userId, forceSync: $forceSync")
+            Timber.i("[SOCIAL-SYNC] 🔄 Starting social profile sync for user: $userId")
+            Timber.d("[SOCIAL-SYNC]   - Force sync: $forceSync")
+            Timber.d("[SOCIAL-SYNC]   - Target collection: social_profiles")
+            Timber.d("[SOCIAL-SYNC]   - This sync makes user discoverable in search")
 
             val profile = socialProfileDao.getProfile(userId) 
                 ?: return@withContext Result.failure(
@@ -83,11 +86,14 @@ class SocialProfileSyncWorker @AssistedInject constructor(
                         .putString(KEY_ERROR_MESSAGE, "Social profile not found for user $userId")
                         .build()
                 ).also {
-                    Timber.e("Social profile not found in local DB for user: $userId")
+                    Timber.e("[SOCIAL-SYNC] ❌ Social profile not found in local DB for user: $userId")
+                    Timber.e("[SOCIAL-SYNC]   - User must create social profile first to be discoverable")
+                    Timber.e("[SOCIAL-SYNC]   - Check CreateSocialProfileUseCase execution")
                 }
             
             if (profile.isSynced && !forceSync) {
-                Timber.d("Profile already synced for user $userId, skipping")
+                Timber.d("[SOCIAL-SYNC] ✅ Profile already synced for user $userId, skipping")
+                Timber.d("[SOCIAL-SYNC]   - User should already be discoverable in search")
                 return@withContext Result.success(
                     Data.Builder()
                         .putInt(KEY_SYNC_COUNT, 0)
@@ -95,8 +101,20 @@ class SocialProfileSyncWorker @AssistedInject constructor(
                 )
             }
 
-            Timber.d("Profile found, syncing to Firebase for user $userId (forceSync: $forceSync)")
-            Timber.d("Profile data: username=${profile.username}, isPrivate=${profile.isPrivate}, hideFromSuggestions=${profile.hideFromSuggestions}")
+            Timber.i("[SOCIAL-SYNC] 📝 Profile found, syncing to Firebase for user: $userId")
+            Timber.d("[SOCIAL-SYNC]   - Username: '${profile.username}'")
+            Timber.d("[SOCIAL-SYNC]   - Display Name: '${profile.displayName}'")
+            Timber.d("[SOCIAL-SYNC]   - Is Private: ${profile.isPrivate}")
+            Timber.d("[SOCIAL-SYNC]   - Hide From Suggestions: ${profile.hideFromSuggestions}")
+            Timber.d("[SOCIAL-SYNC]   - Allow Friend Requests: ${profile.allowFriendRequests}")
+            
+            // Log discoverability status
+            val isDiscoverable = !profile.isPrivate && !profile.hideFromSuggestions
+            if (isDiscoverable) {
+                Timber.i("[SOCIAL-SYNC] ✅ Profile will be DISCOVERABLE after sync")
+            } else {
+                Timber.w("[SOCIAL-SYNC] ⚠️ Profile will NOT be discoverable (private: ${profile.isPrivate}, hidden: ${profile.hideFromSuggestions})")
+            }
             
             val docRef = firestore
                 .collection("social_profiles")
@@ -127,16 +145,24 @@ class SocialProfileSyncWorker @AssistedInject constructor(
                 "updatedAt" to FieldValue.serverTimestamp()
             )
             
+            Timber.d("[SOCIAL-SYNC] 📦 Uploading profile data to social_profiles/$userId")
+            Timber.d("[SOCIAL-SYNC]   - Profile fields: ${profileData.keys}")
             docRef.set(profileData, SetOptions.merge()).await()
+            Timber.i("[SOCIAL-SYNC] ✅ Profile data uploaded to Firebase")
             
             // Mark as synced in local database
+            Timber.d("[SOCIAL-SYNC] 📋 Updating local sync status for user: $userId")
             socialProfileDao.updateSyncStatus(
                 userId = userId,
                 isSynced = true,
                 version = System.currentTimeMillis().toInt()
             )
+            Timber.d("[SOCIAL-SYNC] ✅ Local sync status updated")
             
-            Timber.d("Successfully synced social profile and updated local sync status for user: $userId")
+            Timber.i("[SOCIAL-SYNC] ✅ Successfully synced social profile for user: $userId")
+            Timber.i("[SOCIAL-SYNC]   - User is now discoverable in search (if not private/hidden)")
+            Timber.i("[SOCIAL-SYNC]   - Profile available in social_profiles collection")
+            Timber.i("[SOCIAL-SYNC]   - Local sync status updated to prevent duplicate syncs")
             
             return@withContext Result.success(
                 Data.Builder()
@@ -145,11 +171,18 @@ class SocialProfileSyncWorker @AssistedInject constructor(
             )
             
         } catch (e: Exception) {
-            Timber.e(e, "SocialProfileSyncWorker failed for user ${inputData.getString("userId")}")
+            val userId = inputData.getString("userId") ?: "unknown"
+            Timber.e(e, "[SOCIAL-SYNC] ❌ SocialProfileSyncWorker failed for user: $userId")
+            Timber.e("[SOCIAL-SYNC]   - Error type: ${e.javaClass.simpleName}")
+            Timber.e("[SOCIAL-SYNC]   - User will remain undiscoverable until sync succeeds")
+            Timber.e("[SOCIAL-SYNC]   - Retry attempt: ${runAttemptCount + 1}/$MAX_RETRY_COUNT")
             
             return@withContext if (runAttemptCount < MAX_RETRY_COUNT) {
+                Timber.w("[SOCIAL-SYNC] 🔄 Retrying sync for user: $userId (attempt ${runAttemptCount + 1}/$MAX_RETRY_COUNT)")
                 Result.retry()
             } else {
+                Timber.e("[SOCIAL-SYNC] ❌ All retry attempts exhausted for user: $userId")
+                Timber.e("[SOCIAL-SYNC]   - User will remain undiscoverable until manual sync")
                 Result.failure(
                     Data.Builder()
                         .putString(KEY_ERROR_MESSAGE, e.message ?: "Unknown error")

@@ -63,9 +63,33 @@ class GetPublicProfileUseCase @Inject constructor(
             
             val profile = profileResult.getOrThrow()
             if (profile == null) {
-                return liftrixFailure(
-                    LiftrixError.NotFoundError("User profile not found or not public")
-                )
+                // Check if profile exists but is private by querying without privacy filtering
+                val profileExistsResult = userSearchRepository.profileExists(request.profileUserId)
+                val profileExists = profileExistsResult.getOrNull() == true
+                
+                if (profileExists) {
+                    return liftrixFailure(
+                        LiftrixError.BusinessLogicError(
+                            code = "PROFILE_PRIVATE",
+                            errorMessage = "This profile is private",
+                            analyticsContext = mapOf(
+                                "context" to "GetPublicProfileUseCase",
+                                "profileUserId" to request.profileUserId,
+                                "viewerId" to currentUserId
+                            )
+                        )
+                    )
+                } else {
+                    return liftrixFailure(
+                        LiftrixError.NotFoundError(
+                            errorMessage = "User profile not found",
+                            analyticsContext = mapOf(
+                                "context" to "GetPublicProfileUseCase",
+                                "profileUserId" to request.profileUserId
+                            )
+                        )
+                    )
+                }
             }
             
             // Track profile view if enabled

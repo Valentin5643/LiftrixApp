@@ -9,6 +9,7 @@ import com.example.liftrix.domain.model.analytics.MetricWidgetData
 import com.example.liftrix.domain.model.analytics.ChartWidgetData
 import com.example.liftrix.domain.model.analytics.ProgressWidgetData
 import com.example.liftrix.domain.model.analytics.AnalyticsWidgetData
+import com.example.liftrix.ui.common.extensions.getWeightUnitSymbolFromPreferences
 
 /**
  * Factory for creating dynamic widget instances based on widget type.
@@ -254,18 +255,23 @@ object WidgetFactory {
     
     /**
      * Gets clean unit for widget - consistent with FR-004 clean zero-state display
+     * Now supports dynamic weight units from coordinator preferences
      */
-    private fun getCleanUnitForWidget(widget: AnalyticsWidget): String {
+    private fun getCleanUnitForWidget(
+        widget: AnalyticsWidget,
+        coordinatorPreferences: Map<String, Any> = emptyMap()
+    ): String {
+        val weightUnitSymbol = getWeightUnitSymbolFromPreferences(coordinatorPreferences)
         return when (widget) {
             // Hidden widgets (for compatibility)
-            AnalyticsWidget.TotalVolume -> "kg"
+            AnalyticsWidget.TotalVolume -> weightUnitSymbol
             AnalyticsWidget.WorkoutStreak -> "days"
             AnalyticsWidget.AverageDuration -> "min"
             AnalyticsWidget.WorkoutFrequency -> "workouts"
             
             // Consolidated widgets - primary widgets
-            AnalyticsWidget.StrengthAnalytics -> "kg"
-            AnalyticsWidget.VolumeAnalytics -> "kg"
+            AnalyticsWidget.StrengthAnalytics -> weightUnitSymbol
+            AnalyticsWidget.VolumeAnalytics -> weightUnitSymbol
             
             // Other active widgets
             AnalyticsWidget.MuscleGroupDistribution -> "%"
@@ -275,12 +281,12 @@ object WidgetFactory {
             AnalyticsWidget.ProgressChart -> ""
             
             // Deprecated widgets (for compatibility)
-            AnalyticsWidget.StrengthProgress -> "kg"
+            AnalyticsWidget.StrengthProgress -> weightUnitSymbol
             AnalyticsWidget.PersonalRecords -> "records"
-            AnalyticsWidget.OneRMProgression -> "kg"
-            AnalyticsWidget.VolumeLoadProgression -> "kg"
-            AnalyticsWidget.VolumeTrends -> "kg"
-            AnalyticsWidget.VolumeChart -> "kg"
+            AnalyticsWidget.OneRMProgression -> weightUnitSymbol
+            AnalyticsWidget.VolumeLoadProgression -> weightUnitSymbol
+            AnalyticsWidget.VolumeTrends -> weightUnitSymbol
+            AnalyticsWidget.VolumeChart -> weightUnitSymbol
             
             else -> ""
         }

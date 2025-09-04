@@ -53,6 +53,7 @@ class ProfileRepositoryImpl @Inject constructor(
     override fun getProfile(userId: String): Flow<UserProfile?> {
         return flow {
             // 🔥 COLD START FIX: Ensure database is ready before profile operations
+            Timber.d("[PROFILE-REPO] 🔄 Getting profile for user: $userId")
             ensureDatabaseReady(userId)
             
             // Emit all values from the DAO flow
@@ -79,22 +80,52 @@ class ProfileRepositoryImpl @Inject constructor(
             }
             
             // Save to local database (offline-first)
+            Timber.d("[PROFILE-SAVE] 💾 Saving profile to local database for user: ${profile.userId}")
             val insertResult = userProfileDao.insertProfile(entity)
+            Timber.d("[PROFILE-SAVE]   - Database insert result: $insertResult")
+            Timber.d("[PROFILE-SAVE]   - Entity ID: ${entity.id}")
+            Timber.d("[PROFILE-SAVE]   - Is existing profile: ${existingEntity != null}")
             
-            // Verification to ensure database persistence
-            kotlinx.coroutines.delay(100L) // Allow database write to complete
+            // ONBOARDING FIX: Enhanced verification to ensure database persistence
+            kotlinx.coroutines.delay(200L) // Allow database write to complete
+            
+            // Force database sync to ensure data is committed
+            try {
+                forceDatabaseSync()
+            } catch (e: Exception) {
+                Timber.w(e, "Database sync failed during profile save verification")
+            }
+            
+            // Additional delay for filesystem operations
+            kotlinx.coroutines.delay(100L)
             
             val verifyEntity = userProfileDao.getProfileForUserSuspend(profile.userId)
             if (verifyEntity == null) {
+                Timber.e("[PROFILE-SAVE] ❌ Profile save verification failed - no entity found for user: ${profile.userId}")
+                Timber.e("[PROFILE-SAVE]   - Profile may not have been persisted to database")
+                Timber.e("[PROFILE-SAVE]   - User will not be discoverable until profile is saved")
                 return Result.failure(IllegalStateException("Profile save verification failed - data may not be persisted"))
+            } else {
+                Timber.d("[PROFILE-SAVE] ✅ Profile verification successful - entity found in database")
             }
+            
+            // Additional verification: Check that key fields match
+            if (verifyEntity.displayName != entity.displayName) {
+                Timber.e("[PROFILE-SAVE] ❌ Profile save verification failed - displayName mismatch for user: ${profile.userId}")
+                Timber.e("[PROFILE-SAVE]   - Expected: '${entity.displayName}'")
+                Timber.e("[PROFILE-SAVE]   - Found: '${verifyEntity.displayName}'")
+                return Result.failure(IllegalStateException("Profile save verification failed - data corruption detected"))
+            }
+            
+            Timber.d("[PROFILE-SAVE] ✅ Profile save verification passed for user: ${profile.userId}")
             
             // ONBOARDING FIX: Check if this is an initial profile save (during onboarding)
             val isOnboardingProfile = existingEntity == null || profile.completedAt != null
             
             if (isOnboardingProfile) {
                 // For onboarding profiles, trigger immediate sync to ensure data availability
-                Timber.d("Onboarding profile detected - triggering immediate sync for user: ${profile.userId}")
+                Timber.i("[PROFILE-SAVE] 🏁 Onboarding profile detected - triggering immediate sync for user: ${profile.userId}")
+                Timber.d("[PROFILE-SAVE]   - Profile will sync to Firebase for discoverability")
                 
                 // Queue sync first
                 queueSync(profile.userId)
@@ -103,19 +134,24 @@ class ProfileRepositoryImpl @Inject constructor(
                 try {
                     val immediateSync = syncNow(profile.userId)
                     if (immediateSync.isSuccess) {
-                        Timber.d("Onboarding profile synced immediately for user: ${profile.userId}")
+                        Timber.i("[PROFILE-SAVE] ✅ Onboarding profile synced immediately for user: ${profile.userId}")
+                        Timber.i("[PROFILE-SAVE]   - User should now be discoverable in search")
                     } else {
-                        Timber.w("Immediate sync failed for onboarding profile, will retry in background: ${profile.userId}")
+                        Timber.w("[PROFILE-SAVE] ⚠️ Immediate sync failed for onboarding profile: ${profile.userId}")
+                        Timber.w("[PROFILE-SAVE]   - User may not be discoverable until background sync completes")
                     }
                 } catch (syncError: Exception) {
                     Timber.w(syncError, "Non-critical: Immediate sync failed, queued for background sync")
                 }
             } else {
                 // For regular updates, just queue sync in background
+                Timber.d("[PROFILE-SAVE] 📦 Regular profile update - queuing background sync for user: ${profile.userId}")
                 queueSync(profile.userId)
             }
             
-            Timber.d("User profile saved successfully: ${profile.userId} (${if (existingEntity != null) "updated" else "created"})")
+            Timber.i("[PROFILE-SAVE] ✅ User profile saved successfully: ${profile.userId} (${if (existingEntity != null) "updated" else "created"})")
+            Timber.i("[PROFILE-SAVE]   - Profile is ready for sync to Firebase")
+            Timber.i("[PROFILE-SAVE]   - User will be discoverable once sync completes")
             Result.success(Unit)
             
         } catch (e: Exception) {
@@ -227,6 +263,7 @@ class ProfileRepositoryImpl @Inject constructor(
                 )
                 
                 // Queue in offline manager
+                Timber.d("[PROFILE-SYNC] 📦 Queuing UPSERT operation for profile $userId")
                 val queueResult = offlineQueueManager.queueOperation(
                     userId = userId,
                     entityType = "PROFILE",
@@ -234,6 +271,12 @@ class ProfileRepositoryImpl @Inject constructor(
                     operation = "UPSERT",
                     data = profilePayload
                 )
+                
+                if (queueResult.isSuccess) {
+                    Timber.d("[PROFILE-SYNC] ✅ Profile operation successfully queued for user $userId")
+                } else {
+                    Timber.e("[PROFILE-SYNC] ❌ Failed to queue profile operation: ${queueResult.exceptionOrNull()?.message}")
+                }
                 
                 if (queueResult.isSuccess) {
                     // Trigger sync coordinator
@@ -244,25 +287,25 @@ class ProfileRepositoryImpl @Inject constructor(
                     val publicSyncResult = syncCoordinator.triggerEntitySync(userId, "user_public")
                     
                     if (syncResult.isSuccess) {
-                        Timber.d("Successfully queued and triggered profile sync for user: $userId")
+                        Timber.i("[PROFILE-SYNC] ✅ Successfully queued and triggered profile sync for user: $userId")
                         if (publicSyncResult.isSuccess) {
-                            Timber.d("Also triggered public profile sync for searchability")
+                            Timber.i("[PROFILE-SYNC]   - Also triggered public profile sync for searchability")
                         } else {
-                            Timber.w("Profile sync succeeded but public sync failed: ${publicSyncResult.exceptionOrNull()?.message}")
+                            Timber.w("[PROFILE-SYNC]   - Profile sync succeeded but public sync failed: ${publicSyncResult.exceptionOrNull()?.message}")
                         }
                         Result.success(Unit)
                     } else {
                         val error = syncResult.exceptionOrNull()
-                        Timber.w("Profile queued but sync trigger failed: ${error?.message}")
+                        Timber.w("[PROFILE-SYNC] ⚠️ Profile queued but sync trigger failed: ${error?.message}")
                         Result.success(Unit) // Still success since queued
                     }
                 } else {
                     val error = queueResult.exceptionOrNull()
-                    Timber.e("Failed to queue profile for sync: ${error?.message}")
+                    Timber.e("[PROFILE-SYNC] ❌ Failed to queue profile for sync: ${error?.message}")
                     Result.failure(error ?: Exception("Unknown queue error"))
                 }
             } else {
-                Timber.d("Profile already synced or not found for user: $userId")
+                Timber.d("[PROFILE-SYNC] ✅ Profile already synced or not found for user: $userId")
                 Result.success(Unit)
             }
         } catch (e: Exception) {
@@ -307,6 +350,7 @@ class ProfileRepositoryImpl @Inject constructor(
     override suspend fun getUserProfile(userId: String): LiftrixResult<UserProfile?> {
         return try {
             // 🔥 COLD START FIX: Ensure database is ready before profile operations
+            Timber.d("[PROFILE-GET] 🔄 Getting enhanced user profile for: $userId")
             ensureDatabaseReady(userId)
             
             val entity = userProfileDao.getProfileForUserSuspend(userId)
@@ -377,7 +421,8 @@ class ProfileRepositoryImpl @Inject constructor(
             // Queue sync in background
             queueSync(profile.userId)
             
-            Timber.d("Enhanced user profile saved successfully: ${profile.userId} (${if (existingEntity != null) "updated" else "created"})")
+            Timber.i("[PROFILE-ENHANCED] ✅ Enhanced user profile saved successfully: ${profile.userId} (${if (existingEntity != null) "updated" else "created"})")
+            Timber.i("[PROFILE-ENHANCED]   - Profile ready for social features and search")
             liftrixSuccess(Unit)
             
         } catch (e: Exception) {

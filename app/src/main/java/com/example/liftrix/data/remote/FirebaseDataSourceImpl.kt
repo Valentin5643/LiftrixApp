@@ -52,7 +52,19 @@ class FirebaseDataSourceImpl @Inject constructor(
             val documentRef = getDocumentReference(userId, entityType, entityId)
             val documentData = parseJsonToMap(data)
             
-            // Check if document already exists (conflict detection)
+            // 🔥 PROFILE SYNC CONFLICT FIX: Handle profile entities with UPSERT semantics
+            // Profile entities should use merge behavior instead of strict CREATE conflict detection
+            if (entityType == "PROFILE") {
+                Timber.d("FirebaseDataSource: Using UPSERT semantics for profile $entityId")
+                
+                // Use SetOptions.merge() for profile documents to avoid conflicts during account creation
+                documentRef.set(documentData, com.google.firebase.firestore.SetOptions.merge()).await()
+                
+                Timber.d("FirebaseDataSource: Successfully upserted profile $entityId")
+                return ProcessResult.Success
+            }
+            
+            // For non-profile entities, maintain existing conflict detection behavior
             val existingDoc = documentRef.get().await()
             if (existingDoc.exists()) {
                 Timber.w("FirebaseDataSource: Document already exists for $entityType:$entityId")

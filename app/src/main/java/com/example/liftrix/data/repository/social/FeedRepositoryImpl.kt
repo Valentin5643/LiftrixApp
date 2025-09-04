@@ -14,6 +14,7 @@ import com.example.liftrix.data.local.dao.SocialProfileDao
 import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.local.dao.FeedCacheDao
 import com.example.liftrix.data.local.dao.FollowRelationshipDao
+import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.mapper.WorkoutPostMapper
 import com.example.liftrix.data.paging.FeedRemoteMediator
 import com.example.liftrix.data.paging.StableFeedPagingSource
@@ -52,6 +53,7 @@ class FeedRepositoryImpl @Inject constructor(
     private val postLikeDao: PostLikeDao,
     private val savedPostDao: SavedPostDao,
     private val socialProfileDao: SocialProfileDao,
+    private val userProfileDao: UserProfileDao,
     private val workoutDao: WorkoutDao,
     private val workoutPostMapper: WorkoutPostMapper,
     private val feedCacheService: FeedCacheService,
@@ -567,38 +569,95 @@ class FeedRepositoryImpl @Inject constructor(
     
     /**
      * Enhances post entity with user interaction data and author information
+     * Auto-creates social profiles when missing to ensure posts always have profile data
      */
     private suspend fun enhanceWithUserData(entity: com.example.liftrix.data.local.entity.WorkoutPostEntity, viewerId: String): WorkoutPost {
         // Get user interaction data
         val isLiked = postLikeDao.isPostLikedByUser(entity.id, viewerId)
         val isSaved = savedPostDao.isPostSaved(viewerId, entity.id)
         
-        // Get author profile information - log error but don't crash
-        val authorProfile = socialProfileDao.getSocialProfileByUserId(entity.userId)
+        // Get or create author profile information with comprehensive logging
+        var authorProfile = socialProfileDao.getSocialProfileByUserId(entity.userId)
         
         if (authorProfile == null) {
-            Timber.e("PROFILE_MISSING: Social profile not found for user ${entity.userId} in post ${entity.id}")
+            Timber.e("🔥 PROFILE_MISSING: Social profile not found for user ${entity.userId} in post ${entity.id}")
+            Timber.i("🔄 AUTO_PROFILE_CREATE: Creating fallback social profile for user ${entity.userId}")
+            
+            // Auto-create a basic social profile to fix missing profiles
+            authorProfile = createFallbackSocialProfile(entity.userId)
+            
+            if (authorProfile != null) {
+                Timber.i("✅ AUTO_PROFILE_SUCCESS: Created social profile for user ${entity.userId}, hasPhoto: ${authorProfile.profilePhotoUrl != null}")
+            } else {
+                Timber.e("❌ AUTO_PROFILE_FAILED: Could not create social profile for user ${entity.userId}")
+            }
         } else {
             // Fix empty string profile photo URLs by converting them to null
             val cleanedPhotoUrl = authorProfile.profilePhotoUrl?.takeIf { it.isNotBlank() }
             if (authorProfile.profilePhotoUrl != cleanedPhotoUrl) {
-                Timber.w("PROFILE_FIX: Converting empty profile photo URL to null for user ${entity.userId}")
+                Timber.w("🔧 PROFILE_FIX: Converting empty profile photo URL to null for user ${entity.userId}")
                 try {
                     socialProfileDao.updateProfile(authorProfile.copy(profilePhotoUrl = cleanedPhotoUrl))
+                    authorProfile = authorProfile.copy(profilePhotoUrl = cleanedPhotoUrl)
                 } catch (e: Exception) {
                     Timber.e(e, "Failed to update profile photo URL for user ${entity.userId}")
                 }
             }
-            Timber.d("Enhanced post ${entity.id} with profile: ${authorProfile.username}, photo: ${cleanedPhotoUrl}")
+            
+            // 🔍 DIAGNOSTIC & FIX: Check for profile photo sync mismatch and auto-fix
+            try {
+                val mainProfilePhoto = userProfileDao.getProfileImageUrl(entity.userId)
+                if (mainProfilePhoto != null && cleanedPhotoUrl == null) {
+                    Timber.e("[PROFILE-PHOTO-SYNC-MISMATCH] User ${entity.userId} has main profile photo but social profile photo is null")
+                    Timber.e("[PROFILE-PHOTO-SYNC-MISMATCH] Main: $mainProfilePhoto, Social: null - attempting immediate fix")
+                    
+                    // 🚀 IMMEDIATE FIX: Sync main profile photo to social profile
+                    try {
+                        val updatedAt = System.currentTimeMillis()
+                        val rowsUpdated = socialProfileDao.updateProfilePhoto(entity.userId, mainProfilePhoto, updatedAt)
+                        
+                        if (rowsUpdated > 0) {
+                            Timber.i("[PROFILE-PHOTO-SYNC-FIX] ✅ Auto-synced profile photo for user ${entity.userId}")
+                            
+                            // Update the current authorProfile object to reflect the fix
+                            authorProfile = authorProfile?.copy(profilePhotoUrl = mainProfilePhoto)
+                            
+                            // Trigger social profile sync to Firebase
+                            try {
+                                val socialSyncRequest = com.example.liftrix.sync.SocialProfileSyncWorker.createWorkRequest(entity.userId, forceSync = true)
+                                androidx.work.WorkManager.getInstance(context).enqueue(socialSyncRequest)
+                                Timber.d("[PROFILE-PHOTO-SYNC-FIX] Social profile sync to Firebase triggered")
+                            } catch (e: Exception) {
+                                Timber.e(e, "[PROFILE-PHOTO-SYNC-FIX] Failed to trigger Firebase sync")
+                            }
+                        } else {
+                            Timber.w("[PROFILE-PHOTO-SYNC-FIX] No social profile rows updated - profile may not exist")
+                        }
+                    } catch (e: Exception) {
+                        Timber.e(e, "[PROFILE-PHOTO-SYNC-FIX] Failed to auto-sync profile photo for user ${entity.userId}")
+                    }
+                }
+                Timber.d("📝 PROFILE_ENHANCED: Post ${entity.id} enhanced with profile: ${authorProfile?.username}, photo: ${authorProfile?.profilePhotoUrl ?: "null"}, mainPhoto: ${mainProfilePhoto ?: "null"}")
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to check main profile photo for sync mismatch diagnosis")
+                Timber.d("📝 PROFILE_ENHANCED: Post ${entity.id} enhanced with profile: ${authorProfile?.username}, photo: ${authorProfile?.profilePhotoUrl ?: "null"}")
+            }
         }
+        
+        // Final validation and logging
+        val finalUsername = authorProfile?.username ?: "user${entity.userId.take(8)}"
+        val finalDisplayName = authorProfile?.displayName ?: "Anonymous User"
+        val finalPhotoUrl = authorProfile?.profilePhotoUrl?.takeIf { it.isNotBlank() }
+        
+        Timber.d("📤 POST_ENHANCED: Post ${entity.id} final data - username: $finalUsername, displayName: $finalDisplayName, hasPhoto: ${finalPhotoUrl != null}")
         
         return workoutPostMapper.toDomain(
             entity = entity,
             isLikedByViewer = isLiked,
             isSavedByViewer = isSaved,
-            authorUsername = authorProfile?.username ?: "ERROR_NO_PROFILE",
-            authorDisplayName = authorProfile?.displayName ?: "Missing Profile",
-            authorProfilePhotoUrl = authorProfile?.profilePhotoUrl?.takeIf { it.isNotBlank() }
+            authorUsername = finalUsername,
+            authorDisplayName = finalDisplayName,
+            authorProfilePhotoUrl = finalPhotoUrl
         )
     }
     
@@ -737,5 +796,156 @@ class FeedRepositoryImpl @Inject constructor(
             limit = pageSize,
             offset = offset
         )
+    }
+    
+    /**
+     * Creates a fallback social profile for users who don't have one yet
+     * This ensures posts always have profile information available
+     * Syncs data from main user profile when available
+     */
+    private suspend fun createFallbackSocialProfile(userId: String): com.example.liftrix.data.local.entity.SocialProfileEntity? {
+        return try {
+            // Try to get main user profile information for better fallback data
+            val userProfile = try {
+                userProfileDao.getProfileForUserSuspend(userId)
+            } catch (e: Exception) {
+                Timber.w(e, "Could not load main user profile for $userId")
+                null
+            }
+            
+            // Always try to get the latest profile photo from main profile
+            val mainProfilePhotoUrl = try {
+                userProfileDao.getProfileImageUrl(userId)
+            } catch (e: Exception) {
+                Timber.w(e, "Could not load profile image URL for $userId")
+                userProfile?.profileImageUrl
+            }
+            
+            Timber.d("🎆 FALLBACK_PROFILE_DATA: user=$userId, hasMainProfile=${userProfile != null}, mainPhoto=${mainProfilePhotoUrl ?: "null"}")
+            
+            val now = System.currentTimeMillis()
+            val fallbackUsername = generateUniqueUsername(userId)
+            
+            val fallbackProfile = com.example.liftrix.data.local.entity.SocialProfileEntity(
+                userId = userId,
+                username = fallbackUsername,
+                displayName = userProfile?.displayName ?: "Liftrix User",
+                bio = null,
+                profilePhotoUrl = mainProfilePhotoUrl ?: userProfile?.profileImageUrl, // Use latest photo from main profile
+                coverPhotoUrl = null,
+                workoutCount = 0,
+                followerCount = 0,
+                followingCount = 0,
+                memberSince = userProfile?.createdAt?.let { java.time.ZoneOffset.UTC.let { zone -> it.atZone(zone).toInstant().toEpochMilli() } } ?: now,
+                lastActive = now,
+                isVerified = false,
+                isPrivate = false, // Default to public for discoverability
+                hideFromSuggestions = false,
+                allowFriendRequests = true,
+                instagramHandle = null,
+                youtubeChannel = null,
+                personalWebsite = null,
+                createdAt = userProfile?.createdAt?.let { java.time.ZoneOffset.UTC.let { zone -> it.atZone(zone).toInstant().toEpochMilli() } } ?: now,
+                updatedAt = now,
+                isSynced = false,
+                syncVersion = 0
+            )
+            
+            // Insert the fallback profile
+            socialProfileDao.insertProfile(fallbackProfile)
+            Timber.i("🎆 FALLBACK_CREATED: Social profile for user $userId with username: ${fallbackProfile.username}, hasPhoto: ${fallbackProfile.profilePhotoUrl != null}")
+            
+            // Trigger sync to Firebase to make it searchable
+            try {
+                val socialProfileSyncRequest = com.example.liftrix.sync.SocialProfileSyncWorker.createWorkRequest(userId, forceSync = true)
+                androidx.work.WorkManager.getInstance(context).enqueue(socialProfileSyncRequest)
+                Timber.d("🔄 SYNC_QUEUED: Social profile sync enqueued for user $userId")
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to enqueue social profile sync for user $userId")
+            }
+            
+            fallbackProfile
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to create fallback social profile for user $userId")
+            null
+        }
+    }
+    
+    /**
+     * Generates a unique username based on userId to avoid collisions
+     */
+    private suspend fun generateUniqueUsername(userId: String): String {
+        val baseUsername = "user${userId.take(8)}"
+        var username = baseUsername
+        var suffix = 1
+        
+        // Ensure username is unique by checking existing profiles
+        while (!socialProfileDao.isUsernameAvailable(username)) {
+            username = "${baseUsername}_${suffix}"
+            suffix++
+            // Prevent infinite loop
+            if (suffix > 100) {
+                username = "${baseUsername}_${System.currentTimeMillis().toString().takeLast(6)}"
+                break
+            }
+        }
+        
+        return username
+    }
+    
+    /**
+     * Diagnostic method to log comprehensive profile information for debugging
+     * Call this when investigating profile loading issues
+     */
+    suspend fun diagnoseProfileLoadingIssues(userId: String): String {
+        val report = StringBuilder()
+        report.appendLine("🔍 PROFILE_DIAGNOSIS for user: $userId")
+        report.appendLine("=" .repeat(50))
+        
+        try {
+            // Check social profile
+            val socialProfile = socialProfileDao.getSocialProfileByUserId(userId)
+            if (socialProfile != null) {
+                report.appendLine("✅ SOCIAL_PROFILE: Found")
+                report.appendLine("   - username: ${socialProfile.username}")
+                report.appendLine("   - displayName: ${socialProfile.displayName}")
+                report.appendLine("   - profilePhotoUrl: ${socialProfile.profilePhotoUrl}")
+                report.appendLine("   - hasPhoto: ${!socialProfile.profilePhotoUrl.isNullOrBlank()}")
+                report.appendLine("   - createdAt: ${socialProfile.createdAt}")
+                report.appendLine("   - isPrivate: ${socialProfile.isPrivate}")
+                report.appendLine("   - isSynced: ${socialProfile.isSynced}")
+            } else {
+                report.appendLine("❌ SOCIAL_PROFILE: NOT FOUND")
+            }
+            
+            // Check main user profile
+            val userProfile = userProfileDao.getProfileForUserSuspend(userId)
+            if (userProfile != null) {
+                report.appendLine("✅ USER_PROFILE: Found")
+                report.appendLine("   - displayName: ${userProfile.displayName}")
+                report.appendLine("   - displayName: ${userProfile.displayName}")
+                report.appendLine("   - profileImageUrl: ${userProfile.profileImageUrl}")
+                report.appendLine("   - hasPhoto: ${!userProfile.profileImageUrl.isNullOrBlank()}")
+            } else {
+                report.appendLine("❌ USER_PROFILE: NOT FOUND")
+            }
+            
+            // Check posts count
+            val postCount = workoutPostDao.getUserPostCount(userId)
+            report.appendLine("📊 POSTS_COUNT: $postCount")
+            
+            // Check total social profiles count
+            val totalSocialProfiles = socialProfileDao.getTotalProfileCount()
+            report.appendLine("📋 TOTAL_SOCIAL_PROFILES: $totalSocialProfiles")
+            
+        } catch (e: Exception) {
+            report.appendLine("⚠️ DIAGNOSIS_ERROR: ${e.message}")
+            Timber.e(e, "Failed to diagnose profile issues for user $userId")
+        }
+        
+        report.appendLine("=" .repeat(50))
+        val reportString = report.toString()
+        Timber.w(reportString)
+        return reportString
     }
 }

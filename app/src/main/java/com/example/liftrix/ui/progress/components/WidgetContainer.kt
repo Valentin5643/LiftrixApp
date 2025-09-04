@@ -75,6 +75,10 @@ import com.example.liftrix.ui.accessibility.TalkBackAnnouncements
 import com.example.liftrix.ui.performance.PerformanceTracker
 import com.example.liftrix.core.extensions.WidgetPerformanceExt
 import com.example.liftrix.BuildConfig
+import com.example.liftrix.ui.common.extensions.getWeightUnitFromPreferences
+import com.example.liftrix.ui.common.extensions.getWeightUnitSymbolFromPreferences
+import com.example.liftrix.domain.service.UnitConversionService
+import com.example.liftrix.domain.model.WeightUnit
 
 // Import chart types for widget rendering
 import com.example.liftrix.ui.progress.components.ProgressChart
@@ -86,21 +90,7 @@ import com.example.liftrix.ui.progress.components.widgets.*
 
 // WidgetLayoutMode is now imported from the proper file
 
-/**
- * Container component for organizing analytics dashboard widgets.
- * 
- * Provides flexible layout management with responsive design,
- * collapsible sections, drag-and-drop widget reordering, and 
- * Hevy-inspired organizational patterns. Supports grid, staggered, 
- * list, and sectioned layouts with smooth animations and accessibility compliance.
- * 
- * Enhanced with drag-and-drop functionality for widget reordering with:
- * - Material 3 visual feedback during drag operations
- * - Haptic feedback for drag start, snap-to-grid, and drop operations  
- * - Accessibility support with alternative reorder methods
- * - Performance optimization for 60fps during gesture tracking
- * - Immediate persistence of widget preference changes
- */
+
 @Composable
 fun WidgetContainer(
     widgets: List<AnalyticsWidget>,
@@ -113,7 +103,9 @@ fun WidgetContainer(
     isLoading: Boolean = false,
     enableCollapsibleSections: Boolean = true,
     enableDragAndDrop: Boolean = true,
-    windowSizeClass: WindowSizeClass = rememberWindowSizeClass()
+    windowSizeClass: WindowSizeClass = rememberWindowSizeClass(),
+    coordinatorPreferences: Map<String, Any> = emptyMap(),
+    unitConversionService: UnitConversionService? = null
 ) {
     // Performance optimization: memoize expensive calculations
     val columnsCount by rememberDerivedStateOf { 
@@ -149,7 +141,7 @@ fun WidgetContainer(
                     onWidgetClick = onWidgetClick,
                     widgetDataCache = widgetDataCache,
                     isLoading = isLoading,
-                    windowSizeClass = windowSizeClass
+                    windowSizeClass = windowSizeClass,
                 )
             }
         }
@@ -174,7 +166,7 @@ fun WidgetContainer(
                     modifier = modifier,
                     onWidgetClick = onWidgetClick,
                     widgetDataProvider = widgetDataProvider,
-                    isLoading = isLoading
+                    isLoading = isLoading,
                 )
             }
         }
@@ -187,7 +179,7 @@ fun WidgetContainer(
                 modifier = modifier,
                 onWidgetClick = onWidgetClick,
                 widgetDataProvider = widgetDataProvider,
-                isLoading = isLoading
+                isLoading = isLoading,
             )
         }
         
@@ -203,7 +195,7 @@ fun WidgetContainer(
                     windowSizeClass.widthDp.value >= 600,
                 enableDragAndDrop = enableDragAndDrop,
                 isLoading = isLoading,
-                windowSizeClass = windowSizeClass
+                windowSizeClass = windowSizeClass,
             )
         }
     }
@@ -217,7 +209,9 @@ private fun GridLayout(
     onWidgetClick: (AnalyticsWidget) -> Unit,
     widgetDataCache: Map<AnalyticsWidget, WidgetData>,
     isLoading: Boolean,
-    windowSizeClass: WindowSizeClass = rememberWindowSizeClass()
+    windowSizeClass: WindowSizeClass = rememberWindowSizeClass(),
+    coordinatorPreferences: Map<String, Any> = emptyMap(),
+    unitConversionService: UnitConversionService? = null
 ) {
     val spacing = when {
         windowSizeClass.widthDp.value < 400 -> 8.dp
@@ -249,6 +243,8 @@ private fun GridLayout(
                 widgetData = widgetData,
                 onClick = { onWidgetClick(widget) },
                 isLoading = isLoading,
+                coordinatorPreferences = coordinatorPreferences,
+                unitConversionService = unitConversionService,
                 aspectRatio = aspectRatio
             )
         }
@@ -262,7 +258,9 @@ private fun StaggeredLayout(
     modifier: Modifier = Modifier,
     onWidgetClick: (AnalyticsWidget) -> Unit,
     widgetDataProvider: (AnalyticsWidget) -> WidgetData,
-    isLoading: Boolean
+    isLoading: Boolean,
+    coordinatorPreferences: Map<String, Any> = emptyMap(),
+    unitConversionService: UnitConversionService? = null
 ) {
     LazyVerticalStaggeredGrid(
         columns = StaggeredGridCells.Fixed(columnsCount),
@@ -282,6 +280,8 @@ private fun StaggeredLayout(
                 widgetData = widgetData,
                 onClick = { onWidgetClick(widget) },
                 isLoading = isLoading,
+                coordinatorPreferences = coordinatorPreferences,
+                unitConversionService = unitConversionService,
                 aspectRatio = aspectRatio
             )
         }
@@ -294,7 +294,9 @@ private fun ListLayout(
     modifier: Modifier = Modifier,
     onWidgetClick: (AnalyticsWidget) -> Unit,
     widgetDataProvider: (AnalyticsWidget) -> WidgetData,
-    isLoading: Boolean
+    isLoading: Boolean,
+    coordinatorPreferences: Map<String, Any> = emptyMap(),
+    unitConversionService: UnitConversionService? = null
 ) {
     Column(
         modifier = modifier
@@ -313,6 +315,8 @@ private fun ListLayout(
                 widgetData = widgetData,
                 onClick = { onWidgetClick(widget) },
                 isLoading = isLoading,
+                coordinatorPreferences = coordinatorPreferences,
+                unitConversionService = unitConversionService,
                 aspectRatio = aspectRatio
             )
         }
@@ -330,7 +334,9 @@ private fun SectionedLayout(
     enableCollapsibleSections: Boolean,
     enableDragAndDrop: Boolean = false,
     isLoading: Boolean,
-    windowSizeClass: WindowSizeClass = rememberWindowSizeClass()
+    windowSizeClass: WindowSizeClass = rememberWindowSizeClass(),
+    coordinatorPreferences: Map<String, Any> = emptyMap(),
+    unitConversionService: UnitConversionService? = null
 ) {
     // Use the enhanced responsive grid with collapsible sections
     EnhancedResponsiveGrid(
@@ -366,6 +372,8 @@ private fun WidgetSection(
     isCollapsible: Boolean,
     enableDragAndDrop: Boolean = false,
     isLoading: Boolean,
+    coordinatorPreferences: Map<String, Any> = emptyMap(),
+    unitConversionService: UnitConversionService? = null,
     modifier: Modifier = Modifier
 ) {
     var isExpanded by remember { mutableStateOf(true) }
@@ -467,6 +475,8 @@ private fun WidgetSection(
                             widgetData = widgetData,
                             onClick = { onWidgetClick(widget) },
                             isLoading = isLoading,
+                            coordinatorPreferences = coordinatorPreferences,
+                            unitConversionService = unitConversionService,
                             aspectRatio = aspectRatio
                         )
                     }
@@ -482,9 +492,13 @@ internal fun WidgetRenderer(
     widgetData: WidgetData,
     onClick: () -> Unit,
     isLoading: Boolean,
+    coordinatorPreferences: Map<String, Any> = emptyMap(),
+    unitConversionService: UnitConversionService? = null,
     modifier: Modifier = Modifier,
     aspectRatio: Float = 1.1f  // Dynamic aspect ratio based on layout context
 ) {
+    // Get dynamic weight unit symbol from coordinator preferences
+    val weightUnitSymbol = getWeightUnitSymbolFromPreferences(coordinatorPreferences)
     // Render appropriate widget component based on widget type
     when (widget) {
         AnalyticsWidget.TotalVolume -> {
@@ -499,7 +513,7 @@ internal fun WidgetRenderer(
                     isLoading = isLoading,
                     error = null,
                     primaryValue = basic.primaryValue,
-                    unit = "kg",
+                    unit = weightUnitSymbol,
                     secondaryValue = basic.secondaryValue ?: "",
                     trend = basic.trend ?: TrendDirection.STABLE,
                     trendPercentage = 0f,
@@ -513,8 +527,8 @@ internal fun WidgetRenderer(
                     lastUpdated = chart.lastUpdated,
                     isLoading = chart.isLoading,
                     error = null,
-                    primaryValue = "${totalVolume} kg",
-                    unit = "kg",
+                    primaryValue = "${totalVolume} ${weightUnitSymbol}",
+                    unit = weightUnitSymbol,
                     secondaryValue = chart.timeRange,
                     trend = chart.summary?.trend ?: TrendDirection.STABLE,
                     trendPercentage = chart.summary?.changePercentage ?: 0f,
@@ -653,7 +667,7 @@ internal fun WidgetRenderer(
                     isLoading = isLoading,
                     error = null,
                     primaryValue = basic.primaryValue,
-                    unit = "kg",
+                    unit = weightUnitSymbol,
                     secondaryValue = basic.secondaryValue ?: "",
                     trend = basic.trend ?: TrendDirection.STABLE,
                     trendPercentage = 0f,
@@ -702,7 +716,7 @@ internal fun WidgetRenderer(
                     isLoading = isLoading,
                     error = null,
                     primaryValue = basic.primaryValue,
-                    unit = "kg",
+                    unit = weightUnitSymbol,
                     secondaryValue = basic.secondaryValue ?: "",
                     trend = basic.trend ?: TrendDirection.STABLE,
                     trendPercentage = 0f,
@@ -716,8 +730,8 @@ internal fun WidgetRenderer(
                     lastUpdated = chart.lastUpdated,
                     isLoading = chart.isLoading,
                     error = null,
-                    primaryValue = "$currentOneRM kg",
-                    unit = "kg",
+                    primaryValue = "$currentOneRM ${weightUnitSymbol}",
+                    unit = weightUnitSymbol,
                     secondaryValue = chart.timeRange,
                     trend = chart.summary.trend,
                     trendPercentage = chart.summary.changePercentage,
@@ -751,7 +765,7 @@ internal fun WidgetRenderer(
                     isLoading = isLoading,
                     error = null,
                     primaryValue = basic.primaryValue,
-                    unit = "kg",
+                    unit = weightUnitSymbol,
                     secondaryValue = basic.secondaryValue ?: "",
                     trend = basic.trend ?: TrendDirection.STABLE,
                     trendPercentage = 0f,
@@ -765,8 +779,8 @@ internal fun WidgetRenderer(
                     lastUpdated = chart.lastUpdated,
                     isLoading = chart.isLoading,
                     error = null,
-                    primaryValue = "${totalVolume} kg",
-                    unit = "kg",
+                    primaryValue = "${totalVolume} ${weightUnitSymbol}",
+                    unit = weightUnitSymbol,
                     secondaryValue = chart.timeRange,
                     trend = chart.summary?.trend ?: TrendDirection.STABLE,
                     trendPercentage = chart.summary?.changePercentage ?: 0f,
@@ -827,7 +841,7 @@ internal fun WidgetRenderer(
                     isLoading = isLoading,
                     error = null,
                     primaryValue = basic.primaryValue,
-                    unit = "kg",
+                    unit = weightUnitSymbol,
                     secondaryValue = basic.secondaryValue ?: "",
                     trend = basic.trend ?: TrendDirection.STABLE,
                     trendPercentage = 0f,
@@ -909,7 +923,7 @@ internal fun WidgetRenderer(
                     isLoading = isLoading,
                     error = null,
                     primaryValue = basic.primaryValue,
-                    unit = "kg",
+                    unit = weightUnitSymbol,
                     secondaryValue = basic.secondaryValue ?: "",
                     trend = basic.trend ?: TrendDirection.STABLE,
                     trendPercentage = 0f,
@@ -1030,9 +1044,9 @@ private fun createSampleWidgetData(widget: AnalyticsWidget): WidgetData {
         AnalyticsWidget.TotalVolume -> BasicWidgetData(
             widgetType = widget,
             lastUpdated = kotlinx.datetime.Clock.System.now(),
-            primaryValue = "2,847 kg",
+            primaryValue = "2,847 ${WeightUnit.getSystemDefault().symbol}",
             secondaryValue = "This week",
-            unit = "kg",
+            unit = WeightUnit.getSystemDefault().symbol,
             trend = TrendDirection.UP
         )
         AnalyticsWidget.WorkoutFrequency -> BasicWidgetData(
@@ -1078,7 +1092,7 @@ private fun createSampleChartData(widget: AnalyticsWidget): ChartData {
         dataPoints = emptyList(), // Sample data would be provided by ViewModel
         title = widget.displayName,
         valueUnit = when (widget) {
-            AnalyticsWidget.TotalVolume, AnalyticsWidget.VolumeLoadProgression -> "kg"
+            AnalyticsWidget.TotalVolume, AnalyticsWidget.VolumeLoadProgression -> WeightUnit.getSystemDefault().symbol
             AnalyticsWidget.AverageDuration -> "min"
             else -> ""
         },

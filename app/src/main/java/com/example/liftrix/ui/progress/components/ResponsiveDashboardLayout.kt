@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.DashboardConfiguration
 import com.example.liftrix.domain.model.analytics.WidgetData
+import com.example.liftrix.domain.model.WeightUnit
 import com.example.liftrix.ui.common.WindowSizeClass
 import com.example.liftrix.ui.common.rememberWindowSizeClass
 import com.example.liftrix.ui.components.layouts.GridSystem
@@ -70,7 +71,9 @@ fun ResponsiveDashboardLayout(
     windowSizeClass: WindowSizeClass = rememberWindowSizeClass(),
     emptyStateMessage: String = "No widgets to display",
     onAddWidgets: (() -> Unit)? = null,
-    onSaveCustomLayout: ((List<String>) -> Unit)? = null
+    onSaveCustomLayout: ((List<String>) -> Unit)? = null,
+    coordinatorPreferences: Map<String, Any> = emptyMap(),
+    unitConversionService: com.example.liftrix.domain.service.UnitConversionService? = null
 ) {
     // Determine optimal layout mode considering widget categories (FR-003)
     val effectiveLayoutMode = if (layoutMode == DomainDashboardLayoutMode.AUTO) {
@@ -148,6 +151,8 @@ fun ResponsiveDashboardLayout(
                     enableCollapsibleSections = windowSizeClass.shouldShowCollapsibleSections,
                     enableDragAndDrop = effectiveEnableDragAndDrop,
                     windowSizeClass = windowSizeClass,
+                    coordinatorPreferences = coordinatorPreferences,
+                    unitConversionService = unitConversionService,
                     modifier = modifier
                 )
             }
@@ -163,6 +168,8 @@ fun ResponsiveDashboardLayout(
                     isLoading = isLoading,
                     enableDragAndDrop = false, // List mode uses individual widgets, not sections
                     windowSizeClass = windowSizeClass,
+                    coordinatorPreferences = coordinatorPreferences,
+                    unitConversionService = unitConversionService,
                     modifier = modifier
                 )
             }
@@ -178,6 +185,8 @@ fun ResponsiveDashboardLayout(
                     isLoading = isLoading,
                     enableDragAndDrop = false, // List mode uses individual widgets, not sections
                     windowSizeClass = windowSizeClass,
+                    coordinatorPreferences = coordinatorPreferences,
+                    unitConversionService = unitConversionService,
                     modifier = modifier
                 )
             }
@@ -253,6 +262,8 @@ fun ResponsiveDashboardLayout(
                     enableCollapsibleSections = true,
                     enableDragAndDrop = effectiveEnableDragAndDrop,
                     windowSizeClass = windowSizeClass,
+                    coordinatorPreferences = coordinatorPreferences,
+                    unitConversionService = unitConversionService,
                     modifier = modifier
                 )
             }
@@ -395,13 +406,13 @@ fun calculateResponsivePadding(
 private fun createDefaultWidgetData(widget: AnalyticsWidget): WidgetData {
     // Clean zero-state display per FR-004
     val (defaultValue, defaultUnit) = when (widget) {
-        com.example.liftrix.domain.model.analytics.AnalyticsWidget.TotalVolume -> "0" to "kg"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.TotalVolume -> "0" to WeightUnit.getSystemDefault().symbol
         com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutStreak -> "0" to "days"
         com.example.liftrix.domain.model.analytics.AnalyticsWidget.AverageDuration -> "0" to "min"
         com.example.liftrix.domain.model.analytics.AnalyticsWidget.WorkoutFrequency -> "0" to "workouts"
-        com.example.liftrix.domain.model.analytics.AnalyticsWidget.StrengthProgress -> "0" to "kg"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.StrengthProgress -> "0" to WeightUnit.getSystemDefault().symbol
         com.example.liftrix.domain.model.analytics.AnalyticsWidget.PersonalRecords -> "0" to "records"
-        com.example.liftrix.domain.model.analytics.AnalyticsWidget.OneRMProgression -> "0" to "kg"
+        com.example.liftrix.domain.model.analytics.AnalyticsWidget.OneRMProgression -> "0" to WeightUnit.getSystemDefault().symbol
         else -> "0" to ""
     }
     
