@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "ac927f1176c40fe7b04bc59b2ef9bb20",
+    "identityHash": "4ae6c212bf1aec30e7d71f821dcaa4a5",
     "entities": [
       {
         "tableName": "workouts",
@@ -112,6 +112,46 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `idx_workout_analytics` ON `${TABLE_NAME}` (`user_id`, `date`, `status`)"
+          },
+          {
+            "name": "idx_workout_user_created",
+            "unique": false,
+            "columnNames": [
+              "user_id",
+              "created_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_workout_user_created` ON `${TABLE_NAME}` (`user_id`, `created_at`)"
+          },
+          {
+            "name": "idx_workout_user_status",
+            "unique": false,
+            "columnNames": [
+              "user_id",
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_workout_user_status` ON `${TABLE_NAME}` (`user_id`, `status`)"
+          },
+          {
+            "name": "idx_workout_status_date",
+            "unique": false,
+            "columnNames": [
+              "status",
+              "date"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_workout_status_date` ON `${TABLE_NAME}` (`status`, `date`)"
+          },
+          {
+            "name": "idx_workout_sync",
+            "unique": false,
+            "columnNames": [
+              "is_synced",
+              "sync_version"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_workout_sync` ON `${TABLE_NAME}` (`is_synced`, `sync_version`)"
           }
         ],
         "foreignKeys": []
@@ -1134,6 +1174,36 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_exercise_sets_completed_at` ON `${TABLE_NAME}` (`completed_at`)"
+          },
+          {
+            "name": "idx_exercise_sets_exercise_set",
+            "unique": false,
+            "columnNames": [
+              "exercise_id",
+              "set_number"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_exercise_sets_exercise_set` ON `${TABLE_NAME}` (`exercise_id`, `set_number`)"
+          },
+          {
+            "name": "idx_exercise_sets_exercise_completed",
+            "unique": false,
+            "columnNames": [
+              "exercise_id",
+              "completed_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_exercise_sets_exercise_completed` ON `${TABLE_NAME}` (`exercise_id`, `completed_at`)"
+          },
+          {
+            "name": "idx_exercise_sets_performance",
+            "unique": false,
+            "columnNames": [
+              "weight_kg",
+              "completed_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_exercise_sets_performance` ON `${TABLE_NAME}` (`weight_kg`, `completed_at`)"
           }
         ],
         "foreignKeys": [
@@ -7773,7 +7843,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ac927f1176c40fe7b04bc59b2ef9bb20')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '4ae6c212bf1aec30e7d71f821dcaa4a5')"
     ]
   }
 }

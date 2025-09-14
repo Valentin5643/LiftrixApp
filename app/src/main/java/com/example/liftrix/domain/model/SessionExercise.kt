@@ -258,6 +258,14 @@ data class SessionExercise(
     ): SessionExercise {
         require(setIndex in sets.indices) { "Invalid set index: $setIndex" }
 
+        // 🔥 ENHANCED DEBUG: Log what data is being used to complete the set
+        Timber.d("[SET-COMPLETE-DEBUG] Exercise '$name', completing set $setIndex with:")
+        Timber.d("[SET-COMPLETE-DEBUG]   actualReps=$actualReps, actualWeight=$actualWeight")
+        Timber.d("[SET-COMPLETE-DEBUG]   actualTime=$actualTime, actualDistance=$actualDistance, actualRpe=$actualRpe")
+        
+        val originalSet = sets[setIndex]
+        Timber.d("[SET-COMPLETE-DEBUG] Original set had targetReps=${originalSet.targetReps}, targetWeight=${originalSet.targetWeight}")
+
         val completedSet = sets[setIndex].copy(
             actualReps = actualReps,
             actualWeight = actualWeight,
@@ -266,7 +274,8 @@ data class SessionExercise(
             actualRpe = actualRpe,
             completedAt = Instant.now()
         )
-
+        
+        Timber.d("[SET-COMPLETE-DEBUG] Set $setIndex completed successfully with actual data: reps=$actualReps, weight=$actualWeight")
         return updateSet(setIndex, completedSet)
     }
 
@@ -374,8 +383,18 @@ data class SessionExercise(
         // 🔥 SETS-DEBUG: Log session sets before conversion
         Timber.d("[SETS-DEBUG-1] SessionExercise '$name' has ${sets.size} sets before conversion")
         sets.forEach { set ->
-            Timber.d("[SETS-DEBUG-1a] Set ${set.setNumber}: actualReps=${set.actualReps}, targetReps=${set.targetReps}, actualWeight=${set.actualWeight}, completed=${set.completedAt != null}")
+            Timber.d("[SETS-DEBUG-1a] Set ${set.setNumber}: actualReps=${set.actualReps}, targetReps=${set.targetReps}, actualWeight=${set.actualWeight}, targetWeight=${set.targetWeight}")
             Timber.d("[SETS-DEBUG-1a-COMPLETEAT] Set ${set.setNumber}: completedAt=${set.completedAt}, hasActualData=${set.actualReps != null || set.actualWeight != null || set.actualTime != null || set.actualDistance != null}")
+        }
+        
+        // 🔥 ENHANCED DEBUG: Check if we have any sets with actual data
+        val setsWithActualData = sets.count { set ->
+            set.actualReps != null || set.actualWeight != null || set.actualTime != null || set.actualDistance != null
+        }
+        Timber.d("[SETS-DEBUG-1-SUMMARY] Exercise '$name': ${sets.size} total sets, $setsWithActualData have actual data")
+        
+        if (setsWithActualData == 0) {
+            Timber.w("[SETS-DEBUG-1-WARNING] ⚠️ NO SETS WITH ACTUAL DATA! This will result in 0 volume. Check UI data capture!")
         }
         
         val completedSets = sets.map { sessionSet ->

@@ -195,7 +195,6 @@ class UnifiedWorkoutSessionManager @Inject constructor(
             try {
                 // Save completed workout to repository
                 val completedWorkout = completedSession.toCompletedWorkout()
-                Timber.d("WORKOUT-DEBUG: Completing session: ${completedWorkout.name} for user: ${completedWorkout.userId}")
                 
                 // Use synchronous save to ensure database commit before session cleanup
                 val saveResult = if (workoutRepository is com.example.liftrix.data.repository.workout.WorkoutRepositoryImpl) {
@@ -219,8 +218,6 @@ class UnifiedWorkoutSessionManager @Inject constructor(
                 
                 saveResult.fold(
                     onSuccess = { savedWorkout ->
-                        Timber.d("WORKOUT-DEBUG: Session completed successfully - ID: ${savedWorkout.id.value}")
-                        
                         // Store the saved workout ID for navigation
                         _savedWorkoutId.value = savedWorkout.id.value
                         

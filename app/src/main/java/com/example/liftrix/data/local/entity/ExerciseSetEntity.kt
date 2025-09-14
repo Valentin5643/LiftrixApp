@@ -25,7 +25,10 @@ import com.example.liftrix.data.local.converter.DateTimeConverters
     indices = [
         Index(value = ["exercise_id"], name = "index_exercise_sets_exercise_id"),
         Index(value = ["set_number"], name = "index_exercise_sets_set_number"),
-        Index(value = ["completed_at"], name = "index_exercise_sets_completed_at")
+        Index(value = ["completed_at"], name = "index_exercise_sets_completed_at"),
+        Index(value = ["exercise_id", "set_number"], name = "idx_exercise_sets_exercise_set"),
+        Index(value = ["exercise_id", "completed_at"], name = "idx_exercise_sets_exercise_completed"),
+        Index(value = ["weight_kg", "completed_at"], name = "idx_exercise_sets_performance")
     ]
 )
 @TypeConverters(DateTimeConverters::class)

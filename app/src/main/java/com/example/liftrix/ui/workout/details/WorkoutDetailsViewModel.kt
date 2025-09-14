@@ -327,9 +327,6 @@ data class ExerciseWithPRData(
     val totalPRsInExercise: Int
 )
 
-/**
- * Data class representing a set with PR and previous set information
- */
 data class SetWithPRData(
     val set: com.example.liftrix.domain.model.ExerciseSet,
     val isPersonalRecord: Boolean,

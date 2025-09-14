@@ -15,6 +15,7 @@ import kotlinx.datetime.todayIn
 import com.google.gson.Gson
 import com.google.gson.JsonElement
 import com.google.gson.reflect.TypeToken
+import com.example.liftrix.core.json.ExerciseJsonParser
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -232,30 +233,18 @@ class GetPreviousSetDataUseCase @Inject constructor(
                 // Parse JSON element to determine format
                 val jsonElement = gson.fromJson(exerciseJson, JsonElement::class.java)
 
-                val exercises = when {
-                    jsonElement.isJsonObject -> {
+                val exercises = if (jsonElement.isJsonObject) {
+                    val jsonObject = jsonElement.asJsonObject
+                    if (jsonObject.has("exercises")) {
                         // Wrapped format: {"exercises": [...], ...}
-                        val jsonObject = jsonElement.asJsonObject
-                        if (jsonObject.has("exercises")) {
-                            val exercisesArray = jsonObject.getAsJsonArray("exercises")
-                            val exerciseType = object : TypeToken<List<ExerciseJsonData>>() {}.type
-                            gson.fromJson<List<ExerciseJsonData>>(exercisesArray, exerciseType)
-                                ?: emptyList()
-                        } else {
-                            emptyList()
-                        }
+                        ExerciseJsonParser.parseWrappedExercises(exerciseJson, ExerciseJsonData::class.java, "exercises")
+                    } else {
+                        // Direct object format or simple exercises object
+                        ExerciseJsonParser.parseExercises(exerciseJson, ExerciseJsonData::class.java)
                     }
-
-                    jsonElement.isJsonArray -> {
-                        // Direct array format
-                        val exerciseType = object : TypeToken<List<ExerciseJsonData>>() {}.type
-                        gson.fromJson<List<ExerciseJsonData>>(jsonElement, exerciseType)
-                            ?: emptyList()
-                    }
-
-                    else -> {
-                        emptyList()
-                    }
+                } else {
+                    // Direct array format or other
+                    ExerciseJsonParser.parseExercises(exerciseJson, ExerciseJsonData::class.java)
                 }
 
                 // Debug logging for JSON exercise parsing
@@ -319,6 +308,7 @@ class GetPreviousSetDataUseCase @Inject constructor(
         /**
          * Data classes for JSON parsing
          */
+
         private data class ExerciseJsonData(
             val id: String? = null,
             val exerciseId: String? = null,

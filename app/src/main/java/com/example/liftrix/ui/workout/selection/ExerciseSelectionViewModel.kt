@@ -2,6 +2,7 @@ package com.example.liftrix.ui.workout.selection
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.compose.runtime.Stable
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.ExerciseLibrary
@@ -32,6 +33,7 @@ import timber.log.Timber
 /**
  * UI state for exercise selection screen
  */
+@Stable
 data class ExerciseSelectionUiState(
     val allExercises: List<SearchableExercise> = emptyList(),
     val filteredExercises: List<SearchableExercise> = emptyList(),

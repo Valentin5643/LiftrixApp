@@ -12,9 +12,22 @@ import com.example.liftrix.domain.model.Exercise
 import com.example.liftrix.domain.model.ExerciseSet
 import com.example.liftrix.domain.model.CustomExercise
 import com.example.liftrix.domain.model.ExerciseLibrary
+import com.example.liftrix.domain.model.ExerciseCategory
+import com.example.liftrix.domain.model.Equipment
+import com.example.liftrix.domain.model.ExerciseId
+import com.example.liftrix.domain.model.ExerciseSetId
+import com.example.liftrix.domain.model.WorkoutId
+import com.example.liftrix.domain.model.Weight
+import com.example.liftrix.domain.model.Reps
 import com.example.liftrix.domain.usecase.exercise.SearchableExercise
 import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import com.google.gson.JsonDeserializer
+import com.google.gson.JsonElement
+import com.google.gson.JsonDeserializationContext
 import com.google.gson.reflect.TypeToken
+import java.lang.reflect.Type
+import com.example.liftrix.core.json.ExerciseJsonParser
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -51,7 +64,12 @@ data class WorkoutDayMetrics(
  * Calculate comprehensive daily metrics from a list of workouts
  */
 suspend fun List<WorkoutEntity>.calculateDailyMetrics(): Map<LocalDate, WorkoutDayMetrics> {
-    val gson = Gson()
+    // 🔥 SAFE GSON: Handle completedAt/createdAt as either String or {} object + nested structures
+    val gson = GsonBuilder()
+        .registerTypeAdapter(String::class.java, SafeDateAdapter())
+        .registerTypeAdapter(java.time.Instant::class.java, SafeInstantAdapter())
+        .registerTypeAdapter(Exercise::class.java, SafeExerciseDeserializer())
+        .create()
     return groupBy { it.date.toKotlinLocalDate() }.mapValues { (_, workouts) ->
         val validWorkouts = workouts.filter { it.startTime != null && it.endTime != null }
         
@@ -397,16 +415,10 @@ private fun parseExercisesFromJson(workoutId: String, exercisesJson: String, gso
     } catch (e: Exception) {
     }
     
-    // Attempt 3: Object with "exercises" key
+    // Attempt 3: Use defensive parser for wrapped format
     try {
-        val mapType = object : TypeToken<Map<String, Any>>() {}.type
-        val dataMap = gson.fromJson<Map<String, Any>>(exercisesJson, mapType)
-        
-        if (dataMap?.containsKey("exercises") == true) {
-            val searchableType = object : TypeToken<List<SearchableExercise>>() {}.type
-            val exercises = gson.fromJson<List<SearchableExercise>>(gson.toJson(dataMap["exercises"]), searchableType)
-            if (exercises != null && exercises.isNotEmpty()) return exercises
-        }
+        val exercises = ExerciseJsonParser.parseWrappedExercises(exercisesJson, SearchableExercise::class.java, "exercises")
+        if (exercises.isNotEmpty()) return exercises
     } catch (e: Exception) {
     }
     
@@ -418,31 +430,257 @@ private fun parseExercisesFromJson(workoutId: String, exercisesJson: String, gso
  * Maintains backward compatibility with the original Exercise model format.
  */
 private fun parseExercisesFromJsonLegacy(workoutId: String, exercisesJson: String, gson: Gson): List<Exercise> {
-    if (exercisesJson.isBlank()) return emptyList()
-    
-    // Attempt 1: Direct array parsing
-    try {
-        val exercisesType = object : TypeToken<List<Exercise>>() {}.type
-        val exercises = gson.fromJson<List<Exercise>>(exercisesJson, exercisesType)
-        if (exercises != null && exercises.isNotEmpty()) return exercises
-    } catch (e: Exception) {
-        // Fall through to attempt 2
+    if (exercisesJson.isBlank()) {
+        Timber.d("PROGRESS-PARSE-DEBUG: Empty JSON for workout $workoutId")
+        return emptyList()
     }
     
-    // Attempt 2: Object with "exercises" key
-    try {
-        val mapType = object : TypeToken<Map<String, Any>>() {}.type
-        val dataMap = gson.fromJson<Map<String, Any>>(exercisesJson, mapType)
+    // 🔥 ENHANCED DEBUG: Log the raw JSON before parsing
+    Timber.d("PROGRESS-PARSE-RAW JSON for workout $workoutId (length=${exercisesJson.length}): ${exercisesJson.take(500)}")
+    
+    // 🔥 FIX: Use the same successful approach as feed parsing
+    return try {
+        // Parse JSON element first to detect format
+        val element = com.google.gson.JsonParser.parseString(exercisesJson)
         
-        if (dataMap?.containsKey("exercises") == true) {
-            val exercisesType = object : TypeToken<List<Exercise>>() {}.type
-            val exercises = gson.fromJson<List<Exercise>>(gson.toJson(dataMap["exercises"]), exercisesType)
-            if (exercises != null && exercises.isNotEmpty()) return exercises
+        if (element.isJsonObject) {
+            val jsonObject = element.asJsonObject
+            
+            // Check if this is the wrapped format with "exercises" key (same as feed parsing)
+            if (jsonObject.has("exercises")) {
+                Timber.d("PROGRESS-PARSE-DEBUG: Found wrapped format with 'exercises' key - using successful feed approach")
+                val exercisesElement = jsonObject.get("exercises")
+                
+                if (exercisesElement.isJsonArray) {
+                    Timber.d("PROGRESS-PARSE-DEBUG: Parsing exercises array with ${exercisesElement.asJsonArray.size()} items")
+                    
+                    // 🔥 FIX: Use the SafeExerciseDeserializer for proper nested structure handling
+                    val listType = object : TypeToken<List<Exercise>>() {}.type
+                    val exercises = gson.fromJson<List<Exercise>>(exercisesElement, listType) ?: emptyList()
+                    
+                    if (exercises.isNotEmpty()) {
+                        Timber.d("PROGRESS-PARSE-SUCCESS: ✅ Wrapped format parsing succeeded with ${exercises.size} exercises")
+                        return exercises
+                    } else {
+                        Timber.w("PROGRESS-PARSE-WARNING: Wrapped format returned empty exercises array")
+                    }
+                } else {
+                    Timber.w("PROGRESS-PARSE-WARNING: 'exercises' key is not an array")
+                }
+            } else {
+                Timber.w("PROGRESS-PARSE-WARNING: Object format without 'exercises' key")
+            }
+        } else if (element.isJsonArray) {
+            // Direct array format
+            Timber.d("PROGRESS-PARSE-DEBUG: Detected direct array format")
+            val listType = object : TypeToken<List<Exercise>>() {}.type
+            val exercises = gson.fromJson<List<Exercise>>(exercisesJson, listType) ?: emptyList()
+            
+            if (exercises.isNotEmpty()) {
+                Timber.d("PROGRESS-PARSE-SUCCESS: ✅ Direct array parsing succeeded with ${exercises.size} exercises")
+                return exercises
+            }
         }
+        
+        Timber.w("PROGRESS-PARSE-WARNING: ⚠️ All parsing attempts failed for workout $workoutId - returning empty list (will cause 0 volume)")
+        emptyList()
+        
     } catch (e: Exception) {
-        // Fall through to return empty
+        Timber.e(e, "PROGRESS-PARSE-ERROR: Exception during parsing for workout $workoutId")
+        emptyList()
+    }
+}
+
+/**
+ * Safe Gson adapter that handles date fields that can be either String or {} object
+ */
+private class SafeDateAdapter : JsonDeserializer<String?> {
+    override fun deserialize(
+        json: JsonElement,
+        typeOfT: Type,
+        context: JsonDeserializationContext
+    ): String? {
+        return when {
+            json.isJsonNull -> null
+            json.isJsonPrimitive && json.asJsonPrimitive.isString -> json.asString
+            json.isJsonObject && json.asJsonObject.entrySet().isEmpty() -> null // treat {} as null
+            json.isJsonObject -> null // treat any object as null for now
+            else -> json.toString()
+        }
+    }
+}
+
+/**
+ * Safe Gson adapter that handles Instant fields that can be either String or {} object
+ */
+private class SafeInstantAdapter : JsonDeserializer<java.time.Instant?> {
+    override fun deserialize(
+        json: JsonElement,
+        typeOfT: Type,
+        context: JsonDeserializationContext
+    ): java.time.Instant? {
+        return when {
+            json.isJsonNull -> null
+            json.isJsonPrimitive && json.asJsonPrimitive.isString -> {
+                try {
+                    java.time.Instant.parse(json.asString)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            json.isJsonObject && json.asJsonObject.entrySet().isEmpty() -> null // treat {} as null
+            json.isJsonObject -> null // treat any object as null for now
+            else -> null
+        }
+    }
+}
+
+/**
+ * Safe Exercise deserializer that handles nested Weight/Reps structures from WorkoutMapper
+ */
+private class SafeExerciseDeserializer : JsonDeserializer<Exercise> {
+    override fun deserialize(
+        json: JsonElement,
+        typeOfT: Type,
+        context: JsonDeserializationContext
+    ): Exercise {
+        val jsonObject = json.asJsonObject
+        
+        // Extract basic exercise info
+        val id = jsonObject.get("id")?.asString ?: ""
+        val name = jsonObject.get("name")?.asString ?: ""
+        
+        // Handle libraryExercise - use ExerciseLibrary which is what Exercise expects
+        val libraryExercise = try {
+            val libElement = jsonObject.get("libraryExercise")
+            if (libElement?.isJsonObject == true) {
+                val libObj = libElement.asJsonObject
+                ExerciseLibrary(
+                    id = libObj.get("id")?.asString ?: id,
+                    name = libObj.get("name")?.asString ?: name,
+                    primaryMuscleGroup = ExerciseCategory.CHEST, // Default
+                    equipment = Equipment.BARBELL, // Default
+                    secondaryMuscleGroups = emptyList(),
+                    movementPattern = "compound",
+                    difficultyLevel = 1,
+                    instructions = "",
+                    isCompound = false,
+                    searchableTerms = emptyList()
+                )
+            } else {
+                // Fallback to simple structure
+                ExerciseLibrary(
+                    id = id,
+                    name = name,
+                    primaryMuscleGroup = ExerciseCategory.CHEST,
+                    equipment = Equipment.BARBELL,
+                    secondaryMuscleGroups = emptyList(),
+                    movementPattern = "compound",
+                    difficultyLevel = 1,
+                    instructions = "",
+                    isCompound = false,
+                    searchableTerms = emptyList()
+                )
+            }
+        } catch (e: Exception) {
+            Timber.w("SafeExerciseDeserializer: Failed to parse libraryExercise, using fallback")
+            ExerciseLibrary(
+                id = id,
+                name = name,
+                primaryMuscleGroup = ExerciseCategory.CHEST,
+                equipment = Equipment.BARBELL,
+                secondaryMuscleGroups = emptyList(),
+                movementPattern = "compound",
+                difficultyLevel = 1,
+                instructions = "",
+                isCompound = false,
+                searchableTerms = emptyList()
+            )
+        }
+        
+        // Parse sets with proper handling of nested Weight/Reps structures
+        val sets = try {
+            val setsArray = jsonObject.getAsJsonArray("sets")
+            setsArray?.mapIndexed { index, setElement -> 
+                parseExerciseSet(setElement.asJsonObject, index + 1)
+            } ?: emptyList()
+        } catch (e: Exception) {
+            Timber.w("SafeExerciseDeserializer: Failed to parse sets for exercise $name: ${e.message}")
+            emptyList()
+        }
+        
+        return Exercise(
+            id = ExerciseId(id),
+            workoutId = WorkoutId(""), // Will be set by parent
+            libraryExercise = libraryExercise,
+            orderIndex = 0,
+            sets = sets,
+            notes = jsonObject.get("notes")?.asString,
+            createdAt = java.time.Instant.now() // Default to now since we can't parse from JSON reliably
+        )
     }
     
-    return emptyList()
+    private fun parseExerciseSet(setObject: com.google.gson.JsonObject, setNumber: Int): ExerciseSet {
+        // Handle nested weight structure: {"weight": {"kilograms": 50.0}} 
+        val weight = try {
+            val weightElement = setObject.get("weight")
+            when {
+                weightElement?.isJsonObject == true -> {
+                    val weightObj = weightElement.asJsonObject
+                    val kg = weightObj.get("kilograms")?.asDouble
+                    if (kg != null) Weight(kg) else null
+                }
+                weightElement?.isJsonPrimitive == true -> {
+                    Weight(weightElement.asDouble)
+                }
+                else -> null
+            }
+        } catch (e: Exception) {
+            null
+        }
+        
+        // Handle nested reps structure: {"reps": {"count": 20}}
+        val reps = try {
+            val repsElement = setObject.get("reps")
+            when {
+                repsElement?.isJsonObject == true -> {
+                    val repsObj = repsElement.asJsonObject
+                    val count = repsObj.get("count")?.asInt
+                    if (count != null) Reps(count) else null
+                }
+                repsElement?.isJsonPrimitive == true -> {
+                    Reps(repsElement.asInt)
+                }
+                else -> null
+            }
+        } catch (e: Exception) {
+            null
+        }
+        
+        // Handle completedAt
+        val completedAt = try {
+            val completedElement = setObject.get("completedAt")
+            when {
+                completedElement?.isJsonPrimitive == true && completedElement.asJsonPrimitive.isString -> {
+                    java.time.Instant.parse(completedElement.asString)
+                }
+                else -> null
+            }
+        } catch (e: Exception) {
+            null
+        }
+        
+        return ExerciseSet(
+            id = ExerciseSetId.generate(),
+            setNumber = setNumber,
+            reps = reps,
+            weight = weight,
+            time = null,
+            distance = null,
+            rpe = null,
+            completedAt = completedAt,
+            notes = null
+        )
+    }
 }
 

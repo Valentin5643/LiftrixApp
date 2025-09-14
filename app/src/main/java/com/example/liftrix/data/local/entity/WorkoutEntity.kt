@@ -17,7 +17,11 @@ import java.time.LocalDate
 @Entity(
     tableName = "workouts",
     indices = [
-        Index(value = ["user_id", "date", "status"], name = "idx_workout_analytics")
+        Index(value = ["user_id", "date", "status"], name = "idx_workout_analytics"),
+        Index(value = ["user_id", "created_at"], name = "idx_workout_user_created"),
+        Index(value = ["user_id", "status"], name = "idx_workout_user_status"),
+        Index(value = ["status", "date"], name = "idx_workout_status_date"),
+        Index(value = ["is_synced", "sync_version"], name = "idx_workout_sync")
     ]
 )
 @TypeConverters(DateTimeConverters::class, WorkoutConverters::class)

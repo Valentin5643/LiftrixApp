@@ -1,41 +1,39 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Data extraction rules for Liftrix app backup and restore.
-   Configured to backup user preferences and workout data while excluding sensitive information.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Security-hardened data extraction rules for Liftrix Android
+   Prevents sensitive data from being included in cloud backups or device transfers
    See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- Include user preferences and non-sensitive data -->
-        <include domain="sharedpref" path="liftrix_preferences.xml"/>
-        <include domain="sharedpref" path="user_settings.xml"/>
-        <include domain="database" path="liftrix_database.db"/>
-        <include domain="file" path="workout_exports/"/>
-        
-        <!-- Exclude sensitive and cache data -->
-        <exclude domain="sharedpref" path="auth_tokens.xml"/>
-        <exclude domain="sharedpref" path="firebase_config.xml"/>
-        <exclude domain="database" path="liftrix_database.db-wal"/>
-        <exclude domain="database" path="liftrix_database.db-shm"/>
+        <!-- Exclude ALL sensitive data from cloud backup for maximum security -->
+        <exclude domain="database" path="."/>
+        <exclude domain="sharedpref" path="."/>
+        <exclude domain="file" path="."/>
         <exclude domain="cache" path="."/>
-        <exclude domain="file" path="cache/"/>
-        <exclude domain="file" path="temp/"/>
-        <exclude domain="file" path="media_cache/"/>
         <exclude domain="external" path="."/>
         <exclude domain="root" path="."/>
+        
+        <!-- Only allow non-sensitive app preferences -->
+        <include domain="sharedpref" path="androidx.preference"/>
+        <exclude domain="sharedpref" path="firebase"/>
+        <exclude domain="sharedpref" path="auth"/>
+        <exclude domain="sharedpref" path="encrypted"/>
     </cloud-backup>
     
     <device-transfer>
-        <!-- Include all user data for device-to-device transfer -->
-        <include domain="sharedpref" path="."/>
-        <include domain="database" path="."/>
-        <include domain="file" path="."/>
-        
-        <!-- Still exclude temporary and cache files -->
+        <!-- Restrict device-to-device transfer for security -->
+        <exclude domain="database" path="."/>
+        <exclude domain="sharedpref" path="."/>
+        <exclude domain="file" path="."/>
         <exclude domain="cache" path="."/>
-        <exclude domain="file" path="cache/"/>
-        <exclude domain="file" path="temp/"/>
-        <exclude domain="database" path="liftrix_database.db-wal"/>
-        <exclude domain="database" path="liftrix_database.db-shm"/>
+        <exclude domain="external" path="."/>
+        <exclude domain="root" path="."/>
+        
+        <!-- Only allow basic app preferences -->
+        <include domain="sharedpref" path="androidx.preference"/>
+        <exclude domain="sharedpref" path="firebase"/>
+        <exclude domain="sharedpref" path="auth"/>
+        <exclude domain="sharedpref" path="encrypted"/>
     </device-transfer>
 </data-extraction-rules>

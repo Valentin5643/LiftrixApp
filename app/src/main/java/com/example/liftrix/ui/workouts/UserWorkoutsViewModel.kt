@@ -2,6 +2,7 @@ package com.example.liftrix.ui.workouts
 
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
+import androidx.compose.runtime.Stable
 import androidx.paging.cachedIn
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.Workout
@@ -36,6 +37,7 @@ import javax.inject.Inject
 /**
  * UI State for the User Workouts screen
  */
+@Stable
 data class UserWorkoutsUiState(
     val isLoading: Boolean = false,
     val error: LiftrixError? = null,

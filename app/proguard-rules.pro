@@ -65,9 +65,16 @@
 -keep class com.example.liftrix.data.local.entity.** { *; }
 -keep class com.example.liftrix.data.local.dao.** { *; }
 
-# Keep Firebase-related classes
+# Keep Firebase-related classes and prevent obfuscation
 -keep class com.example.liftrix.service.LiftrixFirebaseMessagingService { *; }
 -keep class com.example.liftrix.data.remote.FirebaseDataSource* { *; }
+-keep class com.google.firebase.** { *; }
+-dontwarn com.google.firebase.**
+
+# Firebase App Check and Play Integrity
+-keep class com.google.firebase.appcheck.** { *; }
+-keep class com.google.android.gms.** { *; }
+-dontwarn com.google.android.gms.**
 
 # Hilt dependency injection - comprehensive rules
 -keep class com.example.liftrix.LiftrixApp_* { *; }
@@ -145,5 +152,36 @@
 # CameraX native components
 -keep class androidx.camera.** { *; }
 -dontwarn androidx.camera.**
+
+# Room Database and SQLCipher encryption
+-keep class androidx.room.** { *; }
+-keep class androidx.sqlite.** { *; }
+-keep class net.zetetic.database.sqlcipher.** { *; }
+-dontwarn net.zetetic.database.**
+
+# Keep Room entities and DAOs from obfuscation
+-keep @androidx.room.Entity class * { *; }
+-keep @androidx.room.Dao class * { *; }
+-keep @androidx.room.Database class * { *; }
+
+# Encrypted SharedPreferences (AndroidX Security Crypto)
+-keep class androidx.security.crypto.** { *; }
+-dontwarn androidx.security.crypto.**
+
+# Keep database encryption utilities
+-keep class com.example.liftrix.core.security.** { *; }
+
+# Kotlin serialization for navigation
+-keep class kotlinx.serialization.** { *; }
+-dontwarn kotlinx.serialization.**
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.SerializationKt
+
+# Keep Kotlin metadata for serialization
+-keep class kotlin.Metadata { *; }
+
+# Jetpack Compose optimizations
+-keep class androidx.compose.** { *; }
+-dontwarn androidx.compose.**
 
 # Additional rules as needed for libraries

@@ -100,16 +100,16 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file("../liftrix-release.keystore")
-            storePassword = "Valentin1234#"
-            keyAlias = "liftrix"
-            keyPassword = "Valentin1234#"
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("KEY_ALIAS") ?: "liftrix"
+            keyPassword = System.getenv("KEY_PASSWORD")
         }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false  // Temporarily disabled to isolate issue
-            isShrinkResources = false  // Must also disable resource shrinking
+            isMinifyEnabled = true   // ✅ Re-enabled for APK optimization
+            isShrinkResources = true // ✅ Re-enabled for resource optimization
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -237,6 +237,8 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation("com.google.android.material:material:1.13.0")  // Latest Material Components for XML themes
+    implementation("androidx.compose.material3:material3:1.3.1")   // Explicit Material3 for Compose
     implementation("androidx.compose.runtime:runtime-livedata")
     implementation("androidx.compose.runtime:runtime-tracing")
     implementation(libs.androidx.material3.window.size.util)
@@ -272,13 +274,20 @@ dependencies {
     // Google Play Billing
     implementation("com.android.billingclient:billing-ktx:6.0.1")
     
-    // Room dependencies
+    // Room dependencies with SQLCipher encryption
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     implementation("androidx.room:room-paging:2.5.2")
     implementation(libs.firebase.storage)
     // KSP for better compatibility with SDK 35 and faster compilation
     ksp(libs.room.compiler)
+    
+    // Database encryption with SQLCipher (Modern version)
+    implementation("net.zetetic:sqlcipher-android:4.6.0@aar")
+    implementation("androidx.sqlite:sqlite:2.4.0")
+    
+    // AndroidX Security Crypto for secure key management
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
     
     // Paging3 for social feed
     implementation("androidx.paging:paging-runtime:3.2.1")

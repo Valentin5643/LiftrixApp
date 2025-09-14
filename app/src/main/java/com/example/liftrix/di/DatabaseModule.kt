@@ -5,6 +5,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.liftrix.BuildConfig
+import com.example.liftrix.core.security.DatabaseEncryption
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.io.File
 import com.example.liftrix.data.local.LiftrixDatabase
 import com.example.liftrix.data.local.dao.CustomExerciseDao
@@ -81,16 +83,28 @@ object DatabaseModule {
     fun provideLiftrixDatabase(
         @ApplicationContext context: Context,
         exerciseLibrarySeedData: ExerciseLibrarySeedData,
-        metDataSeedService: MetDataSeedService
+        metDataSeedService: MetDataSeedService,
+        databaseEncryption: DatabaseEncryption
     ): LiftrixDatabase {
 
-        // Database persistence enabled - no clearing on startup
+        // 🔒 SECURITY: Initialize SQLCipher and validate encryption setup
+        System.loadLibrary("sqlcipher")
+        
+        // Validate encryption setup before proceeding
+        if (!databaseEncryption.validateEncryptionSetup()) {
+            throw SecurityException("Database encryption validation failed")
+        }
+        
+        // Get the encryption passphrase for SQLCipher
+        val passphrase = databaseEncryption.getSQLCipherPassphrase()
+        val factory = SupportOpenHelperFactory(passphrase.toByteArray())
 
         val database = Room.databaseBuilder(
             context.applicationContext,
             LiftrixDatabase::class.java,
-            "liftrix_database" // Standard database name
+            "liftrix_database_encrypted" // Encrypted database name
         )
+            .openHelperFactory(factory) // 🔒 Enable SQLCipher encryption
             .setTransactionExecutor(Dispatchers.IO.asExecutor())
             .setQueryExecutor(Dispatchers.IO.asExecutor())
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING) // WAL mode for better data persistence
@@ -98,17 +112,45 @@ object DatabaseModule {
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onCreate(db: SupportSQLiteDatabase) {
                     super.onCreate(db)
-                    Timber.d("Database created successfully")
+                    Timber.d("Encrypted database created successfully")
+                    
+                    // Verify encryption is active
+                    try {
+                        val result = db.query("PRAGMA cipher_version;")
+                        if (result.moveToFirst()) {
+                            val version = result.getString(0)
+                            Timber.i("SQLCipher version: $version - encryption active")
+                        }
+                        result.close()
+                    } catch (e: Exception) {
+                        Timber.e(e, "Failed to verify SQLCipher encryption")
+                    }
                 }
                 
                 override fun onOpen(db: SupportSQLiteDatabase) {
                     super.onOpen(db)
-                    Timber.d("Database opened successfully")
+                    Timber.d("Encrypted database opened successfully")
+                    
+                    // Verify database integrity on each open
+                    try {
+                        val result = db.query("PRAGMA integrity_check;")
+                        if (result.moveToFirst()) {
+                            val status = result.getString(0)
+                            if (status == "ok") {
+                                Timber.d("Database integrity check passed")
+                            } else {
+                                Timber.w("Database integrity check failed: $status")
+                            }
+                        }
+                        result.close()
+                    } catch (e: Exception) {
+                        Timber.e(e, "Database integrity check failed")
+                    }
                 }
                 
                 override fun onDestructiveMigration(db: SupportSQLiteDatabase) {
                     super.onDestructiveMigration(db)
-                    Timber.w("Destructive migration occurred - data may have been lost")
+                    Timber.w("Destructive migration occurred on encrypted database - data may have been lost")
                 }
             })
             .build()
@@ -433,6 +475,14 @@ object DatabaseModule {
     // ========================================
     // Mappers (DAO-dependent)
     // ========================================
+    
+    @Provides
+    @Singleton
+    fun provideDatabaseEncryption(
+        @ApplicationContext context: Context
+    ): DatabaseEncryption {
+        return DatabaseEncryption(context)
+    }
     
     @Provides
     @javax.inject.Singleton

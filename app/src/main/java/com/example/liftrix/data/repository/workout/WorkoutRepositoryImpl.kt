@@ -7,6 +7,7 @@ import com.example.liftrix.data.local.dao.FollowRelationshipDao
 import com.example.liftrix.data.local.dao.ExerciseDao
 import com.example.liftrix.data.local.dao.ExerciseSetDao
 import com.example.liftrix.data.local.entity.ExerciseSetEntity
+import com.example.liftrix.data.local.entity.WorkoutEntity
 import com.example.liftrix.data.mapper.WorkoutMapper
 import com.example.liftrix.data.mapper.WorkoutPostMapper
 import com.example.liftrix.data.mapper.ExerciseMapper
@@ -104,122 +105,82 @@ class WorkoutRepositoryImpl @Inject constructor(
         
         return liftrixCatching(
             errorMapper = { throwable ->
+                // 🔥 PRESERVE ACTUAL SQLITE EXCEPTION: Don't overwrite with generic message
+                val actualError = throwable.cause ?: throwable
+                val errorMessage = when {
+                    actualError.message?.contains("constraint", ignoreCase = true) == true -> 
+                        "Database constraint violation: ${actualError.message}"
+                    actualError.message?.contains("datatype", ignoreCase = true) == true -> 
+                        "Database datatype error: ${actualError.message}"
+                    throwable.message?.startsWith("Failed to insert workout:") == true || 
+                    throwable.message?.startsWith("Failed to update workout:") == true -> 
+                        throwable.message!! // Preserve my detailed error message
+                    else -> 
+                        "Failed to create workout '${workout.name}': ${actualError.message}"
+                }
+                
                 LiftrixError.DatabaseError(
-                    errorMessage = "Failed to create workout: ${workout.name}",
+                    errorMessage = errorMessage,
                     operation = "CREATE",
                     table = "workouts",
                     analyticsContext = mapOf(
                         "workout_name" to workout.name,
                         "user_id" to workout.userId,
-                        "exercise_count" to workout.exercises.size.toString()
+                        "exercise_count" to workout.exercises.size.toString(),
+                        "actual_exception_type" to (actualError::class.simpleName ?: "unknown"),
+                        "actual_exception_message" to (actualError.message ?: "unknown")
                     )
                 )
             }
         ) {
             val entity = workoutMapper.toEntity(workout, isSynced = false)
             
-            Timber.d("[WORKOUT-CREATE-DEBUG] Creating workout for sync debugging:")
-            Timber.d("[WORKOUT-CREATE-DEBUG]   - Workout ID: ${workout.id.value}")
-            Timber.d("[WORKOUT-CREATE-DEBUG]   - User ID: ${workout.userId}")
-            Timber.d("[WORKOUT-CREATE-DEBUG]   - Name: ${workout.name}")
-            Timber.d("[WORKOUT-CREATE-DEBUG]   - Status: ${workout.status}")
-            Timber.d("[WORKOUT-CREATE-DEBUG]   - Entity isSynced: ${entity.isSynced}")
-            Timber.d("[WORKOUT-CREATE-DEBUG]   - Entity syncVersion: ${entity.syncVersion}")
+            val insertResult = try {
+                withContext(Dispatchers.IO) {
+                    val existingEntity = workoutDao.getWorkoutByIdForUser(entity.id, entity.userId)
+                    
+                    if (existingEntity != null) {
+                        val updateResult = workoutDao.updateWorkout(entity)
+                        updateResult.toLong()
+                    } else {
+                        workoutDao.insertWorkout(entity)
+                    }
+                }
+            } catch (e: Exception) {
+                throw e
+            }
             
-            // 🔥 DEBUG: Log before database insertion
-            Timber.d("[WORKOUT-DB-INSERT] About to insert workout entity to database at ${System.currentTimeMillis()}")
-            val insertedId = workoutDao.insertWorkout(entity)
-            // 🔥 DEBUG: Log after database insertion
-            Timber.d("[WORKOUT-DB-INSERT] ✅ Database insertion completed at ${System.currentTimeMillis()}, result: $insertedId")
-            
-            // 🔥 CRITICAL FIX: For string primary keys, insertWorkout returns row count, not the ID
-            
-            if (insertedId > 0) {
-                Timber.d("[WORKOUT-CREATE-DEBUG] Successfully inserted workout with row count: $insertedId")
-                // 🔥 CRITICAL FIX: The workout ID is the original UUID string, not the insert return value
-                
-                // 🔥 NEW: Create ExerciseEntity and ExerciseSetEntity records for analytics queries
+            if (insertResult > 0) {
+                // Create ExerciseEntity and ExerciseSetEntity records for analytics queries
                 workout.exercises.forEachIndexed { exerciseIndex, exercise ->
-                    
-                    
-                    // Create a modified exercise with correct workoutId and orderIndex
                     val exerciseWithCorrectWorkoutId = exercise.copy(
                         workoutId = workout.id,
                         orderIndex = exerciseIndex
                     )
                     
-                    val exerciseEntity = try {
-                        exerciseMapper.toEntity(exerciseWithCorrectWorkoutId)
-                    } catch (e: Exception) {
-                        throw RuntimeException("Failed to map exercise to entity: ${e.message}", e)
+                    val exerciseEntity = exerciseMapper.toEntity(exerciseWithCorrectWorkoutId)
+                    val exerciseId = exerciseDao.insertExercise(exerciseEntity)
+                    
+                    exercise.sets.forEachIndexed { setIndex, set ->
+                        val setEntity = ExerciseSetEntity(
+                            exerciseId = exerciseId,
+                            setNumber = setIndex + 1,
+                            reps = set.reps?.count,
+                            weightKg = set.weight?.kilograms?.toFloat(),
+                            timeSeconds = set.time?.seconds?.toInt(),
+                            rpe = set.rpe?.value,
+                            completedAt = set.completedAt?.toEpochMilli()
+                        )
+                        
+                        exerciseSetDao.insertSet(setEntity)
                     }
-                    
-                    // 🔥 DEBUG: Log exercise entity before DB insert
-                    Timber.d("[SETS-DEBUG-DB-EX] Exercise '${exercise.libraryExercise.name}' entity: exerciseLibraryId='${exerciseEntity.exerciseLibraryId}', workoutId='${exerciseEntity.workoutId}'")
-                    
-                    val exerciseId = try {
-                        exerciseDao.insertExercise(exerciseEntity)
-                    } catch (e: Exception) {
-                        throw e // Re-throw to preserve error propagation
-                    }
-                    
-                    // 🔥 DEBUG: Log successful exercise insert
-                    Timber.d("[SETS-DEBUG-DB-EX-INSERTED] Exercise inserted with ID: $exerciseId")
-                    
-                    
-                    // Create ExerciseSetEntity records for each set
-                    if (exercise.sets.isEmpty()) {
-                    } else {
-                    }
-                    
-                    
-                    try {
-                        exercise.sets.forEachIndexed { setIndex, set ->
-                            
-                            val setEntity = ExerciseSetEntity(
-                                exerciseId = exerciseId,
-                                setNumber = setIndex + 1,
-                                reps = set.reps?.count,
-                                weightKg = set.weight?.kilograms?.toFloat(),
-                                timeSeconds = set.time?.seconds?.toInt(),
-                                rpe = set.rpe?.value,
-                                completedAt = set.completedAt?.toEpochMilli()
-                            )
-                            
-                            // 🔥 DEBUG: Log set entity before DB insert
-                            Timber.d("[SETS-DEBUG-DB] Saving set for exerciseLibraryId='${exerciseEntity.exerciseLibraryId}': exerciseId=$exerciseId, setNumber=${setIndex + 1}, completedAt=${set.completedAt}, completedAtEpoch=${set.completedAt?.toEpochMilli()}")
-                            
-                            val insertedSetId = exerciseSetDao.insertSet(setEntity)
-                            
-                            // 🔥 DEBUG: Log successful set insert
-                            Timber.d("[SETS-DEBUG-DB-SET-INSERTED] Set inserted with ID: $insertedSetId")
-                        }
-                    } catch (e: Exception) {
-                        Timber.e(e, "[SETS-DEBUG-DB-ERROR] Failed to insert sets for exercise: ${exercise.libraryExercise.name}")
-                        throw e
-                    }
-                    
                 }
-                
-                // Verify the workout can be retrieved immediately
-                val verifyEntity = workoutDao.getWorkoutByIdForUser(workout.id.value, workout.userId)
-                if (verifyEntity == null) {
-                    Timber.e("[WORKOUT-CREATE-DEBUG] CRITICAL: Cannot retrieve workout immediately after insert!")
-                } else {
-                    Timber.d("[WORKOUT-CREATE-DEBUG] Verification successful - workout retrieved with:")
-                    Timber.d("[WORKOUT-CREATE-DEBUG]   - ID: ${verifyEntity.id}")
-                    Timber.d("[WORKOUT-CREATE-DEBUG]   - User ID: ${verifyEntity.userId}")
-                    Timber.d("[WORKOUT-CREATE-DEBUG]   - Is Synced: ${verifyEntity.isSynced}")
-                    Timber.d("[WORKOUT-CREATE-DEBUG]   - Sync Version: ${verifyEntity.syncVersion}")
-                }
-                
                 // Queue workout for sync after successful creation
-                Timber.d("[WORKOUT-CREATE-DEBUG] Queueing workout for sync...")
                 queueWorkoutForSync(workout)
                 
                 workout // Return original workout with preserved ID
             } else {
-                throw RuntimeException("Workout insert operation returned invalid ID: $insertedId")
+                throw RuntimeException("Workout insert operation returned invalid result: $insertResult")
             }
         }
     }

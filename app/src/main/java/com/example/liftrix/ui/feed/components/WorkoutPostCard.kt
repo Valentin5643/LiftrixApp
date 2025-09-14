@@ -316,9 +316,8 @@ private fun WorkoutSummaryCard(
             // Volume
             val weightUnitManager = rememberWeightUnitManager()
             val volumeText = post.totalVolume?.let { volume ->
-                // Assuming totalVolume is stored in the posting user's preferred unit
-                // For social posts, we might want to show in viewer's preferred unit
-                weightUnitManager?.formatWeightCompact(volume, WeightUnit.POUNDS) ?: "${volume.toInt()} lbs"
+                // totalVolume is stored in kilograms (base unit), format for viewer's preferred unit
+                weightUnitManager?.formatWeightCompact(volume, WeightUnit.KILOGRAMS) ?: "${(volume * 2.20462).toInt()} lbs"
             } ?: "0 lbs"
             
             WorkoutMetric(

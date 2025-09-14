@@ -84,10 +84,10 @@ value class Weight(val kilograms: Double) {
      */
     val displayValue: String get() = format()
     
-    operator fun plus(other: Weight): Weight = Weight(kilograms + other.kilograms)
-    operator fun minus(other: Weight): Weight = Weight(kilograms - other.kilograms)
-    operator fun times(multiplier: Double): Weight = Weight(kilograms * multiplier)
-    operator fun div(divisor: Double): Weight = Weight(kilograms / divisor)
+    operator fun plus(other: Weight): Weight = fromKilograms(kilograms + other.kilograms)
+    operator fun minus(other: Weight): Weight = fromKilograms((kilograms - other.kilograms).coerceAtLeast(0.0))
+    operator fun times(multiplier: Double): Weight = fromKilograms(kilograms * multiplier)
+    operator fun div(divisor: Double): Weight = fromKilograms(kilograms / divisor)
     
     operator fun compareTo(other: Weight): Int = kilograms.compareTo(other.kilograms)
 } 

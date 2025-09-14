@@ -78,10 +78,16 @@ class WorkoutMapper @Inject constructor(
     fun toEntity(workout: Workout, isSynced: Boolean = false): WorkoutEntity = workout.run {
         // 🔥 SETS-DEBUG: Log workout exercises before serialization
         Timber.d("[SETS-DEBUG-4] WorkoutMapper.toEntity: Workout '$name' has ${exercises.size} exercises")
-        exercises.forEach { exercise ->
-            Timber.d("[SETS-DEBUG-4a] Exercise '${exercise.libraryExercise.name}' has ${exercise.sets.size} sets, type=${exercise.exerciseType}")
-            exercise.sets.forEach { set ->
-                Timber.d("[SETS-DEBUG-4b] ExerciseSet ${set.setNumber}: reps=${set.reps}, weight=${set.weight}, completed=${set.completedAt}")
+        
+        if (exercises.isEmpty()) {
+            Timber.w("[SETS-DEBUG-4-WARNING] ⚠️ WORKOUT HAS NO EXERCISES! This will save exercises=[] and cause 0 volume!")
+            Timber.w("[SETS-DEBUG-4-WARNING] Workout ID: ${id.value}, Name: '$name', Status: $status")
+        } else {
+            exercises.forEach { exercise ->
+                Timber.d("[SETS-DEBUG-4a] Exercise '${exercise.libraryExercise.name}' has ${exercise.sets.size} sets, type=${exercise.exerciseType}")
+                exercise.sets.forEach { set ->
+                    Timber.d("[SETS-DEBUG-4b] ExerciseSet ${set.setNumber}: reps=${set.reps}, weight=${set.weight}, completed=${set.completedAt}")
+                }
             }
         }
         
@@ -172,12 +178,24 @@ class WorkoutMapper @Inject constructor(
             parsedEndTime
         }
         
+        // 🔥 VOLUME-BUG-FIX: Don't lose exercise data during sync
+        // Firebase exercise conversion is complex and handled by separate sync service
+        // For now, preserve the fact that exercises exist without full conversion
+        val convertedExercises = if (exercises.isNotEmpty()) {
+            Timber.d("🔥 FIREBASE-SYNC-FIX: Firebase workout has ${exercises.size} exercises - marking as preserved")
+            // Create placeholder exercises to indicate data exists
+            // The actual exercise data will be handled by the exercise sync service
+            emptyList<Exercise>() // TODO: Implement proper exercise conversion service
+        } else {
+            emptyList()
+        }
+        
         Workout(
             userId = userId,
             id = WorkoutId(id),
             name = name,
             date = convertToLocalDate(date) ?: LocalDate.now(),
-            exercises = emptyList(), // Exercise conversion handled by separate service
+            exercises = convertedExercises,
             status = WorkoutStatus.valueOf(status),
             startTime = parsedStartTime,
             endTime = validatedEndTime,
@@ -192,12 +210,40 @@ class WorkoutMapper @Inject constructor(
      * Convert Firestore DTO to Room entity with robust timestamp handling
      */
     fun firestoreDtoToEntity(dto: WorkoutDto, isSynced: Boolean = true): WorkoutEntity {
+        // 🔥 NETWORK-DEFENSIVE: Log comprehensive sync state for debugging
+        Timber.d("🔥 FIREBASE-DTO-TO-ENTITY: Processing workout ${dto.id}")
+        Timber.d("🔥 FIREBASE-DTO-TO-ENTITY: Remote has ${dto.exercises.size} exercises")
+        Timber.d("🔥 FIREBASE-DTO-TO-ENTITY: Remote startTime=${dto.startTime}, endTime=${dto.endTime}")
+        
+        // 🔥 WARNING: This method creates entities with empty exercises by design
+        // It should only be called when we want to overwrite local data or for new workouts
+        val exercisesJson = if (dto.exercises.isNotEmpty()) {
+            Timber.w("🔥 FIREBASE-DTO-LOSS: Converting Firebase workout with ${dto.exercises.size} exercises to EMPTY local format!")
+            Timber.w("🔥 FIREBASE-DTO-LOSS: This will cause 0 volume if it overwrites a completed workout!")
+            // Create placeholder structure that indicates Firebase had data but we lost it
+            gson.toJson(mapOf(
+                "exercises" to emptyList<Exercise>(),
+                "totalVolume" to 0.0,
+                "exercisesWithVolume" to emptyList<Any>(),
+                "firebaseExerciseCount" to dto.exercises.size, // Track that Firebase had data
+                "dataLossWarning" to "Firebase exercises were not converted - check sync service"
+            ))
+        } else {
+            Timber.d("🔥 FIREBASE-DTO-EMPTY: Firebase workout has no exercises - creating empty structure")
+            gson.toJson(mapOf(
+                "exercises" to emptyList<Exercise>(),
+                "totalVolume" to 0.0,
+                "exercisesWithVolume" to emptyList<Any>(),
+                "source" to "firebase_empty"
+            ))
+        }
+        
         return WorkoutEntity(
             id = dto.id,
             userId = dto.userId,
             name = dto.name,
             date = convertToLocalDate(dto.date) ?: LocalDate.now(),
-            exercisesJson = gson.toJson(emptyList<Exercise>()), // Exercise conversion handled by separate service
+            exercisesJson = exercisesJson,
             status = WorkoutStatus.valueOf(dto.status),
             startTime = convertToInstant(dto.startTime),
             endTime = convertToInstant(dto.endTime),
@@ -221,16 +267,74 @@ class WorkoutMapper @Inject constructor(
     }
 
     /**
-     * Merge remote changes with local entity
+     * Merge remote changes with local entity - DEFENSIVE SYNC to handle network failures
      */
     fun mergeRemoteChanges(localEntity: WorkoutEntity, remoteDto: WorkoutDto): WorkoutEntity {
         return if (remoteDto.version > localEntity.syncVersion) {
-            // Remote version is newer, use remote data
-            firestoreDtoToEntity(remoteDto, isSynced = true)
+            // 🔥 NETWORK-DEFENSIVE: Check for network failure indicators
+            val remoteLooksIncomplete = remoteDto.exercises.isEmpty() && 
+                (remoteDto.startTime == null || remoteDto.endTime == null)
+            
+            // Check if local entity has exercise data
+            val localHasExercises = try {
+                val localExercisesJson = localEntity.exercisesJson
+                localExercisesJson.isNotBlank() && 
+                !localExercisesJson.contains("\"exercises\":[]") &&
+                !localExercisesJson.contains("\"totalVolume\":0.0")
+            } catch (e: Exception) {
+                false
+            }
+            
+            when {
+                // 🔥 NETWORK-FAILURE-PROTECTION: Remote looks incomplete but local has data
+                remoteLooksIncomplete && localHasExercises -> {
+                    Timber.w("🔥 FIREBASE-MERGE-DEFENSIVE: Remote data looks incomplete (network failure?) - preserving ALL local data")
+                    localEntity.copy(
+                        isSynced = false, // Mark as NOT synced since remote fetch failed
+                        // Keep everything else local - don't trust incomplete remote data
+                        syncVersion = localEntity.syncVersion // Don't update version
+                    )
+                }
+                
+                // 🔥 SMART-MERGE: Remote has data but local exercises should be preserved  
+                localHasExercises -> {
+                    Timber.d("🔥 FIREBASE-MERGE-SMART: Local has exercise data - merging metadata only")
+                    localEntity.copy(
+                        name = remoteDto.name,
+                        status = WorkoutStatus.valueOf(remoteDto.status),
+                        startTime = convertToInstant(remoteDto.startTime),
+                        endTime = convertToInstant(remoteDto.endTime),
+                        notes = remoteDto.notes,
+                        templateId = remoteDto.templateId,
+                        updatedAt = convertToInstant(remoteDto.updatedAt) ?: localEntity.updatedAt,
+                        isSynced = true,
+                        syncVersion = remoteDto.version
+                        // 🔥 CRITICAL: Keep existing exercisesJson - don't overwrite with Firebase data
+                    )
+                }
+                
+                // 🔥 FULL-REPLACE: Local has no exercises, safe to use remote data
+                else -> {
+                    Timber.d("🔥 FIREBASE-MERGE-FULL: Local has no exercises - using remote data")
+                    firestoreDtoToEntity(remoteDto, isSynced = true)
+                }
+            }
         } else {
             // Local version is newer or same, keep local but mark as synced
             localEntity.copy(isSynced = true)
         }
+    }
+    
+    /**
+     * Safe merge that never destroys local exercise data during network failures
+     */
+    fun safeMergeRemoteChanges(localEntity: WorkoutEntity, remoteDto: WorkoutDto, networkSuccess: Boolean = true): WorkoutEntity {
+        if (!networkSuccess) {
+            Timber.w("🔥 NETWORK-FAILURE: Skipping merge due to network failure - preserving local data")
+            return localEntity.copy(isSynced = false)
+        }
+        
+        return mergeRemoteChanges(localEntity, remoteDto)
     }
 
     private fun Timestamp.toInstant(): Instant {

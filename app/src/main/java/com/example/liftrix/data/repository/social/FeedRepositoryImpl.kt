@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.withContext
+import com.example.liftrix.core.json.ExerciseJsonParser
 import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
@@ -669,15 +670,199 @@ class FeedRepositoryImpl @Inject constructor(
     }
     
     private fun calculateTotalVolume(workout: Any?): Double? {
-        // For now, return null as total volume calculation needs access to exercise sets
-        // In a full implementation, this would sum weight * reps for all completed sets
-        return null
+        return try {
+            // Cast workout to WorkoutEntity to access exercise data
+            val workoutEntity = workout as? com.example.liftrix.data.local.entity.WorkoutEntity
+                ?: return null
+            
+            // Parse exercises from JSON and calculate total volume
+            if (workoutEntity.exercisesJson.isBlank()) return null
+            
+            // 🔥 ENHANCED DEBUG: Log the complete raw JSON before parsing
+            Timber.d("FEED-PARSE-RAW JSON (length=${workoutEntity.exercisesJson.length}): ${workoutEntity.exercisesJson}")
+            
+            // 🔥 SAFE GSON: Handle completedAt/createdAt as either String or {} object
+            val gson = com.google.gson.GsonBuilder()
+                .registerTypeAdapter(String::class.java, SafeDateAdapter())
+                .registerTypeAdapter(java.time.Instant::class.java, SafeInstantAdapter())
+                .create()
+            val exercises = try {
+                parseExercisesFromJson(workoutEntity.exercisesJson, gson)
+            } catch (e: Exception) {
+                Timber.e("FEED-PARSE-ERROR parsing workout JSON for workout ${workoutEntity.id}: ${e.message}", e)
+                Timber.e("FEED-PARSE-ERROR raw JSON was: ${workoutEntity.exercisesJson}")
+                emptyList() // Return empty instead of crashing
+            }
+            
+            // Debug logging to understand exercise structure
+            if (exercises.isNotEmpty()) {
+                Timber.d("VOLUME_DEBUG: Found ${exercises.size} exercises. Sample JSON: ${workoutEntity.exercisesJson.take(500)}")
+                exercises.take(2).forEach { exercise ->
+                    val effectiveSets = exercise.effectiveSets
+                    Timber.d("VOLUME_DEBUG: Exercise name='${exercise.name}', libraryName='${exercise.libraryExercise?.name}', effectiveName='${exercise.effectiveName}', sets=${exercise.sets?.size ?: 0}, effectiveSets=${effectiveSets.size}")
+                    effectiveSets.take(2).forEach { set ->
+                        Timber.d("VOLUME_DEBUG: Set - actualWeight=${set.actualWeight}, weight=${set.weight}, weightKg=${set.weightKg}, reps=${set.actualReps ?: set.reps}, completed=${set.completed}")
+                    }
+                }
+            } else {
+                Timber.w("VOLUME_DEBUG: ⚠️ NO EXERCISES found after parsing JSON! This will result in 0 volume.")
+            }
+            
+            // Sum volume (weight * reps) for all completed sets
+            val totalVolumeKg = exercises.sumOf { exercise ->
+                exercise.effectiveSets.sumOf { set ->
+                    val weight = set.effectiveWeight
+                    val reps = set.effectiveReps
+                    
+                    // Debug logging to understand data format
+                    if (weight == null && reps != null) {
+                        Timber.d("VOLUME_DEBUG: Set has ${reps} reps but no weight. Raw data: actualWeight=${set.actualWeight}, targetWeight=${set.targetWeight}, weight=${set.weight}, weightKg=${set.weightKg}, weightLbs=${set.weightLbs}")
+                    }
+                    
+                    if (set.completed && weight != null && reps != null) {
+                        val setVolume = weight * reps
+                        Timber.d("VOLUME_DEBUG: Adding ${setVolume}kg volume (${weight}kg x ${reps} reps)")
+                        setVolume
+                    } else {
+                        0.0
+                    }
+                }
+            }
+            
+            Timber.d("VOLUME_DEBUG: Final calculated volume: ${totalVolumeKg}kg for workout ${workoutEntity.id}")
+            totalVolumeKg.takeIf { it > 0.0 }
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to calculate total volume for workout")
+            null
+        }
+    }
+    
+    /**
+     * Helper data classes for JSON parsing
+     */
+    private data class WorkoutExerciseJson(
+        val name: String? = null,
+        val sets: List<WorkoutSetJson>? = emptyList(),
+        val libraryExercise: LibraryExerciseJson? = null
+    ) {
+        // Helper to get effective name from either direct name or libraryExercise.name
+        val effectiveName: String get() = name ?: libraryExercise?.name ?: "Unknown Exercise"
+        
+        // Helper to get effective sets with fallback to libraryExercise sets
+        val effectiveSets: List<WorkoutSetJson> get() = 
+            sets?.takeIf { it.isNotEmpty() } ?: libraryExercise?.sets ?: emptyList()
+    }
+    
+    private data class LibraryExerciseJson(
+        val name: String? = null,
+        val id: String? = null,
+        val sets: List<WorkoutSetJson>? = null
+    )
+    
+    private data class WorkoutSetJson(
+        // Support both direct fields and nested object structures from WorkoutMapper
+        val actualWeight: Double? = null,
+        val targetWeight: Double? = null,
+        val weight: WeightJson? = null,     // Support Weight object structure  
+        val weightKg: Double? = null,       // Legacy field
+        val weightLbs: Double? = null,      // Legacy field
+        
+        val actualReps: Int? = null,
+        val targetReps: Int? = null,
+        val reps: RepsJson? = null,         // Support Reps object structure
+        val repsValue: Int? = null,         // Legacy field
+        
+        val completed: Boolean = false,
+        val completedAt: String? = null     // ISO timestamp
+    ) {
+        // Helper to get the effective weight with fallback to nested/legacy fields
+        val effectiveWeight: Double? get() = 
+            actualWeight ?: targetWeight ?: 
+            weight?.kilograms ?: weightKg ?: 
+            // Convert lbs to kg if that's all we have
+            weightLbs?.let { it / 2.20462 }
+            
+        // Helper to get the effective reps with fallback to nested/legacy fields
+        val effectiveReps: Int? get() = 
+            actualReps ?: targetReps ?: 
+            reps?.count ?: repsValue
+    }
+    
+    // Support for nested Weight object structure from WorkoutMapper
+    private data class WeightJson(
+        val kilograms: Double? = null,
+        val pounds: Double? = null
+    )
+    
+    // Support for nested Reps object structure from WorkoutMapper
+    private data class RepsJson(
+        val count: Int? = null
+    )
+    
+    /**
+     * Parse exercises from workout JSON using shared defensive parser
+     */
+    private fun parseExercisesFromJson(exercisesJson: String, gson: com.google.gson.Gson): List<WorkoutExerciseJson> {
+        return try {
+            // 🔥 FIX: Handle wrapper format from WorkoutMapper.toEntity()
+            // The JSON structure is: {"exercises": [...], "totalVolume": 123.45}
+            val element = com.google.gson.JsonParser.parseString(exercisesJson)
+            
+            if (element.isJsonObject) {
+                val jsonObject = element.asJsonObject
+                
+                // Check if this is the wrapped format with "exercises" key
+                if (jsonObject.has("exercises")) {
+                    Timber.d("FEED-PARSE-DEBUG: Found wrapped format with 'exercises' key")
+                    val exercisesElement = jsonObject.get("exercises")
+                    
+                    if (exercisesElement.isJsonArray) {
+                        val listType = com.google.gson.reflect.TypeToken.getParameterized(
+                            List::class.java, 
+                            WorkoutExerciseJson::class.java
+                        ).type
+                        gson.fromJson<List<WorkoutExerciseJson>>(exercisesElement, listType) ?: emptyList()
+                    } else {
+                        Timber.w("FEED-PARSE-DEBUG: 'exercises' element is not an array")
+                        emptyList()
+                    }
+                } else {
+                    // Fallback to original parser for other formats
+                    Timber.d("FEED-PARSE-DEBUG: Using fallback parser for non-wrapped format")
+                    ExerciseJsonParser.parseExercises(exercisesJson, WorkoutExerciseJson::class.java)
+                }
+            } else {
+                // Direct array format
+                Timber.d("FEED-PARSE-DEBUG: Using direct array parser")
+                ExerciseJsonParser.parseExercises(exercisesJson, WorkoutExerciseJson::class.java)
+            }
+        } catch (e: Exception) {
+            Timber.e("FEED-PARSE-ERROR: Failed to parse exercises: ${e.message}", e)
+            emptyList()
+        }
     }
     
     private fun calculateExercisesCount(workout: Any?): Int? {
-        // For now, return null as exercise count needs access to exercises collection
-        // In a full implementation, this would count unique exercises in the workout
-        return null
+        return try {
+            // Cast workout to WorkoutEntity to access exercise data
+            val workoutEntity = workout as? com.example.liftrix.data.local.entity.WorkoutEntity
+                ?: return null
+            
+            // Parse exercises from JSON and count them
+            if (workoutEntity.exercisesJson.isBlank()) return null
+            
+            // 🔥 SAFE GSON: Handle completedAt/createdAt as either String or {} object
+            val gson = com.google.gson.GsonBuilder()
+                .registerTypeAdapter(String::class.java, SafeDateAdapter())
+                .registerTypeAdapter(java.time.Instant::class.java, SafeInstantAdapter())
+                .create()
+            val exercises = parseExercisesFromJson(workoutEntity.exercisesJson, gson)
+            
+            exercises.size.takeIf { it > 0 }
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to calculate exercises count for workout")
+            null
+        }
     }
     
     override fun getHomeFeed(
@@ -947,5 +1132,49 @@ class FeedRepositoryImpl @Inject constructor(
         val reportString = report.toString()
         Timber.w(reportString)
         return reportString
+    }
+}
+
+/**
+ * Safe Gson adapter that handles date fields that can be either String or {} object
+ */
+private class SafeDateAdapter : com.google.gson.JsonDeserializer<String?> {
+    override fun deserialize(
+        json: com.google.gson.JsonElement,
+        typeOfT: java.lang.reflect.Type,
+        context: com.google.gson.JsonDeserializationContext
+    ): String? {
+        return when {
+            json.isJsonNull -> null
+            json.isJsonPrimitive && json.asJsonPrimitive.isString -> json.asString
+            json.isJsonObject && json.asJsonObject.entrySet().isEmpty() -> null // treat {} as null
+            json.isJsonObject -> null // treat any object as null for now
+            else -> json.toString()
+        }
+    }
+}
+
+/**
+ * Safe Gson adapter that handles Instant fields that can be either String or {} object
+ */
+private class SafeInstantAdapter : com.google.gson.JsonDeserializer<java.time.Instant?> {
+    override fun deserialize(
+        json: com.google.gson.JsonElement,
+        typeOfT: java.lang.reflect.Type,
+        context: com.google.gson.JsonDeserializationContext
+    ): java.time.Instant? {
+        return when {
+            json.isJsonNull -> null
+            json.isJsonPrimitive && json.asJsonPrimitive.isString -> {
+                try {
+                    java.time.Instant.parse(json.asString)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            json.isJsonObject && json.asJsonObject.entrySet().isEmpty() -> null // treat {} as null
+            json.isJsonObject -> null // treat any object as null for now
+            else -> null
+        }
     }
 }

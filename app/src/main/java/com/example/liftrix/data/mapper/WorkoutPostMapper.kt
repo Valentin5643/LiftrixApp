@@ -16,6 +16,7 @@ import kotlinx.serialization.builtins.serializer
 import com.example.liftrix.domain.model.social.MediaType
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.example.liftrix.core.json.ExerciseJsonParser
 import kotlinx.coroutines.flow.firstOrNull
 import timber.log.Timber
 import javax.inject.Inject
@@ -237,18 +238,21 @@ class WorkoutPostMapper @Inject constructor(
             
             // Convert to PostExercise objects with custom exercise detection
             return exercises.map { exercise ->
-                val isCustom = isCustomExercise(exercise.name, userId)
+                val effectiveName = exercise.effectiveName
+                val isCustom = isCustomExercise(effectiveName, userId)
                 val customExerciseData = if (isCustom) {
-                    getCustomExerciseData(exercise.name, userId)
+                    getCustomExerciseData(effectiveName, userId)
                 } else null
                 
+                val effectiveSets = exercise.effectiveSets
+                
                 PostExercise(
-                    name = exercise.name,
+                    name = effectiveName,
                     isCustomExercise = isCustom,
                     customExerciseId = customExerciseData?.id?.value,
-                    primaryMuscleGroup = customExerciseData?.primaryMuscle ?: inferMuscleGroupFromName(exercise.name),
-                    setsCount = exercise.sets.size,
-                    maxWeight = exercise.sets.mapNotNull { it.weight }.maxOrNull(),
+                    primaryMuscleGroup = customExerciseData?.primaryMuscle ?: inferMuscleGroupFromName(effectiveName),
+                    setsCount = effectiveSets.size,
+                    maxWeight = effectiveSets.mapNotNull { it.effectiveWeight }.maxOrNull(),
                     isPR = false // PR detection handled by PRDetectionService
                 )
             }
@@ -262,34 +266,59 @@ class WorkoutPostMapper @Inject constructor(
      * Simple exercise data class for JSON parsing
      */
     private data class SimpleWorkoutExercise(
-        val name: String,
-        val sets: List<SimpleWorkoutSet> = emptyList()
+        val name: String? = null,
+        val sets: List<SimpleWorkoutSet>? = emptyList(),
+        val libraryExercise: LibraryExerciseJson? = null
+    ) {
+        // Helper to get effective name from either direct name or libraryExercise.name
+        val effectiveName: String get() = name ?: libraryExercise?.name ?: "Unknown Exercise"
+        
+        // Helper to get effective sets with fallback to libraryExercise sets
+        val effectiveSets: List<SimpleWorkoutSet> get() = 
+            sets?.takeIf { it.isNotEmpty() } ?: libraryExercise?.sets ?: emptyList()
+    }
+    
+    private data class LibraryExerciseJson(
+        val name: String? = null,
+        val id: String? = null,
+        val sets: List<SimpleWorkoutSet>? = null
     )
     
     private data class SimpleWorkoutSet(
-        val weight: Double?,
-        val reps: Int?
-    )
+        val actualWeight: Double? = null,
+        val targetWeight: Double? = null,
+        val actualReps: Int? = null,
+        val targetReps: Int? = null,
+        val completed: Boolean = false,
+        // Legacy/alternative field names for compatibility
+        val weight: Double? = null,
+        val weightKg: Double? = null,
+        val weightLbs: Double? = null,
+        val reps: Int? = null
+    ) {
+        // Helper to get the effective weight with fallback to legacy fields
+        val effectiveWeight: Double? get() = 
+            actualWeight ?: targetWeight ?: weight ?: weightKg ?: 
+            // Convert lbs to kg if that's all we have
+            weightLbs?.let { it / 2.20462 }
+            
+        // Helper to get the effective reps with fallback to legacy fields  
+        val effectiveReps: Int? get() = actualReps ?: targetReps ?: reps
+    }
     
     /**
-     * Parse exercises from workout JSON
+     * Parse exercises from workout JSON using shared defensive parser
      */
     private fun parseExercisesFromWorkoutJson(exercisesJson: String, gson: Gson): List<SimpleWorkoutExercise> {
-        if (exercisesJson.isBlank()) return emptyList()
-        
-        return try {
-            val type = object : TypeToken<List<SimpleWorkoutExercise>>() {}.type
-            gson.fromJson<List<SimpleWorkoutExercise>>(exercisesJson, type) ?: emptyList()
-        } catch (e: Exception) {
-            Timber.w(e, "Failed to parse exercises from JSON, returning empty list")
-            emptyList()
-        }
+        return ExerciseJsonParser.parseExercises(exercisesJson, SimpleWorkoutExercise::class.java)
     }
     
     /**
      * Detect if an exercise is custom by checking naming patterns and database
      */
-    private suspend fun isCustomExercise(exerciseName: String, userId: String): Boolean {
+    private suspend fun isCustomExercise(exerciseName: String?, userId: String): Boolean {
+        if (exerciseName.isNullOrBlank()) return false
+        
         return try {
             // Try to find this exercise in custom exercises
             val customExercises = customExerciseDao.searchCustomExercises(userId, exerciseName).firstOrNull()
@@ -305,7 +334,8 @@ class WorkoutPostMapper @Inject constructor(
     /**
      * Get custom exercise data if available
      */
-    private suspend fun getCustomExerciseData(exerciseName: String, userId: String): CustomExercise? {
+    private suspend fun getCustomExerciseData(exerciseName: String?, userId: String): CustomExercise? {
+        if (exerciseName.isNullOrBlank()) return null
         return try {
             val customExercises = customExerciseDao.searchCustomExercises(userId, exerciseName).firstOrNull()
             val matchingEntity = customExercises?.find { it.name.equals(exerciseName, ignoreCase = true) }
@@ -342,7 +372,9 @@ class WorkoutPostMapper @Inject constructor(
     /**
      * Simple inference of muscle group from exercise name
      */
-    private fun inferMuscleGroupFromName(exerciseName: String): com.example.liftrix.domain.model.ExerciseCategory? {
+    private fun inferMuscleGroupFromName(exerciseName: String?): com.example.liftrix.domain.model.ExerciseCategory? {
+        if (exerciseName.isNullOrBlank()) return null
+        
         val lowerName = exerciseName.lowercase()
         return when {
             lowerName.contains("squat") || lowerName.contains("leg") -> com.example.liftrix.domain.model.ExerciseCategory.LEGS
