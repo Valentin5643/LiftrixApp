@@ -391,19 +391,53 @@ class LiftrixApp : Application(), Configuration.Provider {
     private fun debugVerifyWorkerFactory() {
         applicationScope.launch {
             try {
-                Timber.d("🔧 DEBUG: Testing HiltWorkerFactory capabilities...")
-                
-                // Simple test: check if the factory class has the expected methods
-                val factoryClass = hiltWorkerFactory.javaClass
-                Timber.d("🔧 DEBUG: HiltWorkerFactory class: ${factoryClass.name}")
-                Timber.d("🔧 DEBUG: HiltWorkerFactory methods: ${factoryClass.declaredMethods.map { it.name }}")
-                
+                Timber.d("🔧 HILT-DEBUG: Testing HiltWorkerFactory capabilities...")
+
+                // Check if injection completed
+                if (::hiltWorkerFactory.isInitialized) {
+                    Timber.d("🔧 HILT-DEBUG: ✅ hiltWorkerFactory is injected: ${hiltWorkerFactory}")
+
+                    // Simple test: check if the factory class has the expected methods
+                    val factoryClass = hiltWorkerFactory.javaClass
+                    Timber.d("🔧 HILT-DEBUG: HiltWorkerFactory class: ${factoryClass.name}")
+
+                    // Check superclass to see if it's the real Hilt factory
+                    val superClass = factoryClass.superclass
+                    Timber.d("🔧 HILT-DEBUG: HiltWorkerFactory superclass: ${superClass?.name}")
+
+                    // Check if we can access WorkManager and its configuration
+                    delay(1000) // Give some time for WorkManager to initialize
+
+                    try {
+                        val workManager = WorkManager.getInstance(this@LiftrixApp)
+                        val config = workManager.configuration
+                        val actualFactory = config.workerFactory
+
+                        Timber.d("🔧 HILT-DEBUG: WorkManager factory in config: ${actualFactory}")
+                        Timber.d("🔧 HILT-DEBUG: Factory matches injected? ${actualFactory === hiltWorkerFactory}")
+
+                        if (actualFactory === hiltWorkerFactory) {
+                            Timber.d("🔧 HILT-DEBUG: ✅ WorkManager correctly configured with injected HiltWorkerFactory!")
+                        } else {
+                            Timber.w("🔧 HILT-DEBUG: ❌ WorkManager factory mismatch!")
+                            Timber.w("🔧 HILT-DEBUG: Expected: $hiltWorkerFactory")
+                            Timber.w("🔧 HILT-DEBUG: Actual: $actualFactory")
+                        }
+
+                    } catch (e: Exception) {
+                        Timber.e(e, "🔧 HILT-DEBUG: Failed to check WorkManager configuration")
+                    }
+
+                } else {
+                    Timber.e("🔧 HILT-DEBUG: ❌ hiltWorkerFactory not injected yet!")
+                }
+
                 // Log that fallback constructors are available
-                Timber.d("🔧 DEBUG: Workers now have fallback constructors for WorkManager reflection")
-                Timber.d("🔧 DEBUG: If you see 'using FALLBACK constructor' messages, Hilt factories failed")
-                
+                Timber.d("🔧 HILT-DEBUG: Workers have fallback constructors as safety net")
+                Timber.d("🔧 HILT-DEBUG: Watch for 'using FALLBACK constructor' to detect Hilt issues")
+
             } catch (e: Exception) {
-                Timber.e(e, "❌ DEBUG: Worker factory verification failed")
+                Timber.e(e, "🔧 HILT-DEBUG: Failed to test HiltWorkerFactory")
             }
         }
     }

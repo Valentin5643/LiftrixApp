@@ -345,7 +345,7 @@ class RealtimeSyncManager @Inject constructor(
                             Timber.d("Processing workout session change: ${change.document.id}")
                             
                             // Trigger local data update through sync strategy
-                            syncStrategy.handleWorkoutSessionUpdate(userId, sessionData)
+                            syncStrategy.handleWorkoutSessionUpdate(context, userId, sessionData)
                         }
                         else -> { /* No action needed for REMOVED */ }
                     }
@@ -368,7 +368,7 @@ class RealtimeSyncManager @Inject constructor(
                             Timber.d("Processing new personal record: ${change.document.id}")
                             
                             // Trigger analytics recalculation
-                            syncStrategy.handlePersonalRecordUpdate(userId, prData)
+                            syncStrategy.handlePersonalRecordUpdate(context, userId, prData)
                         }
                         else -> { /* Handle other change types if needed */ }
                     }

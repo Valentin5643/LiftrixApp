@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.navigation
 
+import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
@@ -166,6 +167,7 @@ class MainNavigationViewModel @Inject constructor(
  * @param isLoading Whether a loading operation is in progress
  * @param error Error message to display, null if no error
  */
+@Stable
 data class MainNavigationState(
     val authenticationState: AuthenticationState = AuthenticationState.Loading,
     val selectedTab: MainNavigationItem = MainNavigationItem.HOME,
@@ -178,9 +180,13 @@ data class MainNavigationState(
 /**
  * Authentication state for navigation
  */
+@Stable
 sealed class AuthenticationState {
+    @Stable
     data object Loading : AuthenticationState()
+    @Stable
     data object Unauthenticated : AuthenticationState()
+    @Stable
     data class Authenticated(val user: User) : AuthenticationState()
 }
 

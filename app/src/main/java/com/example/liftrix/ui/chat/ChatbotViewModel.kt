@@ -1,6 +1,10 @@
 package com.example.liftrix.ui.chat
 
+import androidx.compose.runtime.Stable
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.plus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -66,15 +70,13 @@ class ChatbotViewModel @Inject constructor(
      * Sets up real-time message observation and checks usage limits.
      */
     private fun loadInitialData() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO + SupervisorJob()) {
             try {
                 // Get authenticated user ID
                 val userIdResult = getCurrentUserIdUseCase()
                 if (userIdResult != null) {
                     userId = userIdResult
-                    viewModelScope.launch {
-                        setupConversation(userIdResult)
-                    }
+                    setupConversation(userIdResult)
                     checkUsageLimits()
                 } else {
                     handleError(LiftrixError.AuthenticationError(
@@ -331,6 +333,7 @@ class ChatbotViewModel @Inject constructor(
 /**
  * UI state for the chatbot screen.
  */
+@Stable
 data class ChatbotUiState(
     val messages: List<ChatMessage> = emptyList(),
     val conversationState: UiState<List<ChatMessage>> = UiState.Loading,

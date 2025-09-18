@@ -49,5 +49,11 @@ data class SyncQueueEntity(
     val createdAt: Long,
 
     @ColumnInfo(name = "next_retry_at")
-    val nextRetryAt: Long? = null
+    val nextRetryAt: Long? = null,
+
+    @ColumnInfo(name = "last_error")
+    val lastError: String? = null,
+
+    @ColumnInfo(name = "failed_at")
+    val failedAt: Long? = null
 )

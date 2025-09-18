@@ -66,6 +66,7 @@ import com.example.liftrix.data.local.dao.SupportTicketDao
 import com.example.liftrix.data.local.dao.AppConfigDao
 import com.example.liftrix.data.local.dao.SettingsAuditDao
 import com.example.liftrix.data.local.dao.SyncQueueDao
+import com.example.liftrix.data.local.dao.DeadLetterQueueDao
 import com.example.liftrix.data.local.dao.SyncPreferencesDao
 import com.example.liftrix.data.local.dao.ChatPreferencesDao
 import com.example.liftrix.data.local.dao.ChatHistoryDao
@@ -134,6 +135,7 @@ import com.example.liftrix.data.local.entity.SupportTicketEntity
 import com.example.liftrix.data.local.entity.AppConfigEntity
 import com.example.liftrix.data.local.entity.SettingsAuditEntity
 import com.example.liftrix.data.local.entity.SyncQueueEntity
+import com.example.liftrix.data.local.entity.DeadLetterQueueEntity
 import com.example.liftrix.data.local.entity.SyncPreferencesEntity
 
 
@@ -198,13 +200,14 @@ import com.example.liftrix.data.local.entity.SyncPreferencesEntity
         AppConfigEntity::class,
         SettingsAuditEntity::class,
         SyncQueueEntity::class,
+        DeadLetterQueueEntity::class,
         SyncPreferencesEntity::class,
         ChatPreferencesEntity::class,
         ChatHistoryEntity::class,
         PRReactionEntity::class,
         PRNotificationPreferencesEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 @TypeConverters(
@@ -274,6 +277,7 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun appConfigDao(): AppConfigDao
     abstract fun settingsAuditDao(): SettingsAuditDao
     abstract fun syncQueueDao(): SyncQueueDao
+    abstract fun deadLetterQueueDao(): DeadLetterQueueDao
     abstract fun syncPreferencesDao(): SyncPreferencesDao
     abstract fun chatPreferencesDao(): ChatPreferencesDao
     abstract fun chatHistoryDao(): ChatHistoryDao

@@ -51,10 +51,15 @@ data class UserWorkoutsUiState(
 /**
  * Events that can occur on the User Workouts screen
  */
+@Stable
 sealed class UserWorkoutsEvent : ViewModelEvent {
+    @Stable
     data class ToggleLike(val postId: String) : UserWorkoutsEvent()
+    @Stable
     data class ToggleSave(val postId: String) : UserWorkoutsEvent()
+    @Stable
     data class ShareWorkout(val workoutId: String) : UserWorkoutsEvent()
+    @Stable
     data object RefreshWorkouts : UserWorkoutsEvent()
 }
 

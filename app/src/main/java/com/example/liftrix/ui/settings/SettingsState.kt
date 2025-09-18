@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.settings
 
+import androidx.compose.runtime.Stable
 import com.example.liftrix.domain.model.SubscriptionStatus
 import com.example.liftrix.domain.model.UserSettings
 import com.example.liftrix.domain.model.UserProfile
@@ -25,6 +26,7 @@ import com.example.liftrix.domain.model.social.SocialProfile
  * @property showLogoutDialog Whether to show logout confirmation dialog
  * @property expandedCard Currently expanded settings card, null if none expanded
  */
+@Stable
 data class SettingsState(
     val isLoading: Boolean = false,
     val userSettings: UserSettings? = null,

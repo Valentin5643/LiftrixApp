@@ -232,7 +232,28 @@ class WorkoutSyncWorker @AssistedInject constructor(
                                 }
                                 val localUpdatedAtMillis = workout.updatedAt.epochSecond * 1000
                                 if (localUpdatedAtMillis > remoteUpdatedAtMillis) {
-                                    workoutMapper.toFirestoreDto(workoutMapper.toDomain(workout), userId)
+                                    // 🔥 SYNC-SCHEMA-DEBUG: Log before and after toDomain conversion
+                                    Timber.d("[SYNC-SCHEMA-DEBUG] About to convert workout '${workout.name}' entity to domain")
+                                    Timber.d("[SYNC-SCHEMA-DEBUG] Original entity JSON length: ${workout.exercisesJson?.length ?: 0}")
+
+                                    // 🔥 SYNC-FIX: Use fallback logic to prevent data loss
+                                    val workoutData = try {
+                                        val domainWorkout = workoutMapper.toDomain(workout)
+
+                                        Timber.d("[SYNC-SCHEMA-DEBUG] After toDomain: workout has ${domainWorkout.exercises.size} exercises")
+                                        if (domainWorkout.exercises.isEmpty() && !workout.exercisesJson.isNullOrBlank()) {
+                                            Timber.e("[SYNC-SCHEMA-DEBUG] 🚨 CRITICAL: toDomain conversion LOST EXERCISES! Entity had JSON but domain has 0 exercises!")
+                                            Timber.w("[SYNC-FALLBACK] Using entity→DTO bypass to preserve exercise data")
+                                            workoutMapper.entityToFirestoreDto(workout, userId)
+                                        } else {
+                                            workoutMapper.toFirestoreDto(domainWorkout, userId)
+                                        }
+                                    } catch (e: Exception) {
+                                        Timber.e(e, "[SYNC-FALLBACK] toDomain failed in conflict resolution, using bypass")
+                                        workoutMapper.entityToFirestoreDto(workout, userId)
+                                    }
+
+                                    workoutData
                                 } else {
                                     // Remote is newer, update local
                                     workoutDao.updateSyncStatusForUser(
@@ -244,10 +265,52 @@ class WorkoutSyncWorker @AssistedInject constructor(
                                     null // Skip this item in batch
                                 }
                             } else {
-                                workoutMapper.toFirestoreDto(workoutMapper.toDomain(workout), userId)
+                                // 🔥 SYNC-SCHEMA-DEBUG: Log toDomain conversion for failed remote parsing
+                                Timber.d("[SYNC-SCHEMA-DEBUG] Remote workout parsing failed, converting local '${workout.name}' entity to domain")
+                                Timber.d("[SYNC-SCHEMA-DEBUG] Original entity JSON length: ${workout.exercisesJson?.length ?: 0}")
+
+                                // 🔥 SYNC-FIX: Use fallback logic to prevent data loss
+                                val workoutData = try {
+                                    val domainWorkout = workoutMapper.toDomain(workout)
+
+                                    Timber.d("[SYNC-SCHEMA-DEBUG] After toDomain: workout has ${domainWorkout.exercises.size} exercises")
+                                    if (domainWorkout.exercises.isEmpty() && !workout.exercisesJson.isNullOrBlank()) {
+                                        Timber.e("[SYNC-SCHEMA-DEBUG] 🚨 CRITICAL: toDomain conversion LOST EXERCISES! Entity had JSON but domain has 0 exercises!")
+                                        Timber.w("[SYNC-FALLBACK] Using entity→DTO bypass to preserve exercise data")
+                                        workoutMapper.entityToFirestoreDto(workout, userId)
+                                    } else {
+                                        workoutMapper.toFirestoreDto(domainWorkout, userId)
+                                    }
+                                } catch (e: Exception) {
+                                    Timber.e(e, "[SYNC-FALLBACK] toDomain failed for remote parsing failure case, using bypass")
+                                    workoutMapper.entityToFirestoreDto(workout, userId)
+                                }
+
+                                workoutData
                             }
                         } else {
-                            workoutMapper.toFirestoreDto(workoutMapper.toDomain(workout), userId)
+                            // 🔥 SYNC-SCHEMA-DEBUG: Log toDomain conversion for non-existing remote
+                            Timber.d("[SYNC-SCHEMA-DEBUG] No remote workout found, converting local '${workout.name}' entity to domain")
+                            Timber.d("[SYNC-SCHEMA-DEBUG] Original entity JSON length: ${workout.exercisesJson?.length ?: 0}")
+
+                            // 🔥 SYNC-FIX: Use fallback logic to prevent data loss
+                            val workoutData = try {
+                                val domainWorkout = workoutMapper.toDomain(workout)
+
+                                Timber.d("[SYNC-SCHEMA-DEBUG] After toDomain: workout has ${domainWorkout.exercises.size} exercises")
+                                if (domainWorkout.exercises.isEmpty() && !workout.exercisesJson.isNullOrBlank()) {
+                                    Timber.e("[SYNC-SCHEMA-DEBUG] 🚨 CRITICAL: toDomain conversion LOST EXERCISES! Entity had JSON but domain has 0 exercises!")
+                                    Timber.w("[SYNC-FALLBACK] Using entity→DTO bypass to preserve exercise data")
+                                    workoutMapper.entityToFirestoreDto(workout, userId)
+                                } else {
+                                    workoutMapper.toFirestoreDto(domainWorkout, userId)
+                                }
+                            } catch (e: Exception) {
+                                Timber.e(e, "[SYNC-FALLBACK] toDomain failed for non-existing remote case, using bypass")
+                                workoutMapper.entityToFirestoreDto(workout, userId)
+                            }
+
+                            workoutData
                         }
                         
                         if (dataToSync != null) {
@@ -779,12 +842,42 @@ class WorkoutSyncWorker @AssistedInject constructor(
                         ?.map { exerciseData ->
                             // Basic ExerciseDto construction from map data
                             try {
+                                // Parse exercise sets from the exercise data
+                                val sets = (exerciseData["sets"] as? List<*>)?.filterIsInstance<Map<String, Any>>()
+                                    ?.mapNotNull { setData ->
+                                        try {
+                                            com.example.liftrix.data.remote.dto.ExerciseSetDto(
+                                                setNumber = (setData["set_number"] as? Number)?.toInt() ?: 0,
+                                                weightKg = (setData["weight_kg"] as? Number)?.toDouble() ?: 0.0,
+                                                reps = (setData["reps"] as? Number)?.toInt() ?: 0,
+                                                isCompleted = setData["is_completed"] as? Boolean ?: false,
+                                                restTimeSeconds = (setData["rest_time_seconds"] as? Number)?.toInt(),
+                                                notes = setData["notes"] as? String,
+                                                timeSeconds = (setData["time_seconds"] as? Number)?.toInt(),
+                                                distanceMeters = (setData["distance_meters"] as? Number)?.toFloat(),
+                                                rpe = (setData["rpe"] as? Number)?.toInt(),
+                                                completedAt = setData["completed_at"] as? com.google.firebase.Timestamp
+                                            )
+                                        } catch (setEx: Exception) {
+                                            Timber.w(setEx, "[SYNC-DESERIALIZE] Failed to parse set data for exercise ${exerciseData["name"]}")
+                                            null
+                                        }
+                                    } ?: emptyList()
+
                                 com.example.liftrix.data.remote.dto.ExerciseDto(
                                     id = exerciseData["id"] as? String ?: "",
                                     name = exerciseData["name"] as? String ?: "",
-                                    sets = emptyList() // Simplified for now
+                                    category = exerciseData["category"] as? String ?: "",
+                                    sets = sets,
+                                    notes = exerciseData["notes"] as? String,
+                                    targetSets = (exerciseData["target_sets"] as? Number)?.toInt(),
+                                    targetReps = (exerciseData["target_reps"] as? Number)?.toInt(),
+                                    targetWeightKg = (exerciseData["target_weight_kg"] as? Number)?.toDouble(),
+                                    createdAt = exerciseData["created_at"] as? com.google.firebase.Timestamp ?: com.google.firebase.Timestamp.now(),
+                                    updatedAt = exerciseData["updated_at"] as? com.google.firebase.Timestamp ?: com.google.firebase.Timestamp.now()
                                 )
                             } catch (ex: Exception) {
+                                Timber.w(ex, "[SYNC-DESERIALIZE] Failed to parse exercise data for ${exerciseData["name"]}")
                                 null
                             }
                         }?.filterNotNull() ?: emptyList(),

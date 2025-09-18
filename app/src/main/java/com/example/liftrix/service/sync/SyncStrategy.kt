@@ -1,10 +1,20 @@
 package com.example.liftrix.service.sync
 
+import android.content.Context
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.workDataOf
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.WidgetComplexity
 import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.sync.AnalyticsSyncWorker
 import kotlinx.coroutines.flow.Flow
 import timber.log.Timber
+import java.util.concurrent.TimeUnit
 
 /**
  * Sealed class defining different synchronization strategies based on widget complexity
@@ -163,7 +173,7 @@ sealed class SyncStrategy {
     /**
      * Handle workout session updates from Firestore listeners
      */
-    suspend fun handleWorkoutSessionUpdate(userId: String, sessionData: Map<String, Any>) {
+    suspend fun handleWorkoutSessionUpdate(context: Context, userId: String, sessionData: Map<String, Any>) {
         try {
             Timber.d("SyncStrategy: Processing workout session update for user: $userId")
             
@@ -181,7 +191,7 @@ sealed class SyncStrategy {
             when (status) {
                 "ACTIVE", "PAUSED" -> {
                     // Real-time sync for active sessions
-                    triggerRealTimeSync(userId, setOf(
+                    triggerRealTimeSync(context, userId, setOf(
                         AnalyticsWidget.TotalVolume,
                         AnalyticsWidget.WorkoutFrequency,
                         AnalyticsWidget.AverageDuration
@@ -189,7 +199,7 @@ sealed class SyncStrategy {
                 }
                 "COMPLETED" -> {
                     // Comprehensive sync for completed sessions
-                    triggerComprehensiveSync(userId)
+                    triggerComprehensiveSync(context, userId)
                 }
             }
             
@@ -203,7 +213,7 @@ sealed class SyncStrategy {
     /**
      * Handle personal record updates from Firestore listeners
      */
-    suspend fun handlePersonalRecordUpdate(userId: String, prData: Map<String, Any>) {
+    suspend fun handlePersonalRecordUpdate(context: Context, userId: String, prData: Map<String, Any>) {
         try {
             Timber.d("SyncStrategy: Processing personal record update for user: $userId")
             
@@ -218,7 +228,7 @@ sealed class SyncStrategy {
             }
             
             // Trigger analytics recalculation for strength-related widgets
-            triggerRealTimeSync(userId, setOf(
+            triggerRealTimeSync(context, userId, setOf(
                 AnalyticsWidget.StrengthProgress,
                 AnalyticsWidget.OneRMProgression,
                 AnalyticsWidget.MonthlySummary
@@ -234,24 +244,110 @@ sealed class SyncStrategy {
     /**
      * Triggers real-time sync for specific widgets
      */
-    private suspend fun triggerRealTimeSync(userId: String, widgets: Set<AnalyticsWidget>) {
+    private suspend fun triggerRealTimeSync(context: Context, userId: String, widgets: Set<AnalyticsWidget>) {
         Timber.d("SyncStrategy: Triggering real-time sync for ${widgets.size} widgets")
-        
-        // Implementation would trigger immediate sync through the sync manager
-        // This is a placeholder for the actual sync trigger mechanism
-        widgets.forEach { widget ->
-            Timber.d("SyncStrategy: Queuing real-time sync for widget: ${widget.id}")
+
+        try {
+            widgets.forEach { widget ->
+                when (widget.complexity) {
+                    WidgetComplexity.SIMPLE -> {
+                        // Queue immediate sync for simple widgets
+                        val constraints = Constraints.Builder()
+                            .setRequiredNetworkType(NetworkType.CONNECTED)
+                            .setRequiresBatteryNotLow(false)
+                            .build()
+
+                        val workRequest = OneTimeWorkRequestBuilder<AnalyticsSyncWorker>()
+                            .setConstraints(constraints)
+                            .setInputData(workDataOf(
+                                "userId" to userId,
+                                "widgetType" to widget.id,
+                                "priority" to "IMMEDIATE"
+                            ))
+                            .build()
+
+                        WorkManager.getInstance(context).enqueue(workRequest)
+                        Timber.d("SyncStrategy: Queued immediate sync for simple widget: ${widget.id}")
+                    }
+
+                    WidgetComplexity.MODERATE -> {
+                        // Use smart polling with shorter interval for moderate widgets
+                        val workRequest = PeriodicWorkRequestBuilder<AnalyticsSyncWorker>(30, TimeUnit.SECONDS)
+                            .setConstraints(Constraints.Builder()
+                                .setRequiredNetworkType(NetworkType.CONNECTED)
+                                .build())
+                            .setInputData(workDataOf(
+                                "userId" to userId,
+                                "widgetType" to widget.id,
+                                "priority" to "HIGH"
+                            ))
+                            .build()
+
+                        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                            "realtime_sync_${widget.id}",
+                            ExistingPeriodicWorkPolicy.REPLACE,
+                            workRequest
+                        )
+                        Timber.d("SyncStrategy: Queued periodic sync for moderate widget: ${widget.id}")
+                    }
+
+                    WidgetComplexity.COMPLEX -> {
+                        // Batch sync for complex widgets to avoid blocking
+                        val workRequest = OneTimeWorkRequestBuilder<AnalyticsSyncWorker>()
+                            .setConstraints(Constraints.Builder()
+                                .setRequiredNetworkType(NetworkType.CONNECTED)
+                                .setRequiresBatteryNotLow(true)
+                                .build())
+                            .setInputData(workDataOf(
+                                "userId" to userId,
+                                "widgetType" to widget.id,
+                                "priority" to "BATCH",
+                                "delay" to 5000L // 5 second delay to batch operations
+                            ))
+                            .setInitialDelay(5, TimeUnit.SECONDS)
+                            .build()
+
+                        WorkManager.getInstance(context).enqueue(workRequest)
+                        Timber.d("SyncStrategy: Queued batch sync for complex widget: ${widget.id}")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "SyncStrategy: Failed to trigger real-time sync for user: $userId")
+            throw e
         }
     }
     
     /**
      * Triggers comprehensive sync for all user widgets
      */
-    private suspend fun triggerComprehensiveSync(userId: String) {
+    private suspend fun triggerComprehensiveSync(context: Context, userId: String) {
         Timber.d("SyncStrategy: Triggering comprehensive sync for user: $userId")
-        
-        // Implementation would trigger full sync through the sync manager
-        // This would sync all enabled widgets with appropriate priorities
+
+        try {
+            // Trigger comprehensive sync with batch processing for all widget types
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .setRequiresBatteryNotLow(true)
+                .build()
+
+            val workRequest = OneTimeWorkRequestBuilder<AnalyticsSyncWorker>()
+                .setConstraints(constraints)
+                .setInputData(workDataOf(
+                    "userId" to userId,
+                    "widgetType" to "ALL_WIDGETS",
+                    "priority" to "COMPREHENSIVE",
+                    "batchSize" to 10
+                ))
+                .build()
+
+            WorkManager.getInstance(context).enqueue(workRequest)
+
+            Timber.d("SyncStrategy: Queued comprehensive sync for user: $userId")
+        } catch (e: Exception) {
+            Timber.e(e, "SyncStrategy: Failed to trigger comprehensive sync for user: $userId")
+            throw e
+        }
     }
     
     /**

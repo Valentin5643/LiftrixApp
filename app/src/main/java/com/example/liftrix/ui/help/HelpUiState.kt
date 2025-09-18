@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.help
 
+import androidx.compose.runtime.Stable
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.help.HelpArticle
 import com.example.liftrix.domain.model.help.HelpCategory
@@ -18,6 +19,7 @@ fun initialHelpUiState(): HelpUiState = UiState.Loading
 /**
  * Data class containing all help-related state
  */
+@Stable
 data class HelpUiData(
     val searchQuery: String = "",
     val searchResults: List<HelpArticle> = emptyList(),

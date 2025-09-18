@@ -424,14 +424,165 @@ class AnalyticsTrackerImpl @Inject constructor(
                 "is_near_threshold" to isNearThreshold,
                 "cost_per_token" to if (tokensUsed > 0) estimatedCost / tokensUsed else 0.0
             )
-            
+
             params.putAll(additionalProperties)
-            
+
             firebaseAnalytics.logEvent("ai_chat_cost", params.toBundle())
-            
+
             Timber.d("Analytics: AI chat cost tracked - $userId incurred $estimatedCost cost for $tokensUsed tokens in $timeWindow")
         } catch (e: Exception) {
             Timber.w(e, "Failed to track AI chat cost analytics")
+        }
+    }
+
+    // Sync Monitoring Implementation
+
+    override fun trackSyncOperation(
+        operation: String,
+        entityType: String,
+        userId: String,
+        itemCount: Int,
+        durationMs: Long?,
+        errorReason: String?,
+        additionalProperties: Map<String, Any>
+    ) {
+        try {
+            val params = mutableMapOf<String, Any>(
+                "operation" to operation,
+                "entity_type" to entityType,
+                "user_id" to userId,
+                "item_count" to itemCount
+            )
+
+            durationMs?.let { params["duration_ms"] = it }
+            errorReason?.let { params["error_reason"] = it }
+            params.putAll(additionalProperties)
+
+            firebaseAnalytics.logEvent("sync_operation", params.toBundle())
+
+            Timber.d("Analytics: Sync operation tracked - $userId performed $operation on $entityType ($itemCount items)")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to track sync operation analytics")
+        }
+    }
+
+    override fun trackSyncQueueStatus(
+        userId: String,
+        pendingCount: Int,
+        failedCount: Int,
+        averageRetryCount: Float,
+        oldestItemAgeMs: Long?,
+        additionalProperties: Map<String, Any>
+    ) {
+        try {
+            val params = mutableMapOf<String, Any>(
+                "user_id" to userId,
+                "pending_count" to pendingCount,
+                "failed_count" to failedCount,
+                "average_retry_count" to averageRetryCount.toDouble()
+            )
+
+            oldestItemAgeMs?.let { params["oldest_item_age_ms"] = it }
+            params.putAll(additionalProperties)
+
+            firebaseAnalytics.logEvent("sync_queue_status", params.toBundle())
+
+            Timber.d("Analytics: Sync queue status tracked - $userId has $pendingCount pending, $failedCount failed")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to track sync queue status analytics")
+        }
+    }
+
+    override fun trackSyncPerformance(
+        syncType: String,
+        userId: String,
+        totalItems: Int,
+        successfulItems: Int,
+        failedItems: Int,
+        conflictItems: Int,
+        totalDurationMs: Long,
+        networkType: String?,
+        additionalProperties: Map<String, Any>
+    ) {
+        try {
+            val params = mutableMapOf<String, Any>(
+                "sync_type" to syncType,
+                "user_id" to userId,
+                "total_items" to totalItems,
+                "successful_items" to successfulItems,
+                "failed_items" to failedItems,
+                "conflict_items" to conflictItems,
+                "total_duration_ms" to totalDurationMs,
+                "success_rate" to if (totalItems > 0) (successfulItems.toDouble() / totalItems * 100).toInt() else 0
+            )
+
+            networkType?.let { params["network_type"] = it }
+            params.putAll(additionalProperties)
+
+            firebaseAnalytics.logEvent("sync_performance", params.toBundle())
+
+            Timber.d("Analytics: Sync performance tracked - $userId synced $totalItems items ($successfulItems success, $failedItems failed)")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to track sync performance analytics")
+        }
+    }
+
+    override fun trackSyncConflict(
+        entityType: String,
+        entityId: String,
+        resolutionStrategy: String,
+        userId: String,
+        localVersion: Long,
+        remoteVersion: Long,
+        additionalProperties: Map<String, Any>
+    ) {
+        try {
+            val params = mutableMapOf<String, Any>(
+                "entity_type" to entityType,
+                "entity_id" to entityId,
+                "resolution_strategy" to resolutionStrategy,
+                "user_id" to userId,
+                "local_version" to localVersion,
+                "remote_version" to remoteVersion,
+                "version_diff" to (remoteVersion - localVersion).toString()
+            )
+
+            params.putAll(additionalProperties)
+
+            firebaseAnalytics.logEvent("sync_conflict", params.toBundle())
+
+            Timber.d("Analytics: Sync conflict tracked - $userId had conflict on $entityType:$entityId, resolved with $resolutionStrategy")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to track sync conflict analytics")
+        }
+    }
+
+    override fun trackOfflineQueue(
+        action: String,
+        userId: String,
+        queueSize: Int,
+        entityType: String?,
+        retryCount: Int?,
+        errorCategory: String?,
+        additionalProperties: Map<String, Any>
+    ) {
+        try {
+            val params = mutableMapOf<String, Any>(
+                "action" to action,
+                "user_id" to userId,
+                "queue_size" to queueSize
+            )
+
+            entityType?.let { params["entity_type"] = it }
+            retryCount?.let { params["retry_count"] = it }
+            errorCategory?.let { params["error_category"] = it }
+            params.putAll(additionalProperties)
+
+            firebaseAnalytics.logEvent("offline_queue", params.toBundle())
+
+            Timber.d("Analytics: Offline queue tracked - $userId performed $action (queue size: $queueSize)")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to track offline queue analytics")
         }
     }
     

@@ -246,6 +246,7 @@ class ExerciseSelectionViewModel @Inject constructor(
 /**
  * Data class for filter parameters
  */
+@Stable
 private data class FilterParams(
     val searchQuery: String,
     val selectedEquipment: Set<Equipment>,

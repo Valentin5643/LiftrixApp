@@ -111,6 +111,18 @@ interface SyncQueueDao {
     suspend fun updateRetryInfo(id: String, nextRetryAt: Long)
 
     /**
+     * Enhanced retry info update with error tracking.
+     */
+    @Query("""
+        UPDATE sync_queue
+        SET retry_count = :retryCount,
+            next_retry_at = :nextRetryAt,
+            last_error = :lastError
+        WHERE id = :id
+    """)
+    suspend fun updateRetryInfo(id: String, nextRetryAt: Long, retryCount: Int, lastError: String?)
+
+    /**
      * Gets operations that are ready for retry.
      */
     @Query("""

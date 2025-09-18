@@ -1,6 +1,7 @@
 package com.example.liftrix.ui.feed
 
 import android.net.Uri
+import androidx.compose.runtime.Stable
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.social.*
@@ -269,6 +270,7 @@ class PostCreationViewModel @Inject constructor(
 /**
  * UI state for post creation screen
  */
+@Stable
 data class PostCreationUiState(
     val workoutId: String = "",
     val workoutSummary: WorkoutSummary? = null,

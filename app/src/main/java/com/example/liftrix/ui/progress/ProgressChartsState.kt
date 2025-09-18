@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.progress
 
+import androidx.compose.runtime.Stable
 import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.model.analytics.VolumeCalendarData
@@ -61,6 +62,7 @@ import com.example.liftrix.ui.common.state.isNotAsked
  * @param userId The current user ID for data scoping (null if not authenticated)
  * @param lastRefreshTimestamp Timestamp of the last data refresh operation
  */
+@Stable
 data class ProgressChartsState(
     val volumeChart: AsyncData<List<VolumeDataPoint>> = AsyncData.NotAsked,
     val durationChart: AsyncData<List<DurationDataPoint>> = AsyncData.NotAsked,

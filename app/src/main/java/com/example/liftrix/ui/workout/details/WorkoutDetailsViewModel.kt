@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.workout.details
 
+import androidx.compose.runtime.Stable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -292,9 +293,12 @@ class WorkoutDetailsViewModel @Inject constructor(
 }
 
 // UI State sealed class
+@Stable
 sealed class WorkoutDetailsUiState {
+    @Stable
     object Loading : WorkoutDetailsUiState()
-    
+
+    @Stable
     data class Success(
         val workoutName: String,
         val date: String,
@@ -311,7 +315,8 @@ sealed class WorkoutDetailsUiState {
         val notes: String,
         val isOwnWorkout: Boolean
     ) : WorkoutDetailsUiState()
-    
+
+    @Stable
     data class Error(
         val message: String
     ) : WorkoutDetailsUiState()
@@ -320,6 +325,7 @@ sealed class WorkoutDetailsUiState {
 /**
  * Data class representing an exercise with PR and previous workout data
  */
+@Stable
 data class ExerciseWithPRData(
     val exercise: com.example.liftrix.domain.model.Exercise,
     val exerciseNumber: Int,
@@ -327,6 +333,7 @@ data class ExerciseWithPRData(
     val totalPRsInExercise: Int
 )
 
+@Stable
 data class SetWithPRData(
     val set: com.example.liftrix.domain.model.ExerciseSet,
     val isPersonalRecord: Boolean,

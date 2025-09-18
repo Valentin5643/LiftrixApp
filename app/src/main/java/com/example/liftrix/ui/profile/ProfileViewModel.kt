@@ -1,6 +1,7 @@
 package com.example.liftrix.ui.profile
 
 import android.graphics.Rect
+import androidx.compose.runtime.Stable
 import android.net.Uri
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.UserProfile
@@ -1144,6 +1145,7 @@ class ProfileViewModel @Inject constructor(
 /**
  * UI state for profile screen with comprehensive profile management.
  */
+@Stable
 data class ProfileUiState(
     val userId: String? = null,
     val profileState: ProfileLoadingState = ProfileLoadingState.Loading,
@@ -1165,6 +1167,7 @@ data class ProfileUiState(
 /**
  * Profile loading state with explicit Loading/Success/Error/Missing states
  */
+@Stable
 sealed class ProfileLoadingState {
     data object Loading : ProfileLoadingState()
     data class Loaded(val profile: UserProfile) : ProfileLoadingState()
@@ -1175,6 +1178,7 @@ sealed class ProfileLoadingState {
 /**
  * Image upload state with progress tracking.
  */
+@Stable
 sealed class ImageUploadState {
     data object Idle : ImageUploadState()
     data class Uploading(val progress: Float) : ImageUploadState()
@@ -1185,6 +1189,7 @@ sealed class ImageUploadState {
 /**
  * Profile-specific error types with recovery context.
  */
+@Stable
 sealed class ProfileError(val message: String, val isRecoverable: Boolean = true) {
     data class Authentication(private val msg: String) : ProfileError(msg, false)
     data class LoadingFailed(private val msg: String) : ProfileError(msg, true)
@@ -1199,6 +1204,7 @@ sealed class ProfileError(val message: String, val isRecoverable: Boolean = true
 /**
  * Profile operations for retry functionality.
  */
+@Stable
 sealed class ProfileOperation {
     data class SaveProfile(val profile: UserProfile) : ProfileOperation()
     data class UpdatePrivacy(val isPublic: Boolean) : ProfileOperation()
@@ -1209,6 +1215,7 @@ sealed class ProfileOperation {
 /**
  * Profile events for user interactions and system actions.
  */
+@Stable
 sealed class ProfileEvent : ViewModelEvent {
     data object LoadProfile : ProfileEvent()
     data object RefreshProfile : ProfileEvent()

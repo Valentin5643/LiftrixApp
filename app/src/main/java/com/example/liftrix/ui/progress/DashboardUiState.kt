@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.progress
 
+import androidx.compose.runtime.Stable
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.DashboardConfiguration
 import com.example.liftrix.domain.model.analytics.WidgetPreferences
@@ -41,6 +42,7 @@ import com.example.liftrix.domain.usecase.analytics.GetWidgetDataUseCase
  * }
  * ```
  */
+@Stable
 data class DashboardUiState(
     /**
      * Current dashboard configuration including layout mode, widget order, and display preferences.
@@ -214,6 +216,7 @@ data class DashboardUiState(
  * Tracks the current state of drag-and-drop interactions including
  * dragged widget information, drop targets, and visual feedback states.
  */
+@Stable
 data class DragDropState(
     /**
      * Widget currently being dragged, null if no drag operation active.

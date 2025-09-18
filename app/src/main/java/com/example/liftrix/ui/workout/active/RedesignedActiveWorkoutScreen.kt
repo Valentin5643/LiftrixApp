@@ -490,10 +490,11 @@ private fun ActiveWorkoutContent(
         
         // Reorder dialog
         if (showReorderDialog) {
+            val exercisePairs = session.exercises.map { exercise ->
+                exercise.exerciseId.value to exercise.name
+            }
             ExerciseReorderDialog(
-                exercises = session.exercises.map { exercise ->
-                    exercise.exerciseId.value to exercise.name
-                },
+                exercises = exercisePairs,
                 onDismiss = { showReorderDialog = false },
                 onConfirmReorder = { reorderedIds ->
                     // Reorder functionality handled by ViewModel layer

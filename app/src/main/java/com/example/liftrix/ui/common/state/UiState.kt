@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.common.state
 
+import androidx.compose.runtime.Stable
 import com.example.liftrix.domain.model.error.LiftrixError
 
 /**
@@ -30,6 +31,7 @@ import com.example.liftrix.domain.model.error.LiftrixError
  * 
  * @param T The type of data contained in success state
  */
+@Stable
 sealed class UiState<out T> {
     
     /**
@@ -56,6 +58,7 @@ sealed class UiState<out T> {
      * - Operations completed without errors
      * - Content is ready for display
      */
+    @Stable
     data class Success<T>(
         val data: T,
         val isRefreshing: Boolean = false,
@@ -79,6 +82,7 @@ sealed class UiState<out T> {
      * - Show retry buttons when error.isRecoverable is true
      * - Preserve previous data when available for better UX
      */
+    @Stable
     data class Error<T>(
         val error: LiftrixError,
         val previousData: T? = null
@@ -102,6 +106,7 @@ sealed class UiState<out T> {
      * - Encouraging messages to guide user actions
      * - Clear call-to-action buttons when appropriate
      */
+    @Stable
     data class Empty(
         val message: String = "No data available",
         val actionText: String? = null,

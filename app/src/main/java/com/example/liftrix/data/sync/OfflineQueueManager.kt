@@ -1,7 +1,9 @@
 package com.example.liftrix.data.sync
 
 import com.example.liftrix.data.local.dao.SyncQueueDao
+import com.example.liftrix.data.local.dao.DeadLetterQueueDao
 import com.example.liftrix.data.local.entity.SyncQueueEntity
+import com.example.liftrix.data.local.entity.DeadLetterQueueEntity
 import com.example.liftrix.data.remote.FirebaseDataSource
 import com.example.liftrix.data.remote.ProcessResult
 import com.example.liftrix.domain.model.common.LiftrixResult
@@ -9,6 +11,7 @@ import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.SyncResult
 import com.example.liftrix.data.model.SyncPayload
+import com.example.liftrix.domain.service.AnalyticsTracker
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -43,8 +46,10 @@ import kotlin.time.Duration.Companion.seconds
 @Singleton
 class OfflineQueueManager @Inject constructor(
     private val syncQueueDao: SyncQueueDao,
+    private val deadLetterQueueDao: DeadLetterQueueDao,
     private val firebaseDataSource: FirebaseDataSource,
-    private val json: Json
+    private val json: Json,
+    private val analyticsTracker: AnalyticsTracker
 ) {
     
     /**
@@ -143,7 +148,19 @@ class OfflineQueueManager @Inject constructor(
             )
             
             syncQueueDao.insert(queueItem)
-            
+
+            // Track queue operation
+            analyticsTracker.trackOfflineQueue(
+                action = "QUEUE_ADD",
+                userId = userId,
+                queueSize = syncQueueDao.getPendingItemsCount(userId),
+                entityType = entityType,
+                additionalProperties = mapOf(
+                    "operation" to operation,
+                    "priority" to queueItem.priority
+                )
+            )
+
             Timber.d("OfflineQueueManager: Successfully queued operation ${queueItem.id}")
             Result.success(Unit)
             
@@ -171,9 +188,18 @@ class OfflineQueueManager @Inject constructor(
      */
     suspend fun processPendingQueue(userId: String): LiftrixResult<SyncResult> {
         return try {
+            val startTime = System.currentTimeMillis()
             Timber.d("OfflineQueueManager: Processing pending queue for user $userId")
-            
+
             val pendingItems = syncQueueDao.getPendingItems(userId)
+
+            // Track queue processing start
+            analyticsTracker.trackOfflineQueue(
+                action = "QUEUE_PROCESS",
+                userId = userId,
+                queueSize = pendingItems.size,
+                additionalProperties = mapOf("sync_type" to "MANUAL")
+            )
             
             if (pendingItems.isEmpty()) {
                 Timber.d("OfflineQueueManager: No pending operations for user $userId")
@@ -206,6 +232,21 @@ class OfflineQueueManager @Inject constructor(
                         is ProcessResult.Conflict -> {
                             syncQueueDao.delete(item) // Remove conflict item as it's been resolved
                             conflicts++
+
+                            // Track conflict resolution
+                            analyticsTracker.trackSyncConflict(
+                                entityType = item.entityType,
+                                entityId = item.entityId,
+                                resolutionStrategy = "LAST_WRITE_WINS", // Default strategy
+                                userId = item.userId,
+                                localVersion = System.currentTimeMillis(), // Approximation
+                                remoteVersion = System.currentTimeMillis(), // Would need actual version tracking
+                                additionalProperties = mapOf(
+                                    "operation" to item.operation,
+                                    "retry_count" to item.retryCount
+                                )
+                            )
+
                             if (item.entityType == "PROFILE") {
                                 Timber.w("$logPrefix ⚠️ Profile operation ${item.id} (${item.operation}) ended in conflict - THIS SHOULD NOT HAPPEN after the fix!")
                             } else {
@@ -243,8 +284,25 @@ class OfflineQueueManager @Inject constructor(
             }
             
             val result = SyncResult(successful, failed, conflicts)
+            val durationMs = System.currentTimeMillis() - startTime
+
+            // Track sync performance metrics
+            analyticsTracker.trackSyncPerformance(
+                syncType = "MANUAL",
+                userId = userId,
+                totalItems = pendingItems.size,
+                successfulItems = successful,
+                failedItems = failed,
+                conflictItems = conflicts,
+                totalDurationMs = durationMs,
+                additionalProperties = mapOf(
+                    "queue_processing" to true,
+                    "average_time_per_item" to if (pendingItems.isNotEmpty()) durationMs / pendingItems.size else 0
+                )
+            )
+
             Timber.d("OfflineQueueManager: Queue processing complete - $result")
-            
+
             Result.success(result)
             
         } catch (e: Exception) {
@@ -533,24 +591,340 @@ class OfflineQueueManager @Inject constructor(
     }
     
     /**
-     * Handles sync operation failures with exponential backoff retry logic.
+     * Enhanced sync failure handler with error categorization and intelligent retry strategies.
+     *
+     * This enhanced implementation provides:
+     * - Error categorization (Network, Auth, Data, Server)
+     * - Context-aware retry strategies based on error type
+     * - Dead letter queue for permanently failed operations
+     * - Enhanced logging with error context
+     * - Analytics integration for failure tracking
      */
     private suspend fun handleSyncFailure(item: SyncQueueEntity, error: Throwable) {
+        val errorCategory = categorizeError(error)
         val newRetryCount = item.retryCount + 1
-        
-        if (newRetryCount >= MAX_RETRY_COUNT) {
-            Timber.e("OfflineQueueManager: Operation ${item.id} exceeded max retries, removing from queue")
-            syncQueueDao.delete(item)
+
+        // Log detailed error information for debugging
+        Timber.w("OfflineQueueManager: Operation ${item.id} failed (${errorCategory.name}) - ${error.message}")
+        Timber.d("OfflineQueueManager: Error context - Entity: ${item.entityType}:${item.entityId}, Operation: ${item.operation}, Attempt: $newRetryCount/$MAX_RETRY_COUNT")
+
+        // Check for non-retryable errors
+        if (!errorCategory.isRetryable) {
+            Timber.e("OfflineQueueManager: Non-retryable error for operation ${item.id} - moving to dead letter queue")
+            moveToDeadLetterQueue(item, error, errorCategory)
             return
         }
-        
-        // Calculate exponential backoff delay
-        val delaySeconds = BASE_RETRY_DELAY_SECONDS * (1L shl newRetryCount) // 2^retryCount
+
+        // Check max retry limit
+        if (newRetryCount >= getMaxRetriesForCategory(errorCategory)) {
+            Timber.e("OfflineQueueManager: Operation ${item.id} exceeded max retries (${getMaxRetriesForCategory(errorCategory)}) - moving to dead letter queue")
+            moveToDeadLetterQueue(item, error, errorCategory)
+            return
+        }
+
+        // Calculate context-aware backoff delay
+        val delaySeconds = calculateBackoffDelay(errorCategory, newRetryCount)
         val nextRetryAt = System.currentTimeMillis() + (delaySeconds * 1000)
-        
-        Timber.w("OfflineQueueManager: Scheduling retry ${newRetryCount}/$MAX_RETRY_COUNT for operation ${item.id} in ${delaySeconds}s")
-        
-        syncQueueDao.updateRetryInfo(item.id, nextRetryAt)
+
+        Timber.w("OfflineQueueManager: Scheduling ${errorCategory.name} retry ${newRetryCount}/${getMaxRetriesForCategory(errorCategory)} for operation ${item.id} in ${delaySeconds}s")
+
+        // Update retry info with error context
+        val updatedItem = item.copy(
+            retryCount = newRetryCount,
+            nextRetryAt = nextRetryAt,
+            lastError = "${errorCategory.name}: ${error.message?.take(200) ?: "Unknown error"}"
+        )
+
+        syncQueueDao.updateRetryInfo(updatedItem.id, nextRetryAt, newRetryCount, updatedItem.lastError)
+    }
+
+    /**
+     * Categorizes errors for intelligent retry handling
+     */
+    private fun categorizeError(error: Throwable): ErrorCategory {
+        return when {
+            // Network-related errors - highly retryable
+            error.message?.contains("network", ignoreCase = true) == true ||
+            error.message?.contains("connection", ignoreCase = true) == true ||
+            error.message?.contains("timeout", ignoreCase = true) == true ||
+            error is java.net.ConnectException ||
+            error is java.net.SocketTimeoutException ||
+            error is java.io.IOException -> ErrorCategory.NETWORK
+
+            // Authentication errors - moderately retryable (token might refresh)
+            error.message?.contains("auth", ignoreCase = true) == true ||
+            error.message?.contains("unauthorized", ignoreCase = true) == true ||
+            error.message?.contains("token", ignoreCase = true) == true -> ErrorCategory.AUTHENTICATION
+
+            // Server errors - moderately retryable
+            error.message?.contains("server", ignoreCase = true) == true ||
+            error.message?.contains("internal", ignoreCase = true) == true ||
+            error.message?.contains("5xx", ignoreCase = true) == true -> ErrorCategory.SERVER
+
+            // Data validation errors - not retryable without fixing data
+            error.message?.contains("validation", ignoreCase = true) == true ||
+            error.message?.contains("invalid", ignoreCase = true) == true ||
+            error.message?.contains("malformed", ignoreCase = true) == true ||
+            error is kotlinx.serialization.SerializationException -> ErrorCategory.DATA_VALIDATION
+
+            // Rate limiting - retryable with longer delays
+            error.message?.contains("rate", ignoreCase = true) == true ||
+            error.message?.contains("quota", ignoreCase = true) == true ||
+            error.message?.contains("429", ignoreCase = true) == true -> ErrorCategory.RATE_LIMIT
+
+            // Unknown errors - limited retryable
+            else -> ErrorCategory.UNKNOWN
+        }
+    }
+
+    /**
+     * Gets maximum retry count based on error category
+     */
+    private fun getMaxRetriesForCategory(category: ErrorCategory): Int {
+        return when (category) {
+            ErrorCategory.NETWORK -> 7        // Network issues are most retryable
+            ErrorCategory.AUTHENTICATION -> 3  // Auth might resolve with token refresh
+            ErrorCategory.SERVER -> 5         // Server issues are moderately retryable
+            ErrorCategory.RATE_LIMIT -> 4     // Rate limits need patience
+            ErrorCategory.DATA_VALIDATION -> 0 // Data issues need manual fix
+            ErrorCategory.UNKNOWN -> MAX_RETRY_COUNT
+        }
+    }
+
+    /**
+     * Calculates backoff delay based on error type and attempt count
+     */
+    private fun calculateBackoffDelay(category: ErrorCategory, retryCount: Int): Long {
+        val baseDelay = when (category) {
+            ErrorCategory.NETWORK -> 15L      // Quick retry for network issues
+            ErrorCategory.AUTHENTICATION -> 60L // Wait longer for auth issues
+            ErrorCategory.SERVER -> 45L       // Medium delay for server issues
+            ErrorCategory.RATE_LIMIT -> 300L  // Long delay for rate limiting
+            ErrorCategory.DATA_VALIDATION -> 0L // No retry
+            ErrorCategory.UNKNOWN -> BASE_RETRY_DELAY_SECONDS
+        }
+
+        // Apply exponential backoff with jitter
+        val exponentialDelay = baseDelay * (1L shl (retryCount - 1))
+        val jitter = (Math.random() * 0.1 * exponentialDelay).toLong()
+
+        return exponentialDelay + jitter
+    }
+
+    /**
+     * Moves permanently failed operations to dead letter queue for manual inspection
+     */
+    private suspend fun moveToDeadLetterQueue(item: SyncQueueEntity, error: Throwable, category: ErrorCategory) {
+        try {
+            // Create dead letter entry with full error context
+            val deadLetterItem = DeadLetterQueueEntity(
+                id = "${item.id}_dead",
+                originalId = item.id,
+                userId = item.userId,
+                entityType = item.entityType,
+                entityId = item.entityId,
+                operation = item.operation,
+                data = item.data,
+                priority = item.priority,
+                retryCount = item.retryCount,
+                createdAt = item.createdAt,
+                failedAt = System.currentTimeMillis(),
+                errorCategory = category.name,
+                errorMessage = "${category.name}: ${error.message?.take(500) ?: "Unknown error"}",
+                reviewed = false,
+                reviewedAt = null,
+                retryAfterFix = false
+            )
+
+            // Log the dead letter operation for manual review
+            Timber.e("OfflineQueueManager: DEAD LETTER - ${item.entityType}:${item.entityId} ${item.operation} - ${category.name}: ${error.message}")
+
+            // Track dead letter queue operation
+            analyticsTracker.trackOfflineQueue(
+                action = "DEAD_LETTER",
+                userId = item.userId,
+                queueSize = syncQueueDao.getPendingItemsCount(item.userId),
+                entityType = item.entityType,
+                retryCount = item.retryCount,
+                errorCategory = category.name,
+                additionalProperties = mapOf(
+                    "operation" to item.operation,
+                    "error_message" to (error.message?.take(100) ?: "Unknown"),
+                    "age_hours" to ((System.currentTimeMillis() - item.createdAt) / (1000 * 60 * 60))
+                )
+            )
+
+            // Store in dead letter table
+            deadLetterQueueDao.insert(deadLetterItem)
+
+            // Remove from active queue
+            syncQueueDao.delete(item)
+
+            Timber.d("OfflineQueueManager: Successfully moved item ${item.id} to dead letter queue")
+
+        } catch (e: Exception) {
+            Timber.e(e, "OfflineQueueManager: Failed to move item ${item.id} to dead letter queue")
+            // Still remove from active queue to prevent infinite processing
+            syncQueueDao.delete(item)
+        }
+    }
+
+    /**
+     * Monitors and reports sync queue health metrics for analytics.
+     * Should be called periodically (e.g., every 15 minutes) to track queue health.
+     */
+    suspend fun reportQueueHealthMetrics(userId: String) {
+        try {
+            val allItems = syncQueueDao.getAllQueueEntries().filter { it.userId == userId }
+            val pendingItems = allItems.filter { it.nextRetryAt == null || it.nextRetryAt <= System.currentTimeMillis() }
+            val failedItems = allItems.filter { it.retryCount > 0 }
+
+            val averageRetryCount = if (allItems.isNotEmpty()) {
+                allItems.map { it.retryCount }.average().toFloat()
+            } else {
+                0f
+            }
+
+            val oldestItemAge = allItems.minByOrNull { it.createdAt }?.let {
+                System.currentTimeMillis() - it.createdAt
+            }
+
+            analyticsTracker.trackSyncQueueStatus(
+                userId = userId,
+                pendingCount = pendingItems.size,
+                failedCount = failedItems.size,
+                averageRetryCount = averageRetryCount,
+                oldestItemAgeMs = oldestItemAge,
+                additionalProperties = mapOf(
+                    "total_queue_size" to allItems.size,
+                    "stuck_items" to allItems.count { it.retryCount >= MAX_RETRY_COUNT - 1 },
+                    "entity_types" to allItems.groupBy { it.entityType }.mapValues { it.value.size }
+                )
+            )
+
+            Timber.d("OfflineQueueManager: Reported queue health - Pending: ${pendingItems.size}, Failed: ${failedItems.size}, Avg Retries: $averageRetryCount")
+
+        } catch (e: Exception) {
+            Timber.e(e, "OfflineQueueManager: Failed to report queue health metrics")
+        }
+    }
+
+    /**
+     * Gets dead letter queue items for manual review.
+     */
+    suspend fun getDeadLetterItems(userId: String): LiftrixResult<List<DeadLetterQueueEntity>> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.BusinessLogicError(
+                    code = "GET_DEAD_LETTER_FAILED",
+                    errorMessage = "Failed to get dead letter items: ${throwable.message}",
+                    analyticsContext = mapOf("user_id" to userId)
+                )
+            }
+        ) {
+            deadLetterQueueDao.getDeadLetterItems(userId)
+        }
+    }
+
+    /**
+     * Retries items from dead letter queue after fixes have been applied.
+     */
+    suspend fun retryDeadLetterItems(userId: String): LiftrixResult<Int> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.BusinessLogicError(
+                    code = "RETRY_DEAD_LETTER_FAILED",
+                    errorMessage = "Failed to retry dead letter items: ${throwable.message}",
+                    analyticsContext = mapOf("user_id" to userId)
+                )
+            }
+        ) {
+            val itemsToRetry = deadLetterQueueDao.getItemsToRetry(userId)
+            var retriedCount = 0
+
+            for (deadLetterItem in itemsToRetry) {
+                try {
+                    // Convert back to sync queue item
+                    val syncQueueItem = SyncQueueEntity(
+                        id = UUID.randomUUID().toString(), // New ID for retry
+                        userId = deadLetterItem.userId,
+                        entityType = deadLetterItem.entityType,
+                        entityId = deadLetterItem.entityId,
+                        operation = deadLetterItem.operation,
+                        data = deadLetterItem.data,
+                        priority = deadLetterItem.priority,
+                        retryCount = 0, // Reset retry count
+                        createdAt = System.currentTimeMillis(),
+                        nextRetryAt = null,
+                        lastError = null,
+                        failedAt = null
+                    )
+
+                    // Add back to sync queue
+                    syncQueueDao.insert(syncQueueItem)
+
+                    // Remove from dead letter queue
+                    deadLetterQueueDao.delete(deadLetterItem.id)
+
+                    retriedCount++
+                    Timber.d("OfflineQueueManager: Retried dead letter item ${deadLetterItem.id}")
+
+                } catch (e: Exception) {
+                    Timber.e(e, "OfflineQueueManager: Failed to retry dead letter item ${deadLetterItem.id}")
+                }
+            }
+
+            // Track retry operation
+            analyticsTracker.trackOfflineQueue(
+                action = "DEAD_LETTER_RETRY",
+                userId = userId,
+                queueSize = syncQueueDao.getPendingItemsCount(userId),
+                additionalProperties = mapOf(
+                    "retried_count" to retriedCount,
+                    "total_items" to itemsToRetry.size
+                )
+            )
+
+            retriedCount
+        }
+    }
+
+    /**
+     * Cleans up old reviewed dead letter items.
+     */
+    suspend fun cleanupOldDeadLetterItems(userId: String, daysOld: Int = 30): LiftrixResult<Int> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.BusinessLogicError(
+                    code = "CLEANUP_DEAD_LETTER_FAILED",
+                    errorMessage = "Failed to cleanup dead letter items: ${throwable.message}",
+                    analyticsContext = mapOf("user_id" to userId)
+                )
+            }
+        ) {
+            val cutoffTime = System.currentTimeMillis() - (daysOld * 24 * 60 * 60 * 1000L)
+            val countBefore = deadLetterQueueDao.getDeadLetterCount(userId)
+
+            deadLetterQueueDao.clearOldReviewedItems(userId, cutoffTime)
+
+            val countAfter = deadLetterQueueDao.getDeadLetterCount(userId)
+            val cleanedCount = countBefore - countAfter
+
+            Timber.d("OfflineQueueManager: Cleaned up $cleanedCount old dead letter items for user $userId")
+            cleanedCount
+        }
+    }
+
+    /**
+     * Error categories for intelligent retry handling
+     */
+    private enum class ErrorCategory(val isRetryable: Boolean) {
+        NETWORK(true),
+        AUTHENTICATION(true),
+        SERVER(true),
+        RATE_LIMIT(true),
+        DATA_VALIDATION(false),
+        UNKNOWN(true)
     }
     
     /**

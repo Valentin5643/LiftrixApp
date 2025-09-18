@@ -21,7 +21,9 @@ import java.time.LocalDate
         Index(value = ["user_id", "created_at"], name = "idx_workout_user_created"),
         Index(value = ["user_id", "status"], name = "idx_workout_user_status"),
         Index(value = ["status", "date"], name = "idx_workout_status_date"),
-        Index(value = ["is_synced", "sync_version"], name = "idx_workout_sync")
+        Index(value = ["is_synced", "sync_version"], name = "idx_workout_sync"),
+        Index(value = ["user_id", "is_synced", "updated_at"], name = "idx_workout_sync_operations"),
+        Index(value = ["id", "updated_at"], name = "idx_workout_conflict_detection")
     ]
 )
 @TypeConverters(DateTimeConverters::class, WorkoutConverters::class)

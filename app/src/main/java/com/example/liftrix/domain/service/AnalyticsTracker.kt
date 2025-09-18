@@ -120,6 +120,74 @@ interface AnalyticsTracker {
         errorMessage: String,
         additionalProperties: Map<String, Any> = emptyMap()
     )
+
+    // Sync Monitoring Methods
+
+    /**
+     * Track sync operation events
+     */
+    fun trackSyncOperation(
+        operation: String, // START, SUCCESS, FAILURE, CONFLICT
+        entityType: String, // WORKOUT, PROFILE, TEMPLATE, etc.
+        userId: String,
+        itemCount: Int = 1,
+        durationMs: Long? = null,
+        errorReason: String? = null,
+        additionalProperties: Map<String, Any> = emptyMap()
+    )
+
+    /**
+     * Track sync queue status
+     */
+    fun trackSyncQueueStatus(
+        userId: String,
+        pendingCount: Int,
+        failedCount: Int,
+        averageRetryCount: Float,
+        oldestItemAgeMs: Long? = null,
+        additionalProperties: Map<String, Any> = emptyMap()
+    )
+
+    /**
+     * Track sync performance metrics
+     */
+    fun trackSyncPerformance(
+        syncType: String, // PERIODIC, MANUAL, REAL_TIME, BATCH
+        userId: String,
+        totalItems: Int,
+        successfulItems: Int,
+        failedItems: Int,
+        conflictItems: Int,
+        totalDurationMs: Long,
+        networkType: String? = null,
+        additionalProperties: Map<String, Any> = emptyMap()
+    )
+
+    /**
+     * Track sync conflict resolution
+     */
+    fun trackSyncConflict(
+        entityType: String,
+        entityId: String,
+        resolutionStrategy: String, // LAST_WRITE_WINS, SERVER_WINS, CLIENT_WINS
+        userId: String,
+        localVersion: Long,
+        remoteVersion: Long,
+        additionalProperties: Map<String, Any> = emptyMap()
+    )
+
+    /**
+     * Track offline queue operations
+     */
+    fun trackOfflineQueue(
+        action: String, // QUEUE_ADD, QUEUE_PROCESS, QUEUE_CLEAR, DEAD_LETTER
+        userId: String,
+        queueSize: Int,
+        entityType: String? = null,
+        retryCount: Int? = null,
+        errorCategory: String? = null,
+        additionalProperties: Map<String, Any> = emptyMap()
+    )
     
     // AI Chat Analytics Methods
     

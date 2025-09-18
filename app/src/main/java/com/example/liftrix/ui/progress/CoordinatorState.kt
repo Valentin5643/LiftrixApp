@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.progress
 
+import androidx.compose.runtime.Stable
 import kotlinx.datetime.Instant
 import com.example.liftrix.ui.common.state.AsyncData
 import com.example.liftrix.ui.common.state.isSuccess
@@ -37,6 +38,7 @@ import com.example.liftrix.service.export.ExportProgress
  * )
  * ```
  */
+@Stable
 data class CoordinatorState(
     /**
      * Current user authentication state.

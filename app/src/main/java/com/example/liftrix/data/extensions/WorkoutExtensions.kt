@@ -457,10 +457,25 @@ private fun parseExercisesFromJsonLegacy(workoutId: String, exercisesJson: Strin
                     // 🔥 FIX: Use the SafeExerciseDeserializer for proper nested structure handling
                     val listType = object : TypeToken<List<Exercise>>() {}.type
                     val exercises = gson.fromJson<List<Exercise>>(exercisesElement, listType) ?: emptyList()
-                    
+
                     if (exercises.isNotEmpty()) {
-                        Timber.d("PROGRESS-PARSE-SUCCESS: ✅ Wrapped format parsing succeeded with ${exercises.size} exercises")
-                        return exercises
+                        // Validate exercises have valid data
+                        val validExercises = exercises.filter { exercise ->
+                            val hasValidSets = exercise.sets.isNotEmpty() && exercise.sets.any { set ->
+                                set.weight != null && set.reps != null
+                            }
+                            if (!hasValidSets) {
+                                Timber.w("PROGRESS-PARSE-FILTER: Exercise '${exercise.libraryExercise.name}' has no valid sets (${exercise.sets.size} sets total)")
+                            }
+                            hasValidSets
+                        }
+
+                        if (validExercises.isNotEmpty()) {
+                            Timber.d("PROGRESS-PARSE-SUCCESS: ✅ Wrapped format parsing succeeded with ${validExercises.size} valid exercises (${exercises.size} total parsed)")
+                            return validExercises
+                        } else {
+                            Timber.w("PROGRESS-PARSE-WARNING: All ${exercises.size} parsed exercises were filtered out due to invalid sets")
+                        }
                     } else {
                         Timber.w("PROGRESS-PARSE-WARNING: Wrapped format returned empty exercises array")
                     }
@@ -545,53 +560,100 @@ private class SafeExerciseDeserializer : JsonDeserializer<Exercise> {
         context: JsonDeserializationContext
     ): Exercise {
         val jsonObject = json.asJsonObject
-        
+
         // Extract basic exercise info
         val id = jsonObject.get("id")?.asString ?: ""
         val name = jsonObject.get("name")?.asString ?: ""
-        
-        // Handle libraryExercise - use ExerciseLibrary which is what Exercise expects
+
+        // Handle libraryExercise - properly parse all fields instead of using defaults
         val libraryExercise = try {
             val libElement = jsonObject.get("libraryExercise")
             if (libElement?.isJsonObject == true) {
                 val libObj = libElement.asJsonObject
+
+                // Parse equipment from string to enum
+                val equipmentStr = libObj.get("equipment")?.asString ?: "BARBELL"
+                val equipment = try {
+                    Equipment.valueOf(equipmentStr.uppercase())
+                } catch (e: Exception) {
+                    Timber.w("SafeExerciseDeserializer: Unknown equipment '$equipmentStr', using BARBELL")
+                    Equipment.BARBELL
+                }
+
+                // Parse primary muscle group - extract from movementPattern or use shoulders for arnold press
+                val primaryMuscleGroup = try {
+                    val exerciseId = libObj.get("id")?.asString ?: ""
+                    when {
+                        exerciseId.contains("shoulders") -> ExerciseCategory.SHOULDERS
+                        exerciseId.contains("chest") -> ExerciseCategory.CHEST
+                        exerciseId.contains("back") -> ExerciseCategory.BACK
+                        exerciseId.contains("legs") -> ExerciseCategory.LEGS
+                        exerciseId.contains("arms") -> ExerciseCategory.ARMS
+                        exerciseId.contains("bicep") -> ExerciseCategory.BICEPS
+                        exerciseId.contains("tricep") -> ExerciseCategory.TRICEPS
+                        exerciseId.contains("core") -> ExerciseCategory.CORE
+                        else -> ExerciseCategory.OTHER
+                    }
+                } catch (e: Exception) {
+                    ExerciseCategory.OTHER
+                }
+
+                // Parse secondary muscle groups if available
+                val secondaryMuscleGroups = try {
+                    val secondaryArray = libObj.getAsJsonArray("secondaryMuscleGroups")
+                    secondaryArray?.map { element ->
+                        try {
+                            ExerciseCategory.valueOf(element.asString.uppercase())
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }?.filterNotNull() ?: emptyList()
+                } catch (e: Exception) {
+                    emptyList()
+                }
+
                 ExerciseLibrary(
                     id = libObj.get("id")?.asString ?: id,
                     name = libObj.get("name")?.asString ?: name,
-                    primaryMuscleGroup = ExerciseCategory.CHEST, // Default
-                    equipment = Equipment.BARBELL, // Default
-                    secondaryMuscleGroups = emptyList(),
-                    movementPattern = "compound",
-                    difficultyLevel = 1,
-                    instructions = "",
-                    isCompound = false,
-                    searchableTerms = emptyList()
+                    primaryMuscleGroup = primaryMuscleGroup,
+                    equipment = equipment,
+                    secondaryMuscleGroups = secondaryMuscleGroups,
+                    movementPattern = libObj.get("movementPattern")?.asString ?: "compound",
+                    difficultyLevel = libObj.get("difficultyLevel")?.asInt ?: 3,
+                    instructions = libObj.get("instructions")?.asString ?: "",
+                    isCompound = libObj.get("isCompound")?.asBoolean ?: false,
+                    searchableTerms = try {
+                        val termsArray = libObj.getAsJsonArray("searchableTerms")
+                        termsArray?.map { it.asString } ?: emptyList()
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
                 )
             } else {
                 // Fallback to simple structure
                 ExerciseLibrary(
                     id = id,
                     name = name,
-                    primaryMuscleGroup = ExerciseCategory.CHEST,
-                    equipment = Equipment.BARBELL,
+                    primaryMuscleGroup = ExerciseCategory.OTHER,
+                    equipment = Equipment.BODYWEIGHT_ONLY,
                     secondaryMuscleGroups = emptyList(),
-                    movementPattern = "compound",
-                    difficultyLevel = 1,
+                    movementPattern = "unknown",
+                    difficultyLevel = 3,
                     instructions = "",
                     isCompound = false,
                     searchableTerms = emptyList()
                 )
             }
         } catch (e: Exception) {
-            Timber.w("SafeExerciseDeserializer: Failed to parse libraryExercise, using fallback")
+            Timber.w("SafeExerciseDeserializer: Failed to parse libraryExercise, using fallback: ${e.message}")
             ExerciseLibrary(
                 id = id,
                 name = name,
-                primaryMuscleGroup = ExerciseCategory.CHEST,
-                equipment = Equipment.BARBELL,
+                primaryMuscleGroup = ExerciseCategory.OTHER,
+                equipment = Equipment.BODYWEIGHT_ONLY,
                 secondaryMuscleGroups = emptyList(),
-                movementPattern = "compound",
-                difficultyLevel = 1,
+                movementPattern = "unknown",
+                difficultyLevel = 3,
                 instructions = "",
                 isCompound = false,
                 searchableTerms = emptyList()
@@ -601,9 +663,19 @@ private class SafeExerciseDeserializer : JsonDeserializer<Exercise> {
         // Parse sets with proper handling of nested Weight/Reps structures
         val sets = try {
             val setsArray = jsonObject.getAsJsonArray("sets")
-            setsArray?.mapIndexed { index, setElement -> 
-                parseExerciseSet(setElement.asJsonObject, index + 1)
-            } ?: emptyList()
+            if (setsArray != null && setsArray.size() > 0) {
+                setsArray.mapIndexedNotNull { index, setElement ->
+                    try {
+                        parseExerciseSet(setElement.asJsonObject, index + 1)
+                    } catch (e: Exception) {
+                        Timber.w("SafeExerciseDeserializer: Failed to parse set ${index + 1} for exercise $name: ${e.message}")
+                        null
+                    }
+                }
+            } else {
+                Timber.d("SafeExerciseDeserializer: No sets found for exercise $name")
+                emptyList()
+            }
         } catch (e: Exception) {
             Timber.w("SafeExerciseDeserializer: Failed to parse sets for exercise $name: ${e.message}")
             emptyList()
@@ -621,24 +693,26 @@ private class SafeExerciseDeserializer : JsonDeserializer<Exercise> {
     }
     
     private fun parseExerciseSet(setObject: com.google.gson.JsonObject, setNumber: Int): ExerciseSet {
-        // Handle nested weight structure: {"weight": {"kilograms": 50.0}} 
+        // Handle nested weight structure: {"weight": {"kilograms": 50.0}}
         val weight = try {
             val weightElement = setObject.get("weight")
             when {
                 weightElement?.isJsonObject == true -> {
                     val weightObj = weightElement.asJsonObject
                     val kg = weightObj.get("kilograms")?.asDouble
-                    if (kg != null) Weight(kg) else null
+                    if (kg != null && kg > 0) Weight(kg) else null
                 }
                 weightElement?.isJsonPrimitive == true -> {
-                    Weight(weightElement.asDouble)
+                    val kg = weightElement.asDouble
+                    if (kg > 0) Weight(kg) else null
                 }
                 else -> null
             }
         } catch (e: Exception) {
+            Timber.d("parseExerciseSet: Failed to parse weight for set $setNumber: ${e.message}")
             null
         }
-        
+
         // Handle nested reps structure: {"reps": {"count": 20}}
         val reps = try {
             val repsElement = setObject.get("reps")
@@ -646,17 +720,19 @@ private class SafeExerciseDeserializer : JsonDeserializer<Exercise> {
                 repsElement?.isJsonObject == true -> {
                     val repsObj = repsElement.asJsonObject
                     val count = repsObj.get("count")?.asInt
-                    if (count != null) Reps(count) else null
+                    if (count != null && count > 0) Reps(count) else null
                 }
                 repsElement?.isJsonPrimitive == true -> {
-                    Reps(repsElement.asInt)
+                    val count = repsElement.asInt
+                    if (count > 0) Reps(count) else null
                 }
                 else -> null
             }
         } catch (e: Exception) {
+            Timber.d("parseExerciseSet: Failed to parse reps for set $setNumber: ${e.message}")
             null
         }
-        
+
         // Handle completedAt
         val completedAt = try {
             val completedElement = setObject.get("completedAt")
@@ -664,12 +740,22 @@ private class SafeExerciseDeserializer : JsonDeserializer<Exercise> {
                 completedElement?.isJsonPrimitive == true && completedElement.asJsonPrimitive.isString -> {
                     java.time.Instant.parse(completedElement.asString)
                 }
+                completedElement?.isJsonObject == true && completedElement.asJsonObject.entrySet().isEmpty() -> {
+                    // Handle empty {} objects as null
+                    null
+                }
                 else -> null
             }
         } catch (e: Exception) {
+            Timber.d("parseExerciseSet: Failed to parse completedAt for set $setNumber: ${e.message}")
             null
         }
-        
+
+        // Parse completed status - if completedAt exists, set is completed
+        val isCompleted = completedAt != null || setObject.get("completed")?.asBoolean == true
+
+        Timber.d("parseExerciseSet: Set $setNumber parsed - weight=$weight, reps=$reps, completed=$isCompleted")
+
         return ExerciseSet(
             id = ExerciseSetId.generate(),
             setNumber = setNumber,
@@ -678,8 +764,8 @@ private class SafeExerciseDeserializer : JsonDeserializer<Exercise> {
             time = null,
             distance = null,
             rpe = null,
-            completedAt = completedAt,
-            notes = null
+            completedAt = if (isCompleted) completedAt ?: java.time.Instant.now() else null,
+            notes = setObject.get("notes")?.asString?.takeIf { it.isNotBlank() }
         )
     }
 }

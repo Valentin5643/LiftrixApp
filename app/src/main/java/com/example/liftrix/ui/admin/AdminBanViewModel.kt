@@ -1,5 +1,6 @@
 package com.example.liftrix.ui.admin
 
+import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.admin.*
@@ -354,6 +355,7 @@ class AdminBanViewModel @Inject constructor(
 /**
  * UI state for admin ban management screen
  */
+@Stable
 data class AdminBanUiState(
     val isAdmin: Boolean,
     val isLoading: Boolean,

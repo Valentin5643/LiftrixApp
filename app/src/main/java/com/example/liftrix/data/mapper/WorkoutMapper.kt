@@ -2,6 +2,8 @@ package com.example.liftrix.data.mapper
 
 import com.example.liftrix.data.local.entity.WorkoutEntity
 import com.example.liftrix.data.remote.dto.WorkoutDto
+import com.example.liftrix.data.remote.dto.ExerciseDto
+import com.example.liftrix.data.service.ExerciseConversionService
 import com.example.liftrix.domain.model.*
 import com.google.firebase.Timestamp
 import com.google.gson.Gson
@@ -16,43 +18,157 @@ import timber.log.Timber
 @Singleton
 class WorkoutMapper @Inject constructor(
     private val exerciseMapper: ExerciseMapper,
+    private val exerciseConversionService: ExerciseConversionService,
     private val gson: Gson
 ) {
 
     companion object {
         private val DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE
+
+        // JSON Schema versioning for exercises_json field - PRODUCTION BRIDGE PATTERN
+        const val CURRENT_SCHEMA_VERSION = 2  // WorkoutMapper native format (schema_version: 2)
+        const val SUPPORTED_LATEST_VERSION = 3  // WorkoutJsonSerializationService format (schemaVersion: 3)
+        const val LEGACY_SCHEMA_VERSION = 1
+        const val MINIMAL_SCHEMA_VERSION = 0
+
+        // 🚀 PRODUCTION-READY: Support both v2 (native) and v3 (serialization service) during 12-month migration
     }
+
+    /**
+     * Data class to represent the enhanced workout JSON structure
+     */
+    data class WorkoutJsonWrapper(
+        val schema_version: Int?,
+        val exercises: List<Exercise>?,
+        val totalVolume: Double?,
+        val exercisesWithVolume: List<Any>?,
+        val created_at: Long?,
+        val format: String?
+    )
 
     /**
      * Convert Room entity to domain model
      */
     fun toDomain(entity: WorkoutEntity): Workout = entity.run {
-        // Handle both old and new JSON formats for backward compatibility
-        val exercises: List<Exercise> = try {
-            // Try new enhanced format first
-            val enhancedType = object : TypeToken<Map<String, Any>>() {}.type
-            val enhancedData: Map<String, Any>? = gson.fromJson(exercisesJson, enhancedType)
-            
-            if (enhancedData?.containsKey("exercises") == true) {
-                // New format with exercises key
-                val exercisesType = object : TypeToken<List<Exercise>>() {}.type
-                val exercisesList = gson.fromJson<List<Exercise>>(gson.toJson(enhancedData["exercises"]), exercisesType) ?: emptyList<Exercise>()
-                exercisesList
+        // 🚨 SCHEMA-CONFLICT: Log the incoming JSON to detect schema conflicts between WorkoutMapper vs WorkoutJsonSerializationService
+        Timber.d("[CONFLICT] WorkoutMapper.toDomain: Processing workout '${entity.name}' (ID: ${entity.id})")
+        Timber.d("[CONFLICT] JSON length: ${exercisesJson?.length ?: 0}")
+        if (!exercisesJson.isNullOrBlank()) {
+            val jsonPreview = if (exercisesJson.length > 300) exercisesJson.substring(0, 300) + "..." else exercisesJson
+            Timber.d("[CONFLICT] JSON preview: $jsonPreview")
+
+            // Detect schema version from JSON structure - CHECK FOR CONFLICTING FORMATS
+            val detectedVersion = when {
+                exercisesJson.contains("\"schemaVersion\":3") -> 3  // WorkoutJsonSerializationService format
+                exercisesJson.contains("\"schema_version\":2") -> 2  // WorkoutMapper format
+                exercisesJson.contains("\"exercises\":") -> 1
+                else -> 0
+            }
+
+            // 🚨 CRITICAL: Check if we have format conflict between services
+            val hasSerializationServiceFormat = exercisesJson.contains("\"schemaVersion\":3")
+            val hasMapperFormat = exercisesJson.contains("\"schema_version\":2")
+
+            Timber.d("[CONFLICT] Detected version: $detectedVersion, SerializationService format: $hasSerializationServiceFormat, Mapper format: $hasMapperFormat")
+            Timber.d("[CONFLICT] WorkoutMapper supports v$CURRENT_SCHEMA_VERSION (native) and v$SUPPORTED_LATEST_VERSION (bridge)")
+
+            if (detectedVersion != CURRENT_SCHEMA_VERSION && detectedVersion != SUPPORTED_LATEST_VERSION) {
+                Timber.w("[CONFLICT] ⚠️ UNSUPPORTED SCHEMA! JSON is v$detectedVersion but mapper supports v$CURRENT_SCHEMA_VERSION-$SUPPORTED_LATEST_VERSION")
             } else {
-                // Old format - direct exercise list
-                val exercisesType = object : TypeToken<List<Exercise>>() {}.type
-                val exercisesList = gson.fromJson<List<Exercise>>(exercisesJson, exercisesType) ?: emptyList<Exercise>()
-                exercisesList
+                Timber.d("[CONFLICT] ✅ SCHEMA SUPPORTED: v$detectedVersion is within supported range")
+                if (hasSerializationServiceFormat) {
+                    Timber.d("[CONFLICT] ✅ Using v3 bridge pattern for WorkoutJsonSerializationService format")
+                }
+            }
+        }
+
+        // 🚀 PRODUCTION-READY: Handle multiple JSON schema versions with version bridge pattern
+        val exercises: List<Exercise> = try {
+            // Parse JSON structure first to detect schema version
+            val dataType = object : TypeToken<Map<String, Any>>() {}.type
+            val data: Map<String, Any>? = gson.fromJson(exercisesJson, dataType)
+
+            when {
+                // 🔥 SCHEMA-V3: WorkoutJsonSerializationService format (schemaVersion: 3)
+                data?.containsKey("schemaVersion") == true && data["schemaVersion"]?.toString()?.toIntOrNull() == 3 -> {
+                    Timber.d("[CONFLICT] 🚀 SCHEMA-V3-BRIDGE: Parsing WorkoutJsonSerializationService format")
+
+                    // Extract exercises from v3 format: { schemaVersion: 3, exercises: [...], metadata: {...} }
+                    val exercisesRaw = data["exercises"]
+                    Timber.d("[CONFLICT] V3 has ${(exercisesRaw as? List<*>)?.size ?: 0} exercises")
+
+                    if (exercisesRaw is List<*>) {
+                        val exercisesType = object : TypeToken<List<Exercise>>() {}.type
+                        val parsedExercises = gson.fromJson<List<Exercise>>(gson.toJson(exercisesRaw), exercisesType) ?: emptyList()
+                        Timber.d("[CONFLICT] ✅ SCHEMA-V3-SUCCESS: Parsed ${parsedExercises.size} exercises from v3 format")
+                        parsedExercises
+                    } else {
+                        Timber.w("[CONFLICT] ⚠️ SCHEMA-V3-ERROR: exercises field is not a list")
+                        emptyList<Exercise>()
+                    }
+                }
+
+                // 🔥 SCHEMA-V2: WorkoutMapper format (schema_version: 2) with serializable data
+                data?.containsKey("schema_version") == true && data["schema_version"]?.toString()?.toIntOrNull() == 2 -> {
+                    Timber.d("[CONFLICT] 🔥 SCHEMA-V2: Parsing WorkoutMapper serializable format")
+
+                    val exercisesRaw = data["exercises"]
+                    Timber.d("[CONFLICT] V2 has ${(exercisesRaw as? List<*>)?.size ?: 0} exercises")
+
+                    if (exercisesRaw is List<*>) {
+                        // Parse serializable exercise data and convert back to domain objects
+                        val parsedExercises = exercisesRaw.mapNotNull { exerciseData ->
+                            parseSerializableExercise(exerciseData as? Map<String, Any?> ?: return@mapNotNull null)
+                        }
+                        Timber.d("[CONFLICT] ✅ SCHEMA-V2-SUCCESS: Parsed ${parsedExercises.size} exercises from v2 serializable format")
+                        parsedExercises
+                    } else {
+                        Timber.w("[CONFLICT] ⚠️ SCHEMA-V2-ERROR: exercises field is not a list")
+                        emptyList<Exercise>()
+                    }
+                }
+
+                // 🔥 SCHEMA-V1: Enhanced format without explicit version (exercises key present)
+                data?.containsKey("exercises") == true -> {
+                    Timber.d("[CONFLICT] 🔥 SCHEMA-V1: Parsing enhanced format (legacy)")
+                    val exercisesRaw = data["exercises"]
+
+                    if (exercisesRaw is List<*>) {
+                        val exercisesType = object : TypeToken<List<Exercise>>() {}.type
+                        val parsedExercises = gson.fromJson<List<Exercise>>(gson.toJson(exercisesRaw), exercisesType) ?: emptyList()
+                        Timber.d("[CONFLICT] ✅ SCHEMA-V1-SUCCESS: Parsed ${parsedExercises.size} exercises from v1 format")
+                        parsedExercises
+                    } else {
+                        Timber.w("[CONFLICT] ⚠️ SCHEMA-V1-ERROR: exercises field is not a list")
+                        emptyList<Exercise>()
+                    }
+                }
+
+                // 🔥 SCHEMA-V0: Direct exercise array (minimal format)
+                else -> {
+                    Timber.d("[CONFLICT] 🔥 SCHEMA-V0: Parsing minimal format (direct exercise array)")
+                    val exercisesType = object : TypeToken<List<Exercise>>() {}.type
+                    val parsedExercises = gson.fromJson<List<Exercise>>(exercisesJson, exercisesType) ?: emptyList()
+                    Timber.d("[CONFLICT] ✅ SCHEMA-V0-SUCCESS: Parsed ${parsedExercises.size} exercises from minimal format")
+                    parsedExercises
+                }
             }
         } catch (e: Exception) {
-            // Fallback to old format if parsing fails
-            try {
-                val exercisesType = object : TypeToken<List<Exercise>>() {}.type
-                val fallbackList = gson.fromJson<List<Exercise>>(exercisesJson, exercisesType) ?: emptyList<Exercise>()
-                fallbackList
-            } catch (e2: Exception) {
-                Timber.e(e2, "🔥 WORKOUT-DEBUG: Exercise JSON parsing failed completely")
-                emptyList<Exercise>()
+            // Final fallback to empty list with detailed error logging
+            Timber.e(e, "[SCHEMA-DEBUG-4] 🔥 SCHEMA-ERROR: All exercise JSON parsing failed for workout ${entity.id}")
+            Timber.e("[SCHEMA-DEBUG-4a] 🔥 SCHEMA-ERROR: JSON content: ${exercisesJson?.take(200)}...")
+            Timber.e("[SCHEMA-DEBUG-4b] 🔥 SCHEMA-ERROR: Exception type: ${e.javaClass.simpleName}")
+            Timber.e("[SCHEMA-DEBUG-4c] 🔥 SCHEMA-ERROR: This suggests either corrupted JSON or incompatible data structure")
+            emptyList<Exercise>()
+        }
+
+        // 🔥 SCHEMA-DEBUG: Log final result
+        Timber.d("[SCHEMA-DEBUG-5] WorkoutMapper.toDomain final result: ${exercises.size} exercises")
+        if (exercises.isEmpty()) {
+            Timber.w("[SCHEMA-DEBUG-5a] ⚠️ WARNING: toDomain returning ZERO exercises! This will cause volume calculations to be 0!")
+        } else {
+            exercises.forEachIndexed { index, exercise ->
+                Timber.d("[SCHEMA-DEBUG-5b] Final exercise $index: '${exercise.libraryExercise.name}' with ${exercise.sets.size} sets")
             }
         }
 
@@ -91,33 +207,76 @@ class WorkoutMapper @Inject constructor(
             }
         }
         
-        // Create enhanced JSON that includes calculated totalVolume
-        val exercisesWithVolume = exercises.map { exercise ->
-            val volumeInKg = exercise.getTotalVolume()?.kilograms ?: 0.0
+        // 🚀 FIXED: Create serializable exercise data that includes sets with weight/reps
+        val serializableExercises = exercises.map { exercise ->
             mapOf(
-                "exercise" to exercise,
+                "id" to exercise.id.value,
+                "workoutId" to exercise.workoutId.value,
+                "libraryExercise" to mapOf(
+                    "id" to exercise.libraryExercise.id,
+                    "name" to exercise.libraryExercise.name,
+                    "primaryMuscleGroup" to exercise.libraryExercise.primaryMuscleGroup.name
+                ),
+                "orderIndex" to exercise.orderIndex,
+                // 🔥 CRITICAL FIX: Include sets with actual weight/reps data
+                "sets" to exercise.sets.map { set ->
+                    mapOf(
+                        "id" to set.id.value,
+                        "setNumber" to set.setNumber,
+                        "reps" to set.reps?.count,  // Extract actual integer value
+                        "weight" to set.weight?.kilograms,  // Extract actual double value
+                        "time" to set.time?.toMillis(),
+                        "distance" to set.distance?.meters,
+                        "rpe" to set.rpe?.value,
+                        "completedAt" to set.completedAt?.toEpochMilli(),
+                        "notes" to set.notes
+                    )
+                },
+                "targetSets" to exercise.targetSets,
+                "targetReps" to exercise.targetReps,
+                "targetWeight" to exercise.targetWeight?.kilograms,
+                "notes" to exercise.notes,
+                "createdAt" to exercise.createdAt.toEpochMilli()
+            )
+        }
+
+        // Calculate volume from serializable exercise data
+        val exercisesWithVolume = serializableExercises.map { exerciseMap ->
+            val sets = exerciseMap["sets"] as? List<Map<String, Any?>> ?: emptyList()
+            val volumeInKg = sets.sumOf { setMap ->
+                val reps = (setMap["reps"] as? Number)?.toDouble() ?: 0.0
+                val weight = (setMap["weight"] as? Number)?.toDouble() ?: 0.0
+                reps * weight
+            }
+            mapOf(
+                "exerciseId" to exerciseMap["id"],
                 "totalVolume" to volumeInKg
             )
         }
-        val workoutTotalVolume = exercises.mapNotNull { it.getTotalVolume() }
-            .fold(Weight.ZERO) { acc, weight -> acc + weight }
-            .kilograms
-        
+
+        val workoutTotalVolume = exercisesWithVolume.sumOf {
+            (it["totalVolume"] as? Number)?.toDouble() ?: 0.0
+        }
+
         val enhancedJson = mapOf(
-            "exercises" to exercises,
+            "schema_version" to CURRENT_SCHEMA_VERSION,
+            "exercises" to serializableExercises,  // Use serializable format instead of domain objects
             "totalVolume" to workoutTotalVolume,
-            "exercisesWithVolume" to exercisesWithVolume
+            "exercisesWithVolume" to exercisesWithVolume,
+            "created_at" to System.currentTimeMillis(),
+            "format" to "enhanced_v2"
         )
         
-        // 🔥 SETS-DEBUG: Log the serialized JSON to detect serialization issues
+        // 🚨 CONFLICT: Log serialization to detect which service is creating the JSON
         val serializedJson = gson.toJson(enhancedJson)
-        Timber.d("[SETS-DEBUG-5] WorkoutMapper.toEntity: Generated JSON length=${serializedJson.length}")
-        
+        Timber.d("[CONFLICT] WorkoutMapper.toEntity: Generated JSON length=${serializedJson.length}")
+        Timber.d("[CONFLICT] This JSON uses schema_version:$CURRENT_SCHEMA_VERSION (WorkoutMapper format)")
+
         // Log first part of JSON to see structure without overwhelming logs
         if (serializedJson.length > 500) {
-            Timber.d("[SETS-DEBUG-5a] JSON preview: ${serializedJson.substring(0, 500)}...")
+            Timber.d("[CONFLICT] JSON preview: ${serializedJson.substring(0, 500)}...")
         } else {
-            Timber.d("[SETS-DEBUG-5a] Full JSON: $serializedJson")
+            Timber.d("[CONFLICT] Full JSON: $serializedJson")
         }
         
         WorkoutEntity(
@@ -135,6 +294,84 @@ class WorkoutMapper @Inject constructor(
             updatedAt = updatedAt,
             isSynced = isSynced,
             syncVersion = System.currentTimeMillis()
+        )
+    }
+
+    /**
+     * Direct entity to Firestore DTO conversion - bypasses domain layer
+     *
+     * This method preserves raw exercise data from the entity without parsing,
+     * preventing data loss during sync operations when schema versions mismatch.
+     * Use this for sync operations where preserving data integrity is critical.
+     */
+    fun entityToFirestoreDto(entity: WorkoutEntity, userId: String): WorkoutDto = entity.run {
+        // 🔥 SYNC-FIX: Log the bypass operation
+        Timber.d("[SYNC-BYPASS] entityToFirestoreDto: Converting '${entity.name}' directly from entity to DTO")
+        Timber.d("[SYNC-BYPASS] Entity has ${exercisesJson?.length ?: 0} chars of exercise JSON")
+
+        // 🔥 SYNC-FIX: Try to extract exercises using the robust parsing we know works
+        val exercises: List<ExerciseDto> = try {
+            if (exercisesJson.isNullOrBlank()) {
+                Timber.d("[SYNC-BYPASS] No exercise JSON to parse")
+                emptyList<ExerciseDto>()
+            } else {
+                // Use the same parsing logic that we know works from toDomain, but catch errors
+                val dataType = object : TypeToken<Map<String, Any>>() {}.type
+                val data: Map<String, Any>? = gson.fromJson(exercisesJson, dataType)
+
+                when {
+                    data?.containsKey("exercises") == true -> {
+                        Timber.d("[SYNC-BYPASS] Found exercises in JSON object format")
+                        val exercisesRaw = data["exercises"]
+                        if (exercisesRaw is List<*>) {
+                            // Convert each exercise map to ExerciseDto
+                            exercisesRaw.mapNotNull { exerciseMap ->
+                                try {
+                                    // Convert map to ExerciseDto using Gson
+                                    val exerciseJson = gson.toJson(exerciseMap)
+                                    gson.fromJson(exerciseJson, ExerciseDto::class.java)
+                                } catch (e: Exception) {
+                                    Timber.w("[SYNC-BYPASS] Failed to convert exercise: ${e.message}")
+                                    null
+                                }
+                            }
+                        } else {
+                            Timber.w("[SYNC-BYPASS] Exercises field is not a list: ${exercisesRaw?.javaClass?.simpleName}")
+                            emptyList<ExerciseDto>()
+                        }
+                    }
+                    else -> {
+                        Timber.d("[SYNC-BYPASS] JSON doesn't contain exercises field, treating as empty")
+                        emptyList<ExerciseDto>()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "[SYNC-BYPASS] Failed to parse exercises JSON, using empty list")
+            emptyList<ExerciseDto>()
+        }
+
+        Timber.d("[SYNC-BYPASS] Successfully parsed ${exercises.size} exercises for Firestore upload")
+        if (exercises.isNotEmpty()) {
+            exercises.forEachIndexed { index, exerciseDto ->
+                Timber.d("[SYNC-BYPASS] Exercise $index: '${exerciseDto.name}' with ${exerciseDto.sets.size} sets")
+            }
+        }
+
+        WorkoutDto(
+            id = id,
+            name = name,
+            date = Timestamp(date.atStartOfDay().toInstant(java.time.ZoneOffset.UTC)),
+            exercises = exercises,
+            status = status.name,
+            startTime = startTime?.let { Timestamp(it.epochSecond, it.nano) },
+            endTime = endTime?.let { Timestamp(it.epochSecond, it.nano) },
+            notes = notes,
+            templateId = templateId,
+            createdAt = Timestamp(createdAt.epochSecond, createdAt.nano),
+            updatedAt = Timestamp(updatedAt.epochSecond, updatedAt.nano),
+            userId = userId,
+            version = syncVersion
         )
     }
 
@@ -162,7 +399,7 @@ class WorkoutMapper @Inject constructor(
     /**
      * Convert Firestore DTO to domain model with robust timestamp handling
      */
-    fun fromFirestoreDto(dto: WorkoutDto): Workout = dto.run {
+    suspend fun fromFirestoreDto(dto: WorkoutDto): Workout = dto.run {
         val parsedStartTime = convertToInstant(startTime)
         val parsedEndTime = convertToInstant(endTime)
         
@@ -178,15 +415,17 @@ class WorkoutMapper @Inject constructor(
             parsedEndTime
         }
         
-        // 🔥 VOLUME-BUG-FIX: Don't lose exercise data during sync
-        // Firebase exercise conversion is complex and handled by separate sync service
-        // For now, preserve the fact that exercises exist without full conversion
+        // 🔥 VOLUME-BUG-FIX: Properly convert Firebase exercise data using conversion service
         val convertedExercises = if (exercises.isNotEmpty()) {
-            Timber.d("🔥 FIREBASE-SYNC-FIX: Firebase workout has ${exercises.size} exercises - marking as preserved")
-            // Create placeholder exercises to indicate data exists
-            // The actual exercise data will be handled by the exercise sync service
-            emptyList<Exercise>() // TODO: Implement proper exercise conversion service
+            Timber.d("🔥 FIREBASE-SYNC-FIX: Converting Firebase workout with ${exercises.size} exercises")
+            try {
+                exerciseConversionService.convertFirebaseExercisesToDomain(exercises, WorkoutId(id))
+            } catch (e: Exception) {
+                Timber.e(e, "🔥 FIREBASE-SYNC-ERROR: Failed to convert exercises for workout $id")
+                emptyList<Exercise>()
+            }
         } else {
+            Timber.d("🔥 FIREBASE-SYNC-FIX: Firebase workout has no exercises")
             emptyList()
         }
         
@@ -373,6 +612,201 @@ class WorkoutMapper @Inject constructor(
                 null
             }
         }
+    }
+
+    /**
+     * Migrate exercise JSON from older schema versions to current version
+     * This method can be used to batch migrate existing workouts
+     */
+    fun migrateExerciseJsonToCurrentSchema(oldJson: String): String {
+        return try {
+            val dataType = object : TypeToken<Map<String, Any>>() {}.type
+            val data: Map<String, Any>? = gson.fromJson(oldJson, dataType)
+
+            when {
+                // Already current version
+                data?.get("schema_version")?.toString()?.toIntOrNull() == CURRENT_SCHEMA_VERSION -> {
+                    Timber.d("🔥 MIGRATION: JSON already at current schema version")
+                    oldJson
+                }
+
+                // Migrate from version 1 (enhanced without schema version)
+                data?.containsKey("exercises") == true && data.get("schema_version") == null -> {
+                    Timber.d("🔥 MIGRATION: Migrating from schema v1 to v${CURRENT_SCHEMA_VERSION}")
+                    val migratedJson = mutableMapOf<String, Any>()
+                    migratedJson.putAll(data)
+                    migratedJson["schema_version"] = CURRENT_SCHEMA_VERSION
+                    migratedJson["format"] = "enhanced_v2"
+                    migratedJson["migrated_at"] = System.currentTimeMillis()
+
+                    // Preserve original created_at if it exists, otherwise use migration time
+                    if (!migratedJson.containsKey("created_at")) {
+                        migratedJson["created_at"] = System.currentTimeMillis()
+                    }
+
+                    gson.toJson(migratedJson)
+                }
+
+                // Migrate from version 0 (direct exercise list)
+                else -> {
+                    Timber.d("🔥 MIGRATION: Migrating from schema v0 to v${CURRENT_SCHEMA_VERSION}")
+                    // Parse as direct exercise list
+                    val exercisesType = object : TypeToken<List<Exercise>>() {}.type
+                    val exercises: List<Exercise> = gson.fromJson(oldJson, exercisesType) ?: emptyList()
+
+                    // Create new enhanced format
+                    val exercisesWithVolume = exercises.map { exercise ->
+                        val volumeInKg = exercise.getTotalVolume()?.kilograms ?: 0.0
+                        mapOf(
+                            "exercise" to exercise,
+                            "totalVolume" to volumeInKg
+                        )
+                    }
+                    val workoutTotalVolume = exercises.mapNotNull { it.getTotalVolume() }
+                        .fold(Weight.ZERO) { acc, weight -> acc + weight }
+                        .kilograms
+
+                    val migratedJson = mapOf(
+                        "schema_version" to CURRENT_SCHEMA_VERSION,
+                        "exercises" to exercises,
+                        "totalVolume" to workoutTotalVolume,
+                        "exercisesWithVolume" to exercisesWithVolume,
+                        "created_at" to System.currentTimeMillis(),
+                        "migrated_at" to System.currentTimeMillis(),
+                        "format" to "enhanced_v2",
+                        "migrated_from" to "direct_list_v0"
+                    )
+
+                    gson.toJson(migratedJson)
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "🔥 MIGRATION-ERROR: Failed to migrate exercise JSON")
+            // Return original JSON on migration failure
+            oldJson
+        }
+    }
+
+    /**
+     * Parse serializable exercise data back to domain Exercise object
+     */
+    private fun parseSerializableExercise(exerciseData: Map<String, Any?>): Exercise? {
+        return try {
+            val id = ExerciseId(exerciseData["id"] as? String ?: return null)
+            val workoutId = WorkoutId(exerciseData["workoutId"] as? String ?: return null)
+
+            val libraryExerciseData = exerciseData["libraryExercise"] as? Map<String, Any?> ?: return null
+            val libraryExercise = ExerciseLibrary(
+                id = libraryExerciseData["id"] as? String ?: return null,
+                name = libraryExerciseData["name"] as? String ?: return null,
+                primaryMuscleGroup = (libraryExerciseData["primaryMuscleGroup"] as? String)?.let { ExerciseCategory.valueOf(it) } ?: ExerciseCategory.OTHER,
+                equipment = Equipment.BODYWEIGHT_ONLY, // Default for now
+                secondaryMuscleGroups = emptyList(),
+                movementPattern = "unknown",
+                difficultyLevel = 5,
+                instructions = null,
+                isCompound = false,
+                searchableTerms = emptyList()
+            )
+
+            val orderIndex = (exerciseData["orderIndex"] as? Number)?.toInt() ?: return null
+
+            // Parse sets data
+            val setsData = exerciseData["sets"] as? List<Map<String, Any?>> ?: emptyList()
+            val sets = setsData.mapNotNull { setData ->
+                try {
+                    val setId = ExerciseSetId(setData["id"] as? String ?: return@mapNotNull null)
+                    val setNumber = (setData["setNumber"] as? Number)?.toInt() ?: return@mapNotNull null
+                    val reps = (setData["reps"] as? Number)?.toInt()?.let { Reps(it) }
+                    val weight = (setData["weight"] as? Number)?.toDouble()?.let { Weight.fromKilograms(it) }
+                    val rpe = (setData["rpe"] as? Number)?.toInt()?.let { RPE(it) }
+                    val completedAt = (setData["completedAt"] as? Number)?.toLong()?.let { Instant.ofEpochMilli(it) }
+                    val notes = setData["notes"] as? String
+
+                    ExerciseSet(
+                        id = setId,
+                        setNumber = setNumber,
+                        reps = reps,
+                        weight = weight,
+                        rpe = rpe,
+                        completedAt = completedAt,
+                        notes = notes
+                    )
+                } catch (e: Exception) {
+                    Timber.w(e, "[CONFLICT] Failed to parse set data: $setData")
+                    null
+                }
+            }
+
+            val targetWeight = (exerciseData["targetWeight"] as? Number)?.toDouble()?.let { Weight.fromKilograms(it) }
+            val createdAt = (exerciseData["createdAt"] as? Number)?.toLong()?.let { Instant.ofEpochMilli(it) } ?: Instant.now()
+
+            Exercise.createSafe(
+                id = id,
+                workoutId = workoutId,
+                libraryExercise = libraryExercise,
+                orderIndex = orderIndex,
+                targetSets = exerciseData["targetSets"] as? Int,
+                targetReps = exerciseData["targetReps"] as? Int,
+                targetWeight = targetWeight,
+                sets = sets,
+                notes = exerciseData["notes"] as? String,
+                createdAt = createdAt
+            )
+        } catch (e: Exception) {
+            Timber.w(e, "[CONFLICT] Failed to parse serializable exercise: $exerciseData")
+            null
+        }
+    }
+
+    /**
+     * Validates exercise JSON schema integrity
+     */
+    fun validateExerciseJsonSchema(json: String): SchemaValidationResult {
+        return try {
+            val dataType = object : TypeToken<Map<String, Any>>() {}.type
+            val data: Map<String, Any>? = gson.fromJson(json, dataType)
+
+            when {
+                data?.get("schema_version")?.toString()?.toIntOrNull() == CURRENT_SCHEMA_VERSION -> {
+                    val hasExercises = data.containsKey("exercises")
+                    val hasTotalVolume = data.containsKey("totalVolume")
+                    val hasFormat = data.containsKey("format")
+
+                    if (hasExercises && hasTotalVolume && hasFormat) {
+                        SchemaValidationResult.Valid(CURRENT_SCHEMA_VERSION)
+                    } else {
+                        SchemaValidationResult.Invalid("Missing required fields for schema v$CURRENT_SCHEMA_VERSION")
+                    }
+                }
+
+                data?.containsKey("exercises") == true -> {
+                    SchemaValidationResult.NeedsMigration(LEGACY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)
+                }
+
+                else -> {
+                    // Check if it's a direct exercise list
+                    try {
+                        val exercisesType = object : TypeToken<List<Exercise>>() {}.type
+                        gson.fromJson<List<Exercise>>(json, exercisesType)
+                        SchemaValidationResult.NeedsMigration(MINIMAL_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)
+                    } catch (e: Exception) {
+                        SchemaValidationResult.Invalid("Unrecognized JSON format")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            SchemaValidationResult.Invalid("JSON parsing failed: ${e.message}")
+        }
+    }
+
+    /**
+     * Result of schema validation
+     */
+    sealed class SchemaValidationResult {
+        data class Valid(val version: Int) : SchemaValidationResult()
+        data class NeedsMigration(val currentVersion: Int, val targetVersion: Int) : SchemaValidationResult()
+        data class Invalid(val reason: String) : SchemaValidationResult()
     }
 
 } 

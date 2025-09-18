@@ -1,6 +1,7 @@
 package com.example.liftrix.ui.settings.support
 
 import android.net.Uri
+import androidx.compose.runtime.Stable
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.support.CreateSupportTicketRequest
 import com.example.liftrix.domain.model.support.DeviceInfo
@@ -11,11 +12,13 @@ import com.example.liftrix.ui.common.event.ViewModelEvent
 /**
  * UI state for support ticket creation and management
  */
+@Stable
 sealed class SupportUiState {
     
     /**
      * Data class containing all support-related state
      */
+    @Stable
     data class Data(
         val ticketForm: TicketForm = TicketForm(),
         val deviceInfo: DeviceInfo? = null,
@@ -63,11 +66,13 @@ sealed class SupportUiState {
     /**
      * Loading state while fetching support data
      */
+    @Stable
     data object Loading : SupportUiState()
     
     /**
      * Success state with support data
      */
+    @Stable
     data class Success(
         val data: Data,
         val isRefreshing: Boolean = false
@@ -76,6 +81,7 @@ sealed class SupportUiState {
     /**
      * Error state with failure information
      */
+    @Stable
     data class Error(
         val error: LiftrixError,
         val previousData: Data? = null
@@ -84,6 +90,7 @@ sealed class SupportUiState {
     /**
      * Empty state when no support data is available
      */
+    @Stable
     data class Empty(
         val message: String = "No support tickets available",
         val actionText: String? = "Create Ticket",
@@ -94,6 +101,7 @@ sealed class SupportUiState {
 /**
  * Form data for creating a support ticket
  */
+@Stable
 data class TicketForm(
     val userId: String = "",
     val category: SupportCategory = SupportCategory.GENERAL_QUESTION,

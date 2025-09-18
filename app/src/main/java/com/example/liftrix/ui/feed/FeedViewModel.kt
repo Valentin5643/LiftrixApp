@@ -1,6 +1,10 @@
 package com.example.liftrix.ui.feed
 
+import androidx.compose.runtime.Stable
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.plus
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.example.liftrix.domain.model.common.LiftrixResult
@@ -162,7 +166,7 @@ class FeedViewModel @Inject constructor(
                 error = null
             )
         ).let { flow ->
-            viewModelScope.launch {
+            viewModelScope.launch(Dispatchers.IO + SupervisorJob()) {
                 flow.collect { newState ->
                     updateState { newState }
                 }
@@ -185,7 +189,7 @@ class FeedViewModel @Inject constructor(
     }
 
     private fun toggleLike(postId: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO + SupervisorJob()) {
             val userId = getCurrentUserIdUseCase()
             if (userId != null) {
                 val currentLiked = _likedPosts.value
@@ -407,6 +411,7 @@ class FeedViewModel @Inject constructor(
 /**
  * UI state for feed screen
  */
+@Stable
 data class FeedUiState(
     val selectedTab: FeedTab = FeedTab.HOME,
     val likedPosts: Set<String> = emptySet(),
@@ -419,10 +424,14 @@ data class FeedUiState(
 /**
  * Events that can be triggered in the feed screen
  */
+@Stable
 sealed class FeedEvent : ViewModelEvent {
+    @Stable
     data class SelectTab(val tab: FeedTab) : FeedEvent()
+    @Stable
     data class HandlePostInteraction(val interaction: PostInteraction) : FeedEvent()
-    object RefreshFeed : FeedEvent()
+    @Stable
+    data object RefreshFeed : FeedEvent()
 }
 
 /**
@@ -438,16 +447,23 @@ enum class FeedTab {
 /**
  * Types of post interactions
  */
+@Stable
 sealed class PostInteraction {
+    @Stable
     data class Like(val postId: String) : PostInteraction()
+    @Stable
     data class Save(val postId: String) : PostInteraction()
+    @Stable
     data class Share(val post: WorkoutPost) : PostInteraction()
+    @Stable
     data class CopyWorkout(val post: WorkoutPost) : PostInteraction()
 }
 
 /**
  * ViewModel events that trigger UI actions
  */
+@Stable
 sealed class FeedViewModelEvent : ViewModelEvent {
+    @Stable
     data class SharePost(val shareText: String, val postId: String) : FeedViewModelEvent()
 }

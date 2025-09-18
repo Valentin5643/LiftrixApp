@@ -211,19 +211,50 @@ class SyncOperationManager @Inject constructor(
                 userId = userId
             )
             
-            val result = try {
-                // For now, create a basic sync placeholder
-                // This will be expanded once we have proper DAO method signatures
-                Timber.d("SyncOperationManager: Profile sync operation queued for $userId")
-                SyncOperationResult(operation, success = true)
-                
+            val results = mutableListOf<SyncOperationResult>()
+
+            try {
+                // Get user profile that needs syncing
+                val userProfile = userProfileDao.getProfileForUserSuspend(userId)
+
+                if (userProfile == null) {
+                    Timber.d("SyncOperationManager: No profile found for user $userId")
+                    return emptyList()
+                }
+
+                if (userProfile.isSynced) {
+                    Timber.d("SyncOperationManager: Profile already synced for user $userId")
+                    return emptyList()
+                }
+
+                // Convert to Firestore and upload
+                val docRef = firestore
+                    .collection("users")
+                    .document(userId)
+
+                val profileData = userProfileMapper.toFirestoreDto(
+                    userProfileMapper.toDomain(userProfile)
+                )
+
+                docRef.set(profileData, SetOptions.merge()).await()
+
+                // Mark as synced
+                userProfileDao.updateSyncStatus(
+                    userId = userId,
+                    isSynced = true,
+                    version = System.currentTimeMillis()
+                )
+
+                results.add(SyncOperationResult(operation, success = true))
+                Timber.d("SyncOperationManager: Successfully synced profile for $userId")
+
             } catch (e: Exception) {
                 Timber.e(e, "SyncOperationManager: Failed to sync profile $userId")
-                SyncOperationResult(operation, success = false, error = e.message)
+                results.add(SyncOperationResult(operation, success = false, error = e.message))
             }
-            
+
             Timber.d("SyncOperationManager: Profile sync completed for user $userId")
-            listOf(result)
+            results
             
         } catch (e: Exception) {
             Timber.e(e, "SyncOperationManager: Profile sync failed for user $userId")
@@ -269,10 +300,29 @@ class SyncOperationManager @Inject constructor(
                         .document(workout.id)
                     
                     try {
-                        val workoutData = workoutMapper.toFirestoreDto(
-                            workoutMapper.toDomain(workout),
-                            userId
-                        )
+                        // 🔥 SYNC-FIX: Implement fallback to prevent exercise data loss during schema mismatches
+                        val workoutData = try {
+                            // First attempt: Use normal domain conversion
+                            val domainWorkout = workoutMapper.toDomain(workout)
+
+                            // Check if domain conversion preserved exercise data
+                            if (domainWorkout.exercises.isEmpty() && !workout.exercisesJson.isNullOrBlank()) {
+                                Timber.w("[SYNC-FALLBACK] 🚨 toDomain conversion lost exercises! JSON length: ${workout.exercisesJson.length}")
+                                Timber.w("[SYNC-FALLBACK] Falling back to direct entity→DTO conversion to preserve data")
+
+                                // Use the bypass method to preserve exercise data
+                                workoutMapper.entityToFirestoreDto(workout, userId)
+                            } else {
+                                Timber.d("[SYNC-NORMAL] toDomain conversion successful, ${domainWorkout.exercises.size} exercises preserved")
+                                workoutMapper.toFirestoreDto(domainWorkout, userId)
+                            }
+                        } catch (e: Exception) {
+                            Timber.e(e, "[SYNC-FALLBACK] 🚨 toDomain failed completely! Exception: ${e.message}")
+                            Timber.w("[SYNC-FALLBACK] Falling back to direct entity→DTO conversion")
+
+                            // Use the bypass method when toDomain throws an exception
+                            workoutMapper.entityToFirestoreDto(workout, userId)
+                        }
                         
                         firestoreBatch.set(docRef, workoutData, SetOptions.merge())
                         
@@ -353,18 +403,85 @@ class SyncOperationManager @Inject constructor(
                 userId = userId
             )
             
-            val result = try {
-                // For now, create a basic sync placeholder
-                Timber.d("SyncOperationManager: Template sync operation queued for $userId")
-                SyncOperationResult(operation, success = true)
-                
+            val results = mutableListOf<SyncOperationResult>()
+
+            try {
+                // Get unsynced templates
+                val unsyncedTemplates = workoutTemplateDao.getUnsyncedTemplates(userId)
+
+                if (unsyncedTemplates.isEmpty()) {
+                    Timber.d("SyncOperationManager: No unsynced templates for user $userId")
+                    return emptyList()
+                }
+
+                // Process templates in batches
+                val batches = unsyncedTemplates.chunked(DEFAULT_BATCH_SIZE)
+
+                for ((batchIndex, batch) in batches.withIndex()) {
+                    cancellationCheck?.invoke()
+
+                    Timber.d("SyncOperationManager: Processing template batch ${batchIndex + 1}/${batches.size} (${batch.size} templates)")
+
+                    val firestoreBatch = firestore.batch()
+
+                    for (template in batch) {
+                        val docRef = firestore
+                            .collection("users")
+                            .document(userId)
+                            .collection("templates")
+                            .document(template.id)
+
+                        try {
+                            // Create basic template data since we don't have a mapper
+                            val templateData = mapOf(
+                                "id" to template.id,
+                                "userId" to template.userId,
+                                "name" to template.name,
+                                "description" to template.description,
+                                "templateExercisesJson" to template.templateExercisesJson,
+                                "estimatedDurationMinutes" to template.estimatedDurationMinutes,
+                                "difficultyLevel" to template.difficultyLevel,
+                                "folderId" to template.folderId,
+                                "usageCount" to template.usageCount,
+                                "lastUpdated" to FieldValue.serverTimestamp(),
+                                "version" to System.currentTimeMillis()
+                            )
+
+                            firestoreBatch.set(docRef, templateData, SetOptions.merge())
+
+                        } catch (e: Exception) {
+                            Timber.w(e, "SyncOperationManager: Failed to prepare template ${template.id} for batch")
+                            continue
+                        }
+                    }
+
+                    try {
+                        firestoreBatch.commit().await()
+
+                        // Mark batch as synced
+                        workoutTemplateDao.markTemplatesAsSynced(batch.map { it.id })
+
+                        for (template in batch) {
+                            results.add(SyncOperationResult(operation, success = true))
+                        }
+
+                        Timber.d("SyncOperationManager: Successfully synced template batch ${batchIndex + 1}")
+
+                    } catch (e: Exception) {
+                        Timber.e(e, "SyncOperationManager: Failed to commit template batch ${batchIndex + 1}")
+
+                        for (template in batch) {
+                            results.add(SyncOperationResult(operation, success = false, error = e.message))
+                        }
+                    }
+                }
+
             } catch (e: Exception) {
                 Timber.e(e, "SyncOperationManager: Failed to sync templates for $userId")
-                SyncOperationResult(operation, success = false, error = e.message)
+                results.add(SyncOperationResult(operation, success = false, error = e.message))
             }
-            
             Timber.d("SyncOperationManager: Template sync completed for user $userId")
-            listOf(result)
+            results
             
         } catch (e: Exception) {
             Timber.e(e, "SyncOperationManager: Template sync failed for user $userId")
@@ -392,18 +509,87 @@ class SyncOperationManager @Inject constructor(
                 userId = userId
             )
             
-            val result = try {
-                // For now, create a basic sync placeholder
-                Timber.d("SyncOperationManager: Social sync operation queued for $userId")
-                SyncOperationResult(operation, success = true)
-                
+            val results = mutableListOf<SyncOperationResult>()
+
+            try {
+                // Get unsynced social profiles
+                val unsyncedSocialProfiles = socialProfileDao.getUnsyncedProfiles(userId)
+
+                if (unsyncedSocialProfiles.isEmpty()) {
+                    Timber.d("SyncOperationManager: No unsynced social profiles for user $userId")
+                    return emptyList()
+                }
+
+                // Process social data in batches
+                val batches = unsyncedSocialProfiles.chunked(SOCIAL_BATCH_SIZE)
+
+                for ((batchIndex, batch) in batches.withIndex()) {
+                    cancellationCheck?.invoke()
+
+                    Timber.d("SyncOperationManager: Processing social batch ${batchIndex + 1}/${batches.size} (${batch.size} profiles)")
+
+                    val firestoreBatch = firestore.batch()
+
+                    for (profile in batch) {
+                        val docRef = firestore
+                            .collection("social_profiles")
+                            .document(profile.userId)
+
+                        try {
+                            // Create a basic social profile data map since we don't have a mapper
+                            val socialData = mapOf(
+                                "userId" to profile.userId,
+                                "username" to profile.username,
+                                "displayName" to (profile.displayName ?: ""),
+                                "bio" to (profile.bio ?: ""),
+                                "profilePhotoUrl" to profile.profilePhotoUrl,
+                                "isPrivate" to profile.isPrivate,
+                                "followerCount" to profile.followerCount,
+                                "followingCount" to profile.followingCount,
+                                "workoutCount" to profile.workoutCount,
+                                "lastUpdated" to FieldValue.serverTimestamp(),
+                                "version" to System.currentTimeMillis()
+                            )
+
+                            firestoreBatch.set(docRef, socialData, SetOptions.merge())
+
+                        } catch (e: Exception) {
+                            Timber.w(e, "SyncOperationManager: Failed to prepare social profile ${profile.userId} for batch")
+                            continue
+                        }
+                    }
+
+                    try {
+                        firestoreBatch.commit().await()
+
+                        // Mark batch as synced
+                        for (profile in batch) {
+                            socialProfileDao.updateSyncStatus(
+                                userId = profile.userId,
+                                isSynced = true,
+                                version = System.currentTimeMillis().toInt()
+                            )
+
+                            results.add(SyncOperationResult(operation, success = true))
+                        }
+
+                        Timber.d("SyncOperationManager: Successfully synced social batch ${batchIndex + 1}")
+
+                    } catch (e: Exception) {
+                        Timber.e(e, "SyncOperationManager: Failed to commit social batch ${batchIndex + 1}")
+
+                        for (profile in batch) {
+                            results.add(SyncOperationResult(operation, success = false, error = e.message))
+                        }
+                    }
+                }
+
             } catch (e: Exception) {
                 Timber.e(e, "SyncOperationManager: Failed to sync social data for $userId")
-                SyncOperationResult(operation, success = false, error = e.message)
+                results.add(SyncOperationResult(operation, success = false, error = e.message))
             }
-            
             Timber.d("SyncOperationManager: Social sync completed for user $userId")
-            listOf(result)
+            results
             
         } catch (e: Exception) {
             Timber.e(e, "SyncOperationManager: Social sync failed for user $userId")
@@ -431,18 +617,88 @@ class SyncOperationManager @Inject constructor(
                 userId = userId
             )
             
-            val result = try {
-                // For now, create a basic sync placeholder
-                Timber.d("SyncOperationManager: Achievement sync operation queued for $userId")
-                SyncOperationResult(operation, success = true)
-                
+            val results = mutableListOf<SyncOperationResult>()
+
+            try {
+                // Get unsynced achievements
+                val unsyncedAchievements = achievementDao.getUnsyncedAchievements(userId)
+
+                if (unsyncedAchievements.isEmpty()) {
+                    Timber.d("SyncOperationManager: No unsynced achievements for user $userId")
+                    return emptyList()
+                }
+
+                // Process achievements in batches
+                val batches = unsyncedAchievements.chunked(DEFAULT_BATCH_SIZE)
+
+                for ((batchIndex, batch) in batches.withIndex()) {
+                    cancellationCheck?.invoke()
+
+                    Timber.d("SyncOperationManager: Processing achievement batch ${batchIndex + 1}/${batches.size} (${batch.size} achievements)")
+
+                    val firestoreBatch = firestore.batch()
+
+                    for (achievement in batch) {
+                        val docRef = firestore
+                            .collection("users")
+                            .document(userId)
+                            .collection("achievements")
+                            .document(achievement.id)
+
+                        try {
+                            // Create basic achievement data since we don't have a mapper
+                            val achievementData = mapOf(
+                                "id" to achievement.id,
+                                "userId" to achievement.userId,
+                                "type" to achievement.achievementType,
+                                "title" to achievement.achievementTitle,
+                                "description" to achievement.achievementDescription,
+                                "unlockedAt" to achievement.unlockedAt.let {
+                                    Timestamp(it.toEpochSecond(java.time.ZoneOffset.UTC), it.nano)
+                                },
+                                "isDisplayed" to achievement.isDisplayed,
+                                "lastUpdated" to FieldValue.serverTimestamp(),
+                                "version" to System.currentTimeMillis()
+                            )
+
+                            firestoreBatch.set(docRef, achievementData, SetOptions.merge())
+
+                        } catch (e: Exception) {
+                            Timber.w(e, "SyncOperationManager: Failed to prepare achievement ${achievement.id} for batch")
+                            continue
+                        }
+                    }
+
+                    try {
+                        firestoreBatch.commit().await()
+
+                        // Mark batch as synced
+                        for (achievement in batch) {
+                            achievementDao.markAsSynced(
+                                achievementId = achievement.id,
+                                syncVersion = System.currentTimeMillis()
+                            )
+
+                            results.add(SyncOperationResult(operation, success = true))
+                        }
+
+                        Timber.d("SyncOperationManager: Successfully synced achievement batch ${batchIndex + 1}")
+
+                    } catch (e: Exception) {
+                        Timber.e(e, "SyncOperationManager: Failed to commit achievement batch ${batchIndex + 1}")
+
+                        for (achievement in batch) {
+                            results.add(SyncOperationResult(operation, success = false, error = e.message))
+                        }
+                    }
+                }
+
             } catch (e: Exception) {
                 Timber.e(e, "SyncOperationManager: Failed to sync achievements for $userId")
-                SyncOperationResult(operation, success = false, error = e.message)
+                results.add(SyncOperationResult(operation, success = false, error = e.message))
             }
-            
             Timber.d("SyncOperationManager: Achievement sync completed for user $userId")
-            listOf(result)
+            results
             
         } catch (e: Exception) {
             Timber.e(e, "SyncOperationManager: Achievement sync failed for user $userId")

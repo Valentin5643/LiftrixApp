@@ -108,6 +108,7 @@ object DatabaseModule {
             .setTransactionExecutor(Dispatchers.IO.asExecutor())
             .setQueryExecutor(Dispatchers.IO.asExecutor())
             .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING) // WAL mode for better data persistence
+            .fallbackToDestructiveMigration() // Allow destructive migration for development
             // 🛡️ DATABASE LIFECYCLE: Add callback for database lifecycle events
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onCreate(db: SupportSQLiteDatabase) {
@@ -456,7 +457,12 @@ object DatabaseModule {
     fun provideSyncQueueDao(database: LiftrixDatabase): com.example.liftrix.data.local.dao.SyncQueueDao {
         return database.syncQueueDao()
     }
-    
+
+    @Provides
+    fun provideDeadLetterQueueDao(database: LiftrixDatabase): com.example.liftrix.data.local.dao.DeadLetterQueueDao {
+        return database.deadLetterQueueDao()
+    }
+
     @Provides
     fun provideSyncPreferencesDao(database: LiftrixDatabase): SyncPreferencesDao {
         return database.syncPreferencesDao()
