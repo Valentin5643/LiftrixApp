@@ -19,6 +19,7 @@ import com.example.liftrix.data.model.ExerciseDto
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import com.example.liftrix.sync.SyncCoordinator
+import com.example.liftrix.data.service.KotlinxWorkoutSerializationService
 import androidx.work.WorkManager
 import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.domain.model.Workout
@@ -51,6 +52,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import timber.log.Timber
+import com.example.liftrix.BuildConfig
 import kotlinx.datetime.LocalDate as KotlinxLocalDate
 import java.time.LocalDate
 import java.time.Duration
@@ -85,6 +87,7 @@ class WorkoutRepositoryImpl @Inject constructor(
     private val exerciseMapper: ExerciseMapper,
     private val syncCoordinator: SyncCoordinator,
     private val offlineQueueManager: OfflineQueueManager,
+    private val kotlinxSerializer: KotlinxWorkoutSerializationService,
     @ApplicationContext private val context: Context
 ) : WorkoutRepository {
     
@@ -133,6 +136,7 @@ class WorkoutRepositoryImpl @Inject constructor(
                 )
             }
         ) {
+            // Convert workout to entity for database storage
             val entity = workoutMapper.toEntity(workout, isSynced = false)
             
             val insertResult = try {
@@ -318,6 +322,7 @@ class WorkoutRepositoryImpl @Inject constructor(
         ) {
             Timber.d("🔥 UPDATE-WORKOUT-DEBUG: Attempting to update workout - ID: ${workout.id.value}, Name: ${workout.name}, Status: ${workout.status}, UserId: ${workout.userId}")
             
+            // Convert workout to entity for database storage
             val entity = workoutMapper.toEntity(workout, isSynced = false)
             Timber.d("🔥 UPDATE-WORKOUT-DEBUG: Updating entity with ID: ${entity.id}, Status: ${entity.status}, UserId: ${entity.userId}")
             
@@ -1334,39 +1339,16 @@ class WorkoutRepositoryImpl @Inject constructor(
                 if (workoutEntity.exercisesJson.isNullOrBlank()) {
                     emptyList<ExerciseDto>()
                 } else {
-                    val gson = com.google.gson.Gson()
-                    
-                    // First, determine the format and extract the Exercise list
+                    // Use kotlinx.serialization for modern, type-safe deserialization
                     val domainExercises = try {
-                        // Try parsing as JsonObject first (workout format)
-                        val jsonElement = gson.fromJson(workoutEntity.exercisesJson, com.google.gson.JsonElement::class.java)
-                        
-                        when {
-                            jsonElement.isJsonObject -> {
-                                // Wrapped format: {"exercises": [...], ...}
-                                val jsonObject = jsonElement.asJsonObject
-                                if (jsonObject.has("exercises")) {
-                                    val exercisesArray = jsonObject.getAsJsonArray("exercises")
-                                    val exerciseType = object : com.google.gson.reflect.TypeToken<List<com.example.liftrix.domain.model.Exercise>>() {}.type
-                                    gson.fromJson<List<com.example.liftrix.domain.model.Exercise>>(exercisesArray, exerciseType) ?: emptyList()
-                                } else {
-                                    Timber.w("JSON object doesn't contain 'exercises' field for workout ${workoutEntity.id}")
-                                    emptyList()
-                                }
-                            }
-                            jsonElement.isJsonArray -> {
-                                // Direct array format (templates or old workouts)
-                                val exerciseType = object : com.google.gson.reflect.TypeToken<List<com.example.liftrix.domain.model.Exercise>>() {}.type
-                                gson.fromJson<List<com.example.liftrix.domain.model.Exercise>>(jsonElement, exerciseType) ?: emptyList()
-                            }
-                            else -> {
-                                Timber.w("Unexpected JSON type for workout ${workoutEntity.id}: ${jsonElement.javaClass.simpleName}")
-                                emptyList()
-                            }
+                        if (BuildConfig.DEBUG) {
+                            Timber.d("🚀 KOTLINX-REPO: Deserializing exercises for workout ${workoutEntity.id}")
                         }
+
+                        kotlinxSerializer.deserializeExercises(workoutEntity.exercisesJson)
                     } catch (e: Exception) {
-                        Timber.w(e, "Failed to parse exercises JSON for workout ${workoutEntity.id}")
-                        emptyList<com.example.liftrix.domain.model.Exercise>()
+                        Timber.e(e, "❌ SERIALIZATION-ERROR: Failed to deserialize exercises for workout ${workoutEntity.id}")
+                        throw RuntimeException("Unable to load workout data. This workout uses an unsupported format. Please export and re-import your workouts.", e)
                     }
                     
                     // Convert Exercise domain models to ExerciseDto for sync
@@ -1487,4 +1469,5 @@ class WorkoutRepositoryImpl @Inject constructor(
             }
         }
     }
+
 }

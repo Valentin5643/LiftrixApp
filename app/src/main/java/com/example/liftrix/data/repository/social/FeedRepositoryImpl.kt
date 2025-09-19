@@ -701,7 +701,7 @@ class FeedRepositoryImpl @Inject constructor(
                     val effectiveSets = exercise.effectiveSets
                     Timber.d("VOLUME_DEBUG: Exercise name='${exercise.name}', libraryName='${exercise.libraryExercise?.name}', effectiveName='${exercise.effectiveName}', sets=${exercise.sets?.size ?: 0}, effectiveSets=${effectiveSets.size}")
                     effectiveSets.take(2).forEach { set ->
-                        Timber.d("VOLUME_DEBUG: Set - actualWeight=${set.actualWeight}, weight=${set.weight}, weightKg=${set.weightKg}, reps=${set.actualReps ?: set.reps}, completed=${set.completed}")
+                        Timber.d("VOLUME_DEBUG: Set - actualWeight=${set.actualWeight}, weight=${set.weight}, weightKg=${set.weightKg}, reps=${set.actualReps ?: set.reps}, repsCount=${set.repsCount}, completed=${set.completed}, completedAt=${set.completedAt}, completedAtEpochMilli=${set.completedAtEpochMilli}, isEffectivelyCompleted=${set.isEffectivelyCompleted}")
                     }
                 }
             } else {
@@ -719,7 +719,7 @@ class FeedRepositoryImpl @Inject constructor(
                         Timber.d("VOLUME_DEBUG: Set has ${reps} reps but no weight. Raw data: actualWeight=${set.actualWeight}, targetWeight=${set.targetWeight}, weight=${set.weight}, weightKg=${set.weightKg}, weightLbs=${set.weightLbs}")
                     }
                     
-                    if (set.completed && weight != null && reps != null) {
+                    if (set.isEffectivelyCompleted && weight != null && reps != null) {
                         val setVolume = weight * reps
                         Timber.d("VOLUME_DEBUG: Adding ${setVolume}kg volume (${weight}kg x ${reps} reps)")
                         setVolume
@@ -771,9 +771,11 @@ class FeedRepositoryImpl @Inject constructor(
         val targetReps: Int? = null,
         val reps: RepsJson? = null,         // Support Reps object structure
         val repsValue: Int? = null,         // Legacy field
+        val repsCount: Int? = null,         // From KotlinxWorkoutSerializationService
         
         val completed: Boolean = false,
-        val completedAt: String? = null     // ISO timestamp
+        val completedAt: String? = null,           // ISO timestamp
+        val completedAtEpochMilli: Long? = null    // From KotlinxWorkoutSerializationService
     ) {
         // Helper to get the effective weight with fallback to nested/legacy fields
         val effectiveWeight: Double? get() = 
@@ -783,9 +785,13 @@ class FeedRepositoryImpl @Inject constructor(
             weightLbs?.let { it / 2.20462 }
             
         // Helper to get the effective reps with fallback to nested/legacy fields
-        val effectiveReps: Int? get() = 
-            actualReps ?: targetReps ?: 
-            reps?.count ?: repsValue
+        val effectiveReps: Int? get() =
+            actualReps ?: targetReps ?:
+            reps?.count ?: repsValue ?: repsCount
+
+        // Helper to get the effective completion status
+        val isEffectivelyCompleted: Boolean get() =
+            completed || completedAt != null || completedAtEpochMilli != null
     }
     
     // Support for nested Weight object structure from WorkoutMapper

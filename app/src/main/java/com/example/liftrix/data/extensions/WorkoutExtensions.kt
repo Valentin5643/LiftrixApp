@@ -31,6 +31,10 @@ import com.example.liftrix.core.json.ExerciseJsonParser
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.example.liftrix.BuildConfig
+import com.example.liftrix.core.security.JsonInputValidator
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -80,11 +84,12 @@ suspend fun List<WorkoutEntity>.calculateDailyMetrics(): Map<LocalDate, WorkoutD
         // Enhanced to properly handle both library and custom exercises (custom exercises
         // are stored as simplified ExerciseLibrary objects after conversion)
         workouts.forEach { workout ->
+            // Note: JSON parsing should ideally be moved to background thread in repository layer
             val exercises: List<Exercise> = parseExercisesFromJsonLegacy(workout.id, workout.exercisesJson, gson)
             val workoutVolumeResult = calculateWorkoutVolumeEnhanced(workout.id, exercises)
             totalVolume += workoutVolumeResult.totalVolume
             exerciseCount += workoutVolumeResult.validExerciseCount
-            
+
         }
         
         // Calculate duration metrics
@@ -389,8 +394,32 @@ private fun calculateWorkoutVolume(workoutId: String, exercises: List<Exercise>)
 }
 
 /**
+ * Async wrapper for parseExercisesFromJsonLegacy that ensures JSON parsing happens on background thread
+ */
+suspend fun parseExercisesFromJsonLegacyAsync(
+    workoutId: String,
+    exercisesJson: String?,
+    gson: Gson,
+    jsonValidator: JsonInputValidator
+): List<Exercise> = withContext(Dispatchers.IO) {
+    if (exercisesJson.isNullOrBlank()) return@withContext emptyList()
+
+    // 🔒 SECURITY: Validate JSON input before parsing
+    when (val validation = jsonValidator.validateJson(exercisesJson)) {
+        is JsonInputValidator.ValidationResult.Valid -> {
+            parseExercisesFromJsonLegacy(workoutId, validation.json, gson)
+        }
+        is JsonInputValidator.ValidationResult.Invalid -> {
+            Timber.e("WorkoutExtensions: JSON validation failed for workout $workoutId: ${validation.reason}")
+            emptyList()
+        }
+    }
+}
+
+/**
  * Enhanced JSON parsing for exercises with comprehensive error handling and fallbacks.
  * Now supports both library exercises and custom exercises stored in SearchableExercise format.
+ * WARNING: This method performs heavy JSON parsing and should be called from background thread
  */
 private fun parseExercisesFromJson(workoutId: String, exercisesJson: String, gson: Gson): List<SearchableExercise> {
     if (exercisesJson.isBlank()) return emptyList()
@@ -426,17 +455,41 @@ private fun parseExercisesFromJson(workoutId: String, exercisesJson: String, gso
 }
 
 /**
+ * Async wrapper for parseExercisesFromJson that ensures JSON parsing happens on background thread
+ */
+suspend fun parseExercisesFromJsonAsync(
+    workoutId: String,
+    exercisesJson: String?,
+    gson: Gson,
+    jsonValidator: JsonInputValidator
+): List<SearchableExercise> = withContext(Dispatchers.IO) {
+    if (exercisesJson.isNullOrBlank()) return@withContext emptyList()
+
+    // 🔒 SECURITY: Validate JSON input before parsing
+    when (val validation = jsonValidator.validateJson(exercisesJson)) {
+        is JsonInputValidator.ValidationResult.Valid -> {
+            parseExercisesFromJson(workoutId, validation.json, gson)
+        }
+        is JsonInputValidator.ValidationResult.Invalid -> {
+            Timber.e("WorkoutExtensions: JSON validation failed for workout $workoutId: ${validation.reason}")
+            emptyList()
+        }
+    }
+}
+
+/**
  * Legacy JSON parsing for exercises with comprehensive error handling and fallbacks.
  * Maintains backward compatibility with the original Exercise model format.
+ * WARNING: This method performs heavy JSON parsing and should be called from background thread
  */
 private fun parseExercisesFromJsonLegacy(workoutId: String, exercisesJson: String, gson: Gson): List<Exercise> {
     if (exercisesJson.isBlank()) {
-        Timber.d("PROGRESS-PARSE-DEBUG: Empty JSON for workout $workoutId")
+        if (BuildConfig.DEBUG) Timber.d("PROGRESS-PARSE-DEBUG: Empty JSON for workout $workoutId")
         return emptyList()
     }
-    
+
     // 🔥 ENHANCED DEBUG: Log the raw JSON before parsing
-    Timber.d("PROGRESS-PARSE-RAW JSON for workout $workoutId (length=${exercisesJson.length}): ${exercisesJson.take(500)}")
+    if (BuildConfig.DEBUG) Timber.d("PROGRESS-PARSE-RAW JSON for workout $workoutId (length=${exercisesJson.length}): ${exercisesJson.take(500)}")
     
     // 🔥 FIX: Use the same successful approach as feed parsing
     return try {
@@ -448,11 +501,11 @@ private fun parseExercisesFromJsonLegacy(workoutId: String, exercisesJson: Strin
             
             // Check if this is the wrapped format with "exercises" key (same as feed parsing)
             if (jsonObject.has("exercises")) {
-                Timber.d("PROGRESS-PARSE-DEBUG: Found wrapped format with 'exercises' key - using successful feed approach")
+                if (BuildConfig.DEBUG) Timber.d("PROGRESS-PARSE-DEBUG: Found wrapped format with 'exercises' key - using successful feed approach")
                 val exercisesElement = jsonObject.get("exercises")
                 
                 if (exercisesElement.isJsonArray) {
-                    Timber.d("PROGRESS-PARSE-DEBUG: Parsing exercises array with ${exercisesElement.asJsonArray.size()} items")
+                    if (BuildConfig.DEBUG) Timber.d("PROGRESS-PARSE-DEBUG: Parsing exercises array with ${exercisesElement.asJsonArray.size()} items")
                     
                     // 🔥 FIX: Use the SafeExerciseDeserializer for proper nested structure handling
                     val listType = object : TypeToken<List<Exercise>>() {}.type
@@ -471,7 +524,7 @@ private fun parseExercisesFromJsonLegacy(workoutId: String, exercisesJson: Strin
                         }
 
                         if (validExercises.isNotEmpty()) {
-                            Timber.d("PROGRESS-PARSE-SUCCESS: ✅ Wrapped format parsing succeeded with ${validExercises.size} valid exercises (${exercises.size} total parsed)")
+                            if (BuildConfig.DEBUG) Timber.d("PROGRESS-PARSE-SUCCESS: ✅ Wrapped format parsing succeeded with ${validExercises.size} valid exercises (${exercises.size} total parsed)")
                             return validExercises
                         } else {
                             Timber.w("PROGRESS-PARSE-WARNING: All ${exercises.size} parsed exercises were filtered out due to invalid sets")
@@ -487,12 +540,12 @@ private fun parseExercisesFromJsonLegacy(workoutId: String, exercisesJson: Strin
             }
         } else if (element.isJsonArray) {
             // Direct array format
-            Timber.d("PROGRESS-PARSE-DEBUG: Detected direct array format")
+            if (BuildConfig.DEBUG) Timber.d("PROGRESS-PARSE-DEBUG: Detected direct array format")
             val listType = object : TypeToken<List<Exercise>>() {}.type
             val exercises = gson.fromJson<List<Exercise>>(exercisesJson, listType) ?: emptyList()
             
             if (exercises.isNotEmpty()) {
-                Timber.d("PROGRESS-PARSE-SUCCESS: ✅ Direct array parsing succeeded with ${exercises.size} exercises")
+                if (BuildConfig.DEBUG) Timber.d("PROGRESS-PARSE-SUCCESS: ✅ Direct array parsing succeeded with ${exercises.size} exercises")
                 return exercises
             }
         }
@@ -673,7 +726,7 @@ private class SafeExerciseDeserializer : JsonDeserializer<Exercise> {
                     }
                 }
             } else {
-                Timber.d("SafeExerciseDeserializer: No sets found for exercise $name")
+                if (BuildConfig.DEBUG) Timber.d("SafeExerciseDeserializer: No sets found for exercise $name")
                 emptyList()
             }
         } catch (e: Exception) {
@@ -709,7 +762,7 @@ private class SafeExerciseDeserializer : JsonDeserializer<Exercise> {
                 else -> null
             }
         } catch (e: Exception) {
-            Timber.d("parseExerciseSet: Failed to parse weight for set $setNumber: ${e.message}")
+            if (BuildConfig.DEBUG) Timber.d("parseExerciseSet: Failed to parse weight for set $setNumber: ${e.message}")
             null
         }
 
@@ -729,7 +782,7 @@ private class SafeExerciseDeserializer : JsonDeserializer<Exercise> {
                 else -> null
             }
         } catch (e: Exception) {
-            Timber.d("parseExerciseSet: Failed to parse reps for set $setNumber: ${e.message}")
+            if (BuildConfig.DEBUG) Timber.d("parseExerciseSet: Failed to parse reps for set $setNumber: ${e.message}")
             null
         }
 
@@ -747,14 +800,14 @@ private class SafeExerciseDeserializer : JsonDeserializer<Exercise> {
                 else -> null
             }
         } catch (e: Exception) {
-            Timber.d("parseExerciseSet: Failed to parse completedAt for set $setNumber: ${e.message}")
+            if (BuildConfig.DEBUG) Timber.d("parseExerciseSet: Failed to parse completedAt for set $setNumber: ${e.message}")
             null
         }
 
         // Parse completed status - if completedAt exists, set is completed
         val isCompleted = completedAt != null || setObject.get("completed")?.asBoolean == true
 
-        Timber.d("parseExerciseSet: Set $setNumber parsed - weight=$weight, reps=$reps, completed=$isCompleted")
+        if (BuildConfig.DEBUG) Timber.d("parseExerciseSet: Set $setNumber parsed - weight=$weight, reps=$reps, completed=$isCompleted")
 
         return ExerciseSet(
             id = ExerciseSetId.generate(),
@@ -767,6 +820,123 @@ private class SafeExerciseDeserializer : JsonDeserializer<Exercise> {
             completedAt = if (isCompleted) completedAt ?: java.time.Instant.now() else null,
             notes = setObject.get("notes")?.asString?.takeIf { it.isNotBlank() }
         )
+    }
+}
+
+/**
+ * Calculate total volume from workout JSON using the same logic as FeedRepositoryImpl
+ * This provides live calculation to avoid stale metadata issues
+ */
+fun WorkoutEntity.calculateLiveVolume(): Double {
+    return try {
+        // Use same parser as FeedRepositoryImpl
+        val gson = com.google.gson.GsonBuilder()
+            .registerTypeAdapter(String::class.java, SafeDateAdapter())
+            .registerTypeAdapter(java.time.Instant::class.java, SafeInstantAdapter())
+            .create()
+
+        val exercises = parseExercisesFromWorkoutJson(exercisesJson, gson)
+
+        // Sum volume from all completed sets
+        exercises.sumOf { exercise ->
+            exercise.effectiveSets.sumOf { set ->
+                val weight = set.effectiveWeight
+                val reps = set.effectiveReps
+
+                if (set.isEffectivelyCompleted && weight != null && reps != null) {
+                    weight * reps
+                } else {
+                    0.0
+                }
+            }
+        }
+    } catch (e: Exception) {
+        if (BuildConfig.DEBUG) Timber.w(e, "Failed to calculate live volume for workout $id")
+        0.0
+    }
+}
+
+
+/**
+ * Helper data classes matching FeedRepositoryImpl structure
+ */
+private data class WorkoutExerciseJson(
+    val name: String? = null,
+    val sets: List<WorkoutSetJson>? = emptyList(),
+    val libraryExercise: LibraryExerciseJson? = null
+) {
+    val effectiveName: String get() = name ?: libraryExercise?.name ?: "Unknown Exercise"
+    val effectiveSets: List<WorkoutSetJson> get() = sets ?: emptyList()
+}
+
+private data class LibraryExerciseJson(
+    val name: String? = null,
+    val sets: List<WorkoutSetJson>? = null
+)
+
+private data class WorkoutSetJson(
+    val actualWeight: Double? = null,
+    val targetWeight: Double? = null,
+    val weight: WeightJson? = null,
+    val weightKg: Double? = null,
+    val weightLbs: Double? = null,
+
+    val actualReps: Int? = null,
+    val targetReps: Int? = null,
+    val reps: RepsJson? = null,
+    val repsValue: Int? = null,
+    val repsCount: Int? = null,
+
+    val completed: Boolean = false,
+    val completedAt: String? = null,
+    val completedAtEpochMilli: Long? = null
+) {
+    val effectiveWeight: Double? get() =
+        actualWeight ?: targetWeight ?:
+        weight?.kilograms ?: weightKg ?:
+        weightLbs?.let { it / 2.20462 }
+
+    val effectiveReps: Int? get() =
+        actualReps ?: targetReps ?:
+        reps?.count ?: repsValue ?: repsCount
+
+    val isEffectivelyCompleted: Boolean get() =
+        completed || completedAt != null || completedAtEpochMilli != null
+}
+
+private data class WeightJson(
+    val kilograms: Double? = null,
+    val pounds: Double? = null
+)
+
+private data class RepsJson(
+    val count: Int? = null
+)
+
+/**
+ * Parse exercises from workout JSON with same logic as FeedRepositoryImpl
+ */
+private fun parseExercisesFromWorkoutJson(exercisesJson: String, gson: com.google.gson.Gson): List<WorkoutExerciseJson> {
+    return try {
+        // Handle wrapper format: {"exercises": [...], "totalVolume": 123.45}
+        val jsonElement = gson.fromJson(exercisesJson, com.google.gson.JsonElement::class.java)
+
+        val exercisesList = if (jsonElement.isJsonObject && jsonElement.asJsonObject.has("exercises")) {
+            // Wrapper format
+            jsonElement.asJsonObject.getAsJsonArray("exercises")
+        } else if (jsonElement.isJsonArray) {
+            // Direct array format
+            jsonElement.asJsonArray
+        } else {
+            return emptyList()
+        }
+
+        exercisesList.map { exerciseElement ->
+            gson.fromJson(exerciseElement, WorkoutExerciseJson::class.java)
+        }
+    } catch (e: Exception) {
+        if (BuildConfig.DEBUG) Timber.w(e, "Failed to parse workout exercises JSON")
+        emptyList()
     }
 }
 
