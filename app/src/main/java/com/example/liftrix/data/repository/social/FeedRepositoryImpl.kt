@@ -19,6 +19,7 @@ import com.example.liftrix.data.mapper.WorkoutPostMapper
 import com.example.liftrix.data.paging.FeedRemoteMediator
 import com.example.liftrix.data.paging.StableFeedPagingSource
 import com.example.liftrix.domain.repository.social.FeedRepository
+import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.model.social.WorkoutPost
 import com.example.liftrix.domain.model.social.CreateWorkoutPostRequest
 import com.example.liftrix.domain.model.social.FeedType
@@ -60,6 +61,7 @@ class FeedRepositoryImpl @Inject constructor(
     private val feedCacheService: FeedCacheService,
     private val feedCacheDao: FeedCacheDao,
     private val followRelationshipDao: FollowRelationshipDao,
+    private val authRepository: AuthRepository,
     @ApplicationContext private val context: Context
 ) : FeedRepository {
     
@@ -249,12 +251,15 @@ class FeedRepositoryImpl @Inject constructor(
             // Get workout details for metadata
             val workout = workoutDao.getWorkoutById(request.workoutId)
             
+            val calculatedVolume = calculateTotalVolume(workout)
+            Timber.d("🔍 POST-CREATION-DEBUG: About to create post entity - workoutId=${request.workoutId}, calculatedVolume=$calculatedVolume")
+            
             val entity = workoutPostMapper.createEntityFromRequest(
                 id = postId,
                 userId = userId,
                 request = request,
                 workoutDuration = calculateWorkoutDuration(workout),
-                totalVolume = calculateTotalVolume(workout),
+                totalVolume = calculatedVolume,
                 exercisesCount = calculateExercisesCount(workout),
                 prsCount = 0 // Will be calculated later
             )
@@ -580,84 +585,120 @@ class FeedRepositoryImpl @Inject constructor(
         // Get or create author profile information with comprehensive logging
         var authorProfile = socialProfileDao.getSocialProfileByUserId(entity.userId)
         
+        Timber.d("PFP_DEBUG: 🔍 PROFILE_LOOKUP: User ${entity.userId} | foundSocialProfile=${authorProfile != null} | photoUrl='${authorProfile?.profilePhotoUrl}' | displayName='${authorProfile?.displayName}' | username='${authorProfile?.username}'")
+        
         if (authorProfile == null) {
-            Timber.e("🔥 PROFILE_MISSING: Social profile not found for user ${entity.userId} in post ${entity.id}")
-            Timber.i("🔄 AUTO_PROFILE_CREATE: Creating fallback social profile for user ${entity.userId}")
+            Timber.e("PFP_DEBUG: 🔥 PROFILE_MISSING: Social profile not found for user ${entity.userId} in post ${entity.id}")
+            Timber.i("PFP_DEBUG: 🔄 AUTO_PROFILE_CREATE: Creating fallback social profile for user ${entity.userId}")
             
             // Auto-create a basic social profile to fix missing profiles
             authorProfile = createFallbackSocialProfile(entity.userId)
             
             if (authorProfile != null) {
-                Timber.i("✅ AUTO_PROFILE_SUCCESS: Created social profile for user ${entity.userId}, hasPhoto: ${authorProfile.profilePhotoUrl != null}")
+                Timber.i("PFP_DEBUG: ✅ AUTO_PROFILE_SUCCESS: Created social profile for user ${entity.userId}, hasPhoto: ${authorProfile.profilePhotoUrl != null}")
             } else {
-                Timber.e("❌ AUTO_PROFILE_FAILED: Could not create social profile for user ${entity.userId}")
+                Timber.e("PFP_DEBUG: ❌ AUTO_PROFILE_FAILED: Could not create social profile for user ${entity.userId}")
             }
         } else {
             // Fix empty string profile photo URLs by converting them to null
             val cleanedPhotoUrl = authorProfile.profilePhotoUrl?.takeIf { it.isNotBlank() }
             if (authorProfile.profilePhotoUrl != cleanedPhotoUrl) {
-                Timber.w("🔧 PROFILE_FIX: Converting empty profile photo URL to null for user ${entity.userId}")
+                Timber.w("PFP_DEBUG: 🔧 PROFILE_FIX: Converting empty profile photo URL to null for user ${entity.userId}")
                 try {
                     socialProfileDao.updateProfile(authorProfile.copy(profilePhotoUrl = cleanedPhotoUrl))
                     authorProfile = authorProfile.copy(profilePhotoUrl = cleanedPhotoUrl)
                 } catch (e: Exception) {
-                    Timber.e(e, "Failed to update profile photo URL for user ${entity.userId}")
+                    Timber.e("PFP_DEBUG: Failed to update profile photo URL for user ${entity.userId}", e)
                 }
             }
             
             // 🔍 DIAGNOSTIC & FIX: Check for profile photo sync mismatch and auto-fix
             try {
                 val mainProfilePhoto = userProfileDao.getProfileImageUrl(entity.userId)
-                if (mainProfilePhoto != null && cleanedPhotoUrl == null) {
-                    Timber.e("[PROFILE-PHOTO-SYNC-MISMATCH] User ${entity.userId} has main profile photo but social profile photo is null")
-                    Timber.e("[PROFILE-PHOTO-SYNC-MISMATCH] Main: $mainProfilePhoto, Social: null - attempting immediate fix")
+                
+                // Also check Firebase Auth as fallback (only works for current user)
+                val currentUserId = try {
+                    authRepository.getCurrentUserId()
+                } catch (e: Exception) {
+                    Timber.w("PFP_DEBUG: 🔥 CURRENT_USER_ID_ERROR: Failed to get current user ID", e)
+                    null
+                }
+                
+                val firebaseAuthPhoto = if (entity.userId == currentUserId) {
+                    try {
+                        val authUser = authRepository.getCurrentUser()
+                        Timber.d("PFP_DEBUG: 🔍 AUTH_CHECK: User ${entity.userId} is current user, checking Firebase Auth photo")
+                        authUser?.photoUrl
+                    } catch (e: Exception) {
+                        Timber.w("PFP_DEBUG: 🔥 AUTH_FALLBACK_ERROR: Failed to get Firebase Auth user for ${entity.userId}", e)
+                        null
+                    }
+                } else {
+                    Timber.d("PFP_DEBUG: 🚫 AUTH_SKIP: User ${entity.userId} is not current user ($currentUserId), cannot access Firebase Auth")
+                    null
+                }
+                
+                val effectiveMainPhoto = mainProfilePhoto ?: firebaseAuthPhoto
+                
+                Timber.d("PFP_DEBUG: 🔍 SYNC_CHECK: User ${entity.userId} | dbProfilePhoto='$mainProfilePhoto' | firebaseAuthPhoto='$firebaseAuthPhoto' | effectiveMainPhoto='$effectiveMainPhoto' | socialProfilePhoto='$cleanedPhotoUrl'")
+                
+                if (effectiveMainPhoto != null && cleanedPhotoUrl == null) {
+                    Timber.e("PFP_DEBUG: [PROFILE-PHOTO-SYNC-MISMATCH] User ${entity.userId} has effective profile photo but social profile photo is null")
+                    Timber.e("PFP_DEBUG: [PROFILE-PHOTO-SYNC-MISMATCH] EffectiveMain: $effectiveMainPhoto, Social: null - attempting immediate fix")
                     
-                    // 🚀 IMMEDIATE FIX: Sync main profile photo to social profile
+                    // 🚀 IMMEDIATE FIX: Sync effective main profile photo to social profile
                     try {
                         val updatedAt = System.currentTimeMillis()
-                        val rowsUpdated = socialProfileDao.updateProfilePhoto(entity.userId, mainProfilePhoto, updatedAt)
+                        val rowsUpdated = socialProfileDao.updateProfilePhoto(entity.userId, effectiveMainPhoto, updatedAt)
                         
                         if (rowsUpdated > 0) {
-                            Timber.i("[PROFILE-PHOTO-SYNC-FIX] ✅ Auto-synced profile photo for user ${entity.userId}")
+                            Timber.i("PFP_DEBUG: [PROFILE-PHOTO-SYNC-FIX] ✅ Auto-synced profile photo for user ${entity.userId}")
                             
                             // Update the current authorProfile object to reflect the fix
-                            authorProfile = authorProfile?.copy(profilePhotoUrl = mainProfilePhoto)
+                            authorProfile = authorProfile?.copy(profilePhotoUrl = effectiveMainPhoto)
                             
                             // Trigger social profile sync to Firebase
                             try {
                                 val socialSyncRequest = com.example.liftrix.sync.SocialProfileSyncWorker.createWorkRequest(entity.userId, forceSync = true)
                                 androidx.work.WorkManager.getInstance(context).enqueue(socialSyncRequest)
-                                Timber.d("[PROFILE-PHOTO-SYNC-FIX] Social profile sync to Firebase triggered")
+                                Timber.d("PFP_DEBUG: [PROFILE-PHOTO-SYNC-FIX] Social profile sync to Firebase triggered")
                             } catch (e: Exception) {
-                                Timber.e(e, "[PROFILE-PHOTO-SYNC-FIX] Failed to trigger Firebase sync")
+                                Timber.e("PFP_DEBUG: [PROFILE-PHOTO-SYNC-FIX] Failed to trigger Firebase sync", e)
                             }
                         } else {
-                            Timber.w("[PROFILE-PHOTO-SYNC-FIX] No social profile rows updated - profile may not exist")
+                            Timber.w("PFP_DEBUG: [PROFILE-PHOTO-SYNC-FIX] No social profile rows updated - profile may not exist")
                         }
                     } catch (e: Exception) {
-                        Timber.e(e, "[PROFILE-PHOTO-SYNC-FIX] Failed to auto-sync profile photo for user ${entity.userId}")
+                        Timber.e("PFP_DEBUG: [PROFILE-PHOTO-SYNC-FIX] Failed to auto-sync profile photo for user ${entity.userId}", e)
                     }
+                } else {
+                    Timber.d("PFP_DEBUG: 🚫 SYNC_SKIP: User ${entity.userId} | reason: effectiveMainPhoto=${effectiveMainPhoto != null}, socialPhoto=${cleanedPhotoUrl != null}")
                 }
                 Timber.d("📝 PROFILE_ENHANCED: Post ${entity.id} enhanced with profile: ${authorProfile?.username}, photo: ${authorProfile?.profilePhotoUrl ?: "null"}, mainPhoto: ${mainProfilePhoto ?: "null"}")
             } catch (e: Exception) {
-                Timber.w(e, "Failed to check main profile photo for sync mismatch diagnosis")
+                Timber.e("PFP_DEBUG: 💥 SYNC_CHECK_ERROR: Failed to check main profile photo for user ${entity.userId}", e)
                 Timber.d("📝 PROFILE_ENHANCED: Post ${entity.id} enhanced with profile: ${authorProfile?.username}, photo: ${authorProfile?.profilePhotoUrl ?: "null"}")
             }
         }
         
-        // Final validation and logging
-        val finalUsername = authorProfile?.username ?: "user${entity.userId.take(8)}"
-        val finalDisplayName = authorProfile?.displayName ?: "Anonymous User"
+        // Final validation and logging with better fallbacks
+        val finalUsername = authorProfile?.username?.takeIf { it.isNotBlank() } ?: "user${entity.userId.take(8)}"
+        val finalDisplayName = authorProfile?.displayName?.takeIf { it.isNotBlank() } 
+            ?: finalUsername.takeIf { !it.startsWith("user") } 
+            ?: "Liftrix User"
+        
+        // Ensure display name is never empty (critical fix for initials)
+        val safeDisplayName = if (finalDisplayName.isBlank()) "Liftrix User" else finalDisplayName
         val finalPhotoUrl = authorProfile?.profilePhotoUrl?.takeIf { it.isNotBlank() }
         
-        Timber.d("📤 POST_ENHANCED: Post ${entity.id} final data - username: $finalUsername, displayName: $finalDisplayName, hasPhoto: ${finalPhotoUrl != null}")
+        Timber.d("PFP_DEBUG: 📤 POST_ENHANCED: Post ${entity.id} final data - username: $finalUsername, displayName: $safeDisplayName, hasPhoto: ${finalPhotoUrl != null}, photoUrl: '${finalPhotoUrl ?: "null"}'")
         
         return workoutPostMapper.toDomain(
             entity = entity,
             isLikedByViewer = isLiked,
             isSavedByViewer = isSaved,
             authorUsername = finalUsername,
-            authorDisplayName = finalDisplayName,
+            authorDisplayName = safeDisplayName,
             authorProfilePhotoUrl = finalPhotoUrl
         )
     }
@@ -708,29 +749,39 @@ class FeedRepositoryImpl @Inject constructor(
                 Timber.w("VOLUME_DEBUG: ⚠️ NO EXERCISES found after parsing JSON! This will result in 0 volume.")
             }
             
-            // Sum volume (weight * reps) for all completed sets
+            // Sum volume (weight * reps) for all completed sets using centralized calculator
             val totalVolumeKg = exercises.sumOf { exercise ->
-                exercise.effectiveSets.sumOf { set ->
+                val exerciseVolume = exercise.effectiveSets.sumOf { set ->
                     val weight = set.effectiveWeight
                     val reps = set.effectiveReps
+                    val isCompleted = set.isEffectivelyCompleted
                     
-                    // Debug logging to understand data format
-                    if (weight == null && reps != null) {
-                        Timber.d("VOLUME_DEBUG: Set has ${reps} reps but no weight. Raw data: actualWeight=${set.actualWeight}, targetWeight=${set.targetWeight}, weight=${set.weight}, weightKg=${set.weightKg}, weightLbs=${set.weightLbs}")
-                    }
+                    // Enhanced debug logging to understand why sets aren't being counted
+                    Timber.d("VOLUME_DEBUG: Set analysis - weight=$weight, reps=$reps, isCompleted=$isCompleted")
+                    Timber.d("VOLUME_DEBUG: Raw set data - actualWeight=${set.actualWeight}, targetWeight=${set.targetWeight}, weight=${set.weight}, weightKg=${set.weightKg}, weightLbs=${set.weightLbs}")
+                    Timber.d("VOLUME_DEBUG: Completion data - completed=${set.completed}, completedAt=${set.completedAt}, completedAtEpochMilli=${set.completedAtEpochMilli}")
                     
-                    if (set.isEffectivelyCompleted && weight != null && reps != null) {
-                        val setVolume = weight * reps
-                        Timber.d("VOLUME_DEBUG: Adding ${setVolume}kg volume (${weight}kg x ${reps} reps)")
-                        setVolume
+                    val setVolume = com.example.liftrix.domain.util.VolumeCalculator.calculateSetVolume(
+                        effectiveWeight = weight,
+                        effectiveReps = reps,
+                        isCompleted = isCompleted
+                    )
+                    
+                    if (setVolume > 0.0) {
+                        Timber.d("VOLUME_DEBUG: ✅ Adding ${setVolume}kg volume (${weight}kg x ${reps} reps)")
                     } else {
-                        0.0
+                        Timber.d("VOLUME_DEBUG: ❌ Skipping set - completed=$isCompleted, weight=$weight, reps=$reps")
                     }
+                    
+                    setVolume
                 }
+                Timber.d("VOLUME_DEBUG: Exercise '${exercise.effectiveName}' total volume: ${exerciseVolume}kg")
+                exerciseVolume
             }
             
             Timber.d("VOLUME_DEBUG: Final calculated volume: ${totalVolumeKg}kg for workout ${workoutEntity.id}")
-            totalVolumeKg.takeIf { it > 0.0 }
+            // Return the calculated volume even if it's 0.0 - let the UI handle display decisions
+            totalVolumeKg
         } catch (e: Exception) {
             Timber.w(e, "Failed to calculate total volume for workout")
             null
@@ -1012,17 +1063,48 @@ class FeedRepositoryImpl @Inject constructor(
                 userProfile?.profileImageUrl
             }
             
-            Timber.d("🎆 FALLBACK_PROFILE_DATA: user=$userId, hasMainProfile=${userProfile != null}, mainPhoto=${mainProfilePhotoUrl ?: "null"}")
+            // Also check Firebase Auth as fallback (only works for current user)
+            val currentUserId = try {
+                authRepository.getCurrentUserId()
+            } catch (e: Exception) {
+                Timber.w("PFP_DEBUG: 🔥 FALLBACK_CURRENT_USER_ERROR: Failed to get current user ID during fallback", e)
+                null
+            }
+            
+            val firebaseAuthPhotoUrl = if (userId == currentUserId) {
+                try {
+                    val authUser = authRepository.getCurrentUser()
+                    Timber.d("PFP_DEBUG: 🔍 FALLBACK_AUTH_CHECK: User $userId is current user, checking Firebase Auth photo")
+                    authUser?.photoUrl
+                } catch (e: Exception) {
+                    Timber.w("PFP_DEBUG: 🔥 FALLBACK_AUTH_ERROR: Failed to get Firebase Auth user during fallback creation for $userId", e)
+                    null
+                }
+            } else {
+                Timber.d("PFP_DEBUG: 🚫 FALLBACK_AUTH_SKIP: User $userId is not current user ($currentUserId), cannot access Firebase Auth")
+                null
+            }
+            
+            val effectiveFallbackPhotoUrl = mainProfilePhotoUrl ?: firebaseAuthPhotoUrl ?: userProfile?.profileImageUrl
+            
+            Timber.d("PFP_DEBUG: 🎆 FALLBACK_PROFILE_DATA: user=$userId, hasMainProfile=${userProfile != null}, mainPhoto=${mainProfilePhotoUrl ?: "null"}, firebaseAuthPhoto=${firebaseAuthPhotoUrl ?: "null"}, effectivePhoto=${effectiveFallbackPhotoUrl ?: "null"}")
             
             val now = System.currentTimeMillis()
             val fallbackUsername = generateUniqueUsername(userId)
             
+            // Better fallback display name logic
+            val fallbackDisplayName = userProfile?.displayName?.takeIf { it.isNotBlank() } 
+                ?: fallbackUsername.takeIf { !it.startsWith("user_") } 
+                ?: "Liftrix User"
+            
+            Timber.d("PFP_DEBUG: Creating fallback profile for user $userId with effectivePhotoUrl: '$effectiveFallbackPhotoUrl', displayName: '$fallbackDisplayName'")
+            
             val fallbackProfile = com.example.liftrix.data.local.entity.SocialProfileEntity(
                 userId = userId,
                 username = fallbackUsername,
-                displayName = userProfile?.displayName ?: "Liftrix User",
+                displayName = fallbackDisplayName,
                 bio = null,
-                profilePhotoUrl = mainProfilePhotoUrl ?: userProfile?.profileImageUrl, // Use latest photo from main profile
+                profilePhotoUrl = effectiveFallbackPhotoUrl, // Use effective photo (DB → Firebase Auth → UserProfile fallback)
                 coverPhotoUrl = null,
                 workoutCount = 0,
                 followerCount = 0,
@@ -1044,7 +1126,7 @@ class FeedRepositoryImpl @Inject constructor(
             
             // Insert the fallback profile
             socialProfileDao.insertProfile(fallbackProfile)
-            Timber.i("🎆 FALLBACK_CREATED: Social profile for user $userId with username: ${fallbackProfile.username}, hasPhoto: ${fallbackProfile.profilePhotoUrl != null}")
+            Timber.i("PFP_DEBUG: 🎆 FALLBACK_CREATED: Social profile for user $userId with username: ${fallbackProfile.username}, hasPhoto: ${fallbackProfile.profilePhotoUrl != null}, effectivePhotoUrl: '${fallbackProfile.profilePhotoUrl ?: "null"}'")
             
             // Trigger sync to Firebase to make it searchable
             try {

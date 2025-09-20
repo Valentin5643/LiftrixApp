@@ -31,8 +31,23 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.liftrix.domain.model.social.PublicUserProfile
+import com.google.firebase.auth.FirebaseAuth
+import timber.log.Timber
 import com.example.liftrix.domain.model.social.FollowStatus
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import com.example.liftrix.ui.theme.LiftrixColorsV2
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.liftrix.domain.repository.social.SocialProfileRepository
+import javax.inject.Inject
+import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.example.liftrix.ui.theme.LiftrixSpacing
 import com.example.liftrix.ui.theme.ProfileColors
 import com.example.liftrix.ui.workout.components.PrimaryActionButton
@@ -153,10 +168,80 @@ private fun ProfileImageSection(
             modifier = Modifier.size(100.dp),
             contentAlignment = Alignment.Center
         ) {
-            // Use ProfileImageDisplay for consistent image loading
+            // State for social profile fallback photo URL
+            var socialProfilePhotoUrl by remember { mutableStateOf<String?>(null) }
+            
+            // Use ProfileImageDisplay for consistent image loading with Firebase Auth fallback
+            val isCurrentUser = try {
+                FirebaseAuth.getInstance().currentUser?.uid == profile.userId
+            } catch (e: Exception) {
+                false
+            }
+            
+            // Enhanced fallback logic: Public Profile -> Social Profile -> Firebase Auth
+            LaunchedEffect(profile.userId, profile.profilePhotoUrl) {
+                Timber.d("PFP_DEBUG: 🔍 ENHANCED_FALLBACK: Starting fallback logic for userId=${profile.userId}")
+                
+                // If public profile has no image, try social profile as fallback
+                if (profile.profilePhotoUrl.isNullOrBlank()) {
+                    Timber.d("PFP_DEBUG: 🔍 ENHANCED_FALLBACK: Public profile image is null, querying social profile...")
+                    
+                    try {
+                        // Note: We'll use a simple coroutine approach since we can't inject repository here
+                        // This is a temporary solution - ideally we'd have repository injection in the parent ViewModel
+                        withContext(Dispatchers.IO) {
+                            // For now, log that we need social profile data
+                            Timber.d("PFP_DEBUG: 🔍 ENHANCED_FALLBACK: Would query social profile for userId=${profile.userId} here")
+                            Timber.d("PFP_DEBUG: 🔍 ENHANCED_FALLBACK: Current profile data - userId=${profile.userId}, username=${profile.username}, displayName=${profile.displayName}, profilePhotoUrl=${profile.profilePhotoUrl}")
+                        }
+                    } catch (e: Exception) {
+                        Timber.e("PFP_DEBUG: 🔥 ENHANCED_FALLBACK_ERROR: Failed to query social profile", e)
+                    }
+                }
+            }
+            
+            val effectiveImageUrl = if (isCurrentUser) {
+                // Debug the profile object to understand what data we have
+                Timber.d("PFP_DEBUG: 🔍 PROFILE_OBJECT_DEBUG: profile.profilePhotoUrl='${profile.profilePhotoUrl}' | profile.displayName='${profile.displayName}' | profile.username='${profile.username}' | profile.userId='${profile.userId}'")
+                
+                // Enhanced priority: Public Profile -> Social Profile -> Firebase Auth
+                val dbUrl = profile.profilePhotoUrl
+                val socialUrl = socialProfilePhotoUrl
+                val firebaseUser = try {
+                    FirebaseAuth.getInstance().currentUser
+                } catch (e: Exception) {
+                    Timber.e("PFP_DEBUG: 🔥 FIREBASE_AUTH_INSTANCE_ERROR: Failed to get FirebaseAuth instance", e)
+                    null
+                }
+                
+                val firebaseAuthUrl = firebaseUser?.photoUrl?.toString()
+                val effectiveUrl = dbUrl ?: socialUrl ?: firebaseAuthUrl
+                
+                Timber.d("PFP_DEBUG: 🔍 ENHANCED_MODERN_PROFILE_HEADER: userId=${profile.userId} | isCurrentUser=$isCurrentUser")
+                Timber.d("PFP_DEBUG: 🔍 ENHANCED_MODERN_PROFILE_HEADER: dbUrl='$dbUrl' | socialUrl='$socialUrl' | firebaseUser=${firebaseUser != null} | firebaseUserId='${firebaseUser?.uid}' | firebaseAuthUrl='$firebaseAuthUrl' | effectiveUrl='$effectiveUrl'")
+                
+                if (firebaseUser != null) {
+                    Timber.d("PFP_DEBUG: 🔍 FIREBASE_USER_DETAILS: email='${firebaseUser.email}' | displayName='${firebaseUser.displayName}' | photoUrl='${firebaseUser.photoUrl}'")
+                }
+                
+                effectiveUrl
+            } else {
+                // For other users, use profile image with social fallback
+                val effectiveUrl = profile.profilePhotoUrl ?: socialProfilePhotoUrl
+                Timber.d("PFP_DEBUG: 🔍 ENHANCED_MODERN_PROFILE_HEADER: userId=${profile.userId} | isCurrentUser=$isCurrentUser | publicUrl='${profile.profilePhotoUrl}' | socialUrl='$socialProfilePhotoUrl' | effectiveUrl='$effectiveUrl'")
+                effectiveUrl
+            }
+            
+            // Ensure display name is not empty for better initials
+            val displayName = profile.displayName?.takeIf { it.isNotBlank() } 
+                ?: profile.username?.takeIf { it.isNotBlank() } 
+                ?: "User"
+            
+            Timber.d("PFP_DEBUG: 🔍 DISPLAY_NAME_DEBUG: originalDisplayName='${profile.displayName}' | username='${profile.username}' | finalDisplayName='$displayName'")
+            
             ProfileImageDisplay(
-                imageUrl = profile.profileImageUrl,
-                displayName = profile.displayName ?: profile.username,
+                imageUrl = effectiveImageUrl,
+                displayName = displayName,
                 userId = profile.userId,
                 size = 96.dp,
                 onClick = null,

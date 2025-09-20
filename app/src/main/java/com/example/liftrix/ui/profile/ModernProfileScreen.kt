@@ -83,7 +83,7 @@ fun ModernProfileScreen(
                 uiState.profile != null -> {
                     ModernProfileContent(
                         profile = uiState.profile!!,
-                        profileImageUrl = uiState.profile!!.profileImageUrl
+                        profileImageUrl = uiState.effectiveProfileImageUrl
                     )
                 }
                 else -> {
@@ -215,8 +215,9 @@ private fun ModernProfileContent(
                             contentDescription = "Your profile picture",
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),
-                            onError = { 
-                                timber.log.Timber.e("Failed to load own profile image: $profileImageUrl")
+                            onError = { error ->
+                                val httpCode = if (error.result.throwable?.message?.contains("403") == true) "HTTP 403" else "Unknown"
+                                timber.log.Timber.e("Failed to load own profile image: $profileImageUrl | Error=$httpCode | ${error.result.throwable?.message}")
                             }
                         )
                     } else {

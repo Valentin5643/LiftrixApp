@@ -16,6 +16,7 @@ import com.google.firebase.storage.FirebaseStorage
 import androidx.work.WorkManager
 import com.example.liftrix.core.workmanager.WorkManagerProvider
 import com.example.liftrix.sync.UserPublicSyncWorker
+import com.example.liftrix.data.service.FirebaseStorageUrlResolver
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import java.time.LocalDateTime
@@ -47,6 +48,7 @@ class ProfileImageRepositoryImpl @Inject constructor(
     private val userProfileDao: UserProfileDao,
     private val socialProfileDao: SocialProfileDao,
     private val dateTimeConverters: DateTimeConverters,
+    private val storageUrlResolver: FirebaseStorageUrlResolver,
     @ApplicationContext private val context: Context
 ) : ProfileImageRepository {
     
@@ -81,12 +83,22 @@ class ProfileImageRepositoryImpl @Inject constructor(
         val uploadTask = storageRef.putBytes(imageBytes).await()
         Timber.d("✅ Upload task completed: ${uploadTask.totalByteCount} bytes")
         
-        // Get download URL for the uploaded image
+        // CRITICAL FIX: Store storage path instead of tokenized URL
+        // This eliminates token invalidation issues that cause 403 errors
+        val storagePath = storageUrlResolver.createProfileImagePath(userId, PROFILE_IMAGE_FILENAME)
+        
+        // Get download URL for verification, but don't store it permanently
         val downloadUrl = storageRef.downloadUrl.await()
         val downloadUrlString = downloadUrl.toString()
+        val tokenMatch = downloadUrlString.substringAfter("token=").substringBefore("&")
         
-        Timber.i("🎉 Profile image uploaded successfully: $downloadUrlString")
-        downloadUrlString
+        Timber.i("🎉 Profile image uploaded successfully")
+        Timber.d("[PROFILE_IMAGE_DEBUG] Fresh download URL: $downloadUrlString")
+        Timber.d("[PROFILE_IMAGE_DEBUG] Token extracted: $tokenMatch")
+        Timber.d("[PROFILE_IMAGE_DEBUG] Storage path (will be stored): $storagePath")
+        
+        // Return storage path instead of URL - eliminates token invalidation
+        storagePath
     }
     
     override suspend fun deleteProfileImage(userId: String): LiftrixResult<Unit> = liftrixCatching(

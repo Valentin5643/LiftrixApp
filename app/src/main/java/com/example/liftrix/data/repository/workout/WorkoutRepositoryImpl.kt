@@ -31,6 +31,9 @@ import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.SubscriptionTier
 import com.example.liftrix.domain.model.SubscriptionStatus
 import com.example.liftrix.domain.model.toSummary
+import com.example.liftrix.domain.model.ExerciseSet
+import com.example.liftrix.domain.model.ExerciseSetId
+import com.example.liftrix.domain.model.Reps
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -106,6 +109,21 @@ class WorkoutRepositoryImpl @Inject constructor(
             )
         }
         
+        // 🔥 SETS-DEBUG: Enhanced debug logging for workout creation
+        if (BuildConfig.DEBUG) {
+            Timber.d("[SETS-DEBUG-CREATE] Creating workout '${workout.name}' with ${workout.exercises.size} exercises")
+            workout.exercises.forEachIndexed { index, exercise ->
+                Timber.d("[SETS-DEBUG-CREATE] Exercise $index: '${exercise.libraryExercise.name}' - targetSets=${exercise.targetSets}, actualSets=${exercise.sets.size}")
+                if (exercise.sets.isEmpty() && (exercise.targetSets ?: 0) > 0) {
+                    Timber.w("[SETS-DEBUG-CREATE] ⚠️ WARNING: Exercise '${exercise.libraryExercise.name}' has targetSets=${exercise.targetSets} but NO ACTUAL SETS!")
+                    Timber.w("[SETS-DEBUG-CREATE] This will save as 'sets':[] and cause 0 volume calculations")
+                }
+                exercise.sets.forEach { set ->
+                    Timber.d("[SETS-DEBUG-CREATE] Set ${set.setNumber}: reps=${set.reps?.count}, weight=${set.weight?.kilograms}, completed=${set.completedAt != null}")
+                }
+            }
+        }
+        
         return liftrixCatching(
             errorMapper = { throwable ->
                 // 🔥 PRESERVE ACTUAL SQLITE EXCEPTION: Don't overwrite with generic message
@@ -136,7 +154,11 @@ class WorkoutRepositoryImpl @Inject constructor(
                 )
             }
         ) {
-            // Convert workout to entity for database storage
+            // 🔥 SETS-FIX: Preserve original data integrity - don't create fake placeholder sets
+            // The root issue is saving workouts with targetSets but no actual completed sets
+            // This is EXPECTED BEHAVIOR for template workouts or in-progress workouts
+            
+            // Convert workout to entity for database storage (preserve original data)
             val entity = workoutMapper.toEntity(workout, isSynced = false)
             
             val insertResult = try {
@@ -179,7 +201,7 @@ class WorkoutRepositoryImpl @Inject constructor(
                         exerciseSetDao.insertSet(setEntity)
                     }
                 }
-                // Queue workout for sync after successful creation
+                // Queue workout for sync after successful creation (use original workout for sync, not placeholder version)
                 queueWorkoutForSync(workout)
                 
                 workout // Return original workout with preserved ID
@@ -306,6 +328,21 @@ class WorkoutRepositoryImpl @Inject constructor(
     }
 
     override suspend fun updateWorkout(workout: Workout): LiftrixResult<Workout> {
+        // 🔥 SETS-DEBUG: Enhanced debug logging for workout update
+        if (BuildConfig.DEBUG) {
+            Timber.d("[SETS-DEBUG-UPDATE] Updating workout '${workout.name}' with ${workout.exercises.size} exercises")
+            workout.exercises.forEachIndexed { index, exercise ->
+                Timber.d("[SETS-DEBUG-UPDATE] Exercise $index: '${exercise.libraryExercise.name}' - targetSets=${exercise.targetSets}, actualSets=${exercise.sets.size}")
+                if (exercise.sets.isEmpty() && (exercise.targetSets ?: 0) > 0) {
+                    Timber.w("[SETS-DEBUG-UPDATE] ⚠️ WARNING: Exercise '${exercise.libraryExercise.name}' has targetSets=${exercise.targetSets} but NO ACTUAL SETS!")
+                    Timber.w("[SETS-DEBUG-UPDATE] This will save as 'sets':[] and cause 0 volume calculations")
+                }
+                exercise.sets.forEach { set ->
+                    Timber.d("[SETS-DEBUG-UPDATE] Set ${set.setNumber}: reps=${set.reps?.count}, weight=${set.weight?.kilograms}, completed=${set.completedAt != null}")
+                }
+            }
+        }
+        
         return liftrixCatching(
             errorMapper = { throwable ->
                 LiftrixError.DatabaseError(
@@ -322,7 +359,10 @@ class WorkoutRepositoryImpl @Inject constructor(
         ) {
             Timber.d("🔥 UPDATE-WORKOUT-DEBUG: Attempting to update workout - ID: ${workout.id.value}, Name: ${workout.name}, Status: ${workout.status}, UserId: ${workout.userId}")
             
-            // Convert workout to entity for database storage
+            // 🔥 SETS-FIX: Preserve original data integrity - this is correct behavior
+            // Workouts with targetSets but no actual sets are VALID (templates, in-progress, etc.)
+            
+            // Convert workout to entity for database storage (preserve original data)
             val entity = workoutMapper.toEntity(workout, isSynced = false)
             Timber.d("🔥 UPDATE-WORKOUT-DEBUG: Updating entity with ID: ${entity.id}, Status: ${entity.status}, UserId: ${entity.userId}")
             

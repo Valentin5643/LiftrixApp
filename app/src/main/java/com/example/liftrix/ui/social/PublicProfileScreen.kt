@@ -327,8 +327,9 @@ fun ModernProfileContent(
                                 contentDescription = "Profile picture of ${profile.displayName ?: profile.username}",
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize(),
-                                onError = { 
-                                    timber.log.Timber.e("Failed to load profile image: ${profile.profileImageUrl} for user: ${profile.username}")
+                                onError = { error ->
+                                    val httpCode = if (error.result.throwable?.message?.contains("403") == true) "HTTP 403" else "Unknown"
+                                    timber.log.Timber.e("Failed to load profile image: ${profile.profileImageUrl} for user: ${profile.username} | Error=$httpCode | ${error.result.throwable?.message}")
                                 }
                             )
                         } else {

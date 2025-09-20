@@ -25,7 +25,7 @@ interface ProfileImageRepository {
      * 
      * @param userId User ID for scoped storage (must match authenticated user)
      * @param imageBytes Processed image data (JPEG format from ImageProcessingService)
-     * @return LiftrixResult<String> with Firebase Storage download URL on success
+     * @return LiftrixResult<String> with Firebase Storage path on success (not tokenized URL)
      */
     suspend fun uploadProfileImage(
         userId: String,

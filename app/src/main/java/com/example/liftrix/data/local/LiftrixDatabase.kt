@@ -72,12 +72,14 @@ import com.example.liftrix.data.local.dao.ChatPreferencesDao
 import com.example.liftrix.data.local.dao.ChatHistoryDao
 import com.example.liftrix.data.local.dao.PRReactionDao
 import com.example.liftrix.data.local.dao.PRNotificationPreferencesDao
+import com.example.liftrix.data.local.dao.PersonalRecordDao
 
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.data.local.entity.ChatPreferencesEntity
 import com.example.liftrix.data.local.entity.ChatHistoryEntity
 import com.example.liftrix.data.local.entity.PRReactionEntity
 import com.example.liftrix.data.local.entity.PRNotificationPreferencesEntity
+import com.example.liftrix.data.local.entity.PersonalRecordEntity
 import com.example.liftrix.data.local.entity.UserAccountEntity
 import com.example.liftrix.data.local.entity.FolderEntity
 import com.example.liftrix.data.local.entity.SettingsEntity
@@ -206,8 +208,9 @@ import com.example.liftrix.data.local.entity.SyncPreferencesEntity
         ChatHistoryEntity::class,
         PRReactionEntity::class,
         PRNotificationPreferencesEntity::class,
+        PersonalRecordEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 @TypeConverters(
@@ -283,4 +286,5 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun chatHistoryDao(): ChatHistoryDao
     abstract fun prReactionDao(): PRReactionDao
     abstract fun prNotificationPreferencesDao(): PRNotificationPreferencesDao
+    abstract fun personalRecordDao(): PersonalRecordDao
 }

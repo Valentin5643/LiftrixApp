@@ -89,6 +89,9 @@ class ProgressDataServiceImpl @Inject constructor(
                     (timeRange.endDate.time / (24 * 60 * 60 * 1000)).toInt()
                 )
                 
+                Timber.d("🔍 VOLUME-SERVICE-DEBUG: TimeRange for volume data - startDate=$startDate, endDate=$endDate")
+                Timber.d("🔍 VOLUME-SERVICE-DEBUG: TimeRange milliseconds - start=${timeRange.startDate.time}, end=${timeRange.endDate.time}")
+                
                 Timber.d("$TAG: Fetching volume data from repository: startDate=$startDate, endDate=$endDate")
                 kotlinx.coroutines.withTimeout(8000) {
                     progressStatsRepository.getWorkoutVolumeData(userId, startDate, endDate).first()
@@ -223,6 +226,15 @@ class ProgressDataServiceImpl @Inject constructor(
                 val endDate = kotlinx.datetime.LocalDate.fromEpochDays(
                     (timeRange.endDate.time / (24 * 60 * 60 * 1000)).toInt()
                 )
+                
+                Timber.d("🔍 PROGRESS-SERVICE-DEBUG: TimeRange for progress summary - startDate=$startDate, endDate=$endDate")
+                Timber.d("🔍 PROGRESS-SERVICE-DEBUG: TimeRange milliseconds - start=${timeRange.startDate.time}, end=${timeRange.endDate.time}")
+                
+                // Convert the problematic workout timestamp for comparison
+                val workoutTimestamp = 1758316901826L
+                val workoutDate = kotlinx.datetime.LocalDate.fromEpochDays((workoutTimestamp / (24 * 60 * 60 * 1000)).toInt())
+                Timber.d("🔍 PROGRESS-SERVICE-DEBUG: Workout with 600kg volume created at timestamp=$workoutTimestamp, which is date=$workoutDate")
+                Timber.d("🔍 PROGRESS-SERVICE-DEBUG: Is workout date in range? ${workoutDate >= startDate && workoutDate <= endDate}")
                 
                 Timber.d("$TAG: Fetching progress summary from repository")
                 kotlinx.coroutines.withTimeout(15000) { // 15 second timeout

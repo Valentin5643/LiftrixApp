@@ -183,9 +183,10 @@ abstract class SocialModule {
             feedCacheService: FeedCacheService,
             feedCacheDao: FeedCacheDao,
             followRelationshipDao: FollowRelationshipDao,
+            authRepository: com.example.liftrix.domain.repository.AuthRepository,
             @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context
             ): FeedRepository {
-                return FeedRepositoryImpl(workoutPostDao, postLikeDao, savedPostDao, socialProfileDao, userProfileDao, workoutDao, workoutPostMapper, feedCacheService, feedCacheDao, followRelationshipDao, context)
+                return FeedRepositoryImpl(workoutPostDao, postLikeDao, savedPostDao, socialProfileDao, userProfileDao, workoutDao, workoutPostMapper, feedCacheService, feedCacheDao, followRelationshipDao, authRepository, context)
             }
 
         @Provides

@@ -223,16 +223,41 @@ class PostCreationViewModel @Inject constructor(
 
         updateState { UiState.Loading }
 
-        // Create workout summary
+        // Calculate total volume using centralized VolumeCalculator with debug logging
+        val calculatedVolume = workout.calculateTotalVolume()
+        Timber.d("🔍 COMPLETION-POST-DEBUG: Domain model volume calculation - totalVolume=${calculatedVolume.value}kg")
+        Timber.d("🔍 COMPLETION-POST-DEBUG: Workout has ${workout.exercises.size} exercises")
+        
+        // Also calculate manually to compare
+        val manualTotalVolume = workout.exercises.sumOf { exercise ->
+            com.example.liftrix.domain.util.VolumeCalculator.calculateVolumeFromSets(exercise.sets)
+        }
+        Timber.d("🔍 COMPLETION-POST-DEBUG: Manual VolumeCalculator total: ${manualTotalVolume}kg")
+        
+        workout.exercises.forEachIndexed { index, exercise ->
+            // Use VolumeCalculator with debug logging to identify any issues
+            val exerciseVolumeKg = com.example.liftrix.domain.util.VolumeCalculator.calculateVolumeWithDebug(
+                sets = exercise.sets,
+                exerciseName = exercise.libraryExercise.name
+            )
+            val exerciseVolume = exercise.getTotalVolume()
+            Timber.d("🔍 COMPLETION-POST-DEBUG: Exercise $index '${exercise.libraryExercise.name}' - calculated=${exerciseVolumeKg}kg, domain=${exerciseVolume?.value}kg, sets=${exercise.sets.size}")
+        }
+        
+        // Use the manually calculated volume if domain model is still showing 0
+        val finalVolume = if (calculatedVolume.value > 0.0) calculatedVolume.value else manualTotalVolume
+        Timber.d("🔍 COMPLETION-POST-DEBUG: Final volume to use: ${finalVolume}kg (domain=${calculatedVolume.value}kg, manual=${manualTotalVolume}kg)")
+        
+        // Create workout summary using corrected volume
         val workoutSummary = WorkoutSummary(
             totalSets = workout.getTotalSets(),
             totalReps = workout.getTotalRepsCompleted().count,
-            totalVolume = workout.calculateTotalVolume().value,
+            totalVolume = finalVolume,
             exerciseCount = workout.exercises.size,
             duration = workout.getDuration()?.toMinutes()?.toInt() ?: 0
         )
 
-        // Create post entity
+        // Create post entity using corrected volume
         val post = WorkoutPost(
             id = UUID.randomUUID().toString(),
             userId = userId,
@@ -241,7 +266,7 @@ class PostCreationViewModel @Inject constructor(
             mediaUrls = mediaUrls,
             mediaThumbnails = mediaUrls.map { it.replace("/original/", "/thumb/") },
             workoutDuration = workout.getDuration()?.toMinutes()?.toInt() ?: 0,
-            totalVolume = workout.calculateTotalVolume().value,
+            totalVolume = finalVolume,
             exercisesCount = workout.exercises.size,
             prsCount = 0, // PR detection handled separately
             workoutSummary = workoutSummary,

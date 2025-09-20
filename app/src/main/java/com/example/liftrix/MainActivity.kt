@@ -35,27 +35,55 @@ import com.example.liftrix.ui.auth.AuthActivity
 import com.example.liftrix.ui.navigation.UnifiedNavigationContainer
 import com.example.liftrix.ui.theme.LiftrixTheme
 import com.example.liftrix.ui.theme.ThemeManager
+import com.example.liftrix.ui.theme.ProvideWeightUnitManager
+import com.example.liftrix.domain.service.WeightUnitManager
+import com.example.liftrix.data.service.FirebaseStorageUrlResolver
+import com.example.liftrix.ui.common.LocalFirebaseStorageUrlResolver
+import androidx.compose.runtime.CompositionLocalProvider
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    
+    @Inject
+    lateinit var weightUnitManager: WeightUnitManager
+    
+    @Inject
+    lateinit var firebaseStorageUrlResolver: FirebaseStorageUrlResolver
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Initialize WeightUnitManager
+        CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+            try {
+                weightUnitManager.initialize()
+                Timber.d("WeightUnitManager initialized successfully in MainActivity")
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to initialize WeightUnitManager in MainActivity")
+            }
+        }
+        
         setContent {
             val themeManager = remember { ThemeManager.getInstance(this@MainActivity) }
             
             LiftrixTheme(
                 themeManager = themeManager
             ) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    MainContent(
-                        onNavigateToAuth = {
-                            navigateToAuthActivity()
+                ProvideWeightUnitManager(weightUnitManager = weightUnitManager) {
+                    CompositionLocalProvider(LocalFirebaseStorageUrlResolver provides firebaseStorageUrlResolver) {
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.background
+                        ) {
+                            MainContent(
+                                onNavigateToAuth = {
+                                    navigateToAuthActivity()
+                                }
+                            )
                         }
-                    )
+                    }
                 }
             }
         }

@@ -1162,6 +1162,26 @@ data class ProfileUiState(
             is ProfileLoadingState.Loaded -> profileState.profile
             else -> null
         }
+        
+    // Effective profile image URL with Firebase Auth fallback (like settings screen)
+    val effectiveProfileImageUrl: String?
+        get() {
+            Timber.d("PFP_DEBUG: 🔍 PROFILE_EFFECTIVE_URL_CALLED: Starting effectiveProfileImageUrl calculation")
+            
+            val dbPhotoUrl = profile?.profileImageUrl
+            val firebaseAuthUrl = try {
+                FirebaseAuth.getInstance().currentUser?.photoUrl?.toString()
+            } catch (e: Exception) {
+                Timber.e("PFP_DEBUG: 🔥 FIREBASE_AUTH_ERROR: Failed to get Firebase Auth user in ProfileViewModel", e)
+                null
+            }
+            val effectiveUrl = dbPhotoUrl ?: firebaseAuthUrl
+            
+            // Debug logging for profile image fallback tracking
+            Timber.d("PFP_DEBUG: 🔍 PROFILE_EFFECTIVE_URL: userId=${profile?.userId} | dbPhoto='$dbPhotoUrl' | firebaseAuthPhoto='$firebaseAuthUrl' | effectiveUrl='$effectiveUrl'")
+            
+            return effectiveUrl
+        }
 }
 
 /**

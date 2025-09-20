@@ -28,6 +28,7 @@ import com.example.liftrix.ui.common.FeedItemShimmer
 import com.example.liftrix.ui.feed.components.WorkoutPostCard
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.theme.LiftrixSpacing
+import com.example.liftrix.data.service.FirebaseStorageUrlResolver
 import eu.bambooapps.material3.pullrefresh.PullRefreshIndicator
 import eu.bambooapps.material3.pullrefresh.pullRefresh
 import eu.bambooapps.material3.pullrefresh.rememberPullRefreshState
@@ -112,6 +113,7 @@ fun FeedScreen(
                 likedPosts = feedUiState.likedPosts,
                 savedPosts = feedUiState.savedPosts,
                 currentUserId = feedUiState.currentUserId,
+                urlResolver = feedViewModel.urlResolver,
                 onPostInteraction = { interaction ->
                     // Map feed interactions to social events
                     feedViewModel.onEvent(FeedEvent.HandlePostInteraction(interaction))
@@ -136,7 +138,8 @@ private fun FeedContent(
     savedPosts: Set<String>,
     currentUserId: String?,
     onPostInteraction: (PostInteraction) -> Unit,
-    navController: NavController
+    navController: NavController,
+    urlResolver: FirebaseStorageUrlResolver
 ) {
     val listState = rememberLazyListState()
 
@@ -212,6 +215,7 @@ private fun FeedContent(
                         navController.navigateToEditWorkout(post.workoutId)
                     },
                     isOwnPost = currentUserId == post.userId,
+                    urlResolver = urlResolver,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = LiftrixSpacing.medium)

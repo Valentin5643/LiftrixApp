@@ -17,8 +17,8 @@ value class Weight(val kilograms: Double) {
     }
     
     companion object {
-        const val MAX_WEIGHT_KG: Double = 1000.0
-        const val ANOMALY_THRESHOLD_KG: Double = 500.0
+        const val MAX_WEIGHT_KG: Double = 5000.0
+        const val ANOMALY_THRESHOLD_KG: Double = 1000.0
         
         /**
          * Creates Weight safely - if over limit, caps at max and triggers anomaly detection

@@ -18,6 +18,7 @@ import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.service.AnalyticsTracker
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import com.example.liftrix.ui.common.event.ViewModelEvent
+import com.example.liftrix.data.service.FirebaseStorageUrlResolver
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -35,6 +36,7 @@ class FeedViewModel @Inject constructor(
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     private val seedWorkoutPostsUseCase: SeedWorkoutPostsUseCase,
     private val analyticsTracker: AnalyticsTracker,
+    private val storageUrlResolver: FirebaseStorageUrlResolver,
     errorHandler: ErrorHandler
 ) : BaseViewModel<FeedUiState, FeedEvent>(errorHandler) {
 
@@ -47,6 +49,9 @@ class FeedViewModel @Inject constructor(
     
     private val _viewModelEvents = MutableSharedFlow<FeedViewModelEvent>()
     val viewModelEvents: SharedFlow<FeedViewModelEvent> = _viewModelEvents.asSharedFlow()
+    
+    // Expose URL resolver for WorkoutPostCard to resolve storage paths to fresh URLs
+    val urlResolver: FirebaseStorageUrlResolver = storageUrlResolver
     
     override val _uiState = MutableStateFlow(
         FeedUiState(

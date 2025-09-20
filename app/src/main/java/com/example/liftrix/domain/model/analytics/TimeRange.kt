@@ -76,8 +76,11 @@ data class TimeRange(
          */
         fun lastMonth(): TimeRange {
             val calendar = Calendar.getInstance()
+            // FIX: Extend end date slightly into future to catch workouts with minor timestamp issues
+            calendar.add(Calendar.DAY_OF_MONTH, 1)
             val endDate = calendar.time
             calendar.add(Calendar.MONTH, -1)
+            calendar.add(Calendar.DAY_OF_MONTH, -1) // Back to actual last month
             val startDate = calendar.time
             return TimeRange(startDate, endDate, TimeRangeType.MONTH)
         }

@@ -1,12 +1,14 @@
 package com.example.liftrix.domain.usecase.profile
 
+import android.content.Context
 import com.example.liftrix.data.local.dao.SocialProfileDao
 import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.sync.SocialProfileSyncWorker
-import androidx.work.WorkManager
+import com.example.liftrix.core.workmanager.WorkManagerProvider
+import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -29,9 +31,9 @@ import javax.inject.Inject
  * - Debugging tool for investigating profile photo sync issues
  */
 class SyncProfilePhotoToSocialUseCase @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val userProfileDao: UserProfileDao,
-    private val socialProfileDao: SocialProfileDao,
-    private val workManager: WorkManager
+    private val socialProfileDao: SocialProfileDao
 ) {
     
     /**
@@ -58,6 +60,10 @@ class SyncProfilePhotoToSocialUseCase @Inject constructor(
         val mainProfileImageUrl = userProfileDao.getProfileImageUrl(userId)
         Timber.d("[PROFILE-PHOTO-SYNC-UC] Main profile photo: ${mainProfileImageUrl ?: "null"}")
         
+        // 🐛 DEBUG: Check if profile exists at all
+        val profileEntity = userProfileDao.getProfileForUserSuspend(userId)
+        Timber.d("PFP_DEBUG: 🐛 SYNC_DEBUG: Profile exists=${profileEntity != null} | entityImageUrl='${profileEntity?.profileImageUrl}' | hasCustom=${profileEntity?.hasCustomProfileImage}")
+        
         // Check if social profile exists
         val hasSocialProfile = socialProfileDao.hasProfile(userId)
         
@@ -78,12 +84,16 @@ class SyncProfilePhotoToSocialUseCase @Inject constructor(
         
         Timber.d("[PROFILE-PHOTO-SYNC-UC] Current social profile photo: ${currentSocialPhotoUrl ?: "null"}")
         
+        // 🐛 DEBUG: Detailed comparison logging
+        Timber.d("PFP_DEBUG: 🐛 SYNC_COMPARISON: mainPhoto='${mainProfileImageUrl ?: "NULL"}' vs socialPhoto='${currentSocialPhotoUrl ?: "NULL"}'")
+        Timber.d("PFP_DEBUG: 🐛 SYNC_COMPARISON: Are equal? ${mainProfileImageUrl == currentSocialPhotoUrl} | mainIsNull=${mainProfileImageUrl == null} | socialIsNull=${currentSocialPhotoUrl == null}")
+        
         // Check if sync is needed
         if (mainProfileImageUrl == currentSocialPhotoUrl) {
             Timber.d("[PROFILE-PHOTO-SYNC-UC] Photos already match - no sync needed")
             return@liftrixCatching ProfilePhotoSyncResult(
                 syncPerformed = false,
-                reason = "Profile photos already match",
+                reason = "Profile photos already match (both are ${if (mainProfileImageUrl == null) "null" else "URLs"})",
                 mainProfilePhotoUrl = mainProfileImageUrl,
                 socialProfilePhotoUrl = currentSocialPhotoUrl,
                 socialProfileExists = true
@@ -101,6 +111,7 @@ class SyncProfilePhotoToSocialUseCase @Inject constructor(
             
             // Trigger social profile sync to Firebase to make changes searchable
             try {
+                val workManager = WorkManagerProvider.getInstance(context)
                 val socialSyncRequest = SocialProfileSyncWorker.createWorkRequest(userId, forceSync = true)
                 workManager.enqueue(socialSyncRequest)
                 Timber.d("[PROFILE-PHOTO-SYNC-UC] Social profile sync to Firebase triggered")

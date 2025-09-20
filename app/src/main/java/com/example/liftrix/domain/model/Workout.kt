@@ -77,12 +77,13 @@ data class Workout(
     }
     
     /**
-     * Calculates total volume across all exercises
+     * Calculates total volume across all exercises using centralized VolumeCalculator
      */
     fun calculateTotalVolume(): Weight {
-        return exercises
-            .mapNotNull { it.getTotalVolume() }
-            .fold(Weight.ZERO) { acc, volume -> acc + volume }
+        val totalVolumeKg = exercises.sumOf { exercise ->
+            com.example.liftrix.domain.util.VolumeCalculator.calculateVolumeFromSets(exercise.sets)
+        }
+        return Weight(totalVolumeKg)
     }
     
     /**

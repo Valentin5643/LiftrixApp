@@ -2,6 +2,7 @@ package com.example.liftrix.di
 
 import com.example.liftrix.data.repository.ProfileImageRepositoryImpl
 import com.example.liftrix.domain.repository.ProfileImageRepository
+import com.example.liftrix.data.service.FirebaseStorageUrlResolver
 import com.example.liftrix.domain.repository.ProfileRepository
 import com.example.liftrix.domain.usecase.GetProfileUseCase
 import com.example.liftrix.domain.usecase.SaveProfileUseCase

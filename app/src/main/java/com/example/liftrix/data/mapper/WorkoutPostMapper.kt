@@ -54,6 +54,12 @@ class WorkoutPostMapper @Inject constructor(
             emptyList()
         }
         
+        // Debug the entity values before mapping to domain
+        Timber.d("MAPPER-DEBUG: Converting entity to domain - ID=${entity.id}, totalVolume=${entity.totalVolume}, workoutId=${entity.workoutId}")
+        
+        // Note: Volume recalculation will be handled by FeedRepositoryImpl fix
+        // For now, just pass through the entity volume as-is
+        
         return WorkoutPost(
             id = entity.id,
             userId = entity.userId,
@@ -123,6 +129,9 @@ class WorkoutPostMapper @Inject constructor(
         prsCount: Int = 0
     ): WorkoutPostEntity {
         val currentTime = System.currentTimeMillis()
+        
+        // Debug the input parameters
+        Timber.d("CREATE-ENTITY-DEBUG: Creating entity - ID=$id, workoutId=${request.workoutId}, totalVolume=$totalVolume, duration=$workoutDuration, exercises=$exercisesCount")
         
         return WorkoutPostEntity(
             id = id,

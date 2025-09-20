@@ -8,6 +8,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.service.MediaProcessingService
 import com.example.liftrix.domain.service.PRDetectionService
+import com.example.liftrix.domain.repository.PersonalRecordRepository
 import com.example.liftrix.domain.usecase.sharing.ShareToExternalPlatformUseCase
 import com.example.liftrix.domain.usecase.sharing.ShareRequest
 import com.example.liftrix.domain.usecase.sharing.SharePlatform
@@ -38,6 +39,7 @@ class PostWorkoutSummaryViewModel @Inject constructor(
     private val getWorkoutByIdUseCase: GetWorkoutByIdUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     private val prDetectionService: PRDetectionService,
+    private val personalRecordRepository: PersonalRecordRepository,
     private val mediaProcessingService: MediaProcessingService,
     private val shareToExternalPlatformUseCase: ShareToExternalPlatformUseCase
 ) : ViewModel() {
@@ -204,6 +206,26 @@ class PostWorkoutSummaryViewModel @Inject constructor(
         
         return detectionResult.fold(
             onSuccess = { domainRecords ->
+                // CRITICAL FIX: Save detected PRs to database so they persist
+                if (domainRecords.isNotEmpty()) {
+                    Timber.d("Saving ${domainRecords.size} detected PRs to database")
+                    val saveResult = personalRecordRepository.savePRs(
+                        personalRecords = domainRecords,
+                        userId = userId,
+                        workoutId = workout.id.value
+                    )
+                    
+                    saveResult.fold(
+                        onSuccess = {
+                            Timber.d("Successfully saved ${domainRecords.size} PRs to database")
+                        },
+                        onFailure = { error ->
+                            Timber.e("Failed to save PRs to database: $error")
+                            // Continue with UI display even if save fails
+                        }
+                    )
+                }
+                
                 // Map domain PersonalRecords to UI PersonalRecords
                 domainRecords.map { domainRecord ->
                     PersonalRecord(

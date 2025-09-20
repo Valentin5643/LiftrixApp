@@ -180,10 +180,8 @@ data class Exercise(
     fun getTotalVolume(): Weight? {
         if (!isWeightBased) return null
         
-        return sets
-            .filter { it.isCompleted }
-            .mapNotNull { it.getVolume() }
-            .fold(Weight.ZERO) { acc, volume -> acc + volume }
+        val totalVolumeKg = com.example.liftrix.domain.util.VolumeCalculator.calculateVolumeFromSets(sets)
+        return com.example.liftrix.domain.util.VolumeCalculator.toWeightOrNull(totalVolumeKg)
     }
     
     /**

@@ -29,10 +29,10 @@ import com.example.liftrix.ui.profile.components.ProfileImageDisplay
 import com.example.liftrix.ui.profile.components.ImagePickerDialog
 import com.example.liftrix.ui.workout.components.PrimaryActionButton
 import com.example.liftrix.ui.workout.components.SecondaryActionButton
+import timber.log.Timber
 import com.example.liftrix.ui.workout.components.TertiaryActionButton
 import com.example.liftrix.ui.workout.components.UnifiedWorkoutCard
 import com.example.liftrix.ui.theme.LiftrixSpacing
-import timber.log.Timber
 
 /**
  * ProfileScreen - Main profile display screen
@@ -68,6 +68,9 @@ fun ProfileScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     
+    // Simple debug log to confirm this screen is being used
+    Timber.d("PFP_DEBUG: 🏠 PROFILE_SCREEN_ENTRY: ProfileScreen composable is being executed")
+    
     // Image picker dialog state
     var showImagePickerDialog by remember { mutableStateOf(false) }
     
@@ -92,9 +95,13 @@ fun ProfileScreen(
                 )
             }
             uiState.profile != null -> {
+                // Debug: Check what's being passed to ProfileContent
+                val effectiveUrl = uiState.effectiveProfileImageUrl
+                Timber.d("PFP_DEBUG: 🔍 PROFILE_SCREEN_DEBUG: effectiveUrl='$effectiveUrl' | rawUrl='${uiState.profile!!.profileImageUrl}'")
+                
                 ProfileContent(
                     profile = uiState.profile!!,
-                    profileImageUrl = uiState.profile!!.profileImageUrl,
+                    profileImageUrl = effectiveUrl,
                     imageUploadState = uiState.imageUploadState,
                     onNavigateToEdit = onNavigateToEdit,
                     onNavigateToImageCrop = onNavigateToImageCrop,

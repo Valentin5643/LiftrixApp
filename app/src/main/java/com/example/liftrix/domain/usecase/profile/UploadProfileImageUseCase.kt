@@ -8,6 +8,7 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.ProfileImageRepository
 import com.example.liftrix.domain.repository.ProfileRepository
 import com.example.liftrix.service.ImageProcessingService
+import com.example.liftrix.data.service.UserProfileCacheService
 import timber.log.Timber
 import java.time.LocalDateTime
 import javax.inject.Inject
@@ -37,7 +38,9 @@ import javax.inject.Inject
 class UploadProfileImageUseCase @Inject constructor(
     private val imageProcessingService: ImageProcessingService,
     private val profileImageRepository: ProfileImageRepository,
-    private val profileRepository: ProfileRepository
+    private val profileRepository: ProfileRepository,
+    private val syncProfilePhotoToSocialUseCase: SyncProfilePhotoToSocialUseCase,
+    private val userProfileCacheService: UserProfileCacheService
 ) {
     
     /**
@@ -46,7 +49,7 @@ class UploadProfileImageUseCase @Inject constructor(
      * @param userId User ID for profile image association (must be authenticated user)
      * @param imageUri URI of source image (content:// or file:// scheme)
      * @param cropRect Optional crop rectangle, auto-crops to center square if null
-     * @return LiftrixResult<String> with Firebase Storage download URL on success
+     * @return LiftrixResult<String> with Firebase Storage path on success (resolves to fresh URLs dynamically)
      */
     suspend operator fun invoke(
         userId: String,
@@ -101,13 +104,13 @@ class UploadProfileImageUseCase @Inject constructor(
             throw error ?: RuntimeException("Image upload failed")
         }
         
-        val newImageUrl = uploadResult.getOrThrow()
-        Timber.d("✅ Image uploaded to Firebase Storage: $newImageUrl")
+        val newStoragePath = uploadResult.getOrThrow()
+        Timber.d("✅ Image uploaded to Firebase Storage path: $newStoragePath")
         
-        // Update profile with new image URL and metadata
+        // Update profile with new storage path and metadata
         val updateResult = profileImageRepository.updateProfileImageUrl(
             userId = userId,
-            imageUrl = newImageUrl,
+            imageUrl = newStoragePath,  // Now storing path instead of tokenized URL
             updatedAt = LocalDateTime.now(),
             hasCustomImage = true
         )
@@ -117,18 +120,46 @@ class UploadProfileImageUseCase @Inject constructor(
             Timber.e(error, "Failed to update profile image URL for user: $userId")
             
             // Attempt to clean up uploaded image since profile update failed
-            cleanupUploadedImage(userId, newImageUrl)
+            cleanupUploadedImage(userId, newStoragePath)
             
             throw error ?: RuntimeException("Profile update failed")
         }
         
         // Clean up previous image if different from new one
-        if (currentImageUrl != null && currentImageUrl != newImageUrl) {
+        if (currentImageUrl != null && currentImageUrl != newStoragePath) {
             cleanupPreviousImage(userId, currentImageUrl)
         }
         
-        Timber.i("🎉 Profile image upload completed successfully for user: $userId")
-        newImageUrl
+        // 🔄 SYNC TO SOCIAL PROFILE: Ensure the uploaded photo appears in feed/social contexts
+        Timber.d("PFP_DEBUG: 🔄 SYNCING_TO_SOCIAL: Starting sync of profile photo to social profile for user: $userId")
+        try {
+            val syncResult = syncProfilePhotoToSocialUseCase(userId)
+            syncResult.fold(
+                onSuccess = { result -> 
+                    Timber.i("PFP_DEBUG: ✅ SOCIAL_SYNC_SUCCESS: ${result.reason} | mainPhoto=${result.mainProfilePhotoUrl} | socialPhoto=${result.newSocialProfilePhotoUrl}")
+                },
+                onFailure = { error -> 
+                    // Don't fail the entire upload if social sync fails - it's not critical
+                    Timber.e("PFP_DEBUG: 🔥 SOCIAL_SYNC_FAILED: ${error.message} | Upload still successful but photo may not appear in feed immediately")
+                }
+            )
+        } catch (e: Exception) {
+            // Non-blocking failure - upload is still successful
+            Timber.e(e, "PFP_DEBUG: 🔥 SOCIAL_SYNC_EXCEPTION: Exception during social profile sync, continuing normally")
+        }
+        
+        // 🔄 INVALIDATE PROFILE CACHE: Force refresh of public profile data to show new photo
+        Timber.d("PFP_DEBUG: 🔄 CACHE_INVALIDATION: Invalidating profile cache for user: $userId")
+        try {
+            userProfileCacheService.invalidateCache(userId)
+            Timber.i("PFP_DEBUG: ✅ CACHE_INVALIDATED: Profile cache invalidated successfully for user: $userId")
+        } catch (e: Exception) {
+            // Non-blocking failure - upload is still successful
+            Timber.e(e, "PFP_DEBUG: 🔥 CACHE_INVALIDATION_FAILED: Exception during cache invalidation, continuing normally")
+        }
+        
+        Timber.i("🎉 Profile image upload completed successfully for user: $userId (with social sync attempt)")
+        newStoragePath
     }
     
     /**

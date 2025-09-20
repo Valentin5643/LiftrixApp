@@ -28,10 +28,16 @@ import com.example.liftrix.R
 import com.example.liftrix.domain.model.social.MediaItem
 import com.example.liftrix.domain.model.social.MediaType
 import com.example.liftrix.domain.model.social.WorkoutPost
+import com.example.liftrix.ui.components.DynamicProfileImage
+import com.example.liftrix.ui.components.isStoragePath
+import com.example.liftrix.ui.components.extractStoragePathFromUrl
+import com.example.liftrix.data.service.FirebaseStorageUrlResolver
+import com.google.firebase.storage.FirebaseStorage
 import com.example.liftrix.domain.model.WeightUnit
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.example.liftrix.ui.theme.LiftrixSpacing
 import com.example.liftrix.ui.theme.rememberWeightUnitManager
+import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -55,7 +61,8 @@ fun WorkoutPostCard(
     onBlockUser: () -> Unit = {},
     onReportPost: () -> Unit = {},
     onEditWorkout: () -> Unit = {},
-    isOwnPost: Boolean = false
+    isOwnPost: Boolean = false,
+    urlResolver: FirebaseStorageUrlResolver = FirebaseStorageUrlResolver(FirebaseStorage.getInstance())
 ) {
     val hapticFeedback = LocalHapticFeedback.current
 
@@ -78,6 +85,7 @@ fun WorkoutPostCard(
                 onReportPost = onReportPost,
                 onEditWorkout = onEditWorkout,
                 isOwnPost = isOwnPost,
+                urlResolver = urlResolver,
                 modifier = Modifier.fillMaxWidth()
             )
             
@@ -149,7 +157,8 @@ private fun PostHeader(
     onBlockUser: () -> Unit = {},
     onReportPost: () -> Unit = {},
     onEditWorkout: () -> Unit = {},
-    isOwnPost: Boolean = false
+    isOwnPost: Boolean = false,
+    urlResolver: FirebaseStorageUrlResolver
 ) {
     var showOptionsMenu by remember { mutableStateOf(false) }
     
@@ -164,40 +173,26 @@ private fun PostHeader(
                 .clickable { onProfileClick() },
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Profile image - consistent with profile screen behavior
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center
-            ) {
-                val hasValidImageUrl = !post.authorProfilePhotoUrl.isNullOrBlank()
-                timber.log.Timber.d("WorkoutPostCard: Profile image for ${post.authorDisplayName ?: post.authorUsername} (${post.userId}): " +
-                    "photoUrl='${post.authorProfilePhotoUrl}', " +
-                    "hasValidUrl=$hasValidImageUrl, " +
-                    "willShowInitials=${!hasValidImageUrl}")
-                
-                if (hasValidImageUrl) {
-                    AsyncImage(
-                        model = post.authorProfilePhotoUrl,
-                        contentDescription = "Profile picture of ${post.authorDisplayName}",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        onError = { 
-                            timber.log.Timber.e("Failed to load profile image: ${post.authorProfilePhotoUrl} for user: ${post.authorDisplayName}")
-                        }
-                    )
-                } else {
-                    // Fallback to initials like profile screen (consistent behavior)
-                    Text(
-                        text = (post.authorDisplayName ?: post.authorUsername ?: "?").take(2).uppercase(),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+            // Profile image - using DynamicProfileImage for token-resilient loading
+            val userIdentifier = "${post.authorDisplayName ?: post.authorUsername} (${post.userId})"
+            val profilePath = if (post.authorProfilePhotoUrl.isStoragePath()) {
+                post.authorProfilePhotoUrl
+            } else {
+                // Extract storage path from URL using utility function
+                post.authorProfilePhotoUrl.extractStoragePathFromUrl()
             }
+            
+            Timber.d("PFP_DEBUG: Feed profile image for $userIdentifier | originalUrl='${post.authorProfilePhotoUrl}' | extractedPath='$profilePath'")
+            
+            // Use DynamicProfileImage for token-resilient loading
+            // Note: DynamicProfileImage now handles both paths and URLs automatically via CompositionLocal
+            DynamicProfileImage(
+                storagePath = profilePath ?: post.authorProfilePhotoUrl,
+                displayName = post.authorDisplayName ?: post.authorUsername ?: "User",
+                contentDescription = "Profile picture of ${post.authorDisplayName}",
+                modifier = Modifier.size(40.dp),
+                debugContext = "Feed-$userIdentifier"
+            )
             
             Spacer(modifier = Modifier.width(LiftrixSpacing.small))
             
@@ -316,9 +311,23 @@ private fun WorkoutSummaryCard(
             // Volume
             val weightUnitManager = rememberWeightUnitManager()
             val volumeText = post.totalVolume?.let { volume ->
+                // Debug logging to identify the issue
+                Timber.d("UI-MAPPER-DEBUG: WorkoutPost volume display - post.totalVolume=$volume kg, weightUnitManager=${weightUnitManager != null}")
+                
                 // totalVolume is stored in kilograms (base unit), format for viewer's preferred unit
-                weightUnitManager?.formatWeightCompact(volume, WeightUnit.KILOGRAMS) ?: "${(volume * 2.20462).toInt()} lbs"
-            } ?: "0 lbs"
+                if (weightUnitManager != null) {
+                    val formattedWeight = weightUnitManager.formatWeightCompact(volume, WeightUnit.KILOGRAMS)
+                    Timber.d("UI-MAPPER-DEBUG: Formatted weight via WeightUnitManager: $formattedWeight")
+                    formattedWeight
+                } else {
+                    val fallbackLbs = (volume * 2.20462).toInt()
+                    val fallbackText = "$fallbackLbs lbs"
+                    Timber.d("UI-MAPPER-DEBUG: WeightUnitManager null, using fallback: $fallbackText")
+                    fallbackText
+                }
+            } ?: "0 lbs".also { 
+                Timber.w("UI-MAPPER-DEBUG: post.totalVolume is null! Post ID: ${post.id}, workout ID: ${post.workoutId}")
+            }
             
             WorkoutMetric(
                 value = volumeText,

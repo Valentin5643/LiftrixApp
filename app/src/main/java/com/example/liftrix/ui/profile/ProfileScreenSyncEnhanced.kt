@@ -116,7 +116,7 @@ fun ProfileScreenSyncEnhanced(
                 uiState.profile != null -> {
                     ProfileContentWithSync(
                         profile = uiState.profile!!,
-                        profileImageUrl = uiState.profile!!.profileImageUrl,
+                        profileImageUrl = uiState.effectiveProfileImageUrl,
                         imageUploadState = uiState.imageUploadState,
                         combinedSyncStatus = combinedSyncStatus,
                         achievementSyncStatus = achievementSyncStatus,

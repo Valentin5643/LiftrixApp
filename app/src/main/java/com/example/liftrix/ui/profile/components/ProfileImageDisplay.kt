@@ -26,8 +26,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.liftrix.service.ProfileImageCache
 import com.example.liftrix.ui.theme.LiftrixTheme
+import com.example.liftrix.data.service.FirebaseStorageUrlResolver
+import com.example.liftrix.ui.components.isStoragePath
+import com.example.liftrix.ui.common.LocalFirebaseStorageUrlResolver
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import com.google.firebase.storage.FirebaseStorage
+import androidx.compose.runtime.CompositionLocalProvider
 
 /**
  * Enhanced profile image display component with comprehensive image loading capabilities.
@@ -35,6 +40,7 @@ import timber.log.Timber
  * Features:
  * - Circular image display with proper aspect ratio
  * - Multi-level caching integration via ProfileImageCache
+ * - Storage path resolution via CompositionLocal FirebaseStorageUrlResolver
  * - Fallback to user initials when no image is available
  * - Loading state with skeleton shimmer effect
  * - Error handling with graceful fallback
@@ -42,8 +48,9 @@ import timber.log.Timber
  * - Accessibility support with proper semantics
  * - Material 3 design compliance
  * - Responsive sizing for different use cases
+ * - Clean API without manual dependency injection
  * 
- * @param imageUrl Optional profile image URL from Firebase Storage
+ * @param imageUrl Optional profile image URL or storage path from Firebase Storage
  * @param displayName User's display name for initials fallback
  * @param userId User ID for cache scoping and analytics
  * @param size Size of the circular image display
@@ -63,6 +70,7 @@ fun ProfileImageDisplay(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val urlResolver = LocalFirebaseStorageUrlResolver.current
     
     // Image loading state management
     var isLoading by remember(imageUrl) { mutableStateOf(!imageUrl.isNullOrBlank()) }
@@ -72,31 +80,57 @@ fun ProfileImageDisplay(
     // Load image when URL changes
     LaunchedEffect(imageUrl, userId) {
         if (!imageUrl.isNullOrBlank() && userId != null) {
-            Timber.d("ProfileImageDisplay: Loading image for user $userId with URL: $imageUrl")
+            Timber.d("PFP_DEBUG: ProfileImageDisplay starting load for user $userId with URL: $imageUrl")
             scope.launch {
                 try {
                     isLoading = true
                     hasError = false
                     
-                    // Use ProfileImageCache for optimized loading
-                    val cache = ProfileImageCache(context)
-                    val bitmap = cache.loadImage(imageUrl, userId)
+                    // Resolve storage path to URL if needed
+                    val resolvedUrl = if (imageUrl.isStoragePath()) {
+                        if (urlResolver != null) {
+                            Timber.d("PFP_DEBUG: Resolving storage path to URL for user $userId | path=$imageUrl")
+                            urlResolver.resolveUrl(imageUrl)
+                        } else {
+                            Timber.w("PFP_DEBUG: Storage path provided but no urlResolver available for user $userId | path=$imageUrl")
+                            null
+                        }
+                    } else {
+                        Timber.d("PFP_DEBUG: Using URL directly for user $userId | url=$imageUrl")
+                        imageUrl
+                    }
                     
-                    loadedImage = bitmap
-                    hasError = bitmap == null
-                    
-                    Timber.d("ProfileImageDisplay: Image load result for user $userId: " +
-                        "bitmap=${bitmap != null}, hasError=$hasError")
+                    if (resolvedUrl != null) {
+                        // Use ProfileImageCache for optimized loading
+                        val cache = ProfileImageCache(context)
+                        Timber.d("PFP_DEBUG: ProfileImageCache initialized for user $userId | resolvedUrl=$resolvedUrl")
+                        
+                        val bitmap = cache.loadImage(resolvedUrl, userId)
+                        
+                        loadedImage = bitmap
+                        hasError = bitmap == null
+                        
+                        if (bitmap != null) {
+                            Timber.d("PFP_DEBUG: ✅ ProfileImageDisplay cache hit for user $userId | bitmap=${bitmap.width}x${bitmap.height}")
+                        } else {
+                            Timber.w("PFP_DEBUG: ❌ ProfileImageDisplay cache miss for user $userId | resolvedUrl: $resolvedUrl")
+                        }
+                    } else {
+                        Timber.w("PFP_DEBUG: ❌ Failed to resolve URL for user $userId | originalInput: $imageUrl")
+                        hasError = true
+                        loadedImage = null
+                    }
                 } catch (e: Exception) {
-                    Timber.e(e, "ProfileImageDisplay: Failed to load image for user $userId from URL: $imageUrl")
+                    Timber.e("PFP_DEBUG: 💥 ProfileImageDisplay failed to load image for user $userId from URL: $imageUrl | Error: ${e.message}", e)
                     hasError = true
                     loadedImage = null
                 } finally {
                     isLoading = false
+                    Timber.d("PFP_DEBUG: ProfileImageDisplay loading completed for user $userId | hasError=$hasError | hasImage=${loadedImage != null}")
                 }
             }
         } else {
-            Timber.d("ProfileImageDisplay: No image URL provided for user $userId (imageUrl='$imageUrl'), showing initials fallback")
+            Timber.d("PFP_DEBUG: 🔤 ProfileImageDisplay no image URL for user $userId (imageUrl='$imageUrl'), showing initials fallback")
             isLoading = false
             loadedImage = null
             hasError = false
@@ -200,11 +234,12 @@ fun ProfileImageDisplay(
 /**
  * Compact profile image display for use in lists, cards, and dense layouts.
  * 
- * @param imageUrl Optional profile image URL
+ * @param imageUrl Optional profile image URL or storage path
  * @param displayName User's display name for initials
  * @param userId User ID for cache scoping
  * @param onClick Optional click handler
  * @param modifier Modifier for styling
+ * @param urlResolver Firebase storage URL resolver
  */
 @Composable
 fun CompactProfileImage(
@@ -228,11 +263,12 @@ fun CompactProfileImage(
 /**
  * Large profile image display for profile screens and detailed views.
  * 
- * @param imageUrl Optional profile image URL
+ * @param imageUrl Optional profile image URL or storage path
  * @param displayName User's display name for initials
  * @param userId User ID for cache scoping
  * @param onClick Optional click handler for image management
  * @param modifier Modifier for styling
+ * @param urlResolver Firebase storage URL resolver
  */
 @Composable
 fun LargeProfileImage(
@@ -256,7 +292,11 @@ fun LargeProfileImage(
 @Preview(showBackground = true)
 @Composable
 private fun ProfileImageDisplayPreview() {
+    // Mock URL resolver for preview (since we can't inject in previews)
+    val mockUrlResolver = FirebaseStorageUrlResolver(FirebaseStorage.getInstance())
+    
     LiftrixTheme {
+        CompositionLocalProvider(LocalFirebaseStorageUrlResolver provides mockUrlResolver) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -330,6 +370,7 @@ private fun ProfileImageDisplayPreview() {
                     onClick = null // No click handler
                 )
             }
+        }
         }
     }
 }
