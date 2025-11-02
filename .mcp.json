@@ -2,8 +2,10 @@
   "mcpServers": {
     "specgen": {
       "type": "stdio",
-      "command": "npx",
+      "command": "cmd",
       "args": [
+        "/c",
+        "npx",
         "-y",
         "specgen-mcp@latest"
       ],

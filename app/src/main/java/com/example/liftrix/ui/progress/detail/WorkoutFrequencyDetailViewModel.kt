@@ -11,10 +11,10 @@ import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.model.analytics.VolumeDataPoint
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.analytics.ExportWorkoutFrequencyDataUseCase
+import com.example.liftrix.domain.usecase.analytics.AnalyticsQueryUseCase
+import com.example.liftrix.domain.usecase.analytics.AnalyticsExportUseCase
 import com.example.liftrix.domain.usecase.analytics.ExportWorkoutFrequencyDataRequest
 import com.example.liftrix.domain.usecase.analytics.WorkoutFrequencyDataPoint
-import com.example.liftrix.domain.usecase.analytics.GetWorkoutFrequencyAnalyticsUseCase
 import com.example.liftrix.domain.usecase.analytics.WorkoutFrequencyData as UseCaseWorkoutFrequencyData
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -58,8 +58,8 @@ class WorkoutFrequencyDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     errorHandler: ErrorHandler,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
-    private val getWorkoutFrequencyAnalyticsUseCase: GetWorkoutFrequencyAnalyticsUseCase,
-    private val exportWorkoutFrequencyDataUseCase: ExportWorkoutFrequencyDataUseCase
+    private val analyticsQueryUseCase: AnalyticsQueryUseCase,
+    private val analyticsExportUseCase: AnalyticsExportUseCase
 ) : StatefulDetailViewModel<WorkoutFrequencyDetailViewModel.UiState, WorkoutFrequencyDetailViewModel.Event>(savedStateHandle, errorHandler) {
 
     override val _uiState = MutableStateFlow<UiState>(UiState.Loading)
@@ -130,40 +130,40 @@ class WorkoutFrequencyDetailViewModel @Inject constructor(
                 }
                 
                 // Use actual use case to get workout frequency analytics
-                getWorkoutFrequencyAnalyticsUseCase.execute(
+                val result = analyticsQueryUseCase.getWorkoutFrequency(
                     userId = userId,
                     timeRange = _timeRange.value
-                ).collectLatest { result ->
-                    result.fold(
-                        onSuccess = { useCaseData ->
-                            val loadTime = System.currentTimeMillis() - startTime
-                            Timber.d("Workout frequency data loaded in ${loadTime}ms")
-                            
-                            // Performance validation - warn if exceeds 500ms target
-                            if (loadTime > 500) {
-                                Timber.w("PERFORMANCE WARNING: Workout frequency load time exceeded 500ms target: ${loadTime}ms")
-                            } else {
-                                Timber.i("PERFORMANCE: Workout frequency load time within target: ${loadTime}ms")
-                            }
-                            
-                            // Convert use case data to UI data
-                            val uiData = mapUseCaseDataToUiData(useCaseData)
-                            _uiState.value = UiState.Success(uiData)
-                            
-                            // Update consistency score
-                            _consistencyScore.value = useCaseData.consistencyScore
-                            
-                            Timber.d("Workout frequency data loaded: timeRange=${_timeRange.value}")
-                        },
-                        onFailure = { error ->
-                            // If no data available, fall back to mock data for demonstration
-                            Timber.w("No real data available, using mock data: ${error.message}")
-                            val mockData = generateMockWorkoutFrequencyData(_timeRange.value)
-                            _uiState.value = UiState.Success(mockData)
-                            _consistencyScore.value = calculateConsistencyScore(mockData)
+                )
+
+                result.fold(
+                    onSuccess = { useCaseData ->
+                        val loadTime = System.currentTimeMillis() - startTime
+                        Timber.d("Workout frequency data loaded in ${loadTime}ms")
+
+                        // Performance validation - warn if exceeds 500ms target
+                        if (loadTime > 500) {
+                            Timber.w("PERFORMANCE WARNING: Workout frequency load time exceeded 500ms target: ${loadTime}ms")
+                        } else {
+                            Timber.i("PERFORMANCE: Workout frequency load time within target: ${loadTime}ms")
                         }
-                    )
-                }
+
+                        // Convert use case data to UI data
+                        val uiData = mapUseCaseDataToUiData(useCaseData)
+                        _uiState.value = UiState.Success(uiData)
+
+                        // Update consistency score
+                        _consistencyScore.value = useCaseData.consistencyScore
+
+                        Timber.d("Workout frequency data loaded: timeRange=${_timeRange.value}")
+                    },
+                    onFailure = { error ->
+                        // If no data available, fall back to mock data for demonstration
+                        Timber.w("No real data available, using mock data: ${error.message}")
+                        val mockData = generateMockWorkoutFrequencyData(_timeRange.value)
+                        _uiState.value = UiState.Success(mockData)
+                        _consistencyScore.value = calculateConsistencyScore(mockData)
+                    }
+                )
                 
             } catch (error: Exception) {
                 val liftrixError = LiftrixError.DataRetrievalError(
@@ -178,7 +178,7 @@ class WorkoutFrequencyDetailViewModel @Inject constructor(
     /**
      * Maps use case data to UI data model
      */
-    private fun mapUseCaseDataToUiData(useCaseData: UseCaseWorkoutFrequencyData): WorkoutFrequencyData {
+    private fun mapUseCaseDataToUiData(useCaseData: com.example.liftrix.domain.usecase.analytics.WorkoutFrequencyData): WorkoutFrequencyData {
         return WorkoutFrequencyData(
             frequencyData = useCaseData.frequencyPoints.map { frequencyPoint ->
                 // Convert WorkoutFrequencyDataPoint to VolumeDataPoint for chart compatibility
@@ -198,7 +198,7 @@ class WorkoutFrequencyDetailViewModel @Inject constructor(
             averageRestDays = 7f - (useCaseData.dailyAverage * 7),
             totalRestDays = 7 - (useCaseData.dailyAverage * 7).toInt(),
             optimalRestDays = ((useCaseData.totalWorkoutDays * 0.4).toInt()),
-            weeklyPattern = useCaseData.weeklyDistribution.map { it.key.name to it.value },
+            weeklyPattern = useCaseData.weeklyDistribution.map { (key, value) -> key to value },
             morningWorkouts = 30, // Mock data - can be enhanced with real data
             afternoonWorkouts = 40,
             eveningWorkouts = 30,
@@ -235,7 +235,7 @@ class WorkoutFrequencyDetailViewModel @Inject constructor(
                         includeTrends = true
                     )
                     
-                    val result = exportWorkoutFrequencyDataUseCase.exportToPdf(exportRequest)
+                    val result = analyticsExportUseCase.exportFrequency(exportRequest)
                     result.fold(
                         onSuccess = { file ->
                             Timber.d("Frequency data exported successfully: ${file.absolutePath}")

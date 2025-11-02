@@ -12,8 +12,9 @@ import com.example.liftrix.domain.repository.social.FollowRepository
 import com.example.liftrix.domain.model.social.FollowRelationship
 import com.example.liftrix.domain.model.FriendStatus
 import com.example.liftrix.domain.service.AnalyticsService
-import com.example.liftrix.domain.usecase.social.SearchUsersUseCase
+import com.example.liftrix.domain.usecase.social.SocialSearchUseCase
 import com.example.liftrix.domain.usecase.social.SearchUsersRequest
+import com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase
 import com.example.liftrix.domain.usecase.social.FeedGeneratorUseCase
 import com.example.liftrix.domain.usecase.social.FollowAction
 import com.example.liftrix.domain.model.social.SearchFilters
@@ -51,10 +52,10 @@ class SocialViewModel @Inject constructor(
     private val presenceService: FirebasePresenceService,
     private val authRepository: AuthRepository,
     private val analyticsService: AnalyticsService,
-    private val searchUsersUseCase: SearchUsersUseCase,
+    private val socialSearchUseCase: SocialSearchUseCase,
     private val feedGeneratorUseCase: FeedGeneratorUseCase,
     private val followRealtimeService: FollowRealtimeService,
-    private val followUserUseCase: com.example.liftrix.domain.usecase.social.FollowUserUseCase,
+    private val socialRelationshipUseCase: SocialRelationshipUseCase,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -312,7 +313,7 @@ class SocialViewModel @Inject constructor(
                 useCache = true
             )
             
-            searchUsersUseCase(request).fold(
+            socialSearchUseCase.searchUsers(request).fold(
                 onSuccess = { result ->
                     val users = result.users.map { searchResult ->
                         User(
@@ -484,7 +485,7 @@ class SocialViewModel @Inject constructor(
         viewModelScope.launch {
             val currentUserId = authRepository.getCurrentUserId() ?: return@launch
             
-            followUserUseCase(
+            socialRelationshipUseCase.followAction(
                 targetUserId = targetUserId,
                 action = FollowAction.FOLLOW,
                 context = "SOCIAL_FEED"
@@ -720,13 +721,13 @@ class SocialViewModel @Inject constructor(
                 Timber.d("DEBUG_FOLLOW_ACTION: Starting follow action for userId: $userId")
                 updateState { copy(isLoading = true) }
                 
-                val result = followUserUseCase(
+                val result = socialRelationshipUseCase.followAction(
                     targetUserId = userId,
                     action = FollowAction.FOLLOW,
                     context = "SOCIAL_SCREEN"
                 )
                 
-                Timber.d("DEBUG_FOLLOW_ACTION: followUserUseCase result: ${if (result.isSuccess) "SUCCESS" else "FAILURE"}")
+                Timber.d("DEBUG_FOLLOW_ACTION: socialRelationshipUseCase.follow result: ${if (result.isSuccess) "SUCCESS" else "FAILURE"}")
                 
                 result.fold(
                     onSuccess = { followStatus ->
@@ -845,7 +846,7 @@ class SocialViewModel @Inject constructor(
                     useCache = true
                 )
                 
-                searchUsersUseCase(request).fold(
+                socialSearchUseCase.searchUsers(request).fold(
                     onSuccess = { result ->
                         val users = result.users.map { searchResult ->
                             User(

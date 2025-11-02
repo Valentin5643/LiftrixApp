@@ -7,9 +7,8 @@ import com.example.liftrix.domain.model.social.ProfileVisibility
 import com.example.liftrix.domain.model.social.WorkoutVisibility
 import com.example.liftrix.ui.social.onboarding.SocialOnboardingStep
 import com.example.liftrix.domain.usecase.common.ErrorHandler
-import com.example.liftrix.domain.usecase.social.CheckUsernameAvailabilityUseCase
-import com.example.liftrix.domain.usecase.social.CreateSocialProfileUseCase
-import com.example.liftrix.domain.usecase.social.UpdateSocialPrivacySettingsUseCase
+import com.example.liftrix.domain.usecase.social.SocialProfileQueryUseCase
+import com.example.liftrix.domain.usecase.social.SocialProfileCommandUseCase
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
@@ -38,9 +37,8 @@ import javax.inject.Inject
 @OptIn(FlowPreview::class)
 @HiltViewModel
 class SocialOnboardingViewModel @Inject constructor(
-    private val createSocialProfileUseCase: CreateSocialProfileUseCase,
-    private val checkUsernameAvailabilityUseCase: CheckUsernameAvailabilityUseCase,
-    private val updateSocialPrivacySettingsUseCase: UpdateSocialPrivacySettingsUseCase,
+    private val socialProfileCommandUseCase: SocialProfileCommandUseCase,
+    private val socialProfileQueryUseCase: SocialProfileQueryUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<SocialOnboardingUiState, SocialOnboardingEvent>(errorHandler) {
 
@@ -182,7 +180,7 @@ class SocialOnboardingViewModel @Inject constructor(
 
     private fun checkUsernameAvailability(username: String) {
         executeUseCase(
-            useCase = { checkUsernameAvailabilityUseCase(username) },
+            useCase = { socialProfileQueryUseCase.checkUsernameAvailability(username) },
             onSuccess = { isAvailable ->
                 val error = if (!isAvailable) {
                     "Username '$username' is already taken"
@@ -215,8 +213,8 @@ class SocialOnboardingViewModel @Inject constructor(
         val state = _uiState.value
         
         executeUseCase(
-            useCase = { 
-                createSocialProfileUseCase(
+            useCase = {
+                socialProfileCommandUseCase.create(
                     username = state.username,
                     displayName = state.displayName,
                     bio = state.bio.takeIf { it.isNotBlank() }
@@ -276,7 +274,7 @@ class SocialOnboardingViewModel @Inject constructor(
         )
         
         executeUseCase(
-            useCase = { updateSocialPrivacySettingsUseCase(privacySettings) },
+            useCase = { socialProfileCommandUseCase.updatePrivacySettings(privacySettings) },
             onSuccess = { 
                 Timber.d("Privacy settings saved successfully")
                 navigateNext()

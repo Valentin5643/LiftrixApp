@@ -4,8 +4,7 @@ import com.example.liftrix.data.repository.workout.WorkoutRepositoryImpl
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.workout.CreateWorkoutUseCase
-import com.example.liftrix.domain.usecase.workout.GetWorkoutByIdUseCase
-import com.example.liftrix.domain.usecase.workout.UpdateWorkoutSessionUseCase
+// Consolidated WorkoutQueryUseCase and WorkoutCommandUseCase are provided automatically via @Inject constructor
 import com.example.liftrix.domain.usecase.workout.GetWorkoutSessionForEditingUseCase
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import dagger.Binds
@@ -69,49 +68,8 @@ abstract class WorkoutModule {
             )
         }
 
-        /**
-         * Provides GetWorkoutByIdUseCase with proper dependency injection.
-         * 
-         * This use case handles workout retrieval by ID with user authorization,
-         * security validation, and proper error handling.
-         * 
-         * @param workoutRepository The workout repository dependency
-         * @param errorHandler The centralized error handler dependency
-         * @return Configured GetWorkoutByIdUseCase instance
-         */
-        @Provides
-        @Singleton
-        fun provideGetWorkoutByIdUseCase(
-            workoutRepository: WorkoutRepository,
-            errorHandler: ErrorHandler
-        ): GetWorkoutByIdUseCase {
-            return GetWorkoutByIdUseCase(
-                workoutRepository = workoutRepository,
-                errorHandler = errorHandler
-            )
-        }
-
-        /**
-         * Provides UpdateWorkoutSessionUseCase with proper dependency injection.
-         * 
-         * This use case handles updating completed workout sessions for historical
-         * data editing with validation, user authorization, and Firebase sync compatibility.
-         * 
-         * @param workoutRepository The workout repository dependency
-         * @param getCurrentUserIdUseCase The user authentication dependency
-         * @return Configured UpdateWorkoutSessionUseCase instance
-         */
-        @Provides
-        @Singleton
-        fun provideUpdateWorkoutSessionUseCase(
-            workoutRepository: WorkoutRepository,
-            getCurrentUserIdUseCase: GetCurrentUserIdUseCase
-        ): UpdateWorkoutSessionUseCase {
-            return UpdateWorkoutSessionUseCase(
-                workoutRepository = workoutRepository,
-                getCurrentUserIdUseCase = getCurrentUserIdUseCase
-            )
-        }
+        // Note: Consolidated WorkoutQueryUseCase and WorkoutCommandUseCase are provided automatically via @Inject constructor
+        // Note: UpdateWorkoutSessionUseCase has been consolidated into WorkoutCommandUseCase
 
         /**
          * Provides GetWorkoutSessionForEditingUseCase with proper dependency injection.

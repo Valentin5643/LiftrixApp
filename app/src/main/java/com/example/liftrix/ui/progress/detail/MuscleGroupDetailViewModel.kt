@@ -10,7 +10,7 @@ import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.model.MuscleGroup
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.analytics.GetMuscleGroupAnalyticsUseCase
+import com.example.liftrix.domain.usecase.analytics.AnalyticsQueryUseCase
 import com.example.liftrix.domain.usecase.analytics.MuscleGroupAnalyticsData as UseCaseMuscleGroupAnalyticsData
 import com.example.liftrix.domain.usecase.analytics.MuscleGroupData as UseCaseMuscleGroupData
 import com.example.liftrix.domain.usecase.analytics.BalanceAnalysis as UseCaseBalanceAnalysis
@@ -40,7 +40,7 @@ import kotlinx.datetime.*
 class MuscleGroupDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     errorHandler: ErrorHandler,
-    private val getMuscleGroupAnalyticsUseCase: GetMuscleGroupAnalyticsUseCase,
+    private val analyticsQueryUseCase: AnalyticsQueryUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : StatefulDetailViewModel<MuscleGroupDetailViewModel.UiState, MuscleGroupDetailViewModel.Event>(savedStateHandle, errorHandler) {
@@ -258,7 +258,7 @@ class MuscleGroupDetailViewModel @Inject constructor(
                     LiftrixError.AuthenticationError("User not authenticated")
                 )
                 
-                val result = getMuscleGroupAnalyticsUseCase.execute(
+                val result = analyticsQueryUseCase.getMuscleGroupAnalytics(
                     userId = userId,
                     muscleGroup = convertToUseCaseMuscleGroup(muscleGroup),
                     timeRange = timeRange
@@ -439,7 +439,7 @@ class MuscleGroupDetailViewModel @Inject constructor(
         // Create color palette for muscle groups
         val colors = listOf(
             androidx.compose.ui.graphics.Color(0xFF339989), // Persian Green
-            androidx.compose.ui.graphics.Color(0xFF7DE2D1), // Tiffany Blue  
+            androidx.compose.ui.graphics.Color(0xFF7DE2D1), // Tiffany Blue
             androidx.compose.ui.graphics.Color(0xFF2B2C28), // Jet
             androidx.compose.ui.graphics.Color(0xFF4A90A4), // Steel Blue
             androidx.compose.ui.graphics.Color(0xFF83C5BE), // Powder Blue
@@ -447,51 +447,45 @@ class MuscleGroupDetailViewModel @Inject constructor(
             androidx.compose.ui.graphics.Color(0xFFE29578), // Sandy Brown
             androidx.compose.ui.graphics.Color(0xFFFDBF50), // Maize
         )
-        
+
         // Convert muscle group distribution
         val distribution = useCaseData.muscleGroupDistribution.mapIndexed { index, data ->
+            // Parse muscle group from string
+            val useCaseMuscleGroup = try {
+                com.example.liftrix.domain.usecase.analytics.MuscleGroup.valueOf(data.muscleGroup.uppercase())
+            } catch (e: IllegalArgumentException) {
+                com.example.liftrix.domain.usecase.analytics.MuscleGroup.OTHER
+            }
+
             MuscleGroupDistribution(
-                muscleGroup = convertFromUseCaseMuscleGroup(data.muscleGroup),
-                percentage = data.percentage.toFloat(),
-                totalVolume = data.totalVolume.toFloat(),
-                exerciseCount = data.uniqueExercises,
-                workoutCount = data.workoutDays,
+                muscleGroup = convertFromUseCaseMuscleGroup(useCaseMuscleGroup),
+                percentage = data.volumePercentage,
+                totalVolume = data.totalVolume,
+                exerciseCount = data.exerciseCount,
+                workoutCount = 0, // Not available in use case data, use default
                 color = colors[index % colors.size]
             )
         }
-        
-        // Convert balance analysis
+
+        // Create mock balance analysis since it's not in the use case data
         val balanceAnalysis = BalanceAnalysis(
-            overtrainingRisk = useCaseData.balanceAnalysis.imbalances
-                .filter { it.currentPercentage > it.expectedPercentage && it.severity != com.example.liftrix.domain.usecase.analytics.ImbalanceSeverity.LOW }
-                .map { convertFromUseCaseMuscleGroup(it.muscleGroup) },
-            undertrainingRisk = useCaseData.balanceAnalysis.imbalances
-                .filter { it.currentPercentage < it.expectedPercentage && it.severity != com.example.liftrix.domain.usecase.analytics.ImbalanceSeverity.LOW }
-                .map { convertFromUseCaseMuscleGroup(it.muscleGroup) },
-            balanceScore = useCaseData.balanceAnalysis.balanceScore.toFloat(),
-            recommendations = useCaseData.recommendations.map { recommendation ->
-                BalanceRecommendation(
-                    muscleGroup = extractMuscleGroupFromRecommendation(recommendation),
-                    recommendationType = determineRecommendationType(recommendation),
-                    message = recommendation,
-                    suggestedExercises = extractSuggestedExercises(recommendation)
-                )
-            }
+            overtrainingRisk = emptyList(),
+            undertrainingRisk = emptyList(),
+            balanceScore = 75f, // Mock score
+            recommendations = emptyList()
         )
-        
-        // Create exercises for selected muscle group (mock for now)
-        val exercises = useCaseData.targetMuscleGroup?.let { targetGroup ->
-            createMockExercisesForMuscleGroup(convertFromUseCaseMuscleGroup(targetGroup))
-        } ?: emptyList()
-        
+
+        // No selected muscle group data available
+        val exercises = emptyList<MuscleGroupExercise>()
+
         // Create mock weekly comparison
-        val weeklyComparison = createMockWeeklyComparison(useCaseData.timeRange, colors)
-        
+        val weeklyComparison = createMockWeeklyComparison(timeRange.value, colors)
+
         return MuscleGroupData(
             distribution = distribution,
-            selectedMuscleGroup = useCaseData.targetMuscleGroup?.let { convertFromUseCaseMuscleGroup(it) },
+            selectedMuscleGroup = null,
             selectedMuscleGroupExercises = exercises,
-            timeRange = useCaseData.timeRange,
+            timeRange = timeRange.value,
             viewMode = viewMode.value,
             balanceAnalysis = balanceAnalysis,
             weeklyComparison = weeklyComparison

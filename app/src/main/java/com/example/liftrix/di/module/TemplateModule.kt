@@ -3,7 +3,7 @@ package com.example.liftrix.di.module
 import com.example.liftrix.data.repository.template.TemplateRepositoryImpl
 import com.example.liftrix.domain.repository.template.TemplateRepository
 import com.example.liftrix.domain.usecase.common.ErrorHandler
-import com.example.liftrix.domain.usecase.template.GetTemplatesUseCase
+// Consolidated TemplateQueryUseCase and TemplateCommandUseCase are provided automatically via @Inject constructor
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -41,28 +41,6 @@ abstract class TemplateModule {
         templateRepositoryImpl: TemplateRepositoryImpl
     ): TemplateRepository
 
-    companion object {
-        
-        /**
-         * Provides GetTemplatesUseCase with proper dependency injection.
-         * 
-         * This use case handles template retrieval with filtering, sorting,
-         * user authorization, and comprehensive error handling.
-         * 
-         * @param templateRepository The template repository dependency
-         * @param errorHandler The centralized error handler dependency
-         * @return Configured GetTemplatesUseCase instance
-         */
-        @Provides
-        @Singleton
-        fun provideGetTemplatesUseCase(
-            templateRepository: TemplateRepository,
-            errorHandler: ErrorHandler
-        ): GetTemplatesUseCase {
-            return GetTemplatesUseCase(
-                templateRepository = templateRepository,
-                errorHandler = errorHandler
-            )
-        }
-    }
+    // Note: Consolidated TemplateQueryUseCase and TemplateCommandUseCase are provided
+    // automatically via @Inject constructor and don't need explicit @Provides methods.
 }

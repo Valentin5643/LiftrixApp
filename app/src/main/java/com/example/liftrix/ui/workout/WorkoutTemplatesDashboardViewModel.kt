@@ -6,9 +6,7 @@ import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
 import com.example.liftrix.domain.usecase.auth.GetAuthenticatedUserIdUseCase
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
-import com.example.liftrix.domain.usecase.template.GetTemplatesUseCase
-import com.example.liftrix.domain.usecase.template.GetTemplatesRequest
-import com.example.liftrix.domain.usecase.template.TemplateSortBy
+import com.example.liftrix.domain.usecase.template.TemplateQueryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,7 +44,7 @@ class WorkoutTemplatesDashboardViewModel @Inject constructor(
     private val getAuthenticatedUserIdUseCase: GetAuthenticatedUserIdUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     private val workoutTemplateRepository: WorkoutTemplateRepository,
-    private val getTemplatesUseCase: GetTemplatesUseCase // 🔥 NEW: Use optimized template queries
+    private val templateQueryUseCase: TemplateQueryUseCase // 🔥 Consolidated use case
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<WorkoutTemplatesDashboardUiState>(
@@ -104,17 +102,12 @@ class WorkoutTemplatesDashboardViewModel @Inject constructor(
                 _uiState.value = WorkoutTemplatesDashboardUiState.Loading
                 
                 val userId = getAuthenticatedUserIdUseCase()
-                val request = GetTemplatesRequest(
-                    userId = userId,
-                    folderId = folderId,
-                    sortBy = TemplateSortBy.RECENT
-                )
-                
-                getTemplatesUseCase(request).collect { result ->
+
+                // Use repository directly for folder-specific templates
+                workoutTemplateRepository.getTemplatesByFolder(userId, folderId).collect { result ->
                     if (result.isSuccess) {
-                        val templatesResult = result.getOrThrow()
-                        val templates = templatesResult.templates
-                        
+                        val templates = result.getOrThrow()
+
                         _uiState.value = WorkoutTemplatesDashboardUiState.Success(
                             templates = templates,
                             filteredTemplates = templates,

@@ -103,7 +103,7 @@ abstract class ServiceModule {
     
     /**
      * Binds PRDetectionService interface to its implementation.
-     * 
+     *
      * Provides personal record detection for workout achievements.
      */
     @Binds
@@ -111,6 +111,61 @@ abstract class ServiceModule {
     abstract fun bindPRDetectionService(
         prDetectionServiceImpl: PRDetectionServiceImpl
     ): PRDetectionService
+
+    /**
+     * Binds AnalyticsCalculationService interface to its implementation.
+     *
+     * Provides analytics calculation logic for calories, 1RM, metrics, and rankings.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindAnalyticsCalculationService(
+        analyticsCalculationServiceImpl: com.example.liftrix.domain.service.AnalyticsCalculationServiceImpl
+    ): com.example.liftrix.domain.service.AnalyticsCalculationService
+
+    /**
+     * Binds WidgetOperationsService interface to its implementation.
+     *
+     * Provides widget business logic for preference repair, validation, and migration.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindWidgetOperationsService(
+        widgetOperationsServiceImpl: com.example.liftrix.domain.service.WidgetOperationsServiceImpl
+    ): com.example.liftrix.domain.service.WidgetOperationsService
+
+    /**
+     * Binds TemplateValidationService interface to its implementation.
+     *
+     * Provides template validation logic for name, exercises, difficulty, and description.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindTemplateValidationService(
+        templateValidationServiceImpl: com.example.liftrix.domain.service.TemplateValidationServiceImpl
+    ): com.example.liftrix.domain.service.TemplateValidationService
+
+    /**
+     * Binds WorkoutValidationService interface to its implementation.
+     *
+     * Provides workout validation logic for name, date, exercises, notes, and status transitions.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindWorkoutValidationService(
+        workoutValidationServiceImpl: com.example.liftrix.domain.service.WorkoutValidationServiceImpl
+    ): com.example.liftrix.domain.service.WorkoutValidationService
+
+    /**
+     * Binds ProfileValidationService interface to its implementation.
+     *
+     * Provides profile validation logic for username, display name, bio, image URLs, and profile images.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindProfileValidationService(
+        profileValidationServiceImpl: com.example.liftrix.domain.service.ProfileValidationServiceImpl
+    ): com.example.liftrix.domain.service.ProfileValidationService
 
     /**
      * Binds HelpCenterService interface to its implementation.

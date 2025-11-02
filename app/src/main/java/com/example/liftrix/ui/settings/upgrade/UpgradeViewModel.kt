@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
-import com.example.liftrix.domain.usecase.settings.GetSubscriptionStatusUseCase
+import com.example.liftrix.domain.usecase.settings.SettingsQueryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,7 +32,7 @@ import javax.inject.Inject
 @HiltViewModel
 class UpgradeViewModel @Inject constructor(
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
-    private val getSubscriptionStatusUseCase: GetSubscriptionStatusUseCase
+    private val settingsQueryUseCase: SettingsQueryUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(UpgradeUiState())

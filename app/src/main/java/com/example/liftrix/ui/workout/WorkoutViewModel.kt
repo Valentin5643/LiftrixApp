@@ -10,15 +10,10 @@ import com.example.liftrix.domain.repository.WorkoutTemplateRepository
 import com.example.liftrix.domain.usecase.auth.GetAuthenticatedUserIdUseCase
 import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.usecase.SaveWorkoutUseCase
-import com.example.liftrix.domain.usecase.folder.CreateFolderUseCase
-import com.example.liftrix.domain.usecase.folder.DeleteFolderUseCase
-import com.example.liftrix.domain.usecase.folder.GetFoldersUseCase
-import com.example.liftrix.domain.usecase.folder.MoveFolderUseCase
-import com.example.liftrix.domain.usecase.folder.ReorderFoldersUseCase
+import com.example.liftrix.domain.usecase.folder.FolderOperationsUseCase
 import com.example.liftrix.domain.usecase.analytics.LogWorkoutEventUseCase
-import com.example.liftrix.domain.usecase.template.GetTemplatesUseCase
-import com.example.liftrix.domain.usecase.template.GetTemplatesRequest
-import com.example.liftrix.domain.usecase.template.TemplateSortBy
+import com.example.liftrix.domain.usecase.template.TemplateQueryUseCase
+import com.example.liftrix.domain.usecase.template.TemplateCommandUseCase
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.analytics.UxMetricsTracker
 import com.example.liftrix.analytics.TaskCompletionTracker
@@ -60,13 +55,9 @@ class WorkoutViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val getAuthenticatedUserIdUseCase: GetAuthenticatedUserIdUseCase,
     private val saveWorkoutUseCase: SaveWorkoutUseCase,
-    private val createFolderUseCase: CreateFolderUseCase,
-    private val deleteFolderUseCase: DeleteFolderUseCase,
-    private val getFoldersUseCase: GetFoldersUseCase,
-    private val moveFolderUseCase: MoveFolderUseCase,
-    private val reorderFoldersUseCase: ReorderFoldersUseCase,
-    private val getTemplatesUseCase: GetTemplatesUseCase,
-    private val moveWorkoutToFolderUseCase: com.example.liftrix.domain.usecase.template.MoveWorkoutToFolderUseCase,
+    private val folderOperationsUseCase: FolderOperationsUseCase,
+    private val templateQueryUseCase: TemplateQueryUseCase,
+    private val templateCommandUseCase: TemplateCommandUseCase,
     private val syncManager: SyncManager,
     private val logWorkoutEventUseCase: LogWorkoutEventUseCase,
     private val analyticsService: AnalyticsService,
@@ -219,25 +210,19 @@ class WorkoutViewModel @Inject constructor(
                         
                         // Start combined observation of folders and templates
                         combine(
-                            getFoldersUseCase(GetFoldersUseCase.GetFoldersInput(user.uid)),
-                            getTemplatesUseCase(GetTemplatesRequest(
-                                userId = user.uid,
-                                folderId = null, // Load all templates initially
-                                sortBy = TemplateSortBy.RECENT,
-                                limit = 50
-                            ))
+                            folderOperationsUseCase.invoke(user.uid),
+                            templateQueryUseCase(user.uid).map { Result.success(it) }
                         ) { foldersResult, templatesResult ->
                             // Process both results together
                             val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
-                            
+
                             when {
                                 foldersResult.isSuccess && templatesResult.isSuccess -> {
                                     val folders = foldersResult.getOrThrow()
-                                    val templatesData = templatesResult.getOrThrow()
-                                    val templates = templatesData.templates
-                                    
+                                    val templates = templatesResult.getOrThrow()
+
                                     Timber.d("WorkoutViewModel: Loaded ${folders.size} folders and ${templates.size} templates")
-                                    
+
                                     setState(WorkoutUiState.Success(
                                         currentData.copy(
                                             folders = folders,
@@ -250,7 +235,7 @@ class WorkoutViewModel @Inject constructor(
                                     Timber.e("Failed to load folders: ${foldersResult.exceptionOrNull()?.message}")
                                     // Try to load templates only if folders fail
                                     if (templatesResult.isSuccess) {
-                                        val templates = templatesResult.getOrThrow().templates
+                                        val templates = templatesResult.getOrThrow()
                                         setState(WorkoutUiState.Success(
                                             currentData.copy(
                                                 templates = templates,
@@ -471,19 +456,12 @@ class WorkoutViewModel @Inject constructor(
     private fun loadTemplatesForUser(userId: String, selectedFolderId: String?) {
         viewModelScope.launch {
             try {
-                val request = GetTemplatesRequest(
-                    userId = userId,
-                    folderId = selectedFolderId,
-                    sortBy = TemplateSortBy.RECENT,
-                    limit = 50
-                )
-                
-                getTemplatesUseCase(request).collect { result ->
+                // Use repository directly for folder filtering
+                workoutTemplateRepository.getTemplatesByFolder(userId, selectedFolderId ?: "").collect { result ->
                     result.fold(
-                        onSuccess = { templatesResult ->
-                            val templates = templatesResult.templates
+                        onSuccess = { templates ->
                             val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
-                            
+
                             setState(WorkoutUiState.Success(
                                 currentData.copy(
                                     templates = templates,
@@ -536,17 +514,12 @@ class WorkoutViewModel @Inject constructor(
         executeUseCase(
             useCase = {
                 val userId = getAuthenticatedUserIdUseCase()
-                
+
                 if (userId.isBlank()) {
                     throw IllegalStateException("User not authenticated - cannot create folder")
                 }
-                
-                val input = CreateFolderUseCase.CreateFolderInput(
-                    userId = userId,
-                    name = folderName
-                )
-                
-                createFolderUseCase(input)
+
+                folderOperationsUseCase.create(userId, folderName)
             },
             onSuccess = { folder ->
                 Timber.d("New folder created: ${folder.name} (${folder.id.value})")
@@ -564,7 +537,7 @@ class WorkoutViewModel @Inject constructor(
     fun moveWorkoutToFolder(workoutTemplate: com.example.liftrix.domain.model.WorkoutTemplate, targetFolderId: String) {
         executeUseCase(
             useCase = {
-                moveWorkoutToFolderUseCase(workoutTemplate, targetFolderId)
+                templateCommandUseCase.moveToFolder(workoutTemplate, targetFolderId)
             },
             onSuccess = { updatedTemplate ->
                 Timber.d("Workout '${updatedTemplate.name}' moved to folder '$targetFolderId'")
@@ -582,17 +555,12 @@ class WorkoutViewModel @Inject constructor(
         executeUseCase(
             useCase = {
                 val userId = getAuthenticatedUserIdUseCase()
-                
+
                 if (userId.isBlank()) {
                     throw IllegalStateException("User not authenticated - cannot delete folder")
                 }
-                
-                val input = DeleteFolderUseCase.DeleteFolderInput(
-                    userId = userId,
-                    folderId = folder.id
-                )
-                
-                deleteFolderUseCase(input)
+
+                folderOperationsUseCase.delete(userId, folder.id)
             },
             onSuccess = {
                 Timber.d("Folder '${folder.name}' deleted successfully")
@@ -681,23 +649,17 @@ class WorkoutViewModel @Inject constructor(
                 
                 // ✅ RACE CONDITION FIX: Use cached state directly, no re-checking UI state
                 val currentFolders = confirmedSuccessState.data.folders
-                
+
                 // Defensive validation before calling use case
                 if (orderedFolderIds.isEmpty()) {
                     throw IllegalArgumentException("Cannot reorder folders: ordered folder IDs list is empty")
                 }
-                
+
                 if (currentFolders.isEmpty()) {
                     throw IllegalArgumentException("Cannot reorder folders: no folders available to reorder")
                 }
-                
-                val input = ReorderFoldersUseCase.ReorderFoldersInput(
-                    userId = userId,
-                    folders = currentFolders,
-                    orderedFolderIds = orderedFolderIds
-                )
-                
-                val result = reorderFoldersUseCase(input)
+
+                val result = folderOperationsUseCase.reorder(userId, currentFolders, orderedFolderIds)
                 
                 // Convert Result<T> to LiftrixResult<T> for BaseViewModel
                 result.fold(

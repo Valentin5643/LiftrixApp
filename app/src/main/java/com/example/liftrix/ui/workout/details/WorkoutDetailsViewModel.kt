@@ -9,11 +9,7 @@ import com.example.liftrix.domain.model.SessionExercise
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.service.PRDetectionService
-import com.example.liftrix.domain.usecase.workout.GetWorkoutByIdUseCase
-import com.example.liftrix.domain.usecase.workout.GetWorkoutByIdRequest
-import com.example.liftrix.domain.usecase.workout.GetPreviousWorkoutDataUseCase
-import com.example.liftrix.domain.usecase.workout.GetPreviousWorkoutDataRequest
-import com.example.liftrix.domain.usecase.workout.PreviousWorkoutData
+import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.domain.service.PRComparison
@@ -37,11 +33,10 @@ import javax.inject.Inject
 @HiltViewModel
 class WorkoutDetailsViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
-    private val getWorkoutByIdUseCase: GetWorkoutByIdUseCase,
+    private val workoutQueryUseCase: WorkoutQueryUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     private val workoutRepository: WorkoutRepository,
     private val prDetectionService: PRDetectionService,
-    private val getPreviousWorkoutDataUseCase: GetPreviousWorkoutDataUseCase,
     private val privacyEnforcementService: PrivacyEnforcementService
 ) : ViewModel() {
     
@@ -61,16 +56,11 @@ class WorkoutDetailsViewModel @Inject constructor(
             }
             
             // First try to get workout for current user (most common case)
-            val userRequest = GetWorkoutByIdRequest(
-                workoutId = WorkoutId(workoutId),
-                userId = currentUserId
-            )
-            
             var workout: com.example.liftrix.domain.model.Workout? = null
             var workoutOwnerId: String = currentUserId
-            
+
             // Try to get workout as current user first
-            getWorkoutByIdUseCase(userRequest).fold(
+            workoutQueryUseCase.getById(WorkoutId(workoutId), currentUserId).fold(
                 onSuccess = { userWorkout ->
                     if (userWorkout != null) {
                         workout = userWorkout
@@ -208,14 +198,12 @@ class WorkoutDetailsViewModel @Inject constructor(
         userId: String,
         exerciseLibraryIds: List<String>,
         currentWorkoutId: String
-    ): PreviousWorkoutData? {
-        val request = GetPreviousWorkoutDataRequest(
+    ): Map<String, List<com.example.liftrix.domain.usecase.workout.PreviousSetData>>? {
+        return workoutQueryUseCase.getPreviousWorkoutData(
             userId = userId,
             exerciseLibraryIds = exerciseLibraryIds,
             excludeWorkoutId = currentWorkoutId
-        )
-        
-        return getPreviousWorkoutDataUseCase(request).fold(
+        ).fold(
             onSuccess = { it },
             onFailure = { error ->
                 Timber.e("Failed to get previous workout data: $error")
@@ -249,17 +237,17 @@ class WorkoutDetailsViewModel @Inject constructor(
     private fun createExerciseDataWithPRs(
         exercises: List<com.example.liftrix.domain.model.Exercise>,
         personalRecords: List<PersonalRecord>,
-        previousWorkoutData: PreviousWorkoutData?
+        previousWorkoutData: Map<String, List<com.example.liftrix.domain.usecase.workout.PreviousSetData>>?
     ): List<ExerciseWithPRData> {
         return exercises.mapIndexed { index, exercise ->
             val exerciseLibraryId = exercise.libraryExercise.id
             val exercisePRs = personalRecords.filter { it.exerciseName == exerciseLibraryId }
-            
+
             val setDataWithPRs = exercise.sets.mapIndexed { setIndex, set ->
                 val isPR = exercisePRs.any { pr ->
                     pr.weight == set.weight?.kilograms && pr.reps == set.reps?.count
                 }
-                val previousSetData = previousWorkoutData?.getPreviousSetData(exerciseLibraryId, setIndex + 1)
+                val previousSetData = previousWorkoutData?.get(exerciseLibraryId)?.getOrNull(setIndex)
                 val restTime = if (exercise is com.example.liftrix.domain.model.SessionExercise) {
                     exercise.restTimeSeconds?.let { Duration.ofSeconds(it.toLong()) }
                 } else {
@@ -311,7 +299,7 @@ sealed class WorkoutDetailsUiState {
         val exercises: List<com.example.liftrix.domain.model.Exercise>,
         val exerciseDataWithPRs: List<ExerciseWithPRData>,
         val personalRecords: List<PersonalRecord>,
-        val previousWorkoutData: PreviousWorkoutData?,
+        val previousWorkoutData: Map<String, List<com.example.liftrix.domain.usecase.workout.PreviousSetData>>?,
         val notes: String,
         val isOwnWorkout: Boolean
     ) : WorkoutDetailsUiState()

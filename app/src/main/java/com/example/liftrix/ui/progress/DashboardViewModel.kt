@@ -12,7 +12,7 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.analytics.GetWidgetDataUseCase
 import com.example.liftrix.domain.usecase.analytics.GetDashboardConfigurationUseCase
-import com.example.liftrix.domain.usecase.analytics.SaveWidgetPreferencesUseCase
+import com.example.liftrix.domain.usecase.analytics.WidgetPreferencesUseCase
 import com.example.liftrix.service.WidgetResolver
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import com.example.liftrix.ui.common.state.UiState
@@ -79,14 +79,14 @@ import timber.log.Timber
  * 
  * @param getWidgetDataUseCase Use case for retrieving widget data
  * @param getDashboardConfigurationUseCase Use case for dashboard configuration
- * @param saveWidgetPreferencesUseCase Use case for saving widget preferences
+ * @param widgetPreferencesUseCase Consolidated use case for widget preference operations
  * @param errorHandler Centralized error handling service
  */
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val getWidgetDataUseCase: GetWidgetDataUseCase,
     private val getDashboardConfigurationUseCase: GetDashboardConfigurationUseCase,
-    private val saveWidgetPreferencesUseCase: SaveWidgetPreferencesUseCase,
+    private val widgetPreferencesUseCase: WidgetPreferencesUseCase,
     private val widgetResolver: WidgetResolver,
     errorHandler: ErrorHandler
 ) : BaseViewModel<UiState<DashboardUiState>, DashboardEvent>(errorHandler) {
@@ -710,8 +710,8 @@ class DashboardViewModel @Inject constructor(
                 val updatedPreferences = currentData.preferences.copy(
                     visibleWidgets = activeWidgets.toSet()
                 )
-                
-                val saveResult = saveWidgetPreferencesUseCase(updatedPreferences)
+
+                val saveResult = widgetPreferencesUseCase.save(updatedPreferences)
                 
                 saveResult.fold(
                     onSuccess = {
@@ -842,8 +842,8 @@ class DashboardViewModel @Inject constructor(
         }
         
         if (shouldPersist) {
-            val saveResult = saveWidgetPreferencesUseCase(updatedPreferences)
-            
+            val saveResult = widgetPreferencesUseCase.save(updatedPreferences)
+
             saveResult.fold(
                 onSuccess = {
                     Timber.d("Widget visibility persisted successfully: $widgetId -> $newVisibility")

@@ -8,7 +8,7 @@ import com.example.liftrix.domain.model.UserAccount
 import com.example.liftrix.domain.model.UserProfile
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.UserAccountRepository
-import com.example.liftrix.domain.usecase.social.CreateSocialProfileUseCase
+import com.example.liftrix.domain.usecase.social.SocialProfileCommandUseCase
 import com.example.liftrix.domain.usecase.profile.SaveUserProfileUseCase
 import com.example.liftrix.sync.UserPublicSyncWorker
 import com.example.liftrix.domain.model.common.LiftrixResult
@@ -24,7 +24,7 @@ import javax.inject.Inject
 class SignUpWithEmailUseCase @Inject constructor(
     private val authRepository: AuthRepository,
     private val userAccountRepository: UserAccountRepository,
-    private val createSocialProfileUseCase: CreateSocialProfileUseCase,
+    private val socialProfileCommandUseCase: SocialProfileCommandUseCase,
     private val saveUserProfileUseCase: SaveUserProfileUseCase,
     @ApplicationContext private val context: Context,
     private val firestore: FirebaseFirestore
@@ -121,7 +121,7 @@ class SignUpWithEmailUseCase @Inject constructor(
                 val userProfileResult = saveUserProfileUseCase(userProfile)
                 
                 // Create social profile with the username
-                val socialProfileResult = createSocialProfileUseCase(
+                val socialProfileResult = socialProfileCommandUseCase.create(
                     username = username,
                     displayName = username, // Use username as display name initially
                     bio = null

@@ -5,11 +5,8 @@ import com.example.liftrix.domain.model.analytics.*
 import kotlinx.datetime.Clock
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.analytics.FixWidgetPreferenceMigrationUseCase
-import com.example.liftrix.domain.usecase.analytics.GetWidgetPreferencesUseCase
-import com.example.liftrix.domain.usecase.analytics.ResetWidgetPreferencesUseCase
-import com.example.liftrix.domain.usecase.analytics.SaveWidgetPreferencesUseCase
-import com.example.liftrix.domain.usecase.analytics.UpdateWidgetVisibilityUseCase
+import com.example.liftrix.domain.usecase.analytics.WidgetPreferencesUseCase
+import com.example.liftrix.domain.usecase.analytics.WidgetMigrationUseCase
 import com.example.liftrix.domain.usecase.auth.GetAuthenticatedUserIdUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.ui.common.event.ViewModelEvent
@@ -24,11 +21,11 @@ import javax.inject.Inject
 
 /**
  * ViewModel for widget settings screen following the established BaseViewModel pattern.
- * 
+ *
  * This ViewModel manages widget customization state including visibility toggles,
  * layout mode selection, drag-and-drop reordering, and user experience level configuration.
  * It follows the MVI pattern with comprehensive error handling and analytics integration.
- * 
+ *
  * Features:
  * - Widget visibility management with real-time updates
  * - Dashboard layout mode selection
@@ -37,20 +34,16 @@ import javax.inject.Inject
  * - Reset to defaults functionality
  * - Loading states for all operations
  * - Comprehensive error handling with LiftrixError
- * 
- * @param getWidgetPreferencesUseCase Use case for retrieving widget preferences
- * @param saveWidgetPreferencesUseCase Use case for saving widget preferences
- * @param updateWidgetVisibilityUseCase Use case for updating widget visibility
- * @param resetWidgetPreferencesUseCase Use case for resetting preferences to defaults
+ *
+ * @param widgetPreferencesUseCase Consolidated use case for widget preference operations (get/save/reset)
+ * @param widgetMigrationUseCase Use case for fixing widget preference migration issues
+ * @param getAuthenticatedUserIdUseCase Use case for retrieving authenticated user ID
  * @param errorHandler Centralized error handler
  */
 @HiltViewModel
 class WidgetSettingsViewModel @Inject constructor(
-    private val getWidgetPreferencesUseCase: GetWidgetPreferencesUseCase,
-    private val saveWidgetPreferencesUseCase: SaveWidgetPreferencesUseCase,
-    private val updateWidgetVisibilityUseCase: UpdateWidgetVisibilityUseCase,
-    private val resetWidgetPreferencesUseCase: ResetWidgetPreferencesUseCase,
-    private val fixWidgetPreferenceMigrationUseCase: FixWidgetPreferenceMigrationUseCase,
+    private val widgetPreferencesUseCase: WidgetPreferencesUseCase,
+    private val widgetMigrationUseCase: WidgetMigrationUseCase,
     private val getAuthenticatedUserIdUseCase: GetAuthenticatedUserIdUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<WidgetSettingsUiState, WidgetSettingsEvent>(errorHandler) {
@@ -131,8 +124,8 @@ class WidgetSettingsViewModel @Inject constructor(
             Timber.d("🔧 SETTINGS: Loading preferences for user: $userId")
             
             setState(UiState.Loading)
-            
-            getWidgetPreferencesUseCase(userId)
+
+            widgetPreferencesUseCase(userId)
                 .collect { result ->
                     result.fold(
                         onSuccess = { preferences ->
@@ -321,9 +314,9 @@ class WidgetSettingsViewModel @Inject constructor(
         }
 
         executeUseCase(
-            useCase = { 
+            useCase = {
                 val userId = currentUserId.value ?: return@executeUseCase Result.failure(IllegalStateException("User not authenticated"))
-                fixWidgetPreferenceMigrationUseCase(userId)
+                widgetMigrationUseCase.fixLegacyNames(userId)
             },
             onSuccess = { _ ->
                 // Migration was successful, reload the preferences to show updated state
@@ -365,9 +358,9 @@ class WidgetSettingsViewModel @Inject constructor(
         }
 
         executeUseCase(
-            useCase = { 
+            useCase = {
                 val userId = currentUserId.value ?: return@executeUseCase Result.failure(IllegalStateException("User not authenticated"))
-                resetWidgetPreferencesUseCase(
+                widgetPreferencesUseCase.reset(
                     userId = userId,
                     userLevel = uiState.value.dataOrNull()?.preferences?.userLevel ?: UserLevel.BEGINNER
                 )
@@ -418,9 +411,9 @@ class WidgetSettingsViewModel @Inject constructor(
 
         Timber.d("💾 SETTINGS: About to save preferences: ${currentData.preferences}")
         Timber.d("💾 SETTINGS: Dashboard layout being saved: ${currentData.preferences.dashboardLayout}")
-        
+
         executeUseCase(
-            useCase = { saveWidgetPreferencesUseCase(currentData.preferences) },
+            useCase = { widgetPreferencesUseCase.save(currentData.preferences) },
             onSuccess = {
                 updateState { currentState ->
                     val data = currentState.dataOrNull()

@@ -1,0 +1,477 @@
+package com.example.liftrix.domain.usecase.template
+
+import com.example.liftrix.domain.model.Equipment
+import com.example.liftrix.domain.model.FolderId
+import com.example.liftrix.domain.model.Reps
+import com.example.liftrix.domain.model.TemplateExercise
+import com.example.liftrix.domain.model.UnifiedWorkoutSession
+import com.example.liftrix.domain.model.Weight
+import com.example.liftrix.domain.model.WorkoutTemplate
+import com.example.liftrix.domain.model.WorkoutTemplateId
+import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.model.common.liftrixCatching
+import com.example.liftrix.domain.model.error.LiftrixError
+import com.example.liftrix.domain.repository.AuthRepository
+import com.example.liftrix.domain.repository.FolderRepository
+import com.example.liftrix.domain.repository.WorkoutTemplateRepository
+import com.example.liftrix.domain.service.TemplateValidationService
+import com.example.liftrix.domain.usecase.workout.EstimateWorkoutDurationUseCase
+import kotlinx.coroutines.flow.first
+import timber.log.Timber
+import java.time.Instant
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * Consolidated use case for all workout template mutation (command) operations.
+ *
+ * This use case consolidates:
+ * - CreateWorkoutTemplateUseCase
+ * - CreateTemplateFromSessionUseCase
+ * - DuplicateWorkoutTemplateUseCase
+ * - DeleteWorkoutTemplateUseCase
+ * - MoveWorkoutToFolderUseCase
+ *
+ * **Consolidation Rationale**:
+ * - All use cases perform mutations on WorkoutTemplate entities
+ * - Share common validation logic (now extracted to TemplateValidationService)
+ * - Share common error handling patterns
+ * - Consolidating reduces duplication and maintains single responsibility
+ *
+ * **Command Operations**:
+ * - create(): Create new template from scratch
+ * - createFromSession(): Convert active workout session to template
+ * - duplicate(): Duplicate existing template with new name
+ * - delete(): Delete template by ID
+ * - moveToFolder(): Move template to different folder
+ */
+@Singleton
+class TemplateCommandUseCase @Inject constructor(
+    private val templateRepository: WorkoutTemplateRepository,
+    private val folderRepository: FolderRepository,
+    private val authRepository: AuthRepository,
+    private val validationService: TemplateValidationService,
+    private val estimateWorkoutDurationUseCase: EstimateWorkoutDurationUseCase
+) {
+
+    // ========== CREATE OPERATIONS ==========
+
+    /**
+     * Creates a new workout template from scratch.
+     *
+     * **Replaces**: CreateWorkoutTemplateUseCase.invoke()
+     *
+     * @param userId The ID of the user creating the template
+     * @param name The name of the template
+     * @param folderId Optional folder ID (null uses default folder)
+     * @param description Optional description for the template
+     * @param exercises List of exercises to include in the template
+     * @param estimatedDurationMinutes Optional estimated duration
+     * @param difficultyLevel Optional difficulty level (1-10)
+     * @return LiftrixResult containing the created template or error
+     */
+    suspend fun create(
+        userId: String,
+        name: String,
+        folderId: String? = null,
+        description: String? = null,
+        exercises: List<TemplateExercise> = emptyList(),
+        estimatedDurationMinutes: Int? = null,
+        difficultyLevel: Int? = null
+    ): LiftrixResult<WorkoutTemplate> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                Timber.e(throwable, "CREATE-TEMPLATE: Error occurred during template creation")
+                when (throwable) {
+                    is IllegalArgumentException -> {
+                        LiftrixError.ValidationError(
+                            field = when {
+                                throwable.message?.contains("User ID") == true -> "userId"
+                                throwable.message?.contains("Template name") == true -> "name"
+                                throwable.message?.contains("exercises") == true -> "exercises"
+                                throwable.message?.contains("Difficulty level") == true -> "difficultyLevel"
+                                else -> "input"
+                            },
+                            violations = listOf(throwable.message ?: "Invalid input parameters")
+                        )
+                    }
+                    is RuntimeException -> when {
+                        throwable.message?.contains("Failed to create default folder") == true -> {
+                            LiftrixError.DatabaseError(
+                                errorMessage = "Failed to create default folder",
+                                operation = "getOrCreateDefaultFolder"
+                            )
+                        }
+                        else -> {
+                            LiftrixError.BusinessLogicError(
+                                code = "TEMPLATE_CREATION_FAILED",
+                                analyticsContext = mapOf("userId" to userId, "templateName" to name),
+                                errorMessage = throwable.message ?: "Failed to create workout template"
+                            )
+                        }
+                    }
+                    else -> {
+                        LiftrixError.DatabaseError(
+                            errorMessage = "Failed to create workout template",
+                            operation = "createTemplate"
+                        )
+                    }
+                }
+            }
+        ) {
+            Timber.d("CREATE-TEMPLATE: Starting template creation for user=$userId, name=$name")
+
+            // Validate inputs using validation service
+            require(userId.isNotBlank()) { "User ID cannot be blank" }
+            validationService.validateTemplateRequest(
+                name = name,
+                description = description,
+                exercises = exercises,
+                difficultyLevel = difficultyLevel,
+                estimatedDurationMinutes = estimatedDurationMinutes
+            ).getOrThrow()
+
+            // Ensure default folder exists before creating template
+            val defaultFolder = folderRepository.getOrCreateDefaultFolder(userId).getOrThrow()
+            val actualFolderId = if (folderId == null) {
+                defaultFolder.id
+            } else {
+                FolderId(folderId)
+            }
+
+            // Calculate estimated duration if not provided
+            val finalEstimatedDuration = estimatedDurationMinutes ?: run {
+                val tempTemplate = WorkoutTemplate(
+                    id = WorkoutTemplateId.generate(),
+                    userId = userId,
+                    name = name.trim(),
+                    description = description?.trim()?.takeIf { it.isNotBlank() },
+                    exercises = exercises.mapIndexed { index, exercise ->
+                        exercise.copy(orderIndex = index)
+                    },
+                    estimatedDurationMinutes = null,
+                    difficultyLevel = difficultyLevel,
+                    folderId = actualFolderId.value,
+                    usageCount = 0,
+                    lastUsedAt = null,
+                    createdAt = Instant.now(),
+                    updatedAt = Instant.now()
+                )
+                estimateWorkoutDurationUseCase.estimateDurationMinutes(tempTemplate)
+            }
+
+            val template = WorkoutTemplate(
+                id = WorkoutTemplateId.generate(),
+                userId = userId,
+                name = name.trim(),
+                description = description?.trim()?.takeIf { it.isNotBlank() },
+                exercises = exercises.mapIndexed { index, exercise ->
+                    exercise.copy(orderIndex = index)
+                },
+                estimatedDurationMinutes = finalEstimatedDuration,
+                difficultyLevel = difficultyLevel,
+                folderId = actualFolderId.value,
+                usageCount = 0,
+                lastUsedAt = null,
+                createdAt = Instant.now(),
+                updatedAt = Instant.now()
+            )
+
+            Timber.d("CREATE-TEMPLATE: Calling repository.createTemplate()")
+            val createdTemplate = templateRepository.createTemplate(template).getOrThrow()
+            Timber.d("CREATE-TEMPLATE: Template created successfully - ID: ${createdTemplate.id.value}")
+
+            createdTemplate
+        }
+    }
+
+    /**
+     * Creates a workout template from an active session.
+     *
+     * **Replaces**: CreateTemplateFromSessionUseCase.invoke()
+     *
+     * @param session The active workout session to convert
+     * @param templateName Custom name for the template
+     * @param templateDescription Optional description for the template
+     * @return LiftrixResult containing the created template or error
+     */
+    suspend fun createFromSession(
+        session: UnifiedWorkoutSession,
+        templateName: String,
+        templateDescription: String? = null
+    ): LiftrixResult<WorkoutTemplate> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                when (throwable) {
+                    is IllegalArgumentException -> LiftrixError.ValidationError(
+                        field = when {
+                            throwable.message?.contains("Template name") == true -> "templateName"
+                            throwable.message?.contains("empty workout") == true -> "session"
+                            else -> "input"
+                        },
+                        violations = listOf(throwable.message ?: "Invalid input parameters")
+                    )
+                    else -> LiftrixError.DatabaseError(
+                        errorMessage = "Failed to create template from session",
+                        operation = "createTemplate"
+                    )
+                }
+            }
+        ) {
+            // Validate inputs
+            require(templateName.isNotBlank()) { "Template name cannot be blank" }
+            require(templateName.length <= WorkoutTemplate.MAX_NAME_LENGTH) {
+                "Template name too long: ${templateName.length} > ${WorkoutTemplate.MAX_NAME_LENGTH}"
+            }
+            require(session.exercises.isNotEmpty()) { "Cannot create template from empty workout" }
+
+            // Ensure default folder exists before creating template
+            val defaultFolder = folderRepository.getOrCreateDefaultFolder(session.userId).getOrThrow()
+
+            val template = convertSessionToTemplate(
+                session = session,
+                templateName = templateName.trim(),
+                templateDescription = templateDescription?.trim()?.takeIf { it.isNotBlank() },
+                defaultFolderId = defaultFolder.id.value
+            )
+
+            templateRepository.createTemplate(template).getOrThrow()
+        }
+    }
+
+    /**
+     * Duplicates an existing workout template with a new name.
+     *
+     * **Replaces**: DuplicateWorkoutTemplateUseCase.invoke()
+     *
+     * @param originalTemplate The template to duplicate
+     * @param newName The name for the duplicated template
+     * @return LiftrixResult containing the new template or error
+     */
+    suspend fun duplicate(
+        originalTemplate: WorkoutTemplate,
+        newName: String
+    ): LiftrixResult<WorkoutTemplate> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.BusinessLogicError(
+                    code = "DUPLICATE_TEMPLATE_FAILED",
+                    errorMessage = "Failed to duplicate template: ${throwable.message}",
+                    analyticsContext = mapOf(
+                        "originalTemplateId" to originalTemplate.id.value,
+                        "newName" to newName
+                    )
+                )
+            }
+        ) {
+            require(newName.isNotBlank()) { "New template name cannot be blank" }
+            require(newName.length <= 100) { "Template name too long" }
+
+            // Check if name already exists
+            val nameExistsResult = templateRepository.doesTemplateNameExist(
+                originalTemplate.userId,
+                newName.trim()
+            )
+
+            val nameExists = nameExistsResult.getOrElse { false }
+
+            if (nameExists) {
+                throw IllegalArgumentException("Template name '$newName' already exists")
+            }
+
+            // Create duplicate with new ID and name
+            val now = Instant.now()
+            val duplicateTemplate = originalTemplate.copy(
+                id = WorkoutTemplateId.generate(),
+                name = newName.trim(),
+                description = originalTemplate.description?.let { "$it (Copy)" },
+                usageCount = 0, // Reset usage count for new template
+                lastUsedAt = null, // Reset last used timestamp
+                createdAt = now,
+                updatedAt = now
+            )
+
+            // Save the duplicate template
+            val result = templateRepository.createTemplate(duplicateTemplate).getOrThrow()
+
+            Timber.i("Template duplicated successfully: ${originalTemplate.name} -> $newName")
+
+            result
+        }
+    }
+
+    // ========== DELETE OPERATIONS ==========
+
+    /**
+     * Deletes a workout template by ID.
+     *
+     * **Replaces**: DeleteWorkoutTemplateUseCase.invoke()
+     *
+     * Only the owner of the template can delete it.
+     *
+     * @param templateId The ID of the template to delete
+     * @return LiftrixResult indicating success or failure
+     */
+    suspend fun delete(templateId: WorkoutTemplateId): LiftrixResult<Unit> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.BusinessLogicError(
+                    code = "DELETE_TEMPLATE_FAILED",
+                    errorMessage = "Failed to delete template: ${throwable.message}",
+                    analyticsContext = mapOf("templateId" to templateId.value)
+                )
+            }
+        ) {
+            // Get current user
+            val currentUser = authRepository.currentUser.first()
+                ?: throw IllegalStateException("User not authenticated")
+
+            // Verify template exists and belongs to user
+            val template = templateRepository.getTemplateById(templateId, currentUser.uid).getOrNull()
+                ?: throw IllegalArgumentException("Template not found or access denied")
+
+            // Delete the template
+            templateRepository.deleteTemplate(templateId, currentUser.uid).getOrThrow()
+
+            Timber.i("Template deleted successfully: ${template.name}")
+        }
+    }
+
+    // ========== UPDATE OPERATIONS ==========
+
+    /**
+     * Moves a workout template to a different folder.
+     *
+     * **Replaces**: MoveWorkoutToFolderUseCase.invoke()
+     *
+     * Validates that the target folder exists and belongs to the same user,
+     * then updates the workout template's folder assignment.
+     *
+     * @param workoutTemplate The workout template to move
+     * @param targetFolderId The ID of the target folder
+     * @return LiftrixResult with the updated workout template or error
+     */
+    suspend fun moveToFolder(
+        workoutTemplate: WorkoutTemplate,
+        targetFolderId: String
+    ): LiftrixResult<WorkoutTemplate> {
+        return liftrixCatching(
+            errorMapper = { throwable ->
+                Timber.e(throwable, "Failed to move workout template")
+                when (throwable) {
+                    is IllegalArgumentException -> LiftrixError.ValidationError(
+                        field = "targetFolderId",
+                        violations = listOf(throwable.message ?: "Invalid folder ID")
+                    )
+                    else -> LiftrixError.UnknownError(
+                        errorMessage = "Failed to move workout template: ${throwable.message}"
+                    )
+                }
+            }
+        ) {
+            Timber.d("Moving workout '${workoutTemplate.name}' from folder '${workoutTemplate.folderId}' to folder '$targetFolderId'")
+
+            // Check if workout is already in the target folder
+            if (workoutTemplate.folderId == targetFolderId) {
+                Timber.d("Workout is already in target folder, no move needed")
+                return@liftrixCatching workoutTemplate
+            }
+
+            // Validate that target folder exists and belongs to the user
+            val targetFolder = folderRepository.getFolderById(FolderId(targetFolderId))
+            if (targetFolder == null) {
+                Timber.w("Target folder not found: $targetFolderId")
+                throw IllegalArgumentException("Target folder does not exist")
+            }
+
+            // Validate folder belongs to the same user as the workout template
+            if (targetFolder.userId != workoutTemplate.userId) {
+                Timber.w("Folder user mismatch - Folder User: ${targetFolder.userId}, Workout User: ${workoutTemplate.userId}")
+                throw IllegalArgumentException("Cannot move workout to folder belonging to different user")
+            }
+
+            Timber.d("Target folder validation passed: '${targetFolder.name.value}' owned by user '${targetFolder.userId}'")
+
+            // Update the workout template with new folder ID
+            val updatedTemplate = workoutTemplate.copy(
+                folderId = targetFolderId,
+                updatedAt = Instant.now()
+            )
+
+            Timber.d("Updating workout template in repository")
+
+            // Save the updated template and return the result
+            val updatedWorkout = templateRepository.updateTemplate(updatedTemplate).getOrThrow()
+
+            Timber.d("Successfully moved workout to folder '$targetFolderId'")
+
+            updatedWorkout
+        }
+    }
+
+    // ========== PRIVATE HELPER METHODS ==========
+
+    /**
+     * Converts a workout session to a template.
+     */
+    private fun convertSessionToTemplate(
+        session: UnifiedWorkoutSession,
+        templateName: String,
+        templateDescription: String?,
+        defaultFolderId: String
+    ): WorkoutTemplate {
+        val templateExercises = session.exercises.mapIndexed { index, exercise ->
+            TemplateExercise(
+                exerciseId = exercise.libraryExercise.id.let { com.example.liftrix.domain.model.ExerciseId(it) },
+                name = exercise.libraryExercise.name,
+                primaryMuscle = exercise.libraryExercise.primaryMuscleGroup,
+                equipment = exercise.libraryExercise.equipment?.let { Equipment.valueOf(it) },
+                orderIndex = index,
+                targetSets = exercise.sets.size,
+                targetReps = exercise.targetReps?.let { Reps(it) },
+                targetWeight = exercise.targetWeight?.let { Weight(it, Weight.Unit.KG) },
+                notes = exercise.notes
+            )
+        }
+
+        val estimatedDuration = estimateWorkoutDurationUseCase.estimateDurationMinutes(
+            exerciseCount = templateExercises.size,
+            totalSets = templateExercises.sumOf { it.targetSets ?: 0 }
+        )
+
+        val difficultyLevel = calculateDifficultyLevel(templateExercises)
+
+        return WorkoutTemplate(
+            id = WorkoutTemplateId.generate(),
+            userId = session.userId,
+            name = templateName,
+            description = templateDescription,
+            exercises = templateExercises,
+            estimatedDurationMinutes = estimatedDuration,
+            difficultyLevel = difficultyLevel,
+            folderId = defaultFolderId,
+            usageCount = 0,
+            lastUsedAt = null,
+            createdAt = Instant.now(),
+            updatedAt = Instant.now()
+        )
+    }
+
+    /**
+     * Calculates difficulty level based on exercise complexity and volume.
+     */
+    private fun calculateDifficultyLevel(exercises: List<TemplateExercise>): Int {
+        if (exercises.isEmpty()) return 1
+
+        val totalSets = exercises.sumOf { it.targetSets ?: 0 }
+        val averageSetsPerExercise = totalSets.toFloat() / exercises.size
+
+        return when {
+            exercises.size >= 8 && averageSetsPerExercise >= 4 -> 5  // Very Hard
+            exercises.size >= 6 && averageSetsPerExercise >= 3 -> 4  // Hard
+            exercises.size >= 4 && averageSetsPerExercise >= 3 -> 3  // Moderate
+            exercises.size >= 3 && averageSetsPerExercise >= 2 -> 2  // Easy
+            else -> 1  // Beginner
+        }
+    }
+}

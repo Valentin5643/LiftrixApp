@@ -9,8 +9,7 @@ import com.example.liftrix.domain.model.UserAchievement
 import com.example.liftrix.domain.repository.ProfileRepository
 import com.example.liftrix.domain.usecase.GetProfileUseCase
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
-import com.example.liftrix.domain.usecase.profile.DeleteProfileImageUseCase
-import com.example.liftrix.domain.usecase.profile.UploadProfileImageUseCase
+import com.example.liftrix.domain.usecase.profile.ProfileImageOperationsUseCase
 import com.example.liftrix.domain.usecase.profile.SaveUserProfileUseCase
 import com.example.liftrix.domain.usecase.profile.CalculateAchievementsUseCase
 import com.example.liftrix.ui.common.state.UiState
@@ -79,8 +78,7 @@ class ProfileViewModel @Inject constructor(
     private val getProfileUseCase: GetProfileUseCase,
     private val saveUserProfileUseCase: SaveUserProfileUseCase,
     private val calculateAchievementsUseCase: CalculateAchievementsUseCase,
-    private val uploadProfileImageUseCase: UploadProfileImageUseCase,
-    private val deleteProfileImageUseCase: DeleteProfileImageUseCase,
+    private val profileImageOperationsUseCase: ProfileImageOperationsUseCase,
     private val profileRepository: ProfileRepository,
     private val auth: FirebaseAuth,
     private val networkConnectivityMonitor: NetworkConnectivityMonitor,
@@ -554,7 +552,7 @@ class ProfileViewModel @Inject constructor(
                     it.copy(imageUploadState = ImageUploadState.Uploading(progress = 0.3f))
                 }
                 
-                val result = uploadProfileImageUseCase(
+                val result = profileImageOperationsUseCase.upload(
                     userId = userId,
                     imageUri = imageUri,
                     cropRect = cropRect
@@ -625,7 +623,7 @@ class ProfileViewModel @Inject constructor(
                 
                 Timber.d("Starting image deletion for user: $userId")
                 
-                val result = deleteProfileImageUseCase(userId)
+                val result = profileImageOperationsUseCase.delete(userId)
                 
                 if (result.isSuccess) {
                     updateState { 

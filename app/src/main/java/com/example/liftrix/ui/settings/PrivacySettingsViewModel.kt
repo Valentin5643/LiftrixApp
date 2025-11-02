@@ -7,7 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.repository.social.SocialPrivacySettingsRepository
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
-import com.example.liftrix.domain.usecase.social.UpdateSocialPrivacySettingsUseCase
+import com.example.liftrix.domain.usecase.social.SocialProfileCommandUseCase
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
@@ -33,7 +33,7 @@ import javax.inject.Inject
 @HiltViewModel
 class PrivacySettingsViewModel @Inject constructor(
     private val privacySettingsRepository: SocialPrivacySettingsRepository,
-    private val updateSocialPrivacySettingsUseCase: UpdateSocialPrivacySettingsUseCase,
+    private val socialProfileCommandUseCase: SocialProfileCommandUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<PrivacySettingsUiState, PrivacySettingsEvent>(errorHandler) {
@@ -226,7 +226,7 @@ class PrivacySettingsViewModel @Inject constructor(
         updateState { it.copy(isUpdatingSettings = true) }
 
         executeUseCase(
-            useCase = { updateSocialPrivacySettingsUseCase(updatedSettings) },
+            useCase = { socialProfileCommandUseCase.updatePrivacySettings(updatedSettings) },
             onSuccess = { _ ->
                 updateState { 
                     it.copy(

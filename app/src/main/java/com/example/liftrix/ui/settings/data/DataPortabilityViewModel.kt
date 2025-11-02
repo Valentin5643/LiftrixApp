@@ -14,7 +14,7 @@ import com.example.liftrix.domain.usecase.export.ExportResult
 import com.example.liftrix.domain.usecase.export.ExportProgress
 import com.example.liftrix.domain.usecase.export.DataType
 import com.example.liftrix.domain.usecase.export.DateRange
-import com.example.liftrix.domain.usecase.data_import.ImportWorkoutsUseCase
+import com.example.liftrix.domain.usecase.data_import.DataImportUseCase
 import com.example.liftrix.domain.usecase.data_import.ImportValidation
 import com.example.liftrix.domain.usecase.data_import.ImportResult
 import com.example.liftrix.domain.usecase.data_import.ImportProgress
@@ -60,14 +60,14 @@ import javax.inject.Inject
  * - TCX: Training Center XML format
  * 
  * @property exportWorkoutsUseCase Use case for exporting workout data
- * @property importWorkoutsUseCase Use case for importing workout data
+ * @property dataImportUseCase Use case for importing workout data
  * @property getCurrentUserIdUseCase Use case for getting current user ID
  * @property errorHandler Centralized error handler
  */
 @HiltViewModel
 class DataPortabilityViewModel @Inject constructor(
     private val exportWorkoutsUseCase: ExportWorkoutsUseCase,
-    private val importWorkoutsUseCase: ImportWorkoutsUseCase,
+    private val dataImportUseCase: DataImportUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     @ApplicationContext private val context: Context,
     errorHandler: ErrorHandler
@@ -368,7 +368,7 @@ class DataPortabilityViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            val result = importWorkoutsUseCase.validateImportFile(uri, inputStream)
+            val result = dataImportUseCase.validateFile(uri, inputStream)
             result.fold(
                 onSuccess = { validation ->
                     updateState { currentState ->
@@ -475,13 +475,13 @@ class DataPortabilityViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            val result = importWorkoutsUseCase.importWorkouts(userId, uri, inputStream, importOptions)
+            val result = dataImportUseCase.import(userId, uri, inputStream, importOptions)
             result.fold(
                 onSuccess = { importResult ->
                     currentImportId = importResult.importId
-                    
+
                     // Track import progress
-                    importWorkoutsUseCase.getImportProgress(importResult.importId)
+                    dataImportUseCase.getImportProgress(importResult.importId)
                         .onEach { progress ->
                             updateImportProgress(progress)
                         }

@@ -60,8 +60,7 @@ import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.ui.common.state.WorkoutScreenData
 import com.example.liftrix.ui.common.state.WorkoutUiState
 import com.example.liftrix.domain.model.Folder
-import com.example.liftrix.domain.usecase.folder.GetFoldersUseCase
-import com.example.liftrix.domain.usecase.folder.CreateFolderUseCase
+import com.example.liftrix.domain.usecase.folder.FolderOperationsUseCase
 import kotlinx.coroutines.flow.firstOrNull
 import com.example.liftrix.ui.workout.components.InlineFolderSection
 import timber.log.Timber

@@ -31,8 +31,8 @@ import com.example.liftrix.di.IoDispatcher
  * - Analytics widget coordination
  * - Multi-tier caching system (DiskCache, CacheStrategy, WidgetCacheManager)
  * 
- * Note: GetWidgetDataUseCase and SaveWidgetPreferencesUseCase are provided by
- * existing modules (UseCaseModule) to avoid duplication.
+ * Note: GetWidgetDataUseCase and consolidated use cases (WidgetPreferencesUseCase,
+ * AnalyticsQueryUseCase) use @Inject constructor and don't need providers here.
  * 
  * Scope Management:
  * - All components are Singleton scoped for consistent state

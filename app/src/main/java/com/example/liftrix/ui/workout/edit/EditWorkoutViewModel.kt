@@ -9,10 +9,10 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
-import com.example.liftrix.domain.usecase.workout.GetWorkoutByIdRequest
-import com.example.liftrix.domain.usecase.workout.GetWorkoutByIdUseCase
-import com.example.liftrix.domain.usecase.workout.AddExerciseToWorkoutUseCase
-import com.example.liftrix.domain.usecase.template.GetWorkoutTemplateByIdUseCase
+import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
+import com.example.liftrix.domain.usecase.workout.WorkoutCommandUseCase
+import com.example.liftrix.domain.usecase.template.TemplateQueryUseCase
+import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.state.EditWorkoutUiState
@@ -56,16 +56,18 @@ private fun EditWorkoutUiState.dataOrNull(): EditWorkoutData? = when (this) {
  * - Real-time state updates with proper error handling
  * - Integration with repository layer for data persistence
  * 
- * @param getWorkoutByIdUseCase Use case for retrieving workout data
+ * @param workoutQueryUseCase Use case for retrieving workout data
+ * @param templateQueryUseCase Use case for retrieving template data
+ * @param workoutCommandUseCase Use case for modifying workouts
  * @param workoutRepository Repository for workout data persistence
  * @param getCurrentUserIdUseCase Use case for getting current user ID
  * @param errorHandler Centralized error handler
  */
 @HiltViewModel
 class EditWorkoutViewModel @Inject constructor(
-    private val getWorkoutByIdUseCase: GetWorkoutByIdUseCase,
-    private val getWorkoutTemplateByIdUseCase: GetWorkoutTemplateByIdUseCase,
-    private val addExerciseToWorkoutUseCase: AddExerciseToWorkoutUseCase,
+    private val workoutQueryUseCase: WorkoutQueryUseCase,
+    private val templateQueryUseCase: TemplateQueryUseCase,
+    private val workoutCommandUseCase: WorkoutCommandUseCase,
     private val workoutRepository: WorkoutRepository,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     errorHandler: ErrorHandler
@@ -187,14 +189,13 @@ class EditWorkoutViewModel @Inject constructor(
         Timber.d("🔥 EDIT-WORKOUT-DEBUG: Checking ID type - workoutId: ${workoutId.value}, isTemplate: $isTemplate")
 
         executeUseCase(
-            useCase = { 
+            useCase = {
                 if (isTemplate) {
-                    Timber.d("🔥 EDIT-WORKOUT-DEBUG: Calling getWorkoutTemplateByIdUseCase for template")
-                    getWorkoutTemplateByIdUseCase(workoutId.value, userId)
+                    Timber.d("🔥 EDIT-WORKOUT-DEBUG: Calling templateQueryUseCase.getById for template")
+                    templateQueryUseCase.getById(workoutId.value, userId)
                 } else {
-                    Timber.d("🔥 EDIT-WORKOUT-DEBUG: Calling getWorkoutByIdUseCase for regular workout")
-                    val request = GetWorkoutByIdRequest(workoutId, userId)
-                    getWorkoutByIdUseCase(request)
+                    Timber.d("🔥 EDIT-WORKOUT-DEBUG: Calling workoutQueryUseCase.getById for regular workout")
+                    workoutQueryUseCase.getById(workoutId, userId)
                 }
             },
             onSuccess = { workout ->
@@ -393,8 +394,9 @@ class EditWorkoutViewModel @Inject constructor(
 
         executeUseCase(
             useCase = {
+                val userId = currentUserId ?: throw IllegalStateException("User ID is null")
                 Timber.d("🔥 ADD-EXERCISE-DEBUG: Adding exercise $exerciseLibraryId to workout ${currentData.originalWorkout.id.value}")
-                addExerciseToWorkoutUseCase.invoke(
+                workoutCommandUseCase.addExercise(
                     workoutId = currentData.originalWorkout.id,
                     exerciseLibraryId = exerciseLibraryId,
                     initialSets = 3

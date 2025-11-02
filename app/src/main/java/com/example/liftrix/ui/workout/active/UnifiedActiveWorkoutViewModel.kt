@@ -14,10 +14,9 @@ import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.model.common.LiftrixResult
 import java.time.Instant
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
-import com.example.liftrix.domain.usecase.session.AddExerciseToSessionUseCase
-import com.example.liftrix.domain.usecase.template.CreateTemplateFromSessionUseCase
-import com.example.liftrix.domain.usecase.workout.GetPreviousSetDataUseCase
-import com.example.liftrix.domain.usecase.workout.PreviousSetDataRequest
+import com.example.liftrix.domain.usecase.session.SessionOperationsUseCase
+import com.example.liftrix.domain.usecase.template.TemplateCommandUseCase
+import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
 import com.example.liftrix.domain.usecase.workout.PreviousSetDataResponse
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,9 +46,9 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
     private val sessionManager: UnifiedWorkoutSessionManager,
     private val workoutTemplateRepository: WorkoutTemplateRepository,
     private val authRepository: AuthRepository,
-    private val addExerciseToSessionUseCase: AddExerciseToSessionUseCase,
-    private val createTemplateFromSessionUseCase: CreateTemplateFromSessionUseCase,
-    private val getPreviousSetDataUseCase: GetPreviousSetDataUseCase
+    private val sessionOperationsUseCase: SessionOperationsUseCase,
+    private val templateCommandUseCase: TemplateCommandUseCase,
+    private val workoutQueryUseCase: WorkoutQueryUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<UnifiedActiveWorkoutUiState>(
@@ -424,7 +423,7 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
             try {
                 // Use proper use case instead of direct session manager call
                 val exerciseId = ExerciseId.fromString(exerciseLibrary.id)
-                val result = addExerciseToSessionUseCase.execute(exerciseId)
+                val result = sessionOperationsUseCase.addExercise(exerciseId)
                 
                 result.fold(
                     onSuccess = {
@@ -914,7 +913,7 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                     _uiState.value = currentUiState.copy(showSaveQuickWorkoutDialog = false)
                 }
                 
-                val result = createTemplateFromSessionUseCase(
+                val result = templateCommandUseCase.createFromSession(
                     session = currentSession,
                     templateName = templateName,
                     templateDescription = "Created from Quick workout"
@@ -1024,16 +1023,14 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                     Timber.d("[PREV_SET_DEBUG] Exercise '${exercise.name}' - Using canonical ID: '$canonicalLibraryId' for history query")
                     Timber.d("[PREV_SET_ID_FIX] Switching from display name '${exercise.name}' to canonical ID '$canonicalLibraryId'")
                     
-                    val request = PreviousSetDataRequest(
-                        userId = userId,
-                        exerciseId = canonicalLibraryId, // 🔥 FIX: Use canonical library ID instead of display name
-                        setNumber = 1, // Load for all sets initially
-                        excludeWorkoutId = currentSession.id.value // Exclude current active session
-                    )
-                    
                     // Launch concurrent requests for each exercise
                     launch {
-                        getPreviousSetDataUseCase(request).fold(
+                        workoutQueryUseCase.getPreviousSetData(
+                            userId = userId,
+                            exerciseId = canonicalLibraryId, // 🔥 FIX: Use canonical library ID instead of display name
+                            setNumber = 1, // Load for all sets initially
+                            excludeWorkoutId = currentSession.id.value // Exclude current active session
+                        ).fold(
                             onSuccess = { response ->
                                 if (response.hasPreviousData()) {
                                     previousDataMap[exercise.exerciseId.value] = response
@@ -1104,14 +1101,12 @@ class UnifiedActiveWorkoutViewModel @Inject constructor(
                 // since it comes from the exercise selection. Add logging to verify.
                 Timber.d("[PREV_SET_REFRESH_FIX] Refreshing previous data for canonical ID: '$exerciseId'")
                 
-                val request = PreviousSetDataRequest(
+                workoutQueryUseCase.getPreviousSetData(
                     userId = userId,
                     exerciseId = exerciseId, // Should already be canonical library ID
                     setNumber = 1,
                     excludeWorkoutId = currentSession.id.value
-                )
-                
-                getPreviousSetDataUseCase(request).fold(
+                ).fold(
                     onSuccess = { response ->
                         val currentMap = _previousSetData.value.toMutableMap()
                         if (response.hasPreviousData()) {

@@ -29,11 +29,6 @@ import com.example.liftrix.domain.repository.social.SocialPrivacySettingsReposit
 import com.example.liftrix.domain.repository.SettingsRepository
 import com.example.liftrix.domain.service.PrivacyEnforcementService
 import com.example.liftrix.domain.usecase.social.CheckUsernameAvailabilityUseCase
-import com.example.liftrix.domain.usecase.social.CreateSocialProfileUseCase
-import com.example.liftrix.domain.usecase.social.GetDiscoverableSocialProfilesUseCase
-import com.example.liftrix.domain.usecase.social.GetSocialProfileUseCase
-import com.example.liftrix.domain.usecase.social.SearchSocialProfilesUseCase
-import com.example.liftrix.domain.usecase.social.UpdateSocialProfileUseCase
 import com.example.liftrix.domain.validation.ProfileValidator
 import com.example.liftrix.domain.service.MediaUploadService
 import com.example.liftrix.data.service.MediaUploadServiceImpl
@@ -273,35 +268,9 @@ abstract class SocialModule {
     // ========================================
     // Social Use Cases
     // ========================================
-
-        @Provides
-        @Singleton
-        fun provideCreateSocialProfileUseCase(
-            repository: SocialProfileRepository,
-            validator: ProfileValidator,
-            getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
-        ): CreateSocialProfileUseCase {
-            return CreateSocialProfileUseCase(repository, validator, getCurrentUserIdUseCase)
-        }
-
-        @Provides
-        @Singleton
-        fun provideGetSocialProfileUseCase(
-            repository: SocialProfileRepository,
-            getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
-        ): GetSocialProfileUseCase {
-            return GetSocialProfileUseCase(repository, getCurrentUserIdUseCase)
-        }
-
-        @Provides
-        @Singleton
-        fun provideUpdateSocialProfileUseCase(
-            repository: SocialProfileRepository,
-            validator: ProfileValidator,
-            getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
-        ): UpdateSocialProfileUseCase {
-            return UpdateSocialProfileUseCase(repository, validator, getCurrentUserIdUseCase)
-        }
+    // Note: Consolidated use cases (SocialProfileQueryUseCase, SocialProfileCommandUseCase,
+    // SocialSearchUseCase, SocialRelationshipUseCase, PostEngagementUseCase) are provided
+    // automatically via @Inject constructor and don't need explicit @Provides methods.
 
         @Provides
         @Singleton
@@ -310,24 +279,6 @@ abstract class SocialModule {
             validator: ProfileValidator
         ): CheckUsernameAvailabilityUseCase {
             return CheckUsernameAvailabilityUseCase(repository, validator)
-        }
-
-        @Provides
-        @Singleton
-        fun provideSearchSocialProfilesUseCase(
-            repository: SocialProfileRepository,
-            getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
-        ): SearchSocialProfilesUseCase {
-            return SearchSocialProfilesUseCase(repository, getCurrentUserIdUseCase)
-        }
-
-        @Provides
-        @Singleton
-        fun provideGetDiscoverableSocialProfilesUseCase(
-            repository: SocialProfileRepository,
-            getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
-        ): GetDiscoverableSocialProfilesUseCase {
-            return GetDiscoverableSocialProfilesUseCase(repository, getCurrentUserIdUseCase)
         }
     
     // ========================================

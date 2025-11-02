@@ -179,11 +179,11 @@ private fun ProfileImageSection(
             }
             
             // Enhanced fallback logic: Public Profile -> Social Profile -> Firebase Auth
-            LaunchedEffect(profile.userId, profile.profilePhotoUrl) {
+            LaunchedEffect(profile.userId, profile.profileImageUrl) {
                 Timber.d("PFP_DEBUG: 🔍 ENHANCED_FALLBACK: Starting fallback logic for userId=${profile.userId}")
                 
                 // If public profile has no image, try social profile as fallback
-                if (profile.profilePhotoUrl.isNullOrBlank()) {
+                if (profile.profileImageUrl.isNullOrBlank()) {
                     Timber.d("PFP_DEBUG: 🔍 ENHANCED_FALLBACK: Public profile image is null, querying social profile...")
                     
                     try {
@@ -192,7 +192,7 @@ private fun ProfileImageSection(
                         withContext(Dispatchers.IO) {
                             // For now, log that we need social profile data
                             Timber.d("PFP_DEBUG: 🔍 ENHANCED_FALLBACK: Would query social profile for userId=${profile.userId} here")
-                            Timber.d("PFP_DEBUG: 🔍 ENHANCED_FALLBACK: Current profile data - userId=${profile.userId}, username=${profile.username}, displayName=${profile.displayName}, profilePhotoUrl=${profile.profilePhotoUrl}")
+                            Timber.d("PFP_DEBUG: 🔍 ENHANCED_FALLBACK: Current profile data - userId=${profile.userId}, username=${profile.username}, displayName=${profile.displayName}, profilePhotoUrl=${profile.profileImageUrl}")
                         }
                     } catch (e: Exception) {
                         Timber.e("PFP_DEBUG: 🔥 ENHANCED_FALLBACK_ERROR: Failed to query social profile", e)
@@ -202,10 +202,10 @@ private fun ProfileImageSection(
             
             val effectiveImageUrl = if (isCurrentUser) {
                 // Debug the profile object to understand what data we have
-                Timber.d("PFP_DEBUG: 🔍 PROFILE_OBJECT_DEBUG: profile.profilePhotoUrl='${profile.profilePhotoUrl}' | profile.displayName='${profile.displayName}' | profile.username='${profile.username}' | profile.userId='${profile.userId}'")
+                Timber.d("PFP_DEBUG: 🔍 PROFILE_OBJECT_DEBUG: profile.profileImageUrl='${profile.profileImageUrl}' | profile.displayName='${profile.displayName}' | profile.username='${profile.username}' | profile.userId='${profile.userId}'")
                 
                 // Enhanced priority: Public Profile -> Social Profile -> Firebase Auth
-                val dbUrl = profile.profilePhotoUrl
+                val dbUrl = profile.profileImageUrl
                 val socialUrl = socialProfilePhotoUrl
                 val firebaseUser = try {
                     FirebaseAuth.getInstance().currentUser
@@ -227,8 +227,8 @@ private fun ProfileImageSection(
                 effectiveUrl
             } else {
                 // For other users, use profile image with social fallback
-                val effectiveUrl = profile.profilePhotoUrl ?: socialProfilePhotoUrl
-                Timber.d("PFP_DEBUG: 🔍 ENHANCED_MODERN_PROFILE_HEADER: userId=${profile.userId} | isCurrentUser=$isCurrentUser | publicUrl='${profile.profilePhotoUrl}' | socialUrl='$socialProfilePhotoUrl' | effectiveUrl='$effectiveUrl'")
+                val effectiveUrl = profile.profileImageUrl ?: socialProfilePhotoUrl
+                Timber.d("PFP_DEBUG: 🔍 ENHANCED_MODERN_PROFILE_HEADER: userId=${profile.userId} | isCurrentUser=$isCurrentUser | publicUrl='${profile.profileImageUrl}' | socialUrl='$socialProfilePhotoUrl' | effectiveUrl='$effectiveUrl'")
                 effectiveUrl
             }
             

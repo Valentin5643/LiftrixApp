@@ -10,7 +10,7 @@ import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.social.GymBuddyRepository
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.domain.service.QRCodeService
-import com.example.liftrix.domain.usecase.social.GetSocialProfileUseCase
+import com.example.liftrix.domain.usecase.social.SocialProfileQueryUseCase
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -31,7 +31,7 @@ class GymBuddyViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val analyticsService: AnalyticsService,
     private val qrCodeService: QRCodeService,
-    private val getSocialProfileUseCase: GetSocialProfileUseCase
+    private val socialProfileQueryUseCase: SocialProfileQueryUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GymBuddyUiState())
@@ -162,7 +162,7 @@ class GymBuddyViewModel @Inject constructor(
                 updateState { copy(isGeneratingQr = true, error = null) }
 
                 // Get user's social profile for QR data
-                val socialProfileResult = getSocialProfileUseCase(currentUser.uid)
+                val socialProfileResult = socialProfileQueryUseCase.invoke(currentUser.uid)
                 if (socialProfileResult.isFailure) {
                     updateState { 
                         copy(

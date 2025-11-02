@@ -379,7 +379,7 @@ private fun SuggestedUsersEmptyState() {
 @dagger.hilt.android.lifecycle.HiltViewModel
 class SuggestedUsersCarouselViewModel @javax.inject.Inject constructor(
     private val followRepository: com.example.liftrix.domain.repository.social.FollowRepository,
-    private val followUserUseCase: com.example.liftrix.domain.usecase.social.FollowUserUseCase,
+    private val socialRelationshipUseCase: com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase,
     private val getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase,
     private val userSearchRepository: com.example.liftrix.domain.repository.UserSearchRepository,
     errorHandler: com.example.liftrix.domain.usecase.common.ErrorHandler
@@ -500,7 +500,7 @@ class SuggestedUsersCarouselViewModel @javax.inject.Inject constructor(
                     it.copy(followingUsers = it.followingUsers + userId) 
                 }
                 
-                val result = followUserUseCase(
+                val result = socialRelationshipUseCase.follow(
                     targetUserId = userId,
                     action = com.example.liftrix.domain.usecase.social.FollowAction.FOLLOW,
                     context = "SUGGESTED_USERS_CAROUSEL"

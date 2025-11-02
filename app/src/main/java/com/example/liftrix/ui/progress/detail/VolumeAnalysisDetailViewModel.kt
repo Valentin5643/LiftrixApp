@@ -7,10 +7,10 @@ import com.example.liftrix.ui.common.viewmodel.DetailScreenStateKeys
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.domain.usecase.common.ErrorHandler
-import com.example.liftrix.domain.usecase.analytics.GetVolumeAnalysisUseCase
+import com.example.liftrix.domain.usecase.analytics.AnalyticsQueryUseCase
+import com.example.liftrix.domain.usecase.analytics.AnalyticsExportUseCase
 import com.example.liftrix.domain.usecase.analytics.VolumeAnalysisData as UseCaseVolumeAnalysisData
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
-import com.example.liftrix.domain.usecase.analytics.ExportVolumeDataUseCase
 import com.example.liftrix.domain.usecase.analytics.ExportVolumeDataRequest
 import com.example.liftrix.domain.usecase.analytics.ExportVolumeDataPoint
 import com.example.liftrix.domain.model.analytics.TimeRangeType
@@ -52,9 +52,9 @@ import java.io.File
 class VolumeAnalysisDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     errorHandler: ErrorHandler,
-    private val getVolumeAnalysisUseCase: GetVolumeAnalysisUseCase,
+    private val analyticsQueryUseCase: AnalyticsQueryUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
-    private val exportVolumeDataUseCase: ExportVolumeDataUseCase
+    private val analyticsExportUseCase: AnalyticsExportUseCase
 ) : StatefulDetailViewModel<VolumeAnalysisDetailViewModel.UiState, VolumeAnalysisDetailViewModel.Event>(savedStateHandle, errorHandler) {
 
     override val _uiState = MutableStateFlow<UiState>(UiState.Loading)
@@ -156,7 +156,7 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
                 }
                 
                 
-                getVolumeAnalysisUseCase.execute(
+                analyticsQueryUseCase.getVolumeAnalysis(
                     userId = userId,
                     groupBy = groupBy.value,
                     timeRange = timeRange.value
@@ -180,9 +180,9 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
                             label = useCasePoint.label
                         )
                     },
-                    totalVolume = useCaseData.totalVolume,
-                    volumeGrowth = useCaseData.volumeGrowth,
-                    averageVolume = useCaseData.averageVolume,
+                    totalVolume = useCaseData.totalVolume.toDouble(),
+                    volumeGrowth = useCaseData.volumeGrowth.toDouble(),
+                    averageVolume = useCaseData.averageVolume.toDouble(),
                     lastUpdated = Clock.System.now()
                 )
                 
@@ -264,7 +264,7 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
                         includeBreakdown = true
                     )
                     
-                    val result = exportVolumeDataUseCase.exportToPdf(exportRequest)
+                    val result = analyticsExportUseCase.exportVolume(exportRequest)
                     result.fold(
                         onSuccess = { file ->
                             Timber.d("Volume analysis data exported successfully: ${file.absolutePath}")

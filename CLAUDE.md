@@ -26,7 +26,7 @@ UI Layer (Jetpack Compose)
     ↓ StateFlow<UiState<T>>
 ViewModel Layer (BaseViewModel<S,E>)
     ↓ LiftrixResult<T>
-Use Case Layer (85+ use cases)
+Use Case Layer (79 use cases)
     ↓ LiftrixResult<T>
 Repository Layer (16 interfaces)
     ↓ Flow<Entity>
@@ -89,7 +89,7 @@ sealed class LiftrixRoute {
 ### Key Components & Their Roles
 
 #### Domain Layer
-- **Use Cases**: Single responsibility business operations (80+ use cases)
+- **Use Cases**: Single responsibility business operations (79 use cases - 25 consolidated, 54 domain-specific)
 - **Models**: Domain entities with business logic
 - **Repository Interfaces**: Contracts for data operations
 
@@ -749,11 +749,27 @@ fun ModernChart(
 
 ### File Patterns
 - ViewModels: `*ViewModel.kt` in `ui/` subdirectories
-- Use Cases: `*UseCase.kt` in `domain/usecase/`
+- Use Cases: `*UseCase.kt` in `domain/usecase/` (**Note**: 82 old use cases consolidated into 25 - see below)
 - Repositories: `*RepositoryImpl.kt` in `data/repository/`
 - DAOs: `*Dao.kt` in `data/local/dao/`
 - Entities: `*Entity.kt` in `data/local/entity/`
 - AI Components: `ui/chat/ChatbotViewModel.kt`, `domain/service/AIChatService.kt`, `data/service/AbusePreventionService.kt`
+
+### Consolidated Use Cases
+
+The codebase uses consolidated use cases to reduce duplication:
+
+**By Domain:**
+- **Analytics**: AnalyticsQueryUseCase, AnalyticsExportUseCase, DashboardCommandUseCase, WidgetPreferencesUseCase, WidgetMigrationUseCase
+- **Templates & Folders**: TemplateQueryUseCase, TemplateCommandUseCase, FolderOperationsUseCase
+- **Social**: SocialProfileQueryUseCase, SocialProfileCommandUseCase, SocialRelationshipUseCase, PostEngagementUseCase, SocialSearchUseCase
+- **Workouts**: WorkoutQueryUseCase, WorkoutCommandUseCase
+- **Account**: AccountQueryUseCase, AccountCommandUseCase
+- **Settings**: SettingsQueryUseCase, SettingsCommandUseCase
+- **Other**: ChatOperationsUseCase, ExerciseQueryUseCase, NotificationPreferencesUseCase, ProfileImageOperationsUseCase, DataImportUseCase, SessionOperationsUseCase
+
+**Domain Services:**
+- AnalyticsCalculationService, WidgetOperationsService (calculation logic)
 
 ### Validation Patterns
 - Use validation DSL for chainable rules

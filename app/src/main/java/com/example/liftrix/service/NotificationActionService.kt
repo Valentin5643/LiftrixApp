@@ -3,7 +3,7 @@ package com.example.liftrix.service
 import android.app.IntentService
 import android.content.Intent
 import com.example.liftrix.domain.service.AnalyticsTracker
-import com.example.liftrix.domain.usecase.social.FollowUserUseCase
+import com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase
 import com.example.liftrix.domain.repository.social.EngagementRepository
 import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
@@ -18,7 +18,7 @@ import javax.inject.Inject
 class NotificationActionService : IntentService("NotificationActionService") {
 
     @Inject lateinit var analyticsTracker: AnalyticsTracker
-    @Inject lateinit var followUserUseCase: FollowUserUseCase
+    @Inject lateinit var socialRelationshipUseCase: SocialRelationshipUseCase
     @Inject lateinit var engagementRepository: EngagementRepository
 
     override fun onHandleIntent(intent: Intent?) {
@@ -87,7 +87,7 @@ class NotificationActionService : IntentService("NotificationActionService") {
         runBlocking {
             try {
                 // Accept the follow request using the FollowUserUseCase
-                val result = followUserUseCase(
+                val result = socialRelationshipUseCase.followUser(
                     targetUserId = fromUser,
                     action = com.example.liftrix.domain.usecase.social.FollowAction.ACCEPT,
                     context = "NOTIFICATION_ACTION"
@@ -142,7 +142,7 @@ class NotificationActionService : IntentService("NotificationActionService") {
         runBlocking {
             try {
                 // Decline the follow request using the FollowUserUseCase
-                val result = followUserUseCase(
+                val result = socialRelationshipUseCase.followUser(
                     targetUserId = fromUser,
                     action = com.example.liftrix.domain.usecase.social.FollowAction.DECLINE,
                     context = "NOTIFICATION_ACTION"

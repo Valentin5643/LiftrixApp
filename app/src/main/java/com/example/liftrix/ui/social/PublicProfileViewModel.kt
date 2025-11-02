@@ -5,12 +5,10 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.PublicUserProfile
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
-import com.example.liftrix.domain.usecase.social.GetPublicProfileUseCase
+import com.example.liftrix.domain.usecase.social.SocialProfileQueryUseCase
 import com.example.liftrix.domain.usecase.social.GetPublicProfileRequest
-import com.example.liftrix.domain.usecase.social.FollowUserUseCase
+import com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase
 import com.example.liftrix.domain.usecase.social.FollowAction
-import com.example.liftrix.domain.usecase.social.BlockUserUseCase
-import com.example.liftrix.domain.usecase.social.ReportUserUseCase
 import com.example.liftrix.domain.model.social.ReportReason
 import com.example.liftrix.domain.model.social.FollowStatus
 import com.example.liftrix.domain.model.social.ConnectionStatus
@@ -37,10 +35,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class PublicProfileViewModel @Inject constructor(
-    private val getPublicProfileUseCase: GetPublicProfileUseCase,
-    private val followUserUseCase: FollowUserUseCase,
-    private val blockUserUseCase: BlockUserUseCase,
-    private val reportUserUseCase: ReportUserUseCase,
+    private val socialProfileQueryUseCase: SocialProfileQueryUseCase,
+    private val socialRelationshipUseCase: SocialRelationshipUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     private val feedRepository: FeedRepository,
     private val engagementRepository: EngagementRepository,
@@ -111,7 +107,7 @@ class PublicProfileViewModel @Inject constructor(
 
         executeUseCase(
             useCase = {
-                getPublicProfileUseCase(
+                socialProfileQueryUseCase.getPublicProfile(
                     GetPublicProfileRequest(
                         profileUserId = userId,
                         trackView = true
@@ -330,7 +326,7 @@ class PublicProfileViewModel @Inject constructor(
                 }
 
                 // Execute the follow action
-                val result = followUserUseCase(
+                val result = socialRelationshipUseCase.followAction(
                     targetUserId = currentProfile.userId,
                     action = followAction,
                     context = "PUBLIC_PROFILE"
@@ -436,8 +432,8 @@ class PublicProfileViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 updateState { it.copy(isConnectionLoading = true) }
-                
-                val result = blockUserUseCase(
+
+                val result = socialRelationshipUseCase.blockUser(
                     targetUserId = profile.userId,
                     shouldBlock = true
                 )
@@ -485,7 +481,7 @@ class PublicProfileViewModel @Inject constructor(
                 
                 // For now, we'll use INAPPROPRIATE_CONTENT as the default reason
                 // In a real app, you'd show a dialog to let the user select the reason
-                val result = reportUserUseCase(
+                val result = socialRelationshipUseCase.reportUser(
                     targetUserId = profile.userId,
                     reason = ReportReason.INAPPROPRIATE_CONTENT,
                     description = "Reported from profile view"

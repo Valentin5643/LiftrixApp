@@ -5,11 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.service.AnalyticsService
-import com.example.liftrix.domain.usecase.account.DeleteAccountUseCase
-import com.example.liftrix.domain.usecase.account.GetAccountInfoUseCase
-import com.example.liftrix.domain.usecase.account.UpdateEmailUseCase
-import com.example.liftrix.domain.usecase.account.UpdatePasswordUseCase
-import com.example.liftrix.domain.usecase.account.UpdateUsernameUseCase
+import com.example.liftrix.domain.usecase.account.AccountQueryUseCase
+import com.example.liftrix.domain.usecase.account.AccountCommandUseCase
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.UserAccountRepository
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
@@ -29,11 +26,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class AccountManagementViewModel @Inject constructor(
-    private val updateEmailUseCase: UpdateEmailUseCase,
-    private val updatePasswordUseCase: UpdatePasswordUseCase,
-    private val updateUsernameUseCase: UpdateUsernameUseCase,
-    private val deleteAccountUseCase: DeleteAccountUseCase,
-    private val getAccountInfoUseCase: GetAccountInfoUseCase,
+    private val accountCommandUseCase: AccountCommandUseCase,
+    private val accountQueryUseCase: AccountQueryUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     private val authRepository: AuthRepository,
     private val userAccountRepository: UserAccountRepository,
@@ -86,9 +80,9 @@ class AccountManagementViewModel @Inject constructor(
                     )
                 
                 currentUserId = userId
-                
-                val result = getAccountInfoUseCase()
-                
+
+                val result = accountQueryUseCase()
+
                 result.fold(
                     onSuccess = { accountInfo ->
                         updateState {
@@ -136,7 +130,7 @@ class AccountManagementViewModel @Inject constructor(
             updateState { copy(isUpdatingEmail = true, error = null) }
             
             try {
-                val result = updateEmailUseCase(newEmail, currentPassword)
+                val result = accountCommandUseCase.updateEmail(newEmail, currentPassword)
                 
                 result.fold(
                     onSuccess = {
@@ -190,7 +184,7 @@ class AccountManagementViewModel @Inject constructor(
             updateState { copy(isUpdatingPassword = true, error = null) }
             
             try {
-                val result = updatePasswordUseCase(currentPassword, newPassword)
+                val result = accountCommandUseCase.updatePassword(currentPassword, newPassword)
                 
                 result.fold(
                     onSuccess = {
@@ -248,7 +242,7 @@ class AccountManagementViewModel @Inject constructor(
                         errorCode = "NO_USER"
                     )
                 
-                val result = updateUsernameUseCase(newUsername)
+                val result = accountCommandUseCase.updateUsername(newUsername)
                 
                 result.fold(
                     onSuccess = {
@@ -330,7 +324,7 @@ class AccountManagementViewModel @Inject constructor(
                     )
                 }
                 
-                val result = deleteAccountUseCase(password)
+                val result = accountCommandUseCase.deleteAccount(password)
                 
                 result.fold(
                     onSuccess = {

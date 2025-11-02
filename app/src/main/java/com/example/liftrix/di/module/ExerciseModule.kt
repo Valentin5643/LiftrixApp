@@ -5,7 +5,7 @@ import com.example.liftrix.domain.repository.exercise.ExerciseRepository
 import com.example.liftrix.domain.repository.CustomExerciseRepository
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.usecase.common.ErrorHandler
-import com.example.liftrix.domain.usecase.exercise.SearchExercisesUseCase
+// Consolidated ExerciseQueryUseCase is provided automatically via @Inject constructor
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -43,35 +43,6 @@ abstract class ExerciseModule {
         exerciseRepositoryImpl: ExerciseRepositoryImpl
     ): ExerciseRepository
 
-    companion object {
-        
-        /**
-         * Provides SearchExercisesUseCase with all required dependencies.
-         * 
-         * The SearchExercisesUseCase requires multiple repositories and services
-         * that are provided by other modules, so we use a @Provides method
-         * to inject all the dependencies correctly.
-         * 
-         * @param exerciseRepository Repository for exercise library operations
-         * @param customExerciseRepository Repository for custom exercise operations
-         * @param authRepository Repository for authentication operations
-         * @param errorHandler Service for centralized error handling
-         * @return Configured SearchExercisesUseCase instance
-         */
-        @Provides
-        @Singleton
-        fun provideSearchExercisesUseCase(
-            exerciseRepository: ExerciseRepository,
-            customExerciseRepository: CustomExerciseRepository,
-            authRepository: AuthRepository,
-            errorHandler: ErrorHandler
-        ): SearchExercisesUseCase {
-            return SearchExercisesUseCase(
-                exerciseRepository = exerciseRepository,
-                customExerciseRepository = customExerciseRepository,
-                authRepository = authRepository,
-                errorHandler = errorHandler
-            )
-        }
-    }
+    // Note: Consolidated ExerciseQueryUseCase is provided automatically via @Inject constructor
+    // and doesn't need explicit @Provides method.
 }

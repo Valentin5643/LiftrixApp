@@ -14,7 +14,7 @@ import com.example.liftrix.domain.model.WorkoutStatus
 import java.time.Duration
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SocialRepository
-import com.example.liftrix.domain.usecase.social.GetSocialProfileUseCase
+import com.example.liftrix.domain.usecase.social.SocialProfileQueryUseCase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.channels.awaitClose
@@ -42,7 +42,7 @@ class SocialRepositoryImpl @Inject constructor(
     private val authRepository: AuthRepository,
     private val firestore: FirebaseFirestore,
     private val recommendationCache: RecommendationCache,
-    private val getSocialProfileUseCase: GetSocialProfileUseCase,
+    private val socialProfileQueryUseCase: SocialProfileQueryUseCase,
     private val userSuggestionService: com.example.liftrix.domain.service.UserSuggestionService
 ) : SocialRepository {
 
@@ -253,7 +253,7 @@ class SocialRepositoryImpl @Inject constructor(
             friendEntities.mapNotNull { entity ->
                 try {
                     // Get the friend's profile data for proper display
-                    val friendProfile = getSocialProfileUseCase(entity.friendUserId).getOrNull()
+                    val friendProfile = socialProfileQueryUseCase(entity.friendUserId).getOrNull()
                     Timber.d("DEBUG_REPO: Mapping entity ${entity.friendUserId}, profile found: ${friendProfile != null}")
                     
                     val mappedFriend = friendMapper.toDomain(
@@ -330,7 +330,7 @@ class SocialRepositoryImpl @Inject constructor(
                             for (workout in workouts) {
                                 try {
                                     // Get friend's display name
-                                    val friendProfile = getSocialProfileUseCase(friendId).getOrNull()
+                                    val friendProfile = socialProfileQueryUseCase(friendId).getOrNull()
                                     val friendName = friendProfile?.displayName ?: "Friend"
                                     
                                     // Calculate duration
@@ -1127,7 +1127,7 @@ class SocialRepositoryImpl @Inject constructor(
             friendEntities.mapNotNull { entity ->
                 try {
                     // Get the friend's profile data for proper display
-                    val friendProfile = getSocialProfileUseCase(entity.friendUserId).getOrNull()
+                    val friendProfile = socialProfileQueryUseCase(entity.friendUserId).getOrNull()
                     Timber.d("DEBUG_REPO_FOLLOWING: Mapping entity ${entity.friendUserId}, profile found: ${friendProfile != null}")
                     
                     val mappedFriend = friendMapper.toDomain(
@@ -1163,7 +1163,7 @@ class SocialRepositoryImpl @Inject constructor(
                 try {
                     // For followers, the "userId" field in the entity represents the follower
                     // Get the follower's profile data for proper display
-                    val followerProfile = getSocialProfileUseCase(entity.userId).getOrNull()
+                    val followerProfile = socialProfileQueryUseCase(entity.userId).getOrNull()
                     Timber.d("DEBUG_REPO_FOLLOWERS: Mapping follower entity ${entity.userId}, profile found: ${followerProfile != null}")
                     
                     val mappedFollower = friendMapper.toDomain(

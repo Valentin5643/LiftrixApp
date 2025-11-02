@@ -7,9 +7,9 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
-import com.example.liftrix.domain.usecase.notifications.GetNotificationPreferencesUseCase
-import com.example.liftrix.domain.usecase.notifications.UpdateNotificationPreferencesUseCase
+import com.example.liftrix.domain.usecase.notifications.NotificationPreferencesUseCase
 import com.example.liftrix.domain.usecase.notifications.GetMutedUsersCountUseCase
+import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.notifications.NotificationPreferences
 import com.example.liftrix.domain.model.notifications.DeliveryFrequency
@@ -40,9 +40,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
  */
 @HiltViewModel
 class NotificationSettingsViewModel @Inject constructor(
-    private val getNotificationPreferencesUseCase: GetNotificationPreferencesUseCase,
-    private val updateNotificationPreferencesUseCase: UpdateNotificationPreferencesUseCase,
+    private val notificationPreferencesUseCase: NotificationPreferencesUseCase,
     private val getMutedUsersCountUseCase: GetMutedUsersCountUseCase,
+    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<NotificationSettingsUiState, NotificationSettingsEvent>(errorHandler) {
 
@@ -219,61 +219,62 @@ class NotificationSettingsViewModel @Inject constructor(
      */
     private fun loadNotificationPreferences() {
         updateState { it.copy(isLoading = true, error = null) }
-        
+
         viewModelScope.launch {
-            getNotificationPreferencesUseCase()
-                .collect { result ->
-                    result.fold(
-                        onSuccess = { preferences ->
-                            updateState { currentState ->
-                                currentState.copy(
-                                    preferencesState = UiState.Success(preferences),
-                                    isLoading = false,
-                                    error = null,
-                                    notificationsEnabled = preferences.notificationsEnabled,
-                                    socialNotifications = preferences.socialNotifications,
-                                    workoutNotifications = preferences.workoutNotifications,
-                                    achievementNotifications = preferences.achievementNotifications,
-                                    reminderNotifications = preferences.reminderNotifications,
-                                    gymBuddyPrs = preferences.gymBuddyPrs,
-                                    followRequests = preferences.followRequests,
-                                    postLikes = preferences.postLikes,
-                                    postComments = preferences.postComments,
-                                    mentions = preferences.mentions,
-                                    quietHoursEnabled = preferences.quietHoursEnabled,
-                                    quietHoursStart = preferences.quietHoursStart,
-                                    quietHoursEnd = preferences.quietHoursEnd,
-                                    batchSocialNotifications = preferences.batchSocialNotifications,
-                                    notificationSound = preferences.notificationSound,
-                                    notificationVibration = preferences.notificationVibration,
-                                    showInAppNotifications = preferences.showInAppNotifications,
-                                    socialDeliveryFrequency = mapDeliveryFrequency(preferences.deliveryFrequency),
-                                    workoutReminders = preferences.reminderNotifications,
-                                    restDayReminders = false, // Default until implemented
-                                    personalRecords = preferences.achievementNotifications,
-                                    milestoneAchievements = preferences.achievementNotifications
-                                )
-                            }
-                        },
-                        onFailure = { throwable ->
-                            val liftrixError = throwable as? LiftrixError ?: LiftrixError.BusinessLogicError(
-                                code = "NOTIFICATION_PREFERENCES_LOAD_FAILED",
-                                errorMessage = "Failed to load notification preferences",
-                                analyticsContext = mapOf(
-                                    "error" to (throwable.message ?: "Unknown error")
-                                )
-                            )
-                            updateState { currentState ->
-                                currentState.copy(
-                                    preferencesState = UiState.Error(liftrixError),
-                                    isLoading = false,
-                                    error = liftrixError.message
-                                )
-                            }
-                            Timber.e("Failed to load notification preferences: $liftrixError")
-                        }
+            val userId = getCurrentUserIdUseCase() ?: run {
+                updateState {
+                    it.copy(
+                        isLoading = false,
+                        error = "User not authenticated"
                     )
                 }
+                return@launch
+            }
+
+            val result = notificationPreferencesUseCase(userId)
+            result.fold(
+                onSuccess = { preferences ->
+                    updateState { currentState ->
+                        currentState.copy(
+                            preferencesState = UiState.Success(preferences),
+                            isLoading = false,
+                            error = null,
+                            notificationsEnabled = preferences.notificationsEnabled,
+                            socialNotifications = preferences.socialNotifications,
+                            workoutNotifications = preferences.workoutNotifications,
+                            achievementNotifications = preferences.achievementNotifications,
+                            reminderNotifications = preferences.reminderNotifications,
+                            gymBuddyPrs = preferences.gymBuddyPrs,
+                            followRequests = preferences.followRequests,
+                            postLikes = preferences.postLikes,
+                            postComments = preferences.postComments,
+                            mentions = preferences.mentions,
+                            quietHoursEnabled = preferences.quietHoursEnabled,
+                            quietHoursStart = preferences.quietHoursStart,
+                            quietHoursEnd = preferences.quietHoursEnd,
+                            batchSocialNotifications = preferences.batchSocialNotifications,
+                            notificationSound = preferences.notificationSound,
+                            notificationVibration = preferences.notificationVibration,
+                            showInAppNotifications = preferences.showInAppNotifications,
+                            socialDeliveryFrequency = mapDeliveryFrequency(preferences.deliveryFrequency),
+                            workoutReminders = preferences.reminderNotifications,
+                            restDayReminders = false, // Default until implemented
+                            personalRecords = preferences.achievementNotifications,
+                            milestoneAchievements = preferences.achievementNotifications
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    updateState { currentState ->
+                        currentState.copy(
+                            preferencesState = UiState.Error(error as LiftrixError),
+                            isLoading = false,
+                            error = error.message
+                        )
+                    }
+                    Timber.e("Failed to load notification preferences: $error")
+                }
+            )
         }
     }
 
@@ -285,18 +286,11 @@ class NotificationSettingsViewModel @Inject constructor(
             getMutedUsersCountUseCase()
                 .collect { result ->
                     result.fold(
-                        onSuccess = { count ->
+                        onSuccess = { count: Int ->
                             updateState { it.copy(mutedUsersCount = count) }
                         },
-                        onFailure = { throwable ->
-                            val liftrixError = throwable as? LiftrixError ?: LiftrixError.BusinessLogicError(
-                                code = "MUTED_USERS_COUNT_LOAD_FAILED",
-                                errorMessage = "Failed to load muted users count",
-                                analyticsContext = mapOf(
-                                    "error" to (throwable.message ?: "Unknown error")
-                                )
-                            )
-                            Timber.w("Failed to load muted users count: $liftrixError")
+                        onFailure = { error: Throwable ->
+                            Timber.w("Failed to load muted users count: $error")
                             // Don't show error for this, just use default count
                         }
                     )
@@ -310,11 +304,17 @@ class NotificationSettingsViewModel @Inject constructor(
     private fun updateNotificationPreference(
         update: NotificationPreferences.() -> NotificationPreferences
     ) {
-        val currentState = _uiState.value
-        
-        // Create updated preferences based on current UI state
-        val currentPreferences = NotificationPreferences(
-            userId = "", // Will be filled by use case
+        viewModelScope.launch {
+            val userId = getCurrentUserIdUseCase() ?: run {
+                updateState { it.copy(error = "User not authenticated") }
+                return@launch
+            }
+
+            val currentState = _uiState.value
+
+            // Create updated preferences based on current UI state
+            val currentPreferences = NotificationPreferences(
+                userId = userId,
             notificationsEnabled = currentState.notificationsEnabled,
             socialNotifications = currentState.socialNotifications,
             workoutNotifications = currentState.workoutNotifications,
@@ -337,41 +337,31 @@ class NotificationSettingsViewModel @Inject constructor(
             updatedAt = System.currentTimeMillis()
         )
         
-        val updatedPreferences = update(currentPreferences)
-        
-        // Show updating state
-        updateState { it.copy(isUpdatingPreferences = true) }
-        
-        viewModelScope.launch {
-            updateNotificationPreferencesUseCase(updatedPreferences)
-                .collect { result ->
-                    result.fold(
-                        onSuccess = {
-                            updateState { it.copy(isUpdatingPreferences = false) }
-                            Timber.d("Successfully updated notification preferences")
-                        },
-                        onFailure = { throwable ->
-                            val liftrixError = throwable as? LiftrixError ?: LiftrixError.BusinessLogicError(
-                                code = "NOTIFICATION_PREFERENCES_UPDATE_FAILED",
-                                errorMessage = "Failed to update notification preferences",
-                                analyticsContext = mapOf(
-                                    "error" to (throwable.message ?: "Unknown error")
-                                )
-                            )
-                            updateState { currentState ->
-                                currentState.copy(
-                                    isUpdatingPreferences = false,
-                                    error = "Failed to update preferences: ${liftrixError.message}"
-                                )
-                            }
-                            
-                            // Reload preferences to revert optimistic updates
-                            loadNotificationPreferences()
-                            
-                            Timber.e("Failed to update notification preferences: $liftrixError")
-                        }
-                    )
+            val updatedPreferences = update(currentPreferences)
+
+            // Show updating state
+            updateState { it.copy(isUpdatingPreferences = true) }
+
+            val updateResult = notificationPreferencesUseCase.update(updatedPreferences)
+            updateResult.fold(
+                onSuccess = { _ ->
+                    updateState { it.copy(isUpdatingPreferences = false) }
+                    Timber.d("Successfully updated notification preferences")
+                },
+                onFailure = { error ->
+                    updateState { currentState ->
+                        currentState.copy(
+                            isUpdatingPreferences = false,
+                            error = "Failed to update preferences: ${error.message}"
+                        )
+                    }
+
+                    // Reload preferences to revert optimistic updates
+                    loadNotificationPreferences()
+
+                    Timber.e("Failed to update notification preferences: $error")
                 }
+            )
         }
     }
 

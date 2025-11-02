@@ -106,7 +106,6 @@ import com.example.liftrix.domain.model.analytics.TrendDirection
 import com.example.liftrix.domain.model.analytics.CalorieSummary
 import com.example.liftrix.domain.model.analytics.UserLevel
 import com.example.liftrix.domain.model.analytics.WidgetPriority
-import com.example.liftrix.domain.usecase.analytics.CalorieAnalyticsUseCase
 import com.example.liftrix.ui.common.validation.ViewModelValidator
 import com.example.liftrix.core.extensions.collectAsOptimizedState
 import com.example.liftrix.ui.progress.NavigationCallbacks

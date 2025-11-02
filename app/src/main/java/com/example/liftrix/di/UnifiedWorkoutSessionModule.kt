@@ -1,6 +1,5 @@
 package com.example.liftrix.di
 
-import com.example.liftrix.domain.usecase.session.AddExerciseToSessionUseCase
 import com.example.liftrix.domain.usecase.session.StartWorkoutSessionUseCase
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
 import dagger.Module
@@ -45,12 +44,7 @@ object UnifiedWorkoutSessionModule {
     ): StartWorkoutSessionUseCase {
         return StartWorkoutSessionUseCase(sessionManager, workoutTemplateRepository)
     }
-    
-    @Provides
-    fun provideAddExerciseToSessionUseCase(
-        sessionManager: UnifiedWorkoutSessionManager,
-        exerciseRepository: com.example.liftrix.domain.repository.exercise.ExerciseRepository
-    ): AddExerciseToSessionUseCase {
-        return AddExerciseToSessionUseCase(sessionManager, exerciseRepository)
-    }
+
+    // Note: AddExerciseToSessionUseCase has been consolidated into SessionOperationsUseCase
+    // which is provided automatically via @Inject constructor
 }

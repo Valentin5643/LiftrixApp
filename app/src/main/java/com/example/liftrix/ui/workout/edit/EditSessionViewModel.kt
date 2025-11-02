@@ -8,8 +8,7 @@ import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.workout.GetWorkoutSessionForEditingRequest
 import com.example.liftrix.domain.usecase.workout.GetWorkoutSessionForEditingUseCase
-import com.example.liftrix.domain.usecase.workout.UpdateWorkoutSessionUseCase
-import com.example.liftrix.domain.usecase.workout.UpdateWorkoutSessionRequest
+import com.example.liftrix.domain.usecase.workout.WorkoutCommandUseCase
 import com.example.liftrix.domain.usecase.workout.WorkoutSessionEditingData
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.state.UiState
@@ -29,18 +28,18 @@ import javax.inject.Inject
 
 /**
  * EditSessionViewModel - ViewModel for editing completed workout sessions
- * 
+ *
  * This ViewModel handles historical data editing using the existing use cases:
  * - GetWorkoutSessionForEditingUseCase for loading session data
- * - UpdateWorkoutSessionUseCase for saving changes
- * 
+ * - WorkoutCommandUseCase for saving changes
+ *
  * The simplified approach leverages existing infrastructure while providing
  * the necessary functionality for session editing.
  */
 @HiltViewModel
 class EditSessionViewModel @Inject constructor(
     private val getWorkoutSessionForEditingUseCase: GetWorkoutSessionForEditingUseCase,
-    private val updateWorkoutSessionUseCase: UpdateWorkoutSessionUseCase,
+    private val workoutCommandUseCase: WorkoutCommandUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<EditSessionUiState, EditSessionEvent>(errorHandler) {
@@ -196,12 +195,10 @@ class EditSessionViewModel @Inject constructor(
             val workoutFromSession = convertSessionToWorkout(currentData.session)
             
             executeUseCase(
-                useCase = { 
-                    updateWorkoutSessionUseCase(
-                        UpdateWorkoutSessionRequest(
-                            updatedSession = workoutFromSession,
-                            originalCreatedAt = originalData.originalCreatedAt
-                        )
+                useCase = {
+                    workoutCommandUseCase.updateSession(
+                        updatedSession = workoutFromSession,
+                        originalCreatedAt = originalData.originalCreatedAt
                     )
                 },
                 onSuccess = { savedWorkout ->

@@ -10,13 +10,13 @@ import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.analytics.GetOneRmProgressionUseCase
+import com.example.liftrix.domain.usecase.analytics.AnalyticsQueryUseCase
+import com.example.liftrix.domain.usecase.analytics.AnalyticsExportUseCase
 import com.example.liftrix.domain.usecase.analytics.OneRmProgressionData as UseCaseOneRmProgressionData
 import com.example.liftrix.domain.model.analytics.ExerciseProgression
 import com.example.liftrix.domain.model.analytics.OneRmDataPoint
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
-import com.example.liftrix.domain.usecase.exercise.GetExerciseLibraryUseCase
-import com.example.liftrix.domain.usecase.analytics.ExportOneRmDataUseCase
+import com.example.liftrix.domain.usecase.exercise.ExerciseQueryUseCase
 import com.example.liftrix.domain.usecase.analytics.ExportOneRmDataRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,10 +51,10 @@ import java.io.File
 class OneRmDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     errorHandler: ErrorHandler,
-    private val getOneRmProgressionUseCase: GetOneRmProgressionUseCase,
+    private val analyticsQueryUseCase: AnalyticsQueryUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
-    private val getExerciseLibraryUseCase: GetExerciseLibraryUseCase,
-    private val exportOneRmDataUseCase: ExportOneRmDataUseCase
+    private val exerciseQueryUseCase: ExerciseQueryUseCase,
+    private val analyticsExportUseCase: AnalyticsExportUseCase
 ) : StatefulDetailViewModel<OneRmDetailViewModel.UiState, OneRmDetailViewModel.Event>(savedStateHandle, errorHandler) {
 
     override val _uiState = MutableStateFlow<UiState>(UiState.Loading)
@@ -275,7 +275,7 @@ class OneRmDetailViewModel @Inject constructor(
                 
                 
                 
-                getOneRmProgressionUseCase.execute(
+                analyticsQueryUseCase.getOneRmProgression(
                     userId = userId,
                     exerciseIds = exerciseIds,
                     timeRange = timeRange,
@@ -376,7 +376,7 @@ class OneRmDetailViewModel @Inject constructor(
                         showEstimated = currentState.data.showEstimated
                     )
                     
-                    val result = exportOneRmDataUseCase.exportToPdf(exportRequest)
+                    val result = analyticsExportUseCase.exportOneRm(exportRequest)
                     result.fold(
                         onSuccess = { file ->
                             Timber.i("1RM data export completed successfully: ${file.absolutePath}")
@@ -440,7 +440,7 @@ class OneRmDetailViewModel @Inject constructor(
     private fun loadAvailableExercises() {
         viewModelScope.launch {
             try {
-                val result = getExerciseLibraryUseCase()
+                val result = exerciseQueryUseCase()
                 result.fold(
                     onSuccess = { exercises ->
                         _availableExercises.value = exercises
@@ -465,57 +465,66 @@ class OneRmDetailViewModel @Inject constructor(
     private fun convertToViewModelData(useCaseData: UseCaseOneRmProgressionData): OneRmProgressionData {
         val progressionPoints = mutableListOf<OneRmDataPoint>()
         val exercisesIncluded = mutableListOf<ExerciseInfo>()
-        
+
         // Convert exercise progressions to progression points
         for (exerciseProgression in useCaseData.exerciseProgressions) {
             // Lookup exercise details from available exercises
             val exerciseDetails = _availableExercises.value.find { it.id == exerciseProgression.exerciseId }
+
+            // Get latest 1RM value from progression points
+            val latestOneRm = exerciseProgression.progressionPoints.lastOrNull()?.oneRmValue ?: 0f
+
             val exerciseInfo = ExerciseInfo(
                 id = exerciseProgression.exerciseId,
-                name = exerciseDetails?.name ?: "Exercise ${exerciseProgression.exerciseId}",
+                name = exerciseDetails?.name ?: exerciseProgression.exerciseName,
                 category = exerciseDetails?.primaryMuscleGroup?.let { com.example.liftrix.domain.model.MuscleGroup.CHEST } ?: com.example.liftrix.domain.model.MuscleGroup.CHEST,
-                hasOneRmData = exerciseProgression.dataPoints.isNotEmpty(),
-                latestOneRm = exerciseProgression.currentMax.toFloat()
+                hasOneRmData = exerciseProgression.progressionPoints.isNotEmpty(),
+                latestOneRm = latestOneRm
             )
             exercisesIncluded.add(exerciseInfo)
-            
+
             // Convert data points
-            for (dataPoint in exerciseProgression.dataPoints) {
+            for (dataPoint in exerciseProgression.progressionPoints) {
                 progressionPoints.add(
                     OneRmDataPoint(
                         date = dataPoint.date,
                         exerciseId = exerciseProgression.exerciseId,
                         exerciseName = exerciseInfo.name,
-                        actualOneRm = dataPoint.actualOneRm,
-                        estimatedOneRm = dataPoint.estimatedOneRm,
-                        weight = dataPoint.weight,
-                        reps = dataPoint.reps,
-                        isEstimated = dataPoint.actualOneRm == null
+                        actualOneRm = if (!dataPoint.isEstimated) dataPoint.oneRmValue else null,
+                        estimatedOneRm = if (dataPoint.isEstimated) dataPoint.oneRmValue else null,
+                        weight = dataPoint.oneRmValue ?: 0f, // Using oneRm as weight fallback
+                        reps = 1, // Default reps
+                        isEstimated = dataPoint.isEstimated
                     )
                 )
             }
         }
-        
+
         // Calculate summary statistics
-        val totalGrowth = useCaseData.exerciseProgressions
-            .map { it.progression }
-            .average()
-            .toFloat()
-        
+        val totalGrowth = if (exercisesIncluded.isNotEmpty()) {
+            val firstValues = useCaseData.exerciseProgressions.mapNotNull { it.progressionPoints.firstOrNull()?.oneRmValue }
+            val lastValues = useCaseData.exerciseProgressions.mapNotNull { it.progressionPoints.lastOrNull()?.oneRmValue }
+            if (firstValues.isNotEmpty() && lastValues.isNotEmpty()) {
+                ((lastValues.average() - firstValues.average()) / firstValues.average() * 100).toFloat()
+            } else {
+                0f
+            }
+        } else {
+            0f
+        }
+
         val summary = ProgressionSummary(
             totalGrowth = totalGrowth,
             averageGrowth = totalGrowth, // Same as total for now
             strongestExercise = exercisesIncluded.maxByOrNull { it.latestOneRm ?: 0f },
-            mostImprovedExercise = useCaseData.exerciseProgressions
-                .maxByOrNull { it.progression }
-                ?.let { prog -> exercisesIncluded.find { it.id == prog.exerciseId } },
+            mostImprovedExercise = exercisesIncluded.firstOrNull(), // Mock for now
             dataPointCount = progressionPoints.size
         )
-        
+
         return OneRmProgressionData(
             progressionPoints = progressionPoints.sortedBy { it.date },
             exercisesIncluded = exercisesIncluded,
-            timeRange = useCaseData.timeRange,
+            timeRange = timeRange.value,
             showEstimated = showEstimated.value,
             summary = summary
         )

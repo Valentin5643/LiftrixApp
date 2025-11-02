@@ -714,7 +714,7 @@ private fun ModernUserProfileContent(
                     workoutId = workout.id,
                     authorUsername = profile.username,
                     authorDisplayName = profile.displayName ?: profile.username,
-                    authorProfilePhotoUrl = profile.profilePhotoUrl,
+                    authorProfilePhotoUrl = profile.profileImageUrl,
                     caption = workout.name,
                     exercisesCount = workout.exerciseCount,
                     workoutDuration = workout.duration.replace("min", "").trim().toIntOrNull(),

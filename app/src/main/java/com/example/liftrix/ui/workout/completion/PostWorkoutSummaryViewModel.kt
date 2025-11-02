@@ -14,8 +14,7 @@ import com.example.liftrix.domain.usecase.sharing.ShareRequest
 import com.example.liftrix.domain.usecase.sharing.SharePlatform
 import com.example.liftrix.domain.usecase.sharing.ShareContentType
 import com.example.liftrix.domain.usecase.sharing.ShareWorkoutData
-import com.example.liftrix.domain.usecase.workout.GetWorkoutByIdUseCase
-import com.example.liftrix.domain.usecase.workout.GetWorkoutByIdRequest
+import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.ui.navigation.LiftrixRoute
@@ -36,7 +35,7 @@ import javax.inject.Inject
 class PostWorkoutSummaryViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val workoutRepository: WorkoutRepository,
-    private val getWorkoutByIdUseCase: GetWorkoutByIdUseCase,
+    private val workoutQueryUseCase: WorkoutQueryUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     private val prDetectionService: PRDetectionService,
     private val personalRecordRepository: PersonalRecordRepository,
@@ -62,12 +61,7 @@ class PostWorkoutSummaryViewModel @Inject constructor(
             }
             
             // Get workout details
-            val request = GetWorkoutByIdRequest(
-                workoutId = WorkoutId(workoutId),
-                userId = userId
-            )
-            
-            getWorkoutByIdUseCase(request).fold(
+            workoutQueryUseCase.getById(WorkoutId(workoutId), userId).fold(
                 onSuccess = { workout ->
                     if (workout == null) {
                         _uiState.value = PostWorkoutUiState.Error(

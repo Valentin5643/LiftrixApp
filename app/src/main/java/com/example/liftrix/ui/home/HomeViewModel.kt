@@ -51,7 +51,7 @@ class HomeViewModel @Inject constructor(
     private val analyticsService: AnalyticsService,
     private val socialRepository: SocialRepository,
     private val getWorkoutHistoryUseCase: GetWorkoutHistoryUseCase,
-    private val followUserUseCase: com.example.liftrix.domain.usecase.social.FollowUserUseCase,
+    private val socialRelationshipUseCase: com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<UiState<HomeScreenData>, HomeEvent>(errorHandler) {
 
@@ -442,7 +442,7 @@ class HomeViewModel @Inject constructor(
                     )
                 )
                 
-                followUserUseCase(
+                socialRelationshipUseCase.follow(
                     targetUserId = userId,
                     action = FollowAction.FOLLOW,
                     context = "HOME_DISCOVERY"
@@ -496,7 +496,7 @@ class HomeViewModel @Inject constructor(
     private fun unfollowUser(userId: String) {
         viewModelScope.launch {
             try {
-                followUserUseCase(
+                socialRelationshipUseCase.follow(
                     targetUserId = userId,
                     action = FollowAction.UNFOLLOW,
                     context = "HOME_DISCOVERY"

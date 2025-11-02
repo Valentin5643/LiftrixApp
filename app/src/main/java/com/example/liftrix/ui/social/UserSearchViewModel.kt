@@ -8,9 +8,9 @@ import com.example.liftrix.domain.model.social.SearchFilters
 import com.example.liftrix.domain.model.social.UserSearchResult
 import com.example.liftrix.domain.model.FitnessLevel
 import com.example.liftrix.domain.usecase.common.ErrorHandler
-import com.example.liftrix.domain.usecase.social.SearchUsersUseCase
+import com.example.liftrix.domain.usecase.social.SocialSearchUseCase
 import com.example.liftrix.domain.usecase.social.SearchUsersRequest
-import com.example.liftrix.domain.usecase.social.FollowUserUseCase
+import com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase
 import com.example.liftrix.domain.usecase.social.FollowAction
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.state.UiState
@@ -35,8 +35,8 @@ import javax.inject.Inject
 @OptIn(FlowPreview::class)
 @HiltViewModel
 class UserSearchViewModel @Inject constructor(
-    private val searchUsersUseCase: SearchUsersUseCase,
-    private val followUserUseCase: FollowUserUseCase,
+    private val socialSearchUseCase: SocialSearchUseCase,
+    private val socialRelationshipUseCase: SocialRelationshipUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<UserSearchUiState, UserSearchEvent>(errorHandler) {
 
@@ -188,7 +188,7 @@ class UserSearchViewModel @Inject constructor(
 
         executeUseCase(
             useCase = {
-                searchUsersUseCase(
+                socialSearchUseCase.searchUsers(
                     SearchUsersRequest(
                         query = query,
                         filters = filters,
@@ -258,7 +258,7 @@ class UserSearchViewModel @Inject constructor(
 
         executeUseCase(
             useCase = {
-                followUserUseCase(
+                socialRelationshipUseCase.followAction(
                     targetUserId = targetUserId,
                     action = action,
                     context = "SEARCH_RESULT"

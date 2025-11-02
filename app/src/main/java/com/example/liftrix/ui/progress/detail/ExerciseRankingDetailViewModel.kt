@@ -11,7 +11,7 @@ import com.example.liftrix.domain.model.analytics.RankingMetric
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.analytics.GetExerciseRankingUseCase
+import com.example.liftrix.domain.usecase.analytics.AnalyticsQueryUseCase
 import com.example.liftrix.domain.usecase.analytics.ExerciseRankingData as UseCaseExerciseRankingData
 import com.example.liftrix.domain.usecase.analytics.RankedExercise as UseCaseRankedExercise
 import com.example.liftrix.domain.usecase.analytics.PlateauStatus as UseCasePlateauStatus
@@ -43,7 +43,7 @@ import kotlinx.datetime.*
 class ExerciseRankingDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     errorHandler: ErrorHandler,
-    private val getExerciseRankingUseCase: GetExerciseRankingUseCase,
+    private val analyticsQueryUseCase: AnalyticsQueryUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : StatefulDetailViewModel<ExerciseRankingDetailViewModel.UiState, ExerciseRankingDetailViewModel.Event>(savedStateHandle, errorHandler) {
@@ -123,7 +123,7 @@ class ExerciseRankingDetailViewModel @Inject constructor(
                     Timber.e("Failed to load exercise rankings: User not authenticated")
                     return@launch
                 }
-                val result = getExerciseRankingUseCase.execute(
+                val result = analyticsQueryUseCase.getExerciseRanking(
                     userId = userId,
                     timeRange = _timeRange.value
                 )

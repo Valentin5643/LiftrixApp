@@ -60,7 +60,7 @@ import timber.log.Timber
 class ProgressDashboardCoordinator @Inject constructor(
     private val sessionManager: UnifiedWorkoutSessionManager,
     private val authRepository: AuthRepository,
-    private val getWeightUnitPreferenceUseCase: com.example.liftrix.domain.usecase.settings.GetWeightUnitPreferenceUseCase,
+    private val settingsQueryUseCase: com.example.liftrix.domain.usecase.settings.SettingsQueryUseCase,
     private val unitConversionService: com.example.liftrix.domain.service.UnitConversionService,
     errorHandler: ErrorHandler
 ) : BaseViewModel<UiState<CoordinatorState>, CoordinatorEvent>(errorHandler) {
@@ -226,7 +226,7 @@ class ProgressDashboardCoordinator @Inject constructor(
             authRepository.currentUser
                 .filterNotNull()
                 .flatMapLatest { user ->
-                    getWeightUnitPreferenceUseCase(user.uid)
+                    settingsQueryUseCase.getWeightUnitPreference(user.uid)
                 }
                 .catch { exception ->
                     Timber.e(exception, "Error observing weight unit preferences")

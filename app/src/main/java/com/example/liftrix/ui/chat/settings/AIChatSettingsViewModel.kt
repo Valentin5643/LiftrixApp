@@ -5,8 +5,7 @@ import com.example.liftrix.domain.model.chat.ChatPreferences
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
-import com.example.liftrix.domain.usecase.chat.ClearChatHistoryUseCase
-import com.example.liftrix.domain.usecase.chat.ExportChatHistoryUseCase
+import com.example.liftrix.domain.usecase.chat.ChatOperationsUseCase
 import com.example.liftrix.domain.usecase.chat.ExportFormat
 import com.example.liftrix.domain.usecase.chat.UpdateChatPreferencesUseCase
 import com.example.liftrix.domain.repository.ChatRepository
@@ -28,8 +27,7 @@ import javax.inject.Inject
 @HiltViewModel
 class AIChatSettingsViewModel @Inject constructor(
     private val updateChatPreferencesUseCase: UpdateChatPreferencesUseCase,
-    private val clearChatHistoryUseCase: ClearChatHistoryUseCase,
-    private val exportChatHistoryUseCase: ExportChatHistoryUseCase,
+    private val chatOperationsUseCase: ChatOperationsUseCase,
     private val chatRepository: ChatRepository,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     errorHandler: ErrorHandler
@@ -185,7 +183,7 @@ class AIChatSettingsViewModel @Inject constructor(
                 showClearHistoryDialog = false
             )
             
-            clearChatHistoryUseCase(
+            chatOperationsUseCase.clear(
                 confirmationText = confirmationText,
                 language = currentState.preferences?.preferredLanguage ?: "en"
             ).fold(
@@ -218,7 +216,7 @@ class AIChatSettingsViewModel @Inject constructor(
                 showExportDialog = false
             )
             
-            exportChatHistoryUseCase(format).fold(
+            chatOperationsUseCase.export(format).fold(
                 onSuccess = { exportData ->
                     Timber.i("Successfully exported chat history")
                     _uiState.value = _uiState.value.copy(
@@ -267,7 +265,7 @@ class AIChatSettingsViewModel @Inject constructor(
      */
     fun getRequiredConfirmationText(): String {
         val language = _uiState.value.preferences?.preferredLanguage ?: "en"
-        return clearChatHistoryUseCase.getRequiredConfirmationText(language)
+        return chatOperationsUseCase.getRequiredConfirmationText(language)
     }
 }
 

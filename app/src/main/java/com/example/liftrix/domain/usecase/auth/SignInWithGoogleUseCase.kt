@@ -9,7 +9,7 @@ import com.example.liftrix.domain.model.UserProfile
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.UserAccountRepository
 import com.example.liftrix.domain.repository.ProfileRepository
-import com.example.liftrix.domain.usecase.social.CreateSocialProfileUseCase
+import com.example.liftrix.domain.usecase.social.SocialProfileCommandUseCase
 import com.example.liftrix.domain.usecase.profile.SaveUserProfileUseCase
 import com.example.liftrix.sync.UserPublicSyncWorker
 import com.example.liftrix.sync.FollowRelationshipSyncWorker
@@ -34,7 +34,7 @@ class SignInWithGoogleUseCase @Inject constructor(
     private val authRepository: AuthRepository,
     private val userAccountRepository: UserAccountRepository,
     private val profileRepository: ProfileRepository,
-    private val createSocialProfileUseCase: CreateSocialProfileUseCase,
+    private val socialProfileCommandUseCase: SocialProfileCommandUseCase,
     private val saveUserProfileUseCase: SaveUserProfileUseCase,
     private val onboardingDataStore: OnboardingDataStore,
     @ApplicationContext private val context: Context
@@ -76,7 +76,7 @@ class SignInWithGoogleUseCase @Inject constructor(
                                 kotlinx.coroutines.delay(1000) // Allow UserAccount to be fully committed before social profile creation
                                 
                                 val socialProfileResult = runBlocking {
-                                    createSocialProfileUseCase(
+                                    socialProfileCommandUseCase.create(
                                         username = userAccount.username ?: "user_${user.uid.take(8)}",
                                         displayName = user.displayName ?: userAccount.username ?: "User",
                                         bio = null
@@ -173,7 +173,7 @@ class SignInWithGoogleUseCase @Inject constructor(
                             
                             // Check if social profile exists by attempting to create one
                             val socialProfileResult = runBlocking {
-                                createSocialProfileUseCase(
+                                socialProfileCommandUseCase.create(
                                     username = existingAccount.username!!,
                                     displayName = user.displayName ?: existingAccount.displayName ?: existingAccount.username!!,
                                     bio = null
@@ -252,7 +252,7 @@ class SignInWithGoogleUseCase @Inject constructor(
                                 // SOCIAL PROFILE FIX: Create social profile after username generation
                                 try {
                                     val socialProfileResult = runBlocking {
-                                        createSocialProfileUseCase(
+                                        socialProfileCommandUseCase.create(
                                             username = username,
                                             displayName = user.displayName ?: username,
                                             bio = null

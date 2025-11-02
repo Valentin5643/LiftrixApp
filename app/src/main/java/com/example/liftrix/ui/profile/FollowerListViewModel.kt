@@ -3,7 +3,7 @@ package com.example.liftrix.ui.profile
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.social.FollowRelationship
 import com.example.liftrix.domain.repository.social.FollowRepository
-import com.example.liftrix.domain.usecase.social.FollowUserUseCase
+import com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase
 import com.example.liftrix.domain.usecase.social.FollowAction
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
@@ -39,7 +39,7 @@ import javax.inject.Inject
 @HiltViewModel
 class FollowerListViewModel @Inject constructor(
     private val followRepository: FollowRepository,
-    private val followUserUseCase: FollowUserUseCase,
+    private val socialRelationshipUseCase: SocialRelationshipUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<FollowerListUiState, FollowerListEvent>(
@@ -278,8 +278,8 @@ class FollowerListViewModel @Inject constructor(
                 }
                 
                 Timber.d("Toggling follow status: $action for user: $userId")
-                
-                val result = followUserUseCase(
+
+                val result = socialRelationshipUseCase.followUser(
                     targetUserId = userId,
                     action = action
                 )

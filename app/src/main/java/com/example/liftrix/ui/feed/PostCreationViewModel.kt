@@ -9,7 +9,7 @@ import com.example.liftrix.domain.repository.social.FeedRepository
 import com.example.liftrix.domain.service.MediaUploadService
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
-import com.example.liftrix.domain.usecase.workout.GetWorkoutByIdUseCase
+import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
 import com.example.liftrix.domain.usecase.workout.GetWorkoutByIdRequest
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.model.toSummary
@@ -30,7 +30,7 @@ class PostCreationViewModel @Inject constructor(
     private val feedRepository: FeedRepository,
     private val mediaUploadService: MediaUploadService,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
-    private val getWorkoutByIdUseCase: GetWorkoutByIdUseCase,
+    private val workoutQueryUseCase: WorkoutQueryUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<PostCreationUiState, PostCreationEvent>(errorHandler) {
 
@@ -80,7 +80,7 @@ class PostCreationViewModel @Inject constructor(
                     userId = userId
                 )
 
-                val result = getWorkoutByIdUseCase(request)
+                val result = workoutQueryUseCase.getById(request.workoutId.value, request.userId)
                 result.fold(
                     onSuccess = { workout ->
                         if (workout != null) {

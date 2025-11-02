@@ -15,10 +15,9 @@ import com.example.liftrix.domain.model.TemplateExercise
 import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.domain.usecase.auth.GetAuthenticatedUserIdUseCase
-import com.example.liftrix.domain.usecase.exercise.GetExerciseDefaultsUseCase
-import com.example.liftrix.domain.usecase.exercise.SearchExercisesUseCase
+import com.example.liftrix.domain.usecase.exercise.ExerciseQueryUseCase
 import com.example.liftrix.domain.usecase.exercise.SearchableExercise
-import com.example.liftrix.domain.usecase.template.CreateWorkoutTemplateUseCase
+import com.example.liftrix.domain.usecase.template.TemplateCommandUseCase
 import com.example.liftrix.domain.usecase.workout.EstimateWorkoutDurationUseCase
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
 import com.example.liftrix.domain.repository.FolderRepository
@@ -49,11 +48,10 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class WorkoutTemplateCreationViewModel @Inject constructor(
-    private val createWorkoutTemplateUseCase: CreateWorkoutTemplateUseCase,
+    private val templateCommandUseCase: TemplateCommandUseCase,
     private val getAuthenticatedUserIdUseCase: GetAuthenticatedUserIdUseCase,
     private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
-    private val searchExercisesUseCase: SearchExercisesUseCase,
-    private val getExerciseDefaultsUseCase: GetExerciseDefaultsUseCase,
+    private val exerciseQueryUseCase: ExerciseQueryUseCase,
     private val estimateWorkoutDurationUseCase: EstimateWorkoutDurationUseCase,
     private val workoutTemplateRepository: WorkoutTemplateRepository,
     private val folderRepository: FolderRepository,
@@ -398,8 +396,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
      */
     private suspend fun initializeAvailableExercisesSync(): List<com.example.liftrix.domain.usecase.exercise.SearchableExercise> {
         return try {
-            
-            val exercises = searchExercisesUseCase.search("", Equipment.entries.toSet()).first()
+            val exercises = exerciseQueryUseCase.search("", Equipment.entries.toSet()).first()
             exercises
         } catch (e: Exception) {
             Timber.e(e, "Failed to load exercises, returning empty list")
@@ -438,7 +435,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
      */
     private fun loadAvailableExercises() {
         viewModelScope.launch {
-            searchExercisesUseCase.search("", Equipment.entries.toSet())
+            exerciseQueryUseCase.search("", Equipment.entries.toSet())
                 .catch { error ->
                     Timber.e(error, "Error loading available exercises")
                 }
@@ -608,27 +605,27 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                         }
                     }
                 
-                timber.log.Timber.d("🔥 TEMPLATE-VIEWMODEL-DEBUG: About to call CreateWorkoutTemplateUseCase")
+                timber.log.Timber.d("🔥 TEMPLATE-VIEWMODEL-DEBUG: About to call TemplateCommandUseCase.create()")
                 timber.log.Timber.d("🔥 TEMPLATE-VIEWMODEL-DEBUG: Final parameters - userId: $userId, name: $templateName, folderId: $effectiveFolderId, exercises: ${exercisesToSave.size}")
-                
-                val result = createWorkoutTemplateUseCase(
+
+                val result = templateCommandUseCase.create(
                     userId = userId,
                     name = templateName,
                     folderId = effectiveFolderId,
                     description = templateDescription,
                     exercises = exercisesToSave
                 )
-                
-                timber.log.Timber.d("🔥 TEMPLATE-VIEWMODEL-DEBUG: CreateWorkoutTemplateUseCase completed")
+
+                timber.log.Timber.d("🔥 TEMPLATE-VIEWMODEL-DEBUG: TemplateCommandUseCase.create() completed")
                 timber.log.Timber.d("🔥 TEMPLATE-VIEWMODEL-DEBUG: Result isSuccess: ${result.isSuccess}")
                 timber.log.Timber.d("🔥 TEMPLATE-VIEWMODEL-DEBUG: Result isFailure: ${result.isFailure}")
-                
+
                 if (result.isFailure) {
                     val error = result.exceptionOrNull()
-                    timber.log.Timber.e("🔥 TEMPLATE-VIEWMODEL-DEBUG: CreateWorkoutTemplateUseCase returned failure: ${error?.message}")
+                    timber.log.Timber.e("🔥 TEMPLATE-VIEWMODEL-DEBUG: TemplateCommandUseCase.create() returned failure: ${error?.message}")
                     timber.log.Timber.e("🔥 TEMPLATE-VIEWMODEL-DEBUG: Error type: ${error?.javaClass?.simpleName}")
                 }
-                
+
                 result
             },
             onSuccess = { template ->
@@ -798,7 +795,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
     fun addExerciseById(exerciseId: String, isCustomExercise: Boolean) {
         viewModelScope.launch {
             try {
-                val exercises = searchExercisesUseCase.search("", Equipment.entries.toSet()).first()
+                val exercises = exerciseQueryUseCase.search("", Equipment.entries.toSet()).first()
                 val searchableExercise = exercises.find { searchable ->
                     when (searchable) {
                         is SearchableExercise.LibraryExercise -> !isCustomExercise && searchable.exercise.id == exerciseId
@@ -905,7 +902,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                     return@launch
                 }
                 
-                val defaultsResult = getExerciseDefaultsUseCase(
+                val defaultsResult = exerciseQueryUseCase.getExerciseDefaults(
                     exerciseId = templateExercise.exerciseId,
                     userId = userId,
                     exerciseLibrary = exerciseLibrary
@@ -1046,10 +1043,10 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
             setState(WorkoutTemplateCreationUiState.Success(
                 data = currentData.copy(exerciseSearchQuery = query)
             ))
-            
+
             // Perform search
             viewModelScope.launch {
-                searchExercisesUseCase.search(query, Equipment.entries.toSet())
+                exerciseQueryUseCase.search(query, Equipment.entries.toSet())
                     .catch { error ->
                         Timber.e(error, "Error searching exercises")
                     }
