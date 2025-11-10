@@ -1,8 +1,8 @@
 package com.example.liftrix.domain.usecase.notifications
 
 import com.example.liftrix.domain.model.common.liftrixCatching
+import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.model.error.LiftrixResult
 import com.example.liftrix.domain.model.notifications.NotificationPreferences
 import com.example.liftrix.domain.repository.notifications.NotificationMuteRepository
 import com.example.liftrix.domain.repository.notifications.NotificationPreferencesRepository

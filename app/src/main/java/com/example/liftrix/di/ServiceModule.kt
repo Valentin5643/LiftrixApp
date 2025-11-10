@@ -134,38 +134,11 @@ abstract class ServiceModule {
         widgetOperationsServiceImpl: com.example.liftrix.domain.service.WidgetOperationsServiceImpl
     ): com.example.liftrix.domain.service.WidgetOperationsService
 
-    /**
-     * Binds TemplateValidationService interface to its implementation.
-     *
-     * Provides template validation logic for name, exercises, difficulty, and description.
-     */
-    @Binds
-    @Singleton
-    abstract fun bindTemplateValidationService(
-        templateValidationServiceImpl: com.example.liftrix.domain.service.TemplateValidationServiceImpl
-    ): com.example.liftrix.domain.service.TemplateValidationService
-
-    /**
-     * Binds WorkoutValidationService interface to its implementation.
-     *
-     * Provides workout validation logic for name, date, exercises, notes, and status transitions.
-     */
-    @Binds
-    @Singleton
-    abstract fun bindWorkoutValidationService(
-        workoutValidationServiceImpl: com.example.liftrix.domain.service.WorkoutValidationServiceImpl
-    ): com.example.liftrix.domain.service.WorkoutValidationService
-
-    /**
-     * Binds ProfileValidationService interface to its implementation.
-     *
-     * Provides profile validation logic for username, display name, bio, image URLs, and profile images.
-     */
-    @Binds
-    @Singleton
-    abstract fun bindProfileValidationService(
-        profileValidationServiceImpl: com.example.liftrix.domain.service.ProfileValidationServiceImpl
-    ): com.example.liftrix.domain.service.ProfileValidationService
+    // TODO: Create and restore validation service interfaces if needed
+    // The following validation services were removed as their interfaces do not exist:
+    // - TemplateValidationService
+    // - WorkoutValidationService
+    // - ProfileValidationService
 
     /**
      * Binds HelpCenterService interface to its implementation.

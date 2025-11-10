@@ -10,7 +10,6 @@ import com.example.liftrix.domain.service.MediaUploadService
 import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
-import com.example.liftrix.domain.usecase.workout.GetWorkoutByIdRequest
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.model.toSummary
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
@@ -75,12 +74,7 @@ class PostCreationViewModel @Inject constructor(
                     return@launch
                 }
 
-                val request = GetWorkoutByIdRequest(
-                    workoutId = WorkoutId(workoutId),
-                    userId = userId
-                )
-
-                val result = workoutQueryUseCase.getById(request.workoutId.value, request.userId)
+                val result = workoutQueryUseCase.getById(WorkoutId(workoutId), userId)
                 result.fold(
                     onSuccess = { workout ->
                         if (workout != null) {

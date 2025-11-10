@@ -491,7 +491,7 @@ class OneRmDetailViewModel @Inject constructor(
                         exerciseId = exerciseProgression.exerciseId,
                         exerciseName = exerciseInfo.name,
                         actualOneRm = if (!dataPoint.isEstimated) dataPoint.oneRmValue else null,
-                        estimatedOneRm = if (dataPoint.isEstimated) dataPoint.oneRmValue else null,
+                        estimatedOneRm = if (dataPoint.isEstimated) (dataPoint.oneRmValue ?: 0f) else 0f,
                         weight = dataPoint.oneRmValue ?: 0f, // Using oneRm as weight fallback
                         reps = 1, // Default reps
                         isEstimated = dataPoint.isEstimated

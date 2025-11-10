@@ -442,7 +442,7 @@ class HomeViewModel @Inject constructor(
                     )
                 )
                 
-                socialRelationshipUseCase.follow(
+                socialRelationshipUseCase.followAction(
                     targetUserId = userId,
                     action = FollowAction.FOLLOW,
                     context = "HOME_DISCOVERY"
@@ -496,7 +496,7 @@ class HomeViewModel @Inject constructor(
     private fun unfollowUser(userId: String) {
         viewModelScope.launch {
             try {
-                socialRelationshipUseCase.follow(
+                socialRelationshipUseCase.followAction(
                     targetUserId = userId,
                     action = FollowAction.UNFOLLOW,
                     context = "HOME_DISCOVERY"

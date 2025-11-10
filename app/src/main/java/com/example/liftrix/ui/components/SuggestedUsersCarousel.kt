@@ -500,7 +500,7 @@ class SuggestedUsersCarouselViewModel @javax.inject.Inject constructor(
                     it.copy(followingUsers = it.followingUsers + userId) 
                 }
                 
-                val result = socialRelationshipUseCase.follow(
+                val result = socialRelationshipUseCase.followAction(
                     targetUserId = userId,
                     action = com.example.liftrix.domain.usecase.social.FollowAction.FOLLOW,
                     context = "SUGGESTED_USERS_CAROUSEL"

@@ -7,6 +7,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.ProgressStatsRepository
+import com.example.liftrix.domain.repository.DashboardData
 import com.example.liftrix.service.ProgressDataService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -344,7 +345,7 @@ class AnalyticsQueryUseCase @Inject constructor(
             val volumeAnalysis = getVolumeAnalysis(userId, VolumeGrouping.TOTAL, timeRange).getOrThrow()
             val oneRmProgression = getOneRmProgression(userId, null, timeRange, true).getOrThrow()
             val workoutFrequency = getWorkoutFrequency(userId, timeRange).getOrThrow()
-            val muscleGroupAnalytics = getMuscleGroupAnalytics(userId, timeRange).getOrThrow()
+            val muscleGroupAnalytics = getMuscleGroupAnalytics(userId, null, timeRange).getOrThrow()
             val exerciseRanking = getExerciseRanking(userId, timeRange = timeRange, limit = 10).getOrThrow()
 
             ComprehensiveAnalyticsData(
@@ -489,3 +490,94 @@ data class ComprehensiveAnalyticsData(
     val topExercises: List<ExerciseRanking>,
     val timeRange: TimeRangeType
 )
+
+/**
+ * Exercise performance data for detailed exercise analytics (consolidation of old GetExerciseRankingUseCase).
+ * Contains aggregated performance metrics for a single exercise over a time period.
+ */
+data class ExercisePerformanceData(
+    val exerciseId: String,
+    val exerciseName: String,
+    val muscleGroup: String = "",
+    val totalVolume: Double = 0.0,
+    val totalSets: Int = 0,
+    val workoutDays: Int = 0,
+    val maxEstimated1RM: Double = 0.0,
+    val performanceScore: Double = 0.0,
+    val volumeHistory: List<PerformanceDataPoint> = emptyList(),
+    val oneRmHistory: List<PerformanceDataPoint> = emptyList()
+)
+
+/**
+ * Individual data point in exercise performance history.
+ */
+data class PerformanceDataPoint(
+    val date: kotlinx.datetime.LocalDate,
+    val volume: Double = 0.0,
+    val weight: Double = 0.0,
+    val reps: Int = 0,
+    val oneRm: Double = 0.0  // For 1RM progression tracking
+)
+
+/**
+ * Workout data for frequency analytics (consolidation of old GetWorkoutFrequencyAnalyticsUseCase).
+ * Simplified workout representation for frequency calculations and heatmap generation.
+ */
+data class WorkoutData(
+    val id: String,
+    val date: kotlinx.datetime.LocalDate,
+    val durationMinutes: Int,
+    val exerciseCount: Int
+)
+
+/**
+ * Detailed ranked exercise data with plateau detection and recommendations.
+ * Consolidation of old GetExerciseRankingUseCase output.
+ */
+data class ExerciseRankingData(
+    val rankedExercises: List<RankedExercise>,
+    val topPerformer: RankedExercise? = null,
+    val mostImproved: RankedExercise? = null,
+    val needsAttention: List<RankedExercise> = emptyList(),
+    val overallScore: Double = 0.0,
+    val timeRange: TimeRangeType = TimeRangeType.MONTH,
+    val isEmpty: Boolean = rankedExercises.isEmpty()
+)
+
+/**
+ * Individual ranked exercise with full performance metrics.
+ */
+data class RankedExercise(
+    val rank: Int,
+    val exerciseId: String,
+    val exerciseName: String,
+    val performanceScore: Double,
+    val totalVolume: Double,
+    val workoutDays: Int,
+    val totalSets: Int,
+    val maxEstimated1RM: Double,
+    val plateauStatus: PlateauStatus,
+    val trend: PerformanceTrend,
+    val recommendations: List<String> = emptyList(),
+    val muscleGroup: String = ""
+)
+
+/**
+ * Plateau detection status for exercises
+ */
+enum class PlateauStatus {
+    PROGRESSING,
+    STABLE,
+    STAGNANT,
+    DECLINING,
+    INSUFFICIENT_DATA
+}
+
+/**
+ * Performance trend direction for exercises
+ */
+enum class PerformanceTrend {
+    IMPROVING,
+    STABLE,
+    DECLINING
+}

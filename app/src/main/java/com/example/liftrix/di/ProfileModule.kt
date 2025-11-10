@@ -7,8 +7,8 @@ import com.example.liftrix.domain.repository.ProfileRepository
 import com.example.liftrix.domain.usecase.GetProfileUseCase
 import com.example.liftrix.domain.usecase.SaveProfileUseCase
 import com.example.liftrix.domain.usecase.ValidateProfileInputUseCase
-import com.example.liftrix.domain.usecase.profile.DeleteProfileImageUseCase
-import com.example.liftrix.domain.usecase.profile.UploadProfileImageUseCase
+import com.example.liftrix.domain.usecase.profile.ProfileImageOperationsUseCase
+import com.example.liftrix.domain.repository.social.SocialProfileRepository
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -60,8 +60,23 @@ abstract class ProfileModule {
          */
         @Provides
         @Singleton
-        fun provideValidateProfileInputUseCase(): ValidateProfileInputUseCase = 
+        fun provideValidateProfileInputUseCase(): ValidateProfileInputUseCase =
             ValidateProfileInputUseCase()
+
+        /**
+         * Provides ProfileImageOperationsUseCase with singleton scope.
+         * Consolidates upload, delete, and sync profile image operations.
+         */
+        @Provides
+        @Singleton
+        fun provideProfileImageOperationsUseCase(
+            profileImageRepository: ProfileImageRepository,
+            socialProfileRepository: SocialProfileRepository
+        ): ProfileImageOperationsUseCase =
+            ProfileImageOperationsUseCase(
+                profileImageRepository = profileImageRepository,
+                socialProfileRepository = socialProfileRepository
+            )
 
     }
 } 

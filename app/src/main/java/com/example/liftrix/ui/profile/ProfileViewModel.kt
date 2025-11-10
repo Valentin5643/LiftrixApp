@@ -548,14 +548,28 @@ class ProfileViewModel @Inject constructor(
                 }
                 
                 // Simulate progress updates (in real implementation, this would come from use case)
-                updateState { 
+                updateState {
                     it.copy(imageUploadState = ImageUploadState.Uploading(progress = 0.3f))
                 }
-                
+
+                // Process image to bytes before upload
+                val inputStream = context.contentResolver.openInputStream(imageUri)
+                if (inputStream == null) {
+                    updateState {
+                        it.copy(
+                            imageUploadState = ImageUploadState.Error("Cannot read image"),
+                            lastOperation = null
+                        )
+                    }
+                    return@launch
+                }
+
+                val imageBytes = inputStream.readBytes()
+                inputStream.close()
+
                 val result = profileImageOperationsUseCase.upload(
                     userId = userId,
-                    imageUri = imageUri,
-                    cropRect = cropRect
+                    imageBytes = imageBytes
                 )
                 
                 if (result.isSuccess) {

@@ -276,3 +276,7 @@ class ProfileImageOperationsUseCase @Inject constructor(
         private const val MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024 // 5MB
     }
 }
+
+// Type aliases for backward compatibility with old use case names
+typealias UploadProfileImageUseCase = ProfileImageOperationsUseCase
+typealias DeleteProfileImageUseCase = ProfileImageOperationsUseCase

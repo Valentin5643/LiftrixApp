@@ -86,13 +86,13 @@ class NotificationActionService : IntentService("NotificationActionService") {
         
         runBlocking {
             try {
-                // Accept the follow request using the FollowUserUseCase
-                val result = socialRelationshipUseCase.followUser(
+                // Accept the follow request using the SocialRelationshipUseCase
+                val result = socialRelationshipUseCase.followAction(
                     targetUserId = fromUser,
                     action = com.example.liftrix.domain.usecase.social.FollowAction.ACCEPT,
                     context = "NOTIFICATION_ACTION"
                 )
-                
+
                 result.fold(
                     onSuccess = { followStatus ->
                         Timber.i("Successfully accepted follow request from $fromUser. Status: $followStatus")
@@ -141,13 +141,13 @@ class NotificationActionService : IntentService("NotificationActionService") {
         
         runBlocking {
             try {
-                // Decline the follow request using the FollowUserUseCase
-                val result = socialRelationshipUseCase.followUser(
+                // Decline the follow request using the SocialRelationshipUseCase
+                val result = socialRelationshipUseCase.followAction(
                     targetUserId = fromUser,
                     action = com.example.liftrix.domain.usecase.social.FollowAction.DECLINE,
                     context = "NOTIFICATION_ACTION"
                 )
-                
+
                 result.fold(
                     onSuccess = { followStatus ->
                         Timber.i("Successfully declined follow request from $fromUser. Status: $followStatus")

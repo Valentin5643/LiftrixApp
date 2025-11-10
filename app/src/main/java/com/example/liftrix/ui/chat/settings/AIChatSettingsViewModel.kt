@@ -183,7 +183,7 @@ class AIChatSettingsViewModel @Inject constructor(
                 showClearHistoryDialog = false
             )
             
-            chatOperationsUseCase.clear(
+            chatOperationsUseCase.clearAllHistory(
                 confirmationText = confirmationText,
                 language = currentState.preferences?.preferredLanguage ?: "en"
             ).fold(
@@ -216,7 +216,7 @@ class AIChatSettingsViewModel @Inject constructor(
                 showExportDialog = false
             )
             
-            chatOperationsUseCase.export(format).fold(
+            chatOperationsUseCase.exportHistory(format).fold(
                 onSuccess = { exportData ->
                     Timber.i("Successfully exported chat history")
                     _uiState.value = _uiState.value.copy(

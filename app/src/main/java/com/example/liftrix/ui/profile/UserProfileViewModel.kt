@@ -191,7 +191,7 @@ class UserProfileViewModel @Inject constructor(
                 
                 Timber.d("Executing follow action: $action for user: ${profile.userId}")
 
-                val result = socialRelationshipUseCase.followUser(
+                val result = socialRelationshipUseCase.followAction(
                     targetUserId = profile.userId,
                     action = action,
                     context = "USER_PROFILE_VIEW"
@@ -261,7 +261,8 @@ class UserProfileViewModel @Inject constructor(
                 updateState { it.copy(isFollowActionLoading = true) }
 
                 val result = socialRelationshipUseCase.blockUser(
-                    targetUserId = profile.userId
+                    targetUserId = profile.userId,
+                    shouldBlock = true
                 )
                 
                 if (result.isSuccess) {
@@ -966,7 +967,7 @@ class UserProfileViewModel @Inject constructor(
             try {
                 updateState { it.copy(engagementLoadingPosts = it.engagementLoadingPosts + postId) }
                 
-                val result = postEngagementUseCase.getStatus(postId)
+                val result = postEngagementUseCase.getEngagementStatus(postId)
                 
                 result.fold(
                     onSuccess = { engagementStatus ->

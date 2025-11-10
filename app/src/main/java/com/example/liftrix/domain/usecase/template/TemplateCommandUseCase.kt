@@ -14,7 +14,6 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
-import com.example.liftrix.domain.service.TemplateValidationService
 import com.example.liftrix.domain.usecase.workout.EstimateWorkoutDurationUseCase
 import kotlinx.coroutines.flow.first
 import timber.log.Timber
@@ -50,7 +49,6 @@ class TemplateCommandUseCase @Inject constructor(
     private val templateRepository: WorkoutTemplateRepository,
     private val folderRepository: FolderRepository,
     private val authRepository: AuthRepository,
-    private val validationService: TemplateValidationService,
     private val estimateWorkoutDurationUseCase: EstimateWorkoutDurationUseCase
 ) {
 
@@ -121,15 +119,10 @@ class TemplateCommandUseCase @Inject constructor(
         ) {
             Timber.d("CREATE-TEMPLATE: Starting template creation for user=$userId, name=$name")
 
-            // Validate inputs using validation service
+            // Validate inputs
             require(userId.isNotBlank()) { "User ID cannot be blank" }
-            validationService.validateTemplateRequest(
-                name = name,
-                description = description,
-                exercises = exercises,
-                difficultyLevel = difficultyLevel,
-                estimatedDurationMinutes = estimatedDurationMinutes
-            ).getOrThrow()
+            require(name.isNotBlank()) { "Template name cannot be blank" }
+            require(name.length <= WorkoutTemplate.MAX_NAME_LENGTH) { "Template name too long" }
 
             // Ensure default folder exists before creating template
             val defaultFolder = folderRepository.getOrCreateDefaultFolder(userId).getOrThrow()
@@ -414,40 +407,41 @@ class TemplateCommandUseCase @Inject constructor(
     /**
      * Converts a workout session to a template.
      */
-    private fun convertSessionToTemplate(
+    private suspend fun convertSessionToTemplate(
         session: UnifiedWorkoutSession,
         templateName: String,
         templateDescription: String?,
         defaultFolderId: String
     ): WorkoutTemplate {
         val templateExercises = session.exercises.mapIndexed { index, exercise ->
+            // Extract target reps and weight from the first set (or use null if no sets)
+            val firstSet = exercise.sets.firstOrNull()
+            val targetReps = firstSet?.targetReps?.let { Reps(it) }
+            val targetWeight = firstSet?.targetWeight
+
             TemplateExercise(
-                exerciseId = exercise.libraryExercise.id.let { com.example.liftrix.domain.model.ExerciseId(it) },
-                name = exercise.libraryExercise.name,
-                primaryMuscle = exercise.libraryExercise.primaryMuscleGroup,
-                equipment = exercise.libraryExercise.equipment?.let { Equipment.valueOf(it) },
+                exerciseId = exercise.exerciseId,
+                name = exercise.name,
+                primaryMuscle = exercise.primaryMuscle,
+                equipment = exercise.equipment,
                 orderIndex = index,
                 targetSets = exercise.sets.size,
-                targetReps = exercise.targetReps?.let { Reps(it) },
-                targetWeight = exercise.targetWeight?.let { Weight(it, Weight.Unit.KG) },
+                targetReps = targetReps,
+                targetWeight = targetWeight,
                 notes = exercise.notes
             )
         }
 
-        val estimatedDuration = estimateWorkoutDurationUseCase.estimateDurationMinutes(
-            exerciseCount = templateExercises.size,
-            totalSets = templateExercises.sumOf { it.targetSets ?: 0 }
-        )
-
         val difficultyLevel = calculateDifficultyLevel(templateExercises)
 
-        return WorkoutTemplate(
+        // Create the template first
+        val template = WorkoutTemplate(
             id = WorkoutTemplateId.generate(),
             userId = session.userId,
             name = templateName,
             description = templateDescription,
             exercises = templateExercises,
-            estimatedDurationMinutes = estimatedDuration,
+            estimatedDurationMinutes = 0, // Will be set below
             difficultyLevel = difficultyLevel,
             folderId = defaultFolderId,
             usageCount = 0,
@@ -455,6 +449,12 @@ class TemplateCommandUseCase @Inject constructor(
             createdAt = Instant.now(),
             updatedAt = Instant.now()
         )
+
+        // Estimate duration using the complete template
+        val estimatedDuration = estimateWorkoutDurationUseCase.estimateDurationMinutes(template)
+
+        // Return template with estimated duration
+        return template.copy(estimatedDurationMinutes = estimatedDuration)
     }
 
     /**

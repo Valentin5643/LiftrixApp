@@ -279,7 +279,7 @@ class FollowerListViewModel @Inject constructor(
                 
                 Timber.d("Toggling follow status: $action for user: $userId")
 
-                val result = socialRelationshipUseCase.followUser(
+                val result = socialRelationshipUseCase.followAction(
                     targetUserId = userId,
                     action = action
                 )

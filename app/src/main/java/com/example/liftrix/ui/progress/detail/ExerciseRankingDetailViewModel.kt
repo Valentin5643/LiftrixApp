@@ -129,7 +129,33 @@ class ExerciseRankingDetailViewModel @Inject constructor(
                 )
                 
                 result.fold(
-                    onSuccess = { data ->
+                    onSuccess = { rankings ->
+                        // Convert List<ExerciseRanking> to ExerciseRankingData format
+                        val rankedExercises = rankings.map { ranking ->
+                            UseCaseRankedExercise(
+                                rank = ranking.rank,
+                                exerciseId = ranking.exerciseId,
+                                exerciseName = ranking.exerciseName,
+                                performanceScore = ranking.performanceScore.toDouble(),
+                                totalVolume = 0.0, // Not available in simplified ranking
+                                workoutDays = 0,
+                                totalSets = 0,
+                                maxEstimated1RM = 0.0,
+                                plateauStatus = UseCasePlateauStatus.STABLE,
+                                trend = UseCasePerformanceTrend.STABLE,
+                                recommendations = emptyList(),
+                                muscleGroup = ranking.muscleGroup
+                            )
+                        }
+                        val data = UseCaseExerciseRankingData(
+                            rankedExercises = rankedExercises,
+                            topPerformer = rankedExercises.firstOrNull(),
+                            mostImproved = null,
+                            needsAttention = emptyList(),
+                            overallScore = 0.0,
+                            timeRange = _timeRange.value,
+                            isEmpty = rankedExercises.isEmpty()
+                        )
                         val viewModelData = convertToViewModelData(data)
                         
                         val loadTime = System.currentTimeMillis() - startTime

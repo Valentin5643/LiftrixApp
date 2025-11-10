@@ -16,8 +16,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
-import com.example.liftrix.domain.usecase.profile.DeleteProfileImageUseCase
-import com.example.liftrix.domain.usecase.profile.UploadProfileImageUseCase
+import com.example.liftrix.domain.usecase.profile.ProfileImageOperationsUseCase
 import com.example.liftrix.ui.navigation.LiftrixRoute
 import com.example.liftrix.ui.theme.LiftrixTheme
 import kotlinx.coroutines.launch
@@ -60,8 +59,7 @@ fun ProfileImageManager(
     currentImageUrl: String?,
     displayName: String?,
     userId: String,
-    uploadUseCase: UploadProfileImageUseCase,
-    deleteUseCase: DeleteProfileImageUseCase,
+    profileImageOperationsUseCase: ProfileImageOperationsUseCase,
     navController: NavController,
     size: Dp = 120.dp,
     onImageUpdated: (String?) -> Unit = { },
@@ -98,10 +96,19 @@ fun ProfileImageManager(
                     // Simulate upload progress (in real implementation, this would come from the use case)
                     uploadProgress = 0.3f
                     
-                    val result = uploadUseCase(
+                    // Process image to bytes
+                    val inputStream = context.contentResolver.openInputStream(selectedImageUri!!)
+                    if (inputStream == null) {
+                        errorMessage = "Cannot read image"
+                        onError("Cannot read image")
+                        return@launch
+                    }
+                    val imageBytes = inputStream.readBytes()
+                    inputStream.close()
+
+                    val result = profileImageOperationsUseCase.upload(
                         userId = userId,
-                        imageUri = selectedImageUri!!,
-                        cropRect = cropRect
+                        imageBytes = imageBytes
                     )
                     
                     uploadProgress = 1f
@@ -143,7 +150,7 @@ fun ProfileImageManager(
                 
                 Timber.d("Starting image deletion for user: $userId")
                 
-                val result = deleteUseCase(userId)
+                val result = profileImageOperationsUseCase.delete(userId)
                 
                 if (result.isSuccess) {
                     successMessage = "Profile picture removed successfully!"
