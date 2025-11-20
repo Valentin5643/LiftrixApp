@@ -3,7 +3,7 @@ package com.example.liftrix.ui.common.sync
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.repository.SyncStatusRepository
-import com.example.liftrix.domain.usecase.auth.GetAuthenticatedUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.sync.SyncManager
 import com.example.liftrix.sync.SyncStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,7 +40,7 @@ import javax.inject.Inject
 class SyncStatusViewModel @Inject constructor(
     private val syncStatusRepository: SyncStatusRepository,
     private val syncManager: SyncManager,
-    private val getAuthenticatedUserIdUseCase: GetAuthenticatedUserIdUseCase
+    private val authQueryUseCase: AuthQueryUseCase
 ) : ViewModel() {
 
     private val _currentUserId = MutableStateFlow<String?>(null)
@@ -208,7 +208,10 @@ class SyncStatusViewModel @Inject constructor(
     private fun loadCurrentUser() {
         viewModelScope.launch {
             try {
-                val userId = getAuthenticatedUserIdUseCase()
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { null }
+                )
                 _currentUserId.value = userId
                 Timber.d("SyncStatusViewModel: Current user loaded: $userId")
             } catch (e: Exception) {

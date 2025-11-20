@@ -7,7 +7,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.social.*
 import com.example.liftrix.domain.repository.social.FeedRepository
 import com.example.liftrix.domain.service.MediaUploadService
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
 import com.example.liftrix.domain.model.WorkoutId
@@ -28,7 +28,7 @@ import javax.inject.Inject
 class PostCreationViewModel @Inject constructor(
     private val feedRepository: FeedRepository,
     private val mediaUploadService: MediaUploadService,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     private val workoutQueryUseCase: WorkoutQueryUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<PostCreationUiState, PostCreationEvent>(errorHandler) {
@@ -63,16 +63,18 @@ class PostCreationViewModel @Inject constructor(
         
         viewModelScope.launch {
             try {
-                val userId = getCurrentUserIdUseCase()
-                if (userId == null) {
-                    updateState { currentState ->
-                        currentState.copy(
-                            isLoading = false,
-                            error = "User not authenticated"
-                        )
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = {
+                        updateState { currentState ->
+                            currentState.copy(
+                                isLoading = false,
+                                error = "User not authenticated"
+                            )
+                        }
+                        return@launch
                     }
-                    return@launch
-                }
+                )
 
                 val result = workoutQueryUseCase.getById(WorkoutId(workoutId), userId)
                 result.fold(
@@ -186,18 +188,20 @@ class PostCreationViewModel @Inject constructor(
         }
         
         viewModelScope.launch {
-            val userId = getCurrentUserIdUseCase()
-            if (userId != null) {
-                createPostForUser(userId, state)
-            } else {
-                updateState { currentState ->
-                    currentState.copy(
-                        isCreatingPost = false,
-                        error = "Authentication required"
-                    )
+            val userId = authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it },
+                onFailure = {
+                    updateState { currentState ->
+                        currentState.copy(
+                            isCreatingPost = false,
+                            error = "Authentication required"
+                        )
+                    }
+                    Timber.e("Failed to get current user ID for post creation")
+                    return@launch
                 }
-                Timber.e("Failed to get current user ID for post creation")
-            }
+            )
+            createPostForUser(userId, state)
         }
     }
 

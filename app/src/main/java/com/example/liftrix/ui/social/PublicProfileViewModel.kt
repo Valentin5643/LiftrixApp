@@ -4,7 +4,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.PublicUserProfile
 import com.example.liftrix.domain.usecase.common.ErrorHandler
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.social.SocialProfileQueryUseCase
 import com.example.liftrix.domain.usecase.social.GetPublicProfileRequest
 import com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase
@@ -37,7 +37,7 @@ import javax.inject.Inject
 class PublicProfileViewModel @Inject constructor(
     private val socialProfileQueryUseCase: SocialProfileQueryUseCase,
     private val socialRelationshipUseCase: SocialRelationshipUseCase,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     private val feedRepository: FeedRepository,
     private val engagementRepository: EngagementRepository,
     errorHandler: ErrorHandler
@@ -152,7 +152,10 @@ class PublicProfileViewModel @Inject constructor(
     private fun loadUserPosts(userId: String) {
         viewModelScope.launch {
             // Get current user ID, or use empty string for anonymous viewing
-            val currentUserId = _uiState.value.currentUserId ?: getCurrentUserIdUseCase() ?: ""
+            val currentUserId = _uiState.value.currentUserId ?: authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it },
+                onFailure = { "" }
+            )
             
             val postsFlow = feedRepository.getUserPosts(
                 userId = userId,
@@ -418,7 +421,10 @@ class PublicProfileViewModel @Inject constructor(
      */
     private fun loadCurrentUserId() {
         viewModelScope.launch {
-            val currentUserId = getCurrentUserIdUseCase()
+            val currentUserId = authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it },
+                onFailure = { null }
+            )
             updateState { it.copy(currentUserId = currentUserId) }
         }
     }

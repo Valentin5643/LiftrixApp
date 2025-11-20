@@ -67,7 +67,7 @@ import com.example.liftrix.domain.model.ProgressPhoto
 import com.example.liftrix.domain.model.BodyPart
 import com.example.liftrix.domain.model.PhotoType
 import com.example.liftrix.ui.home.HomeScreen
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.ui.settings.sync.SyncSettingsViewModel
 import com.example.liftrix.ui.share.ShareWorkoutViewModel
 import com.example.liftrix.ui.progress.ProgressComparisonViewModel
@@ -561,12 +561,15 @@ fun UnifiedNavigationContainer(
                 }
                 
                 composable<LiftrixRoute.SyncSettings> {
-                    val getCurrentUserIdUseCase: GetCurrentUserIdUseCase = hiltViewModel<SyncSettingsViewModel>().getCurrentUserIdUseCase
+                    val authQueryUseCase: AuthQueryUseCase = hiltViewModel<SyncSettingsViewModel>().authQueryUseCase
                     var currentUserId by remember { mutableStateOf<String?>(null) }
                     var isLoading by remember { mutableStateOf(true) }
-                    
+
                     LaunchedEffect(Unit) {
-                        currentUserId = getCurrentUserIdUseCase()
+                        currentUserId = authQueryUseCase(waitForAuth = false).fold(
+                            onSuccess = { it },
+                            onFailure = { null }
+                        )
                         isLoading = false
                     }
                     
@@ -1364,7 +1367,7 @@ private data class BottomNavItem(
 @HiltViewModel
 class UnifiedNavigationViewModel @Inject constructor(
     val sessionManager: UnifiedWorkoutSessionManager,  // Made public for WorkoutScreen access
-    private val getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+    private val authQueryUseCase: com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 ) : ViewModel() {
     
     // Direct access to current session
@@ -1481,7 +1484,10 @@ class UnifiedNavigationViewModel @Inject constructor(
      */
     suspend fun getCurrentUserId(): String? {
         return try {
-            getCurrentUserIdUseCase()
+            authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it },
+                onFailure = { null }
+            )
         } catch (e: Exception) {
             timber.log.Timber.e(e, "Error getting current user ID")
             null

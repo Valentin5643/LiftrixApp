@@ -1,0 +1,260 @@
+LIFTRIXAPP USE CASE STRUCTURE - COMPLETE INVENTORY
+===================================================
+
+Generated: November 11, 2025
+Total Files: 82 (80 use cases + 2 utilities)
+Directories: 28 subdirectories + 1 root level
+
+CONSOLIDATED USE CASES (25 - Modern Pattern)
+=============================================
+
+1. AnalyticsQueryUseCase (replaces 5 old use cases)
+   - getVolumeAnalysis, getOneRmProgression, getWorkoutFrequency, getMuscleGroupAnalytics, getExerciseRanking
+   
+2. AnalyticsExportUseCase
+3. DashboardCommandUseCase
+4. WidgetPreferencesUseCase
+5. WidgetMigrationUseCase
+6. AccountCommandUseCase
+7. AccountQueryUseCase
+8. ChatOperationsUseCase
+9. DataImportUseCase
+10. ExerciseQueryUseCase
+11. FolderOperationsUseCase
+12. NotificationPreferencesUseCase
+13. ProfileImageOperationsUseCase
+14. SessionOperationsUseCase
+15. SettingsCommandUseCase
+16. SettingsQueryUseCase
+17. SocialProfileQueryUseCase (replaces 3 old use cases)
+    - getPublicProfile, getDiscoverableProfiles, checkUsernameAvailability
+18. SocialProfileCommandUseCase
+19. SocialRelationshipUseCase
+20. SocialSearchUseCase
+21. PostEngagementUseCase
+22. TemplateQueryUseCase
+23. TemplateCommandUseCase
+24. WorkoutCommandUseCase (replaces 2 old use cases)
+    - updateSession, addExercise, addMultipleExercises, addCustomExercise
+25. WorkoutQueryUseCase
+
+DOMAIN-SPECIFIC USE CASES (54+ - Legacy/Specialized)
+====================================================
+
+Root Level (6):
+- CreateWorkoutWithExercisesUseCase
+- GetProfileUseCase
+- GetWorkoutHistoryUseCase
+- SaveProfileUseCase
+- SaveWorkoutUseCase
+- ValidateProfileInputUseCase
+
+account/ (0 additional)
+
+admin/ (2):
+- AdminUseCases
+- BanUserUseCase
+
+analytics/ (5 non-consolidated):
+- GenerateVolumeCalendarUseCase
+- GetDashboardConfigurationUseCase
+- GetWidgetDataUseCase
+- LogWorkoutEventUseCase
+- RefreshWidgetDataUseCase
+
+anomaly/ (1):
+- DetectWorkoutAnomaliesUseCase
+
+auth/ (8):
+- ForgotPasswordUseCase
+- GetAuthenticatedUserIdUseCase
+- GetCurrentUserIdUseCase (CRITICAL - used everywhere)
+- SignInAnonymouslyUseCase
+- SignInWithEmailUseCase
+- SignInWithGoogleUseCase
+- SignOutUseCase
+- SignUpWithEmailUseCase
+
+chat/ (3 non-consolidated):
+- CheckUsageLimitsUseCase
+- SendChatMessageUseCase
+- UpdateChatPreferencesUseCase
+
+exercise/ (1):
+- CreateCustomExerciseUseCase
+
+export/ (1):
+- ExportWorkoutsUseCase
+
+goals/ (2):
+- CreateGoalUseCase
+- TrackGoalProgressUseCase
+
+guest/ (1):
+- ManageGuestSessionUseCase
+
+legal/ (1):
+- DownloadPdfUseCase
+
+maintenance/ (1):
+- ProfileMaintenanceUseCase
+
+notifications/ (1):
+- GetMutedUsersCountUseCase
+
+profile/ (3):
+- CalculateAchievementsUseCase
+- SaveUserProfileUseCase
+- SyncOnboardingProfileAfterLoginUseCase
+
+progress/ (1):
+- GetProgressDataUseCase
+
+session/ (2 non-consolidated):
+- StartWorkoutSessionUseCase
+- ValidateUnifiedWorkoutSessionUseCase
+
+settings/ (3 non-consolidated):
+- EnhancedSignOutUseCase
+- EvaluateFeatureFlagUseCase
+- InitializeUserThemeUseCase
+
+sharing/ (1):
+- ShareToExternalPlatformUseCase
+
+social/ (7 non-consolidated):
+- CalculateFeedRelevanceScoreUseCase
+- CheckUsernameAvailabilityUseCase
+- CopyWorkoutFromPostUseCase
+- FeedGeneratorUseCase
+- QRCodeGenerationUseCase
+- RecordShareUseCase
+- SeedWorkoutPostsUseCase
+
+subscription/ (1):
+- CheckPremiumStatusUseCase
+
+support/ (1):
+- AddReplyToSupportTicketUseCase
+
+template/ (0 additional)
+
+workout/ (3 non-consolidated):
+- CreateWorkoutUseCase
+- EstimateWorkoutDurationUseCase
+- GetWorkoutSessionForEditingUseCase
+
+UTILITY FILES (2)
+================
+- common/ErrorHandler.kt
+- exercise/SearchableExercise.kt
+
+CONSOLIDATION PATTERNS
+======================
+
+Pattern 1: Multiple Query Methods in Single Class
+  Example: AnalyticsQueryUseCase
+  Methods: getVolumeAnalysis, getOneRmProgression, getWorkoutFrequency, getMuscleGroupAnalytics, getExerciseRanking, getComprehensiveAnalytics
+
+Pattern 2: Command/Query Separation (CQRS)
+  Example: SettingsQueryUseCase + SettingsCommandUseCase
+  
+Pattern 3: Domain-Scoped Operations
+  Example: SocialRelationshipUseCase (follow, block, gym buddy)
+           PostEngagementUseCase (like, comment, save)
+
+CRITICAL USE CASES FOR DEVELOPMENT
+==================================
+
+GetCurrentUserIdUseCase
+  - Used everywhere for user scoping
+  - Returns current authenticated user ID
+  - Critical for security/data isolation
+
+SocialProfileQueryUseCase
+  - Privacy filtering for profile access
+  - Checks viewer permissions
+  - Returns null if private or access denied
+
+WorkoutCommandUseCase
+  - Smart exercise defaults (time-based, distance-based, strength)
+  - Validation of session data
+  - Supports batch operations
+
+AnalyticsQueryUseCase
+  - All analytics queries consolidated here
+  - Parameter-driven for different metric types
+  - Comprehensive analytics aggregation
+
+DIRECTORY STRUCTURE
+===================
+
+domain/usecase/
+├── Root Level (6 files)
+│   ├── CreateWorkoutWithExercisesUseCase.kt
+│   ├── GetProfileUseCase.kt
+│   ├── GetWorkoutHistoryUseCase.kt
+│   ├── SaveProfileUseCase.kt
+│   ├── SaveWorkoutUseCase.kt
+│   └── ValidateProfileInputUseCase.kt
+│
+├── account/ (2 files)
+├── admin/ (2 files)
+├── analytics/ (10 files - 5 consolidated + 5 legacy)
+├── anomaly/ (1 file)
+├── auth/ (8 files)
+├── chat/ (4 files - 1 consolidated + 3 legacy)
+├── common/ (1 utility)
+├── data_import/ (1 consolidated)
+├── exercise/ (3 files - 1 consolidated + 1 legacy + 1 utility)
+├── export/ (1 file)
+├── folder/ (1 consolidated)
+├── goals/ (2 files)
+├── guest/ (1 file)
+├── legal/ (1 file)
+├── maintenance/ (1 file)
+├── notifications/ (2 files - 1 consolidated + 1 legacy)
+├── profile/ (4 files - 1 consolidated + 3 legacy)
+├── progress/ (1 file)
+├── session/ (3 files - 1 consolidated + 2 legacy)
+├── settings/ (5 files - 2 consolidated + 3 legacy)
+├── sharing/ (1 file)
+├── social/ (12 files - 5 consolidated + 7 legacy)
+├── subscription/ (1 file)
+├── support/ (1 file)
+├── template/ (2 consolidated)
+└── workout/ (5 files - 2 consolidated + 3 legacy)
+
+KEY STATISTICS
+==============
+Total Use Cases: 80
+Total Files: 82 (with 2 utilities)
+Consolidated: 25 (31% of use cases)
+Domain-Specific/Legacy: 54+ (69% of use cases)
+
+Largest Consolidation Candidates:
+- Analytics: 5 old use cases consolidated into 1
+- Social Profiles: 3 old use cases consolidated into 1
+- Workouts: 2 old use cases consolidated into 1
+
+DI Module References
+====================
+From UseCaseModule.kt:
+- AnalyticsQueryUseCase (auto-wired via @Inject)
+- AnalyticsExportUseCase (auto-wired via @Inject)
+- DashboardCommandUseCase (auto-wired via @Inject)
+- Consolidated use cases are @Singleton scoped
+
+MIGRATION CHECKLIST
+===================
+When refactoring to use consolidated use cases:
+1. Replace GetVolumeAnalysisUseCase with AnalyticsQueryUseCase.getVolumeAnalysis()
+2. Replace GetOneRmProgressionUseCase with AnalyticsQueryUseCase.getOneRmProgression()
+3. Replace UpdateWorkoutSessionUseCase with WorkoutCommandUseCase.updateSession()
+4. Replace AddExerciseToWorkoutUseCase with WorkoutCommandUseCase.addExercise()
+5. Replace GetSocialProfileUseCase with SocialProfileQueryUseCase()
+6. Replace GetPublicProfileUseCase with SocialProfileQueryUseCase.getPublicProfile()
+7. Check all imports and DI registrations
+8. Verify LiftrixResult error handling patterns
+
+END OF INVENTORY

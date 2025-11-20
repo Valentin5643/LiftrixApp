@@ -5,7 +5,7 @@ import com.example.liftrix.core.cache.EnhancedCacheManager
 import com.example.liftrix.core.cache.getOrComputeTyped
 import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.common.LiftrixResult
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -62,7 +62,7 @@ import kotlin.time.Duration.Companion.seconds
 class CacheWarmingService @Inject constructor(
     private val cacheManager: EnhancedCacheManager,
     private val progressDataService: ProgressDataService,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+    private val authQueryUseCase: AuthQueryUseCase
 ) {
     
     private val warmingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -91,9 +91,9 @@ class CacheWarmingService @Inject constructor(
             try {
                 warmingStartTime = System.currentTimeMillis()
                 Timber.d("$TAG: Starting cache warming process")
-                
+
                 // Get current user for personalized warming
-                val userId = getCurrentUserIdUseCase()
+                val userId = authQueryUseCase(waitForAuth = false).getOrNull()
                 if (userId != null && userId.isNotEmpty()) {
                     warmUserSpecificCache(userId)
                 } else {

@@ -4,7 +4,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.chat.ChatPreferences
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.chat.ChatOperationsUseCase
 import com.example.liftrix.domain.usecase.chat.ExportFormat
 import com.example.liftrix.domain.usecase.chat.UpdateChatPreferencesUseCase
@@ -29,7 +29,7 @@ class AIChatSettingsViewModel @Inject constructor(
     private val updateChatPreferencesUseCase: UpdateChatPreferencesUseCase,
     private val chatOperationsUseCase: ChatOperationsUseCase,
     private val chatRepository: ChatRepository,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<AIChatSettingsUiState, AIChatSettingsEvent>(errorHandler) {
     
@@ -43,7 +43,10 @@ class AIChatSettingsViewModel @Inject constructor(
     
     private fun loadInitialData() {
         viewModelScope.launch {
-            currentUserId = getCurrentUserIdUseCase()
+            currentUserId = authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it },
+                onFailure = { null }
+            )
             currentUserId?.let { userId ->
                 // Load current preferences
                 chatRepository.observePreferences(userId).collect { preferences ->

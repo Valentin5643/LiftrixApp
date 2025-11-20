@@ -7,7 +7,7 @@ import com.example.liftrix.domain.model.social.SocialPrivacySettings
 import com.example.liftrix.domain.model.social.SocialProfile
 import com.example.liftrix.domain.repository.social.SocialPrivacySettingsRepository
 import com.example.liftrix.domain.repository.social.SocialProfileRepository
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.validation.ProfileValidator
 import timber.log.Timber
 import javax.inject.Inject
@@ -27,7 +27,7 @@ class SocialProfileCommandUseCase @Inject constructor(
     private val profileRepository: SocialProfileRepository,
     private val privacyRepository: SocialPrivacySettingsRepository,
     private val validator: ProfileValidator,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+    private val authQueryUseCase: AuthQueryUseCase
 ) {
     /**
      * Creates a new social profile with validation and privacy defaults.
@@ -54,7 +54,7 @@ class SocialProfileCommandUseCase @Inject constructor(
             )
         }
     ) {
-        val userId = getCurrentUserIdUseCase()
+        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw IllegalStateException("User not authenticated")
 
         Timber.i("[SOCIAL-PROFILE] 🔨 Creating social profile for user: $userId")
@@ -155,7 +155,7 @@ class SocialProfileCommandUseCase @Inject constructor(
             )
         }
     ) {
-        val userId = getCurrentUserIdUseCase()
+        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw IllegalStateException("User not authenticated")
 
         // Validate inputs if provided
@@ -195,7 +195,7 @@ class SocialProfileCommandUseCase @Inject constructor(
             )
         }
     ) {
-        val userId = getCurrentUserIdUseCase()
+        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw IllegalStateException("User not authenticated")
 
         // Ensure the privacy settings belong to the current user

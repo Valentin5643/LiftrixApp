@@ -12,7 +12,7 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.WorkoutPost
 import com.example.liftrix.domain.repository.social.FeedRepository
 import com.example.liftrix.domain.repository.social.EngagementRepository
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.social.SeedWorkoutPostsUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.service.AnalyticsTracker
@@ -33,7 +33,7 @@ import javax.inject.Inject
 class FeedViewModel @Inject constructor(
     private val feedRepository: FeedRepository,
     private val engagementRepository: EngagementRepository,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     private val seedWorkoutPostsUseCase: SeedWorkoutPostsUseCase,
     private val analyticsTracker: AnalyticsTracker,
     private val storageUrlResolver: FirebaseStorageUrlResolver,
@@ -72,9 +72,12 @@ class FeedViewModel @Inject constructor(
     private fun initializeCurrentUser() {
         viewModelScope.launch {
             try {
-                val userId = getCurrentUserIdUseCase()
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { null }
+                )
                 _uiState.value = _uiState.value.copy(currentUserId = userId)
-                
+
                 // Skip seeding to show natural empty state
                 // seedSampleData(userId)
             } catch (e: Exception) {
@@ -100,10 +103,13 @@ class FeedViewModel @Inject constructor(
     val posts: Flow<PagingData<WorkoutPost>> = _selectedTab
         .flatMapLatest { tab ->
             flow {
-                val userId = getCurrentUserIdUseCase()
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { null }
+                )
                 if (userId != null) {
                     Timber.d("🔍 WORKOUT-POSTS-DEBUG: FeedViewModel loading ${tab.name} feed for user $userId")
-                    
+
                     val feedFlow = when (tab) {
                         FeedTab.HOME -> feedRepository.getHomeFeed(
                             userId = userId,
@@ -195,7 +201,10 @@ class FeedViewModel @Inject constructor(
 
     private fun toggleLike(postId: String) {
         viewModelScope.launch(Dispatchers.IO + SupervisorJob()) {
-            val userId = getCurrentUserIdUseCase()
+            val userId = authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it },
+                onFailure = { null }
+            )
             if (userId != null) {
                 val currentLiked = _likedPosts.value
                 val isCurrentlyLiked = currentLiked.contains(postId)
@@ -235,7 +244,10 @@ class FeedViewModel @Inject constructor(
 
     private fun toggleSave(postId: String) {
         viewModelScope.launch {
-            val userId = getCurrentUserIdUseCase()
+            val userId = authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it },
+                onFailure = { null }
+            )
             if (userId != null) {
                 val currentSaved = _savedPosts.value
                 val isCurrentlySaved = currentSaved.contains(postId)
@@ -277,7 +289,10 @@ class FeedViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 // Track share analytics with proper share event
-                val userId = getCurrentUserIdUseCase() ?: ""
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { "" }
+                )
                 analyticsTracker.trackShare(
                     contentType = "POST",
                     contentId = post.id,
@@ -341,7 +356,10 @@ class FeedViewModel @Inject constructor(
 
     private fun copyWorkout(post: WorkoutPost) {
         viewModelScope.launch {
-            val userId = getCurrentUserIdUseCase()
+            val userId = authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it },
+                onFailure = { null }
+            )
             if (userId != null) {
                 // Copy the workout from the post to the user's templates
                 val result = engagementRepository.copyWorkoutFromPost(post.id, userId)
@@ -382,7 +400,10 @@ class FeedViewModel @Inject constructor(
 
     private fun refreshFeed() {
         viewModelScope.launch {
-            val userId = getCurrentUserIdUseCase()
+            val userId = authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it },
+                onFailure = { null }
+            )
             if (userId != null) {
                 // Clear engagement state before refresh to ensure fresh state
                 _likedPosts.value = emptySet()

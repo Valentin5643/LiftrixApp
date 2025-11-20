@@ -2,7 +2,6 @@ package com.example.liftrix.ui.home.managers
 
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
-import com.example.liftrix.domain.usecase.GetWorkoutHistoryUseCase
 import com.example.liftrix.ui.common.state.HomeScreenData
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -16,8 +15,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class HomeDataManager @Inject constructor(
-    private val workoutRepository: WorkoutRepository,
-    private val getWorkoutHistoryUseCase: GetWorkoutHistoryUseCase
+    private val workoutRepository: WorkoutRepository
 ) {
     
     /**

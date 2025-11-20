@@ -1,7 +1,7 @@
 package com.example.liftrix.ui.settings.sync
 
 import androidx.lifecycle.ViewModel
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 
@@ -13,5 +13,5 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class SyncSettingsViewModel @Inject constructor(
-    val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+    val authQueryUseCase: AuthQueryUseCase
 ) : ViewModel()

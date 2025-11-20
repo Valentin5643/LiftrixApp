@@ -9,7 +9,7 @@ import timber.log.Timber
 import javax.inject.Inject
 import com.example.liftrix.domain.usecase.notifications.NotificationPreferencesUseCase
 import com.example.liftrix.domain.usecase.notifications.GetMutedUsersCountUseCase
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.notifications.NotificationPreferences
 import com.example.liftrix.domain.model.notifications.DeliveryFrequency
@@ -42,7 +42,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 class NotificationSettingsViewModel @Inject constructor(
     private val notificationPreferencesUseCase: NotificationPreferencesUseCase,
     private val getMutedUsersCountUseCase: GetMutedUsersCountUseCase,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<NotificationSettingsUiState, NotificationSettingsEvent>(errorHandler) {
 
@@ -221,15 +221,18 @@ class NotificationSettingsViewModel @Inject constructor(
         updateState { it.copy(isLoading = true, error = null) }
 
         viewModelScope.launch {
-            val userId = getCurrentUserIdUseCase() ?: run {
-                updateState {
-                    it.copy(
-                        isLoading = false,
-                        error = "User not authenticated"
-                    )
+            val userId = authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it },
+                onFailure = {
+                    updateState { currentState ->
+                        currentState.copy(
+                            isLoading = false,
+                            error = "User not authenticated"
+                        )
+                    }
+                    return@launch
                 }
-                return@launch
-            }
+            )
 
             val result = notificationPreferencesUseCase(userId)
             result.fold(
@@ -305,10 +308,13 @@ class NotificationSettingsViewModel @Inject constructor(
         update: NotificationPreferences.() -> NotificationPreferences
     ) {
         viewModelScope.launch {
-            val userId = getCurrentUserIdUseCase() ?: run {
-                updateState { it.copy(error = "User not authenticated") }
-                return@launch
-            }
+            val userId = authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it },
+                onFailure = {
+                    updateState { currentState -> currentState.copy(error = "User not authenticated") }
+                    return@launch
+                }
+            )
 
             val currentState = _uiState.value
 

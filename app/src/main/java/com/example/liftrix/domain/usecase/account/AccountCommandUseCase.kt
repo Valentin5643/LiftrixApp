@@ -5,7 +5,7 @@ import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.UserAccountRepository
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import javax.inject.Inject
 
 /**
@@ -27,7 +27,7 @@ import javax.inject.Inject
 class AccountCommandUseCase @Inject constructor(
     private val authRepository: AuthRepository,
     private val userAccountRepository: UserAccountRepository,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+    private val authQueryUseCase: AuthQueryUseCase
 ) {
 
     /**
@@ -78,7 +78,7 @@ class AccountCommandUseCase @Inject constructor(
             )
         }
 
-        val userId = getCurrentUserIdUseCase()
+        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw LiftrixError.AuthenticationError(
                 errorMessage = "User not authenticated",
                 errorCode = "NO_USER",
@@ -171,7 +171,7 @@ class AccountCommandUseCase @Inject constructor(
             )
         }
 
-        val userId = getCurrentUserIdUseCase()
+        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw LiftrixError.AuthenticationError(
                 errorMessage = "User not authenticated",
                 errorCode = "NO_USER",
@@ -216,7 +216,7 @@ class AccountCommandUseCase @Inject constructor(
             }
         }
     ) {
-        val userId = getCurrentUserIdUseCase()
+        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw LiftrixError.AuthenticationError(
                 errorMessage = "User not authenticated",
                 errorCode = "NO_USER",
@@ -294,7 +294,7 @@ class AccountCommandUseCase @Inject constructor(
             )
         }
 
-        val userId = getCurrentUserIdUseCase()
+        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw LiftrixError.AuthenticationError(
                 errorMessage = "User not authenticated",
                 errorCode = "NO_USER",

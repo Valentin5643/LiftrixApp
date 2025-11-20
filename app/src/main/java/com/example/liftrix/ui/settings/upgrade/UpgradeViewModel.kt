@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.settings.SettingsQueryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,7 +31,7 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class UpgradeViewModel @Inject constructor(
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     private val settingsQueryUseCase: SettingsQueryUseCase
 ) : ViewModel() {
 
@@ -78,10 +78,13 @@ class UpgradeViewModel @Inject constructor(
     private fun loadUpgradeData() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-            
+
             try {
-                val userId = getCurrentUserIdUseCase()
-                
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { null }
+                )
+
                 if (userId != null) {
                     // For now, just load static data since subscription use case needs implementation
                     _uiState.value = _uiState.value.copy(

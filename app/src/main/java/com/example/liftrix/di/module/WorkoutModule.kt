@@ -2,14 +2,8 @@ package com.example.liftrix.di.module
 
 import com.example.liftrix.data.repository.workout.WorkoutRepositoryImpl
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
-import com.example.liftrix.domain.usecase.common.ErrorHandler
-import com.example.liftrix.domain.usecase.workout.CreateWorkoutUseCase
-// Consolidated WorkoutQueryUseCase and WorkoutCommandUseCase are provided automatically via @Inject constructor
-import com.example.liftrix.domain.usecase.workout.GetWorkoutSessionForEditingUseCase
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
 import dagger.Binds
 import dagger.Module
-import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
@@ -44,53 +38,12 @@ abstract class WorkoutModule {
         workoutRepositoryImpl: WorkoutRepositoryImpl
     ): WorkoutRepository
 
-    companion object {
-        
-        /**
-         * Provides CreateWorkoutUseCase with proper dependency injection.
-         * 
-         * This use case handles workout creation with comprehensive business logic
-         * validation, error handling, and integration with centralized ErrorHandler.
-         * 
-         * @param workoutRepository The workout repository dependency
-         * @param errorHandler The centralized error handler dependency
-         * @return Configured CreateWorkoutUseCase instance
-         */
-        @Provides
-        @Singleton
-        fun provideCreateWorkoutUseCase(
-            workoutRepository: WorkoutRepository,
-            errorHandler: ErrorHandler
-        ): CreateWorkoutUseCase {
-            return CreateWorkoutUseCase(
-                workoutRepository = workoutRepository,
-                errorHandler = errorHandler
-            )
-        }
-
-        // Note: Consolidated WorkoutQueryUseCase and WorkoutCommandUseCase are provided automatically via @Inject constructor
-        // Note: UpdateWorkoutSessionUseCase has been consolidated into WorkoutCommandUseCase
-
-        /**
-         * Provides GetWorkoutSessionForEditingUseCase with proper dependency injection.
-         * 
-         * This use case handles loading completed workout sessions for historical editing
-         * with user authorization, data validation, and rich contextual information.
-         * 
-         * @param workoutRepository The workout repository dependency
-         * @param getCurrentUserIdUseCase The user authentication dependency
-         * @return Configured GetWorkoutSessionForEditingUseCase instance
-         */
-        @Provides
-        @Singleton
-        fun provideGetWorkoutSessionForEditingUseCase(
-            workoutRepository: WorkoutRepository,
-            getCurrentUserIdUseCase: GetCurrentUserIdUseCase
-        ): GetWorkoutSessionForEditingUseCase {
-            return GetWorkoutSessionForEditingUseCase(
-                workoutRepository = workoutRepository,
-                getCurrentUserIdUseCase = getCurrentUserIdUseCase
-            )
-        }
-    }
+    // Note: WorkoutQueryUseCase and WorkoutCommandUseCase are provided automatically via @Inject constructor
+    // Legacy use cases deleted (CLEANUP-002 completed):
+    //   - CreateWorkoutUseCase
+    //   - GetWorkoutSessionForEditingUseCase
+    //   - SaveWorkoutUseCase
+    //   - EstimateWorkoutDurationUseCase
+    //   - GetWorkoutHistoryUseCase
+    // All functionality consolidated into WorkoutQueryUseCase and WorkoutCommandUseCase
 }

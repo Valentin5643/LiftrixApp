@@ -4,12 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.AuthEvent
 import com.example.liftrix.domain.model.AuthState
-import com.example.liftrix.domain.usecase.auth.ForgotPasswordUseCase
-import com.example.liftrix.domain.usecase.auth.SignInAnonymouslyUseCase
-import com.example.liftrix.domain.usecase.auth.SignInWithEmailUseCase
-import com.example.liftrix.domain.usecase.auth.SignInWithGoogleUseCase
-import com.example.liftrix.domain.usecase.auth.SignOutUseCase
-import com.example.liftrix.domain.usecase.auth.SignUpWithEmailUseCase
+import com.example.liftrix.domain.usecase.auth.AuthCommandUseCase
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.usecase.guest.ManageGuestSessionUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,12 +17,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
-    private val signInWithEmailUseCase: SignInWithEmailUseCase,
-    private val signUpWithEmailUseCase: SignUpWithEmailUseCase,
-    private val signInWithGoogleUseCase: SignInWithGoogleUseCase,
-    private val signInAnonymouslyUseCase: SignInAnonymouslyUseCase,
-    private val signOutUseCase: SignOutUseCase,
-    private val forgotPasswordUseCase: ForgotPasswordUseCase,
+    private val authCommandUseCase: AuthCommandUseCase,
     private val authRepository: AuthRepository,
     private val manageGuestSessionUseCase: ManageGuestSessionUseCase
 ) : ViewModel() {
@@ -122,8 +112,8 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             isAuthOperationInProgress = true
             _authState.value = AuthState.Loading
-            
-            val result = signInWithEmailUseCase(email, password)
+
+            val result = authCommandUseCase.signInWithEmail(email, password)
             result.fold(
                 onSuccess = { user ->
                     _authState.value = AuthState.Authenticated(user)
@@ -147,14 +137,15 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             isAuthOperationInProgress = true
             _authState.value = AuthState.Loading
-            
-            signUpWithEmailUseCase(email, password, username)
-                .onSuccess { user ->
+
+            val result = authCommandUseCase.signUpWithEmail(email, password, username)
+            result.fold(
+                onSuccess = { user ->
                     _authState.value = AuthState.Authenticated(user)
                     Timber.d("Sign up successful for user: ${user.uid}")
                     isAuthOperationInProgress = false
-                }
-                .onFailure { exception ->
+                },
+                onFailure = { exception ->
                     val errorMessage = getErrorMessage(exception)
                     _authState.value = AuthState.Error(errorMessage, exception)
                     Timber.e(exception, "Sign up failed")
@@ -162,6 +153,7 @@ class AuthViewModel @Inject constructor(
                     kotlinx.coroutines.delay(100)
                     isAuthOperationInProgress = false
                 }
+            )
         }
     }
 
@@ -169,14 +161,15 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             isAuthOperationInProgress = true
             _authState.value = AuthState.Loading
-            
-            signInWithGoogleUseCase(idToken)
-                .onSuccess { user ->
+
+            val result = authCommandUseCase.signInWithGoogle(idToken)
+            result.fold(
+                onSuccess = { user ->
                     _authState.value = AuthState.Authenticated(user)
                     Timber.d("Google sign in successful for user: ${user.uid}")
                     isAuthOperationInProgress = false
-                }
-                .onFailure { exception ->
+                },
+                onFailure = { exception ->
                     val errorMessage = getErrorMessage(exception)
                     _authState.value = AuthState.Error(errorMessage, exception)
                     Timber.e(exception, "Google sign in failed")
@@ -184,6 +177,7 @@ class AuthViewModel @Inject constructor(
                     kotlinx.coroutines.delay(100)
                     isAuthOperationInProgress = false
                 }
+            )
         }
     }
 
@@ -191,9 +185,10 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             isAuthOperationInProgress = true
             _authState.value = AuthState.Loading
-            
-            signInAnonymouslyUseCase()
-                .onSuccess { user ->
+
+            val result = authCommandUseCase.signInAnonymously()
+            result.fold(
+                onSuccess = { user ->
                     // Initialize guest session tracking for anonymous users
                     if (user.isAnonymous) {
                         manageGuestSessionUseCase.getOrCreateGuestSession(user.uid)
@@ -208,8 +203,8 @@ class AuthViewModel @Inject constructor(
                     _authState.value = AuthState.Authenticated(user)
                     Timber.d("Anonymous sign in successful for user: ${user.uid}")
                     isAuthOperationInProgress = false
-                }
-                .onFailure { exception ->
+                },
+                onFailure = { exception ->
                     val errorMessage = getErrorMessage(exception)
                     _authState.value = AuthState.Error(errorMessage, exception)
                     Timber.e(exception, "Anonymous sign in failed")
@@ -217,41 +212,46 @@ class AuthViewModel @Inject constructor(
                     kotlinx.coroutines.delay(100)
                     isAuthOperationInProgress = false
                 }
+            )
         }
     }
 
     private fun signOut() {
         viewModelScope.launch {
             _authState.value = AuthState.Loading
-            
-            signOutUseCase()
-                .onSuccess {
+
+            val result = authCommandUseCase.signOut()
+            result.fold(
+                onSuccess = {
                     _authState.value = AuthState.Unauthenticated
                     Timber.d("Sign out successful")
-                }
-                .onFailure { exception ->
+                },
+                onFailure = { exception ->
                     val errorMessage = getErrorMessage(exception)
                     _authState.value = AuthState.Error(errorMessage, exception)
                     Timber.e(exception, "Sign out failed")
                 }
+            )
         }
     }
 
     private fun sendPasswordResetEmail(email: String) {
         viewModelScope.launch {
             _authState.value = AuthState.Loading
-            
-            forgotPasswordUseCase(email)
-                .onSuccess {
+
+            val result = authCommandUseCase.resetPassword(email)
+            result.fold(
+                onSuccess = {
                     _authState.value = AuthState.Unauthenticated
                     // Could show a success message here
                     Timber.d("Password reset email sent successfully")
-                }
-                .onFailure { exception ->
+                },
+                onFailure = { exception ->
                     val errorMessage = getErrorMessage(exception)
                     _authState.value = AuthState.Error(errorMessage, exception)
                     Timber.e(exception, "Failed to send password reset email")
                 }
+            )
         }
     }
 

@@ -4,8 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.WorkoutTemplate
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
-import com.example.liftrix.domain.usecase.auth.GetAuthenticatedUserIdUseCase
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.template.TemplateQueryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,8 +40,7 @@ sealed class WorkoutTemplatesDashboardUiState {
  */
 @HiltViewModel
 class WorkoutTemplatesDashboardViewModel @Inject constructor(
-    private val getAuthenticatedUserIdUseCase: GetAuthenticatedUserIdUseCase,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     private val workoutTemplateRepository: WorkoutTemplateRepository,
     private val templateQueryUseCase: TemplateQueryUseCase // 🔥 Consolidated use case
 ) : ViewModel() {
@@ -63,9 +61,16 @@ class WorkoutTemplatesDashboardViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _uiState.value = WorkoutTemplatesDashboardUiState.Loading
-                
+
                 // Wait for authentication to complete, then load templates
-                val userId = getAuthenticatedUserIdUseCase()
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { error ->
+                        Timber.e(error, "Failed to get current user ID")
+                        _uiState.value = WorkoutTemplatesDashboardUiState.Error("Authentication failed")
+                        return@launch
+                    }
+                )
                 Timber.d("User authenticated, loading templates for user: $userId")
                 
                 workoutTemplateRepository.getAllTemplatesForUser(userId).collect { result ->
@@ -100,8 +105,15 @@ class WorkoutTemplatesDashboardViewModel @Inject constructor(
             try {
                 Timber.d("🔥 FOLDER-DASHBOARD: Loading templates for folder: $folderId")
                 _uiState.value = WorkoutTemplatesDashboardUiState.Loading
-                
-                val userId = getAuthenticatedUserIdUseCase()
+
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { error ->
+                        Timber.e(error, "Failed to get current user ID")
+                        _uiState.value = WorkoutTemplatesDashboardUiState.Error("Authentication failed")
+                        return@launch
+                    }
+                )
 
                 // Use repository directly for folder-specific templates
                 workoutTemplateRepository.getTemplatesByFolder(userId, folderId).collect { result ->
@@ -184,7 +196,10 @@ class WorkoutTemplatesDashboardViewModel @Inject constructor(
     fun recordTemplateUsage(template: WorkoutTemplate) {
         viewModelScope.launch {
             try {
-                val userId = getCurrentUserIdUseCase() ?: return@launch
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { return@launch }
+                )
                 workoutTemplateRepository.recordTemplateUsage(template.id, userId)
                 Timber.i("Template usage recorded: ${template.name}")
             } catch (exception: Exception) {

@@ -15,7 +15,7 @@ import com.example.liftrix.domain.usecase.analytics.AnalyticsExportUseCase
 import com.example.liftrix.domain.usecase.analytics.OneRmProgressionData as UseCaseOneRmProgressionData
 import com.example.liftrix.domain.model.analytics.ExerciseProgression
 import com.example.liftrix.domain.model.analytics.OneRmDataPoint
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.exercise.ExerciseQueryUseCase
 import com.example.liftrix.domain.usecase.analytics.ExportOneRmDataRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -52,7 +52,7 @@ class OneRmDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     errorHandler: ErrorHandler,
     private val analyticsQueryUseCase: AnalyticsQueryUseCase,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     private val exerciseQueryUseCase: ExerciseQueryUseCase,
     private val analyticsExportUseCase: AnalyticsExportUseCase
 ) : StatefulDetailViewModel<OneRmDetailViewModel.UiState, OneRmDetailViewModel.Event>(savedStateHandle, errorHandler) {
@@ -269,9 +269,11 @@ class OneRmDetailViewModel @Inject constructor(
         updateComplexSavedState(DetailScreenStateKeys.ONE_RM_SELECTED_EXERCISES, exerciseIds?.toSet() ?: emptySet())
 
         executeUseCase(
-            useCase = { 
-                val userId = getCurrentUserIdUseCase() ?: throw Exception("User not authenticated").also {
-                }
+            useCase = {
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { throw Exception("User not authenticated") }
+                )
                 
                 
                 

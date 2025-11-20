@@ -9,6 +9,8 @@ import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import kotlinx.datetime.Clock
@@ -252,16 +254,15 @@ class GetWidgetDataUseCase @Inject constructor(
             }
         ) {
             Timber.d("Retrieving multiple widget data for user: $userId, widgets: $widgetTypes")
-            
-            val widgetDataMap = mutableMapOf<AnalyticsWidget, WidgetData>()
-            
-            // Retrieve data for each widget type
-            widgetTypes.forEach { widgetType ->
-                val widgetData = getWidgetData(userId, widgetType).getOrThrow()
-                widgetDataMap[widgetType] = widgetData
+
+            // Retrieve data for all widgets in parallel for optimal performance
+            val deferredResults = widgetTypes.map { widgetType ->
+                async {
+                    widgetType to getWidgetData(userId, widgetType).getOrThrow()
+                }
             }
-            
-            widgetDataMap
+
+            deferredResults.awaitAll().toMap()
         }
     }
     

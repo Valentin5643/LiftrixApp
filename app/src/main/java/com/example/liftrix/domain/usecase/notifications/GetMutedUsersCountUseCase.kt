@@ -5,7 +5,7 @@ import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.common.liftrixFailure
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.NotificationRepository
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -29,7 +29,7 @@ import javax.inject.Inject
  */
 class GetMutedUsersCountUseCase @Inject constructor(
     private val notificationRepository: NotificationRepository,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+    private val authQueryUseCase: AuthQueryUseCase
 ) {
 
     /**
@@ -44,7 +44,7 @@ class GetMutedUsersCountUseCase @Inject constructor(
     suspend operator fun invoke(): Flow<LiftrixResult<Int>> {
         return try {
             // Get current user ID
-            val userId = getCurrentUserIdUseCase()
+            val userId = authQueryUseCase(waitForAuth = false).getOrNull()
                 ?: return flowOf(
                     liftrixFailure(
                         LiftrixError.BusinessLogicError(
@@ -161,7 +161,7 @@ class GetMutedUsersCountUseCase @Inject constructor(
             )
         }
     ) {
-        val userId = getCurrentUserIdUseCase()
+        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw IllegalStateException("User not authenticated")
 
         timber.log.Timber.d("Getting current muted users count for user: $userId")
@@ -218,7 +218,7 @@ class GetMutedUsersCountUseCase @Inject constructor(
      */
     suspend fun getMutedUsersList(): Flow<LiftrixResult<List<String>>> {
         return try {
-            val userId = getCurrentUserIdUseCase()
+            val userId = authQueryUseCase(waitForAuth = false).getOrNull()
                 ?: return flowOf(
                     liftrixFailure(
                         LiftrixError.BusinessLogicError(

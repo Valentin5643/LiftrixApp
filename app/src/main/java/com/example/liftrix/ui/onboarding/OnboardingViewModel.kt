@@ -6,8 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.FitnessGoal
 import com.example.liftrix.domain.model.UserProfile
-import com.example.liftrix.domain.usecase.GetProfileUseCase
-import com.example.liftrix.domain.usecase.SaveProfileUseCase
+import com.example.liftrix.domain.usecase.profile.ProfileQueryUseCase
+import com.example.liftrix.domain.usecase.profile.ProfileCommandUseCase
 import com.example.liftrix.domain.usecase.ValidateProfileInputUseCase
 import com.example.liftrix.domain.usecase.ValidationResult
 import com.example.liftrix.domain.service.OnboardingDataStore
@@ -27,9 +27,9 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
-    private val saveProfileUseCase: SaveProfileUseCase,
+    private val profileCommandUseCase: ProfileCommandUseCase,
     private val validateProfileInputUseCase: ValidateProfileInputUseCase,
-    private val getProfileUseCase: GetProfileUseCase,
+    private val profileQueryUseCase: ProfileQueryUseCase,
     private val savedStateHandle: SavedStateHandle,
     private val profileRepository: com.example.liftrix.domain.repository.ProfileRepository,
     private val onboardingDataStore: OnboardingDataStore
@@ -59,7 +59,7 @@ class OnboardingViewModel @Inject constructor(
                 }
                 
                 // Check for existing profile
-                val hasExistingProfile = getProfileUseCase.hasProfile(userId)
+                val hasExistingProfile = profileQueryUseCase.hasProfile(userId).getOrElse { false }
                 if (hasExistingProfile) {
                     loadExistingProfile()
                     return@launch
@@ -390,16 +390,16 @@ class OnboardingViewModel @Inject constructor(
                 }
                 
                 // Check if profile exists
-                val hasProfile = getProfileUseCase.hasProfile(userId)
+                val hasProfile = profileQueryUseCase.hasProfile(userId).getOrElse { false }
                 if (!hasProfile) {
                     Timber.d("No existing profile found for user: $userId")
                     // Return to current onboarding step
                     initializeOnboarding(userId)
                     return@launch
                 }
-                
+
                 // Load profile data
-                getProfileUseCase(userId).collect { profile ->
+                profileQueryUseCase(userId).collect { profile ->
                     if (profile != null) {
                         val profileData = UserProfileData.fromDomainModel(profile)
                         
@@ -570,16 +570,16 @@ class OnboardingViewModel @Inject constructor(
             Timber.d("Converting profile data to domain model for user: ${profileData.userId}")
             val domainProfile = profileData.toDomainModel()
             
-            Timber.d("Calling SaveProfileUseCase for user: ${profileData.userId}")
-            val saveResult = saveProfileUseCase(domainProfile)
+            Timber.d("Calling ProfileCommandUseCase.saveProfile for user: ${profileData.userId}")
+            val saveResult = profileCommandUseCase.saveProfile(domainProfile, strictValidation = true)
             
             if (saveResult.isSuccess) {
                 // ONBOARDING COMPLETION FIX: Add verification delay to ensure database commit
                 Timber.d("Profile save successful, verifying persistence for user: ${profileData.userId}")
                 kotlinx.coroutines.delay(500L) // Allow database transaction to fully commit
-                
+
                 // Verify the profile was actually saved
-                val hasProfile = getProfileUseCase.hasProfile(profileData.userId)
+                val hasProfile = profileQueryUseCase.hasProfile(profileData.userId).getOrElse { false }
                 if (!hasProfile) {
                     Timber.e("CRITICAL: Profile save verification failed - profile not found after save!")
                     return Result.failure(IllegalStateException("Profile save verification failed"))

@@ -4,8 +4,6 @@ import com.example.liftrix.data.repository.ProfileImageRepositoryImpl
 import com.example.liftrix.domain.repository.ProfileImageRepository
 import com.example.liftrix.data.service.FirebaseStorageUrlResolver
 import com.example.liftrix.domain.repository.ProfileRepository
-import com.example.liftrix.domain.usecase.GetProfileUseCase
-import com.example.liftrix.domain.usecase.SaveProfileUseCase
 import com.example.liftrix.domain.usecase.ValidateProfileInputUseCase
 import com.example.liftrix.domain.usecase.profile.ProfileImageOperationsUseCase
 import com.example.liftrix.domain.repository.social.SocialProfileRepository
@@ -35,28 +33,11 @@ abstract class ProfileModule {
 
     companion object {
         /**
-         * Provides SaveProfileUseCase with singleton scope.
-         * Singleton scope ensures consistent validation behavior across the app.
-         */
-        @Provides
-        @Singleton
-        fun provideSaveProfileUseCase(
-            profileRepository: ProfileRepository
-        ): SaveProfileUseCase = SaveProfileUseCase(profileRepository)
-
-        /**
-         * Provides GetProfileUseCase with singleton scope.
-         * Singleton scope ensures consistent data access patterns.
-         */
-        @Provides
-        @Singleton
-        fun provideGetProfileUseCase(
-            profileRepository: ProfileRepository
-        ): GetProfileUseCase = GetProfileUseCase(profileRepository)
-
-        /**
          * Provides ValidateProfileInputUseCase with singleton scope.
          * Singleton scope ensures consistent validation rules across all forms.
+         *
+         * NOTE: SaveProfileUseCase has been replaced by ProfileCommandUseCase which uses @Inject constructor.
+         * ProfileCommandUseCase does not require a manual provider.
          */
         @Provides
         @Singleton

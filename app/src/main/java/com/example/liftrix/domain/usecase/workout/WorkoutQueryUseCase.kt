@@ -405,6 +405,155 @@ class WorkoutQueryUseCase @Inject constructor(
         }
     }
 
+    // ============== WORKOUT DURATION ESTIMATION ==============
+
+    /**
+     * Estimates the total duration for a workout template.
+     * Replaces: EstimateWorkoutDurationUseCase.invoke()
+     *
+     * @param template The workout template to analyze
+     * @return LiftrixResult containing estimated Duration
+     */
+    suspend fun estimateDuration(template: com.example.liftrix.domain.model.WorkoutTemplate): LiftrixResult<java.time.Duration> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "ESTIMATE_DURATION_FAILED",
+                errorMessage = "Failed to estimate workout duration: ${throwable.message}",
+                analyticsContext = mapOf(
+                    "operation" to "ESTIMATE_DURATION",
+                    "template_name" to template.name,
+                    "exercise_count" to template.exercises.size.toString()
+                )
+            )
+        }
+    ) {
+        if (template.exercises.isEmpty()) {
+            Timber.d("Empty template, returning minimum duration")
+            return@liftrixCatching java.time.Duration.ofMinutes(10)
+        }
+
+        Timber.d("Estimating duration for template '${template.name}' with ${template.exercises.size} exercises")
+
+        val warmupMinutes = 5
+        val cooldownMinutes = 5
+        val exerciseTransitionSeconds = 30
+        val setupTimeSeconds = 20
+
+        var totalSeconds = 0
+        totalSeconds += warmupMinutes * 60
+
+        template.exercises.forEachIndexed { index, exercise ->
+            val sets = exercise.targetSets ?: 3
+            val timePerSet = 40
+            val restTime = exercise.restTimeSeconds ?: 90
+
+            totalSeconds += setupTimeSeconds
+
+            repeat(sets) { setIndex ->
+                totalSeconds += timePerSet
+                if (setIndex < sets - 1) {
+                    totalSeconds += restTime
+                }
+            }
+
+            if (index < template.exercises.size - 1) {
+                totalSeconds += exerciseTransitionSeconds
+            }
+        }
+
+        totalSeconds += cooldownMinutes * 60
+
+        val duration = java.time.Duration.ofSeconds(totalSeconds.toLong())
+        Timber.d("Estimated total duration: ${duration.toMinutes()} minutes")
+
+        duration
+    }
+
+    // ============== WORKOUT SESSION FOR EDITING ==============
+
+    /**
+     * Retrieves workout session data for editing with comprehensive validation.
+     * Replaces: GetWorkoutSessionForEditingUseCase.invoke()
+     *
+     * @param sessionId The workout session ID to retrieve
+     * @param userId The user ID for authorization (MANDATORY)
+     * @param allowCrossUserEditing Allow editing workouts from other users (admin/coach)
+     * @return LiftrixResult containing WorkoutSessionEditingData
+     */
+    suspend fun getSessionForEditing(
+        sessionId: WorkoutId,
+        userId: String,
+        allowCrossUserEditing: Boolean = false
+    ): LiftrixResult<WorkoutSessionEditingData> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "GET_SESSION_FOR_EDITING_FAILED",
+                errorMessage = "Failed to load workout session for editing: ${throwable.message}",
+                analyticsContext = mapOf(
+                    "operation" to "GET_SESSION_FOR_EDITING",
+                    "session_id" to sessionId.value,
+                    "user_id" to userId
+                )
+            )
+        }
+    ) {
+        require(userId.isNotBlank()) { "User ID cannot be blank" }
+        require(sessionId.value.isNotBlank()) { "Session ID cannot be blank" }
+
+        Timber.d("Loading workout session for editing: ${sessionId.value} for user: $userId")
+
+        val sessionResult = workoutRepository.getWorkoutById(sessionId, userId)
+        val session = sessionResult.getOrThrow()
+
+        if (session == null) {
+            throw LiftrixError.NotFoundError(
+                errorMessage = "Workout session not found or access denied",
+                resourceType = "workout_session",
+                resourceId = sessionId.value
+            )
+        }
+
+        if (session.userId != userId && !allowCrossUserEditing) {
+            throw LiftrixError.PermissionError(
+                errorMessage = "User does not own this workout",
+                permission = "EDIT_WORKOUT",
+                analyticsContext = mapOf(
+                    "workout_id" to sessionId.value,
+                    "user_id" to userId
+                )
+            )
+        }
+
+        val totalSets = session.exercises.sumOf { it.sets.size }
+        val completedSets = session.exercises.sumOf { exercise ->
+            exercise.sets.count { it.completedAt != null }
+        }
+
+        val isHistorical = session.status == com.example.liftrix.domain.model.WorkoutStatus.COMPLETED
+        val warnings = if (isHistorical) {
+            listOf("Editing a completed workout may affect historical data")
+        } else {
+            emptyList()
+        }
+
+        val editingData = WorkoutSessionEditingData(
+            session = session,
+            originalCreatedAt = session.createdAt,
+            lastModified = session.updatedAt,
+            isHistoricalSession = isHistorical,
+            totalExercises = session.exercises.size,
+            totalSets = totalSets,
+            completedSets = completedSets,
+            sessionDuration = session.getDuration(),
+            canEdit = true,
+            editWarnings = warnings,
+            hasEditWarnings = warnings.isNotEmpty()
+        )
+
+        Timber.i("Successfully loaded workout session for editing: ${session.name} (${editingData.totalExercises} exercises, ${editingData.totalSets} sets)")
+        editingData
+    }
+
     companion object {
         private const val MAX_HISTORY_LIMIT = 100 // Prevent excessive database queries
     }
@@ -504,4 +653,50 @@ data class PreviousSetInfo(
             }
         }
     }
+}
+
+/**
+ * Response data for workout session editing with historical context.
+ * Extracted from GetWorkoutSessionForEditingUseCase for consolidation.
+ *
+ * @property session The workout session being edited
+ * @property originalCreatedAt Original creation timestamp
+ * @property lastModified Last modification timestamp
+ * @property isHistoricalSession Whether this is a completed/historical session
+ * @property totalExercises Total number of exercises in the session
+ * @property totalSets Total number of sets across all exercises
+ * @property completedSets Number of completed sets
+ * @property sessionDuration Duration of the session
+ * @property canEdit Whether the session can be edited
+ * @property editWarnings List of warnings about editing
+ * @property hasEditWarnings Whether there are any edit warnings
+ */
+data class WorkoutSessionEditingData(
+    val session: Workout,
+    val originalCreatedAt: java.time.Instant,
+    val lastModified: java.time.Instant?,
+    val isHistoricalSession: Boolean,
+    val totalExercises: Int,
+    val totalSets: Int,
+    val completedSets: Int,
+    val sessionDuration: java.time.Duration?,
+    val canEdit: Boolean,
+    val editWarnings: List<String> = emptyList(),
+    val hasEditWarnings: Boolean = false
+) {
+    val completionPercentage: Float
+        get() = if (totalSets > 0) (completedSets.toFloat() / totalSets) * 100f else 0f
+
+    val hasModifications: Boolean
+        get() = lastModified != null && lastModified != originalCreatedAt
+
+    val isCompletelyFinished: Boolean
+        get() = completedSets == totalSets && totalSets > 0
+
+    val estimatedTimeRemaining: java.time.Duration?
+        get() = if (sessionDuration != null && completionPercentage > 0f && completionPercentage < 100f) {
+            val averageTimePerSet = sessionDuration.toMinutes() / completedSets.coerceAtLeast(1)
+            val remainingSets = totalSets - completedSets
+            java.time.Duration.ofMinutes((averageTimePerSet * remainingSets).toLong())
+        } else null
 }

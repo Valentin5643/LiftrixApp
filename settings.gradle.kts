@@ -12,5 +12,6 @@ dependencyResolutionManagement {
         mavenCentral() 
     } 
 } 
-rootProject.name = "Liftrix" 
-include(":app") 
+rootProject.name = "Liftrix"
+include(":app")
+include(":lint-rules")

@@ -7,11 +7,11 @@ import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.domain.service.SettingsPersistenceManager
 import com.example.liftrix.domain.service.SettingsValidator
-import com.example.liftrix.domain.usecase.settings.EnhancedSignOutUseCase
+import com.example.liftrix.domain.usecase.auth.AuthCommandUseCase
 import com.example.liftrix.domain.usecase.settings.SettingsQueryUseCase
 import com.example.liftrix.domain.usecase.settings.SettingsCommandUseCase
 import com.example.liftrix.domain.usecase.profile.ProfileImageOperationsUseCase
-import com.example.liftrix.domain.usecase.GetProfileUseCase
+import com.example.liftrix.domain.usecase.profile.ProfileQueryUseCase
 import com.example.liftrix.domain.usecase.social.SocialProfileQueryUseCase
 import com.example.liftrix.domain.usecase.admin.CheckAdminPermissionsUseCase
 import com.example.liftrix.domain.model.WeightUnit
@@ -48,7 +48,7 @@ import javax.inject.Inject
  * @property getUserSettingsUseCase Use case for retrieving user settings
  * @property updateSettingsUseCase Use case for updating user settings
  * @property getSubscriptionStatusUseCase Use case for retrieving subscription status
- * @property enhancedSignOutUseCase Use case for comprehensive logout process
+ * @property authCommandUseCase Use case for comprehensive auth command operations
  * @property authRepository Repository for authentication operations
  * @property analyticsService Service for tracking analytics events
  */
@@ -56,9 +56,9 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val settingsQueryUseCase: SettingsQueryUseCase,
     private val settingsCommandUseCase: SettingsCommandUseCase,
-    private val getProfileUseCase: GetProfileUseCase,
+    private val profileQueryUseCase: ProfileQueryUseCase,
     private val socialProfileQueryUseCase: SocialProfileQueryUseCase,
-    private val enhancedSignOutUseCase: EnhancedSignOutUseCase,
+    private val authCommandUseCase: AuthCommandUseCase,
     private val profileImageOperationsUseCase: ProfileImageOperationsUseCase,
     private val authRepository: AuthRepository,
     private val analyticsService: AnalyticsService,
@@ -226,7 +226,7 @@ class SettingsViewModel @Inject constructor(
                         // Combine settings, profile, social profile, and subscription data loading
                         combine(
                             settingsQueryUseCase(userId),
-                            getProfileUseCase(userId).map { Result.success(it) }.catch { emit(Result.failure(it)) },
+                            profileQueryUseCase(userId).map { Result.success(it) }.catch { emit(Result.failure(it)) },
                             kotlinx.coroutines.flow.flow {
                                 val socialProfileResult = socialProfileQueryUseCase.invoke(userId)
                                 emit(socialProfileResult)
@@ -833,7 +833,7 @@ class SettingsViewModel @Inject constructor(
             try {
                 Timber.d("Confirming sign out")
                 
-                val result = enhancedSignOutUseCase()
+                val result = authCommandUseCase.signOutEnhanced()
                 
                 result.fold(
                     onSuccess = {

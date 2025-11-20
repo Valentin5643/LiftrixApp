@@ -7,7 +7,7 @@ import com.example.liftrix.domain.model.admin.*
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.usecase.admin.*
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,7 +31,7 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class AdminBanViewModel @Inject constructor(
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     private val checkAdminPermissionsUseCase: CheckAdminPermissionsUseCase,
     private val searchUsersUseCase: SearchUsersUseCase,
     private val banUserUseCase: BanUserUseCase,
@@ -73,7 +73,13 @@ class AdminBanViewModel @Inject constructor(
      */
     fun checkAdminPermissions() {
         viewModelScope.launch {
-            val userId = getCurrentUserIdUseCase() ?: return@launch
+            val userId = authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it },
+                onFailure = {
+                    Timber.e("Authentication failed")
+                    return@launch
+                }
+            )
             
             checkAdminPermissionsUseCase(userId).fold(
                 onSuccess = { isAdmin ->

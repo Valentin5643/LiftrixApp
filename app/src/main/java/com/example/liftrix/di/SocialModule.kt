@@ -28,7 +28,6 @@ import com.example.liftrix.data.repository.social.SocialPrivacySettingsRepositor
 import com.example.liftrix.domain.repository.social.SocialPrivacySettingsRepository
 import com.example.liftrix.domain.repository.SettingsRepository
 import com.example.liftrix.domain.service.PrivacyEnforcementService
-import com.example.liftrix.domain.usecase.social.CheckUsernameAvailabilityUseCase
 import com.example.liftrix.domain.validation.ProfileValidator
 import com.example.liftrix.domain.service.MediaUploadService
 import com.example.liftrix.data.service.MediaUploadServiceImpl
@@ -272,15 +271,6 @@ abstract class SocialModule {
     // SocialSearchUseCase, SocialRelationshipUseCase, PostEngagementUseCase) are provided
     // automatically via @Inject constructor and don't need explicit @Provides methods.
 
-        @Provides
-        @Singleton
-        fun provideCheckUsernameAvailabilityUseCase(
-            repository: SocialProfileRepository,
-            validator: ProfileValidator
-        ): CheckUsernameAvailabilityUseCase {
-            return CheckUsernameAvailabilityUseCase(repository, validator)
-        }
-    
     // ========================================
     // External Services
     // ========================================

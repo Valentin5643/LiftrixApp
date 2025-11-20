@@ -357,22 +357,22 @@ abstract class ServiceModule {
         
         /**
          * Provides WeightUnitManager for centralized weight unit conversion and formatting.
-         * 
+         *
          * The WeightUnitManager provides reactive weight unit management with caching
          * and Compose integration for consistent weight displays across all screens.
-         * 
+         *
          * @param settingsRepository Repository for settings data access
-         * @param getCurrentUserIdUseCase Use case for getting current user ID
+         * @param authQueryUseCase Use case for getting current user ID
          * @return WeightUnitManager singleton instance
          */
         @Provides
         @Singleton
         fun provideWeightUnitManager(
             settingsRepository: com.example.liftrix.domain.repository.SettingsRepository,
-            getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+            authQueryUseCase: com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
         ): WeightUnitManager = WeightUnitManager(
             settingsRepository = settingsRepository,
-            getCurrentUserIdUseCase = getCurrentUserIdUseCase
+            authQueryUseCase = authQueryUseCase
         )
         
         /**

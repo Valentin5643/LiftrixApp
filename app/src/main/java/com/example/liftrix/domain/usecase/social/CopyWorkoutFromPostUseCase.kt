@@ -4,7 +4,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.social.EngagementRepository
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -19,7 +19,7 @@ import javax.inject.Inject
  */
 class CopyWorkoutFromPostUseCase @Inject constructor(
     private val engagementRepository: EngagementRepository,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+    private val authQueryUseCase: AuthQueryUseCase
 ) {
     
     /**
@@ -42,7 +42,7 @@ class CopyWorkoutFromPostUseCase @Inject constructor(
         }
     ) {
         // Get current user ID
-        val userId = getCurrentUserIdUseCase() ?: throw IllegalStateException("User not authenticated")
+        val userId = authQueryUseCase(waitForAuth = false).getOrThrow()
         
         Timber.d("Copying workout from post: $postId for user: $userId")
         

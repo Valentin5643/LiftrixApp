@@ -8,7 +8,7 @@ import com.example.liftrix.domain.usecase.social.GetPublicProfileRequest
 import com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase
 import com.example.liftrix.domain.usecase.social.FollowAction
 import com.example.liftrix.domain.model.social.ReportReason
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.social.PostEngagementUseCase
 import com.example.liftrix.domain.usecase.social.RecordShareUseCase
 import com.example.liftrix.domain.usecase.social.CopyWorkoutFromPostUseCase
@@ -52,7 +52,7 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class UserProfileViewModel @Inject constructor(
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     private val socialProfileQueryUseCase: SocialProfileQueryUseCase,
     private val socialRelationshipUseCase: SocialRelationshipUseCase,
     private val platformShareAdapter: PlatformShareAdapter,
@@ -69,7 +69,10 @@ class UserProfileViewModel @Inject constructor(
     // Current user ID for follow operations
     private val currentUserId = flow {
         try {
-            val userId = getCurrentUserIdUseCase()
+            val userId = authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it },
+                onFailure = { null }
+            )
             emit(userId)
         } catch (e: Exception) {
             Timber.e(e, "Failed to get current user ID")

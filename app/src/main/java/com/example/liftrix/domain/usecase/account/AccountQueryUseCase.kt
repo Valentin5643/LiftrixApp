@@ -5,7 +5,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.UserAccountRepository
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import javax.inject.Inject
@@ -23,7 +23,7 @@ import javax.inject.Inject
  */
 class AccountQueryUseCase @Inject constructor(
     private val userAccountRepository: UserAccountRepository,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+    private val authQueryUseCase: AuthQueryUseCase
 ) {
 
     /**
@@ -33,7 +33,7 @@ class AccountQueryUseCase @Inject constructor(
      * @return Flow of UserAccount or null if not found
      */
     suspend fun asFlow(): Flow<UserAccount?> {
-        val userId = getCurrentUserIdUseCase()
+        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
         return if (userId != null) {
             userAccountRepository.getAccountInfo(userId)
         } else {
@@ -62,7 +62,7 @@ class AccountQueryUseCase @Inject constructor(
             }
         }
     ) {
-        val userId = getCurrentUserIdUseCase()
+        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw LiftrixError.AuthenticationError(
                 errorMessage = "User not authenticated",
                 errorCode = "NO_USER",

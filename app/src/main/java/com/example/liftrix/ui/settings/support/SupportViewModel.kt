@@ -8,7 +8,7 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.support.SupportCategory
 import com.example.liftrix.domain.service.AppInfoService
 import com.example.liftrix.domain.service.SupportService
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.support.AddReplyToSupportTicketUseCase
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
@@ -37,7 +37,7 @@ import javax.inject.Inject
 class SupportViewModel @Inject constructor(
     private val supportService: SupportService,
     private val appInfoService: AppInfoService,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     private val addReplyToSupportTicketUseCase: AddReplyToSupportTicketUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<SupportUiState, SupportEvent>(errorHandler) {
@@ -77,7 +77,10 @@ class SupportViewModel @Inject constructor(
         executeUseCase(
             useCase = {
                 // Get current user ID
-                val userId = getCurrentUserIdUseCase() ?: throw LiftrixError.AuthenticationError("User not authenticated")
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { throw LiftrixError.AuthenticationError("User not authenticated") }
+                )
                 
                 // Get device info for support context
                 val deviceInfo = appInfoService.getDeviceInfo()

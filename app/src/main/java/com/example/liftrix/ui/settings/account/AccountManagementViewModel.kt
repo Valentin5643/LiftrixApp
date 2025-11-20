@@ -9,7 +9,7 @@ import com.example.liftrix.domain.usecase.account.AccountQueryUseCase
 import com.example.liftrix.domain.usecase.account.AccountCommandUseCase
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.UserAccountRepository
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +28,7 @@ import javax.inject.Inject
 class AccountManagementViewModel @Inject constructor(
     private val accountCommandUseCase: AccountCommandUseCase,
     private val accountQueryUseCase: AccountQueryUseCase,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     private val authRepository: AuthRepository,
     private val userAccountRepository: UserAccountRepository,
     private val analyticsService: AnalyticsService
@@ -71,14 +71,16 @@ class AccountManagementViewModel @Inject constructor(
     private fun loadAccountInfo() {
         viewModelScope.launch {
             updateState { copy(isLoading = true, error = null) }
-            
+
             try {
-                val userId = getCurrentUserIdUseCase()
-                    ?: throw LiftrixError.AuthenticationError(
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { throw LiftrixError.AuthenticationError(
                         errorMessage = "User not authenticated",
                         errorCode = "NO_USER"
-                    )
-                
+                    ) }
+                )
+
                 currentUserId = userId
 
                 val result = accountQueryUseCase()

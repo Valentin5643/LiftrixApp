@@ -5,7 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.export.ExportWorkoutsUseCase
 import com.example.liftrix.domain.usecase.export.ExportFormat
@@ -68,7 +68,7 @@ import javax.inject.Inject
 class DataPortabilityViewModel @Inject constructor(
     private val exportWorkoutsUseCase: ExportWorkoutsUseCase,
     private val dataImportUseCase: DataImportUseCase,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     @ApplicationContext private val context: Context,
     errorHandler: ErrorHandler
 ) : BaseViewModel<DataPortabilityUiState, DataPortabilityEvent>(errorHandler) {
@@ -132,7 +132,10 @@ class DataPortabilityViewModel @Inject constructor(
     private fun loadCurrentUser() {
         viewModelScope.launch {
             try {
-                val userId = getCurrentUserIdUseCase()
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { null }
+                )
                 if (userId != null) {
                     currentUserId = userId
                     Timber.d("Current user loaded: $userId")

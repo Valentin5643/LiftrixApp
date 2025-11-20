@@ -10,7 +10,6 @@ import com.example.liftrix.service.FeatureFlagService
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.settings.SettingsCommandUseCase
 import com.example.liftrix.domain.usecase.settings.EvaluateFeatureFlagUseCase
-import com.example.liftrix.domain.usecase.settings.EnhancedSignOutUseCase
 import com.example.liftrix.domain.usecase.settings.InitializeUserThemeUseCase
 // Note: Analytics use cases (Calculate*, Generate*, Update*, etc.) have been consolidated into:
 // - AnalyticsQueryUseCase (provided via @Inject)
@@ -52,40 +51,6 @@ object UseCaseModule {
         @ApplicationContext context: Context
     ): InitializeUserThemeUseCase {
         return InitializeUserThemeUseCase(settingsRepository, context)
-    }
-
-    /**
-     * Provides EnhancedSignOutUseCase with proper dependency injection.
-     * 
-     * This use case handles comprehensive logout functionality including
-     * Firebase sign out, local data cleanup, analytics tracking, and
-     * background service termination.
-     * 
-     * @param authRepository The authentication repository dependency
-     * @param analyticsService The analytics service dependency
-     * @param settingsRepository The settings repository dependency
-     * @param syncManager The sync manager dependency
-     * @param workManager The work manager dependency
-     * @return Configured EnhancedSignOutUseCase instance
-     */
-    @Provides
-    @Singleton
-    fun provideEnhancedSignOutUseCase(
-        authRepository: AuthRepository,
-        analyticsService: AnalyticsService,
-        settingsRepository: SettingsRepository,
-        syncManager: SyncManager,
-        @ApplicationContext context: Context,
-        stateCleanupManager: StateCleanupManager
-    ): EnhancedSignOutUseCase {
-        return EnhancedSignOutUseCase(
-            authRepository = authRepository,
-            analyticsService = analyticsService,
-            settingsRepository = settingsRepository,
-            syncManager = syncManager,
-            context = context,
-            stateCleanupManager = stateCleanupManager
-        )
     }
 
     // NOTE: The following use cases have been consolidated and are now provided via @Inject constructors:

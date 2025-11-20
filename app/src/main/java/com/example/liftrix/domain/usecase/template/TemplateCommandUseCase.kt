@@ -14,8 +14,9 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.FolderRepository
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
-import com.example.liftrix.domain.usecase.workout.EstimateWorkoutDurationUseCase
+import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
 import kotlinx.coroutines.flow.first
+import java.time.Duration
 import timber.log.Timber
 import java.time.Instant
 import javax.inject.Inject
@@ -49,7 +50,7 @@ class TemplateCommandUseCase @Inject constructor(
     private val templateRepository: WorkoutTemplateRepository,
     private val folderRepository: FolderRepository,
     private val authRepository: AuthRepository,
-    private val estimateWorkoutDurationUseCase: EstimateWorkoutDurationUseCase
+    private val workoutQueryUseCase: WorkoutQueryUseCase
 ) {
 
     // ========== CREATE OPERATIONS ==========
@@ -150,7 +151,11 @@ class TemplateCommandUseCase @Inject constructor(
                     createdAt = Instant.now(),
                     updatedAt = Instant.now()
                 )
-                estimateWorkoutDurationUseCase.estimateDurationMinutes(tempTemplate)
+                val durationResult = workoutQueryUseCase.estimateDuration(tempTemplate)
+                durationResult.fold(
+                    onSuccess = { duration -> duration.toMinutes().toInt() },
+                    onFailure = { 45 } // Fallback to 45 minutes
+                )
             }
 
             val template = WorkoutTemplate(
@@ -451,7 +456,11 @@ class TemplateCommandUseCase @Inject constructor(
         )
 
         // Estimate duration using the complete template
-        val estimatedDuration = estimateWorkoutDurationUseCase.estimateDurationMinutes(template)
+        val durationResult = workoutQueryUseCase.estimateDuration(template)
+        val estimatedDuration = durationResult.fold(
+            onSuccess = { duration -> duration.toMinutes().toInt() },
+            onFailure = { 45 } // Fallback to 45 minutes
+        )
 
         // Return template with estimated duration
         return template.copy(estimatedDurationMinutes = estimatedDuration)

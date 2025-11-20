@@ -1,64 +1,76 @@
 package com.example.liftrix.domain.usecase.profile
 
-import com.example.liftrix.domain.model.AchievementType
 import com.example.liftrix.domain.model.StreakData
 import com.example.liftrix.domain.model.UserAchievement
 import com.example.liftrix.domain.model.WorkoutStatus
 import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.domain.model.common.liftrixCatching
+import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.AchievementRepository
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
+import com.example.liftrix.domain.service.achievement.AchievementCalculatorFactory
 import kotlinx.coroutines.flow.first
 import java.time.LocalDateTime
-import java.util.UUID
 import javax.inject.Inject
 
 /**
  * Use case for calculating and assigning user achievements based on workout data.
  * Detects milestones, streaks, consistency badges, and first-time events.
+ *
+ * Refactored to use Strategy Pattern for reduced cyclomatic complexity:
+ * - Delegates calculations to specialized AchievementCalculator strategies
+ * - Factory pattern provides all calculators
+ * - Complexity reduced from 22 to <15
  */
 class CalculateAchievementsUseCase @Inject constructor(
     private val achievementRepository: AchievementRepository,
-    private val workoutRepository: WorkoutRepository
+    private val workoutRepository: WorkoutRepository,
+    private val calculatorFactory: AchievementCalculatorFactory
 ) {
 
-    suspend operator fun invoke(userId: String): LiftrixResult<List<UserAchievement>> {
-        return try {
-            val existingAchievements = achievementRepository.getUserAchievements(userId).getOrElse {
-                return LiftrixResult.failure(Exception("Failed to load existing achievements: ${it.message}"))
-            }
-            
-            val streakData = calculateStreakData(userId).getOrElse {
-                return LiftrixResult.failure(Exception("Failed to calculate streak data: ${it.message}"))
-            }
-            
-            val newAchievements = mutableListOf<UserAchievement>()
-            
-            // Calculate workout milestone achievements
-            newAchievements.addAll(calculateWorkoutMilestones(userId, streakData, existingAchievements))
-            
-            // Calculate streak achievements
-            newAchievements.addAll(calculateStreakAchievements(userId, streakData, existingAchievements))
-            
-            // Calculate consistency badges
-            newAchievements.addAll(calculateConsistencyBadges(userId, existingAchievements))
-            
-            // Calculate first-time achievements
-            newAchievements.addAll(calculateFirstTimeAchievements(userId, streakData, existingAchievements))
-            
-            // Save new achievements
-            if (newAchievements.isNotEmpty()) {
-                achievementRepository.saveAchievements(newAchievements).getOrElse {
-                    return LiftrixResult.failure(Exception("Failed to save achievements: ${it.message}"))
-                }
-            }
-            
-            // Return all achievements (existing + new)
-            val allAchievements = existingAchievements + newAchievements
-            LiftrixResult.success(allAchievements)
-            
-        } catch (e: Exception) {
-            LiftrixResult.failure(Exception("Failed to calculate achievements: ${e.message}"))
+    suspend operator fun invoke(userId: String): LiftrixResult<List<UserAchievement>> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "ACHIEVEMENT_CALCULATION_FAILED",
+                errorMessage = "Failed to calculate achievements: ${throwable.message}",
+                analyticsContext = mapOf(
+                    "operation" to "CALCULATE_ACHIEVEMENTS",
+                    "user_id" to userId
+                )
+            )
         }
+    ) {
+        val existingAchievements = achievementRepository.getUserAchievements(userId).getOrElse {
+            throw LiftrixError.BusinessLogicError(
+                code = "ACHIEVEMENT_LOAD_FAILED",
+                errorMessage = "Failed to load existing achievements: ${it.message}"
+            )
+        }
+
+        val streakData = calculateStreakData(userId).getOrElse {
+            throw LiftrixError.BusinessLogicError(
+                code = "STREAK_DATA_CALCULATION_FAILED",
+                errorMessage = "Failed to calculate streak data: ${it.message}"
+            )
+        }
+
+        // Use strategy pattern: delegate to specialized calculators
+        val newAchievements = calculatorFactory.getAllCalculators().flatMap { calculator ->
+            calculator.calculate(userId, streakData, existingAchievements)
+        }
+
+        // Save new achievements
+        if (newAchievements.isNotEmpty()) {
+            achievementRepository.saveAchievements(newAchievements).getOrElse {
+                throw LiftrixError.BusinessLogicError(
+                    code = "ACHIEVEMENT_SAVE_FAILED",
+                    errorMessage = "Failed to save achievements: ${it.message}"
+                )
+            }
+        }
+
+        // Return all achievements (existing + new)
+        existingAchievements + newAchievements
     }
 
     private suspend fun calculateStreakData(userId: String): LiftrixResult<StreakData> {
@@ -130,137 +142,4 @@ class CalculateAchievementsUseCase @Inject constructor(
         }
     }
 
-    private fun calculateWorkoutMilestones(
-        userId: String,
-        streakData: StreakData,
-        existingAchievements: List<UserAchievement>
-    ): List<UserAchievement> {
-        val milestones = listOf(1, 5, 10, 25, 50, 100, 250, 500, 1000)
-        val newAchievements = mutableListOf<UserAchievement>()
-        val currentTime = LocalDateTime.now()
-        
-        for (milestone in milestones) {
-            if (streakData.totalWorkouts >= milestone) {
-                val achievementTitle = when (milestone) {
-                    1 -> "First Workout"
-                    5 -> "Getting Started"
-                    10 -> "Perfect Ten"
-                    25 -> "Quarter Century"
-                    50 -> "Half Century"
-                    100 -> "Century Club"
-                    250 -> "Quarter Thousand"
-                    500 -> "Elite Athlete"
-                    1000 -> "Workout Legend"
-                    else -> "$milestone Workouts"
-                }
-                
-                // Check if this achievement already exists
-                val exists = existingAchievements.any { 
-                    it.achievementType == AchievementType.WORKOUT_MILESTONE && 
-                    it.title == achievementTitle 
-                }
-                
-                if (!exists) {
-                    val achievement = UserAchievement(
-                        id = UUID.randomUUID().toString(),
-                        userId = userId,
-                        achievementType = AchievementType.WORKOUT_MILESTONE,
-                        title = achievementTitle,
-                        description = "Completed $milestone workout${if (milestone > 1) "s" else ""}",
-                        unlockedAt = currentTime,
-                        isDisplayed = true
-                    )
-                    newAchievements.add(achievement)
-                }
-            }
-        }
-        
-        return newAchievements
-    }
-
-    private fun calculateStreakAchievements(
-        userId: String,
-        streakData: StreakData,
-        existingAchievements: List<UserAchievement>
-    ): List<UserAchievement> {
-        val streakMilestones = listOf(3, 7, 14, 30, 60, 100)
-        val newAchievements = mutableListOf<UserAchievement>()
-        val currentTime = LocalDateTime.now()
-        
-        for (streak in streakMilestones) {
-            if (streakData.longestStreak >= streak) {
-                val achievementTitle = when (streak) {
-                    3 -> "Three Day Streak"
-                    7 -> "Week Warrior"
-                    14 -> "Two Week Champion"
-                    30 -> "Monthly Streak Master"
-                    60 -> "Two Month Legend"
-                    100 -> "Streak Superstar"
-                    else -> "$streak Day Streak"
-                }
-                
-                // Check if this achievement already exists
-                val exists = existingAchievements.any { 
-                    it.achievementType == AchievementType.STREAK_ACHIEVEMENT && 
-                    it.title == achievementTitle 
-                }
-                
-                if (!exists) {
-                    val achievement = UserAchievement(
-                        id = UUID.randomUUID().toString(),
-                        userId = userId,
-                        achievementType = AchievementType.STREAK_ACHIEVEMENT,
-                        title = achievementTitle,
-                        description = "Maintained a $streak day workout streak",
-                        unlockedAt = currentTime,
-                        isDisplayed = true
-                    )
-                    newAchievements.add(achievement)
-                }
-            }
-        }
-        
-        return newAchievements
-    }
-
-    private suspend fun calculateConsistencyBadges(
-        userId: String,
-        existingAchievements: List<UserAchievement>
-    ): List<UserAchievement> {
-        // This would require more complex workout analysis
-        // For now, return empty list - can be enhanced later
-        return emptyList()
-    }
-
-    private fun calculateFirstTimeAchievements(
-        userId: String,
-        streakData: StreakData,
-        existingAchievements: List<UserAchievement>
-    ): List<UserAchievement> {
-        val newAchievements = mutableListOf<UserAchievement>()
-        val currentTime = LocalDateTime.now()
-        
-        // First workout achievement
-        if (streakData.totalWorkouts >= 1) {
-            val exists = existingAchievements.any { 
-                it.achievementType == AchievementType.FIRST_TIME_EVENTS && 
-                it.title == "Welcome to Liftrix" 
-            }
-            
-            if (!exists) {
-                val achievement = UserAchievement(
-                    id = UUID.randomUUID().toString(),
-                    userId = userId,
-                    achievementType = AchievementType.FIRST_TIME_EVENTS,
-                    title = "Welcome to Liftrix",
-                    description = "Completed your first workout",
-                    unlockedAt = currentTime,
-                    isDisplayed = true
-                )
-                newAchievements.add(achievement)
-            }
-        }
-        
-        return newAchievements
-    }
 }

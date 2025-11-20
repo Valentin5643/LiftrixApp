@@ -16,7 +16,7 @@ import com.example.liftrix.domain.usecase.analytics.ExerciseRankingData as UseCa
 import com.example.liftrix.domain.usecase.analytics.RankedExercise as UseCaseRankedExercise
 import com.example.liftrix.domain.usecase.analytics.PlateauStatus as UseCasePlateauStatus
 import com.example.liftrix.domain.usecase.analytics.PerformanceTrend as UseCasePerformanceTrend
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -44,7 +44,7 @@ class ExerciseRankingDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     errorHandler: ErrorHandler,
     private val analyticsQueryUseCase: AnalyticsQueryUseCase,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : StatefulDetailViewModel<ExerciseRankingDetailViewModel.UiState, ExerciseRankingDetailViewModel.Event>(savedStateHandle, errorHandler) {
 
@@ -97,12 +97,17 @@ class ExerciseRankingDetailViewModel @Inject constructor(
         viewModelScope.launch {
             // Reactive binding for real-time exercise ranking updates
             // This will automatically refresh when workout data changes
-            getCurrentUserIdUseCase()?.let { userId ->
-                // Monitor for workout data changes that affect rankings
-                // The use case already handles the data flow internally
-                Timber.d("Monitoring exercise ranking changes for user: $userId")
-            }
-            
+            authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { userId ->
+                    // Monitor for workout data changes that affect rankings
+                    // The use case already handles the data flow internally
+                    Timber.d("Monitoring exercise ranking changes for user: $userId")
+                },
+                onFailure = {
+                    Timber.e(it, "Failed to get user ID for reactive binding")
+                }
+            )
+
             // For now, set up reactive binding stub
             Timber.d("Reactive data binding initialized for ExerciseRankingDetailViewModel")
         }
@@ -116,13 +121,16 @@ class ExerciseRankingDetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val startTime = System.currentTimeMillis()
-                
-                val userId = getCurrentUserIdUseCase() ?: run {
-                    val authError = LiftrixError.AuthenticationError("User not authenticated")
-                    handleError(authError)
-                    Timber.e("Failed to load exercise rankings: User not authenticated")
-                    return@launch
-                }
+
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = {
+                        val authError = LiftrixError.AuthenticationError("User not authenticated")
+                        handleError(authError)
+                        Timber.e("Failed to load exercise rankings: User not authenticated")
+                        return@launch
+                    }
+                )
                 val result = analyticsQueryUseCase.getExerciseRanking(
                     userId = userId,
                     timeRange = _timeRange.value

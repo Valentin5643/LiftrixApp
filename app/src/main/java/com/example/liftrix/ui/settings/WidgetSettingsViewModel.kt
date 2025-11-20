@@ -7,7 +7,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.usecase.analytics.WidgetPreferencesUseCase
 import com.example.liftrix.domain.usecase.analytics.WidgetMigrationUseCase
-import com.example.liftrix.domain.usecase.auth.GetAuthenticatedUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.state.UiState
@@ -44,7 +44,7 @@ import javax.inject.Inject
 class WidgetSettingsViewModel @Inject constructor(
     private val widgetPreferencesUseCase: WidgetPreferencesUseCase,
     private val widgetMigrationUseCase: WidgetMigrationUseCase,
-    private val getAuthenticatedUserIdUseCase: GetAuthenticatedUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<WidgetSettingsUiState, WidgetSettingsEvent>(errorHandler) {
 
@@ -67,7 +67,14 @@ class WidgetSettingsViewModel @Inject constructor(
     private fun loadAuthenticatedUser() {
         viewModelScope.launch {
             try {
-                val userId = getAuthenticatedUserIdUseCase()
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { error ->
+                        Timber.e(error, "🔐 AUTH: Failed to load authenticated user ID")
+                        updateState { UiState.Error(LiftrixError.AuthenticationError("Failed to authenticate user")) }
+                        return@launch
+                    }
+                )
                 currentUserId.value = userId
                 Timber.d("🔐 AUTH: Loaded authenticated user ID: $userId")
             } catch (e: Exception) {

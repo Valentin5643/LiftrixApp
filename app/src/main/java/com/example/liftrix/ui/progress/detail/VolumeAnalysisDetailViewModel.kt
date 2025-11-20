@@ -10,7 +10,7 @@ import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.analytics.AnalyticsQueryUseCase
 import com.example.liftrix.domain.usecase.analytics.AnalyticsExportUseCase
 import com.example.liftrix.domain.usecase.analytics.VolumeAnalysisData as UseCaseVolumeAnalysisData
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.analytics.ExportVolumeDataRequest
 import com.example.liftrix.domain.usecase.analytics.ExportVolumeDataPoint
 import com.example.liftrix.domain.model.analytics.TimeRangeType
@@ -53,7 +53,7 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     errorHandler: ErrorHandler,
     private val analyticsQueryUseCase: AnalyticsQueryUseCase,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     private val analyticsExportUseCase: AnalyticsExportUseCase
 ) : StatefulDetailViewModel<VolumeAnalysisDetailViewModel.UiState, VolumeAnalysisDetailViewModel.Event>(savedStateHandle, errorHandler) {
 
@@ -151,9 +151,11 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
      */
     private fun loadVolumeAnalysisData() {
         executeUseCase(
-            useCase = { 
-                val userId = getCurrentUserIdUseCase() ?: throw Exception("User not authenticated").also {
-                }
+            useCase = {
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { throw Exception("User not authenticated") }
+                )
                 
                 
                 analyticsQueryUseCase.getVolumeAnalysis(

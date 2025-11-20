@@ -16,7 +16,7 @@ import com.example.liftrix.domain.usecase.analytics.AnalyticsExportUseCase
 import com.example.liftrix.domain.usecase.analytics.ExportWorkoutFrequencyDataRequest
 import com.example.liftrix.domain.usecase.analytics.WorkoutFrequencyDataPoint
 import com.example.liftrix.domain.usecase.analytics.WorkoutFrequencyData as UseCaseWorkoutFrequencyData
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -57,7 +57,7 @@ import kotlin.random.Random
 class WorkoutFrequencyDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     errorHandler: ErrorHandler,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     private val analyticsQueryUseCase: AnalyticsQueryUseCase,
     private val analyticsExportUseCase: AnalyticsExportUseCase
 ) : StatefulDetailViewModel<WorkoutFrequencyDetailViewModel.UiState, WorkoutFrequencyDetailViewModel.Event>(savedStateHandle, errorHandler) {
@@ -118,16 +118,18 @@ class WorkoutFrequencyDetailViewModel @Inject constructor(
             try {
                 val startTime = System.currentTimeMillis()
                 _uiState.value = UiState.Loading
-                
+
                 // Get current user ID
-                val userId = getCurrentUserIdUseCase()
-                if (userId == null) {
-                    Timber.e("User ID not available")
-                    handleError(LiftrixError.AuthenticationError(
-                        errorMessage = "User not authenticated"
-                    ))
-                    return@launch
-                }
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { error ->
+                        Timber.e(error, "User ID not available")
+                        handleError(LiftrixError.AuthenticationError(
+                            errorMessage = "User not authenticated"
+                        ))
+                        return@launch
+                    }
+                )
                 
                 // Use actual use case to get workout frequency analytics
                 val result = analyticsQueryUseCase.getWorkoutFrequency(

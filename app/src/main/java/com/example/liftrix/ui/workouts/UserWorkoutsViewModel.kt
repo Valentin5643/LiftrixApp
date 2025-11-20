@@ -13,7 +13,7 @@ import com.example.liftrix.domain.model.social.WorkoutSummary as SocialWorkoutSu
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.repository.social.EngagementRepository
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.sharing.ShareToExternalPlatformUseCase
 import com.example.liftrix.domain.usecase.sharing.SharePlatform
@@ -77,7 +77,7 @@ sealed class UserWorkoutsEvent : ViewModelEvent {
 class UserWorkoutsViewModel @Inject constructor(
     private val workoutRepository: WorkoutRepository,
     private val engagementRepository: EngagementRepository,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     private val shareToExternalPlatformUseCase: ShareToExternalPlatformUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<UserWorkoutsUiState, UserWorkoutsEvent>(errorHandler) {
@@ -109,29 +109,31 @@ class UserWorkoutsViewModel @Inject constructor(
     
     private fun loadUserData() {
         viewModelScope.launch {
-            val userId = getCurrentUserIdUseCase()
-            if (userId != null) {
-                _uiState.update { it.copy(userId = userId) }
-            } else {
-                val error = LiftrixError.UnknownError("Failed to get user ID")
-                Timber.e("Failed to get current user ID: $error")
-                _uiState.update { it.copy(error = error) }
-            }
+            authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { userId ->
+                    _uiState.update { it.copy(userId = userId) }
+                },
+                onFailure = {
+                    val error = LiftrixError.UnknownError("Failed to get user ID")
+                    Timber.e("Failed to get current user ID: $error")
+                    _uiState.update { it.copy(error = error) }
+                }
+            )
         }
     }
     
     private fun loadUserWorkouts() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            
+
             try {
-                val userId = getCurrentUserIdUseCase()
-                if (userId != null) {
-                    // 🔍 ENHANCED LOGGING: Track workout loading
-                    Timber.d("[WORKOUTS-DEBUG] Loading workouts for user: $userId")
-                    
-                    // Collect workouts from the workout repository and convert to WorkoutPost format
-                    workoutRepository.getWorkoutsByUser(userId).collect { result ->
+                authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { userId ->
+                        // 🔍 ENHANCED LOGGING: Track workout loading
+                        Timber.d("[WORKOUTS-DEBUG] Loading workouts for user: $userId")
+
+                        // Collect workouts from the workout repository and convert to WorkoutPost format
+                        workoutRepository.getWorkoutsByUser(userId).collect { result ->
                         result.fold(
                             onSuccess = { workouts ->
                                 Timber.d("[WORKOUTS-DEBUG] Successfully loaded ${workouts.size} workouts")
@@ -211,17 +213,19 @@ class UserWorkoutsViewModel @Inject constructor(
                                 }
                             }
                         )
+                        }
+                    },
+                    onFailure = {
+                        val error = LiftrixError.AuthenticationError("User not authenticated")
+                        Timber.e("[WORKOUTS-DEBUG] Failed to get current user ID: $error")
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                error = error
+                            )
+                        }
                     }
-                } else {
-                    val error = LiftrixError.AuthenticationError("User not authenticated")
-                    Timber.e("[WORKOUTS-DEBUG] Failed to get current user ID: $error")
-                    _uiState.update { 
-                        it.copy(
-                            isLoading = false,
-                            error = error
-                        )
-                    }
-                }
+                )
             } catch (e: Exception) {
                 val error = LiftrixError.UnknownError("Failed to load user workouts: ${e.message}")
                 Timber.e(e, "[WORKOUTS-DEBUG] Exception loading user workouts")
@@ -319,37 +323,38 @@ class UserWorkoutsViewModel @Inject constructor(
     
     fun shareWorkout(workoutId: String) {
         viewModelScope.launch {
-            val userId = getCurrentUserIdUseCase()
-            if (userId == null) {
-                Timber.e("Cannot share workout: User not authenticated")
-                return@launch
-            }
+            authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { userId ->
+                    // Get the workout details for sharing
+                    val workout = _uiState.value.workoutPosts.find { it.id == workoutId }
+                    if (workout == null) {
+                        Timber.e("Cannot share workout: Workout not found with id $workoutId")
+                        return@launch
+                    }
 
-            // Get the workout details for sharing
-            val workout = _uiState.value.workoutPosts.find { it.id == workoutId }
-            if (workout == null) {
-                Timber.e("Cannot share workout: Workout not found with id $workoutId")
-                return@launch
-            }
+                    // Use the ShareToExternalPlatformUseCase to share the workout
+                    val result = shareToExternalPlatformUseCase.invoke(
+                        com.example.liftrix.domain.usecase.sharing.ShareRequest(
+                            workoutId = workoutId,
+                            userId = userId,
+                            platform = SharePlatform.GENERIC, // Let user choose platform
+                            contentType = ShareContentType.WORKOUT_SUMMARY
+                        )
+                    )
 
-            // Use the ShareToExternalPlatformUseCase to share the workout
-            val result = shareToExternalPlatformUseCase.invoke(
-                com.example.liftrix.domain.usecase.sharing.ShareRequest(
-                    workoutId = workoutId,
-                    userId = userId,
-                    platform = SharePlatform.GENERIC, // Let user choose platform
-                    contentType = ShareContentType.WORKOUT_SUMMARY
-                )
-            )
-
-            result.fold(
-                onSuccess = { 
-                    Timber.d("Workout shared successfully: $workoutId")
+                    result.fold(
+                        onSuccess = {
+                            Timber.d("Workout shared successfully: $workoutId")
+                        },
+                        onFailure = { error ->
+                            val liftrixError = error as? LiftrixError ?: LiftrixError.UnknownError("Failed to share workout: ${error.message}")
+                            Timber.e("Failed to share workout: $liftrixError")
+                            handleError(liftrixError)
+                        }
+                    )
                 },
-                onFailure = { error ->
-                    val liftrixError = error as? LiftrixError ?: LiftrixError.UnknownError("Failed to share workout: ${error.message}")
-                    Timber.e("Failed to share workout: $liftrixError")
-                    handleError(liftrixError)
+                onFailure = {
+                    Timber.e("Cannot share workout: User not authenticated")
                 }
             )
         }

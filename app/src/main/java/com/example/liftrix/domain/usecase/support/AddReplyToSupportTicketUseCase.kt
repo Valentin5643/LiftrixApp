@@ -5,7 +5,7 @@ import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.support.AddSupportTicketReplyRequest
 import com.example.liftrix.domain.service.SupportService
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import javax.inject.Inject
 
 /**
@@ -16,7 +16,7 @@ import javax.inject.Inject
  */
 class AddReplyToSupportTicketUseCase @Inject constructor(
     private val supportService: SupportService,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+    private val authQueryUseCase: AuthQueryUseCase
 ) {
     /**
      * Adds a reply to a support ticket
@@ -48,9 +48,7 @@ class AddReplyToSupportTicketUseCase @Inject constructor(
         }
     ) {
         // Get current user ID for authentication and scoping
-        val userId = getCurrentUserIdUseCase() ?: throw LiftrixError.AuthenticationError(
-            "User not authenticated"
-        )
+        val userId = authQueryUseCase(waitForAuth = false).getOrThrow()
         
         // Create and validate the reply request
         val request = AddSupportTicketReplyRequest(

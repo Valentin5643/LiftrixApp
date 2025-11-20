@@ -7,9 +7,9 @@ import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutTemplatePreview
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.WorkoutTemplateRepository
-import com.example.liftrix.domain.usecase.auth.GetAuthenticatedUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.repository.FolderRepository
-import com.example.liftrix.domain.usecase.SaveWorkoutUseCase
+import com.example.liftrix.domain.usecase.workout.WorkoutCommandUseCase
 import com.example.liftrix.domain.usecase.folder.FolderOperationsUseCase
 import com.example.liftrix.domain.usecase.analytics.LogWorkoutEventUseCase
 import com.example.liftrix.domain.usecase.template.TemplateQueryUseCase
@@ -53,8 +53,8 @@ class WorkoutViewModel @Inject constructor(
     private val workoutTemplateRepository: WorkoutTemplateRepository,
     private val folderRepository: FolderRepository,
     private val authRepository: AuthRepository,
-    private val getAuthenticatedUserIdUseCase: GetAuthenticatedUserIdUseCase,
-    private val saveWorkoutUseCase: SaveWorkoutUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
+    private val workoutCommandUseCase: WorkoutCommandUseCase,
     private val folderOperationsUseCase: FolderOperationsUseCase,
     private val templateQueryUseCase: TemplateQueryUseCase,
     private val templateCommandUseCase: TemplateCommandUseCase,
@@ -331,16 +331,21 @@ class WorkoutViewModel @Inject constructor(
             useCase = {
                 // Track previous status for analytics
                 val previousStatus = workout.status
-                val result = saveWorkoutUseCase(workout)
-                
+                val result = workoutCommandUseCase.saveWorkout(workout)
+
                 // Log analytics events based on workout status changes
-                if (result.isSuccess) {
-                    logWorkoutEventUseCase.logWorkoutStatusChange(workout, previousStatus)
-                        .onFailure { exception ->
-                            Timber.e(exception, "Failed to log workout analytics event")
-                            // Don't fail the save operation if analytics fails
-                        }
-                }
+                result.fold(
+                    onSuccess = {
+                        logWorkoutEventUseCase.logWorkoutStatusChange(workout, previousStatus)
+                            .onFailure { exception ->
+                                Timber.e(exception, "Failed to log workout analytics event")
+                                // Don't fail the save operation if analytics fails
+                            }
+                    },
+                    onFailure = { error ->
+                        Timber.e(error.toString(), "Failed to save workout")
+                    }
+                )
                 result
             },
             onSuccess = { 
@@ -355,7 +360,10 @@ class WorkoutViewModel @Inject constructor(
     fun syncNow() {
         executeUseCase(
             useCase = {
-                val userId = getAuthenticatedUserIdUseCase()
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { return@executeUseCase Result.failure(it) }
+                )
                 workoutRepository.syncNowForUser(userId)
             },
             onSuccess = {
@@ -370,7 +378,10 @@ class WorkoutViewModel @Inject constructor(
     fun getUnsyncedCount() {
         executeUseCase(
             useCase = {
-                val userId = getAuthenticatedUserIdUseCase()
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { return@executeUseCase Result.failure(it) }
+                )
                 workoutRepository.getUnsyncedCountForUser(userId)
             },
             onSuccess = { count ->
@@ -441,7 +452,13 @@ class WorkoutViewModel @Inject constructor(
     fun selectFolder(folderId: String?) {
         viewModelScope.launch {
             try {
-                val userId = getAuthenticatedUserIdUseCase()
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = {
+                        Timber.e(it, "Failed to get user ID")
+                        return@launch
+                    }
+                )
                 loadTemplatesForUser(userId, selectedFolderId = folderId)
             } catch (exception: Exception) {
                 Timber.e(exception, "Failed to select folder: $folderId")
@@ -493,8 +510,14 @@ class WorkoutViewModel @Inject constructor(
     private fun refreshFolderState() {
         viewModelScope.launch {
             try {
-                val userId = getAuthenticatedUserIdUseCase()
-                
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = {
+                        Timber.e(it, "Failed to get user ID")
+                        return@launch
+                    }
+                )
+
                 // Direct repository access to avoid use case Flow complications
                 folderRepository.getAllFoldersForUser(userId)
                     .first() // Get just the first emission
@@ -513,7 +536,10 @@ class WorkoutViewModel @Inject constructor(
     fun createFolder(folderName: String) {
         executeUseCase(
             useCase = {
-                val userId = getAuthenticatedUserIdUseCase()
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { return@executeUseCase Result.failure(it) }
+                )
 
                 if (userId.isBlank()) {
                     throw IllegalStateException("User not authenticated - cannot create folder")
@@ -523,7 +549,7 @@ class WorkoutViewModel @Inject constructor(
             },
             onSuccess = { folder ->
                 Timber.d("New folder created: ${folder.name} (${folder.id.value})")
-                
+
                 // Refresh the combined loading to include the new folder
                 // This ensures the new folder appears alongside existing templates
                 refreshData()
@@ -554,7 +580,10 @@ class WorkoutViewModel @Inject constructor(
     fun deleteFolder(folder: com.example.liftrix.domain.model.Folder) {
         executeUseCase(
             useCase = {
-                val userId = getAuthenticatedUserIdUseCase()
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { return@executeUseCase Result.failure(it) }
+                )
 
                 if (userId.isBlank()) {
                     throw IllegalStateException("User not authenticated - cannot delete folder")
@@ -564,7 +593,7 @@ class WorkoutViewModel @Inject constructor(
             },
             onSuccess = {
                 Timber.d("Folder '${folder.name}' deleted successfully")
-                
+
                 // Refresh the data to remove the deleted folder and show relocated templates
                 refreshData()
             },
@@ -577,22 +606,25 @@ class WorkoutViewModel @Inject constructor(
     fun renameFolder(folder: com.example.liftrix.domain.model.Folder, newName: String) {
         executeUseCase(
             useCase = {
-                val userId = getAuthenticatedUserIdUseCase()
-                
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { return@executeUseCase Result.failure(it) }
+                )
+
                 if (userId.isBlank()) {
                     throw IllegalStateException("User not authenticated - cannot rename folder")
                 }
-                
+
                 // Create updated folder with new name
                 val updatedFolder = folder.copy(
                     name = com.example.liftrix.domain.model.FolderName(newName.trim())
                 )
-                
+
                 folderRepository.updateFolder(updatedFolder)
             },
             onSuccess = { updatedFolder ->
                 Timber.d("Folder '${folder.name}' renamed to '$newName'")
-                
+
                 // Refresh the data to show the updated folder name
                 refreshData()
             },
@@ -641,12 +673,15 @@ class WorkoutViewModel @Inject constructor(
     ) {
         executeUseCase(
             useCase = {
-                val userId = getAuthenticatedUserIdUseCase()
-                
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { return@executeUseCase Result.failure(it) }
+                )
+
                 if (userId.isBlank()) {
                     throw IllegalStateException("User not authenticated - cannot reorder folders")
                 }
-                
+
                 // ✅ RACE CONDITION FIX: Use cached state directly, no re-checking UI state
                 val currentFolders = confirmedSuccessState.data.folders
 
@@ -660,7 +695,7 @@ class WorkoutViewModel @Inject constructor(
                 }
 
                 val result = folderOperationsUseCase.reorder(userId, currentFolders, orderedFolderIds)
-                
+
                 // Convert Result<T> to LiftrixResult<T> for BaseViewModel
                 result.fold(
                     onSuccess = { folders ->

@@ -1,16 +1,30 @@
 package com.example.liftrix.domain.usecase.analytics
 
 import com.example.liftrix.data.local.dao.ExerciseSetDao
+import com.example.liftrix.domain.model.analytics.AnalyticsWidget
+import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.analytics.TimeRangeType
+import com.example.liftrix.domain.model.analytics.VolumeCalendarData
 import com.example.liftrix.domain.model.analytics.VolumeGrouping
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.ProgressStatsRepository
 import com.example.liftrix.domain.repository.DashboardData
+import com.example.liftrix.domain.repository.workout.WorkoutRepository
+import com.example.liftrix.service.AnalyticsEngine
 import com.example.liftrix.service.ProgressDataService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.Clock
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.Month
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
+import kotlinx.datetime.todayIn
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -76,7 +90,10 @@ import javax.inject.Singleton
 class AnalyticsQueryUseCase @Inject constructor(
     private val progressDataService: ProgressDataService,
     private val exerciseSetDao: ExerciseSetDao,
-    private val progressStatsRepository: ProgressStatsRepository
+    private val progressStatsRepository: ProgressStatsRepository,
+    private val workoutRepository: WorkoutRepository,
+    private val analyticsEngine: AnalyticsEngine,
+    private val widgetCalculatorFactory: com.example.liftrix.domain.service.widget.WidgetCalculatorFactory
 ) {
 
     /**
@@ -358,6 +375,154 @@ class AnalyticsQueryUseCase @Inject constructor(
             )
         }
     }
+
+    /**
+     * Gets widget data for dashboard display.
+     *
+     * **Replaces**: GetWidgetDataUseCase.getWidgetData()
+     *
+     * Retrieves widget-specific analytics data optimized for UI display,
+     * including charts, summaries, and trend indicators.
+     *
+     * @param userId User identifier (must not be blank)
+     * @param widgetType Type of widget requesting data
+     * @return LiftrixResult containing widget data or error
+     */
+    suspend fun getWidgetData(
+        userId: String,
+        widgetType: AnalyticsWidget
+    ): LiftrixResult<WidgetData> = withContext(Dispatchers.IO) {
+        return@withContext liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.DataRetrievalError(
+                    errorMessage = "Failed to retrieve widget data for user $userId, widget $widgetType: ${throwable.message}",
+                    operation = "getWidgetData",
+                    retryable = true
+                )
+            }
+        ) {
+            require(userId.isNotBlank()) { "User ID cannot be blank" }
+
+            Timber.d("Retrieving widget data for user: $userId, widgetType: $widgetType")
+
+            // Use widget calculator factory to delegate calculation logic
+            val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
+            val startDate = today.minus(DatePeriod(days = 30)) // Last 30 days by default
+            val endDate = today
+
+            // Get appropriate calculator for widget type and calculate data
+            val calculator = widgetCalculatorFactory.getCalculator(widgetType)
+            val data = calculator.calculate(userId, startDate, endDate)
+
+            WidgetData(
+                widgetType = widgetType,
+                data = data,
+                lastUpdated = System.currentTimeMillis(),
+                isStale = false
+            )
+        }
+    }
+
+    /**
+     * Retrieves data for multiple widgets efficiently with parallel fetching.
+     *
+     * **Replaces**: GetWidgetDataUseCase.getMultipleWidgetData()
+     *
+     * Batch retrieval of widget data to optimize performance when loading
+     * multiple widgets simultaneously on the dashboard.
+     *
+     * @param userId User identifier for data filtering
+     * @param widgetTypes List of widget types to retrieve data for
+     * @return LiftrixResult containing map of widget data or error
+     */
+    suspend fun getMultipleWidgetData(
+        userId: String,
+        widgetTypes: List<AnalyticsWidget>
+    ): LiftrixResult<Map<AnalyticsWidget, WidgetData>> = withContext(Dispatchers.IO) {
+        return@withContext liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.DataRetrievalError(
+                    errorMessage = "Failed to retrieve multiple widget data for user $userId: ${throwable.message}",
+                    operation = "getMultipleWidgetData",
+                    retryable = true
+                )
+            }
+        ) {
+            require(userId.isNotBlank()) { "User ID cannot be blank" }
+
+            Timber.d("Retrieving multiple widget data for user: $userId, widgets: $widgetTypes")
+
+            // Retrieve data for all widgets in parallel for optimal performance (PERF-001 fix)
+            val deferredResults = widgetTypes.map { widgetType ->
+                async {
+                    widgetType to getWidgetData(userId, widgetType).getOrThrow()
+                }
+            }
+
+            deferredResults.awaitAll().toMap()
+        }
+    }
+
+    /**
+     * Generates monthly volume calendar data for analytics dashboard.
+     *
+     * **Replaces**: GenerateVolumeCalendarUseCase.invoke()
+     *
+     * Provides volume calendar generation for monthly workout volume visualization
+     * with color-coded intensity, historical volume pattern analysis, and calendar
+     * widget data for dashboard display.
+     *
+     * @param userId User identifier (must not be blank)
+     * @param year The year for calendar generation
+     * @param month The month for calendar generation
+     * @return LiftrixResult containing VolumeCalendarData or error
+     */
+    suspend fun generateVolumeCalendar(
+        userId: String,
+        year: Int,
+        month: Month
+    ): LiftrixResult<VolumeCalendarData> = withContext(Dispatchers.IO) {
+        return@withContext liftrixCatching(
+            errorMapper = { throwable ->
+                LiftrixError.CalculationError(
+                    errorMessage = "Failed to generate volume calendar: ${throwable.message}",
+                    operation = "GENERATE_VOLUME_CALENDAR",
+                    analyticsContext = mapOf(
+                        "operation" to "generateVolumeCalendar",
+                        "userId" to userId,
+                        "year" to year.toString(),
+                        "month" to month.name
+                    )
+                )
+            }
+        ) {
+            require(userId.isNotBlank()) { "User ID cannot be blank" }
+
+            // Validate year range
+            require(year in 2020..2040) { "Year must be between 2020 and 2040" }
+
+            // Validate future date constraint
+            val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
+            require(
+                year < today.year ||
+                (year == today.year && month.ordinal <= today.month.ordinal)
+            ) { "Cannot generate calendar for future months" }
+
+            Timber.d("Generating volume calendar for user: $userId, year: $year, month: $month")
+
+            // Delegate to analytics engine for calendar generation
+            val calendarResult = analyticsEngine.generateVolumeCalendar(
+                userId = userId,
+                year = year,
+                month = month
+            )
+
+            val calendarData = calendarResult.getOrThrow()
+            Timber.d("Successfully generated volume calendar with ${calendarData.dailyVolumes.size} days of data")
+
+            calendarData
+        }
+    }
 }
 
 /**
@@ -581,3 +746,20 @@ enum class PerformanceTrend {
     STABLE,
     DECLINING
 }
+
+/**
+ * Widget data returned by getWidgetData() and getMultipleWidgetData().
+ *
+ * Contains widget-specific analytics data optimized for dashboard display.
+ *
+ * @property widgetType Type of widget (volume, duration, frequency, etc.)
+ * @property data Raw analytics data for the widget
+ * @property lastUpdated Timestamp of last data update
+ * @property isStale Whether the data should be refreshed
+ */
+data class WidgetData(
+    val widgetType: AnalyticsWidget,
+    val data: Map<String, Any>,
+    val lastUpdated: Long,
+    val isStale: Boolean = false
+)

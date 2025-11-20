@@ -27,7 +27,19 @@ jobs:
       
     - name: Run tests
       run: ./gradlew test
-      
+
+    - name: Generate coverage report
+      run: ./gradlew jacocoTestReport
+
+    - name: Verify coverage threshold (40%)
+      run: ./gradlew jacocoCoverageVerification
+
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report
+        path: app/build/reports/jacoco/jacocoTestReport/html/
+
     - name: Run Android tests
       uses: reactivecircus/android-emulator-runner@v2
       with:

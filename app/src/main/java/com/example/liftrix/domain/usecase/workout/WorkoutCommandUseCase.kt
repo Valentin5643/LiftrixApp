@@ -6,7 +6,7 @@ import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.repository.exercise.ExerciseRepository
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import kotlinx.coroutines.flow.first
 import timber.log.Timber
 import java.time.Instant
@@ -45,7 +45,7 @@ import kotlin.Result
 class WorkoutCommandUseCase @Inject constructor(
     private val workoutRepository: WorkoutRepository,
     private val exerciseRepository: ExerciseRepository,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+    private val authQueryUseCase: AuthQueryUseCase
 ) {
 
     // ============== UPDATE SESSION ==============
@@ -71,7 +71,7 @@ class WorkoutCommandUseCase @Inject constructor(
     ): Result<Workout> {
         return Result.runCatching {
             // Get current user ID for security validation
-            val currentUserId = getCurrentUserIdUseCase()
+            val currentUserId = authQueryUseCase(waitForAuth = false).getOrNull()
             if (currentUserId.isNullOrBlank()) {
                 throw IllegalStateException("User not authenticated")
             }
@@ -185,7 +185,7 @@ class WorkoutCommandUseCase @Inject constructor(
     ) {
         Timber.d("🔥 ADD-EXERCISE-DEBUG: Adding exercise $exerciseLibraryId to workout ${workoutId.value}")
 
-        val userId = getCurrentUserIdUseCase()
+        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
         if (userId.isNullOrBlank()) {
             throw IllegalStateException("User not authenticated")
         }
@@ -339,7 +339,7 @@ class WorkoutCommandUseCase @Inject constructor(
             throw IllegalArgumentException("No exercises to add")
         }
 
-        val userId = getCurrentUserIdUseCase()
+        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
         if (userId.isNullOrBlank()) {
             throw IllegalStateException("User not authenticated")
         }
@@ -437,4 +437,320 @@ class WorkoutCommandUseCase @Inject constructor(
         // Use the addExercise method with the custom exercise
         return addExercise(workoutId, customExerciseLibrary.id, initialSets)
     }
+
+    // ============== SAVE WORKOUT ==============
+
+    /**
+     * Save an existing workout with updated data.
+     *
+     * Replaces: SaveWorkoutUseCase (if it existed)
+     *
+     * Persists workout changes with:
+     * - Data validation to prevent corruption
+     * - User scoping for security
+     * - Timestamp updates for modification tracking
+     * - Sync coordination for Firebase synchronization
+     *
+     * @param workout The workout to save
+     * @return LiftrixResult with saved workout or error
+     */
+    suspend fun saveWorkout(workout: Workout): LiftrixResult<Unit> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "SAVE_WORKOUT_FAILED",
+                errorMessage = "Failed to save workout: ${throwable.message}",
+                analyticsContext = mapOf(
+                    "workout_id" to workout.id.value,
+                    "workout_name" to workout.name,
+                    "user_id" to workout.userId,
+                    "operation" to "SAVE_WORKOUT"
+                )
+            )
+        }
+    ) {
+        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
+        if (userId.isNullOrBlank()) {
+            throw IllegalStateException("User not authenticated")
+        }
+
+        // Validate user ownership
+        if (workout.userId != userId) {
+            throw SecurityException("Cannot save workout belonging to another user")
+        }
+
+        // Validate workout data
+        val validationError = validateSessionData(workout)
+        if (validationError != null) {
+            throw validationError
+        }
+
+        // Update modification timestamp
+        val workoutToSave = workout.copy(updatedAt = Instant.now())
+
+        // Save to repository
+        val saveResult = workoutRepository.updateWorkout(workoutToSave)
+        saveResult.fold(
+            onSuccess = { Timber.i("Successfully saved workout: ${workout.name}") },
+            onFailure = { error -> throw Exception("Repository save failed: ${error.message}") }
+        )
+    }
+
+    // ============== CREATE WORKOUT ==============
+
+    /**
+     * Create a new workout with comprehensive validation.
+     *
+     * Replaces: CreateWorkoutUseCase.invoke()
+     *
+     * Creates workouts with:
+     * - Business rule validation (unique name, active workout check)
+     * - User scoping enforcement
+     * - Automatic timestamp generation
+     * - Status-based initialization (planned vs in-progress)
+     *
+     * @param request The workout creation request
+     * @return LiftrixResult with created workout or error
+     */
+    suspend fun createWorkout(request: CreateWorkoutRequest): LiftrixResult<Workout> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "CREATE_WORKOUT_FAILED",
+                errorMessage = "Failed to create workout: ${throwable.message}",
+                analyticsContext = mapOf(
+                    "workout_name" to request.name,
+                    "user_id" to request.userId,
+                    "status" to request.status.toString(),
+                    "operation" to "CREATE_WORKOUT"
+                )
+            )
+        }
+    ) {
+        // Validate user authentication
+        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
+        if (userId.isNullOrBlank()) {
+            throw IllegalStateException("User not authenticated")
+        }
+
+        // Validate request matches authenticated user
+        if (request.userId != userId) {
+            throw SecurityException("Cannot create workout for another user")
+        }
+
+        // Validate workout name
+        if (request.name.isBlank()) {
+            throw IllegalArgumentException("Workout name is required")
+        }
+
+        if (request.name.length > Workout.MAX_NAME_LENGTH) {
+            throw IllegalArgumentException("Workout name cannot exceed ${Workout.MAX_NAME_LENGTH} characters")
+        }
+
+        // Validate date
+        if (request.date.isAfter(java.time.LocalDate.now().plusDays(1))) {
+            throw IllegalArgumentException("Cannot create workouts more than 1 day in the future")
+        }
+
+        // Validate exercises for active workouts
+        if (request.status == WorkoutStatus.IN_PROGRESS && request.exercises.isEmpty()) {
+            throw IllegalArgumentException("Active workouts must have at least one exercise")
+        }
+
+        // Validate exercise count
+        if (request.exercises.size > Workout.MAX_EXERCISES) {
+            throw IllegalArgumentException("Cannot have more than ${Workout.MAX_EXERCISES} exercises")
+        }
+
+        // Validate notes length
+        request.notes?.let { notes ->
+            if (notes.length > Workout.MAX_NOTES_LENGTH) {
+                throw IllegalArgumentException("Notes cannot exceed ${Workout.MAX_NOTES_LENGTH} characters")
+            }
+        }
+
+        // Check for existing active workout if creating an active workout
+        if (request.status == WorkoutStatus.IN_PROGRESS) {
+            val activeWorkoutResult = workoutRepository.getActiveWorkout(userId)
+            val existingActiveWorkout = activeWorkoutResult.fold(
+                onSuccess = { it },
+                onFailure = { error -> throw Exception("Failed to check for active workout: ${error.message}") }
+            )
+
+            if (existingActiveWorkout != null) {
+                throw IllegalStateException("Cannot create active workout: user already has an active workout (ID: ${existingActiveWorkout.id.value})")
+            }
+        }
+
+        // Check for duplicate workout name on the same date
+        val workoutsByDateResult = workoutRepository.getWorkoutsByDate(
+            request.date.toKotlinxLocalDate(),
+            userId
+        ).first()
+
+        val workoutsOnDate = workoutsByDateResult.fold(
+            onSuccess = { it ?: emptyList() },
+            onFailure = { error -> throw Exception("Failed to check for existing workouts: ${error.message}") }
+        )
+
+        val duplicateName = workoutsOnDate.any { workout ->
+            workout.name.equals(request.name, ignoreCase = true)
+        }
+
+        if (duplicateName) {
+            throw IllegalArgumentException("A workout with this name already exists on ${request.date}")
+        }
+
+        // Build workout
+        val now = Instant.now()
+        val newWorkout = Workout(
+            userId = userId,
+            id = WorkoutId.generate(),
+            name = request.name,
+            date = request.date,
+            exercises = request.exercises,
+            status = request.status,
+            startTime = if (request.status == WorkoutStatus.IN_PROGRESS) now else null,
+            endTime = null,
+            notes = request.notes,
+            templateId = request.templateId,
+            createdAt = now,
+            updatedAt = now
+        )
+
+        // Create workout in repository
+        val createResult = workoutRepository.createWorkout(newWorkout)
+        val createdWorkout = createResult.fold(
+            onSuccess = { it },
+            onFailure = { error -> throw Exception("Repository create failed: ${error.message}") }
+        )
+
+        Timber.i("Successfully created workout: ${createdWorkout.name} (ID: ${createdWorkout.id.value})")
+        createdWorkout
+    }
+
+    // ============== CREATE WORKOUT WITH EXERCISES ==============
+
+    /**
+     * Create a new workout and populate it with exercises in a single transaction.
+     *
+     * Replaces: CreateWorkoutWithExercisesUseCase (deleted in previous session)
+     *
+     * Combines workout creation with exercise population for:
+     * - Atomic workout + exercises creation
+     * - Template-based workout instantiation
+     * - Bulk exercise addition with default sets
+     *
+     * @param request The workout creation request with exercises
+     * @return LiftrixResult with created and populated workout or error
+     */
+    suspend fun createWithExercises(
+        request: CreateWorkoutWithExercisesRequest
+    ): LiftrixResult<Workout> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "CREATE_WORKOUT_WITH_EXERCISES_FAILED",
+                errorMessage = "Failed to create workout with exercises: ${throwable.message}",
+                analyticsContext = mapOf(
+                    "workout_name" to request.name,
+                    "user_id" to request.userId,
+                    "exercise_count" to request.exerciseLibraryIds.size.toString(),
+                    "operation" to "CREATE_WORKOUT_WITH_EXERCISES"
+                )
+            )
+        }
+    ) {
+        // Validate exercise list
+        if (request.exerciseLibraryIds.isEmpty()) {
+            throw IllegalArgumentException("Must provide at least one exercise")
+        }
+
+        // Create base workout request
+        val createWorkoutRequest = CreateWorkoutRequest(
+            userId = request.userId,
+            name = request.name,
+            date = request.date,
+            exercises = emptyList(), // Start with no exercises
+            status = request.status,
+            notes = request.notes,
+            templateId = request.templateId
+        )
+
+        // Create the workout
+        val createResult = createWorkout(createWorkoutRequest)
+        val createdWorkout = createResult.fold(
+            onSuccess = { it },
+            onFailure = { error -> throw Exception("Workout creation failed: ${error.message}") }
+        )
+
+        // Add exercises to the newly created workout
+        val populateResult = addMultipleExercises(
+            workoutId = createdWorkout.id,
+            exerciseLibraryIds = request.exerciseLibraryIds,
+            initialSets = request.initialSetsPerExercise
+        )
+
+        val populatedWorkout = populateResult.fold(
+            onSuccess = { it },
+            onFailure = { error ->
+                // Workout was created but exercise addition failed
+                // Log warning but return the created workout
+                Timber.w("Workout created but some exercises failed to add: ${error.message}")
+                createdWorkout
+            }
+        )
+
+        Timber.i("Successfully created workout with ${request.exerciseLibraryIds.size} exercises: ${populatedWorkout.name}")
+        populatedWorkout
+    }
+
+    /**
+     * Extension function to convert java.time.LocalDate to kotlinx.datetime.LocalDate
+     */
+    private fun java.time.LocalDate.toKotlinxLocalDate(): kotlinx.datetime.LocalDate {
+        return kotlinx.datetime.LocalDate(this.year, this.monthValue, this.dayOfMonth)
+    }
 }
+
+/**
+ * Request data class for creating workouts with exercises.
+ *
+ * @property userId The ID of the user creating the workout
+ * @property name The name of the workout
+ * @property date The date for the workout
+ * @property exerciseLibraryIds List of exercise library IDs to include
+ * @property status Initial status of the workout (default: PLANNED)
+ * @property notes Optional notes for the workout
+ * @property templateId Optional ID of the template this workout is based on
+ * @property initialSetsPerExercise Number of sets to create per exercise (default: 3)
+ */
+data class CreateWorkoutWithExercisesRequest(
+    val userId: String,
+    val name: String,
+    val date: java.time.LocalDate,
+    val exerciseLibraryIds: List<String>,
+    val status: WorkoutStatus = WorkoutStatus.PLANNED,
+    val notes: String? = null,
+    val templateId: WorkoutId? = null,
+    val initialSetsPerExercise: Int = 3
+)
+
+/**
+ * Request data class for creating workouts.
+ * Extracted from CreateWorkoutUseCase for consolidation.
+ *
+ * @property userId The ID of the user creating the workout
+ * @property name The name of the workout
+ * @property date The date for the workout
+ * @property exercises List of exercises to include
+ * @property status Initial status of the workout (default: PLANNED)
+ * @property notes Optional notes for the workout
+ * @property templateId Optional ID of the template this workout is based on
+ */
+data class CreateWorkoutRequest(
+    val userId: String,
+    val name: String,
+    val date: java.time.LocalDate,
+    val exercises: List<Exercise> = emptyList(),
+    val status: WorkoutStatus = WorkoutStatus.PLANNED,
+    val notes: String? = null,
+    val templateId: WorkoutId? = null
+)

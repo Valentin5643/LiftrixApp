@@ -7,7 +7,7 @@ import com.example.liftrix.domain.model.common.liftrixSuccess
 import com.example.liftrix.domain.model.common.liftrixFailure
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
 import com.example.liftrix.domain.usecase.workout.WorkoutCommandUseCase
@@ -69,7 +69,7 @@ class EditWorkoutViewModel @Inject constructor(
     private val templateQueryUseCase: TemplateQueryUseCase,
     private val workoutCommandUseCase: WorkoutCommandUseCase,
     private val workoutRepository: WorkoutRepository,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<EditWorkoutUiState, EditWorkoutEvent>(errorHandler) {
 
@@ -89,7 +89,10 @@ class EditWorkoutViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             Timber.d("🔥 EDIT-WORKOUT-DEBUG: EditWorkoutViewModel init - Getting current user ID")
-            currentUserId = getCurrentUserIdUseCase()
+            currentUserId = authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it },
+                onFailure = { null }
+            )
             isUserIdInitialized = true
             Timber.d("🔥 EDIT-WORKOUT-DEBUG: EditWorkoutViewModel init - Retrieved userId: $currentUserId")
         }
@@ -142,7 +145,10 @@ class EditWorkoutViewModel @Inject constructor(
             viewModelScope.launch {
                 // Fetch user ID synchronously if not yet available
                 if (currentUserId == null) {
-                    currentUserId = getCurrentUserIdUseCase()
+                    currentUserId = authQueryUseCase(waitForAuth = false).fold(
+                        onSuccess = { it },
+                        onFailure = { null }
+                    )
                     isUserIdInitialized = true
                     Timber.d("🔥 EDIT-WORKOUT-DEBUG: User ID fetched in loadWorkout: $currentUserId")
                 }

@@ -11,7 +11,7 @@ import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.service.PRDetectionService
 import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
 import com.example.liftrix.domain.model.WorkoutId
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.service.PRComparison
 import com.example.liftrix.domain.service.PersonalRecord
 import com.example.liftrix.domain.service.PrivacyEnforcementService
@@ -34,7 +34,7 @@ import javax.inject.Inject
 class WorkoutDetailsViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val workoutQueryUseCase: WorkoutQueryUseCase,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     private val workoutRepository: WorkoutRepository,
     private val prDetectionService: PRDetectionService,
     private val privacyEnforcementService: PrivacyEnforcementService
@@ -46,15 +46,18 @@ class WorkoutDetailsViewModel @Inject constructor(
     fun loadWorkoutDetails(workoutId: String) {
         viewModelScope.launch {
             _uiState.value = WorkoutDetailsUiState.Loading
-            
+
             // Get current user ID
-            val currentUserId = getCurrentUserIdUseCase() ?: run {
-                _uiState.value = WorkoutDetailsUiState.Error(
-                    message = "User not authenticated"
-                )
-                return@launch
-            }
-            
+            val currentUserId = authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it },
+                onFailure = {
+                    _uiState.value = WorkoutDetailsUiState.Error(
+                        message = "User not authenticated"
+                    )
+                    return@launch
+                }
+            )
+
             // First try to get workout for current user (most common case)
             var workout: com.example.liftrix.domain.model.Workout? = null
             var workoutOwnerId: String = currentUserId
@@ -71,7 +74,7 @@ class WorkoutDetailsViewModel @Inject constructor(
                     Timber.d("Could not load workout for current user: $error")
                 }
             )
-            
+
             // If not found as current user's workout, it might be another user's workout
             // For now, we can only view our own workouts due to repository constraints
             // This is a limitation that would need repository-level changes to support
@@ -81,16 +84,16 @@ class WorkoutDetailsViewModel @Inject constructor(
                 )
                 return@launch
             }
-            
+
             val isOwnWorkout = workout.userId == currentUserId
-            
+
             // Check privacy if not own workout (currently this won't happen due to repository constraints)
             if (!isOwnWorkout) {
                 val canView = privacyEnforcementService.canViewWorkout(
                     workoutOwnerId = workout.userId,
                     viewerId = currentUserId
                 )
-                
+
                 if (!canView) {
                     _uiState.value = WorkoutDetailsUiState.Error(
                         message = "This workout is private or you don't have permission to view it"
@@ -98,7 +101,7 @@ class WorkoutDetailsViewModel @Inject constructor(
                     return@launch
                 }
             }
-            
+
             // Load full workout details
             loadFullWorkoutDetails(workout, currentUserId, isOwnWorkout)
         }

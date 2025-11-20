@@ -5,7 +5,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import com.example.liftrix.domain.model.WeightUnit
 import com.example.liftrix.domain.repository.SettingsRepository
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -37,7 +37,7 @@ import javax.inject.Singleton
 @Singleton
 class WeightUnitManager @Inject constructor(
     private val settingsRepository: SettingsRepository,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+    private val authQueryUseCase: AuthQueryUseCase
 ) {
     
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -62,7 +62,7 @@ class WeightUnitManager @Inject constructor(
      */
     suspend fun initialize() {
         try {
-            val userId = getCurrentUserIdUseCase() ?: return
+            val userId = authQueryUseCase(waitForAuth = false).getOrNull() ?: return
             val userSettings = settingsRepository.getUserSettings(userId)
                 .filterNotNull()
                 .map { it.weightUnit }

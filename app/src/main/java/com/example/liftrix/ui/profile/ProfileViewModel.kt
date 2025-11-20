@@ -7,10 +7,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.UserProfile
 import com.example.liftrix.domain.model.UserAchievement
 import com.example.liftrix.domain.repository.ProfileRepository
-import com.example.liftrix.domain.usecase.GetProfileUseCase
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.profile.ProfileQueryUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.profile.ProfileImageOperationsUseCase
-import com.example.liftrix.domain.usecase.profile.SaveUserProfileUseCase
+import com.example.liftrix.domain.usecase.profile.ProfileCommandUseCase
 import com.example.liftrix.domain.usecase.profile.CalculateAchievementsUseCase
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
@@ -74,9 +74,9 @@ private sealed class ProfileDataState {
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
-    private val getProfileUseCase: GetProfileUseCase,
-    private val saveUserProfileUseCase: SaveUserProfileUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
+    private val profileQueryUseCase: ProfileQueryUseCase,
+    private val profileCommandUseCase: ProfileCommandUseCase,
     private val calculateAchievementsUseCase: CalculateAchievementsUseCase,
     private val profileImageOperationsUseCase: ProfileImageOperationsUseCase,
     private val profileRepository: ProfileRepository,
@@ -104,22 +104,28 @@ class ProfileViewModel @Inject constructor(
     private val currentUserId = flow {
         var retryCount = 0
         val maxRetries = 3
-        
+
         while (retryCount <= maxRetries) {
             try {
-                val userId = getCurrentUserIdUseCase()
-                if (userId != null) {
-                    Timber.d("[VIEWMODEL-STATE] currentUserId flow emitted: $userId (attempt ${retryCount + 1})")
-                    emit(userId)
-                    return@flow
-                } else if (retryCount < maxRetries) {
-                    // Retry with exponential backoff for cold starts
-                    val delayMs = (1000L * (retryCount + 1)) // 1s, 2s, 3s
-                    kotlinx.coroutines.delay(delayMs)
-                }
+                val result = authQueryUseCase(waitForAuth = false)
+                result.fold(
+                    onSuccess = { userId ->
+                        Timber.d("[VIEWMODEL-STATE] currentUserId flow emitted: $userId (attempt ${retryCount + 1})")
+                        emit(userId)
+                        return@flow
+                    },
+                    onFailure = { error ->
+                        if (retryCount < maxRetries) {
+                            Timber.e(error, "ProfileViewModel: Failed to get current user ID (attempt ${retryCount + 1})")
+                            // Retry with exponential backoff for cold starts
+                            val delayMs = (1000L * (retryCount + 1)) // 1s, 2s, 3s
+                            kotlinx.coroutines.delay(delayMs)
+                        }
+                    }
+                )
             } catch (e: Exception) {
                 Timber.e(e, "ProfileViewModel: Failed to get current user ID (attempt ${retryCount + 1})")
-                
+
                 if (retryCount < maxRetries) {
                     val delayMs = (1000L * (retryCount + 1))
                     kotlinx.coroutines.delay(delayMs)
@@ -127,7 +133,7 @@ class ProfileViewModel @Inject constructor(
             }
             retryCount++
         }
-        
+
         // Final attempt failed
         Timber.e("[VIEWMODEL-STATE] ⚠️  currentUserId flow failed after $maxRetries attempts - emitting null")
         emit(null)
@@ -149,8 +155,8 @@ class ProfileViewModel @Inject constructor(
                         emit(ProfileDataState.Loading)
                         
                         // Check if profile exists to set proper expectations
-                        val profileExists = profileRepository.hasProfile(userId)
-                        
+                        val profileExists = profileQueryUseCase.hasProfile(userId).getOrElse { false }
+
                         if (profileExists) {
                             // Profile exists, start observing
                             profileRepository.getProfile(userId)
@@ -409,8 +415,8 @@ class ProfileViewModel @Inject constructor(
                 }
                 
                 // Check if profile exists in database
-                val hasProfile = profileRepository.hasProfile(userId)
-                val hasCompletedProfile = profileRepository.hasCompletedProfile(userId)
+                val hasProfile = profileQueryUseCase.hasProfile(userId).getOrElse { false }
+                val hasCompletedProfile = profileQueryUseCase.hasCompletedProfile(userId).getOrElse { false }
                 val profileData = profileRepository.getUserProfile(userId).getOrNull()
                 
                 updateState { currentState ->
@@ -437,17 +443,18 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 updateState { it.copy(isLoading = true, error = null) }
-                
+
                 // Add timeout and retry logic for getting user ID
-                val userId = try {
-                    getCurrentUserIdUseCase()
-                } catch (e: Exception) {
-                    Timber.e(e, "Failed to get current user ID during profile loading")
-                    null
-                }
-                
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { error ->
+                        Timber.e(error, "Failed to get current user ID during profile loading")
+                        null
+                    }
+                )
+
                 if (userId == null) {
-                    updateState { 
+                    updateState {
                         it.copy(
                             isLoading = false,
                             error = ProfileError.Authentication("Unable to authenticate user. Please check your connection and try signing in again.")
@@ -455,13 +462,13 @@ class ProfileViewModel @Inject constructor(
                     }
                     return@launch
                 }
-                
+
                 // Profile loading is handled by profileFlow subscription
                 Timber.d("Profile loading initiated for user: $userId")
-                
+
             } catch (e: Exception) {
                 Timber.e(e, "Error loading profile")
-                updateState { 
+                updateState {
                     it.copy(
                         isLoading = false,
                         error = ProfileError.LoadingFailed("Failed to load profile. Please check your connection and try again.")
@@ -481,8 +488,8 @@ class ProfileViewModel @Inject constructor(
                 val userId = currentUserId.value
                 if (userId != null) {
                     Timber.d("Refreshing profile data for user: $userId")
-                    // Use the GetProfileUseCase refresh method if available
-                    val refreshResult = getProfileUseCase.refreshProfile(userId)
+                    // Trigger immediate sync to refresh profile data
+                    val refreshResult = profileRepository.syncNow(userId)
                     if (refreshResult.isFailure) {
                         Timber.w(refreshResult.exceptionOrNull(), "Profile refresh failed, but continuing with reactive updates")
                     }
@@ -786,7 +793,7 @@ class ProfileViewModel @Inject constructor(
                 
                 Timber.d("[DATA-INTEGRITY] Saving profile for user: $userId - all checks passed")
                 
-                val result = saveUserProfileUseCase(profile)
+                val result = profileCommandUseCase.saveProfile(profile, strictValidation = false)
                 
                 if (result.isSuccess) {
                     // 🔍 FORENSIC LOGGING - Verify auth state after save
@@ -922,9 +929,9 @@ class ProfileViewModel @Inject constructor(
                 }
                 
                 Timber.d("Updating privacy settings for user: ${currentProfile.userId} to public: $isPublic")
-                
+
                 val updatedProfile = currentProfile.copy(isPublic = isPublic)
-                val result = saveUserProfileUseCase(updatedProfile)
+                val result = profileCommandUseCase.saveProfile(updatedProfile, strictValidation = false)
                 
                 if (result.isSuccess) {
                     updateState { 

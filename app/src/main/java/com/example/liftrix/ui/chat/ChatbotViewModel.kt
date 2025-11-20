@@ -22,7 +22,7 @@ import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.model.chat.UsageLimits
 import com.example.liftrix.domain.model.chat.ChatPreferences
 import com.example.liftrix.domain.usecase.common.ErrorHandler
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.chat.SendChatMessageUseCase
 import com.example.liftrix.domain.usecase.chat.CheckUsageLimitsUseCase
 import com.example.liftrix.domain.repository.ChatRepository
@@ -49,7 +49,7 @@ import timber.log.Timber
  */
 @HiltViewModel
 class ChatbotViewModel @Inject constructor(
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     private val chatRepository: ChatRepository,
     private val sendChatMessageUseCase: SendChatMessageUseCase,
     private val checkUsageLimitsUseCase: CheckUsageLimitsUseCase,
@@ -73,16 +73,18 @@ class ChatbotViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO + SupervisorJob()) {
             try {
                 // Get authenticated user ID
-                val userIdResult = getCurrentUserIdUseCase()
-                if (userIdResult != null) {
-                    userId = userIdResult
-                    setupConversation(userIdResult)
-                    checkUsageLimits()
-                } else {
-                    handleError(LiftrixError.AuthenticationError(
-                        errorMessage = "Failed to get current user ID"
-                    ))
-                }
+                authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { userIdResult ->
+                        userId = userIdResult
+                        setupConversation(userIdResult)
+                        checkUsageLimits()
+                    },
+                    onFailure = {
+                        handleError(LiftrixError.AuthenticationError(
+                            errorMessage = "Failed to get current user ID"
+                        ))
+                    }
+                )
             } catch (exception: Exception) {
                 Timber.e(exception, "Failed to load initial chat data")
                 handleError(LiftrixError.UnknownError(

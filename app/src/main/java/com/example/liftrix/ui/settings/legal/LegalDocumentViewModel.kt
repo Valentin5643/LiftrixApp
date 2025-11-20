@@ -5,7 +5,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.service.LegalDocumentService
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.legal.DownloadPdfUseCase
 import com.example.liftrix.domain.usecase.legal.DownloadPdfResult
@@ -33,7 +33,7 @@ import javax.inject.Inject
 @HiltViewModel
 class LegalDocumentViewModel @Inject constructor(
     private val legalDocumentService: LegalDocumentService,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     private val downloadPdfUseCase: DownloadPdfUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<LegalDocumentUiState, LegalDocumentEvent>(errorHandler) {
@@ -236,10 +236,13 @@ class LegalDocumentViewModel @Inject constructor(
             }
             
             try {
-                val userId = getCurrentUserIdUseCase() ?: throw LiftrixError.BusinessLogicError(
-                    code = "USER_NOT_AUTHENTICATED",
-                    errorMessage = "User must be authenticated to download documents",
-                    analyticsContext = mapOf("operation" to "DOWNLOAD_PDF_DOCUMENT")
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { throw LiftrixError.BusinessLogicError(
+                        code = "USER_NOT_AUTHENTICATED",
+                        errorMessage = "User must be authenticated to download documents",
+                        analyticsContext = mapOf("operation" to "DOWNLOAD_PDF_DOCUMENT")
+                    ) }
                 )
                 
                 val displayName = when (documentType) {
@@ -369,10 +372,13 @@ class LegalDocumentViewModel @Inject constructor(
                             onSuccess = { it },
                             onFailure = { error -> throw error }
                         )
-                        val userId = getCurrentUserIdUseCase() ?: throw LiftrixError.BusinessLogicError(
-                            code = "USER_NOT_AUTHENTICATED",
-                            errorMessage = "User must be authenticated to accept legal documents",
-                            analyticsContext = mapOf("operation" to "ACCEPT_PRIVACY_POLICY")
+                        val userId = authQueryUseCase(waitForAuth = false).fold(
+                            onSuccess = { it },
+                            onFailure = { throw LiftrixError.BusinessLogicError(
+                                code = "USER_NOT_AUTHENTICATED",
+                                errorMessage = "User must be authenticated to accept legal documents",
+                                analyticsContext = mapOf("operation" to "ACCEPT_PRIVACY_POLICY")
+                            ) }
                         )
                         legalDocumentService.recordDocumentAcceptance(
                             userId = userId,
@@ -388,10 +394,13 @@ class LegalDocumentViewModel @Inject constructor(
                             onSuccess = { it },
                             onFailure = { error -> throw error }
                         )
-                        val userId = getCurrentUserIdUseCase() ?: throw LiftrixError.BusinessLogicError(
-                            code = "USER_NOT_AUTHENTICATED",
-                            errorMessage = "User must be authenticated to accept legal documents",
-                            analyticsContext = mapOf("operation" to "ACCEPT_TERMS_OF_SERVICE")
+                        val userId = authQueryUseCase(waitForAuth = false).fold(
+                            onSuccess = { it },
+                            onFailure = { throw LiftrixError.BusinessLogicError(
+                                code = "USER_NOT_AUTHENTICATED",
+                                errorMessage = "User must be authenticated to accept legal documents",
+                                analyticsContext = mapOf("operation" to "ACCEPT_TERMS_OF_SERVICE")
+                            ) }
                         )
                         legalDocumentService.recordDocumentAcceptance(
                             userId = userId,

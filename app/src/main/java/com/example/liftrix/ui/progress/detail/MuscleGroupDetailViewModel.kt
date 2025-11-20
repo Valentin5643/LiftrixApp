@@ -14,7 +14,7 @@ import com.example.liftrix.domain.usecase.analytics.AnalyticsQueryUseCase
 import com.example.liftrix.domain.usecase.analytics.MuscleGroupAnalyticsData as UseCaseMuscleGroupAnalyticsData
 import com.example.liftrix.domain.usecase.analytics.MuscleGroupData as UseCaseMuscleGroupData
 import com.example.liftrix.domain.usecase.analytics.BalanceAnalysis as UseCaseBalanceAnalysis
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -41,7 +41,7 @@ class MuscleGroupDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     errorHandler: ErrorHandler,
     private val analyticsQueryUseCase: AnalyticsQueryUseCase,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : StatefulDetailViewModel<MuscleGroupDetailViewModel.UiState, MuscleGroupDetailViewModel.Event>(savedStateHandle, errorHandler) {
 
@@ -204,12 +204,17 @@ class MuscleGroupDetailViewModel @Inject constructor(
         viewModelScope.launch {
             // Reactive binding for real-time muscle group data updates
             // This will automatically refresh when workout data changes
-            getCurrentUserIdUseCase()?.let { userId ->
-                // Monitor for workout data changes that affect muscle group distribution
-                // The use case already handles the data flow internally
-                Timber.d("Monitoring muscle group data changes for user: $userId")
-            }
-            
+            authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { userId ->
+                    // Monitor for workout data changes that affect muscle group distribution
+                    // The use case already handles the data flow internally
+                    Timber.d("Monitoring muscle group data changes for user: $userId")
+                },
+                onFailure = {
+                    Timber.e(it, "Failed to get user ID for reactive binding")
+                }
+            )
+
             // For now, set up reactive binding stub
             Timber.d("Reactive data binding initialized for MuscleGroupDetailViewModel")
         }
@@ -253,9 +258,12 @@ class MuscleGroupDetailViewModel @Inject constructor(
         savedStateHandle[KEY_TIME_RANGE] = timeRange.name
 
         executeUseCase(
-            useCase = { 
-                val userId = getCurrentUserIdUseCase() ?: return@executeUseCase Result.failure(
-                    LiftrixError.AuthenticationError("User not authenticated")
+            useCase = {
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { return@executeUseCase Result.failure(
+                        LiftrixError.AuthenticationError("User not authenticated")
+                    ) }
                 )
                 
                 val result = analyticsQueryUseCase.getMuscleGroupAnalytics(

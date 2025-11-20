@@ -17,7 +17,7 @@ import com.example.liftrix.sync.SyncCoordinator
 import com.example.liftrix.sync.SyncManager
 import com.example.liftrix.sync.SyncStatus
 import com.example.liftrix.domain.model.common.LiftrixResult
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.service.sync.RealtimeSyncManager
 import com.example.liftrix.ui.theme.LiftrixSpacing
 import com.example.liftrix.domain.repository.SyncStatusRepository
@@ -70,11 +70,14 @@ import timber.log.Timber
  * Extension function to get current user ID as Flow
  */
 @Composable
-fun getCurrentUserId(getCurrentUserIdUseCase: GetCurrentUserIdUseCase = hiltViewModel()): Flow<String?> {
+fun getCurrentUserId(authQueryUseCase: AuthQueryUseCase = hiltViewModel()): Flow<String?> {
     return remember {
         flow {
             try {
-                val userId = getCurrentUserIdUseCase()
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { null }
+                )
                 emit(userId)
             } catch (e: Exception) {
                 Timber.e(e, "WithSyncAwareness: Failed to get current user ID")

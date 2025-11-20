@@ -5,7 +5,7 @@ import com.example.liftrix.domain.model.social.FollowRelationship
 import com.example.liftrix.domain.repository.social.FollowRepository
 import com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase
 import com.example.liftrix.domain.usecase.social.FollowAction
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.domain.usecase.common.ErrorHandler
@@ -40,7 +40,7 @@ import javax.inject.Inject
 class FollowerListViewModel @Inject constructor(
     private val followRepository: FollowRepository,
     private val socialRelationshipUseCase: SocialRelationshipUseCase,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<FollowerListUiState, FollowerListEvent>(
     errorHandler = errorHandler
@@ -54,7 +54,10 @@ class FollowerListViewModel @Inject constructor(
     // Current user ID for follow operations
     private val currentUserId = flow {
         try {
-            val userId = getCurrentUserIdUseCase()
+            val userId = authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it },
+                onFailure = { null }
+            )
             emit(userId)
         } catch (e: Exception) {
             Timber.e(e, "Failed to get current user ID")

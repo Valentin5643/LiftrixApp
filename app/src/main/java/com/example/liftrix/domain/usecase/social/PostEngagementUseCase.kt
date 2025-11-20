@@ -7,7 +7,7 @@ import com.example.liftrix.domain.model.social.CreateCommentRequest
 import com.example.liftrix.domain.model.social.PostComment
 import com.example.liftrix.domain.model.social.PostEngagementStats
 import com.example.liftrix.domain.repository.social.EngagementRepository
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import timber.log.Timber
@@ -33,7 +33,7 @@ import javax.inject.Inject
  */
 class PostEngagementUseCase @Inject constructor(
     private val engagementRepository: EngagementRepository,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+    private val authQueryUseCase: AuthQueryUseCase
 ) {
 
     /**
@@ -57,7 +57,7 @@ class PostEngagementUseCase @Inject constructor(
         }
     ) {
         // Get current user ID
-        val userId = getCurrentUserIdUseCase() ?: throw IllegalStateException("User not authenticated")
+        val userId = authQueryUseCase(waitForAuth = false).getOrThrow()
 
         Timber.d("Toggling like for post: $postId by user: $userId")
 
@@ -97,7 +97,7 @@ class PostEngagementUseCase @Inject constructor(
         }
     ) {
         // Get current user ID
-        val userId = getCurrentUserIdUseCase() ?: throw IllegalStateException("User not authenticated")
+        val userId = authQueryUseCase(waitForAuth = false).getOrThrow()
 
         Timber.d("Toggling save for post: $postId by user: $userId")
 
@@ -154,7 +154,7 @@ class PostEngagementUseCase @Inject constructor(
         }
 
         // Get current user ID
-        val userId = getCurrentUserIdUseCase() ?: throw IllegalStateException("User not authenticated")
+        val userId = authQueryUseCase(waitForAuth = false).getOrThrow()
 
         Timber.d("Creating comment for post: $postId by user: $userId")
 
@@ -201,7 +201,7 @@ class PostEngagementUseCase @Inject constructor(
         }
     ) {
         // Get current user ID
-        val userId = getCurrentUserIdUseCase() ?: throw IllegalStateException("User not authenticated")
+        val userId = authQueryUseCase(waitForAuth = false).getOrThrow()
 
         Timber.d("Getting engagement status for post: $postId by user: $userId")
 

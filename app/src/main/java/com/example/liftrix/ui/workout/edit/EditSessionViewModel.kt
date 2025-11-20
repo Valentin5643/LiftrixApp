@@ -4,11 +4,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.*
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
-import com.example.liftrix.domain.usecase.workout.GetWorkoutSessionForEditingRequest
-import com.example.liftrix.domain.usecase.workout.GetWorkoutSessionForEditingUseCase
 import com.example.liftrix.domain.usecase.workout.WorkoutCommandUseCase
+import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
 import com.example.liftrix.domain.usecase.workout.WorkoutSessionEditingData
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.state.UiState
@@ -38,9 +37,9 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class EditSessionViewModel @Inject constructor(
-    private val getWorkoutSessionForEditingUseCase: GetWorkoutSessionForEditingUseCase,
+    private val workoutQueryUseCase: WorkoutQueryUseCase,
     private val workoutCommandUseCase: WorkoutCommandUseCase,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<EditSessionUiState, EditSessionEvent>(errorHandler) {
 
@@ -57,7 +56,10 @@ class EditSessionViewModel @Inject constructor(
     init {
         // Get current user ID
         viewModelScope.launch {
-            currentUserId = getCurrentUserIdUseCase()
+            currentUserId = authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it },
+                onFailure = { null }
+            )
         }
     }
 
@@ -91,8 +93,12 @@ class EditSessionViewModel @Inject constructor(
      */
     private fun loadSession(sessionId: WorkoutId) {
         executeUseCase(
-            useCase = { 
-                getWorkoutSessionForEditingUseCase(GetWorkoutSessionForEditingRequest(sessionId))
+            useCase = {
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { "" }
+                )
+                workoutQueryUseCase.getSessionForEditing(sessionId, userId)
             },
             onSuccess = { editingData ->
                 originalEditingData = editingData

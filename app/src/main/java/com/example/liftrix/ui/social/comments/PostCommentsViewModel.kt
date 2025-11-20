@@ -8,7 +8,7 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.PostComment
 import com.example.liftrix.domain.model.social.CreateCommentRequest
 import com.example.liftrix.domain.repository.social.EngagementRepository
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.ui.common.viewmodel.BaseViewModel
 import com.example.liftrix.ui.common.event.ViewModelEvent
@@ -26,7 +26,7 @@ import javax.inject.Inject
 @HiltViewModel
 class PostCommentsViewModel @Inject constructor(
     private val engagementRepository: EngagementRepository,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<PostCommentsUiState, PostCommentsEvent>(errorHandler) {
 
@@ -43,7 +43,10 @@ class PostCommentsViewModel @Inject constructor(
     init {
         // Get current user ID
         viewModelScope.launch {
-            _currentUserId.value = getCurrentUserIdUseCase()
+            _currentUserId.value = authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it },
+                onFailure = { null }
+            )
         }
     }
 

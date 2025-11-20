@@ -9,7 +9,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.model.WorkoutId
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +27,7 @@ import javax.inject.Inject
 @HiltViewModel
 class ShareWorkoutViewModel @Inject constructor(
     private val workoutRepository: WorkoutRepository,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+    private val authQueryUseCase: AuthQueryUseCase
 ) : ViewModel() {
 
     data class ShareWorkoutUiState(
@@ -49,18 +49,20 @@ class ShareWorkoutViewModel @Inject constructor(
             
             try {
                 // Get current user ID
-                val userId = getCurrentUserIdUseCase()
-                if (userId == null) {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = LiftrixError.BusinessLogicError(
-                            code = "USER_NOT_AUTHENTICATED",
-                            errorMessage = "User must be authenticated to share workouts",
-                            analyticsContext = mapOf("operation" to "SHARE_WORKOUT")
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { error ->
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            error = LiftrixError.BusinessLogicError(
+                                code = "USER_NOT_AUTHENTICATED",
+                                errorMessage = "User must be authenticated to share workouts",
+                                analyticsContext = mapOf("operation" to "SHARE_WORKOUT")
+                            )
                         )
-                    )
-                    return@launch
-                }
+                        return@launch
+                    }
+                )
                 
                 val result = workoutRepository.getWorkoutById(WorkoutId.fromString(workoutId), userId)
                 result.fold(

@@ -2,7 +2,7 @@ package com.example.liftrix.domain.usecase.subscription
 
 import com.example.liftrix.domain.model.Subscription
 import com.example.liftrix.domain.repository.SubscriptionRepository
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -15,7 +15,7 @@ import javax.inject.Inject
  */
 class CheckPremiumStatusUseCase @Inject constructor(
     private val subscriptionRepository: SubscriptionRepository,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+    private val authQueryUseCase: AuthQueryUseCase
 ) {
     
     /**
@@ -26,7 +26,7 @@ class CheckPremiumStatusUseCase @Inject constructor(
     suspend operator fun invoke(): Flow<Boolean> {
         return try {
             // Get current user ID and check their subscription status
-            val currentUserId = getCurrentUserIdUseCase()
+            val currentUserId = authQueryUseCase(waitForAuth = false).getOrNull()
             
             if (currentUserId == null) {
                 Timber.d("No authenticated user found - returning false for premium status")
@@ -77,7 +77,7 @@ class CheckPremiumStatusUseCase @Inject constructor(
      */
     suspend fun getSubscriptionDetails(): Flow<Subscription?> {
         return try {
-            val currentUserId = getCurrentUserIdUseCase()
+            val currentUserId = authQueryUseCase(waitForAuth = false).getOrNull()
             
             if (currentUserId == null) {
                 Timber.d("No authenticated user found - returning null for subscription details")

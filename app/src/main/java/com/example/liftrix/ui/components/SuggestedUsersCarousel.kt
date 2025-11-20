@@ -380,7 +380,7 @@ private fun SuggestedUsersEmptyState() {
 class SuggestedUsersCarouselViewModel @javax.inject.Inject constructor(
     private val followRepository: com.example.liftrix.domain.repository.social.FollowRepository,
     private val socialRelationshipUseCase: com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase,
-    private val getCurrentUserIdUseCase: com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase,
+    private val authQueryUseCase: com.example.liftrix.domain.usecase.auth.AuthQueryUseCase,
     private val userSearchRepository: com.example.liftrix.domain.repository.UserSearchRepository,
     errorHandler: com.example.liftrix.domain.usecase.common.ErrorHandler
 ) : com.example.liftrix.ui.common.viewmodel.BaseViewModel<SuggestedUsersCarouselUiState, SuggestedUsersCarouselEvent>(
@@ -396,17 +396,19 @@ class SuggestedUsersCarouselViewModel @javax.inject.Inject constructor(
         viewModelScope.launch {
             try {
                 updateState { it.copy(isLoading = true, error = null) }
-                
-                val currentUserId = getCurrentUserIdUseCase()
-                if (currentUserId == null) {
-                    updateState { 
-                        it.copy(
-                            isLoading = false,
-                            error = "User not authenticated"
-                        )
+
+                val currentUserId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = {
+                        updateState {
+                            it.copy(
+                                isLoading = false,
+                                error = "User not authenticated"
+                            )
+                        }
+                        return@launch
                     }
-                    return@launch
-                }
+                )
                 
                 Timber.d("Loading suggested users for user: $currentUserId")
                 

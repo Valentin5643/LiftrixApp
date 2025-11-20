@@ -10,7 +10,7 @@ import com.example.liftrix.domain.repository.social.FollowRepository
 import com.example.liftrix.domain.repository.social.ReportRepository
 import com.example.liftrix.domain.service.AnalyticsTracker
 import com.example.liftrix.domain.service.NotificationService
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -36,7 +36,7 @@ class SocialRelationshipUseCase @Inject constructor(
     private val followRepository: FollowRepository,
     private val blockRepository: BlockRepository,
     private val reportRepository: ReportRepository,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     private val notificationService: NotificationService,
     private val analyticsTracker: AnalyticsTracker,
     private val getSocialProfileQueryUseCase: SocialProfileQueryUseCase
@@ -70,7 +70,7 @@ class SocialRelationshipUseCase @Inject constructor(
         }
     ) {
         // Get current user ID
-        val currentUserId = getCurrentUserIdUseCase()
+        val currentUserId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw IllegalStateException("User not authenticated")
 
         // Validate action parameters
@@ -170,7 +170,7 @@ class SocialRelationshipUseCase @Inject constructor(
         }
     ) {
         // Get current user ID
-        val currentUserId = getCurrentUserIdUseCase()
+        val currentUserId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw IllegalStateException("User not authenticated")
 
         // Validate not blocking self
@@ -228,7 +228,7 @@ class SocialRelationshipUseCase @Inject constructor(
         }
     ) {
         // Get current user ID
-        val currentUserId = getCurrentUserIdUseCase()
+        val currentUserId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw IllegalStateException("User not authenticated")
 
         // Validate not reporting self

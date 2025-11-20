@@ -12,7 +12,7 @@ import com.example.liftrix.R
 import com.example.liftrix.domain.repository.FCMTokenRepository
 import com.example.liftrix.domain.service.NotificationHandler
 import com.example.liftrix.domain.service.AnalyticsTracker
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -42,7 +42,7 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
     @Inject lateinit var tokenRepository: FCMTokenRepository
     @Inject lateinit var notificationHandler: NotificationHandler
     @Inject lateinit var analyticsTracker: AnalyticsTracker
-    @Inject lateinit var getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+    @Inject lateinit var authQueryUseCase: AuthQueryUseCase
     
     override fun onNewToken(token: String) {
         super.onNewToken(token)
@@ -50,20 +50,10 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
         Timber.d("New FCM token received: ${token.take(20)}...")
         
         GlobalScope.launch {
-            val userIdResult = liftrixCatching(
-                errorMapper = { throwable ->
-                    LiftrixError.NetworkError(
-                        errorMessage = "Failed to get current user ID",
-                        analyticsContext = mapOf("token_length" to token.length.toString())
-                    )
-                }
-            ) {
-                getCurrentUserIdUseCase.invoke()
-            }
-            
+            val userIdResult = authQueryUseCase(waitForAuth = false)
+
             userIdResult.fold(
                 onSuccess = { userIdValue ->
-                    if (userIdValue != null) {
                         val updateResult = liftrixCatching(
                             errorMapper = { throwable ->
                                 LiftrixError.NetworkError(
@@ -84,9 +74,6 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
                             onSuccess = { Timber.d("FCM token updated for user: $userIdValue") },
                             onFailure = { error -> Timber.e("Failed to update FCM token: $error") }
                         )
-                    } else {
-                        Timber.w("No authenticated user - skipping FCM token update")
-                    }
                 },
                 onFailure = { error ->
                     Timber.w("Failed to get current user ID for FCM token update: $error")

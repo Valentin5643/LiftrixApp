@@ -7,7 +7,7 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.ChatRepository
 import com.example.liftrix.data.local.dao.ChatHistoryDao
 import com.example.liftrix.data.local.entity.ChatHistoryEntity
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
@@ -43,7 +43,7 @@ import javax.inject.Inject
 class ChatOperationsUseCase @Inject constructor(
     private val chatRepository: ChatRepository,
     private val chatHistoryDao: ChatHistoryDao,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+    private val authQueryUseCase: AuthQueryUseCase
 ) {
 
     private val json = Json {
@@ -258,7 +258,7 @@ class ChatOperationsUseCase @Inject constructor(
             )
         }
     ) {
-        val userId = getCurrentUserIdUseCase()
+        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw IllegalStateException("User not authenticated")
 
         validateConfirmation(confirmationText, language)
@@ -303,7 +303,7 @@ class ChatOperationsUseCase @Inject constructor(
             )
         }
     ) {
-        val userId = getCurrentUserIdUseCase()
+        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw IllegalStateException("User not authenticated")
 
         Timber.d("Starting chat history export for user: $userId in format: $format")

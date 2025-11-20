@@ -4,7 +4,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixSuccess
 import com.example.liftrix.domain.model.common.liftrixFailure
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.google.firebase.auth.FirebaseAuth
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,12 +19,12 @@ import javax.inject.Singleton
  * - Unauthorized access attempts are prevented with proper error handling
  * 
  * @property firebaseAuth Firebase Authentication instance
- * @property getCurrentUserIdUseCase Use case for retrieving current authenticated user ID
+ * @property authQueryUseCase Use case for retrieving current authenticated user ID
  */
 @Singleton
 class UserIdValidator @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase
+    private val authQueryUseCase: AuthQueryUseCase
 ) {
     
     /**
@@ -33,16 +33,8 @@ class UserIdValidator @Inject constructor(
      * @return LiftrixResult with the current user's ID, or error if not authenticated
      */
     suspend fun validateCurrentUser(): LiftrixResult<String> {
-        return try {
-            val currentUserId = getCurrentUserIdUseCase()
-            
-            if (currentUserId.isNullOrBlank()) {
-                liftrixFailure(
-                    LiftrixError.AuthenticationError(
-                        errorMessage = "User is not authenticated or session has expired"
-                    )
-                )
-            } else {
+        return authQueryUseCase(waitForAuth = false).fold(
+            onSuccess = { currentUserId ->
                 // Verify Firebase auth state consistency
                 val firebaseUser = firebaseAuth.currentUser
                 if (firebaseUser?.uid != currentUserId) {
@@ -54,14 +46,16 @@ class UserIdValidator @Inject constructor(
                 } else {
                     liftrixSuccess(currentUserId)
                 }
-            }
-        } catch (exception: Exception) {
-            liftrixFailure(
-                LiftrixError.AuthenticationError(
-                    errorMessage = "Failed to validate current user: ${exception.message}"
+            },
+            onFailure = { error ->
+                liftrixFailure(
+                    if (error is LiftrixError) error
+                    else LiftrixError.AuthenticationError(
+                        errorMessage = "Failed to get user ID: ${error.message}"
+                    )
                 )
-            )
-        }
+            }
+        )
     }
     
     /**

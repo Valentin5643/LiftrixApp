@@ -9,7 +9,7 @@ import com.example.liftrix.domain.model.social.SocialProfile
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.UserSearchRepository
 import com.example.liftrix.domain.repository.social.SocialProfileRepository
-import com.example.liftrix.domain.usecase.auth.GetCurrentUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import timber.log.Timber
 import javax.inject.Inject
@@ -29,7 +29,7 @@ class SocialProfileQueryUseCase @Inject constructor(
     private val socialProfileRepository: SocialProfileRepository,
     private val userSearchRepository: UserSearchRepository,
     private val authRepository: AuthRepository,
-    private val getCurrentUserIdUseCase: GetCurrentUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     private val errorHandler: ErrorHandler
 ) {
     /**
@@ -52,7 +52,7 @@ class SocialProfileQueryUseCase @Inject constructor(
             )
         }
     ) {
-        val viewerId = getCurrentUserIdUseCase() // Can be null for anonymous viewing
+        val viewerId = authQueryUseCase(waitForAuth = false).getOrNull() // Can be null for anonymous viewing
         socialProfileRepository.getProfile(userId, viewerId).getOrThrow()
     }
 
@@ -161,7 +161,7 @@ class SocialProfileQueryUseCase @Inject constructor(
             )
         }
     ) {
-        val viewerId = getCurrentUserIdUseCase()
+        val viewerId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw IllegalStateException("User not authenticated")
 
         // Validate limit

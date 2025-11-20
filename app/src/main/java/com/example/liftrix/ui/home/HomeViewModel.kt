@@ -10,9 +10,8 @@ import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutStats
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SocialRepository
-import com.example.liftrix.domain.usecase.auth.GetAuthenticatedUserIdUseCase
+import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.service.AnalyticsService
-import com.example.liftrix.domain.usecase.GetWorkoutHistoryUseCase
 import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.social.FollowAction
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -47,10 +46,9 @@ import javax.inject.Inject
 class HomeViewModel @Inject constructor(
     private val workoutRepository: WorkoutRepository,
     private val authRepository: AuthRepository,
-    private val getAuthenticatedUserIdUseCase: GetAuthenticatedUserIdUseCase,
+    private val authQueryUseCase: AuthQueryUseCase,
     private val analyticsService: AnalyticsService,
     private val socialRepository: SocialRepository,
-    private val getWorkoutHistoryUseCase: GetWorkoutHistoryUseCase,
     private val socialRelationshipUseCase: com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase,
     errorHandler: ErrorHandler
 ) : BaseViewModel<UiState<HomeScreenData>, HomeEvent>(errorHandler) {
@@ -172,12 +170,15 @@ class HomeViewModel @Inject constructor(
     fun loadHomeData() {
         executeUseCase(
             useCase = {
-                val userId = getAuthenticatedUserIdUseCase()
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = { return@executeUseCase Result.failure(it) }
+                )
                 val result = workoutRepository.getRecentWorkouts(userId, RECENT_WORKOUTS_LIMIT).first()
                 result
             },
             onSuccess = { recentWorkouts ->
-                
+
                 updateHomeScreenData { it.copy(recentWorkouts = recentWorkouts) }
             },
             onError = { error ->
@@ -222,7 +223,13 @@ class HomeViewModel @Inject constructor(
         
         feedObservationJob = viewModelScope.launch {
             try {
-                val userId = getAuthenticatedUserIdUseCase()
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = {
+                        Timber.e(it, "Failed to get user ID for feed")
+                        return@launch
+                    }
+                )
 
                 updateHomeScreenData { it.copy(workoutFeedState = FeedState.Loading) }
                 currentFeedOffset = 0
@@ -310,8 +317,14 @@ class HomeViewModel @Inject constructor(
         
         recommendationsObservationJob = viewModelScope.launch {
             try {
-                val userId = getAuthenticatedUserIdUseCase()
-                
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = {
+                        Timber.e(it, "Failed to get user ID for recommendations")
+                        return@launch
+                    }
+                )
+
                 updateHomeScreenData { it.copy(recommendationsState = RecommendationsState.Loading) }
                 currentRecommendationsOffset = 0
                 socialRepository.getRecommendedUsers(RECOMMENDATIONS_LIMIT, 0)
@@ -648,7 +661,13 @@ class HomeViewModel @Inject constructor(
         // Get current user ID and refresh the feed
         viewModelScope.launch {
             try {
-                val userId = getAuthenticatedUserIdUseCase()
+                val userId = authQueryUseCase(waitForAuth = false).fold(
+                    onSuccess = { it },
+                    onFailure = {
+                        Timber.e(it, "Failed to get user ID")
+                        return@launch
+                    }
+                )
                 observeWorkoutDataReactively(userId)
             } catch (e: Exception) {
                 Timber.e(e, "Failed to toggle recent activity filter")

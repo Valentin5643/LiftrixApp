@@ -26,7 +26,7 @@ UI Layer (Jetpack Compose)
     ↓ StateFlow<UiState<T>>
 ViewModel Layer (BaseViewModel<S,E>)
     ↓ LiftrixResult<T>
-Use Case Layer (79 use cases)
+Use Case Layer (62 use cases)
     ↓ LiftrixResult<T>
 Repository Layer (16 interfaces)
     ↓ Flow<Entity>
@@ -760,13 +760,15 @@ fun ModernChart(
 The codebase uses consolidated use cases to reduce duplication:
 
 **By Domain:**
+- **Auth**: AuthQueryUseCase, AuthCommandUseCase
+- **Profile**: ProfileQueryUseCase, ProfileCommandUseCase, ProfileImageOperationsUseCase, CalculateAchievementsUseCase
 - **Analytics**: AnalyticsQueryUseCase, AnalyticsExportUseCase, DashboardCommandUseCase, WidgetPreferencesUseCase, WidgetMigrationUseCase
 - **Templates & Folders**: TemplateQueryUseCase, TemplateCommandUseCase, FolderOperationsUseCase
 - **Social**: SocialProfileQueryUseCase, SocialProfileCommandUseCase, SocialRelationshipUseCase, PostEngagementUseCase, SocialSearchUseCase
 - **Workouts**: WorkoutQueryUseCase, WorkoutCommandUseCase
 - **Account**: AccountQueryUseCase, AccountCommandUseCase
 - **Settings**: SettingsQueryUseCase, SettingsCommandUseCase
-- **Other**: ChatOperationsUseCase, ExerciseQueryUseCase, NotificationPreferencesUseCase, ProfileImageOperationsUseCase, DataImportUseCase, SessionOperationsUseCase
+- **Other**: ChatOperationsUseCase, ExerciseQueryUseCase, NotificationPreferencesUseCase, DataImportUseCase, SessionOperationsUseCase
 
 **Domain Services:**
 - AnalyticsCalculationService, WidgetOperationsService (calculation logic)
