@@ -349,7 +349,10 @@ class AuthCommandUseCase @Inject constructor(
     // ============== SIGN OUT (SIMPLE) ==============
 
     /**
-     * Sign out (simple).
+     * Sign out (simple) with comprehensive session cleanup.
+     *
+     * FIX AUTH-007: Session Fixation Risk (CVSS 7.8)
+     * Implements complete session cleanup to prevent session fixation attacks.
      *
      * Replaces: SignOutUseCase
      *
@@ -364,11 +367,42 @@ class AuthCommandUseCase @Inject constructor(
             )
         }
     ) {
+        // Get user ID before signing out
+        val userId = authRepository.getCurrentUserId()
+
+        // 1. Clear Firebase auth session
         val result = authRepository.signOut()
         result.fold(
             onSuccess = { },
             onFailure = { throw it }
         )
+
+        // 2. Clear local session data (AUTH-007 FIX)
+        try {
+            settingsRepository.clearAllSettings()
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to clear settings during sign out")
+        }
+
+        // 3. Clear WorkManager jobs for this user (AUTH-007 FIX)
+        if (userId != null) {
+            try {
+                workManager.cancelAllWorkByTag("sync_$userId")
+                workManager.cancelAllWorkByTag("user_$userId")
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to cancel WorkManager jobs during sign out")
+            }
+        }
+
+        // 4. Clear analytics session (AUTH-007 FIX)
+        try {
+            analyticsService.clearUserProperties()
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to clear analytics during sign out")
+        }
+
+        // Note: FCM token revocation and credential cache invalidation
+        // are handled by the enhanced sign-out flow if needed
     }
 
     // ============== SIGN OUT (ENHANCED) ==============

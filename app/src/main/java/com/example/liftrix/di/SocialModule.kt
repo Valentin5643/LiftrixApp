@@ -311,15 +311,17 @@ abstract class SocialModule {
             workoutPostDao: WorkoutPostDao,
             postLikeDao: PostLikeDao,
             postCommentDao: PostCommentDao,
-            followRelationshipDao: FollowRelationshipDao
+            followRelationshipDao: FollowRelationshipDao,
+            privacyEnforcementService: com.example.liftrix.domain.service.PrivacyEnforcementService
         ): FeedCacheService {
             return FeedCacheServiceImpl(
-            feedCacheDao = feedCacheDao,
-            workoutPostDao = workoutPostDao,
-            postLikeDao = postLikeDao,
-            postCommentDao = postCommentDao,
-            followRelationshipDao = followRelationshipDao
-        )
+                feedCacheDao = feedCacheDao,
+                workoutPostDao = workoutPostDao,
+                postLikeDao = postLikeDao,
+                postCommentDao = postCommentDao,
+                followRelationshipDao = followRelationshipDao,
+                privacyEnforcementService = privacyEnforcementService
+            )
         }
 
     // ========================================

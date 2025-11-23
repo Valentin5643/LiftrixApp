@@ -6,6 +6,9 @@ import com.example.liftrix.data.local.dao.PostLikeDao
 import com.example.liftrix.data.local.dao.PostCommentDao
 import com.example.liftrix.data.local.dao.FollowRelationshipDao
 import com.example.liftrix.data.local.entity.FeedCacheEntity
+import com.example.liftrix.data.local.entity.WorkoutPostEntity
+import com.example.liftrix.domain.model.social.PostVisibility
+import com.example.liftrix.domain.model.social.WorkoutPost
 import com.example.liftrix.domain.service.FeedCacheService
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
@@ -26,7 +29,8 @@ class FeedCacheServiceImpl @Inject constructor(
     private val workoutPostDao: WorkoutPostDao,
     private val postLikeDao: PostLikeDao,
     private val postCommentDao: PostCommentDao,
-    private val followRelationshipDao: FollowRelationshipDao
+    private val followRelationshipDao: FollowRelationshipDao,
+    private val privacyEnforcementService: com.example.liftrix.domain.service.PrivacyEnforcementService
 ) : FeedCacheService {
     
     override suspend fun calculateRelevanceScore(
@@ -225,8 +229,8 @@ class FeedCacheServiceImpl @Inject constructor(
     }
     
     override suspend fun getCachedFeedPostIds(
-        userId: String, 
-        limit: Int, 
+        userId: String,
+        limit: Int,
         offset: Int
     ): LiftrixResult<List<String>> = liftrixCatching(
         errorMapper = { throwable ->
@@ -242,7 +246,25 @@ class FeedCacheServiceImpl @Inject constructor(
         }
     ) {
         withContext(Dispatchers.IO) {
-            feedCacheDao.getCachedPostIds(userId, limit, offset)
+            // FIX PRIV-004: Privacy re-validation on cache retrieval (CVSS 7.9)
+            // Get cached post IDs
+            val cachedPostIds = feedCacheDao.getCachedPostIds(userId, limit, offset)
+
+            // Validate privacy for each cached post before returning
+            // This prevents leaking posts from users who:
+            // - Changed their privacy settings
+            // - Blocked the viewer
+            // - Were unfollowed (for private accounts)
+            val validatedPostIds = cachedPostIds.filter { postId ->
+                val postEntity = workoutPostDao.getPostById(postId)
+                if (postEntity == null) return@filter false
+
+                // Convert entity to domain model for privacy check
+                val domainPost = entityToDomainForPrivacyCheck(postEntity)
+                privacyEnforcementService.canViewPost(userId, domainPost)
+            }
+
+            validatedPostIds
         }
     }
     
@@ -265,5 +287,27 @@ class FeedCacheServiceImpl @Inject constructor(
             val cacheSize = feedCacheDao.getCacheSize(userId)
             cacheSize >= minCacheSize
         }
+    }
+
+    /**
+     * Converts WorkoutPostEntity to WorkoutPost domain model for privacy checking.
+     * This is a minimal conversion that only populates fields needed for privacy validation.
+     */
+    private fun entityToDomainForPrivacyCheck(entity: WorkoutPostEntity): WorkoutPost {
+        return WorkoutPost(
+            id = entity.id,
+            userId = entity.userId,
+            workoutId = entity.workoutId,
+            caption = entity.caption ?: "",
+            visibility = try {
+                PostVisibility.valueOf(entity.visibility)
+            } catch (e: IllegalArgumentException) {
+                PostVisibility.FOLLOWERS
+            },
+            createdAt = entity.createdAt,
+            updatedAt = entity.updatedAt,
+            likeCount = entity.likeCount,
+            commentCount = entity.commentCount
+        )
     }
 }

@@ -1,5 +1,6 @@
 package com.example.liftrix.domain.usecase.analytics
 
+import com.example.liftrix.data.local.dao.ExerciseLibraryDao
 import com.example.liftrix.data.local.dao.ExerciseSetDao
 import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.TimeRange
@@ -21,11 +22,15 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.Month
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.todayIn
 import timber.log.Timber
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -90,11 +95,89 @@ import javax.inject.Singleton
 class AnalyticsQueryUseCase @Inject constructor(
     private val progressDataService: ProgressDataService,
     private val exerciseSetDao: ExerciseSetDao,
+    private val exerciseLibraryDao: ExerciseLibraryDao,
     private val progressStatsRepository: ProgressStatsRepository,
     private val workoutRepository: WorkoutRepository,
     private val analyticsEngine: AnalyticsEngine,
     private val widgetCalculatorFactory: com.example.liftrix.domain.service.widget.WidgetCalculatorFactory
 ) {
+    // ========================================
+    // 🚀 CRITICAL-002 Phase 3: Analytics Caching Layer
+    // ========================================
+
+    /**
+     * Cache entry with TTL support for analytics data.
+     */
+    private data class CacheEntry<T>(
+        val data: T,
+        val timestamp: Long,
+        val ttlMs: Long
+    ) {
+        fun isValid(): Boolean = System.currentTimeMillis() - timestamp < ttlMs
+    }
+
+    // Cache storage with thread-safe concurrent access
+    private val analyticsCache = ConcurrentHashMap<String, CacheEntry<Any>>()
+
+    // Cache TTLs by data type (in milliseconds)
+    private object CacheTTL {
+        const val VOLUME_ANALYSIS = 10 * 60 * 1000L      // 10 minutes
+        const val ONE_RM_PROGRESSION = 15 * 60 * 1000L  // 15 minutes (more stable)
+        const val WORKOUT_FREQUENCY = 10 * 60 * 1000L   // 10 minutes
+        const val MUSCLE_GROUP = 10 * 60 * 1000L        // 10 minutes
+        const val EXERCISE_RANKING = 15 * 60 * 1000L    // 15 minutes (more stable)
+    }
+
+    /**
+     * Get cached data or null if not present/expired.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun <T> getCached(key: String): T? {
+        val entry = analyticsCache[key] ?: return null
+        return if (entry.isValid()) {
+            Timber.d("[ANALYTICS-CACHE] Cache hit for key: $key")
+            entry.data as? T
+        } else {
+            analyticsCache.remove(key)
+            Timber.d("[ANALYTICS-CACHE] Cache expired for key: $key")
+            null
+        }
+    }
+
+    /**
+     * Store data in cache with specified TTL.
+     */
+    private fun <T : Any> putCache(key: String, data: T, ttlMs: Long) {
+        analyticsCache[key] = CacheEntry(data, System.currentTimeMillis(), ttlMs)
+        Timber.d("[ANALYTICS-CACHE] Cached data for key: $key (TTL: ${ttlMs / 1000}s)")
+    }
+
+    /**
+     * Generate cache key for analytics queries.
+     */
+    private fun cacheKey(userId: String, type: String, vararg params: Any?): String {
+        val paramString = params.filterNotNull().joinToString("_")
+        return "$userId:$type:$paramString"
+    }
+
+    /**
+     * Invalidate all cache entries for a user.
+     * Call this when workout data changes.
+     */
+    fun invalidateCacheForUser(userId: String) {
+        val keysToRemove = analyticsCache.keys.filter { it.startsWith("$userId:") }
+        keysToRemove.forEach { analyticsCache.remove(it) }
+        Timber.d("[ANALYTICS-CACHE] Invalidated ${keysToRemove.size} cache entries for user: $userId")
+    }
+
+    /**
+     * Clear all cached analytics data.
+     */
+    fun clearAllCache() {
+        val size = analyticsCache.size
+        analyticsCache.clear()
+        Timber.d("[ANALYTICS-CACHE] Cleared all $size cache entries")
+    }
 
     /**
      * Gets volume analysis with specified grouping and time range.
@@ -127,19 +210,69 @@ class AnalyticsQueryUseCase @Inject constructor(
         ) {
             require(userId.isNotBlank()) { "User ID cannot be blank" }
 
+            // 🚀 CRITICAL-002 Phase 3: Check cache first
+            val cacheKey = cacheKey(userId, "VOLUME", groupBy.name, timeRange.name)
+            getCached<VolumeAnalysisData>(cacheKey)?.let { return@liftrixCatching it }
+
             Timber.d("Getting volume analysis for user: $userId, groupBy: $groupBy, timeRange: $timeRange")
 
-            // TODO: Implement actual volume analysis calculation
-            // For now, return placeholder data to fix compilation
+            // Convert TimeRangeType to TimeRange
+            val timeRangeObj = timeRange.toTimeRange()
+
+            // Fetch volume data from service
+            val volumeResult = progressDataService.getVolumeData(userId, timeRangeObj)
+            val rawVolumeData = volumeResult.getOrThrow()
+
+            if (rawVolumeData.isEmpty()) {
+                Timber.d("No volume data found for user: $userId")
+                return@liftrixCatching VolumeAnalysisData(
+                    volumeData = emptyList(),
+                    totalVolume = 0f,
+                    volumeGrowth = 0f,
+                    averageVolume = 0f,
+                    isEmpty = true
+                )
+            }
+
+            // Convert repository VolumeDataPoint to VolumeAnalysisDataPoint
+            val convertedData = rawVolumeData.map { dataPoint ->
+                VolumeAnalysisDataPoint(
+                    date = dataPoint.date.toString(),
+                    volume = dataPoint.totalVolume.toDouble(),
+                    sets = 0, // Not available from repository
+                    exercises = dataPoint.exerciseCount,
+                    label = dataPoint.date.toString()
+                )
+            }
+
+            // Calculate aggregates
+            val totalVolume = rawVolumeData.sumOf { it.totalVolume.toDouble() }.toFloat()
+            val averageVolume = if (rawVolumeData.isNotEmpty()) {
+                totalVolume / rawVolumeData.size
+            } else 0f
+
+            // Calculate growth (compare first half to second half)
+            val volumeGrowth = if (rawVolumeData.size >= 2) {
+                val midPoint = rawVolumeData.size / 2
+                val firstHalf = rawVolumeData.take(midPoint).sumOf { it.totalVolume.toDouble() }.toFloat()
+                val secondHalf = rawVolumeData.drop(midPoint).sumOf { it.totalVolume.toDouble() }.toFloat()
+                if (firstHalf > 0) {
+                    ((secondHalf - firstHalf) / firstHalf) * 100f
+                } else 0f
+            } else 0f
+
             val volumeData = VolumeAnalysisData(
-                volumeData = emptyList(),
-                totalVolume = 0f,
-                volumeGrowth = 0f,
-                averageVolume = 0f,
-                isEmpty = true
+                volumeData = convertedData,
+                totalVolume = totalVolume,
+                volumeGrowth = volumeGrowth,
+                averageVolume = averageVolume,
+                isEmpty = convertedData.isEmpty()
             )
 
-            Timber.d("Volume analysis retrieved - Total volume: ${volumeData.totalVolume}")
+            // 🚀 CRITICAL-002 Phase 3: Store in cache
+            putCache(cacheKey, volumeData, CacheTTL.VOLUME_ANALYSIS)
+
+            Timber.d("Volume analysis retrieved - Total volume: ${volumeData.totalVolume}, data points: ${convertedData.size}")
             volumeData
         }
     }
@@ -177,13 +310,67 @@ class AnalyticsQueryUseCase @Inject constructor(
         ) {
             require(userId.isNotBlank()) { "User ID cannot be blank" }
 
+            // 🚀 CRITICAL-002 Phase 3: Check cache first
+            val exerciseKey = exerciseIds?.sorted()?.joinToString(",") ?: "ALL"
+            val cacheKey = cacheKey(userId, "ONE_RM", exerciseKey, timeRange.name)
+            getCached<OneRmProgressionData>(cacheKey)?.let { return@liftrixCatching it }
+
             Timber.d("Getting 1RM progression for user: $userId, exercises: ${exerciseIds?.size ?: "all"}, timeRange: $timeRange")
 
-            // TODO: Implement actual 1RM progression calculation
-            // For now, return placeholder data to fix compilation
-            val oneRmData = OneRmProgressionData(
-                exerciseProgressions = emptyList()
-            )
+            // Step 1: Get date range
+            val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
+            val startDate = when (timeRange) {
+                TimeRangeType.MONTH -> today.minus(DatePeriod(months = 1))
+                TimeRangeType.SIX_MONTHS -> today.minus(DatePeriod(months = 6))
+                TimeRangeType.ALL_TIME -> LocalDate(2020, 1, 1)
+            }
+
+            // Step 2: Query DAO for 1RM data
+            val oneRmResults = if (exerciseIds.isNullOrEmpty()) {
+                exerciseSetDao.getAllOneRmData(userId, startDate.toString(), today.toString())
+            } else {
+                exerciseSetDao.getOneRmDataForExercises(
+                    userId, exerciseIds, startDate.toString(), today.toString()
+                )
+            }
+
+            if (oneRmResults.isEmpty()) {
+                Timber.d("No 1RM data found for user: $userId")
+                return@liftrixCatching OneRmProgressionData(exerciseProgressions = emptyList())
+            }
+
+            // Step 3: Group by exercise and fetch names
+            val exerciseIdList = oneRmResults.map { it.exercise_library_id }.distinct()
+            val exerciseMap = exerciseLibraryDao.getExercisesByIds(exerciseIdList)
+                .associateBy { it.id }
+
+            // Step 4: Build progressions
+            val progressions = oneRmResults
+                .groupBy { it.exercise_library_id }
+                .map { (exerciseId, results) ->
+                    ExerciseProgression(
+                        exerciseId = exerciseId,
+                        exerciseName = exerciseMap[exerciseId]?.name ?: "Unknown Exercise",
+                        progressionPoints = results.map { result ->
+                            OneRmDataPoint(
+                                date = Instant.fromEpochMilliseconds(result.completed_at)
+                                    .toLocalDateTime(TimeZone.currentSystemDefault()).date,
+                                exerciseId = exerciseId,
+                                exerciseName = exerciseMap[exerciseId]?.name ?: "",
+                                actualOneRm = null,
+                                estimatedOneRm = result.estimated_one_rm.toFloat(),
+                                weight = result.weight_kg,
+                                reps = result.reps,
+                                isEstimated = true
+                            )
+                        }.sortedBy { it.date }
+                    )
+                }
+
+            val oneRmData = OneRmProgressionData(exerciseProgressions = progressions)
+
+            // 🚀 CRITICAL-002 Phase 3: Store in cache
+            putCache(cacheKey, oneRmData, CacheTTL.ONE_RM_PROGRESSION)
 
             Timber.d("1RM progression retrieved - ${oneRmData.exerciseProgressions.size} exercises")
             oneRmData
@@ -218,22 +405,74 @@ class AnalyticsQueryUseCase @Inject constructor(
         ) {
             require(userId.isNotBlank()) { "User ID cannot be blank" }
 
+            // 🚀 CRITICAL-002 Phase 3: Check cache first
+            val cacheKey = cacheKey(userId, "FREQUENCY", timeRange.name)
+            getCached<WorkoutFrequencyData>(cacheKey)?.let { return@liftrixCatching it }
+
             Timber.d("Getting workout frequency for user: $userId, timeRange: $timeRange")
 
-            // TODO: Implement actual workout frequency calculation
-            // For now, return placeholder data to fix compilation
+            // Convert TimeRangeType to TimeRange
+            val timeRangeObj = timeRange.toTimeRange()
+
+            // Fetch frequency data and summary from service
+            val frequencyResult = progressDataService.getFrequencyData(userId, timeRangeObj)
+            val summaryResult = progressDataService.getProgressSummary(userId, timeRangeObj)
+
+            val rawFrequencyData = frequencyResult.getOrThrow()
+            val progressSummary = summaryResult.getOrThrow()
+
+            if (rawFrequencyData.isEmpty()) {
+                Timber.d("No frequency data found for user: $userId")
+                return@liftrixCatching WorkoutFrequencyData(
+                    totalWorkouts = 0,
+                    consistencyScore = 0f,
+                    frequencyPoints = emptyList(),
+                    totalWorkoutDays = 0,
+                    dailyAverage = 0f,
+                    currentStreak = 0,
+                    longestStreak = 0,
+                    weeklyDistribution = emptyMap()
+                )
+            }
+
+            // Convert repository FrequencyDataPoint to FrequencyPoint
+            val convertedPoints = rawFrequencyData.map { dataPoint ->
+                FrequencyPoint(
+                    date = dataPoint.date,
+                    workoutCount = dataPoint.workoutCount,
+                    dayOfWeek = dataPoint.date.dayOfWeek.name
+                )
+            }
+
+            // Calculate weekly distribution
+            val weeklyDistribution = convertedPoints
+                .groupBy { it.dayOfWeek }
+                .mapValues { (_, points) -> points.sumOf { it.workoutCount } }
+
+            // Calculate daily average from time range
+            val daysInRange = timeRangeObj.getDurationInDays().coerceAtLeast(1)
+            val dailyAverage = progressSummary.totalWorkouts.toFloat() / daysInRange
+
+            // Calculate consistency score (0-100)
+            val consistencyScore = if (daysInRange > 0) {
+                (rawFrequencyData.count { it.workoutCount > 0 }.toFloat() / daysInRange * 100f).coerceIn(0f, 100f)
+            } else 0f
+
             val frequencyData = WorkoutFrequencyData(
-                totalWorkouts = 0,
-                consistencyScore = 0f,
-                frequencyPoints = emptyList(),
-                totalWorkoutDays = 0,
-                dailyAverage = 0f,
-                currentStreak = 0,
-                longestStreak = 0,
-                weeklyDistribution = emptyMap()
+                totalWorkouts = progressSummary.totalWorkouts,
+                consistencyScore = consistencyScore,
+                frequencyPoints = convertedPoints,
+                totalWorkoutDays = rawFrequencyData.count { it.workoutCount > 0 },
+                dailyAverage = dailyAverage,
+                currentStreak = progressSummary.currentStreak,
+                longestStreak = progressSummary.longestStreak,
+                weeklyDistribution = weeklyDistribution
             )
 
-            Timber.d("Workout frequency retrieved - Total workouts: ${frequencyData.totalWorkouts}")
+            // 🚀 CRITICAL-002 Phase 3: Store in cache
+            putCache(cacheKey, frequencyData, CacheTTL.WORKOUT_FREQUENCY)
+
+            Timber.d("Workout frequency retrieved - Total workouts: ${frequencyData.totalWorkouts}, consistency: ${frequencyData.consistencyScore}%")
             frequencyData
         }
     }
@@ -269,13 +508,50 @@ class AnalyticsQueryUseCase @Inject constructor(
         ) {
             require(userId.isNotBlank()) { "User ID cannot be blank" }
 
+            // 🚀 CRITICAL-002 Phase 3: Check cache first
+            val cacheKey = cacheKey(userId, "MUSCLE_GROUP", muscleGroup?.name ?: "ALL", timeRange.name)
+            getCached<MuscleGroupAnalyticsData>(cacheKey)?.let { return@liftrixCatching it }
+
             Timber.d("Getting muscle group analytics for user: $userId, muscleGroup: ${muscleGroup?.name ?: "ALL"}, timeRange: $timeRange")
 
-            // TODO: Implement actual muscle group analytics calculation
-            // Filter by specific muscle group if provided
-            val muscleGroupData = MuscleGroupAnalyticsData(
-                muscleGroupDistribution = emptyList()
+            // Step 1: Get date range
+            val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
+            val startDate = when (timeRange) {
+                TimeRangeType.MONTH -> today.minus(DatePeriod(months = 1))
+                TimeRangeType.SIX_MONTHS -> today.minus(DatePeriod(months = 6))
+                TimeRangeType.ALL_TIME -> LocalDate(2020, 1, 1)
+            }
+
+            // Step 2: Query DAO for muscle group volume data
+            val muscleGroupResults = exerciseSetDao.getVolumeDataByMuscleGroup(
+                userId, startDate.toString(), today.toString()
             )
+
+            if (muscleGroupResults.isEmpty()) {
+                Timber.d("No muscle group data found for user: $userId")
+                return@liftrixCatching MuscleGroupAnalyticsData(muscleGroupDistribution = emptyList())
+            }
+
+            // Step 3: Calculate percentages
+            val grandTotal = muscleGroupResults.sumOf { it.total_volume }
+
+            val distribution = muscleGroupResults
+                .filter { muscleGroup == null || it.primary_muscle_group == muscleGroup.name }
+                .map { result ->
+                    MuscleGroupDistribution(
+                        muscleGroup = result.primary_muscle_group,
+                        volumePercentage = if (grandTotal > 0)
+                            ((result.total_volume / grandTotal) * 100).toFloat()
+                        else 0f,
+                        totalVolume = result.total_volume.toFloat(),
+                        exerciseCount = result.exercise_count
+                    )
+                }
+
+            val muscleGroupData = MuscleGroupAnalyticsData(muscleGroupDistribution = distribution)
+
+            // 🚀 CRITICAL-002 Phase 3: Store in cache
+            putCache(cacheKey, muscleGroupData, CacheTTL.MUSCLE_GROUP)
 
             Timber.d("Muscle group analytics retrieved - ${muscleGroupData.muscleGroupDistribution.size} groups")
             muscleGroupData
@@ -317,11 +593,49 @@ class AnalyticsQueryUseCase @Inject constructor(
             require(userId.isNotBlank()) { "User ID cannot be blank" }
             require(limit > 0) { "Limit must be positive" }
 
+            // 🚀 CRITICAL-002 Phase 3: Check cache first
+            val cacheKey = cacheKey(userId, "EXERCISE_RANKING", metric.name, timeRange.name, limit.toString())
+            getCached<List<ExerciseRanking>>(cacheKey)?.let { return@liftrixCatching it }
+
             Timber.d("Getting exercise ranking for user: $userId, metric: $metric, timeRange: $timeRange, limit: $limit")
 
-            // TODO: Implement actual exercise ranking calculation
-            // For now, return placeholder data to fix compilation
-            val rankings = emptyList<ExerciseRanking>()
+            // Step 1: Get date range
+            val today = Clock.System.todayIn(TimeZone.currentSystemDefault())
+            val startDate = when (timeRange) {
+                TimeRangeType.MONTH -> today.minus(DatePeriod(months = 1))
+                TimeRangeType.SIX_MONTHS -> today.minus(DatePeriod(months = 6))
+                TimeRangeType.ALL_TIME -> LocalDate(2020, 1, 1)
+            }
+
+            // Step 2: Query DAO for exercise rankings
+            val rankingResults = exerciseSetDao.getExerciseRankings(
+                userId, startDate.toString(), today.toString(), limit
+            )
+
+            if (rankingResults.isEmpty()) {
+                Timber.d("No ranking data found for user: $userId")
+                return@liftrixCatching emptyList<ExerciseRanking>()
+            }
+
+            // Step 3: Fetch muscle groups
+            val exerciseIdList = rankingResults.map { it.exercise_library_id }
+            val exerciseMap = exerciseLibraryDao.getExercisesByIds(exerciseIdList)
+                .associateBy { it.id }
+
+            // Step 4: Map to domain model with ranks
+            val rankings = rankingResults.mapIndexed { index, result ->
+                ExerciseRanking(
+                    exerciseId = result.exercise_library_id,
+                    exerciseName = result.exercise_name,
+                    muscleGroup = exerciseMap[result.exercise_library_id]
+                        ?.primaryMuscleGroup?.name ?: "",
+                    performanceScore = result.performance_score.toFloat(),
+                    rank = index + 1
+                )
+            }
+
+            // 🚀 CRITICAL-002 Phase 3: Store in cache
+            putCache(cacheKey, rankings, CacheTTL.EXERCISE_RANKING)
 
             Timber.d("Exercise ranking retrieved - ${rankings.size} exercises ranked")
             rankings
@@ -763,3 +1077,14 @@ data class WidgetData(
     val lastUpdated: Long,
     val isStale: Boolean = false
 )
+
+/**
+ * Extension function to convert TimeRangeType to TimeRange for service calls
+ */
+private fun TimeRangeType.toTimeRange(): TimeRange {
+    return when (this) {
+        TimeRangeType.MONTH -> TimeRange.lastMonth()
+        TimeRangeType.SIX_MONTHS -> TimeRange.lastSixMonths()
+        TimeRangeType.ALL_TIME -> TimeRange.allTime()
+    }
+}

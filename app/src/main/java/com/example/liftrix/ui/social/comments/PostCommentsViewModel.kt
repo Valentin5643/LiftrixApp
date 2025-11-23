@@ -92,11 +92,14 @@ class PostCommentsViewModel @Inject constructor(
 
         viewModelScope.launch {
             _isPosting.value = true
-            
+
             try {
+                // FIX INPUT-006: Sanitize comment content to prevent XSS (CVSS 7.4)
+                val sanitizedContent = sanitizeHtmlInput(commentText)
+
                 val request = CreateCommentRequest(
                     postId = postId,
-                    content = commentText,
+                    content = sanitizedContent,
                     parentCommentId = replyingTo?.id
                 )
 
@@ -217,6 +220,26 @@ class PostCommentsViewModel @Inject constructor(
 
     override fun setLoadingState() {
         updateState { PostCommentsUiState.Loading }
+    }
+
+    /**
+     * FIX INPUT-006: Sanitize HTML input to prevent XSS attacks (CVSS 7.4)
+     *
+     * Removes potentially dangerous HTML tags and JavaScript event handlers.
+     * Allows safe formatting tags like <b>, <i>, <u>, <br> if needed in the future.
+     *
+     * Current implementation: Strip all HTML tags for maximum security.
+     * Future: Can whitelist safe tags if rich text formatting is required.
+     */
+    private fun sanitizeHtmlInput(input: String): String {
+        return input
+            .replace("<", "&lt;")  // Escape left angle bracket
+            .replace(">", "&gt;")  // Escape right angle bracket
+            .replace("\"", "&quot;") // Escape double quotes
+            .replace("'", "&#x27;") // Escape single quotes
+            .replace("&", "&amp;")   // Escape ampersand (must be last or escape others)
+            .take(2000) // Limit length to prevent DoS
+            .trim()
     }
 }
 

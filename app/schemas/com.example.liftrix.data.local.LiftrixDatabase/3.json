@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 3,
-    "identityHash": "0fba6e1784e4842899f06c94ee5340fc",
+    "identityHash": "86d8df78a759a1ab7993f0e9c3e0f668",
     "entities": [
       {
         "tableName": "workouts",
@@ -173,6 +173,39 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `idx_workout_conflict_detection` ON `${TABLE_NAME}` (`id`, `updated_at`)"
+          },
+          {
+            "name": "idx_workout_history_optimized",
+            "unique": false,
+            "columnNames": [
+              "user_id",
+              "updated_at",
+              "date",
+              "created_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_workout_history_optimized` ON `${TABLE_NAME}` (`user_id`, `updated_at`, `date`, `created_at`)"
+          },
+          {
+            "name": "idx_workout_date_range_fast",
+            "unique": false,
+            "columnNames": [
+              "user_id",
+              "date"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_workout_date_range_fast` ON `${TABLE_NAME}` (`user_id`, `date`)"
+          },
+          {
+            "name": "idx_workout_template_history",
+            "unique": false,
+            "columnNames": [
+              "template_id",
+              "user_id",
+              "created_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_workout_template_history` ON `${TABLE_NAME}` (`template_id`, `user_id`, `created_at`)"
           }
         ],
         "foreignKeys": []
@@ -8172,7 +8205,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '0fba6e1784e4842899f06c94ee5340fc')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '86d8df78a759a1ab7993f0e9c3e0f668')"
     ]
   }
 }

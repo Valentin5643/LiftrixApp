@@ -84,11 +84,14 @@ class UserSearchRepositoryImpl @Inject constructor(
             Timber.d("[USER-SEARCH]   - Query: '$query'")
             Timber.d("[USER-SEARCH]   - Viewer ID: $currentUserId")
             Timber.d("[USER-SEARCH]   - Filters: $filters")
-            
+
             if (query.isBlank()) {
                 Timber.d("[USER-SEARCH] ⚠️ Query is blank, returning empty results")
                 return@liftrixCatching emptyList<UserSearchResult>()
             }
+
+            // FIX DATA-002: Sanitize input to prevent SQL wildcard injection (CVSS 8.6)
+            val sanitizedQuery = sanitizeSqlInput(query)
 
             // Check cache first for performance
             // Check cache first for performance
@@ -107,7 +110,7 @@ class UserSearchRepositoryImpl @Inject constructor(
             // Perform comprehensive Firebase search with tokenized indexing
             // Perform comprehensive Firebase search with tokenized indexing
             Timber.d("[USER-SEARCH] 🔥 Performing Firebase search with tokenized indexing...")
-            val searchResults = searchFirebaseUsersWithTokens(query, currentUserId, filters)
+            val searchResults = searchFirebaseUsersWithTokens(sanitizedQuery, currentUserId, filters)
             
             // Cache results for future queries
             if (searchResults.isNotEmpty()) {
@@ -943,5 +946,25 @@ class UserSearchRepositoryImpl @Inject constructor(
     
     private fun generateSessionId(): String {
         return "session_${System.currentTimeMillis()}"
+    }
+
+    /**
+     * FIX DATA-002: Sanitize SQL input to prevent wildcard injection (CVSS 8.6)
+     *
+     * Escapes SQL LIKE wildcards (% and _) to prevent users from broadening search results
+     * beyond their intended scope through wildcard injection attacks.
+     *
+     * Example attack prevention:
+     * - Input: "admin%" → Output: "admin\%"
+     * - Input: "_system" → Output: "\_system"
+     *
+     * This ensures parameterized queries remain safe from wildcard-based exploits.
+     */
+    private fun sanitizeSqlInput(input: String): String {
+        return input
+            .replace("%", "\\%")  // Escape percent wildcard
+            .replace("_", "\\_")  // Escape underscore wildcard
+            .trim()
+            .take(100) // Limit length to prevent DoS
     }
 }

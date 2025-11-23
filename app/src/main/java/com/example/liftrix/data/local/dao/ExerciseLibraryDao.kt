@@ -173,4 +173,10 @@ interface ExerciseLibraryDao {
      */
     @Query("SELECT COUNT(*) FROM exercise_library")
     suspend fun getExerciseCount(): Int
+
+    /**
+     * Get multiple exercises by their IDs (batch lookup for analytics)
+     */
+    @Query("SELECT * FROM exercise_library WHERE id IN (:ids)")
+    suspend fun getExercisesByIds(ids: List<String>): List<ExerciseLibraryEntity>
 } 

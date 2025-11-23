@@ -23,7 +23,11 @@ import java.time.LocalDate
         Index(value = ["status", "date"], name = "idx_workout_status_date"),
         Index(value = ["is_synced", "sync_version"], name = "idx_workout_sync"),
         Index(value = ["user_id", "is_synced", "updated_at"], name = "idx_workout_sync_operations"),
-        Index(value = ["id", "updated_at"], name = "idx_workout_conflict_detection")
+        Index(value = ["id", "updated_at"], name = "idx_workout_conflict_detection"),
+        // Performance optimization indexes (added based on PERF-SPEC analysis)
+        Index(value = ["user_id", "updated_at", "date", "created_at"], name = "idx_workout_history_optimized"),
+        Index(value = ["user_id", "date"], name = "idx_workout_date_range_fast"),
+        Index(value = ["template_id", "user_id", "created_at"], name = "idx_workout_template_history")
     ]
 )
 @TypeConverters(DateTimeConverters::class, WorkoutConverters::class)

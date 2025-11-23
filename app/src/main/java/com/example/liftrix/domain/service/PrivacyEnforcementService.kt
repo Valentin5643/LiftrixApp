@@ -8,13 +8,14 @@ import com.example.liftrix.domain.model.social.ProfileVisibility
 import com.example.liftrix.domain.model.social.WorkoutVisibility
 import com.example.liftrix.domain.model.social.WorkoutPost
 import com.example.liftrix.domain.model.social.PostVisibility
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Service for enforcing privacy rules across social features.
  * Part of social infrastructure foundation from SPEC-20250113-social-infrastructure.
- * 
+ *
  * This service provides centralized privacy enforcement to ensure consistent
  * application of privacy settings across all social operations.
  */
@@ -24,6 +25,80 @@ class PrivacyEnforcementService @Inject constructor(
     private val followRelationshipDao: FollowRelationshipDao,
     private val blockedUserDao: BlockedUserDao
 ) {
+    // 🚀 PERF-P1-OPT2: Relationship cache for batch privacy validation
+    // Cache TTL: 5 minutes to balance freshness with performance
+    private data class RelationshipCache(
+        val viewerId: String,
+        val blockedByViewer: Set<String>,
+        val blockedViewer: Set<String>,
+        val following: Set<String>,
+        val timestamp: Long
+    ) {
+        fun isValid(): Boolean = System.currentTimeMillis() - timestamp < CACHE_TTL_MS
+        companion object {
+            const val CACHE_TTL_MS = 5 * 60 * 1000L // 5 minutes
+        }
+    }
+
+    private var relationshipCache: RelationshipCache? = null
+
+    /**
+     * 🚀 PERF-P1-OPT2: Preload relationships for a viewer to enable batch privacy validation.
+     * Call this before processing a feed page to reduce individual DB queries from O(N) to O(1).
+     *
+     * @param viewerId The viewer whose relationships to preload
+     */
+    suspend fun preloadRelationshipsForViewer(viewerId: String) {
+        val startTime = System.currentTimeMillis()
+
+        val blockedByViewer = blockedUserDao.getBlockedUserIds(viewerId).toSet()
+        val blockedViewer = blockedUserDao.getUsersWhoBlockedMe(viewerId).toSet()
+        val following = followRelationshipDao.getFollowingUserIds(viewerId).toSet()
+
+        relationshipCache = RelationshipCache(
+            viewerId = viewerId,
+            blockedByViewer = blockedByViewer,
+            blockedViewer = blockedViewer,
+            following = following,
+            timestamp = System.currentTimeMillis()
+        )
+
+        val duration = System.currentTimeMillis() - startTime
+        Timber.d("[PRIVACY-PERF] Preloaded relationships for $viewerId in ${duration}ms: " +
+                "${blockedByViewer.size} blocked, ${following.size} following")
+    }
+
+    /**
+     * 🚀 PERF-P1-OPT2: Check if viewer has blocked a user (uses cache if available)
+     */
+    private suspend fun isBlockedCached(viewerId: String, userId: String): Boolean {
+        val cache = relationshipCache
+        return if (cache != null && cache.viewerId == viewerId && cache.isValid()) {
+            userId in cache.blockedByViewer || viewerId in cache.blockedViewer
+        } else {
+            blockedUserDao.hasBlockRelationship(viewerId, userId)
+        }
+    }
+
+    /**
+     * 🚀 PERF-P1-OPT2: Check if viewer is following a user (uses cache if available)
+     */
+    private suspend fun isFollowerCached(viewerId: String, userId: String): Boolean {
+        val cache = relationshipCache
+        return if (cache != null && cache.viewerId == viewerId && cache.isValid()) {
+            userId in cache.following
+        } else {
+            followRelationshipDao.isFollowing(viewerId, userId)
+        }
+    }
+
+    /**
+     * Invalidate the relationship cache (call on follow/unfollow/block actions)
+     */
+    fun invalidateCache() {
+        relationshipCache = null
+        Timber.d("[PRIVACY-PERF] Relationship cache invalidated")
+    }
 
     // ========================================
     // Profile Visibility Rules
@@ -237,7 +312,10 @@ class PrivacyEnforcementService @Inject constructor(
 
     /**
      * Checks if a workout post can be viewed by the specified viewer.
-     * 
+     *
+     * 🚀 PERF-P1-OPT2: Uses cached relationships when available for O(1) lookups
+     * instead of O(N) database queries per post.
+     *
      * @param viewerId The ID of the viewer (null for anonymous)
      * @param post The workout post to check visibility for
      * @return true if post can be viewed, false otherwise
@@ -245,15 +323,15 @@ class PrivacyEnforcementService @Inject constructor(
     suspend fun canViewPost(viewerId: String?, post: WorkoutPost): Boolean {
         // Post authors can always view their own posts
         if (viewerId == post.userId) return true
-        
+
         // Anonymous users cannot view posts
         if (viewerId == null) return false
-        
-        // Check if viewer is blocked by post author
-        if (blockedUserDao.hasBlockRelationship(viewerId, post.userId)) {
+
+        // 🚀 PERF-P1-OPT2: Use cached block check
+        if (isBlockedCached(viewerId, post.userId)) {
             return false
         }
-        
+
         // Check post visibility and privacy settings
         return when (post.visibility) {
             com.example.liftrix.domain.model.social.PostVisibility.PUBLIC -> {
@@ -261,8 +339,8 @@ class PrivacyEnforcementService @Inject constructor(
                 true
             }
             com.example.liftrix.domain.model.social.PostVisibility.FOLLOWERS -> {
-                // Followers-only posts require follow relationship
-                isFollower(viewerId, post.userId)
+                // 🚀 PERF-P1-OPT2: Use cached follower check
+                isFollowerCached(viewerId, post.userId)
             }
             com.example.liftrix.domain.model.social.PostVisibility.PRIVATE -> {
                 // Private posts are only visible to the author
