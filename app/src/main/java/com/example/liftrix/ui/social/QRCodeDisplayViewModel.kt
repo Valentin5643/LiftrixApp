@@ -15,12 +15,11 @@ import com.google.zxing.qrcode.QRCodeWriter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.example.liftrix.domain.model.error.LiftrixError
 import java.io.File
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.social.QRCodeGenerationUseCase
 import com.example.liftrix.domain.usecase.social.QRCodeGenerationRequest
 import com.example.liftrix.domain.service.AnalyticsTracker
 import com.example.liftrix.ui.common.event.ViewModelEvent
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -37,22 +36,19 @@ import javax.inject.Inject
 class QRCodeDisplayViewModel @Inject constructor(
     private val qrCodeGenerationUseCase: QRCodeGenerationUseCase,
     private val analyticsTracker: AnalyticsTracker,
-    @ApplicationContext private val context: Context,
-    errorHandler: ErrorHandler
-) : BaseViewModel<QRCodeDisplayUiState, QRCodeDisplayEvent>(errorHandler) {
-
-    override val _uiState = MutableStateFlow(
-        QRCodeDisplayUiState(
-            qrCodeBitmap = null,
-            profileUrl = null,
-            isLoading = false,
-            error = null,
-            currentUserId = null,
-            saveSuccess = false
-        )
+    @ApplicationContext private val context: Context
+) : ModernBaseViewModel<QRCodeDisplayUiState>(
+    initialState = QRCodeDisplayUiState(
+        qrCodeBitmap = null,
+        profileUrl = null,
+        isLoading = false,
+        error = null,
+        currentUserId = null,
+        saveSuccess = false
     )
+) {
 
-    override fun handleEvent(event: QRCodeDisplayEvent) {
+    fun handleEvent(event: QRCodeDisplayEvent) {
         when (event) {
             is QRCodeDisplayEvent.GenerateQRCode -> {
                 generateQRCode(event.userId)
@@ -76,32 +72,31 @@ class QRCodeDisplayViewModel @Inject constructor(
      * Generates QR code for the specified user profile
      */
     private fun generateQRCode(userId: String) {
-        if (_uiState.value.currentUserId == userId && _uiState.value.qrCodeBitmap != null) {
+        if (uiState.value.currentUserId == userId && uiState.value.qrCodeBitmap != null) {
             // QR code already generated for this user
             return
         }
 
-        updateState { currentState ->
-            currentState.copy(
-                isLoading = true,
-                error = null,
-                currentUserId = userId
-            )
-        }
-
-        executeUseCase(
-            useCase = {
-                qrCodeGenerationUseCase(
-                    QRCodeGenerationRequest(
-                        targetUserId = userId,
-                        expirationHours = 0
-                    )
+        viewModelScope.launch {
+            updateState { currentState ->
+                currentState.copy(
+                    isLoading = true,
+                    error = null,
+                    currentUserId = userId
                 )
-            },
-            onSuccess = { result ->
+            }
+
+            val result = qrCodeGenerationUseCase(
+                QRCodeGenerationRequest(
+                    targetUserId = userId,
+                    expirationHours = 0
+                )
+            )
+
+            result.onSuccess { qrCodeResult ->
                 // Convert QR code data string to bitmap
-                val qrCodeBitmap = generateQRCodeBitmap(result.qrCodeData)
-                
+                val qrCodeBitmap = generateQRCodeBitmap(qrCodeResult.qrCodeData)
+
                 if (qrCodeBitmap != null) {
                     // Track QR code generation analytics
                     analyticsTracker.trackQRCodeEvent(
@@ -109,22 +104,22 @@ class QRCodeDisplayViewModel @Inject constructor(
                         userId = userId,
                         qrType = "GYM_BUDDY",
                         additionalProperties = mapOf(
-                            "has_shareable_url" to (result.shareableUrl != null)
+                            "has_shareable_url" to (qrCodeResult.shareableUrl != null)
                         )
                     )
-                    
+
                     updateState { currentState ->
                         currentState.copy(
                             qrCodeBitmap = qrCodeBitmap,
-                            profileUrl = result.shareableUrl,
+                            profileUrl = qrCodeResult.shareableUrl,
                             isLoading = false,
                             error = null
                         )
                     }
-                    
+
                     Timber.d("QR code generated successfully for user: $userId")
                 } else {
-                    val error = LiftrixError.UnknownError("Failed to generate QR code bitmap")
+                    val error = LiftrixError.UnknownError(errorMessage = "Failed to generate QR code bitmap")
                     updateState { currentState ->
                         currentState.copy(
                             isLoading = false,
@@ -133,26 +128,25 @@ class QRCodeDisplayViewModel @Inject constructor(
                     }
                     Timber.e("Failed to create QR code bitmap for user: $userId")
                 }
-            },
-            onError = { error ->
+            }.onFailure { error ->
+                (error as? Throwable)?.let { logError(it, "generateQRCode") }
                 updateState { currentState ->
                     currentState.copy(
                         isLoading = false,
-                        error = error
+                        error = error as? LiftrixError ?: LiftrixError.UnknownError(errorMessage = error.message ?: "Failed to generate QR code")
                     )
                 }
-                
+
                 Timber.e("Failed to generate QR code for user: $userId - ${error.message}")
-            },
-            showLoading = false // We handle loading state manually
-        )
+            }
+        }
     }
 
     /**
      * Refreshes the current QR code
      */
     private fun refreshQRCode() {
-        val currentUserId = _uiState.value.currentUserId
+        val currentUserId = uiState.value.currentUserId
         if (currentUserId != null) {
             // Clear current QR code and regenerate
             updateState { currentState ->
@@ -171,7 +165,7 @@ class QRCodeDisplayViewModel @Inject constructor(
      * Retries QR code generation after an error
      */
     private fun retryGeneration() {
-        val currentUserId = _uiState.value.currentUserId
+        val currentUserId = uiState.value.currentUserId
         if (currentUserId != null) {
             generateQRCode(currentUserId)
         } else {
@@ -222,9 +216,9 @@ class QRCodeDisplayViewModel @Inject constructor(
                 val chooserIntent = Intent.createChooser(shareIntent, "Share QR Code")
                 chooserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(chooserIntent)
-                
+
                 // Track QR code share analytics
-                val currentUserId = _uiState.value.currentUserId ?: "unknown"
+                val currentUserId = uiState.value.currentUserId ?: "unknown"
                 analyticsTracker.trackQRCodeEvent(
                     action = "SHARE",
                     userId = currentUserId,
@@ -240,7 +234,10 @@ class QRCodeDisplayViewModel @Inject constructor(
                 val error = LiftrixError.FileSystemError(
                     errorMessage = "Failed to share QR code: ${exception.message}"
                 )
-                handleError(error)
+                logError(exception, "shareQRCode")
+                updateState { currentState ->
+                    currentState.copy(error = error)
+                }
                 Timber.e(exception, "Failed to share QR code")
             }
         }
@@ -279,9 +276,9 @@ class QRCodeDisplayViewModel @Inject constructor(
                     }
                     
                     Timber.d("QR code saved successfully to Pictures/Liftrix/$filename")
-                    
+
                     // Track QR code save analytics
-                    val currentUserId = _uiState.value.currentUserId ?: "unknown"
+                    val currentUserId = uiState.value.currentUserId ?: "unknown"
                     analyticsTracker.trackQRCodeEvent(
                         action = "SAVE",
                         userId = currentUserId,
@@ -305,24 +302,12 @@ class QRCodeDisplayViewModel @Inject constructor(
                 val error = LiftrixError.FileSystemError(
                     errorMessage = "Failed to save QR code: ${exception.message}"
                 )
-                handleError(error)
+                logError(exception, "saveQRCode")
+                updateState { currentState ->
+                    currentState.copy(error = error)
+                }
                 Timber.e(exception, "Failed to save QR code")
             }
-        }
-    }
-
-    override fun setLoadingState() {
-        updateState { currentState ->
-            currentState.copy(isLoading = true)
-        }
-    }
-
-    override fun updateErrorState(error: LiftrixError) {
-        updateState { currentState ->
-            currentState.copy(
-                error = error,
-                isLoading = false
-            )
         }
     }
 

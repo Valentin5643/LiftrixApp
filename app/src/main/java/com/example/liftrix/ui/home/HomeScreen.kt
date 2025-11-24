@@ -308,7 +308,7 @@ private fun EnhancedHomeContent(
                             onClick = {
                                 selectedTab = FeedTab.HOME
                                 showDropdown = false
-                                feedViewModel.onEvent(FeedEvent.SelectTab(FeedTab.HOME))
+                                feedViewModel.handleEvent(FeedEvent.SelectTab(FeedTab.HOME))
                             },
                             leadingIcon = if (selectedTab == FeedTab.HOME) {
                                 {
@@ -332,7 +332,7 @@ private fun EnhancedHomeContent(
                             onClick = {
                                 selectedTab = FeedTab.DISCOVERY
                                 showDropdown = false
-                                feedViewModel.onEvent(FeedEvent.SelectTab(FeedTab.DISCOVERY))
+                                feedViewModel.handleEvent(FeedEvent.SelectTab(FeedTab.DISCOVERY))
                             },
                             leadingIcon = if (selectedTab == FeedTab.DISCOVERY) {
                                 {
@@ -418,23 +418,23 @@ private fun EnhancedHomeContent(
                     post = post,
                     isLiked = feedUiState.likedPosts.contains(post.id),
                     isSaved = feedUiState.savedPosts.contains(post.id),
-                    onLikeClick = { 
-                        feedViewModel.onEvent(FeedEvent.HandlePostInteraction(PostInteraction.Like(post.id)))
+                    onLikeClick = {
+                        feedViewModel.handleEvent(FeedEvent.HandlePostInteraction(PostInteraction.Like(post.id)))
                     },
-                    onCommentClick = { 
+                    onCommentClick = {
                         navController.navigate(LiftrixRoute.PostComments(post.id))
                     },
-                    onShareClick = { 
-                        feedViewModel.onEvent(FeedEvent.HandlePostInteraction(PostInteraction.Share(post)))
+                    onShareClick = {
+                        feedViewModel.handleEvent(FeedEvent.HandlePostInteraction(PostInteraction.Share(post)))
                     },
-                    onSaveClick = { 
-                        feedViewModel.onEvent(FeedEvent.HandlePostInteraction(PostInteraction.Save(post.id)))
+                    onSaveClick = {
+                        feedViewModel.handleEvent(FeedEvent.HandlePostInteraction(PostInteraction.Save(post.id)))
                     },
-                    onProfileClick = { 
+                    onProfileClick = {
                         navController.navigate(LiftrixRoute.PublicProfile(post.userId))
                     },
                     onWorkoutCopyClick = {
-                        feedViewModel.onEvent(FeedEvent.HandlePostInteraction(PostInteraction.CopyWorkout(post)))
+                        feedViewModel.handleEvent(FeedEvent.HandlePostInteraction(PostInteraction.CopyWorkout(post)))
                     },
                     onWorkoutClick = {
                         // Navigate to workout details

@@ -6,8 +6,7 @@ import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.help.HelpCategory
 import com.example.liftrix.domain.service.HelpCenterService
-import com.example.liftrix.domain.usecase.common.ErrorHandler
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -21,8 +20,8 @@ import timber.log.Timber
 import javax.inject.Inject
 
 /**
- * ViewModel for help center screen implementing MVI pattern
- * 
+ * ViewModel for help center screen implementing modernized MVI pattern
+ *
  * Features:
  * - Article search with debounced input
  * - Category filtering and navigation
@@ -33,11 +32,10 @@ import javax.inject.Inject
 @OptIn(FlowPreview::class)
 @HiltViewModel
 class HelpViewModel @Inject constructor(
-    private val helpCenterService: HelpCenterService,
-    errorHandler: ErrorHandler
-) : BaseViewModel<HelpUiState, HelpEvent>(errorHandler) {
-    
-    override val _uiState = MutableStateFlow<HelpUiState>(HelpUiState.Loading)
+    private val helpCenterService: HelpCenterService
+) : ModernBaseViewModel<HelpUiState>(
+    initialState = HelpUiState.Loading
+) {
     
     private val _sideEffects = MutableSharedFlow<HelpSideEffect>()
     val sideEffects = _sideEffects.asSharedFlow()
@@ -55,28 +53,15 @@ class HelpViewModel @Inject constructor(
                     performSearch(query)
                 }
         }
-        
+
         // Load initial content
-        handleEvent(HelpEvent.LoadContent)
+        loadContent()
     }
-    
-    override fun handleEvent(event: HelpEvent) {
-        when (event) {
-            is HelpEvent.LoadContent -> loadContent()
-            is HelpEvent.RefreshContent -> refreshContent()
-            is HelpEvent.SearchArticles -> handleSearch(event.query)
-            is HelpEvent.ClearSearch -> clearSearch()
-            is HelpEvent.SelectCategory -> selectCategory(event.category)
-            is HelpEvent.ViewArticle -> recordArticleView(event.articleId)
-            is HelpEvent.MarkArticleHelpful -> markArticleHelpful(event.articleId, event.helpful)
-            is HelpEvent.Retry -> retry()
-        }
-    }
-    
+
     /**
      * Loads initial help content (categories, popular articles, featured articles)
      */
-    private fun loadContent() {
+    fun loadContent() {
         viewModelScope.launch {
             updateState { HelpUiState.Loading }
             
@@ -111,7 +96,7 @@ class HelpViewModel @Inject constructor(
     /**
      * Refreshes help content from remote sources
      */
-    private fun refreshContent() {
+    fun refreshContent() {
         viewModelScope.launch {
             val currentData = getCurrentData()
             updateState { HelpUiState.Success(currentData.copy(isRefreshing = true)) }
@@ -167,7 +152,7 @@ class HelpViewModel @Inject constructor(
     /**
      * Handles search query input with debouncing
      */
-    private fun handleSearch(query: String) {
+    fun searchArticles(query: String) {
         val currentData = getCurrentData()
         updateState { 
             HelpUiState.Success(currentData.copy(
@@ -225,7 +210,7 @@ class HelpViewModel @Inject constructor(
     /**
      * Clears search and returns to default view
      */
-    private fun clearSearch() {
+    fun clearSearch() {
         val currentData = getCurrentData()
         updateState { 
             HelpUiState.Success(currentData.copy(
@@ -240,7 +225,7 @@ class HelpViewModel @Inject constructor(
     /**
      * Selects a category to filter articles
      */
-    private fun selectCategory(category: HelpCategory?) {
+    fun selectCategory(category: HelpCategory?) {
         val currentData = getCurrentData()
         updateState { 
             HelpUiState.Success(currentData.copy(
@@ -272,9 +257,9 @@ class HelpViewModel @Inject constructor(
     }
     
     /**
-     * Records that an article was viewed
+     * Records that an article was viewed and navigates to it
      */
-    private fun recordArticleView(articleId: String) {
+    fun viewArticle(articleId: String) {
         // Record view asynchronously without blocking UI
         viewModelScope.launch {
             try {
@@ -292,7 +277,7 @@ class HelpViewModel @Inject constructor(
     /**
      * Marks an article as helpful or not helpful
      */
-    private fun markArticleHelpful(articleId: String, helpful: Boolean) {
+    fun markArticleHelpful(articleId: String, helpful: Boolean) {
         viewModelScope.launch {
             helpCenterService.markHelpful(articleId, helpful).fold(
                 onSuccess = {
@@ -310,7 +295,7 @@ class HelpViewModel @Inject constructor(
     /**
      * Retries the last failed operation
      */
-    private fun retry() {
+    fun retry() {
         when (val currentState = _uiState.value) {
             is HelpUiState.Error -> {
                 if (currentState.previousData == null || currentState.previousData.categories.isEmpty()) {

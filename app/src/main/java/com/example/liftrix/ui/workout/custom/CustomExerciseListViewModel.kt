@@ -7,9 +7,8 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.CustomExerciseRepository
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.ui.common.state.UiState
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -26,14 +25,9 @@ import javax.inject.Inject
 @HiltViewModel
 class CustomExerciseListViewModelImpl @Inject constructor(
     private val customExerciseRepository: CustomExerciseRepository,
-    private val authRepository: AuthRepository,
-    errorHandler: ErrorHandler
-) : BaseViewModel<UiState<CustomExerciseListState>, CustomExerciseListEvent>(errorHandler),
+    private val authRepository: AuthRepository
+) : ModernBaseViewModel<UiState<CustomExerciseListState>>(initialState = UiState.Loading),
     CustomExerciseListViewModel {
-
-    override val _uiState = MutableStateFlow<UiState<CustomExerciseListState>>(
-        UiState.Loading
-    )
 
     private var allExercises: List<CustomExercise> = emptyList()
 
@@ -41,7 +35,7 @@ class CustomExerciseListViewModelImpl @Inject constructor(
         loadExercises()
     }
 
-    override fun handleEvent(event: CustomExerciseListEvent) {
+    fun handleEvent(event: CustomExerciseListEvent) {
         when (event) {
             is CustomExerciseListEvent.LoadExercises -> loadExercises()
             is CustomExerciseListEvent.UpdateSearchQuery -> updateSearchQuery(event.query)
@@ -50,14 +44,6 @@ class CustomExerciseListViewModelImpl @Inject constructor(
             is CustomExerciseListEvent.ClearFilter -> clearFilter()
             is CustomExerciseListEvent.DeleteExercise -> deleteExercise(event.exerciseId)
         }
-    }
-
-    override fun setLoadingState() {
-        setState(UiState.Loading)
-    }
-
-    override fun updateErrorState(error: LiftrixError) {
-        setState(UiState.Error(error))
     }
 
     override fun loadExercises() {
@@ -114,27 +100,34 @@ class CustomExerciseListViewModelImpl @Inject constructor(
 
     override fun deleteExercise(exerciseId: String) {
         viewModelScope.launch {
-            executeUseCase<Unit>(
-                useCase = {
-                    val userId = authRepository.getCurrentUserId()
-                    if (userId == null) {
-                        LiftrixResult.failure(
-                            LiftrixError.AuthenticationError(
-                                errorMessage = "User not authenticated",
-                                analyticsContext = mapOf("operation" to "DELETE_CUSTOM_EXERCISE")
-                            )
+            try {
+                val userId = authRepository.getCurrentUserId()
+                if (userId == null) {
+                    setState(UiState.Error(
+                        LiftrixError.AuthenticationError(
+                            errorMessage = "User not authenticated",
+                            analyticsContext = mapOf("operation" to "DELETE_CUSTOM_EXERCISE")
                         )
-                    } else {
-                        customExerciseRepository.deleteCustomExercise(userId, CustomExerciseId.fromString(exerciseId))
+                    ))
+                    return@launch
+                }
+
+                val result = customExerciseRepository.deleteCustomExercise(userId, CustomExerciseId.fromString(exerciseId))
+                result.fold(
+                    onSuccess = {
+                        Timber.i("Successfully deleted custom exercise: $exerciseId")
+                        // Reload exercises to reflect the deletion
+                        loadExercises()
+                    },
+                    onFailure = { error ->
+                        Timber.e("Failed to delete custom exercise: $error")
+                        logError(error, "deleteExercise")
                     }
-                },
-                onSuccess = { _: Unit ->
-                    Timber.i("Successfully deleted custom exercise: $exerciseId")
-                    // Reload exercises to reflect the deletion
-                    loadExercises()
-                },
-                showLoading = false // Don't show loading state for deletes
-            )
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "Exception during delete exercise")
+                logError(e, "deleteExercise")
+            }
         }
     }
 

@@ -20,13 +20,11 @@ import com.example.liftrix.domain.model.analytics.DashboardConfiguration
 import com.example.liftrix.domain.model.analytics.DashboardLayoutMode
 import com.example.liftrix.domain.model.analytics.UserLevel
 import com.example.liftrix.domain.model.analytics.WidgetPreferences
-import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.service.AnalyticsService
 import com.example.liftrix.service.WidgetResolver
 import com.example.liftrix.ui.common.state.UiState
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.progress.components.AnalyticsWidgetManager
 import java.time.LocalDateTime
 import timber.log.Timber
@@ -110,16 +108,8 @@ sealed class NavigationEvent {
 class AnalyticsWidgetViewModel @Inject constructor(
     private val analyticsService: AnalyticsService,
     private val widgetManager: AnalyticsWidgetManager,
-    private val widgetResolver: WidgetResolver,
-    errorHandler: ErrorHandler
-) : BaseViewModel<UiState<AnalyticsWidgetState>, AnalyticsWidgetEvent>(errorHandler) {
-
-    /**
-     * Mutable state flow for internal state management.
-     * Initialized with loading state while user authentication is verified.
-     */
-    override val _uiState: MutableStateFlow<UiState<AnalyticsWidgetState>> = 
-        MutableStateFlow(UiState.Loading)
+    private val widgetResolver: WidgetResolver
+) : ModernBaseViewModel<UiState<AnalyticsWidgetState>>(initialState = UiState.Loading) {
 
     /**
      * Current authenticated user state for data scoping.
@@ -182,7 +172,7 @@ class AnalyticsWidgetViewModel @Inject constructor(
      * 
      * @param event The event to process
      */
-    override fun handleEvent(event: AnalyticsWidgetEvent) {
+    fun handleEvent(event: AnalyticsWidgetEvent) {
         when (event) {
             is AnalyticsWidgetEvent.LoadWidget -> loadWidgetData(event.widgetId, event.forceRefresh)
             is AnalyticsWidgetEvent.ToggleVisibility -> toggleWidgetVisibility(event.widgetId, event.visible)
@@ -1097,10 +1087,10 @@ class AnalyticsWidgetViewModel @Inject constructor(
 
     /**
      * Updates error state for ViewModel-specific error handling with permission fallback.
-     * 
+     *
      * @param error The error to reflect in the state
      */
-    override fun updateErrorState(error: LiftrixError) {
+    private fun updateErrorState(error: LiftrixError) {
         // Handle permission denied errors gracefully
         if (isPermissionDeniedError(error)) {
             Timber.w("Permission denied in AnalyticsWidgetViewModel - falling back to empty state: ${error.message}")
@@ -1140,7 +1130,7 @@ class AnalyticsWidgetViewModel @Inject constructor(
     /**
      * Sets loading state for ViewModel operations.
      */
-    override fun setLoadingState() {
+    private fun setLoadingState() {
         updateState { UiState.Loading }
     }
 

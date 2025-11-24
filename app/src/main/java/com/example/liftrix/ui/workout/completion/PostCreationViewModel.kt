@@ -13,10 +13,9 @@ import timber.log.Timber
 import java.util.*
 import javax.inject.Inject
 
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.event.ViewModelEvent
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.service.MediaUploadService
 import com.example.liftrix.data.local.dao.WorkoutPostDao
@@ -53,11 +52,8 @@ class PostCreationViewModel @Inject constructor(
     private val workoutPostDao: WorkoutPostDao,
     private val socialProfileDao: SocialProfileDao,
     private val authRepository: AuthRepository,
-    private val workoutPostMapper: WorkoutPostMapper,
-    errorHandler: ErrorHandler
-) : BaseViewModel<UiState<PostCreationUiState>, PostCreationEvent>(errorHandler) {
-
-    override val _uiState = MutableStateFlow<UiState<PostCreationUiState>>(UiState.Success(PostCreationUiState.Initial))
+    private val workoutPostMapper: WorkoutPostMapper
+) : ModernBaseViewModel<UiState<PostCreationUiState>>(initialState = UiState.Success(PostCreationUiState.Initial)) {
 
     /**
      * Creates a new workout post with optional media attachments.
@@ -81,28 +77,27 @@ class PostCreationViewModel @Inject constructor(
         privacy: PostVisibility
     ) {
         Timber.d("Creating post for workout $workoutId with ${mediaUris.size} media items")
-        
-        executeUseCase(
-            useCase = {
-                liftrixCatching(
-                    errorMapper = { throwable ->
-                        LiftrixError.BusinessLogicError(
-                            code = "POST_CREATION_FAILED",
-                            errorMessage = "Failed to create post: ${throwable.message}",
-                            analyticsContext = mapOf(
-                                "workout_id" to workoutId,
-                                "media_count" to mediaUris.size.toString(),
-                                "privacy" to privacy.name
-                            )
+
+        viewModelScope.launch {
+            updateState { UiState.Loading }
+            val result = liftrixCatching(
+                errorMapper = { throwable ->
+                    LiftrixError.BusinessLogicError(
+                        code = "POST_CREATION_FAILED",
+                        errorMessage = "Failed to create post: ${throwable.message}",
+                        analyticsContext = mapOf(
+                            "workout_id" to workoutId,
+                            "media_count" to mediaUris.size.toString(),
+                            "privacy" to privacy.name
                         )
-                    }
-                ) {
-                    createPostInternal(workoutId, caption, mediaUris, privacy)
+                    )
                 }
-            },
-            onSuccess = { createdPost ->
+            ) {
+                createPostInternal(workoutId, caption, mediaUris, privacy)
+            }
+            result.onSuccess { createdPost ->
                 Timber.d("Post created successfully: ${createdPost.id}")
-                updateState { 
+                updateState {
                     UiState.Success(
                         PostCreationUiState.Success(
                             createdPostId = createdPost.id,
@@ -110,8 +105,11 @@ class PostCreationViewModel @Inject constructor(
                         )
                     )
                 }
+            }.onFailure { error ->
+                logError(error, "createPost")
+                updateState { UiState.Error(error as? LiftrixError ?: LiftrixError.UnknownError(errorMessage = error.message ?: "Failed to create post")) }
             }
-        )
+        }
     }
 
     /**
@@ -340,7 +338,7 @@ class PostCreationViewModel @Inject constructor(
     /**
      * Handles events from the UI.
      */
-    override fun handleEvent(event: PostCreationEvent) {
+    fun handleEvent(event: PostCreationEvent) {
         when (event) {
             is PostCreationEvent.CreatePost -> {
                 createPost(
@@ -354,28 +352,6 @@ class PostCreationViewModel @Inject constructor(
                 updateState { UiState.Success(PostCreationUiState.Initial) }
             }
         }
-    }
-
-    override fun setLoadingState() {
-        updateState { UiState.Loading }
-    }
-
-    override fun updateErrorState(error: LiftrixError) {
-        val userMessage = when (error) {
-            is LiftrixError.AuthenticationError -> "Please sign in to share workouts"
-            is LiftrixError.NotFoundError -> "Workout not found. Please try again."
-            is LiftrixError.NetworkError -> "No internet connection. Please check your network."
-            is LiftrixError.BusinessLogicError -> {
-                when (error.code) {
-                    "MEDIA_UPLOAD_FAILED" -> error.errorMessage
-                    "POST_CREATION_FAILED" -> "Failed to share workout. Please try again."
-                    else -> "Something went wrong. Please try again."
-                }
-            }
-            else -> "Something went wrong. Please try again."
-        }
-        
-        updateState { UiState.Error(error) }
     }
 }
 

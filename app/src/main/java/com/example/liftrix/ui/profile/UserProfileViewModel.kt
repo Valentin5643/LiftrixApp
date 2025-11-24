@@ -13,9 +13,7 @@ import com.example.liftrix.domain.usecase.social.PostEngagementUseCase
 import com.example.liftrix.domain.usecase.social.RecordShareUseCase
 import com.example.liftrix.domain.usecase.social.CopyWorkoutFromPostUseCase
 import com.example.liftrix.ui.common.state.UiState
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
-import com.example.liftrix.ui.common.event.ViewModelEvent
-import com.example.liftrix.domain.usecase.common.ErrorHandler
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.share.PlatformShareAdapter
 import com.example.liftrix.domain.model.ShareableContent
@@ -58,13 +56,8 @@ class UserProfileViewModel @Inject constructor(
     private val platformShareAdapter: PlatformShareAdapter,
     private val postEngagementUseCase: PostEngagementUseCase,
     private val recordShareUseCase: RecordShareUseCase,
-    private val copyWorkoutFromPostUseCase: CopyWorkoutFromPostUseCase,
-    errorHandler: ErrorHandler
-) : BaseViewModel<UserProfileUiState, UserProfileEvent>(
-    errorHandler = errorHandler
-) {
-    
-    override val _uiState = MutableStateFlow(UserProfileUiState())
+    private val copyWorkoutFromPostUseCase: CopyWorkoutFromPostUseCase
+) : ModernBaseViewModel<UserProfileUiState>(initialState = UserProfileUiState()) {
     
     // Current user ID for follow operations
     private val currentUserId = flow {
@@ -1019,7 +1012,7 @@ class UserProfileViewModel @Inject constructor(
         }
     }
     
-    override fun handleEvent(event: UserProfileEvent) {
+    fun handleEvent(event: UserProfileEvent) {
         when (event) {
             // Existing events
             is UserProfileEvent.LoadProfile -> loadUserProfile(event.userId)
@@ -1158,7 +1151,7 @@ data class UserProfileUiState(
 /**
  * Enhanced events for modern profile interactions
  */
-sealed class UserProfileEvent : ViewModelEvent {
+sealed class UserProfileEvent {
     // Existing events
     data class LoadProfile(val userId: String) : UserProfileEvent()
     data object ToggleFollow : UserProfileEvent()

@@ -6,63 +6,58 @@ import com.example.liftrix.domain.model.social.SocialPrivacySettings
 import com.example.liftrix.domain.model.social.ProfileVisibility
 import com.example.liftrix.domain.model.social.WorkoutVisibility
 import com.example.liftrix.ui.social.onboarding.SocialOnboardingStep
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.social.SocialProfileQueryUseCase
 import com.example.liftrix.domain.usecase.social.SocialProfileCommandUseCase
 import com.example.liftrix.ui.common.event.ViewModelEvent
-import com.example.liftrix.ui.common.state.UiState
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 
 /**
  * ViewModel for social onboarding screen managing multi-step flow state.
- * 
+ *
  * Handles:
  * - Step navigation and validation
  * - Profile creation with username availability checking
  * - Privacy settings configuration
  * - Form validation and error handling
- * 
+ *
  * Part of social infrastructure foundation from SPEC-20250113-social-infrastructure.
  */
 @OptIn(FlowPreview::class)
 @HiltViewModel
 class SocialOnboardingViewModel @Inject constructor(
     private val socialProfileCommandUseCase: SocialProfileCommandUseCase,
-    private val socialProfileQueryUseCase: SocialProfileQueryUseCase,
-    errorHandler: ErrorHandler
-) : BaseViewModel<SocialOnboardingUiState, SocialOnboardingEvent>(errorHandler) {
-
-    override val _uiState = MutableStateFlow(
-        SocialOnboardingUiState(
-            currentStep = SocialOnboardingStep.PRIVACY_INTRO,
-            username = "",
-            displayName = "",
-            bio = "",
-            allowFollowRequests = false,
-            workoutSharingEnabled = false,
-            gymBuddiesEnabled = false,
-            showAchievements = true,
-            usernameError = null,
-            displayNameError = null,
-            isLoading = false,
-            isCompleted = false,
-            canCreateProfile = false
-        )
+    private val socialProfileQueryUseCase: SocialProfileQueryUseCase
+) : ModernBaseViewModel<SocialOnboardingUiState>(
+    initialState = SocialOnboardingUiState(
+        currentStep = SocialOnboardingStep.PRIVACY_INTRO,
+        username = "",
+        displayName = "",
+        bio = "",
+        allowFollowRequests = false,
+        workoutSharingEnabled = false,
+        gymBuddiesEnabled = false,
+        showAchievements = true,
+        usernameError = null,
+        displayNameError = null,
+        isLoading = false,
+        isCompleted = false,
+        canCreateProfile = false
     )
+) {
 
     init {
         // Debounced username availability checking
-        _uiState
+        uiState
             .debounce(500) // Wait 500ms after user stops typing
             .distinctUntilChanged { old, new -> old.username == new.username }
             .onEach { state ->
@@ -73,7 +68,7 @@ class SocialOnboardingViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
-    override fun handleEvent(event: SocialOnboardingEvent) {
+    fun handleEvent(event: SocialOnboardingEvent) {
         when (event) {
             is SocialOnboardingEvent.NavigateNext -> navigateNext()
             is SocialOnboardingEvent.NavigateBack -> navigateBack()
@@ -90,17 +85,8 @@ class SocialOnboardingViewModel @Inject constructor(
         }
     }
 
-    override fun setLoadingState() {
-        updateState { it.copy(isLoading = true) }
-    }
-
-    override fun updateErrorState(error: LiftrixError) {
-        updateState { it.copy(isLoading = false) }
-        Timber.e("Social onboarding error: ${error.message}")
-    }
-
-    private fun navigateNext() {
-        val currentStep = _uiState.value.currentStep
+    fun navigateNext() {
+        val currentStep = uiState.value.currentStep
         val nextStep = when (currentStep) {
             SocialOnboardingStep.PRIVACY_INTRO -> SocialOnboardingStep.BENEFITS
             SocialOnboardingStep.BENEFITS -> SocialOnboardingStep.PROFILE_CREATION
@@ -108,12 +94,12 @@ class SocialOnboardingViewModel @Inject constructor(
             SocialOnboardingStep.PRIVACY_SETTINGS -> SocialOnboardingStep.COMPLETION
             SocialOnboardingStep.COMPLETION -> return // Already at end
         }
-        
+
         updateState { it.copy(currentStep = nextStep) }
     }
 
-    private fun navigateBack() {
-        val currentStep = _uiState.value.currentStep
+    fun navigateBack() {
+        val currentStep = uiState.value.currentStep
         val previousStep = when (currentStep) {
             SocialOnboardingStep.PRIVACY_INTRO -> return // Already at start
             SocialOnboardingStep.BENEFITS -> SocialOnboardingStep.PRIVACY_INTRO
@@ -121,11 +107,11 @@ class SocialOnboardingViewModel @Inject constructor(
             SocialOnboardingStep.PRIVACY_SETTINGS -> SocialOnboardingStep.PROFILE_CREATION
             SocialOnboardingStep.COMPLETION -> SocialOnboardingStep.PRIVACY_SETTINGS
         }
-        
+
         updateState { it.copy(currentStep = previousStep) }
     }
 
-    private fun updateUsername(username: String) {
+    fun updateUsername(username: String) {
         updateState { state ->
             state.copy(
                 username = username,
@@ -140,7 +126,7 @@ class SocialOnboardingViewModel @Inject constructor(
         }
     }
 
-    private fun updateDisplayName(displayName: String) {
+    fun updateDisplayName(displayName: String) {
         val error = validateDisplayName(displayName)
         updateState { state ->
             state.copy(
@@ -156,103 +142,110 @@ class SocialOnboardingViewModel @Inject constructor(
         }
     }
 
-    private fun updateBio(bio: String) {
+    fun updateBio(bio: String) {
         // Limit bio to 500 characters
         val trimmedBio = if (bio.length > 500) bio.take(500) else bio
         updateState { it.copy(bio = trimmedBio) }
     }
 
-    private fun updateAllowFollowRequests(enabled: Boolean) {
+    fun updateAllowFollowRequests(enabled: Boolean) {
         updateState { it.copy(allowFollowRequests = enabled) }
     }
 
-    private fun updateWorkoutSharing(enabled: Boolean) {
+    fun updateWorkoutSharing(enabled: Boolean) {
         updateState { it.copy(workoutSharingEnabled = enabled) }
     }
 
-    private fun updateGymBuddies(enabled: Boolean) {
+    fun updateGymBuddies(enabled: Boolean) {
         updateState { it.copy(gymBuddiesEnabled = enabled) }
     }
 
-    private fun updateShowAchievements(enabled: Boolean) {
+    fun updateShowAchievements(enabled: Boolean) {
         updateState { it.copy(showAchievements = enabled) }
     }
 
     private fun checkUsernameAvailability(username: String) {
-        executeUseCase(
-            useCase = { socialProfileQueryUseCase.checkUsernameAvailability(username) },
-            onSuccess = { isAvailable ->
-                val error = if (!isAvailable) {
-                    "Username '$username' is already taken"
-                } else {
-                    null
-                }
-                
-                updateState { state ->
-                    state.copy(
-                        usernameError = error,
-                        canCreateProfile = validateProfileData(
-                            username = state.username,
-                            displayName = state.displayName,
+        viewModelScope.launch {
+            val result = socialProfileQueryUseCase.checkUsernameAvailability(username)
+            result.fold(
+                onSuccess = { isAvailable ->
+                    val error = if (!isAvailable) {
+                        "Username '$username' is already taken"
+                    } else {
+                        null
+                    }
+
+                    updateState { state ->
+                        state.copy(
                             usernameError = error,
-                            displayNameError = state.displayNameError
+                            canCreateProfile = validateProfileData(
+                                username = state.username,
+                                displayName = state.displayName,
+                                usernameError = error,
+                                displayNameError = state.displayNameError
+                            )
                         )
-                    )
+                    }
+                },
+                onFailure = { throwable ->
+                    Timber.e("Failed to check username availability: ${throwable.message}")
+                    // Don't show error to user for availability check failures
+                    // They can still attempt to create the profile
                 }
-            },
-            onError = { error ->
-                Timber.e("Failed to check username availability: ${error.message}")
-                // Don't show error to user for availability check failures
-                // They can still attempt to create the profile
-            },
-            showLoading = false
-        )
+            )
+        }
     }
 
-    private fun createProfile() {
-        val state = _uiState.value
-        
-        executeUseCase(
-            useCase = {
-                socialProfileCommandUseCase.create(
-                    username = state.username,
-                    displayName = state.displayName,
-                    bio = state.bio.takeIf { it.isNotBlank() }
-                )
-            },
-            onSuccess = { profile ->
-                Timber.d("Social profile created successfully: ${profile.username}")
-                navigateNext()
-            },
-            onError = { error ->
-                // Handle specific validation errors
-                when (error) {
-                    is LiftrixError.ValidationError -> {
-                        when (error.field) {
-                            "username" -> {
-                                updateState { it.copy(usernameError = "Invalid username") }
-                            }
-                            "displayName" -> {
-                                updateState { it.copy(displayNameError = "Invalid display name") }
-                            }
-                            else -> {
-                                // Show general error
-                                handleError(error)
+    fun createProfile() {
+        val state = uiState.value
+
+        viewModelScope.launch {
+            updateState { it.copy(isLoading = true) }
+
+            val result = socialProfileCommandUseCase.create(
+                username = state.username,
+                displayName = state.displayName,
+                bio = state.bio.takeIf { it.isNotBlank() }
+            )
+
+            updateState { it.copy(isLoading = false) }
+
+            result.fold(
+                onSuccess = { profile ->
+                    Timber.d("Social profile created successfully: ${profile.username}")
+                    navigateNext()
+                },
+                onFailure = { throwable ->
+                    // Handle specific validation errors
+                    when (throwable) {
+                        is LiftrixError.ValidationError -> {
+                            when (throwable.field) {
+                                "username" -> {
+                                    updateState { it.copy(usernameError = "Invalid username") }
+                                }
+                                "displayName" -> {
+                                    updateState { it.copy(displayNameError = "Invalid display name") }
+                                }
+                                else -> {
+                                    Timber.e("Profile creation error: ${throwable.message}")
+                                }
                             }
                         }
-                    }
-                    else -> {
-                        // Show general error
-                        handleError(error)
+                        is LiftrixError -> {
+                            Timber.e("Profile creation error: ${throwable.message}")
+                        }
+                        else -> {
+                            Timber.e("Profile creation error: ${throwable.message}")
+                        }
                     }
                 }
-            }
-        )
+            )
+        }
     }
 
-    private fun savePrivacySettings() {
-        val state = _uiState.value
-        
+    fun savePrivacySettings() {
+        val state = uiState.value
+
         val privacySettings = SocialPrivacySettings(
             userId = "", // Will be set by use case
             socialEnabled = true, // User is enabling social features
@@ -272,21 +265,31 @@ class SocialOnboardingViewModel @Inject constructor(
             notificationSettings = emptyMap(), // Default notification settings
             updatedAt = System.currentTimeMillis()
         )
-        
-        executeUseCase(
-            useCase = { socialProfileCommandUseCase.updatePrivacySettings(privacySettings) },
-            onSuccess = { 
-                Timber.d("Privacy settings saved successfully")
-                navigateNext()
-            },
-            onError = { error ->
-                Timber.e("Failed to save privacy settings: ${error.message}")
-                handleError(error)
-            }
-        )
+
+        viewModelScope.launch {
+            updateState { it.copy(isLoading = true) }
+
+            val result = socialProfileCommandUseCase.updatePrivacySettings(privacySettings)
+            result.fold(
+                onSuccess = {
+                    updateState { it.copy(isLoading = false) }
+                    Timber.d("Privacy settings saved successfully")
+                    navigateNext()
+                },
+                onFailure = { throwable ->
+                    updateState { it.copy(isLoading = false) }
+                    val errorMessage = if (throwable is LiftrixError) {
+                        throwable.message
+                    } else {
+                        throwable.message ?: "Unknown error"
+                    }
+                    Timber.e("Failed to save privacy settings: $errorMessage")
+                }
+            )
+        }
     }
 
-    private fun completeOnboarding() {
+    fun completeOnboarding() {
         updateState { it.copy(isCompleted = true) }
     }
 

@@ -5,8 +5,6 @@ import androidx.lifecycle.SavedStateHandle
 import com.example.liftrix.ui.common.viewmodel.StatefulDetailViewModel
 import com.example.liftrix.ui.common.viewmodel.DetailScreenStateKeys
 import com.example.liftrix.ui.common.state.UiState
-import com.example.liftrix.ui.common.event.ViewModelEvent
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.model.analytics.RankingMetric
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.model.ExerciseLibrary
@@ -42,13 +40,13 @@ import kotlinx.datetime.*
 @HiltViewModel
 class ExerciseRankingDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    errorHandler: ErrorHandler,
     private val analyticsQueryUseCase: AnalyticsQueryUseCase,
     private val authQueryUseCase: AuthQueryUseCase,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
-) : StatefulDetailViewModel<ExerciseRankingDetailViewModel.UiState, ExerciseRankingDetailViewModel.Event>(savedStateHandle, errorHandler) {
-
-    override val _uiState = MutableStateFlow<UiState>(UiState())
+) : StatefulDetailViewModel<ExerciseRankingDetailViewModel.UiState>(
+    initialState = UiState(),
+    savedStateHandle = savedStateHandle
+) {
 
     companion object {
         private const val KEY_SORT_BY = "sortBy"
@@ -126,7 +124,7 @@ class ExerciseRankingDetailViewModel @Inject constructor(
                     onSuccess = { it },
                     onFailure = {
                         val authError = LiftrixError.AuthenticationError("User not authenticated")
-                        handleError(authError)
+                        logError(authError, "loadExerciseRankings")
                         Timber.e("Failed to load exercise rankings: User not authenticated")
                         return@launch
                     }
@@ -183,7 +181,7 @@ class ExerciseRankingDetailViewModel @Inject constructor(
                             errorMessage = "Failed to load exercise rankings: ${error.message}",
                             operation = "loadExerciseRankings"
                         )
-                        handleError(liftrixError)
+                        logError(liftrixError, "loadExerciseRankings")
                         Timber.e(error, "Failed to load exercise rankings")
                     }
                 )
@@ -193,7 +191,7 @@ class ExerciseRankingDetailViewModel @Inject constructor(
                     errorMessage = "Failed to load exercise rankings: ${error.message}",
                     operation = "loadExerciseRankings"
                 )
-                handleError(liftrixError)
+                logError(liftrixError, "loadExerciseRankings")
                 Timber.e(error, "Failed to load exercise rankings")
             }
         }
@@ -270,13 +268,13 @@ class ExerciseRankingDetailViewModel @Inject constructor(
                     operation = "exportExerciseRankings",
                     format = "csv"
                 )
-                handleError(liftrixError)
+                logError(liftrixError, "exportData")
                 Timber.e(error, "Failed to export exercise ranking data")
             }
         }
     }
 
-    override fun handleEvent(event: Event) {
+    fun handleEvent(event: Event) {
         when (event) {
             is Event.UpdateSortBy -> updateSortBy(event.sortBy)
             is Event.UpdateLimit -> updateLimit(event.limit)
@@ -432,7 +430,7 @@ class ExerciseRankingDetailViewModel @Inject constructor(
     /**
      * Events for exercise ranking detail screen
      */
-    sealed class Event : ViewModelEvent {
+    sealed class Event {
         data class UpdateSortBy(val sortBy: RankingMetric) : Event()
         data class UpdateLimit(val limit: Int) : Event()
         data object TogglePlateaus : Event()
@@ -496,11 +494,11 @@ class ExerciseRankingDetailViewModel @Inject constructor(
         )
     }
 
-    override fun updateErrorState(error: LiftrixError) {
-        handleError(error)
+    fun updateErrorState(error: LiftrixError) {
+        logError(error, "updateErrorState")
     }
 
-    override fun setLoadingState() {
+    fun setLoadingState() {
         // For this data class UiState, we use empty rankings to indicate loading
         _uiState.value = UiState()
     }

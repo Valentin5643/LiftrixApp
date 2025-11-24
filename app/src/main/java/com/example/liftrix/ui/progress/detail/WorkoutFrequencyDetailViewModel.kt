@@ -2,12 +2,9 @@ package com.example.liftrix.ui.progress.detail
 
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.SavedStateHandle
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
-import com.example.liftrix.ui.common.viewmodel.StatefulDetailViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernStatefulDetailViewModel
 import com.example.liftrix.ui.common.viewmodel.DetailScreenStateKeys
 import com.example.liftrix.ui.common.state.UiState
-import com.example.liftrix.ui.common.event.ViewModelEvent
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.model.analytics.VolumeDataPoint
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -56,13 +53,13 @@ import kotlin.random.Random
 @HiltViewModel
 class WorkoutFrequencyDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    errorHandler: ErrorHandler,
     private val authQueryUseCase: AuthQueryUseCase,
     private val analyticsQueryUseCase: AnalyticsQueryUseCase,
     private val analyticsExportUseCase: AnalyticsExportUseCase
-) : StatefulDetailViewModel<WorkoutFrequencyDetailViewModel.UiState, WorkoutFrequencyDetailViewModel.Event>(savedStateHandle, errorHandler) {
-
-    override val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+) : ModernStatefulDetailViewModel<WorkoutFrequencyDetailViewModel.UiState>(
+    initialState = UiState.Loading,
+    savedStateHandle = savedStateHandle
+) {
 
     companion object {
         private const val KEY_TIME_RANGE = "timeRange"
@@ -124,9 +121,9 @@ class WorkoutFrequencyDetailViewModel @Inject constructor(
                     onSuccess = { it },
                     onFailure = { error ->
                         Timber.e(error, "User ID not available")
-                        handleError(LiftrixError.AuthenticationError(
+                        setState(UiState.Error(LiftrixError.AuthenticationError(
                             errorMessage = "User not authenticated"
-                        ))
+                        )))
                         return@launch
                     }
                 )
@@ -171,7 +168,7 @@ class WorkoutFrequencyDetailViewModel @Inject constructor(
                 val liftrixError = LiftrixError.DataRetrievalError(
                     errorMessage = "Failed to load workout frequency data"
                 )
-                handleError(liftrixError)
+                setState(UiState.Error(liftrixError))
                 Timber.e(error, "Failed to load workout frequency data")
             }
         }
@@ -285,27 +282,27 @@ class WorkoutFrequencyDetailViewModel @Inject constructor(
                                     operation = "EXPORT_FREQUENCY_DATA"
                                 )
                             }
-                            handleError(liftrixError)
+                            setState(UiState.Error(liftrixError))
                         }
                     )
                 } else {
                     Timber.w("Cannot export frequency data - no data available")
                 }
-                
+
             } catch (error: Exception) {
                 Timber.e(error, "Failed to export frequency data")
                 val liftrixError = LiftrixError.ExportError(
                     errorMessage = "Failed to export frequency data: ${error.message}",
                     operation = "EXPORT_FREQUENCY_DATA"
                 )
-                handleError(liftrixError)
+                setState(UiState.Error(liftrixError))
             } finally {
                 _isExporting.value = false
             }
         }
     }
 
-    override fun handleEvent(event: Event) {
+    fun handleEvent(event: Event) {
         when (event) {
             is Event.UpdateTimeRange -> updateTimeRange(event.timeRange)
             is Event.ExportData -> exportData()
@@ -382,7 +379,7 @@ class WorkoutFrequencyDetailViewModel @Inject constructor(
     /**
      * Events for workout frequency detail screen
      */
-    sealed class Event : ViewModelEvent {
+    sealed class Event {
         data class UpdateTimeRange(val timeRange: TimeRangeType) : Event()
         data object ExportData : Event()
         data object RefreshData : Event()
@@ -470,10 +467,6 @@ class WorkoutFrequencyDetailViewModel @Inject constructor(
         )
     }
 
-    override fun updateErrorState(error: LiftrixError) {
-        handleError(error)
-    }
-
     /**
      * Converts frequency data to export format
      */
@@ -490,10 +483,6 @@ class WorkoutFrequencyDetailViewModel @Inject constructor(
         }
     }
 
-    override fun setLoadingState() {
-        _uiState.value = UiState.Loading
-    }
-    
     /**
      * Builds share text for the exported workout frequency data
      */

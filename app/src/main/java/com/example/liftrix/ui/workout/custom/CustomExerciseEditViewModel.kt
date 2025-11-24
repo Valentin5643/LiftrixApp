@@ -11,11 +11,9 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.CustomExerciseRepository
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.exercise.CreateCustomExerciseInput
-import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.state.UiState
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,46 +39,41 @@ import javax.inject.Inject
 @HiltViewModel
 class CustomExerciseEditViewModel @Inject constructor(
     private val customExerciseRepository: CustomExerciseRepository,
-    private val authRepository: AuthRepository,
-    errorHandler: ErrorHandler
-) : BaseViewModel<UiState<CustomExerciseEditFormState>, CustomExerciseEditEvent>(errorHandler) {
-
-    override val _uiState = MutableStateFlow<UiState<CustomExerciseEditFormState>>(
-        UiState.Loading
-    )
+    private val authRepository: AuthRepository
+) : ModernBaseViewModel<UiState<CustomExerciseEditFormState>>(initialState = UiState.Loading) {
 
     // Navigation events
     private val _events = MutableSharedFlow<CustomExerciseEditEvent>()
     val events = _events.asSharedFlow()
 
-    override fun handleEvent(event: CustomExerciseEditEvent) {
+    fun handleEvent(event: CustomExerciseEditEvent) {
         when (event) {
             // Navigation
             is CustomExerciseEditEvent.NavigateBack -> handleNavigateBack()
-            
+
             // Form Updates - Basic Info
             is CustomExerciseEditEvent.UpdateName -> updateName(event.name)
             is CustomExerciseEditEvent.UpdateDescription -> updateDescription(event.description)
             is CustomExerciseEditEvent.UpdateExerciseType -> updateExerciseType(event.type)
-            
+
             // Form Updates - Exercise Details
             is CustomExerciseEditEvent.UpdatePrimaryMuscle -> updatePrimaryMuscle(event.muscle)
             is CustomExerciseEditEvent.AddSecondaryMuscle -> addSecondaryMuscle(event.muscle)
             is CustomExerciseEditEvent.RemoveSecondaryMuscle -> removeSecondaryMuscle(event.muscle)
             is CustomExerciseEditEvent.UpdateEquipment -> updateEquipment(event.equipment)
             is CustomExerciseEditEvent.UpdateDifficulty -> updateDifficulty(event.difficulty)
-            
+
             // Form Updates - Media
             is CustomExerciseEditEvent.SetMainImage -> setMainImage(event.uri)
             is CustomExerciseEditEvent.AddImages -> addImages(event.uris)
             is CustomExerciseEditEvent.RemoveImage -> removeImage(event.uri)
             is CustomExerciseEditEvent.UpdateVideoUrl -> updateVideoUrl(event.url)
-            
-            
+
+
             // Actions
             is CustomExerciseEditEvent.SaveExercise -> saveExercise()
             is CustomExerciseEditEvent.DeleteExercise -> deleteExercise()
-            
+
             // Navigation events - handled by emitting to event flow
             is CustomExerciseEditEvent.ExerciseUpdated -> {
                 // This event is emitted by the ViewModel itself, not handled
@@ -93,38 +86,42 @@ class CustomExerciseEditViewModel @Inject constructor(
         }
     }
 
-    override fun setLoadingState() {
-        setState(UiState.Loading)
-    }
-
-    override fun updateErrorState(error: LiftrixError) {
-        setState(UiState.Error(error))
-    }
-
     /**
      * Loads exercise data from repository and populates the form
      */
     fun loadExercise(exerciseId: String) {
-        executeUseCase<CustomExercise>(
-            useCase = {
+        viewModelScope.launch {
+            setState(UiState.Loading)
+            try {
                 val userId = authRepository.getCurrentUserId()
                 if (userId == null) {
-                    LiftrixResult.failure<CustomExercise>(
+                    setState(UiState.Error(
                         LiftrixError.AuthenticationError(
                             errorMessage = "User not authenticated",
                             analyticsContext = mapOf("operation" to "LOAD_CUSTOM_EXERCISE")
                         )
-                    )
-                } else {
-                    customExerciseRepository.getCustomExercise(userId, CustomExerciseId.fromString(exerciseId))
+                    ))
+                    return@launch
                 }
-            },
-            onSuccess = { exercise ->
-                val formState = fromCustomExercise(exercise)
-                setState(UiState.Success(formState))
-                Timber.d("Successfully loaded exercise for editing: ${exercise.name}")
+
+                val result = customExerciseRepository.getCustomExercise(userId, CustomExerciseId.fromString(exerciseId))
+                result.fold(
+                    onSuccess = { exercise ->
+                        val formState = fromCustomExercise(exercise)
+                        setState(UiState.Success(formState))
+                        Timber.d("Successfully loaded exercise for editing: ${exercise.name}")
+                    },
+                    onFailure = { error ->
+                        val liftrixError = if (error is LiftrixError) error else LiftrixError.UnknownError(error.message ?: "Unknown error")
+                        setState(UiState.Error(liftrixError))
+                        logError(error, "loadExercise")
+                    }
+                )
+            } catch (e: Exception) {
+                setState(UiState.Error(LiftrixError.UnknownError(e.message ?: "Unknown error")))
+                logError(e, "loadExercise")
             }
-        )
+        }
     }
 
     private fun handleNavigateBack() {
@@ -287,7 +284,7 @@ class CustomExerciseEditViewModel @Inject constructor(
 
     private fun saveExercise() {
         val currentState = getCurrentFormState() ?: return
-        
+
         if (!currentState.canSave() || !currentState.hasChanges()) {
             Timber.w("Cannot save exercise - form validation failed or no changes")
             return
@@ -295,56 +292,62 @@ class CustomExerciseEditViewModel @Inject constructor(
 
         viewModelScope.launch {
             updateFormState { it.copy(isSaving = true) }
-            
-            executeUseCase<CustomExercise>(
-                useCase = {
-                    val userId = authRepository.getCurrentUserId()
-                    if (userId == null) {
-                        LiftrixResult.failure<CustomExercise>(
-                            LiftrixError.AuthenticationError(
-                                errorMessage = "User not authenticated",
-                                analyticsContext = mapOf("operation" to "SAVE_CUSTOM_EXERCISE")
-                            )
+
+            try {
+                val userId = authRepository.getCurrentUserId()
+                if (userId == null) {
+                    updateFormState { it.copy(isSaving = false) }
+                    setState(UiState.Error(
+                        LiftrixError.AuthenticationError(
+                            errorMessage = "User not authenticated",
+                            analyticsContext = mapOf("operation" to "SAVE_CUSTOM_EXERCISE")
                         )
-                    } else {
-                        // First get the current exercise, then update it
-                        val existingExerciseResult = customExerciseRepository.getCustomExercise(
-                            userId, 
-                            CustomExerciseId.fromString(currentState.exerciseId)
+                    ))
+                    return@launch
+                }
+
+                // First get the current exercise, then update it
+                val existingExerciseResult = customExerciseRepository.getCustomExercise(
+                    userId,
+                    CustomExerciseId.fromString(currentState.exerciseId)
+                )
+                existingExerciseResult.fold(
+                    onSuccess = { existingExercise ->
+                        val updatedExercise = existingExercise.copy(
+                            name = currentState.name.trim(),
+                            description = currentState.description.trim().takeIf { it.isNotBlank() },
+                            exerciseType = currentState.exerciseType,
+                            primaryMuscle = currentState.primaryMuscle!!,
+                            equipment = currentState.equipment!!,
+                            secondaryMuscles = currentState.secondaryMuscles,
+                            difficulty = currentState.difficulty,
+                            videoUrl = currentState.videoUrl.trim().takeIf { it.isNotBlank() }
                         )
-                        existingExerciseResult.fold(
-                            onSuccess = { existingExercise ->
-                                val updatedExercise = existingExercise.copy(
-                                    name = currentState.name.trim(),
-                                    description = currentState.description.trim().takeIf { it.isNotBlank() },
-                                    exerciseType = currentState.exerciseType,
-                                    primaryMuscle = currentState.primaryMuscle!!,
-                                    equipment = currentState.equipment!!,
-                                    secondaryMuscles = currentState.secondaryMuscles,
-                                    difficulty = currentState.difficulty,
-                                    videoUrl = currentState.videoUrl.trim().takeIf { it.isNotBlank() }
-                                )
-                                customExerciseRepository.updateCustomExercise(userId, updatedExercise)
+                        val updateResult = customExerciseRepository.updateCustomExercise(userId, updatedExercise)
+                        updateResult.fold(
+                            onSuccess = { exercise ->
+                                Timber.i("Successfully updated custom exercise: ${exercise.id}")
+                                updateFormState { it.copy(isSaving = false) }
+                                _events.emit(CustomExerciseEditEvent.ExerciseUpdated(exercise.id.value))
                             },
-                            onFailure = { throwable ->
-                                Result.failure(throwable)
+                            onFailure = { error ->
+                                Timber.e("Failed to update custom exercise: $error")
+                                updateFormState { it.copy(isSaving = false) }
+                                logError(error, "saveExercise")
                             }
                         )
+                    },
+                    onFailure = { error ->
+                        Timber.e("Failed to get existing exercise: $error")
+                        updateFormState { it.copy(isSaving = false) }
+                        logError(error, "saveExercise")
                     }
-                },
-                onSuccess = { exercise ->
-                    Timber.i("Successfully updated custom exercise: ${exercise.id}")
-                    updateFormState { it.copy(isSaving = false) }
-                    viewModelScope.launch {
-                        _events.emit(CustomExerciseEditEvent.ExerciseUpdated(exercise.id.value))
-                    }
-                },
-                onError = { error ->
-                    Timber.e("Failed to update custom exercise: $error")
-                    updateFormState { it.copy(isSaving = false) }
-                    handleError(error)
-                }
-            )
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "Exception during save exercise")
+                updateFormState { it.copy(isSaving = false) }
+                logError(e, "saveExercise")
+            }
         }
     }
 
@@ -353,34 +356,38 @@ class CustomExerciseEditViewModel @Inject constructor(
 
         viewModelScope.launch {
             updateFormState { it.copy(isDeleting = true) }
-            
-            executeUseCase<Unit>(
-                useCase = {
-                    val userId = authRepository.getCurrentUserId()
-                    if (userId == null) {
-                        LiftrixResult.failure<Unit>(
-                            LiftrixError.AuthenticationError(
-                                errorMessage = "User not authenticated", 
-                                analyticsContext = mapOf("operation" to "DELETE_CUSTOM_EXERCISE")
-                            )
+
+            try {
+                val userId = authRepository.getCurrentUserId()
+                if (userId == null) {
+                    updateFormState { it.copy(isDeleting = false) }
+                    setState(UiState.Error(
+                        LiftrixError.AuthenticationError(
+                            errorMessage = "User not authenticated",
+                            analyticsContext = mapOf("operation" to "DELETE_CUSTOM_EXERCISE")
                         )
-                    } else {
-                        customExerciseRepository.deleteCustomExercise(userId, CustomExerciseId.fromString(currentState.exerciseId))
-                    }
-                },
-                onSuccess = { 
-                    Timber.i("Successfully deleted custom exercise: ${currentState.exerciseId}")
-                    updateFormState { it.copy(isDeleting = false) }
-                    viewModelScope.launch {
-                        _events.emit(CustomExerciseEditEvent.ExerciseDeleted)
-                    }
-                },
-                onError = { error ->
-                    Timber.e("Failed to delete custom exercise: $error")
-                    updateFormState { it.copy(isDeleting = false) }
-                    handleError(error)
+                    ))
+                    return@launch
                 }
-            )
+
+                val result = customExerciseRepository.deleteCustomExercise(userId, CustomExerciseId.fromString(currentState.exerciseId))
+                result.fold(
+                    onSuccess = {
+                        Timber.i("Successfully deleted custom exercise: ${currentState.exerciseId}")
+                        updateFormState { it.copy(isDeleting = false) }
+                        _events.emit(CustomExerciseEditEvent.ExerciseDeleted)
+                    },
+                    onFailure = { error ->
+                        Timber.e("Failed to delete custom exercise: $error")
+                        updateFormState { it.copy(isDeleting = false) }
+                        logError(error, "deleteExercise")
+                    }
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "Exception during delete exercise")
+                updateFormState { it.copy(isDeleting = false) }
+                logError(e, "deleteExercise")
+            }
         }
     }
 

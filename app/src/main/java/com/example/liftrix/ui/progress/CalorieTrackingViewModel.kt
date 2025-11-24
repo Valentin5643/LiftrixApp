@@ -7,7 +7,6 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.SubscriptionTier
 import com.example.liftrix.domain.model.SubscriptionStatus
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.service.CalorieService
 import com.example.liftrix.service.CalorieSummary
 import com.example.liftrix.service.DailyCalorieData
@@ -15,7 +14,7 @@ import com.example.liftrix.service.WeeklyCalorieTrend
 import com.example.liftrix.ui.common.state.AsyncData
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.state.dataOrNull
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -92,16 +91,8 @@ import javax.inject.Inject
 @HiltViewModel
 class CalorieTrackingViewModel @Inject constructor(
     private val calorieService: CalorieService,
-    private val authRepository: com.example.liftrix.domain.repository.AuthRepository,
-    errorHandler: ErrorHandler
-) : BaseViewModel<UiState<CalorieTrackingState>, CalorieTrackingEvent>(errorHandler) {
-
-    /**
-     * Internal mutable state for the calorie tracking screen.
-     * Starts with Loading state until user authentication is determined.
-     */
-    override val _uiState: MutableStateFlow<UiState<CalorieTrackingState>> = 
-        MutableStateFlow(UiState.Loading)
+    private val authRepository: com.example.liftrix.domain.repository.AuthRepository
+) : ModernBaseViewModel<UiState<CalorieTrackingState>>(initialState = UiState.Loading) {
 
     /**
      * Internal state for current time range selection.
@@ -230,7 +221,7 @@ class CalorieTrackingViewModel @Inject constructor(
      * 
      * @param event The event to process
      */
-    override fun handleEvent(event: CalorieTrackingEvent) {
+    fun handleEvent(event: CalorieTrackingEvent) {
         viewModelScope.launch {
             try {
                 Timber.d("Handling event: ${event.getDescription()}")
@@ -406,20 +397,29 @@ class CalorieTrackingViewModel @Inject constructor(
 
     /**
      * Updates the error state in the UI.
-     * Overrides BaseViewModel method to provide specific error handling for calorie tracking.
-     * 
+     * Provides specific error handling for calorie tracking.
+     *
      * @param error The error to display in the UI
      */
-    override fun updateErrorState(error: com.example.liftrix.domain.model.error.LiftrixError) {
+    private fun updateErrorState(error: com.example.liftrix.domain.model.error.LiftrixError) {
         Timber.e("Updating error state: ${error.message}")
         _uiState.value = UiState.Error(error, _uiState.value.dataOrNull())
     }
 
     /**
-     * Sets the loading state in the UI.
-     * Overrides BaseViewModel method to provide specific loading state for calorie tracking.
+     * Handles errors by logging them for analytics.
+     *
+     * @param error The error to handle
      */
-    override fun setLoadingState() {
+    private fun handleError(error: com.example.liftrix.domain.model.error.LiftrixError) {
+        Timber.e("CalorieTrackingViewModel error: ${error.message}")
+    }
+
+    /**
+     * Sets the loading state in the UI.
+     * Provides specific loading state for calorie tracking.
+     */
+    private fun setLoadingState() {
         val currentState = _uiState.value.dataOrNull()
         if (currentState != null) {
             _uiState.value = UiState.Success(currentState.copy(

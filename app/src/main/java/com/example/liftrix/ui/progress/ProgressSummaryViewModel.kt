@@ -4,11 +4,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.service.ProgressDataService
 import com.example.liftrix.ui.common.state.AsyncData
 import com.example.liftrix.ui.common.state.UiState
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -71,16 +70,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class ProgressSummaryViewModel @Inject constructor(
-    private val progressDataService: ProgressDataService,
-    errorHandler: ErrorHandler
-) : BaseViewModel<UiState<ProgressSummaryState>, ProgressSummaryEvent>(errorHandler) {
-
-    /**
-     * Internal mutable state for the progress summary screen.
-     * Starts with Loading state until user authentication is determined.
-     */
-    override val _uiState: MutableStateFlow<UiState<ProgressSummaryState>> = 
-        MutableStateFlow(UiState.Loading)
+    private val progressDataService: ProgressDataService
+) : ModernBaseViewModel<UiState<ProgressSummaryState>>(initialState = UiState.Loading) {
 
     /**
      * Internal state for current time range selection.
@@ -131,7 +122,7 @@ class ProgressSummaryViewModel @Inject constructor(
      * 
      * @param event The event to process
      */
-    override fun handleEvent(event: ProgressSummaryEvent) {
+    fun handleEvent(event: ProgressSummaryEvent) {
         viewModelScope.launch {
             try {
                 when (event) {
@@ -161,14 +152,15 @@ class ProgressSummaryViewModel @Inject constructor(
                     }
                 }
             } catch (exception: Exception) {
-                handleError(
+                logError(
                     LiftrixError.UnknownError(
                         errorMessage = "Failed to handle event: ${event::class.simpleName}",
                         analyticsContext = mapOf(
                             "event_type" to (event::class.simpleName ?: "Unknown"),
                             "timestamp" to System.currentTimeMillis().toString()
                         )
-                    )
+                    ),
+                    "handleEvent"
                 )
             }
         }
@@ -180,7 +172,7 @@ class ProgressSummaryViewModel @Inject constructor(
      * 
      * @param error The error to display in the UI
      */
-    override fun updateErrorState(error: LiftrixError) {
+    fun updateErrorState(error: LiftrixError) {
         _uiState.value = UiState.Error(error)
     }
 
@@ -188,7 +180,7 @@ class ProgressSummaryViewModel @Inject constructor(
      * Sets the loading state in the UI.
      * Overrides BaseViewModel method to provide specific loading state for summary.
      */
-    override fun setLoadingState() {
+    fun setLoadingState() {
         _uiState.value = UiState.Loading
     }
 
@@ -340,7 +332,7 @@ class ProgressSummaryViewModel @Inject constructor(
                     )
                 )
                 _uiState.value = UiState.Error(error)
-                handleError(error)
+                logError(error, "loadSummaryDataForState")
             }
         )
     }
@@ -423,7 +415,7 @@ class ProgressSummaryViewModel @Inject constructor(
                 )
                 val errorState = currentState.toErrorState(error)
                 _uiState.value = UiState.Success(errorState)
-                handleError(error)
+                logError(error, "forceRefresh")
             }
         )
     }
@@ -464,7 +456,7 @@ class ProgressSummaryViewModel @Inject constructor(
                     val error = throwable as? LiftrixError ?: LiftrixError.UnknownError(
                         errorMessage = throwable.message ?: "Unknown error"
                     )
-                    handleError(error)
+                    logError(error, "handleBackgroundDataUpdate")
                 }
             )
         }

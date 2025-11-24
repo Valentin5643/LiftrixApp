@@ -8,11 +8,10 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.usecase.analytics.WidgetPreferencesUseCase
 import com.example.liftrix.domain.usecase.analytics.WidgetMigrationUseCase
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.state.dataOrNull
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -37,18 +36,14 @@ import javax.inject.Inject
  *
  * @param widgetPreferencesUseCase Consolidated use case for widget preference operations (get/save/reset)
  * @param widgetMigrationUseCase Use case for fixing widget preference migration issues
- * @param getAuthenticatedUserIdUseCase Use case for retrieving authenticated user ID
- * @param errorHandler Centralized error handler
+ * @param authQueryUseCase Use case for retrieving authenticated user ID
  */
 @HiltViewModel
 class WidgetSettingsViewModel @Inject constructor(
     private val widgetPreferencesUseCase: WidgetPreferencesUseCase,
     private val widgetMigrationUseCase: WidgetMigrationUseCase,
-    private val authQueryUseCase: AuthQueryUseCase,
-    errorHandler: ErrorHandler
-) : BaseViewModel<WidgetSettingsUiState, WidgetSettingsEvent>(errorHandler) {
-
-    override val _uiState = MutableStateFlow<WidgetSettingsUiState>(UiState.Loading)
+    private val authQueryUseCase: AuthQueryUseCase
+) : ModernBaseViewModel<WidgetSettingsUiState>(initialState = UiState.Loading) {
 
     // Current user ID - loaded from authentication
     private val currentUserId = MutableStateFlow<String?>(null)
@@ -87,7 +82,7 @@ class WidgetSettingsViewModel @Inject constructor(
     /**
      * Handles all widget settings events following the MVI pattern
      */
-    override fun handleEvent(event: WidgetSettingsEvent) {
+    fun handleEvent(event: WidgetSettingsEvent) {
         when (event) {
             is WidgetSettingsEvent.LoadPreferences -> loadWidgetPreferences()
             is WidgetSettingsEvent.ToggleWidget -> toggleWidget(event.widget)
@@ -104,22 +99,6 @@ class WidgetSettingsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Sets loading state for widget settings
-     */
-    override fun setLoadingState() {
-        _uiState.value = UiState.Loading
-    }
-
-    /**
-     * Updates error state for widget settings specific errors
-     */
-    override fun updateErrorState(error: LiftrixError) {
-        _uiState.value = UiState.Error(
-            error = error,
-            previousData = _uiState.value.dataOrNull()
-        )
-    }
 
     /**
      * Loads widget preferences from repository with reactive updates
@@ -154,7 +133,10 @@ class WidgetSettingsViewModel @Inject constructor(
                             } else {
                                 LiftrixError.UnknownError("Failed to load widget preferences")
                             }
-                            handleError(error)
+                            setState(UiState.Error(
+                                error = error,
+                                previousData = uiState.value.dataOrNull()
+                            ))
                             Timber.e("Failed to load widget preferences: ${error.message}")
                         }
                     )
@@ -320,33 +302,57 @@ class WidgetSettingsViewModel @Inject constructor(
             }
         }
 
-        executeUseCase(
-            useCase = {
-                val userId = currentUserId.value ?: return@executeUseCase Result.failure(IllegalStateException("User not authenticated"))
-                widgetMigrationUseCase.fixLegacyNames(userId)
-            },
-            onSuccess = { _ ->
-                // Migration was successful, reload the preferences to show updated state
-                loadWidgetPreferences()
-                Timber.i("Widget preference migration fix applied successfully")
-                showToast("Widget preferences fixed successfully!")
-            },
-            onError = { error ->
+        viewModelScope.launch {
+            try {
+                val userId = currentUserId.value
+                if (userId == null) {
+                    updateState { currentState ->
+                        val data = currentState.dataOrNull()
+                        if (data != null) {
+                            UiState.Success(data = data.copy(isLoading = false))
+                        } else {
+                            currentState
+                        }
+                    }
+                    Timber.e("Failed to fix widget preference migration: User not authenticated")
+                    showToast("Failed to fix widget preferences. Please try again.")
+                    return@launch
+                }
+
+                val result = widgetMigrationUseCase.fixLegacyNames(userId)
+                result.fold(
+                    onSuccess = {
+                        // Migration was successful, reload the preferences to show updated state
+                        loadWidgetPreferences()
+                        Timber.i("Widget preference migration fix applied successfully")
+                        showToast("Widget preferences fixed successfully!")
+                    },
+                    onFailure = { error ->
+                        updateState { currentState ->
+                            val data = currentState.dataOrNull()
+                            if (data != null) {
+                                UiState.Success(data = data.copy(isLoading = false))
+                            } else {
+                                currentState
+                            }
+                        }
+                        Timber.e("Failed to fix widget preference migration: ${error.message}")
+                        showToast("Failed to fix widget preferences. Please try again.")
+                    }
+                )
+            } catch (e: Exception) {
                 updateState { currentState ->
                     val data = currentState.dataOrNull()
                     if (data != null) {
-                        UiState.Success(
-                            data = data.copy(isLoading = false)
-                        )
+                        UiState.Success(data = data.copy(isLoading = false))
                     } else {
                         currentState
                     }
                 }
-                Timber.e("Failed to fix widget preference migration: ${error.message}")
+                Timber.e(e, "Failed to fix widget preference migration")
                 showToast("Failed to fix widget preferences. Please try again.")
-            },
-            showLoading = false
-        )
+            }
+        }
     }
 
     /**
@@ -364,34 +370,54 @@ class WidgetSettingsViewModel @Inject constructor(
             }
         }
 
-        executeUseCase(
-            useCase = {
-                val userId = currentUserId.value ?: return@executeUseCase Result.failure(IllegalStateException("User not authenticated"))
-                widgetPreferencesUseCase.reset(
-                    userId = userId,
-                    userLevel = uiState.value.dataOrNull()?.preferences?.userLevel ?: UserLevel.BEGINNER
+        viewModelScope.launch {
+            try {
+                val userId = currentUserId.value
+                if (userId == null) {
+                    updateState { currentState ->
+                        val data = currentState.dataOrNull()
+                        if (data != null) {
+                            UiState.Success(data = data.copy(isLoading = false))
+                        } else {
+                            currentState
+                        }
+                    }
+                    Timber.e("Failed to reset widget preferences: User not authenticated")
+                    return@launch
+                }
+
+                val userLevel = uiState.value.dataOrNull()?.preferences?.userLevel ?: UserLevel.BEGINNER
+                val result = widgetPreferencesUseCase.reset(userId = userId, userLevel = userLevel)
+                result.fold(
+                    onSuccess = {
+                        // Reset was successful, reload the preferences
+                        loadWidgetPreferences()
+                        Timber.i("Widget preferences reset to defaults successfully")
+                    },
+                    onFailure = { error ->
+                        updateState { currentState ->
+                            val data = currentState.dataOrNull()
+                            if (data != null) {
+                                UiState.Success(data = data.copy(isLoading = false))
+                            } else {
+                                currentState
+                            }
+                        }
+                        Timber.e("Failed to reset widget preferences: ${error.message}")
+                    }
                 )
-            },
-            onSuccess = { _ ->
-                // Reset was successful, reload the preferences
-                loadWidgetPreferences()
-                Timber.i("Widget preferences reset to defaults successfully")
-            },
-            onError = { error ->
+            } catch (e: Exception) {
                 updateState { currentState ->
                     val data = currentState.dataOrNull()
                     if (data != null) {
-                        UiState.Success(
-                            data = data.copy(isLoading = false)
-                        )
+                        UiState.Success(data = data.copy(isLoading = false))
                     } else {
                         currentState
                     }
                 }
-                Timber.e("Failed to reset widget preferences: ${error.message}")
-            },
-            showLoading = false
-        )
+                Timber.e(e, "Failed to reset widget preferences")
+            }
+        }
     }
 
     /**
@@ -419,44 +445,55 @@ class WidgetSettingsViewModel @Inject constructor(
         Timber.d("💾 SETTINGS: About to save preferences: ${currentData.preferences}")
         Timber.d("💾 SETTINGS: Dashboard layout being saved: ${currentData.preferences.dashboardLayout}")
 
-        executeUseCase(
-            useCase = { widgetPreferencesUseCase.save(currentData.preferences) },
-            onSuccess = {
+        viewModelScope.launch {
+            try {
+                val result = widgetPreferencesUseCase.save(currentData.preferences)
+                result.fold(
+                    onSuccess = {
+                        updateState { currentState ->
+                            val data = currentState.dataOrNull()
+                            if (data != null) {
+                                UiState.Success(
+                                    data = data.copy(
+                                        isLoading = false,
+                                        hasUnsavedChanges = false
+                                    )
+                                )
+                            } else {
+                                currentState
+                            }
+                        }
+
+                        // CRITICAL FIX: Trigger dashboard refresh to show updated widgets immediately
+                        triggerDashboardRefresh(currentData.preferences)
+
+                        Timber.i("Widget preferences saved successfully - ${currentData.preferences.visibleWidgets.size} visible widgets")
+                        Timber.d("Saved widget preferences: ${currentData.preferences.visibleWidgets.joinToString(", ")}")
+                    },
+                    onFailure = { error ->
+                        updateState { currentState ->
+                            val data = currentState.dataOrNull()
+                            if (data != null) {
+                                UiState.Success(data = data.copy(isLoading = false))
+                            } else {
+                                currentState
+                            }
+                        }
+                        Timber.e("Failed to save widget preferences: ${error.message}")
+                    }
+                )
+            } catch (e: Exception) {
                 updateState { currentState ->
                     val data = currentState.dataOrNull()
                     if (data != null) {
-                        UiState.Success(
-                            data = data.copy(
-                                isLoading = false,
-                                hasUnsavedChanges = false
-                            )
-                        )
+                        UiState.Success(data = data.copy(isLoading = false))
                     } else {
                         currentState
                     }
                 }
-                
-                // CRITICAL FIX: Trigger dashboard refresh to show updated widgets immediately
-                triggerDashboardRefresh(currentData.preferences)
-                
-                Timber.i("Widget preferences saved successfully - ${currentData.preferences.visibleWidgets.size} visible widgets")
-                Timber.d("Saved widget preferences: ${currentData.preferences.visibleWidgets.joinToString(", ")}")
-            },
-            onError = { error ->
-                updateState { currentState ->
-                    val data = currentState.dataOrNull()
-                    if (data != null) {
-                        UiState.Success(
-                            data = data.copy(isLoading = false)
-                        )
-                    } else {
-                        currentState
-                    }
-                }
-                Timber.e("Failed to save widget preferences: ${error.message}")
-            },
-            showLoading = false
-        )
+                Timber.e(e, "Failed to save widget preferences")
+            }
+        }
     }
     
     /**

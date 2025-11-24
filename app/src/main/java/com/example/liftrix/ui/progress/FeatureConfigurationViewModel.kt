@@ -3,12 +3,11 @@ package com.example.liftrix.ui.progress
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.service.FeatureFlagService
 import com.example.liftrix.ui.common.state.AsyncData
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.state.dataOrNull
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -63,20 +62,11 @@ import javax.inject.Inject
  * ```
  * 
  * @param featureFlagService Service for feature flag and A/B testing operations
- * @param errorHandler Centralized error handling service
  */
 @HiltViewModel
 class FeatureConfigurationViewModel @Inject constructor(
-    private val featureFlagService: FeatureFlagService,
-    errorHandler: ErrorHandler
-) : BaseViewModel<UiState<FeatureConfigurationState>, FeatureConfigurationEvent>(errorHandler) {
-
-    /**
-     * Internal mutable state for the feature configuration screen.
-     * Starts with Loading state until initial data is loaded.
-     */
-    override val _uiState: MutableStateFlow<UiState<FeatureConfigurationState>> = 
-        MutableStateFlow(UiState.Loading)
+    private val featureFlagService: FeatureFlagService
+) : ModernBaseViewModel<UiState<FeatureConfigurationState>>(initialState = UiState.Loading) {
 
     /**
      * Internal state for analytics tracking enablement.
@@ -91,13 +81,13 @@ class FeatureConfigurationViewModel @Inject constructor(
 
     /**
      * Handles all events from the UI following the MVI pattern.
-     * 
+     *
      * This method processes user interactions and internal events, updating the state
      * accordingly and triggering appropriate feature flag operations.
-     * 
+     *
      * @param event The event to process
      */
-    override fun handleEvent(event: FeatureConfigurationEvent) {
+    fun handleEvent(event: FeatureConfigurationEvent) {
         viewModelScope.launch {
             try {
                 when (event) {
@@ -136,63 +126,41 @@ class FeatureConfigurationViewModel @Inject constructor(
                     }
                 }
             } catch (exception: Exception) {
-                handleError(
+                logError(
                     LiftrixError.UnknownError(
                         errorMessage = "Failed to handle event: ${event::class.simpleName}",
                         analyticsContext = mapOf(
                             "event_type" to (event::class.simpleName ?: "Unknown"),
                             "timestamp" to System.currentTimeMillis().toString()
                         )
-                    )
+                    ),
+                    "handleEvent"
                 )
             }
         }
     }
 
-    /**
-     * Updates the error state in the UI.
-     * Overrides BaseViewModel method to provide specific error handling for feature configuration.
-     * 
-     * @param error The error to display in the UI
-     */
-    override fun updateErrorState(error: LiftrixError) {
-        _uiState.value = UiState.Error(error, _uiState.value.dataOrNull())
-    }
-
-    /**
-     * Sets the loading state in the UI.
-     * Overrides BaseViewModel method to provide specific loading state for feature configuration.
-     */
-    override fun setLoadingState() {
-        val currentState = _uiState.value.dataOrNull()
-        if (currentState != null) {
-            _uiState.value = UiState.Success(currentState.copy(
-                featureFlags = AsyncData.Loading(),
-                abTestVariants = AsyncData.Loading(),
-                remoteConfigStatus = AsyncData.Loading(),
-                lastRefreshTimestamp = System.currentTimeMillis()
-            ))
-        } else {
-            _uiState.value = UiState.Loading
-        }
-    }
 
     /**
      * Loads all available feature flags from the service.
      * Updates the featureFlags state with the result.
      */
     private fun loadFeatureFlags() {
-        executeUseCase(
-            useCase = { featureFlagService.getAllFeatureFlags() },
-            onSuccess = { featureFlags ->
+        viewModelScope.launch {
+            updateFeatureFlags(AsyncData.Loading())
+            val result = featureFlagService.getAllFeatureFlags()
+            result.onSuccess { featureFlags ->
                 updateFeatureFlags(AsyncData.Success(featureFlags))
                 Timber.d("Successfully loaded ${featureFlags.size} feature flags")
-            },
-            onError = { error ->
+            }.onFailure { throwable ->
+                val error = throwable as? LiftrixError ?: LiftrixError.UnknownError(
+                    errorMessage = throwable.message ?: "Failed to load feature flags"
+                )
+                logError(error, "loadFeatureFlags")
                 updateFeatureFlags(AsyncData.Failure(error))
                 Timber.e("Failed to load feature flags: ${error.message}")
             }
-        )
+        }
     }
 
     /**
@@ -200,68 +168,78 @@ class FeatureConfigurationViewModel @Inject constructor(
      * Updates both feature flags and A/B test variants after successful refresh.
      */
     private fun refreshRemoteConfig() {
-        // Set loading state for remote config
-        updateRemoteConfigStatus(AsyncData.Loading())
-        
-        executeUseCase(
-            useCase = { featureFlagService.refreshRemoteConfig() },
-            onSuccess = { _ ->
+        viewModelScope.launch {
+            // Set loading state for remote config
+            updateRemoteConfigStatus(AsyncData.Loading())
+            val result = featureFlagService.refreshRemoteConfig()
+            result.onSuccess { _ ->
                 updateRemoteConfigStatus(AsyncData.Success(Unit))
                 // After successful refresh, reload feature flags and A/B test variants
                 loadAllFeatureFlags()
                 Timber.d("Successfully refreshed remote configuration")
-            },
-            onError = { error ->
+            }.onFailure { throwable ->
+                val error = throwable as? LiftrixError ?: LiftrixError.UnknownError(
+                    errorMessage = throwable.message ?: "Failed to refresh remote configuration"
+                )
+                logError(error, "refreshRemoteConfig")
                 updateRemoteConfigStatus(AsyncData.Failure(error))
                 Timber.e("Failed to refresh remote configuration: ${error.message}")
             }
-        )
+        }
     }
 
     /**
      * Retrieves the A/B test variant for a specific test key.
      * Updates the abTestVariants state with the result for the specific test.
-     * 
+     *
      * @param testKey The unique identifier for the A/B test
      */
     private fun getABTestVariant(testKey: String) {
-        executeUseCase(
-            useCase = { featureFlagService.getABTestVariant(testKey) },
-            onSuccess = { variant ->
+        viewModelScope.launch {
+            updateABTestVariants(AsyncData.Loading())
+            val result = featureFlagService.getABTestVariant(testKey)
+            result.onSuccess { variant ->
                 val currentVariants = getCurrentABTestVariants()
                 val updatedVariants = currentVariants.toMutableMap()
                 updatedVariants[testKey] = variant
                 updateABTestVariants(AsyncData.Success(updatedVariants))
                 Timber.d("Successfully retrieved A/B test variant for $testKey: $variant")
-            },
-            onError = { error ->
+            }.onFailure { throwable ->
+                val error = throwable as? LiftrixError ?: LiftrixError.UnknownError(
+                    errorMessage = throwable.message ?: "Failed to get A/B test variant"
+                )
+                logError(error, "getABTestVariant")
                 updateABTestVariants(AsyncData.Failure(error))
                 Timber.e("Failed to get A/B test variant for $testKey: ${error.message}")
             }
-        )
+        }
     }
 
     /**
      * Checks if a specific feature flag is enabled.
      * Updates the featureFlags state with the result for the specific flag.
-     * 
+     *
      * @param flagKey The unique identifier for the feature flag
      */
     private fun checkFeatureEnabled(flagKey: String) {
-        executeUseCase(
-            useCase = { featureFlagService.isFeatureEnabled(flagKey) },
-            onSuccess = { isEnabled ->
+        viewModelScope.launch {
+            updateFeatureFlags(AsyncData.Loading())
+            val result = featureFlagService.isFeatureEnabled(flagKey)
+            result.onSuccess { isEnabled ->
                 val currentFlags = getCurrentFeatureFlags()
                 val updatedFlags = currentFlags.toMutableMap()
                 updatedFlags[flagKey] = isEnabled
                 updateFeatureFlags(AsyncData.Success(updatedFlags))
                 Timber.d("Successfully checked feature flag $flagKey: $isEnabled")
-            },
-            onError = { error ->
+            }.onFailure { throwable ->
+                val error = throwable as? LiftrixError ?: LiftrixError.UnknownError(
+                    errorMessage = throwable.message ?: "Failed to check feature flag"
+                )
+                logError(error, "checkFeatureEnabled")
                 updateFeatureFlags(AsyncData.Failure(error))
                 Timber.e("Failed to check feature flag $flagKey: ${error.message}")
             }
-        )
+        }
     }
 
     /**
@@ -288,8 +266,8 @@ class FeatureConfigurationViewModel @Inject constructor(
      */
     private fun loadInitialData() {
         // Initialize with unauthenticated state
-        _uiState.value = UiState.Success(createUnauthenticatedFeatureConfigurationState())
-        
+        setState(UiState.Success(createUnauthenticatedFeatureConfigurationState()))
+
         // Load all feature configuration data
         loadAllFeatureFlags()
     }
@@ -299,7 +277,7 @@ class FeatureConfigurationViewModel @Inject constructor(
      * Resets all components to their initial not asked state.
      */
     private fun clearCache() {
-        _uiState.value = UiState.Success(createUnauthenticatedFeatureConfigurationState())
+        setState(UiState.Success(createUnauthenticatedFeatureConfigurationState()))
         Timber.d("Cleared feature configuration cache")
     }
 
@@ -368,56 +346,56 @@ class FeatureConfigurationViewModel @Inject constructor(
 
     /**
      * Updates the feature flags component state.
-     * 
+     *
      * @param flagsData The new feature flags data
      */
     private fun updateFeatureFlags(flagsData: AsyncData<Map<String, Boolean>>) {
-        val currentData = _uiState.value.dataOrNull() ?: FeatureConfigurationState()
-        _uiState.value = UiState.Success(
+        val currentData = uiState.value.dataOrNull() ?: FeatureConfigurationState()
+        setState(UiState.Success(
             currentData.copy(
                 featureFlags = flagsData,
                 lastRefreshTimestamp = System.currentTimeMillis()
             )
-        )
+        ))
     }
 
     /**
      * Updates the A/B test variants component state.
-     * 
+     *
      * @param variantsData The new A/B test variants data
      */
     private fun updateABTestVariants(variantsData: AsyncData<Map<String, String>>) {
-        val currentData = _uiState.value.dataOrNull() ?: FeatureConfigurationState()
-        _uiState.value = UiState.Success(
+        val currentData = uiState.value.dataOrNull() ?: FeatureConfigurationState()
+        setState(UiState.Success(
             currentData.copy(
                 abTestVariants = variantsData,
                 lastRefreshTimestamp = System.currentTimeMillis()
             )
-        )
+        ))
     }
 
     /**
      * Updates the remote config status component state.
-     * 
+     *
      * @param configStatus The new remote config status
      */
     private fun updateRemoteConfigStatus(configStatus: AsyncData<Unit>) {
-        val currentData = _uiState.value.dataOrNull() ?: FeatureConfigurationState()
-        _uiState.value = UiState.Success(
+        val currentData = uiState.value.dataOrNull() ?: FeatureConfigurationState()
+        setState(UiState.Success(
             currentData.copy(
                 remoteConfigStatus = configStatus,
                 lastRefreshTimestamp = System.currentTimeMillis()
             )
-        )
+        ))
     }
 
     /**
      * Gets the current feature flags from the state.
-     * 
+     *
      * @return Map of current feature flags, empty map if not available
      */
     private fun getCurrentFeatureFlags(): Map<String, Boolean> {
-        val currentState = _uiState.value.dataOrNull()
+        val currentState = uiState.value.dataOrNull()
         return when (val flags = currentState?.featureFlags) {
             is AsyncData.Success -> flags.data
             else -> emptyMap()
@@ -426,11 +404,11 @@ class FeatureConfigurationViewModel @Inject constructor(
 
     /**
      * Gets the current A/B test variants from the state.
-     * 
+     *
      * @return Map of current A/B test variants, empty map if not available
      */
     private fun getCurrentABTestVariants(): Map<String, String> {
-        val currentState = _uiState.value.dataOrNull()
+        val currentState = uiState.value.dataOrNull()
         return when (val variants = currentState?.abTestVariants) {
             is AsyncData.Success -> variants.data
             else -> emptyMap()
@@ -480,7 +458,7 @@ class FeatureConfigurationViewModel @Inject constructor(
                         "timestamp" to System.currentTimeMillis().toString()
                     )
                 )
-                updateErrorState(error)
+                logError(error, "handleCoordinatorEvent")
                 Timber.e(exception, "Failed to handle coordinator event: ${event::class.simpleName}")
             }
         }
@@ -509,7 +487,7 @@ class FeatureConfigurationViewModel @Inject constructor(
                     errorMessage = "Failed to dismiss onboarding",
                     analyticsContext = mapOf("operation" to "dismissOnboarding")
                 )
-                updateErrorState(error)
+                logError(error, "dismissOnboarding")
                 Timber.e(exception, "Failed to dismiss onboarding")
             }
         }
@@ -538,7 +516,7 @@ class FeatureConfigurationViewModel @Inject constructor(
                     errorMessage = "Failed to dismiss migration notification",
                     analyticsContext = mapOf("operation" to "dismissMigrationNotification")
                 )
-                updateErrorState(error)
+                logError(error, "dismissMigrationNotification")
                 Timber.e(exception, "Failed to dismiss migration notification")
             }
         }

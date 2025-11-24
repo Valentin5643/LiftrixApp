@@ -4,14 +4,13 @@ import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import timber.log.Timber
 import com.example.liftrix.service.ProgressDataService
 import com.example.liftrix.ui.common.state.AsyncData
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.state.dataOrNull
 import com.example.liftrix.ui.common.state.isFailure
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.progress.components.ChartType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,12 +18,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.toJavaLocalDate
 import java.time.LocalDate as JavaLocalDate
 import javax.inject.Inject
 
@@ -76,20 +73,11 @@ import javax.inject.Inject
  * ```
  * 
  * @param progressDataService Service for fetching chart data
- * @param errorHandler Centralized error handling service
  */
 @HiltViewModel
 class ProgressChartsViewModel @Inject constructor(
-    private val progressDataService: ProgressDataService,
-    errorHandler: ErrorHandler
-) : BaseViewModel<UiState<ProgressChartsState>, ProgressChartsEvent>(errorHandler) {
-
-    /**
-     * Internal mutable state for the progress charts screen.
-     * Starts with Loading state until user authentication is determined.
-     */
-    override val _uiState: MutableStateFlow<UiState<ProgressChartsState>> = 
-        MutableStateFlow(UiState.Loading)
+    private val progressDataService: ProgressDataService
+) : ModernBaseViewModel<UiState<ProgressChartsState>>(initialState = UiState.Loading) {
 
     /**
      * Internal state for current time range selection.
@@ -145,13 +133,13 @@ class ProgressChartsViewModel @Inject constructor(
 
     /**
      * Handles all events from the UI following the MVI pattern.
-     * 
+     *
      * This method processes user interactions and internal events, updating the state
      * accordingly and triggering appropriate data operations.
-     * 
+     *
      * @param event The event to process
      */
-    override fun handleEvent(event: ProgressChartsEvent) {
+    fun handleEvent(event: ProgressChartsEvent) {
         viewModelScope.launch {
             try {
                 when (event) {
@@ -172,15 +160,7 @@ class ProgressChartsViewModel @Inject constructor(
                     }
                 }
             } catch (exception: Exception) {
-                handleError(
-                    com.example.liftrix.domain.model.error.LiftrixError.UnknownError(
-                        errorMessage = "Failed to handle event: ${event::class.simpleName}",
-                        analyticsContext = mapOf(
-                            "event_type" to (event::class.simpleName ?: "Unknown"),
-                            "timestamp" to System.currentTimeMillis().toString()
-                        )
-                    )
-                )
+                logError(exception, "handleEvent")
             }
         }
     }
@@ -241,36 +221,15 @@ class ProgressChartsViewModel @Inject constructor(
                     }
                 }
             } catch (exception: Exception) {
-                handleError(
-                    com.example.liftrix.domain.model.error.LiftrixError.UnknownError(
-                        errorMessage = "Failed to handle coordinator event: ${event::class.simpleName}",
-                        analyticsContext = mapOf(
-                            "event_type" to (event::class.simpleName ?: "Unknown"),
-                            "timestamp" to System.currentTimeMillis().toString()
-                        )
-                    )
-                )
+                logError(exception, "handleCoordinatorEvent")
             }
         }
     }
 
     /**
-     * Updates the error state in the UI.
-     * Overrides BaseViewModel method to provide specific error handling for charts.
-     * 
-     * @param error The error to display in the UI
-     */
-    override fun updateErrorState(error: com.example.liftrix.domain.model.error.LiftrixError) {
-        // For charts, we maintain current state but log the error
-        Timber.e("Chart error: ${error.message}")
-        // State is already maintained in _uiState, no wrapping needed
-    }
-
-    /**
      * Sets the loading state in the UI.
-     * Overrides BaseViewModel method to provide specific loading state for charts.
      */
-    override fun setLoadingState() {
+    private fun setChartLoadingState() {
         val currentState = _uiState.value
         if (currentState is UiState.Success) {
             _uiState.value = UiState.Success(
@@ -471,7 +430,7 @@ class ProgressChartsViewModel @Inject constructor(
                     Timber.e("Volume chart fetch failure: ${error.message}")
                     val liftrixError = if (error is LiftrixError) error else LiftrixError.UnknownError(error.message ?: "Unknown error")
                     updateChartStates(volumeChart = AsyncData.Failure(liftrixError))
-                    handleError(liftrixError)
+                    logError(error, "loadVolumeChart")
                 }
             )
         } catch (e: Exception) {
@@ -498,7 +457,7 @@ class ProgressChartsViewModel @Inject constructor(
                     Timber.e("Duration chart fetch failure: ${error.message}")
                     val liftrixError = if (error is LiftrixError) error else LiftrixError.UnknownError(error.message ?: "Unknown error")
                     updateChartStates(durationChart = AsyncData.Failure(liftrixError))
-                    handleError(liftrixError)
+                    logError(error, "loadDurationChart")
                 }
             )
         } catch (e: Exception) {
@@ -525,7 +484,7 @@ class ProgressChartsViewModel @Inject constructor(
                     Timber.e("Frequency chart fetch failure: ${error.message}")
                     val liftrixError = if (error is LiftrixError) error else LiftrixError.UnknownError(error.message ?: "Unknown error")
                     updateChartStates(frequencyChart = AsyncData.Failure(liftrixError))
-                    handleError(liftrixError)
+                    logError(error, "loadFrequencyChart")
                 }
             )
         } catch (e: Exception) {
@@ -553,7 +512,7 @@ class ProgressChartsViewModel @Inject constructor(
                     Timber.e("🔍 VOLUME-CALENDAR-DEBUG: Volume calendar fetch failure: ${error.message}")
                     val liftrixError = if (error is LiftrixError) error else LiftrixError.UnknownError(error.message ?: "Unknown error")
                     updateChartStates(volumeCalendar = AsyncData.Failure(liftrixError))
-                    handleError(liftrixError)
+                    logError(error, "loadVolumeCalendar")
                 }
             )
         } catch (e: Exception) {

@@ -66,9 +66,9 @@ fun FeedScreen(
         ) {
             Tab(
                 selected = selectedTab == FeedTab.HOME,
-                onClick = { 
+                onClick = {
                     selectedTab = FeedTab.HOME
-                    feedViewModel.onEvent(FeedEvent.SelectTab(FeedTab.HOME))
+                    feedViewModel.handleEvent(FeedEvent.SelectTab(FeedTab.HOME))
                 },
                 text = { 
                     Text(
@@ -81,9 +81,9 @@ fun FeedScreen(
             )
             Tab(
                 selected = selectedTab == FeedTab.DISCOVERY,
-                onClick = { 
+                onClick = {
                     selectedTab = FeedTab.DISCOVERY
-                    feedViewModel.onEvent(FeedEvent.SelectTab(FeedTab.DISCOVERY))
+                    feedViewModel.handleEvent(FeedEvent.SelectTab(FeedTab.DISCOVERY))
                 },
                 text = { 
                     Text(
@@ -116,7 +116,7 @@ fun FeedScreen(
                 urlResolver = feedViewModel.urlResolver,
                 onPostInteraction = { interaction ->
                     // Map feed interactions to social events
-                    feedViewModel.onEvent(FeedEvent.HandlePostInteraction(interaction))
+                    feedViewModel.handleEvent(FeedEvent.HandlePostInteraction(interaction))
                 },
                 navController = navController
             )

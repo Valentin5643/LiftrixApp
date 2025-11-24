@@ -3,14 +3,11 @@ package com.example.liftrix.ui.progress
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.analytics.UserLevel
 import com.example.liftrix.domain.model.analytics.WidgetDisplaySize
-import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.repository.AuthRepository
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.service.PreferencesService
 import com.example.liftrix.ui.common.state.AsyncData
 import com.example.liftrix.ui.common.state.UiState
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.progress.components.WidgetLayoutMode
 import com.example.liftrix.ui.progress.components.toDomainWidgetLayoutMode
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -76,14 +73,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class UserPreferencesViewModel @Inject constructor(
-    private val preferencesService: PreferencesService,
-    errorHandler: ErrorHandler
-) : BaseViewModel<UiState<UserPreferencesState>, UserPreferencesEvent>(errorHandler) {
-    
-    /**
-     * Internal mutable state flow for preferences state management.
-     */
-    override val _uiState = MutableStateFlow<UiState<UserPreferencesState>>(UiState.Loading)
+    private val preferencesService: PreferencesService
+) : ModernBaseViewModel<UiState<UserPreferencesState>>(initialState = UiState.Loading) {
     
     /**
      * Current user state received from Coordinator.
@@ -119,20 +110,20 @@ class UserPreferencesViewModel @Inject constructor(
         // Observe combined state and update main UI state
         viewModelScope.launch {
             combinedState.collect { state ->
-                _uiState.value = state
+                updateState { state }
             }
         }
     }
     
     /**
      * Handles events from the UI following the MVI pattern.
-     * 
+     *
      * All events are processed through this method to ensure consistent
      * state management and error handling.
-     * 
+     *
      * @param event The event to process
      */
-    override fun handleEvent(event: UserPreferencesEvent) {
+    fun handleEvent(event: UserPreferencesEvent) {
         Timber.d("Handling event: ${event.getOperationName()}")
         
         when (event) {
@@ -159,23 +150,22 @@ class UserPreferencesViewModel @Inject constructor(
      */
     private fun loadPreferences() {
         val userId = _currentUser.value?.uid ?: return
-        
+
         viewModelScope.launch {
             _internalState.value = _internalState.value.copy(
                 preferences = AsyncData.Loading()
             )
-            
-            executeUseCase(
-                useCase = { preferencesService.getUserPreferences(userId) },
-                onSuccess = { preferences ->
-                    _internalState.value = _internalState.value.withPreferences(preferences)
-                    Timber.d("Preferences loaded successfully for user: $userId")
-                },
-                onError = { error ->
-                    _internalState.value = _internalState.value.withError(error)
-                    Timber.e("Failed to load preferences for user: $userId, error: ${error.message}")
-                }
-            )
+
+            val result = preferencesService.getUserPreferences(userId)
+            result.onSuccess { preferences ->
+                _internalState.value = _internalState.value.withPreferences(preferences)
+                Timber.d("Preferences loaded successfully for user: $userId")
+            }.onFailure { error ->
+                val liftrixError = error as? LiftrixError ?: LiftrixError.UnknownError(errorMessage = error.message ?: "Failed to load preferences")
+                logError(liftrixError, "loadPreferences")
+                _internalState.value = _internalState.value.withError(liftrixError)
+                Timber.e("Failed to load preferences for user: $userId, error: ${error.message}")
+            }
         }
     }
     
@@ -184,25 +174,24 @@ class UserPreferencesViewModel @Inject constructor(
      */
     private fun refreshPreferences() {
         val userId = _currentUser.value?.uid ?: return
-        
+
         viewModelScope.launch {
             _internalState.value = _internalState.value.withLoading("refresh", true)
-            
-            executeUseCase(
-                useCase = { preferencesService.getUserPreferences(userId) },
-                onSuccess = { preferences ->
-                    _internalState.value = _internalState.value
-                        .withPreferences(preferences)
-                        .withLoading("refresh", false)
-                    Timber.d("Preferences refreshed successfully for user: $userId")
-                },
-                onError = { error ->
-                    _internalState.value = _internalState.value
-                        .withError(error)
-                        .withLoading("refresh", false)
-                    Timber.e("Failed to refresh preferences for user: $userId, error: ${error.message}")
-                }
-            )
+
+            val result = preferencesService.getUserPreferences(userId)
+            result.onSuccess { preferences ->
+                _internalState.value = _internalState.value
+                    .withPreferences(preferences)
+                    .withLoading("refresh", false)
+                Timber.d("Preferences refreshed successfully for user: $userId")
+            }.onFailure { error ->
+                val liftrixError = error as? LiftrixError ?: LiftrixError.UnknownError(errorMessage = error.message ?: "Failed to refresh preferences")
+                logError(liftrixError, "refreshPreferences")
+                _internalState.value = _internalState.value
+                    .withError(liftrixError)
+                    .withLoading("refresh", false)
+                Timber.e("Failed to refresh preferences for user: $userId, error: ${error.message}")
+            }
         }
     }
     
@@ -229,56 +218,53 @@ class UserPreferencesViewModel @Inject constructor(
             _internalState.value = _internalState.value
                 .withLayoutMode(mode)
                 .withLoading("updateLayoutMode", true)
-            
-            executeUseCase(
-                useCase = { preferencesService.updateLayoutMode(userId, mode.toDomainWidgetLayoutMode()) },
-                onSuccess = {
-                    _internalState.value = _internalState.value
-                        .withLoading("updateLayoutMode", false)
-                        .markChangesSaved()
-                    Timber.d("Layout mode updated to $mode for user: $userId")
-                },
-                onError = { error ->
-                    // Revert state change on error
-                    loadPreferences()
-                    _internalState.value = _internalState.value.withLoading("updateLayoutMode", false)
-                    Timber.e("Failed to update layout mode for user: $userId, error: ${error.message}")
-                }
-            )
+
+            val result = preferencesService.updateLayoutMode(userId, mode.toDomainWidgetLayoutMode())
+            result.onSuccess {
+                _internalState.value = _internalState.value
+                    .withLoading("updateLayoutMode", false)
+                    .markChangesSaved()
+                Timber.d("Layout mode updated to $mode for user: $userId")
+            }.onFailure { error ->
+                val liftrixError = error as? LiftrixError ?: LiftrixError.UnknownError(errorMessage = error.message ?: "Failed to update layout mode")
+                logError(liftrixError, "updateLayoutMode")
+                // Revert state change on error
+                loadPreferences()
+                _internalState.value = _internalState.value.withLoading("updateLayoutMode", false)
+                Timber.e("Failed to update layout mode for user: $userId, error: ${error.message}")
+            }
         }
     }
     
     /**
      * Updates the user experience level.
-     * 
+     *
      * @param level The new user experience level
      */
     private fun updateUserLevel(level: UserLevel) {
         val userId = _currentUser.value?.uid ?: return
-        
+
         viewModelScope.launch {
             // Update state immediately for responsive UI
             _internalState.value = _internalState.value
                 .withUserLevel(level)
                 .withLoading("updateUserLevel", true)
-            
-            executeUseCase(
-                useCase = { preferencesService.updateUserLevel(userId, level) },
-                onSuccess = {
-                    _internalState.value = _internalState.value
-                        .withLoading("updateUserLevel", false)
-                        .markChangesSaved()
-                    // Reload preferences to get updated widget configuration
-                    loadPreferences()
-                    Timber.d("User level updated to $level for user: $userId")
-                },
-                onError = { error ->
-                    // Revert state change on error
-                    loadPreferences()
-                    _internalState.value = _internalState.value.withLoading("updateUserLevel", false)
-                    Timber.e("Failed to update user level for user: $userId, error: ${error.message}")
-                }
-            )
+
+            val result = preferencesService.updateUserLevel(userId, level)
+            result.onSuccess {
+                _internalState.value = _internalState.value
+                    .withLoading("updateUserLevel", false)
+                    .markChangesSaved()
+                // Reload preferences to get updated widget configuration
+                loadPreferences()
+                Timber.d("User level updated to $level for user: $userId")
+            }.onFailure { error ->
+                logError(error, "updateUserLevel")
+                // Revert state change on error
+                loadPreferences()
+                _internalState.value = _internalState.value.withLoading("updateUserLevel", false)
+                Timber.e("Failed to update user level for user: $userId, error: ${error.message}")
+            }
         }
     }
     
@@ -287,23 +273,21 @@ class UserPreferencesViewModel @Inject constructor(
      */
     private fun resetToDefaults() {
         val userId = _currentUser.value?.uid ?: return
-        
+
         viewModelScope.launch {
             _internalState.value = _internalState.value.withLoading("resetToDefaults", true)
-            
-            executeUseCase(
-                useCase = { preferencesService.resetToDefaults(userId) },
-                onSuccess = {
-                    _internalState.value = _internalState.value.withLoading("resetToDefaults", false)
-                    // Reload preferences to get default configuration
-                    loadPreferences()
-                    Timber.d("Preferences reset to defaults for user: $userId")
-                },
-                onError = { error ->
-                    _internalState.value = _internalState.value.withLoading("resetToDefaults", false)
-                    Timber.e("Failed to reset preferences for user: $userId, error: ${error.message}")
-                }
-            )
+
+            val result = preferencesService.resetToDefaults(userId)
+            result.onSuccess {
+                _internalState.value = _internalState.value.withLoading("resetToDefaults", false)
+                // Reload preferences to get default configuration
+                loadPreferences()
+                Timber.d("Preferences reset to defaults for user: $userId")
+            }.onFailure { error ->
+                logError(error, "resetToDefaults")
+                _internalState.value = _internalState.value.withLoading("resetToDefaults", false)
+                Timber.e("Failed to reset preferences for user: $userId, error: ${error.message}")
+            }
         }
     }
     
@@ -326,20 +310,18 @@ class UserPreferencesViewModel @Inject constructor(
         
         viewModelScope.launch {
             _internalState.value = _internalState.value.withLoading("updateWidgetVisibility", true)
-            
-            executeUseCase(
-                useCase = { preferencesService.updateWidgetVisibility(userId, widgetName, visible) },
-                onSuccess = {
-                    _internalState.value = _internalState.value.withLoading("updateWidgetVisibility", false)
-                    // Reload preferences to get updated widget configuration
-                    loadPreferences()
-                    Timber.d("Widget visibility updated: $widgetName = $visible for user: $userId")
-                },
-                onError = { error ->
-                    _internalState.value = _internalState.value.withLoading("updateWidgetVisibility", false)
-                    Timber.e("Failed to update widget visibility for user: $userId, error: ${error.message}")
-                }
-            )
+
+            val result = preferencesService.updateWidgetVisibility(userId, widgetName, visible)
+            result.onSuccess {
+                _internalState.value = _internalState.value.withLoading("updateWidgetVisibility", false)
+                // Reload preferences to get updated widget configuration
+                loadPreferences()
+                Timber.d("Widget visibility updated: $widgetName = $visible for user: $userId")
+            }.onFailure { error ->
+                logError(error, "updateWidgetVisibility")
+                _internalState.value = _internalState.value.withLoading("updateWidgetVisibility", false)
+                Timber.e("Failed to update widget visibility for user: $userId, error: ${error.message}")
+            }
         }
     }
     
@@ -361,20 +343,18 @@ class UserPreferencesViewModel @Inject constructor(
         
         viewModelScope.launch {
             _internalState.value = _internalState.value.withLoading("updateWidgetOrder", true)
-            
-            executeUseCase(
-                useCase = { preferencesService.updateWidgetOrder(userId, widgetOrder) },
-                onSuccess = {
-                    _internalState.value = _internalState.value.withLoading("updateWidgetOrder", false)
-                    // Reload preferences to get updated widget configuration
-                    loadPreferences()
-                    Timber.d("Widget order updated for user: $userId")
-                },
-                onError = { error ->
-                    _internalState.value = _internalState.value.withLoading("updateWidgetOrder", false)
-                    Timber.e("Failed to update widget order for user: $userId, error: ${error.message}")
-                }
-            )
+
+            val result = preferencesService.updateWidgetOrder(userId, widgetOrder)
+            result.onSuccess {
+                _internalState.value = _internalState.value.withLoading("updateWidgetOrder", false)
+                // Reload preferences to get updated widget configuration
+                loadPreferences()
+                Timber.d("Widget order updated for user: $userId")
+            }.onFailure { error ->
+                logError(error, "updateWidgetOrder")
+                _internalState.value = _internalState.value.withLoading("updateWidgetOrder", false)
+                Timber.e("Failed to update widget order for user: $userId, error: ${error.message}")
+            }
         }
     }
     
@@ -397,20 +377,18 @@ class UserPreferencesViewModel @Inject constructor(
         
         viewModelScope.launch {
             _internalState.value = _internalState.value.withLoading("updateAutoRefresh", true)
-            
-            executeUseCase(
-                useCase = { preferencesService.updateAutoRefreshSettings(userId, enabled, intervalMinutes) },
-                onSuccess = {
-                    _internalState.value = _internalState.value.withLoading("updateAutoRefresh", false)
-                    // Reload preferences to get updated configuration
-                    loadPreferences()
-                    Timber.d("Auto-refresh settings updated: enabled=$enabled, interval=$intervalMinutes for user: $userId")
-                },
-                onError = { error ->
-                    _internalState.value = _internalState.value.withLoading("updateAutoRefresh", false)
-                    Timber.e("Failed to update auto-refresh settings for user: $userId, error: ${error.message}")
-                }
-            )
+
+            val result = preferencesService.updateAutoRefreshSettings(userId, enabled, intervalMinutes)
+            result.onSuccess {
+                _internalState.value = _internalState.value.withLoading("updateAutoRefresh", false)
+                // Reload preferences to get updated configuration
+                loadPreferences()
+                Timber.d("Auto-refresh settings updated: enabled=$enabled, interval=$intervalMinutes for user: $userId")
+            }.onFailure { error ->
+                logError(error, "updateAutoRefreshSettings")
+                _internalState.value = _internalState.value.withLoading("updateAutoRefresh", false)
+                Timber.e("Failed to update auto-refresh settings for user: $userId, error: ${error.message}")
+            }
         }
     }
     
@@ -442,20 +420,18 @@ class UserPreferencesViewModel @Inject constructor(
         
         viewModelScope.launch {
             _internalState.value = _internalState.value.withLoading("toggleSection", true)
-            
-            executeUseCase(
-                useCase = { preferencesService.toggleSection(userId, sectionName) },
-                onSuccess = {
-                    _internalState.value = _internalState.value.withLoading("toggleSection", false)
-                    // Reload preferences to get updated section state
-                    loadPreferences()
-                    Timber.d("Section toggled: $sectionName for user: $userId")
-                },
-                onError = { error ->
-                    _internalState.value = _internalState.value.withLoading("toggleSection", false)
-                    Timber.e("Failed to toggle section for user: $userId, error: ${error.message}")
-                }
-            )
+
+            val result = preferencesService.toggleSection(userId, sectionName)
+            result.onSuccess {
+                _internalState.value = _internalState.value.withLoading("toggleSection", false)
+                // Reload preferences to get updated section state
+                loadPreferences()
+                Timber.d("Section toggled: $sectionName for user: $userId")
+            }.onFailure { error ->
+                logError(error, "toggleSection")
+                _internalState.value = _internalState.value.withLoading("toggleSection", false)
+                Timber.e("Failed to toggle section for user: $userId, error: ${error.message}")
+            }
         }
     }
     
@@ -488,32 +464,22 @@ class UserPreferencesViewModel @Inject constructor(
         
         viewModelScope.launch {
             _internalState.value = _internalState.value.withLoading("updateWidgetSize", true)
-            
+
             // Update widget size through preferences
             val currentPreferences = currentState.getPreferences()
             if (currentPreferences != null) {
-                val updatedPreferences = currentPreferences.updateWidgetSize(widgetName, size)
-                
-                executeUseCase(
-                    useCase = { 
-                        // Save updated preferences
-                        preferencesService.getUserPreferences(userId).fold(
-                            onSuccess = { prefs ->
-                                val newPrefs = prefs.updateWidgetSize(widgetName, size)
-                                Result.success(newPrefs)
-                            },
-                            onFailure = { throwable ->
-                                Result.failure(throwable)
-                            }
-                        )
-                    },
-                    onSuccess = { preferences ->
+                // Save updated preferences
+                val result = preferencesService.getUserPreferences(userId)
+                result.fold(
+                    onSuccess = { prefs ->
+                        val newPrefs = prefs.updateWidgetSize(widgetName, size)
                         _internalState.value = _internalState.value
-                            .withPreferences(preferences)
+                            .withPreferences(newPrefs)
                             .withLoading("updateWidgetSize", false)
                         Timber.d("Widget size updated: $widgetName = $size for user: $userId")
                     },
-                    onError = { error ->
+                    onFailure = { error ->
+                        logError(error, "updateWidgetSize")
                         _internalState.value = _internalState.value.withLoading("updateWidgetSize", false)
                         Timber.e("Failed to update widget size for user: $userId, error: ${error.message}")
                     }
@@ -681,7 +647,7 @@ class UserPreferencesViewModel @Inject constructor(
                         "timestamp" to System.currentTimeMillis().toString()
                     )
                 )
-                updateErrorState(error)
+                handleError(error)
                 Timber.e(exception, "Failed to handle coordinator event: ${event::class.simpleName}")
             }
         }
@@ -693,37 +659,34 @@ class UserPreferencesViewModel @Inject constructor(
      */
     fun markWidgetMigrationNoticeShown() {
         val userId = _currentUser.value?.uid ?: return
-        
-        executeUseCase(
-            useCase = { 
-                preferencesService.getUserPreferences(userId).fold(
-                    onSuccess = { preferences ->
-                        val updatedPreferences = preferences.markMigrationNoticeSeen()
-                        preferencesService.saveWidgetPreferences(updatedPreferences)
-                    },
-                    onFailure = { error -> LiftrixResult.failure(error) }
-                )
-            },
-            onSuccess = {
-                loadPreferences()
-                Timber.d("Migration notice marked as shown for user: $userId")
-            }
-        )
+
+        viewModelScope.launch {
+            val result = preferencesService.getUserPreferences(userId)
+            result.fold(
+                onSuccess = { preferences ->
+                    val updatedPreferences = preferences.markMigrationNoticeSeen()
+                    val saveResult = preferencesService.saveWidgetPreferences(updatedPreferences)
+                    saveResult.onSuccess {
+                        loadPreferences()
+                        Timber.d("Migration notice marked as shown for user: $userId")
+                    }.onFailure { error ->
+                        logError(error, "markWidgetMigrationNoticeShown")
+                        Timber.e("Failed to save migration notice for user: $userId, error: ${error.message}")
+                    }
+                },
+                onFailure = { error ->
+                    logError(error, "markWidgetMigrationNoticeShown")
+                    Timber.e("Failed to get preferences for user: $userId, error: ${error.message}")
+                }
+            )
+        }
     }
     
     /**
-     * Override to handle specific error states for preferences.
+     * Handles specific error states for preferences.
      */
-    override fun updateErrorState(error: LiftrixError) {
+    private fun handleError(error: LiftrixError) {
+        logError(error, "UserPreferencesViewModel")
         _internalState.value = _internalState.value.withError(error)
-    }
-    
-    /**
-     * Override to set loading state for preferences.
-     */
-    override fun setLoadingState() {
-        _internalState.value = _internalState.value.copy(
-            preferences = AsyncData.Loading()
-        )
     }
 }

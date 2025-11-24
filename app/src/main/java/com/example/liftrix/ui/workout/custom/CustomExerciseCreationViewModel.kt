@@ -6,11 +6,10 @@ import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.ExerciseCategory
 import com.example.liftrix.domain.model.ExerciseType
 import com.example.liftrix.domain.repository.AuthRepository
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.exercise.CreateCustomExerciseInput
 import com.example.liftrix.domain.usecase.exercise.CreateCustomExerciseUseCase
 import com.example.liftrix.ui.common.state.UiState
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.domain.model.error.LiftrixError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -29,24 +28,19 @@ import javax.inject.Inject
 @HiltViewModel
 class CustomExerciseCreationViewModel @Inject constructor(
     private val createCustomExerciseUseCase: CreateCustomExerciseUseCase,
-    private val authRepository: AuthRepository,
-    errorHandler: ErrorHandler
-) : BaseViewModel<UiState<CustomExerciseFormState>, CustomExerciseCreationEvent>(errorHandler) {
-    
+    private val authRepository: AuthRepository
+) : ModernBaseViewModel<UiState<CustomExerciseFormState>>(initialState = UiState.Success(CustomExerciseFormState())) {
+
     companion object {
         private const val MAX_SECONDARY_MUSCLES = 3
         private const val MAX_ADDITIONAL_IMAGES = 5
     }
 
-    override val _uiState = MutableStateFlow<UiState<CustomExerciseFormState>>(
-        UiState.Success(CustomExerciseFormState())
-    )
-
     // Navigation events
     private val _events = MutableSharedFlow<CustomExerciseNavigationEvent>()
     val events = _events.asSharedFlow()
 
-    override fun handleEvent(event: CustomExerciseCreationEvent) {
+    fun handleEvent(event: CustomExerciseCreationEvent) {
         when (event) {
             is CustomExerciseCreationEvent.ExerciseCreated -> {
                 viewModelScope.launch {
@@ -55,26 +49,26 @@ class CustomExerciseCreationViewModel @Inject constructor(
             }
             // Navigation
             is CustomExerciseCreationEvent.NavigateBack -> handleNavigateBack()
-            
+
             // Basic Info Updates
             is CustomExerciseCreationEvent.UpdateName -> updateName(event.name)
             is CustomExerciseCreationEvent.UpdateDescription -> updateDescription(event.description)
             is CustomExerciseCreationEvent.UpdateExerciseType -> updateExerciseType(event.type)
-            
+
             // Exercise Details Updates
             is CustomExerciseCreationEvent.UpdatePrimaryMuscle -> updatePrimaryMuscle(event.muscle)
             is CustomExerciseCreationEvent.AddSecondaryMuscle -> addSecondaryMuscle(event.muscle)
             is CustomExerciseCreationEvent.RemoveSecondaryMuscle -> removeSecondaryMuscle(event.muscle)
             is CustomExerciseCreationEvent.UpdateEquipment -> updateEquipment(event.equipment)
             is CustomExerciseCreationEvent.UpdateDifficulty -> updateDifficulty(event.difficulty)
-            
+
             // Media Updates
             is CustomExerciseCreationEvent.SetMainImage -> setMainImage(event.uri)
             is CustomExerciseCreationEvent.AddImages -> addImages(event.uris)
             is CustomExerciseCreationEvent.RemoveImage -> removeImage(event.uri)
             is CustomExerciseCreationEvent.UpdateVideoUrl -> updateVideoUrl(event.url)
-            
-            
+
+
             // Actions
             is CustomExerciseCreationEvent.CreateExercise -> createExercise()
             is CustomExerciseCreationEvent.Retry -> retry()

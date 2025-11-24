@@ -12,7 +12,6 @@ import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SocialRepository
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.service.AnalyticsService
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.social.FollowAction
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.ui.common.state.UiState
@@ -20,7 +19,7 @@ import com.example.liftrix.ui.common.state.HomeScreenData
 import com.example.liftrix.ui.common.state.FeedState
 import com.example.liftrix.ui.common.state.RecommendationsState
 import com.example.liftrix.ui.common.state.dataOrNull
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.domain.model.TrendData
 import com.example.liftrix.domain.model.IconData
@@ -49,12 +48,8 @@ class HomeViewModel @Inject constructor(
     private val authQueryUseCase: AuthQueryUseCase,
     private val analyticsService: AnalyticsService,
     private val socialRepository: SocialRepository,
-    private val socialRelationshipUseCase: com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase,
-    errorHandler: ErrorHandler
-) : BaseViewModel<UiState<HomeScreenData>, HomeEvent>(errorHandler) {
-
-    override val _uiState = MutableStateFlow<UiState<HomeScreenData>>(UiState.Loading)
-
+    private val socialRelationshipUseCase: com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase
+) : ModernBaseViewModel<UiState<HomeScreenData>>(initialState = UiState.Loading) {
 
     private var currentFeedOffset = 0
     private var currentRecommendationsOffset = 0
@@ -69,7 +64,7 @@ class HomeViewModel @Inject constructor(
     /**
      * Handles events from the UI following BaseViewModel MVI pattern
      */
-    override fun handleEvent(event: HomeEvent) {
+    fun handleEvent(event: HomeEvent) {
         when (event) {
             is HomeEvent.RefreshData -> {
                 refreshData()
@@ -132,20 +127,6 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Override to handle loading state updates
-     */
-    override fun setLoadingState() {
-        setState(UiState.Loading)
-    }
-
-    /**
-     * Override to handle error state updates
-     */
-    override fun updateErrorState(error: com.example.liftrix.domain.model.error.LiftrixError) {
-        val currentData = (_uiState.value as? UiState.Success)?.data ?: HomeScreenData()
-        setState(UiState.Error(error, currentData))
-    }
 
     private fun clearError() {
         updateState { currentState ->
@@ -160,31 +141,32 @@ class HomeViewModel @Inject constructor(
      * Helper method to update HomeScreenData within a Success state
      */
     private fun updateHomeScreenData(transform: (HomeScreenData) -> HomeScreenData) {
-        val currentData = (_uiState.value as? UiState.Success)?.data ?: HomeScreenData()
-        setState(UiState.Success(transform(currentData)))
+        val currentData = (uiState.value as? UiState.Success)?.data ?: HomeScreenData()
+        updateState { UiState.Success(transform(currentData)) }
     }
 
     /**
      * Loads home screen data including recent workouts and statistics
      */
     fun loadHomeData() {
-        executeUseCase(
-            useCase = {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
-                    onFailure = { return@executeUseCase Result.failure(it) }
-                )
-                val result = workoutRepository.getRecentWorkouts(userId, RECENT_WORKOUTS_LIMIT).first()
-                result
-            },
-            onSuccess = { recentWorkouts ->
+        viewModelScope.launch {
+            val userId = authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it },
+                onFailure = {
+                    logError(it, "loadHomeData")
+                    return@launch
+                }
+            )
 
+            val result = workoutRepository.getRecentWorkouts(userId, RECENT_WORKOUTS_LIMIT).first()
+
+            result.onSuccess { recentWorkouts ->
                 updateHomeScreenData { it.copy(recentWorkouts = recentWorkouts) }
-            },
-            onError = { error ->
+            }.onFailure { error ->
+                logError(error, "loadHomeData")
                 Timber.e("Error in loadHomeData: ${error.message}")
             }
-        )
+        }
     }
 
     /**
@@ -296,7 +278,7 @@ class HomeViewModel @Inject constructor(
      * Loads more workout feed data for pagination
      */
     fun loadMoreWorkouts() {
-        val currentData = _uiState.value.dataOrNull() ?: HomeScreenData()
+        val currentData = uiState.value.dataOrNull() ?: HomeScreenData()
         val currentState = currentData.workoutFeedState
         if (currentState !is FeedState.Success || !currentState.hasMore || currentState.isLoadingMore) {
             return
@@ -304,7 +286,7 @@ class HomeViewModel @Inject constructor(
 
         // With reactive feeds, we automatically get all available workouts
         // Pagination can be re-implemented later if needed with offset-based queries
-        
+
         trackMoreWorkoutsLoaded(0) // Track the attempt even if we don't load more
     }
 
@@ -491,14 +473,17 @@ class HomeViewModel @Inject constructor(
                                 )
                             )
                         }
-                        updateErrorState(liftrixError)
+                        logError(liftrixError, "followUser")
                     }
                 )
             } catch (exception: Exception) {
                 Timber.e(exception, "Error in followUser")
-                updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.NetworkError(
-                    "Failed to follow user"
-                ))
+                logError(
+                    com.example.liftrix.domain.model.error.LiftrixError.NetworkError(
+                        "Failed to follow user"
+                    ),
+                    "followUser"
+                )
             }
         }
     }
@@ -545,14 +530,17 @@ class HomeViewModel @Inject constructor(
                                 )
                             )
                         }
-                        updateErrorState(liftrixError)
+                        logError(liftrixError, "unfollowUser")
                     }
                 )
             } catch (exception: Exception) {
                 Timber.e(exception, "Error in unfollowUser")
-                updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.NetworkError(
-                    "Failed to unfollow user"
-                ))
+                logError(
+                    com.example.liftrix.domain.model.error.LiftrixError.NetworkError(
+                        "Failed to unfollow user"
+                    ),
+                    "unfollowUser"
+                )
             }
         }
     }
@@ -572,9 +560,12 @@ class HomeViewModel @Inject constructor(
                     // Properly handle cancellation vs actual errors
                     if (throwable !is kotlinx.coroutines.CancellationException) {
                         Timber.e(throwable, "Error observing auth state")
-                        updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.AuthenticationError(
-                            "Authentication error"
-                        ))
+                        logError(
+                            com.example.liftrix.domain.model.error.LiftrixError.AuthenticationError(
+                                "Authentication error"
+                            ),
+                            "observeUserDataAndLoadHome"
+                        )
                     } else {
                         throw throwable // Rethrow cancellation to maintain structured concurrency
                     }
@@ -619,9 +610,12 @@ class HomeViewModel @Inject constructor(
                     // Properly handle cancellation vs actual errors
                     if (throwable !is kotlinx.coroutines.CancellationException) {
                         Timber.e(throwable, "Error observing recent workouts")
-                        updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.DataRetrievalError(
-                            "Failed to load recent workouts: ${throwable.message}"
-                        ))
+                        logError(
+                            com.example.liftrix.domain.model.error.LiftrixError.DataRetrievalError(
+                                "Failed to load recent workouts: ${throwable.message}"
+                            ),
+                            "observeWorkoutDataReactively"
+                        )
                     } else {
                         throw throwable // Rethrow cancellation to maintain structured concurrency
                     }
@@ -638,9 +632,12 @@ class HomeViewModel @Inject constructor(
                         onFailure = { throwable ->
                             if (throwable !is kotlinx.coroutines.CancellationException) {
                                 Timber.e(throwable, "Error in reactive workout observation")
-                                updateErrorState(com.example.liftrix.domain.model.error.LiftrixError.DataRetrievalError(
-                                    throwable.message ?: "Failed to load workouts"
-                                ))
+                                logError(
+                                    com.example.liftrix.domain.model.error.LiftrixError.DataRetrievalError(
+                                        throwable.message ?: "Failed to load workouts"
+                                    ),
+                                    "observeWorkoutDataReactively"
+                                )
                                 updateHomeScreenData {
                                     it.copy(recentWorkouts = emptyList())
                                 }

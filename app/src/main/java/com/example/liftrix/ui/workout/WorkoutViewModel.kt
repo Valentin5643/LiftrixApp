@@ -21,12 +21,11 @@ import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.state.WorkoutScreenData
 import com.example.liftrix.ui.common.state.WorkoutUiState
 import com.example.liftrix.ui.common.state.dataOrNull
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.sync.SyncManager
 import com.example.liftrix.sync.SyncStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -63,11 +62,10 @@ class WorkoutViewModel @Inject constructor(
     private val analyticsService: AnalyticsService,
     private val uxMetricsTracker: UxMetricsTracker,
     private val taskCompletionTracker: TaskCompletionTracker,
-    private val sessionManager: com.example.liftrix.service.UnifiedWorkoutSessionManager,
-    errorHandler: ErrorHandler
-) : BaseViewModel<WorkoutUiState, WorkoutEvent>(errorHandler) {
-
-    override val _uiState = MutableStateFlow<WorkoutUiState>(WorkoutUiState.Loading)
+    private val sessionManager: com.example.liftrix.service.UnifiedWorkoutSessionManager
+) : ModernBaseViewModel<WorkoutUiState>(
+    initialState = WorkoutUiState.Loading
+) {
 
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
@@ -83,9 +81,9 @@ class WorkoutViewModel @Inject constructor(
     }
 
     /**
-     * Handles events from the UI following BaseViewModel MVI pattern
+     * Handles events from the UI following MVI pattern
      */
-    override fun handleEvent(event: WorkoutEvent) {
+    fun handleEvent(event: WorkoutEvent) {
         when (event) {
             is WorkoutEvent.StartWorkout -> startWorkout(event.workout)
             is WorkoutEvent.CompleteWorkout -> completeWorkout(event.workout)
@@ -102,21 +100,6 @@ class WorkoutViewModel @Inject constructor(
             WorkoutEvent.ClearError -> clearError()
             WorkoutEvent.RefreshData -> refreshData()
         }
-    }
-
-    /**
-     * Override to handle loading state updates
-     */
-    override fun setLoadingState() {
-        setState(WorkoutUiState.Loading)
-    }
-
-    /**
-     * Override to handle error state updates
-     */
-    override fun updateErrorState(error: com.example.liftrix.domain.model.error.LiftrixError) {
-        val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
-        setState(WorkoutUiState.Error(error, currentData))
     }
 
 
@@ -327,74 +310,107 @@ class WorkoutViewModel @Inject constructor(
     }
 
     fun saveWorkout(workout: Workout) {
-        executeUseCase(
-            useCase = {
-                // Track previous status for analytics
-                val previousStatus = workout.status
-                val result = workoutCommandUseCase.saveWorkout(workout)
+        viewModelScope.launch {
+            updateState { WorkoutUiState.Loading }
 
-                // Log analytics events based on workout status changes
-                result.fold(
-                    onSuccess = {
-                        logWorkoutEventUseCase.logWorkoutStatusChange(workout, previousStatus)
-                            .onFailure { exception ->
-                                Timber.e(exception, "Failed to log workout analytics event")
-                                // Don't fail the save operation if analytics fails
-                            }
-                    },
-                    onFailure = { error ->
-                        Timber.e(error.toString(), "Failed to save workout")
+            // Track previous status for analytics
+            val previousStatus = workout.status
+            val result = workoutCommandUseCase.saveWorkout(workout)
+
+            // Log analytics events based on workout status changes
+            result.onSuccess {
+                logWorkoutEventUseCase.logWorkoutStatusChange(workout, previousStatus)
+                    .onFailure { exception ->
+                        Timber.e(exception, "Failed to log workout analytics event")
+                        // Don't fail the save operation if analytics fails
                     }
-                )
-                result
-            },
-            onSuccess = { 
+
                 Timber.d("Workout saved successfully: ${workout.name}")
-            },
-            onError = { error ->
-                Timber.e("Failed to save workout: ${error.message}")
+                val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                updateState {
+                    WorkoutUiState.Success(currentData)
+                }
+            }.onFailure { error ->
+                Timber.e(error.toString(), "Failed to save workout")
+                logError(error, "saveWorkout")
+                val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                updateState {
+                    WorkoutUiState.Error(
+                        error as? LiftrixError ?: LiftrixError.UnknownError(
+                            errorMessage = error.message ?: "Failed to save workout"
+                        ),
+                        currentData
+                    )
+                }
             }
-        )
+        }
     }
 
     fun syncNow() {
-        executeUseCase(
-            useCase = {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
-                    onFailure = { return@executeUseCase Result.failure(it) }
-                )
-                workoutRepository.syncNowForUser(userId)
-            },
-            onSuccess = {
-                Timber.d("Sync started successfully")
-            },
-            onError = { error ->
-                Timber.e("Failed to start sync: ${error.message}")
+        viewModelScope.launch {
+            updateState { WorkoutUiState.Loading }
+
+            val userIdResult = authQueryUseCase(waitForAuth = false)
+            userIdResult.onSuccess { userId ->
+                val result = workoutRepository.syncNowForUser(userId)
+
+                result.onSuccess {
+                    Timber.d("Sync started successfully")
+                    val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                    updateState { WorkoutUiState.Success(currentData) }
+                }.onFailure { error ->
+                    Timber.e("Failed to start sync: ${error.message}")
+                    logError(error, "syncNow")
+                    val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                    updateState {
+                        WorkoutUiState.Error(
+                            error as? LiftrixError ?: LiftrixError.UnknownError(
+                                errorMessage = error.message ?: "Failed to start sync"
+                            ),
+                            currentData
+                        )
+                    }
+                }
+            }.onFailure { error ->
+                Timber.e("Failed to get user ID: ${error.message}")
+                logError(error, "syncNow")
+                val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                updateState {
+                    WorkoutUiState.Error(
+                        error as? LiftrixError ?: LiftrixError.UnknownError(
+                            errorMessage = error.message ?: "Failed to get user ID"
+                        ),
+                        currentData
+                    )
+                }
             }
-        )
+        }
     }
 
     fun getUnsyncedCount() {
-        executeUseCase(
-            useCase = {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
-                    onFailure = { return@executeUseCase Result.failure(it) }
-                )
-                workoutRepository.getUnsyncedCountForUser(userId)
-            },
-            onSuccess = { count ->
-                val currentData = _uiState.value.dataOrNull() ?: WorkoutScreenData()
-                setState(WorkoutUiState.Success(
-                    currentData.copy(unsyncedCount = count)
-                ))
-            },
-            onError = { error ->
-                Timber.e("Failed to get unsynced count: ${error.message}")
-            },
-            showLoading = false
-        )
+        viewModelScope.launch {
+            // Note: No loading state since showLoading was false in original
+
+            val userIdResult = authQueryUseCase(waitForAuth = false)
+            userIdResult.onSuccess { userId ->
+                val result = workoutRepository.getUnsyncedCountForUser(userId)
+
+                result.onSuccess { count ->
+                    val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                    updateState {
+                        WorkoutUiState.Success(
+                            currentData.copy(unsyncedCount = count)
+                        )
+                    }
+                }.onFailure { error ->
+                    Timber.e("Failed to get unsynced count: ${error.message}")
+                    logError(error, "getUnsyncedCount")
+                }
+            }.onFailure { error ->
+                Timber.e("Failed to get user ID: ${error.message}")
+                logError(error, "getUnsyncedCount")
+            }
+        }
     }
 
     fun startWorkout(workout: Workout) {
@@ -534,85 +550,151 @@ class WorkoutViewModel @Inject constructor(
     }
 
     fun createFolder(folderName: String) {
-        executeUseCase(
-            useCase = {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
-                    onFailure = { return@executeUseCase Result.failure(it) }
-                )
+        viewModelScope.launch {
+            updateState { WorkoutUiState.Loading }
 
+            val userIdResult = authQueryUseCase(waitForAuth = false)
+            userIdResult.onSuccess { userId ->
                 if (userId.isBlank()) {
-                    throw IllegalStateException("User not authenticated - cannot create folder")
+                    val error = LiftrixError.UnknownError(
+                        errorMessage = "User not authenticated - cannot create folder"
+                    )
+                    logError(error, "createFolder")
+                    val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                    updateState { WorkoutUiState.Error(error, currentData) }
+                    return@launch
                 }
 
-                folderOperationsUseCase.create(userId, folderName)
-            },
-            onSuccess = { folder ->
-                Timber.d("New folder created: ${folder.name} (${folder.id.value})")
+                val result = folderOperationsUseCase.create(userId, folderName)
 
-                // Refresh the combined loading to include the new folder
-                // This ensures the new folder appears alongside existing templates
-                refreshData()
-            },
-            onError = { error ->
-                Timber.e("Failed to create folder: ${error.message}")
+                result.onSuccess { folder ->
+                    Timber.d("New folder created: ${folder.name} (${folder.id.value})")
+
+                    // Refresh the combined loading to include the new folder
+                    // This ensures the new folder appears alongside existing templates
+                    refreshData()
+                }.onFailure { error ->
+                    Timber.e("Failed to create folder: ${error.message}")
+                    logError(error, "createFolder")
+                    val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                    updateState {
+                        WorkoutUiState.Error(
+                            error as? LiftrixError ?: LiftrixError.UnknownError(
+                                errorMessage = error.message ?: "Failed to create folder"
+                            ),
+                            currentData
+                        )
+                    }
+                }
+            }.onFailure { error ->
+                Timber.e("Failed to get user ID: ${error.message}")
+                logError(error, "createFolder")
+                val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                updateState {
+                    WorkoutUiState.Error(
+                        error as? LiftrixError ?: LiftrixError.UnknownError(
+                            errorMessage = error.message ?: "Failed to get user ID"
+                        ),
+                        currentData
+                    )
+                }
             }
-        )
+        }
     }
 
     fun moveWorkoutToFolder(workoutTemplate: com.example.liftrix.domain.model.WorkoutTemplate, targetFolderId: String) {
-        executeUseCase(
-            useCase = {
-                templateCommandUseCase.moveToFolder(workoutTemplate, targetFolderId)
-            },
-            onSuccess = { updatedTemplate ->
+        viewModelScope.launch {
+            updateState { WorkoutUiState.Loading }
+
+            val result = templateCommandUseCase.moveToFolder(workoutTemplate, targetFolderId)
+
+            result.onSuccess { updatedTemplate ->
                 Timber.d("Workout '${updatedTemplate.name}' moved to folder '$targetFolderId'")
-                
+
                 // Refresh the data to show the workout in its new folder
                 refreshData()
-            },
-            onError = { error ->
+            }.onFailure { error ->
                 Timber.e("Failed to move workout to folder: ${error.message}")
+                logError(error, "moveWorkoutToFolder")
+                val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                updateState {
+                    WorkoutUiState.Error(
+                        error as? LiftrixError ?: LiftrixError.UnknownError(
+                            errorMessage = error.message ?: "Failed to move workout to folder"
+                        ),
+                        currentData
+                    )
+                }
             }
-        )
+        }
     }
 
     fun deleteFolder(folder: com.example.liftrix.domain.model.Folder) {
-        executeUseCase(
-            useCase = {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
-                    onFailure = { return@executeUseCase Result.failure(it) }
-                )
+        viewModelScope.launch {
+            updateState { WorkoutUiState.Loading }
 
+            val userIdResult = authQueryUseCase(waitForAuth = false)
+            userIdResult.onSuccess { userId ->
                 if (userId.isBlank()) {
-                    throw IllegalStateException("User not authenticated - cannot delete folder")
+                    val error = LiftrixError.UnknownError(
+                        errorMessage = "User not authenticated - cannot delete folder"
+                    )
+                    logError(error, "deleteFolder")
+                    val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                    updateState { WorkoutUiState.Error(error, currentData) }
+                    return@launch
                 }
 
-                folderOperationsUseCase.delete(userId, folder.id)
-            },
-            onSuccess = {
-                Timber.d("Folder '${folder.name}' deleted successfully")
+                val result = folderOperationsUseCase.delete(userId, folder.id)
 
-                // Refresh the data to remove the deleted folder and show relocated templates
-                refreshData()
-            },
-            onError = { error ->
-                Timber.e("Failed to delete folder '${folder.name}': ${error.message}")
+                result.onSuccess {
+                    Timber.d("Folder '${folder.name}' deleted successfully")
+
+                    // Refresh the data to remove the deleted folder and show relocated templates
+                    refreshData()
+                }.onFailure { error ->
+                    Timber.e("Failed to delete folder '${folder.name}': ${error.message}")
+                    logError(error, "deleteFolder")
+                    val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                    updateState {
+                        WorkoutUiState.Error(
+                            error as? LiftrixError ?: LiftrixError.UnknownError(
+                                errorMessage = error.message ?: "Failed to delete folder"
+                            ),
+                            currentData
+                        )
+                    }
+                }
+            }.onFailure { error ->
+                Timber.e("Failed to get user ID: ${error.message}")
+                logError(error, "deleteFolder")
+                val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                updateState {
+                    WorkoutUiState.Error(
+                        error as? LiftrixError ?: LiftrixError.UnknownError(
+                            errorMessage = error.message ?: "Failed to get user ID"
+                        ),
+                        currentData
+                    )
+                }
             }
-        )
+        }
     }
 
     fun renameFolder(folder: com.example.liftrix.domain.model.Folder, newName: String) {
-        executeUseCase(
-            useCase = {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
-                    onFailure = { return@executeUseCase Result.failure(it) }
-                )
+        viewModelScope.launch {
+            updateState { WorkoutUiState.Loading }
 
+            val userIdResult = authQueryUseCase(waitForAuth = false)
+            userIdResult.onSuccess { userId ->
                 if (userId.isBlank()) {
-                    throw IllegalStateException("User not authenticated - cannot rename folder")
+                    val error = LiftrixError.UnknownError(
+                        errorMessage = "User not authenticated - cannot rename folder"
+                    )
+                    logError(error, "renameFolder")
+                    val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                    updateState { WorkoutUiState.Error(error, currentData) }
+                    return@launch
                 }
 
                 // Create updated folder with new name
@@ -620,18 +702,40 @@ class WorkoutViewModel @Inject constructor(
                     name = com.example.liftrix.domain.model.FolderName(newName.trim())
                 )
 
-                folderRepository.updateFolder(updatedFolder)
-            },
-            onSuccess = { updatedFolder ->
-                Timber.d("Folder '${folder.name}' renamed to '$newName'")
+                val result = folderRepository.updateFolder(updatedFolder)
 
-                // Refresh the data to show the updated folder name
-                refreshData()
-            },
-            onError = { error ->
-                Timber.e("Failed to rename folder '${folder.name}' to '$newName': ${error.message}")
+                result.onSuccess { folder ->
+                    Timber.d("Folder '${folder.name}' renamed to '$newName'")
+
+                    // Refresh the data to show the updated folder name
+                    refreshData()
+                }.onFailure { error ->
+                    Timber.e("Failed to rename folder '${folder.name}' to '$newName': ${error.message}")
+                    logError(error, "renameFolder")
+                    val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                    updateState {
+                        WorkoutUiState.Error(
+                            error as? LiftrixError ?: LiftrixError.UnknownError(
+                                errorMessage = error.message ?: "Failed to rename folder"
+                            ),
+                            currentData
+                        )
+                    }
+                }
+            }.onFailure { error ->
+                Timber.e("Failed to get user ID: ${error.message}")
+                logError(error, "renameFolder")
+                val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
+                updateState {
+                    WorkoutUiState.Error(
+                        error as? LiftrixError ?: LiftrixError.UnknownError(
+                            errorMessage = error.message ?: "Failed to get user ID"
+                        ),
+                        currentData
+                    )
+                }
             }
-        )
+        }
     }
 
     /**
@@ -671,15 +775,18 @@ class WorkoutViewModel @Inject constructor(
         orderedFolderIds: List<com.example.liftrix.domain.model.FolderId>,
         confirmedSuccessState: WorkoutUiState.Success
     ) {
-        executeUseCase(
-            useCase = {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
-                    onFailure = { return@executeUseCase Result.failure(it) }
-                )
+        viewModelScope.launch {
+            updateState { WorkoutUiState.Loading }
 
+            val userIdResult = authQueryUseCase(waitForAuth = false)
+            userIdResult.onSuccess { userId ->
                 if (userId.isBlank()) {
-                    throw IllegalStateException("User not authenticated - cannot reorder folders")
+                    val error = LiftrixError.UnknownError(
+                        errorMessage = "User not authenticated - cannot reorder folders"
+                    )
+                    logError(error, "reorderFoldersWithState")
+                    updateState { WorkoutUiState.Error(error, confirmedSuccessState.data) }
+                    return@launch
                 }
 
                 // ✅ RACE CONDITION FIX: Use cached state directly, no re-checking UI state
@@ -687,38 +794,56 @@ class WorkoutViewModel @Inject constructor(
 
                 // Defensive validation before calling use case
                 if (orderedFolderIds.isEmpty()) {
-                    throw IllegalArgumentException("Cannot reorder folders: ordered folder IDs list is empty")
+                    val error = LiftrixError.ValidationError(
+                        field = "orderedFolderIds",
+                        violations = listOf("Cannot reorder folders: ordered folder IDs list is empty")
+                    )
+                    logError(error, "reorderFoldersWithState")
+                    updateState { WorkoutUiState.Error(error, confirmedSuccessState.data) }
+                    return@launch
                 }
 
                 if (currentFolders.isEmpty()) {
-                    throw IllegalArgumentException("Cannot reorder folders: no folders available to reorder")
+                    val error = LiftrixError.ValidationError(
+                        field = "currentFolders",
+                        violations = listOf("Cannot reorder folders: no folders available to reorder")
+                    )
+                    logError(error, "reorderFoldersWithState")
+                    updateState { WorkoutUiState.Error(error, confirmedSuccessState.data) }
+                    return@launch
                 }
 
                 val result = folderOperationsUseCase.reorder(userId, currentFolders, orderedFolderIds)
 
-                // Convert Result<T> to LiftrixResult<T> for BaseViewModel
-                result.fold(
-                    onSuccess = { folders ->
-                        LiftrixResult.success(folders)
-                    },
-                    onFailure = { exception ->
-                        LiftrixResult.failure(
-                            LiftrixError.UnknownError(
-                                errorMessage = exception.message ?: "Folder reorder failed"
-                            )
+                result.onSuccess { reorderedFolders ->
+                    // ✅ RACE CONDITION FIX: Use cached state instead of re-checking UI state
+                    val updatedData = confirmedSuccessState.data.copy(folders = reorderedFolders)
+                    updateState { WorkoutUiState.Success(data = updatedData) }
+                }.onFailure { error ->
+                    Timber.e("Failed to reorder folders: ${error.message}")
+                    logError(error, "reorderFoldersWithState")
+                    updateState {
+                        WorkoutUiState.Error(
+                            error as? LiftrixError ?: LiftrixError.UnknownError(
+                                errorMessage = error.message ?: "Folder reorder failed"
+                            ),
+                            confirmedSuccessState.data
                         )
                     }
-                )
-            },
-            onSuccess = { reorderedFolders ->
-                // ✅ RACE CONDITION FIX: Use cached state instead of re-checking UI state
-                val updatedData = confirmedSuccessState.data.copy(folders = reorderedFolders)
-                _uiState.value = WorkoutUiState.Success(data = updatedData)
-            },
-            onError = { error ->
-                Timber.e("Failed to reorder folders: ${error.message}")
+                }
+            }.onFailure { error ->
+                Timber.e("Failed to get user ID: ${error.message}")
+                logError(error, "reorderFoldersWithState")
+                updateState {
+                    WorkoutUiState.Error(
+                        error as? LiftrixError ?: LiftrixError.UnknownError(
+                            errorMessage = error.message ?: "Failed to get user ID"
+                        ),
+                        confirmedSuccessState.data
+                    )
+                }
             }
-        )
+        }
     }
 
 

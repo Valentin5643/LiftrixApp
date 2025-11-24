@@ -9,10 +9,7 @@ import com.example.liftrix.domain.model.social.PostComment
 import com.example.liftrix.domain.model.social.CreateCommentRequest
 import com.example.liftrix.domain.repository.social.EngagementRepository
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.common.ErrorHandler
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
-import com.example.liftrix.ui.common.event.ViewModelEvent
-import com.example.liftrix.ui.common.state.UiState
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -26,19 +23,14 @@ import javax.inject.Inject
 @HiltViewModel
 class PostCommentsViewModel @Inject constructor(
     private val engagementRepository: EngagementRepository,
-    private val authQueryUseCase: AuthQueryUseCase,
-    errorHandler: ErrorHandler
-) : BaseViewModel<PostCommentsUiState, PostCommentsEvent>(errorHandler) {
+    private val authQueryUseCase: AuthQueryUseCase
+) : ModernBaseViewModel<PostCommentsUiState>(initialState = PostCommentsUiState.Loading) {
 
     private val _postId = MutableStateFlow<String?>(null)
     private val _currentUserId = MutableStateFlow<String?>(null)
     private val _commentText = MutableStateFlow("")
     private val _isPosting = MutableStateFlow(false)
     private val _replyingTo = MutableStateFlow<PostComment?>(null)
-
-    override val _uiState = MutableStateFlow<PostCommentsUiState>(
-        PostCommentsUiState.Loading
-    )
 
     init {
         // Get current user ID
@@ -60,7 +52,7 @@ class PostCommentsViewModel @Inject constructor(
         }
         .cachedIn(viewModelScope)
 
-    override fun handleEvent(event: PostCommentsEvent) {
+    fun handleEvent(event: PostCommentsEvent) {
         when (event) {
             is PostCommentsEvent.Initialize -> initializeForPost(event.postId)
             is PostCommentsEvent.UpdateCommentText -> updateCommentText(event.text)
@@ -218,10 +210,6 @@ class PostCommentsViewModel @Inject constructor(
     val replyingTo: StateFlow<PostComment?> = _replyingTo.asStateFlow()
     val currentUserId: StateFlow<String?> = _currentUserId.asStateFlow()
 
-    override fun setLoadingState() {
-        updateState { PostCommentsUiState.Loading }
-    }
-
     /**
      * FIX INPUT-006: Sanitize HTML input to prevent XSS attacks (CVSS 7.4)
      *
@@ -255,7 +243,7 @@ sealed class PostCommentsUiState {
 /**
  * Events for the PostComments screen
  */
-sealed class PostCommentsEvent : ViewModelEvent {
+sealed class PostCommentsEvent {
     data class Initialize(val postId: String) : PostCommentsEvent()
     data class UpdateCommentText(val text: String) : PostCommentsEvent()
     object PostComment : PostCommentsEvent()

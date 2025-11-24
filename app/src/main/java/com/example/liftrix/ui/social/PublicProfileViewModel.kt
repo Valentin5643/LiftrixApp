@@ -3,7 +3,6 @@ package com.example.liftrix.ui.social
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.PublicUserProfile
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.social.SocialProfileQueryUseCase
 import com.example.liftrix.domain.usecase.social.GetPublicProfileRequest
@@ -16,11 +15,10 @@ import com.example.liftrix.domain.model.social.WorkoutPost
 import com.example.liftrix.domain.repository.social.FeedRepository
 import com.example.liftrix.domain.repository.social.EngagementRepository
 import com.example.liftrix.ui.common.event.ViewModelEvent
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -39,24 +37,21 @@ class PublicProfileViewModel @Inject constructor(
     private val socialRelationshipUseCase: SocialRelationshipUseCase,
     private val authQueryUseCase: AuthQueryUseCase,
     private val feedRepository: FeedRepository,
-    private val engagementRepository: EngagementRepository,
-    errorHandler: ErrorHandler
-) : BaseViewModel<PublicProfileUiState, PublicProfileEvent>(errorHandler) {
-
-    override val _uiState = MutableStateFlow(
-        PublicProfileUiState(
-            profile = null,
-            isLoading = false,
-            error = null,
-            isConnectionLoading = false
-        )
+    private val engagementRepository: EngagementRepository
+) : ModernBaseViewModel<PublicProfileUiState>(
+    initialState = PublicProfileUiState(
+        profile = null,
+        isLoading = false,
+        error = null,
+        isConnectionLoading = false
     )
+) {
 
     init {
         loadCurrentUserId()
     }
 
-    override fun handleEvent(event: PublicProfileEvent) {
+    fun handleEvent(event: PublicProfileEvent) {
         when (event) {
             is PublicProfileEvent.LoadProfile -> {
                 loadProfile(event.userId)
@@ -92,7 +87,7 @@ class PublicProfileViewModel @Inject constructor(
      * Loads the public profile for the specified user
      */
     private fun loadProfile(userId: String) {
-        if (_uiState.value.profile?.userId == userId && _uiState.value.error == null) {
+        if (uiState.value.profile?.userId == userId && uiState.value.error == null) {
             // Profile already loaded for this user and no error state
             return
         }
@@ -105,45 +100,50 @@ class PublicProfileViewModel @Inject constructor(
             )
         }
 
-        executeUseCase(
-            useCase = {
-                socialProfileQueryUseCase.getPublicProfile(
-                    GetPublicProfileRequest(
-                        profileUserId = userId,
-                        trackView = true
-                    )
+        viewModelScope.launch {
+            val result = socialProfileQueryUseCase.getPublicProfile(
+                GetPublicProfileRequest(
+                    profileUserId = userId,
+                    trackView = true
                 )
-            },
-            onSuccess = { result ->
-                updateState { currentState ->
-                    currentState.copy(
-                        profile = result.profile,
-                        isLoading = false,
-                        error = null
+            )
+
+            result.fold(
+                onSuccess = { profileResult ->
+                    updateState { currentState ->
+                        currentState.copy(
+                            profile = profileResult.profile,
+                            isLoading = false,
+                            error = null
+                        )
+                    }
+
+                    Timber.d("Profile loaded successfully for user: $userId")
+
+                    // Load user's workout posts
+                    loadUserPosts(userId)
+
+                    // Load engagement state
+                    loadEngagementState()
+                },
+                onFailure = { throwable ->
+                    val error = throwable as? LiftrixError ?: LiftrixError.BusinessLogicError(
+                        code = "PROFILE_LOAD_FAILED",
+                        errorMessage = "Failed to load profile: ${throwable.message}",
+                        analyticsContext = mapOf("user_id" to userId)
                     )
+                    updateState { currentState ->
+                        currentState.copy(
+                            isLoading = false,
+                            error = error,
+                            profile = null
+                        )
+                    }
+
+                    Timber.e("Failed to load profile for user: $userId - ${error.message}")
                 }
-                
-                Timber.d("Profile loaded successfully for user: $userId")
-                
-                // Load user's workout posts
-                loadUserPosts(userId)
-                
-                // Load engagement state
-                loadEngagementState()
-            },
-            onError = { error ->
-                updateState { currentState ->
-                    currentState.copy(
-                        isLoading = false,
-                        error = error,
-                        profile = null
-                    )
-                }
-                
-                Timber.e("Failed to load profile for user: $userId - ${error.message}")
-            },
-            showLoading = false // We handle loading state manually
-        )
+            )
+        }
     }
     
     /**
@@ -152,7 +152,7 @@ class PublicProfileViewModel @Inject constructor(
     private fun loadUserPosts(userId: String) {
         viewModelScope.launch {
             // Get current user ID, or use empty string for anonymous viewing
-            val currentUserId = _uiState.value.currentUserId ?: authQueryUseCase(waitForAuth = false).fold(
+            val currentUserId = uiState.value.currentUserId ?: authQueryUseCase(waitForAuth = false).fold(
                 onSuccess = { it },
                 onFailure = { "" }
             )
@@ -185,8 +185,8 @@ class PublicProfileViewModel @Inject constructor(
      */
     private fun toggleLike(postId: String) {
         viewModelScope.launch {
-            val currentUserId = _uiState.value.currentUserId ?: return@launch
-            val isLiked = _uiState.value.likedPosts.contains(postId)
+            val currentUserId = uiState.value.currentUserId ?: return@launch
+            val isLiked = uiState.value.likedPosts.contains(postId)
             
             // Optimistic update
             updateState { currentState ->
@@ -224,8 +224,8 @@ class PublicProfileViewModel @Inject constructor(
      */
     private fun toggleSave(postId: String) {
         viewModelScope.launch {
-            val currentUserId = _uiState.value.currentUserId ?: return@launch
-            val isSaved = _uiState.value.savedPosts.contains(postId)
+            val currentUserId = uiState.value.currentUserId ?: return@launch
+            val isSaved = uiState.value.savedPosts.contains(postId)
             
             // Optimistic update
             updateState { currentState ->
@@ -262,7 +262,7 @@ class PublicProfileViewModel @Inject constructor(
      * Retries loading the profile after an error
      */
     private fun retryLoadProfile() {
-        val currentProfile = _uiState.value.profile
+        val currentProfile = uiState.value.profile
         if (currentProfile != null) {
             loadProfile(currentProfile.userId)
         } else {
@@ -274,7 +274,7 @@ class PublicProfileViewModel @Inject constructor(
      * Refreshes the current profile data
      */
     private fun refreshProfile() {
-        val currentProfile = _uiState.value.profile
+        val currentProfile = uiState.value.profile
         if (currentProfile != null) {
             // Set refreshing state but keep existing profile
             updateState { currentState ->
@@ -292,7 +292,7 @@ class PublicProfileViewModel @Inject constructor(
      * Toggles connection status with the user
      */
     private fun toggleConnection() {
-        val currentProfile = _uiState.value.profile
+        val currentProfile = uiState.value.profile
         if (currentProfile == null) {
             Timber.w("Cannot toggle connection - no profile loaded")
             return
@@ -360,27 +360,29 @@ class PublicProfileViewModel @Inject constructor(
                                 "target_user_id" to currentProfile.userId
                             )
                         )
-                        handleError(error)
-                        
                         updateState { currentState ->
-                            currentState.copy(isConnectionLoading = false)
+                            currentState.copy(
+                                error = error,
+                                isConnectionLoading = false
+                            )
                         }
-                        
-                        Timber.e(error, "Failed to toggle connection")
+
+                        Timber.e("Failed to toggle connection: ${error.message}")
                     }
                 )
-                
+
             } catch (exception: Exception) {
                 val error = LiftrixError.NetworkError(
                     errorMessage = "Failed to update connection status: ${exception.message}"
                 )
-                
-                handleError(error)
-                
+
                 updateState { currentState ->
-                    currentState.copy(isConnectionLoading = false)
+                    currentState.copy(
+                        error = error,
+                        isConnectionLoading = false
+                    )
                 }
-                
+
                 Timber.e(exception, "Failed to toggle connection")
             }
         }
@@ -400,21 +402,6 @@ class PublicProfileViewModel @Inject constructor(
         }
     }
 
-    override fun setLoadingState() {
-        updateState { currentState ->
-            currentState.copy(isLoading = true)
-        }
-    }
-
-    override fun updateErrorState(error: LiftrixError) {
-        updateState { currentState ->
-            currentState.copy(
-                error = error,
-                isLoading = false,
-                isConnectionLoading = false
-            )
-        }
-    }
 
     /**
      * Load current user ID
@@ -433,7 +420,7 @@ class PublicProfileViewModel @Inject constructor(
      * Block the user
      */
     private fun blockUser() {
-        val profile = _uiState.value.profile ?: return
+        val profile = uiState.value.profile ?: return
         
         viewModelScope.launch {
             try {
@@ -458,9 +445,12 @@ class PublicProfileViewModel @Inject constructor(
                         Timber.d("User blocked successfully: ${profile.userId}")
                     },
                     onFailure = { throwable ->
-                        val error = throwable as LiftrixError
-                        handleError(error)
-                        updateState { it.copy(isConnectionLoading = false) }
+                        val error = throwable as? LiftrixError ?: LiftrixError.BusinessLogicError(
+                            code = "BLOCK_USER_FAILED",
+                            errorMessage = "Failed to block user: ${throwable.message}",
+                            analyticsContext = mapOf("target_user_id" to profile.userId)
+                        )
+                        updateState { it.copy(error = error, isConnectionLoading = false) }
                         Timber.e("Failed to block user: ${error.message}")
                     }
                 )
@@ -468,8 +458,7 @@ class PublicProfileViewModel @Inject constructor(
                 val error = LiftrixError.NetworkError(
                     errorMessage = "Failed to block user: ${exception.message}"
                 )
-                handleError(error)
-                updateState { it.copy(isConnectionLoading = false) }
+                updateState { it.copy(error = error, isConnectionLoading = false) }
                 Timber.e(exception, "Failed to block user")
             }
         }
@@ -479,7 +468,7 @@ class PublicProfileViewModel @Inject constructor(
      * Report the profile
      */
     private fun reportProfile() {
-        val profile = _uiState.value.profile ?: return
+        val profile = uiState.value.profile ?: return
         
         viewModelScope.launch {
             try {
@@ -501,8 +490,8 @@ class PublicProfileViewModel @Inject constructor(
                     },
                     onFailure = { throwable ->
                         val error = throwable as LiftrixError
-                        handleError(error)
-                        updateState { it.copy(isConnectionLoading = false) }
+                        logError(error, "reportProfile")
+                        updateState { it.copy(isConnectionLoading = false, error = error) }
                         Timber.e("Failed to report profile: ${error.message}")
                     }
                 )
@@ -510,8 +499,8 @@ class PublicProfileViewModel @Inject constructor(
                 val error = LiftrixError.NetworkError(
                     errorMessage = "Failed to report profile: ${exception.message}"
                 )
-                handleError(error)
-                updateState { it.copy(isConnectionLoading = false) }
+                logError(error, "reportProfile")
+                updateState { it.copy(isConnectionLoading = false, error = error) }
                 Timber.e(exception, "Failed to report profile")
             }
         }

@@ -74,7 +74,7 @@ fun ContactSupportScreen(
         contract = ActivityResultContracts.GetMultipleContents()
     ) { uris ->
         uris.forEach { uri ->
-            viewModel.handleEvent(SupportEvent.AddAttachment(uri))
+            viewModel.addAttachment(uri)
         }
     }
     
@@ -135,7 +135,7 @@ fun ContactSupportScreen(
                 actions = {
                     // Clear form action
                     IconButton(
-                        onClick = { viewModel.handleEvent(SupportEvent.ClearForm) }
+                        onClick = { viewModel.clearForm() }
                     ) {
                         Icon(
                             imageVector = Icons.Default.Clear,
@@ -163,28 +163,28 @@ fun ContactSupportScreen(
                 SupportSuccessContent(
                     data = currentUiState.data,
                     onCategorySelected = { category ->
-                        viewModel.handleEvent(SupportEvent.UpdateCategory(category))
+                        viewModel.updateCategory(category)
                     },
                     onSubjectChanged = { subject ->
-                        viewModel.handleEvent(SupportEvent.UpdateSubject(subject))
+                        viewModel.updateSubject(subject)
                     },
                     onDescriptionChanged = { description ->
-                        viewModel.handleEvent(SupportEvent.UpdateDescription(description))
+                        viewModel.updateDescription(description)
                     },
                     onAddAttachment = {
-                        viewModel.handleEvent(SupportEvent.AddAttachment(it))
+                        viewModel.addAttachment(it)
                     },
                     onRemoveAttachment = { uri ->
-                        viewModel.handleEvent(SupportEvent.RemoveAttachment(uri))
+                        viewModel.removeAttachment(uri)
                     },
                     onSubmitTicket = {
-                        viewModel.handleEvent(SupportEvent.SubmitTicket)
+                        viewModel.submitTicket()
                     },
                     onRefresh = {
-                        viewModel.handleEvent(SupportEvent.RefreshTickets)
+                        viewModel.refreshTickets()
                     },
                     onTicketClicked = { ticketId ->
-                        viewModel.handleEvent(SupportEvent.ViewTicket(ticketId))
+                        viewModel.viewTicket(ticketId)
                     },
                     onShowFilePicker = {
                         filePickerLauncher.launch("*/*")
@@ -194,13 +194,13 @@ fun ContactSupportScreen(
                         .padding(paddingValues)
                 )
             }
-            
+
             is SupportUiState.Error -> {
                 SupportErrorContent(
                     error = currentUiState.error,
                     data = currentUiState.previousData ?: SupportUiState.Data(),
                     onRetry = {
-                        viewModel.handleEvent(SupportEvent.Retry)
+                        viewModel.retry()
                     },
                     modifier = Modifier
                         .fillMaxSize()
@@ -211,7 +211,7 @@ fun ContactSupportScreen(
             is SupportUiState.Empty -> {
                 SupportEmptyContent(
                     onRetry = {
-                        viewModel.handleEvent(SupportEvent.Retry)
+                        viewModel.retry()
                     },
                     modifier = Modifier
                         .fillMaxSize()

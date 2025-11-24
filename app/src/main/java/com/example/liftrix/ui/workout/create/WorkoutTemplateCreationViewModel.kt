@@ -1,11 +1,10 @@
 package com.example.liftrix.ui.workout.create
 
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.common.state.WorkoutTemplateCreationUiState
 import com.example.liftrix.ui.common.state.WorkoutTemplateCreationData
 import com.example.liftrix.ui.common.state.dataOrNull
 import com.example.liftrix.ui.common.event.ViewModelEvent
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.Equipment
 import com.example.liftrix.domain.model.ExerciseDefaults
@@ -53,13 +52,10 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
     private val exerciseQueryUseCase: ExerciseQueryUseCase,
     private val workoutQueryUseCase: WorkoutQueryUseCase,
     private val workoutTemplateRepository: WorkoutTemplateRepository,
-    private val folderRepository: FolderRepository,
-    errorHandler: ErrorHandler
-) : BaseViewModel<WorkoutTemplateCreationUiState, WorkoutTemplateCreationEvent>(errorHandler) {
-
-    override val _uiState = MutableStateFlow<WorkoutTemplateCreationUiState>(
-        WorkoutTemplateCreationUiState.Loading
-    )
+    private val folderRepository: FolderRepository
+) : ModernBaseViewModel<WorkoutTemplateCreationUiState>(
+    initialState = WorkoutTemplateCreationUiState.Loading
+) {
     
     private val _loadedTemplate = MutableStateFlow<WorkoutTemplate?>(null)
     val loadedTemplate: StateFlow<WorkoutTemplate?> = _loadedTemplate.asStateFlow()
@@ -77,9 +73,9 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
     }
 
     /**
-     * Handles events from the UI following BaseViewModel MVI pattern
+     * Handles events from the UI following MVI pattern
      */
-    override fun handleEvent(event: WorkoutTemplateCreationEvent) {
+    fun handleEvent(event: WorkoutTemplateCreationEvent) {
         when (event) {
             is WorkoutTemplateCreationEvent.CreateWorkout -> createWorkout(event.name, event.description, event.exercises, event.tags)
             is WorkoutTemplateCreationEvent.UpdateTemplate -> updateTemplate(event.templateId, event.name, event.description, event.exercises, event.tags)
@@ -102,25 +98,26 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
     }
 
     /**
-     * Override to handle loading state updates
+     * Handle error state updates
      */
-    override fun setLoadingState() {
-        setState(WorkoutTemplateCreationUiState.Loading)
-    }
-
-    /**
-     * Override to handle error state updates
-     */
-    override fun updateErrorState(error: com.example.liftrix.domain.model.error.LiftrixError) {
-        val currentData = _uiState.value.dataOrNull()
+    private fun updateErrorState(error: com.example.liftrix.domain.model.error.LiftrixError) {
+        val currentData = uiState.value.dataOrNull()
         val preservedData = currentData ?: cachedTemplateData ?: WorkoutTemplateCreationData()
-        
-        setState(
+
+        updateState {
             WorkoutTemplateCreationUiState.Error(
                 error = error,
                 previousData = preservedData
             )
-        )
+        }
+    }
+
+    /**
+     * Handle error with logging
+     */
+    private fun handleError(error: com.example.liftrix.domain.model.error.LiftrixError) {
+        logError(error, "WorkoutTemplateCreation")
+        updateErrorState(error)
     }
     
     /**
@@ -128,16 +125,16 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
      */
     private fun setStateWithBackup(state: WorkoutTemplateCreationUiState) {
         // Backup current data before state transition
-        val currentData = _uiState.value.dataOrNull()
+        val currentData = uiState.value.dataOrNull()
         if (currentData != null && currentData.exercises.isNotEmpty()) {
             cachedTemplateData = currentData
             cachedExercises.clear()
             cachedExercises.addAll(currentData.exercises)
             Timber.d("🔥 STATE-BACKUP: Cached ${cachedExercises.size} exercises before state transition")
         }
-        
-        setState(state)
-        
+
+        updateState { state }
+
         // Restore exercises from backup if they were lost during state transition
         val newData = state.dataOrNull()
         if (newData != null && newData.exercises.isEmpty() && cachedExercises.isNotEmpty()) {
@@ -145,7 +142,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
             val restoredState = WorkoutTemplateCreationUiState.Success(
                 data = newData.copy(exercises = cachedExercises.toList())
             )
-            setState(restoredState)
+            updateState { restoredState }
         }
     }
     
@@ -165,28 +162,30 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                             errorMessage = "Failed to get current user ID",
                             errorCode = "AUTH_QUERY_FAILED"
                         )
-                        _uiState.value = WorkoutTemplateCreationUiState.Error(authError)
+                        updateState { WorkoutTemplateCreationUiState.Error(authError) }
                         return@launch
                     }
                 )
                 Timber.d("🔥 INIT-DEBUG: User authenticated, initializing template creation for user: $userId")
                 
                 // Transition to success state with initial data
-                _uiState.value = WorkoutTemplateCreationUiState.Success(
-                    data = WorkoutTemplateCreationData(
-                        exercises = emptyList(),
-                        availableExercises = emptyList(),
-                        exerciseSearchQuery = "",
-                        selectedExercise = null,
-                        isExerciseSelectorExpanded = false,
-                        availableFolders = emptyList(),
-                        selectedFolderId = null,
-                        defaultFolderId = null,
-                        templateName = "",
-                        templateDescription = "",
-                        targetFolderId = null
+                updateState {
+                    WorkoutTemplateCreationUiState.Success(
+                        data = WorkoutTemplateCreationData(
+                            exercises = emptyList(),
+                            availableExercises = emptyList(),
+                            exerciseSearchQuery = "",
+                            selectedExercise = null,
+                            isExerciseSelectorExpanded = false,
+                            availableFolders = emptyList(),
+                            selectedFolderId = null,
+                            defaultFolderId = null,
+                            templateName = "",
+                            templateDescription = "",
+                            targetFolderId = null
+                        )
                     )
-                )
+                }
                 Timber.d("🔥 INIT-DEBUG: Initial state set successfully")
                 
                 // 🔥 CRITICAL FIX: Initialize components synchronously to prevent state races
@@ -220,7 +219,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                 
                 // 🔥 CRITICAL FIX: Verify state was actually set correctly
                 kotlinx.coroutines.delay(100) // Small delay to ensure state propagation
-                val verificationData = _uiState.value.dataOrNull()
+                val verificationData = uiState.value.dataOrNull()
                 Timber.d("🔥 STATE-VERIFY: Post-init verification - defaultFolderId: ${verificationData?.defaultFolderId?.value}, selectedFolderId: ${verificationData?.selectedFolderId?.value}")
                 Timber.d("🔥 STATE-VERIFY: Post-init verification - availableExercises: ${verificationData?.availableExercises?.size}, exercises: ${verificationData?.exercises?.size}")
                 
@@ -229,7 +228,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                     // Retry state setting if it failed
                     setStateWithBackup(WorkoutTemplateCreationUiState.Success(data = finalData))
                     kotlinx.coroutines.delay(50)
-                    val retryData = _uiState.value.dataOrNull()
+                    val retryData = uiState.value.dataOrNull()
                     Timber.d("🔥 STATE-VERIFY: Retry verification - defaultFolderId: ${retryData?.defaultFolderId?.value}")
                 }
                 
@@ -241,7 +240,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                 val error = com.example.liftrix.domain.model.error.LiftrixError.AuthenticationError(
                     errorMessage = "Authentication failed: ${exception.message}"
                 )
-                setState(WorkoutTemplateCreationUiState.Error(error))
+                updateState { WorkoutTemplateCreationUiState.Error(error) }
                 Timber.e(exception, "🔥 INIT-DEBUG: Error in initializeWhenAuthenticated")
             }
         }
@@ -282,16 +281,16 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                 val result = folderRepository.getOrCreateDefaultFolder(userId)
                 if (result.isSuccess) {
                     val defaultFolder = result.getOrNull()
-                    
+
                     // Update state with default folder
-                    val currentData = _uiState.value.dataOrNull()
+                    val currentData = uiState.value.dataOrNull()
                     if (currentData != null && defaultFolder != null) {
                         val updatedData = currentData.copy(
                             defaultFolderId = defaultFolder.id,
                             selectedFolderId = currentData.selectedFolderId ?: defaultFolder.id
                         )
-                        setState(WorkoutTemplateCreationUiState.Success(data = updatedData))
-                        
+                        updateState { WorkoutTemplateCreationUiState.Success(data = updatedData) }
+
                         // Verify the state was actually set
                         kotlinx.coroutines.delay(50) // Small delay to let state propagate
                     }
@@ -469,10 +468,12 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                     Timber.e(error, "Error loading available exercises")
                 }
                 .collect { exercises ->
-                    val currentData = _uiState.value.dataOrNull() ?: WorkoutTemplateCreationData()
-                    setState(WorkoutTemplateCreationUiState.Success(
-                        data = currentData.copy(availableExercises = exercises)
-                    ))
+                    val currentData = uiState.value.dataOrNull() ?: WorkoutTemplateCreationData()
+                    updateState {
+                        WorkoutTemplateCreationUiState.Success(
+                            data = currentData.copy(availableExercises = exercises)
+                        )
+                    }
                 }
         }
     }
@@ -503,7 +504,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
         Timber.d("🔥 CREATE-IN-FOLDER: Creating workout in folder: $folderId")
         
         // Set the target folder context in state first
-        val currentData = _uiState.value.dataOrNull() ?: WorkoutTemplateCreationData()
+        val currentData = uiState.value.dataOrNull() ?: WorkoutTemplateCreationData()
         val targetFolderId = com.example.liftrix.domain.model.FolderId(folderId)
         
         setStateWithBackup(WorkoutTemplateCreationUiState.Success(
@@ -534,8 +535,8 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
         exercises: List<TemplateExercise> = emptyList(),
         tags: Set<String> = emptySet()
     ) {
-        executeUseCase(
-            useCase = {
+        viewModelScope.launch {
+            try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = { error ->
@@ -543,7 +544,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                         throw IllegalStateException("Authentication failed")
                     }
                 )
-                val currentData = _uiState.value.dataOrNull() ?: WorkoutTemplateCreationData()
+                val currentData = uiState.value.dataOrNull() ?: WorkoutTemplateCreationData()
                 
                 // 🔥 CRITICAL FIX: Use exercises from parameter, UI state, or cached backup
                 val exercisesToSave = when {
@@ -673,49 +674,55 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                     val error = result.exceptionOrNull()
                     timber.log.Timber.e("🔥 TEMPLATE-VIEWMODEL-DEBUG: TemplateCommandUseCase.create() returned failure: ${error?.message}")
                     timber.log.Timber.e("🔥 TEMPLATE-VIEWMODEL-DEBUG: Error type: ${error?.javaClass?.simpleName}")
+
+                    val liftrixError = error as? LiftrixError ?: LiftrixError.UnknownError(
+                        errorMessage = error?.message ?: "Failed to create workout routine"
+                    )
+                    Timber.e("Failed to create workout routine: ${liftrixError.message}")
+                    handleError(liftrixError)
+                    return@launch
                 }
 
-                result
-            },
-            onSuccess = { template ->
+                val template = result.getOrNull()!!
+
                 // 🔥 STATE SYNC FIX: Update selectedFolderId to match where workout was created
-                val currentData = _uiState.value.dataOrNull() ?: WorkoutTemplateCreationData()
+                val successData = uiState.value.dataOrNull() ?: WorkoutTemplateCreationData()
                 val createdFolderId = template.folderId?.let { com.example.liftrix.domain.model.FolderId(it) }
-                
+
                 Timber.d("🔥 SUCCESS-DEBUG: Template created successfully: ${template.name}")
                 Timber.d("🔥 SUCCESS-DEBUG: Template assigned to folder: ${template.folderId}")
-                Timber.d("🔥 SUCCESS-DEBUG: Current available folders: ${currentData.availableFolders.size}")
+                Timber.d("🔥 SUCCESS-DEBUG: Current available folders: ${successData.availableFolders.size}")
                 Timber.d("🔥 SUCCESS-DEBUG: Preserving all state data in success callback")
-                
+
                 setStateWithBackup(WorkoutTemplateCreationUiState.Success(
-                    data = currentData.copy(
+                    data = successData.copy(
                         template = template,
                         exercises = template.exercises,
                         selectedFolderId = createdFolderId, // 🔥 KEY FIX: Sync UI to show newly created workout
                         // 🔥 CRITICAL FIX: Preserve all existing state data
-                        availableExercises = currentData.availableExercises,
-                        availableFolders = currentData.availableFolders, // Keep folders visible!
-                        defaultFolderId = currentData.defaultFolderId,
-                        exerciseSearchQuery = currentData.exerciseSearchQuery,
-                        selectedExercise = currentData.selectedExercise,
-                        isExerciseSelectorExpanded = currentData.isExerciseSelectorExpanded
+                        availableExercises = successData.availableExercises,
+                        availableFolders = successData.availableFolders, // Keep folders visible!
+                        defaultFolderId = successData.defaultFolderId,
+                        exerciseSearchQuery = successData.exerciseSearchQuery,
+                        selectedExercise = successData.selectedExercise,
+                        isExerciseSelectorExpanded = successData.isExerciseSelectorExpanded
                     )
                 ))
-                
+
                 Timber.i("🔥 STATE-SYNC: Workout created in folder ${template.folderId}, updated selectedFolderId to match")
-                Timber.i("🔥 STATE-SYNC: Preserved ${currentData.availableFolders.size} folders in state")
+                Timber.i("🔥 STATE-SYNC: Preserved ${successData.availableFolders.size} folders in state")
                 Timber.i("Workout routine created successfully: ${template.name} in folder ${template.folderId}")
-                
+
                 // Emit navigation event to go back after successful creation
-                viewModelScope.launch {
-                    _navigationEvents.emit(NavigationEvent.NavigateBack)
-                }
-            },
-            onError = { error ->
-                Timber.e("Failed to create workout routine: ${error.message}")
-            },
-            showLoading = false  // 🔥 CRITICAL FIX: Prevent state reset during template creation
-        )
+                _navigationEvents.emit(NavigationEvent.NavigateBack)
+            } catch (e: Exception) {
+                val liftrixError = e as? LiftrixError ?: LiftrixError.UnknownError(
+                    errorMessage = e.message ?: "Failed to create workout routine"
+                )
+                Timber.e("Failed to create workout routine: ${liftrixError.message}")
+                handleError(liftrixError)
+            }
+        }
     }
     
     /**
@@ -728,19 +735,32 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
         exercises: List<TemplateExercise> = emptyList(),
         tags: Set<String> = emptySet()
     ) {
-        executeUseCase(
-            useCase = {
+        viewModelScope.launch {
+            try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = { error ->
-                        Timber.e("Failed to get userId for template update: $error")
-                        throw IllegalStateException("Authentication failed")
+                        logError(error, "updateTemplate_auth")
+                        val authError = error as? LiftrixError ?: LiftrixError.AuthenticationError(
+                            errorMessage = "Authentication failed",
+                            errorCode = "AUTH_FAILED"
+                        )
+                        updateState { WorkoutTemplateCreationUiState.Error(authError) }
+                        return@launch
                     }
                 )
 
                 val loadedTemplate = _loadedTemplate.value
-                    ?: throw IllegalStateException("No template loaded for editing")
-                
+                if (loadedTemplate == null) {
+                    val error = LiftrixError.ValidationError(
+                        field = "template",
+                        violations = listOf("No template loaded for editing")
+                    )
+                    logError(error, "updateTemplate_noTemplate")
+                    updateState { WorkoutTemplateCreationUiState.Error(error) }
+                    return@launch
+                }
+
                 // Create updated workout routine preserving metadata
                 val updatedTemplate = loadedTemplate.copy(
                     name = name.trim(),
@@ -753,30 +773,37 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                     },
                     updatedAt = java.time.Instant.now()
                 )
-                
-                workoutTemplateRepository.updateTemplate(updatedTemplate)
-            },
-            onSuccess = { template ->
-                // 🔥 CRITICAL FIX: Preserve existing state data during template update
-                val currentData = _uiState.value.dataOrNull() ?: WorkoutTemplateCreationData()
-                setStateWithBackup(WorkoutTemplateCreationUiState.Success(
-                    data = currentData.copy(
-                        template = template,
-                        exercises = template.exercises // Update with saved template exercises
-                    )
-                ))
-                Timber.i("Workout routine updated successfully: ${template.name}")
-                
-                // Emit navigation event to go back after successful update
-                viewModelScope.launch {
+
+                val result = workoutTemplateRepository.updateTemplate(updatedTemplate)
+
+                result.onSuccess { template ->
+                    // 🔥 CRITICAL FIX: Preserve existing state data during template update
+                    val currentData = uiState.value.dataOrNull() ?: WorkoutTemplateCreationData()
+                    setStateWithBackup(WorkoutTemplateCreationUiState.Success(
+                        data = currentData.copy(
+                            template = template,
+                            exercises = template.exercises // Update with saved template exercises
+                        )
+                    ))
+                    Timber.i("Workout routine updated successfully: ${template.name}")
+
+                    // Emit navigation event to go back after successful update
                     _navigationEvents.emit(NavigationEvent.NavigateBack)
+                }.onFailure { error ->
+                    logError(error, "updateTemplate")
+                    val liftrixError = error as? LiftrixError ?: LiftrixError.UnknownError(
+                        errorMessage = error.message ?: "Failed to update workout routine"
+                    )
+                    updateState { WorkoutTemplateCreationUiState.Error(liftrixError) }
                 }
-            },
-            onError = { error ->
-                Timber.e("Failed to update workout routine: ${error.message}")
-            },
-            showLoading = false  // 🔥 CRITICAL FIX: Prevent state reset during template update
-        )
+            } catch (e: Exception) {
+                logError(e, "updateTemplate_exception")
+                val error = LiftrixError.UnknownError(
+                    errorMessage = e.message ?: "Failed to update workout routine"
+                )
+                updateState { WorkoutTemplateCreationUiState.Error(error) }
+            }
+        }
     }
     
     /**
@@ -786,29 +813,29 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
         timber.log.Timber.d("🔥 ADD-EXERCISE-DEBUG: Adding exercise: ${exercise.name}")
         timber.log.Timber.d("🔥 ADD-EXERCISE-DEBUG: Exercise instanceId: ${exercise.instanceId}")
         timber.log.Timber.d("🔥 ADD-EXERCISE-DEBUG: Exercise targetSets: ${exercise.targetSets}")
-        val currentData = _uiState.value.dataOrNull() ?: WorkoutTemplateCreationData()
+        val currentData = uiState.value.dataOrNull() ?: WorkoutTemplateCreationData()
         timber.log.Timber.d("🔥 ADD-EXERCISE-DEBUG: Current exercises before add: ${currentData.exercises.size}")
         timber.log.Timber.d("🔥 ADD-EXERCISE-DEBUG: Current exercises instanceIds: ${currentData.exercises.map { "${it.name}: ${it.instanceId}" }}")
-        
+
         val newExercise = exercise.copy(
             orderIndex = currentData.exercises.size,
             instanceId = exercise.instanceId // Explicitly preserve instanceId
         )
         timber.log.Timber.d("🔥 ADD-EXERCISE-DEBUG: New exercise instanceId after copy: ${newExercise.instanceId}")
         timber.log.Timber.d("🔥 ADD-EXERCISE-DEBUG: New exercise targetSets after copy: ${newExercise.targetSets}")
-        
+
         val updatedExercises = currentData.exercises + newExercise
         timber.log.Timber.d("🔥 ADD-EXERCISE-DEBUG: Updated exercises after add: ${updatedExercises.size}")
         timber.log.Timber.d("🔥 ADD-EXERCISE-DEBUG: All exercise instanceIds: ${updatedExercises.map { "${it.name}: ${it.instanceId}" }}")
-        
+
         // Use backup-aware setState method for consistency
         setStateWithBackup(WorkoutTemplateCreationUiState.Success(
             data = currentData.copy(exercises = updatedExercises)
         ))
         timber.log.Timber.d("🔥 ADD-EXERCISE-DEBUG: State update completed using setState()")
-        
+
         // Verify state was set correctly
-        val verifyData = _uiState.value.dataOrNull()
+        val verifyData = uiState.value.dataOrNull()
         timber.log.Timber.d("🔥 ADD-EXERCISE-DEBUG: State verification - exercises count: ${verifyData?.exercises?.size}")
         timber.log.Timber.d("🔥 ADD-EXERCISE-DEBUG: State verification - exercises list: ${verifyData?.exercises?.map { it.name }}")
     }
@@ -820,12 +847,12 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
         timber.log.Timber.d("🔥 ADD-FROM-SELECTOR-DEBUG: Adding exercise from selector")
         val templateExercise = convertSearchableExerciseToTemplateExercise(searchableExercise)
         timber.log.Timber.d("🔥 ADD-FROM-SELECTOR-DEBUG: Converted to template exercise: ${templateExercise.name}")
-        
+
         addExercise(templateExercise)
         timber.log.Timber.d("🔥 ADD-FROM-SELECTOR-DEBUG: addExercise completed")
-        
+
         // Clear selection after adding - but preserve exercises!
-        val currentData = _uiState.value.dataOrNull()
+        val currentData = uiState.value.dataOrNull()
         timber.log.Timber.d("🔥 ADD-FROM-SELECTOR-DEBUG: Current data after addExercise: exercises=${currentData?.exercises?.size}")
         if (currentData != null) {
             // Use backup-aware setState method for consistency
@@ -837,9 +864,9 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                 )
             ))
             timber.log.Timber.d("🔥 ADD-FROM-SELECTOR-DEBUG: State cleared using setState(), exercises preserved: ${currentData.exercises.size}")
-            
+
             // Final verification
-            val finalData = _uiState.value.dataOrNull()
+            val finalData = uiState.value.dataOrNull()
             timber.log.Timber.d("🔥 ADD-FROM-SELECTOR-DEBUG: Final verification - exercises count: ${finalData?.exercises?.size}")
         }
     }
@@ -898,7 +925,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
             timber.log.Timber.d("🔥 TEMPLATE-VIEWMODEL-DEBUG: Smart defaults application started")
             
             // Debug current state
-            val currentData = _uiState.value.dataOrNull()
+            val currentData = uiState.value.dataOrNull()
             if (currentData != null) {
                 timber.log.Timber.d("🔥 WORKOUT-VIEWMODEL-DEBUG: Current workout routine exercises count: ${currentData.exercises.size}")
                 timber.log.Timber.d("🔥 WORKOUT-VIEWMODEL-DEBUG: Workout routine exercises: ${currentData.exercises.map { it.name }}")
@@ -953,9 +980,9 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                 )
 
                 timber.log.Timber.d("🔥 SMART-DEFAULTS-DEBUG: Starting smart defaults for ${exerciseLibrary.name}")
-                
+
                 // Verify the exercise still exists in the current state before applying defaults
-                val currentData = _uiState.value.dataOrNull()
+                val currentData = uiState.value.dataOrNull()
                 val exerciseExists = currentData?.exercises?.any { it.exerciseId == templateExercise.exerciseId } == true
                 
                 if (!exerciseExists) {
@@ -992,11 +1019,11 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
      */
     private fun updateExerciseWithDefaults(exerciseId: ExerciseId, defaults: ExerciseDefaults) {
         timber.log.Timber.d("🔥 DEFAULTS-DEBUG: Updating exercise ${exerciseId.value} with defaults")
-        val currentData = _uiState.value.dataOrNull()
+        val currentData = uiState.value.dataOrNull()
         if (currentData != null) {
             timber.log.Timber.d("🔥 DEFAULTS-DEBUG: Current exercises before defaults: ${currentData.exercises.size}")
             timber.log.Timber.d("🔥 DEFAULTS-DEBUG: Exercise names: ${currentData.exercises.map { it.name }}")
-            
+
             val updatedExercises = currentData.exercises.map { exercise ->
                 if (exercise.exerciseId == exerciseId) {
                     timber.log.Timber.d("🔥 DEFAULTS-DEBUG: Applying defaults to ${exercise.name}")
@@ -1005,14 +1032,14 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                     exercise
                 }
             }
-            
+
             timber.log.Timber.d("🔥 DEFAULTS-DEBUG: Updated exercises after defaults: ${updatedExercises.size}")
             setStateWithBackup(WorkoutTemplateCreationUiState.Success(
                 data = currentData.copy(exercises = updatedExercises)
             ))
-            
+
             // Verify the update didn't lose exercises
-            val verifyData = _uiState.value.dataOrNull()
+            val verifyData = uiState.value.dataOrNull()
             timber.log.Timber.d("🔥 DEFAULTS-DEBUG: Verification - exercises count: ${verifyData?.exercises?.size}")
         } else {
             timber.log.Timber.w("🔥 DEFAULTS-DEBUG: No current data available for defaults update")
@@ -1025,7 +1052,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
     private fun updateEstimatedDuration() {
         viewModelScope.launch {
             try {
-                val currentData = _uiState.value.dataOrNull()
+                val currentData = uiState.value.dataOrNull()
                 if (currentData != null && currentData.exercises.isNotEmpty()) {
                     val userId = authQueryUseCase(waitForAuth = false).fold(
                         onSuccess = { it },
@@ -1107,11 +1134,13 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
      * Updates exercise search query
      */
     fun onExerciseSearchQueryChanged(query: String) {
-        val currentData = _uiState.value.dataOrNull()
+        val currentData = uiState.value.dataOrNull()
         if (currentData != null) {
-            setState(WorkoutTemplateCreationUiState.Success(
-                data = currentData.copy(exerciseSearchQuery = query)
-            ))
+            updateState {
+                WorkoutTemplateCreationUiState.Success(
+                    data = currentData.copy(exerciseSearchQuery = query)
+                )
+            }
 
             // Perform search
             viewModelScope.launch {
@@ -1120,11 +1149,13 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                         Timber.e(error, "Error searching exercises")
                     }
                     .collect { exercises ->
-                        val updatedData = _uiState.value.dataOrNull()
+                        val updatedData = uiState.value.dataOrNull()
                         if (updatedData != null) {
-                            setState(WorkoutTemplateCreationUiState.Success(
-                                data = updatedData.copy(availableExercises = exercises)
-                            ))
+                            updateState {
+                                WorkoutTemplateCreationUiState.Success(
+                                    data = updatedData.copy(availableExercises = exercises)
+                                )
+                            }
                         }
                     }
             }
@@ -1135,11 +1166,13 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
      * Updates selected exercise
      */
     fun onExerciseSelected(exercise: SearchableExercise?) {
-        val currentData = _uiState.value.dataOrNull()
+        val currentData = uiState.value.dataOrNull()
         if (currentData != null) {
-            setState(WorkoutTemplateCreationUiState.Success(
-                data = currentData.copy(selectedExercise = exercise)
-            ))
+            updateState {
+                WorkoutTemplateCreationUiState.Success(
+                    data = currentData.copy(selectedExercise = exercise)
+                )
+            }
         }
     }
     
@@ -1173,11 +1206,13 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
      * Updates exercise selector expanded state
      */
     fun onExerciseSelectorExpandedChanged(expanded: Boolean) {
-        val currentData = _uiState.value.dataOrNull()
+        val currentData = uiState.value.dataOrNull()
         if (currentData != null) {
-            setState(WorkoutTemplateCreationUiState.Success(
-                data = currentData.copy(isExerciseSelectorExpanded = expanded)
-            ))
+            updateState {
+                WorkoutTemplateCreationUiState.Success(
+                    data = currentData.copy(isExerciseSelectorExpanded = expanded)
+                )
+            }
         }
     }
     
@@ -1185,16 +1220,16 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
      * Removes an exercise from the template
      */
     fun removeExercise(exercise: TemplateExercise) {
-        val currentData = _uiState.value.dataOrNull()
+        val currentData = uiState.value.dataOrNull()
         if (currentData != null) {
             val updatedExercises = currentData.exercises
                 .filter { it.instanceId != exercise.instanceId }
                 .mapIndexed { index, ex -> ex.copy(orderIndex = index) }
-            
+
             // Update cache to prevent data loss
             cachedExercises.clear()
             cachedExercises.addAll(updatedExercises)
-            
+
             setStateWithBackup(WorkoutTemplateCreationUiState.Success(
                 data = currentData.copy(exercises = updatedExercises)
             ))
@@ -1206,7 +1241,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
      * Reorders exercises in the template
      */
     fun reorderExercises(fromIndex: Int, toIndex: Int) {
-        val currentData = _uiState.value.dataOrNull()
+        val currentData = uiState.value.dataOrNull()
         if (currentData != null) {
             val exercises = currentData.exercises.toMutableList()
             if (fromIndex in exercises.indices && toIndex in exercises.indices) {
@@ -1218,11 +1253,11 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                         instanceId = exercise.instanceId // Preserve instanceId
                     )
                 }
-                
+
                 // Update cache to prevent data loss
                 cachedExercises.clear()
                 cachedExercises.addAll(reorderedExercises)
-                
+
                 setStateWithBackup(WorkoutTemplateCreationUiState.Success(
                     data = currentData.copy(exercises = reorderedExercises)
                 ))
@@ -1235,7 +1270,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
      * Updates an exercise in the template
      */
     fun updateExercise(updatedExercise: TemplateExercise) {
-        val currentData = _uiState.value.dataOrNull()
+        val currentData = uiState.value.dataOrNull()
         if (currentData != null) {
             val updatedExercises = currentData.exercises.map { exercise ->
                 // Use instanceId for unique identification instead of just exerciseId
@@ -1246,11 +1281,11 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                     exercise
                 }
             }
-            
+
             // Update cache to prevent data loss
             cachedExercises.clear()
             cachedExercises.addAll(updatedExercises)
-            
+
             setStateWithBackup(WorkoutTemplateCreationUiState.Success(
                 data = currentData.copy(exercises = updatedExercises)
             ))
@@ -1262,21 +1297,23 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
      * Resets the creation state back to editing
      */
     fun resetToEditing() {
-        val currentData = _uiState.value.dataOrNull()
+        val currentData = uiState.value.dataOrNull()
         val exercises = currentData?.exercises ?: emptyList()
-        
-        setState(WorkoutTemplateCreationUiState.Success(
-            data = WorkoutTemplateCreationData(
-                exercises = exercises,
-                availableExercises = emptyList(),
-                exerciseSearchQuery = "",
-                selectedExercise = null,
-                isExerciseSelectorExpanded = false,
-                availableFolders = currentData?.availableFolders ?: emptyList(),
-                selectedFolderId = currentData?.selectedFolderId,
-                defaultFolderId = currentData?.defaultFolderId
+
+        updateState {
+            WorkoutTemplateCreationUiState.Success(
+                data = WorkoutTemplateCreationData(
+                    exercises = exercises,
+                    availableExercises = emptyList(),
+                    exerciseSearchQuery = "",
+                    selectedExercise = null,
+                    isExerciseSelectorExpanded = false,
+                    availableFolders = currentData?.availableFolders ?: emptyList(),
+                    selectedFolderId = currentData?.selectedFolderId,
+                    defaultFolderId = currentData?.defaultFolderId
+                )
             )
-        ))
+        }
         loadAvailableExercises()
     }
     
@@ -1285,7 +1322,7 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
      * 🔥 FIXED: Use WorkoutTemplateCreationData validation logic (allows empty templates)
      */
     fun isValidForCreation(name: String): Boolean {
-        val currentData = _uiState.value.dataOrNull()
+        val currentData = uiState.value.dataOrNull()
         return currentData?.isValidForCreation(name) == true
     }
     
@@ -1315,19 +1352,21 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                     val template = templateResult.getOrNull()
                     if (template != null) {
                         _loadedTemplate.value = template
-                        val currentData = _uiState.value.dataOrNull()
-                        setState(WorkoutTemplateCreationUiState.Success(
-                            data = WorkoutTemplateCreationData(
-                                exercises = template.exercises,
-                                availableExercises = currentData?.availableExercises ?: emptyList(),
-                                exerciseSearchQuery = "",
-                                selectedExercise = null,
-                                isExerciseSelectorExpanded = false,
-                                availableFolders = currentData?.availableFolders ?: emptyList(),
-                                selectedFolderId = template.folderId?.let { com.example.liftrix.domain.model.FolderId(it) },
-                                defaultFolderId = currentData?.defaultFolderId
+                        val currentData = uiState.value.dataOrNull()
+                        updateState {
+                            WorkoutTemplateCreationUiState.Success(
+                                data = WorkoutTemplateCreationData(
+                                    exercises = template.exercises,
+                                    availableExercises = currentData?.availableExercises ?: emptyList(),
+                                    exerciseSearchQuery = "",
+                                    selectedExercise = null,
+                                    isExerciseSelectorExpanded = false,
+                                    availableFolders = currentData?.availableFolders ?: emptyList(),
+                                    selectedFolderId = template.folderId?.let { com.example.liftrix.domain.model.FolderId(it) },
+                                    defaultFolderId = currentData?.defaultFolderId
+                                )
                             )
-                        ))
+                        }
                     } else {
                         val error = com.example.liftrix.domain.model.error.LiftrixError.NotFoundError(
                             errorMessage = "Template not found",
@@ -1388,8 +1427,8 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                             Timber.d("🔥 FOLDERS-DEBUG: Job cancelled, skipping state update")
                             return@collect
                         }
-                        
-                        val currentData = _uiState.value.dataOrNull() ?: WorkoutTemplateCreationData()
+
+                        val currentData = uiState.value.dataOrNull() ?: WorkoutTemplateCreationData()
                         val defaultFolder = folders.firstOrNull { it.isDefault() }
                         
                         Timber.d("🔥 FOLDERS-DEBUG: Loaded ${folders.size} folders, default: ${defaultFolder?.id?.value}")
@@ -1438,8 +1477,8 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                             defaultFolderId = preservedDefaultId,
                             selectedFolderId = preservedSelectedId
                         )
-                        
-                        setState(WorkoutTemplateCreationUiState.Success(data = updatedData))
+
+                        updateState { WorkoutTemplateCreationUiState.Success(data = updatedData) }
                         
                         Timber.d("🔥 FOLDERS-DEBUG: Preserved folder IDs - defaultFolderId: ${preservedDefaultId?.value}, selectedFolderId: ${preservedSelectedId?.value}")
                         Timber.d("🔥 FOLDERS-DEBUG: Folder state updated successfully")
@@ -1452,16 +1491,18 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
                 
                 // 🔥 FIXED: Don't create phantom fallback folders - let UI handle gracefully
                 Timber.d("🔥 FOLDERS-DEBUG: Using graceful error handling - no phantom folders")
-                val currentData = _uiState.value.dataOrNull()
+                val currentData = uiState.value.dataOrNull()
                 if (currentData != null) {
                     // Set empty folder list and null IDs - UI should show "create folder" options
-                    setState(WorkoutTemplateCreationUiState.Success(
-                        data = currentData.copy(
-                            availableFolders = emptyList(),
-                            defaultFolderId = null,
-                            selectedFolderId = null
+                    updateState {
+                        WorkoutTemplateCreationUiState.Success(
+                            data = currentData.copy(
+                                availableFolders = emptyList(),
+                                defaultFolderId = null,
+                                selectedFolderId = null
+                            )
                         )
-                    ))
+                    }
                     Timber.d("🔥 FOLDERS-DEBUG: Set empty folder state - UI will handle folder creation")
                 }
             }
@@ -1472,11 +1513,13 @@ class WorkoutTemplateCreationViewModel @Inject constructor(
      * Selects a folder for the template
      */
     fun selectFolder(folderId: com.example.liftrix.domain.model.FolderId) {
-        val currentData = _uiState.value.dataOrNull()
+        val currentData = uiState.value.dataOrNull()
         if (currentData != null) {
-            setState(WorkoutTemplateCreationUiState.Success(
-                data = currentData.copy(selectedFolderId = folderId)
-            ))
+            updateState {
+                WorkoutTemplateCreationUiState.Success(
+                    data = currentData.copy(selectedFolderId = folderId)
+                )
+            }
             Timber.d("Selected folder: ${folderId.value}")
         }
     }

@@ -7,8 +7,6 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.Serializable
-import com.example.liftrix.ui.common.event.ViewModelEvent
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.ui.common.state.StateCleanupManager
 import timber.log.Timber
 
@@ -31,11 +29,11 @@ import timber.log.Timber
  * @HiltViewModel
  * class MyDetailViewModel @Inject constructor(
  *     savedStateHandle: SavedStateHandle,
- *     private val myUseCase: MyUseCase,
- *     errorHandler: ErrorHandler
- * ) : StatefulDetailViewModel<MyUiState, MyEvent>(savedStateHandle, errorHandler) {
- * 
- *     override val _uiState = MutableStateFlow(MyUiState.Loading)
+ *     private val myUseCase: MyUseCase
+ * ) : StatefulDetailViewModel<MyUiState>(
+ *     initialState = MyUiState.Loading,
+ *     savedStateHandle = savedStateHandle
+ * ) {
  * 
  *     // Persisted state properties
  *     private val _timeRange = savedStateFlow(
@@ -51,14 +49,13 @@ import timber.log.Timber
  * ```
  * 
  * @param S The UI state type
- * @param E The event type that extends ViewModelEvent
+ * @param initialState The initial state value
  * @param savedStateHandle Android's SavedStateHandle for state persistence
- * @param errorHandler Centralized error handler for consistent error processing
  */
-abstract class StatefulDetailViewModel<S, E : ViewModelEvent>(
-    protected val savedStateHandle: SavedStateHandle,
-    errorHandler: ErrorHandler
-) : BaseViewModel<S, E>(errorHandler), StateCleanupManager.StateCleanupAware {
+abstract class StatefulDetailViewModel<S : Any>(
+    initialState: S,
+    protected val savedStateHandle: SavedStateHandle
+) : ModernBaseViewModel<S>(initialState), StateCleanupManager.StateCleanupAware {
 
     companion object {
         private const val STATE_VERSION_KEY = "state_version"

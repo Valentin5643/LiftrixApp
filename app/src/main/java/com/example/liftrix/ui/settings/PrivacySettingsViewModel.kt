@@ -1,62 +1,58 @@
 package com.example.liftrix.ui.settings
 
-import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.SocialPrivacySettings
 import com.example.liftrix.domain.model.social.ProfileVisibility
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.repository.social.SocialPrivacySettingsRepository
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.social.SocialProfileCommandUseCase
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.state.UiState
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
+import com.example.liftrix.domain.model.error.LiftrixError
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 
 /**
  * ViewModel for privacy settings screen managing social privacy preferences.
- * 
+ *
  * Handles:
  * - Loading and displaying current privacy settings
  * - Updating privacy settings with immediate effect
  * - Master social toggle with confirmation dialogs
  * - Account management actions (disable social, delete data)
  * - Real-time updates when settings change
- * 
+ *
  * Part of social infrastructure foundation from SPEC-20250113-social-infrastructure.
  */
 @HiltViewModel
 class PrivacySettingsViewModel @Inject constructor(
     private val privacySettingsRepository: SocialPrivacySettingsRepository,
     private val socialProfileCommandUseCase: SocialProfileCommandUseCase,
-    private val authQueryUseCase: AuthQueryUseCase,
-    errorHandler: ErrorHandler
-) : BaseViewModel<PrivacySettingsUiState, PrivacySettingsEvent>(errorHandler) {
-
-    override val _uiState = MutableStateFlow(
-        PrivacySettingsUiState(
-            privacySettingsState = UiState.Loading,
-            isLoading = false,
-            isUpdatingSettings = false,
-            isDeletingData = false,
-            successMessage = null,
-            errorMessage = null,
-            showDisableSocialConfirmation = false,
-            showDeleteDataConfirmation = false
-        )
+    private val authQueryUseCase: AuthQueryUseCase
+) : ModernBaseViewModel<PrivacySettingsUiState>(
+    initialState = PrivacySettingsUiState(
+        privacySettingsState = UiState.Loading,
+        isLoading = false,
+        isUpdatingSettings = false,
+        isDeletingData = false,
+        successMessage = null,
+        errorMessage = null,
+        showDisableSocialConfirmation = false,
+        showDeleteDataConfirmation = false
     )
+) {
 
     init {
         loadPrivacySettings()
         observePrivacySettingsChanges()
     }
 
-    override fun handleEvent(event: PrivacySettingsEvent) {
+    fun handleEvent(event: PrivacySettingsEvent) {
         when (event) {
             is PrivacySettingsEvent.LoadPrivacySettings -> loadPrivacySettings()
             is PrivacySettingsEvent.CreateDefaultSettings -> createDefaultSettings()
@@ -81,97 +77,129 @@ class PrivacySettingsViewModel @Inject constructor(
         }
     }
 
-    override fun setLoadingState() {
-        updateState { it.copy(isLoading = true) }
-    }
-
-    override fun updateErrorState(error: LiftrixError) {
-        updateState { 
-            it.copy(
-                isLoading = false,
-                isUpdatingSettings = false,
-                isDeletingData = false,
-                errorMessage = error.message
-            )
-        }
-    }
-
     private fun loadPrivacySettings() {
-        executeUseCase(
-            useCase = {
+        viewModelScope.launch {
+            try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = { throw IllegalStateException("User not authenticated") }
                 )
-                privacySettingsRepository.getPrivacySettings(userId)
-            },
-            onSuccess = { settings ->
-                updateState { 
-                    it.copy(
-                        privacySettingsState = if (settings != null) {
+                val result = privacySettingsRepository.getPrivacySettings(userId)
+                result.fold(
+                    onSuccess = { settings ->
+                        val newState: UiState<SocialPrivacySettings> = if (settings != null) {
                             UiState.Success(settings)
                         } else {
                             UiState.Empty()
                         }
+                        updateState {
+                            it.copy(privacySettingsState = newState)
+                        }
+                    },
+                    onFailure = { throwable ->
+                        val liftrixError = if (throwable is LiftrixError) {
+                            throwable
+                        } else {
+                            LiftrixError.UnknownError(
+                                errorMessage = throwable.message ?: "Failed to load privacy settings"
+                            )
+                        }
+                        val errorState: UiState<SocialPrivacySettings> = UiState.Error(liftrixError)
+                        updateState {
+                            it.copy(
+                                privacySettingsState = errorState,
+                                isLoading = false,
+                                errorMessage = liftrixError.message
+                            )
+                        }
+                    }
+                )
+            } catch (e: Exception) {
+                logError(e, "loadPrivacySettings")
+                val errorState: UiState<SocialPrivacySettings> = UiState.Error(
+                    LiftrixError.UnknownError(
+                        errorMessage = e.message ?: "Failed to load privacy settings",
+                        analyticsContext = mapOf("operation" to "LOAD_PRIVACY_SETTINGS")
+                    )
+                )
+                updateState {
+                    it.copy(
+                        privacySettingsState = errorState,
+                        isLoading = false,
+                        errorMessage = e.message
                     )
                 }
-            },
-            onError = { error ->
-                updateState { 
-                    it.copy(privacySettingsState = UiState.Error(error))
-                }
-                handleError(error)
             }
-        )
+        }
     }
 
     private fun observePrivacySettingsChanges() {
-        executeUseCase(
-            useCase = {
+        viewModelScope.launch {
+            try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = { throw IllegalStateException("User not authenticated") }
                 )
                 privacySettingsRepository.observePrivacySettings(userId)
                     .onEach { settings ->
-                        updateState { 
-                            it.copy(
-                                privacySettingsState = if (settings != null) {
-                                    UiState.Success(settings)
-                                } else {
-                                    UiState.Empty()
-                                }
-                            )
+                        val newState: UiState<SocialPrivacySettings> = if (settings != null) {
+                            UiState.Success(settings)
+                        } else {
+                            UiState.Empty()
+                        }
+                        updateState {
+                            it.copy(privacySettingsState = newState)
                         }
                     }
                     .launchIn(viewModelScope)
-                Result.success(Unit)
-            },
-            showLoading = false
-        )
+            } catch (e: Exception) {
+                logError(e, "observePrivacySettingsChanges")
+            }
+        }
     }
 
     private fun createDefaultSettings() {
-        executeUseCase(
-            useCase = {
+        viewModelScope.launch {
+            try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = { throw IllegalStateException("User not authenticated") }
                 )
-                privacySettingsRepository.createPrivacySettings(userId)
-            },
-            onSuccess = { settings ->
-                updateState { 
+                val result = privacySettingsRepository.createPrivacySettings(userId)
+                result.fold(
+                    onSuccess = { settings ->
+                        val newState: UiState<SocialPrivacySettings> = UiState.Success(settings)
+                        updateState {
+                            it.copy(
+                                privacySettingsState = newState,
+                                successMessage = "Privacy settings created successfully"
+                            )
+                        }
+                    },
+                    onFailure = { throwable ->
+                        val errorMessage = if (throwable is LiftrixError) {
+                            throwable.message
+                        } else {
+                            throwable.message ?: "Failed to create default settings"
+                        }
+                        updateState {
+                            it.copy(
+                                isLoading = false,
+                                errorMessage = errorMessage
+                            )
+                        }
+                    }
+                )
+            } catch (e: Exception) {
+                logError(e, "createDefaultSettings")
+                updateState {
                     it.copy(
-                        privacySettingsState = UiState.Success(settings),
-                        successMessage = "Privacy settings created successfully"
+                        isLoading = false,
+                        errorMessage = e.message
                     )
                 }
-            },
-            onError = { error ->
-                handleError(error)
             }
-        )
+        }
     }
 
     private fun toggleSocialEnabled(enabled: Boolean) {
@@ -180,7 +208,7 @@ class PrivacySettingsViewModel @Inject constructor(
             showDisableSocialConfirmation()
             return
         }
-        
+
         updateSetting { it.copy(socialEnabled = enabled) }
     }
 
@@ -221,7 +249,7 @@ class PrivacySettingsViewModel @Inject constructor(
     }
 
     private fun updateSetting(transform: (SocialPrivacySettings) -> SocialPrivacySettings) {
-        val currentState = _uiState.value.privacySettingsState
+        val currentState = uiState.value.privacySettingsState
         if (currentState !is UiState.Success) {
             Timber.w("Cannot update privacy settings - current state is not success")
             return
@@ -234,27 +262,25 @@ class PrivacySettingsViewModel @Inject constructor(
 
         updateState { it.copy(isUpdatingSettings = true) }
 
-        executeUseCase(
-            useCase = { socialProfileCommandUseCase.updatePrivacySettings(updatedSettings) },
-            onSuccess = { _ ->
-                updateState { 
+        viewModelScope.launch {
+            try {
+                socialProfileCommandUseCase.updatePrivacySettings(updatedSettings)
+                updateState {
                     it.copy(
                         isUpdatingSettings = false,
                         successMessage = "Settings updated successfully"
                     )
                 }
-            },
-            onError = { error ->
-                updateState { 
+            } catch (e: Exception) {
+                logError(e, "updateSetting")
+                updateState {
                     it.copy(
                         isUpdatingSettings = false,
-                        errorMessage = "Failed to update settings: ${error.message}"
+                        errorMessage = "Failed to update settings: ${e.message}"
                     )
                 }
-                handleError(error)
-            },
-            showLoading = false
-        )
+            }
+        }
     }
 
     private fun showDisableSocialConfirmation() {
@@ -279,45 +305,42 @@ class PrivacySettingsViewModel @Inject constructor(
     }
 
     private fun confirmDeleteData() {
-        updateState { 
+        updateState {
             it.copy(
                 showDeleteDataConfirmation = false,
                 isDeletingData = true
             )
         }
 
-        executeUseCase(
-            useCase = {
+        viewModelScope.launch {
+            try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = { throw IllegalStateException("User not authenticated") }
                 )
                 privacySettingsRepository.deletePrivacySettings(userId)
-            },
-            onSuccess = { _ ->
-                updateState { 
+                val newState: UiState<SocialPrivacySettings> = UiState.Empty()
+                updateState {
                     it.copy(
                         isDeletingData = false,
-                        privacySettingsState = UiState.Empty(),
+                        privacySettingsState = newState,
                         successMessage = "All social data has been deleted"
                     )
                 }
-            },
-            onError = { error ->
-                updateState { 
+            } catch (e: Exception) {
+                logError(e, "confirmDeleteData")
+                updateState {
                     it.copy(
                         isDeletingData = false,
-                        errorMessage = "Failed to delete social data: ${error.message}"
+                        errorMessage = "Failed to delete social data: ${e.message}"
                     )
                 }
-                handleError(error)
-            },
-            showLoading = false
-        )
+            }
+        }
     }
 
     private fun clearMessages() {
-        updateState { 
+        updateState {
             it.copy(
                 successMessage = null,
                 errorMessage = null

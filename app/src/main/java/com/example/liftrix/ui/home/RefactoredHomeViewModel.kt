@@ -3,13 +3,12 @@ package com.example.liftrix.ui.home
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.common.ErrorHandler
-import com.example.liftrix.ui.common.state.UiState  
+import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.state.HomeScreenData
 import com.example.liftrix.ui.common.state.FeedState
 import com.example.liftrix.ui.common.state.RecommendationsState
 import com.example.liftrix.ui.common.state.dataOrNull
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.home.managers.HomeDataManager
 import com.example.liftrix.ui.home.managers.HomeAnalyticsManager
 import com.example.liftrix.ui.home.managers.HomeFeedManager
@@ -21,12 +20,12 @@ import javax.inject.Inject
 
 /**
  * Refactored HomeViewModel using manager pattern for clean separation of concerns.
- * 
+ *
  * This version delegates responsibilities to specialized managers:
  * - HomeDataManager: Data loading and processing
- * - HomeAnalyticsManager: Analytics event tracking  
+ * - HomeAnalyticsManager: Analytics event tracking
  * - HomeFeedManager: Social feed and recommendations
- * 
+ *
  * Maintains backward compatibility while following Single Responsibility Principle.
  * Each manager is <200 lines, focused on a single concern, and testable in isolation.
  */
@@ -36,11 +35,8 @@ class RefactoredHomeViewModel @Inject constructor(
     private val authQueryUseCase: AuthQueryUseCase,
     private val homeDataManager: HomeDataManager,
     private val homeAnalyticsManager: HomeAnalyticsManager,
-    private val homeFeedManager: HomeFeedManager,
-    errorHandler: ErrorHandler
-) : BaseViewModel<UiState<HomeScreenData>, HomeEvent>(errorHandler) {
-
-    override val _uiState = MutableStateFlow<UiState<HomeScreenData>>(UiState.Loading)
+    private val homeFeedManager: HomeFeedManager
+) : ModernBaseViewModel<UiState<HomeScreenData>>(initialState = UiState.Loading) {
     
     // Feed and recommendations state
     private val _feedState = MutableStateFlow<FeedState>(FeedState.Loading)
@@ -59,9 +55,9 @@ class RefactoredHomeViewModel @Inject constructor(
     }
 
     /**
-     * Handles events from the UI following BaseViewModel MVI pattern
+     * Handles events from the UI following MVI pattern
      */
-    override fun handleEvent(event: HomeEvent) {
+    fun handleEvent(event: HomeEvent) {
         when (event) {
             is HomeEvent.RefreshData -> {
                 refreshData()
@@ -116,13 +112,9 @@ class RefactoredHomeViewModel @Inject constructor(
         }
     }
 
-    override fun setLoadingState() {
-        _uiState.value = UiState.Loading
-    }
-
-    override fun updateErrorState(error: com.example.liftrix.domain.model.error.LiftrixError) {
-        val currentData = _uiState.value.dataOrNull()
-        _uiState.value = UiState.Error(error, currentData)
+    private fun handleError(error: com.example.liftrix.domain.model.error.LiftrixError) {
+        val currentData = uiState.value.dataOrNull()
+        setState(UiState.Error(error, currentData))
     }
 
     /**
@@ -168,7 +160,7 @@ class RefactoredHomeViewModel @Inject constructor(
         homeDataManager.loadHomeData(userId).collect { result ->
             result.fold(
                 onSuccess = { homeData ->
-                    _uiState.value = UiState.Success(homeData)
+                    setState(UiState.Success(homeData))
                 },
                 onFailure = { error ->
                     handleError(com.example.liftrix.domain.model.error.LiftrixError.DataRetrievalError(error.message ?: "Unknown error"))
@@ -188,13 +180,13 @@ class RefactoredHomeViewModel @Inject constructor(
                     onFailure = { "" }
                 )
                 if (userId.isNotEmpty()) {
-                    setLoadingState()
+                    setState(UiState.Loading)
                     // Refresh all data concurrently
-                    launch { 
+                    launch {
                         homeDataManager.refreshHomeData(userId).collect { result ->
                             result.fold(
                                 onSuccess = { homeData ->
-                                    _uiState.value = UiState.Success(homeData)
+                                    setState(UiState.Success(homeData))
                                 },
                                 onFailure = { error -> handleError(com.example.liftrix.domain.model.error.LiftrixError.DataRetrievalError(error.message ?: "Unknown error")) }
                             )
@@ -477,11 +469,11 @@ class RefactoredHomeViewModel @Inject constructor(
                             }
                         }
                     } else {
-                        _uiState.value = UiState.Error(
+                        setState(UiState.Error(
                             com.example.liftrix.domain.model.error.LiftrixError.AuthenticationError(
                                 errorMessage = "User not authenticated"
                             )
-                        )
+                        ))
                     }
                 }
             } catch (e: Exception) {

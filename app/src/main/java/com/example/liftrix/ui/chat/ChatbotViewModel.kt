@@ -13,15 +13,13 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
 
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
-import com.example.liftrix.ui.common.event.ViewModelEvent
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.chat.ChatMessage
 import com.example.liftrix.domain.model.chat.MessageType
 import com.example.liftrix.domain.model.chat.UsageLimits
 import com.example.liftrix.domain.model.chat.ChatPreferences
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.chat.SendChatMessageUseCase
 import com.example.liftrix.domain.usecase.chat.CheckUsageLimitsUseCase
@@ -52,11 +50,10 @@ class ChatbotViewModel @Inject constructor(
     private val authQueryUseCase: AuthQueryUseCase,
     private val chatRepository: ChatRepository,
     private val sendChatMessageUseCase: SendChatMessageUseCase,
-    private val checkUsageLimitsUseCase: CheckUsageLimitsUseCase,
-    errorHandler: ErrorHandler
-) : BaseViewModel<ChatbotUiState, ChatbotEvent>(errorHandler) {
-
-    override val _uiState = MutableStateFlow(ChatbotUiState())
+    private val checkUsageLimitsUseCase: CheckUsageLimitsUseCase
+) : ModernBaseViewModel<ChatbotUiState>(
+    initialState = ChatbotUiState()
+) {
 
     private var currentConversationId = UUID.randomUUID().toString()
     private var userId: String? = null
@@ -129,7 +126,7 @@ class ChatbotViewModel @Inject constructor(
         }
     }
 
-    override fun handleEvent(event: ChatbotEvent) {
+    fun handleEvent(event: ChatbotEvent) {
         when (event) {
             is ChatbotEvent.SendMessage -> sendMessage(event.content)
             is ChatbotEvent.UpdateInput -> updateInput(event.text)
@@ -138,6 +135,12 @@ class ChatbotViewModel @Inject constructor(
             ChatbotEvent.RetryLastMessage -> retryLastMessage()
             ChatbotEvent.ClearConversation -> clearConversation()
             ChatbotEvent.DismissError -> dismissError()
+        }
+    }
+
+    private fun handleError(error: LiftrixError) {
+        updateState { currentState ->
+            currentState.copy(error = error, isTyping = false)
         }
     }
 
@@ -290,10 +293,9 @@ class ChatbotViewModel @Inject constructor(
     }
 
     private fun dismissError() {
-        _uiState.value = _uiState.value.copy(
-            error = null,
-            lastFailedMessage = null
-        )
+        updateState { currentState ->
+            currentState.copy(error = null, lastFailedMessage = null)
+        }
     }
 
     /**
@@ -304,10 +306,12 @@ class ChatbotViewModel @Inject constructor(
             viewModelScope.launch {
                 checkUsageLimitsUseCase.getUserUsageLimits(id).fold(
                     onSuccess = { limits ->
-                        _uiState.value = _uiState.value.copy(
-                            usageLimits = limits,
-                            showUsageWarning = limits.isNearDailyLimit || limits.isNearMonthlyLimit
-                        )
+                        updateState { currentState ->
+                            currentState.copy(
+                                usageLimits = limits,
+                                showUsageWarning = limits.isNearDailyLimit || limits.isNearMonthlyLimit
+                            )
+                        }
                     },
                     onFailure = { error ->
                         Timber.w("Failed to check usage limits: $error")
@@ -316,19 +320,6 @@ class ChatbotViewModel @Inject constructor(
                 )
             }
         }
-    }
-
-    override fun setLoadingState() {
-        _uiState.value = _uiState.value.copy(
-            conversationState = UiState.Loading
-        )
-    }
-
-    override fun updateErrorState(error: LiftrixError) {
-        _uiState.value = _uiState.value.copy(
-            error = error,
-            isTyping = false
-        )
     }
 }
 
@@ -352,7 +343,7 @@ data class ChatbotUiState(
 /**
  * Events for the chatbot screen.
  */
-sealed class ChatbotEvent : ViewModelEvent {
+sealed class ChatbotEvent {
     data class SendMessage(val content: String) : ChatbotEvent()
     data class UpdateInput(val text: String) : ChatbotEvent()
     data class ToggleLanguage(val language: Language) : ChatbotEvent()

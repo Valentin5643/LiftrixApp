@@ -13,16 +13,13 @@ import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.notifications.NotificationPreferences
 import com.example.liftrix.domain.model.notifications.DeliveryFrequency
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
-import com.example.liftrix.domain.usecase.common.ErrorHandler
-import com.example.liftrix.ui.common.event.ViewModelEvent
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.domain.model.error.LiftrixError
-import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * ViewModel for the notification settings screen.
- * 
+ *
  * Manages comprehensive notification preferences including:
  * - Master notification toggle
  * - Category-specific settings (social, workout, achievement)
@@ -30,7 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * - Quiet hours configuration
  * - Sound and vibration preferences
  * - Muted users management
- * 
+ *
  * Features:
  * - MVI pattern with clear state management
  * - Optimistic updates for better UX
@@ -42,18 +39,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 class NotificationSettingsViewModel @Inject constructor(
     private val notificationPreferencesUseCase: NotificationPreferencesUseCase,
     private val getMutedUsersCountUseCase: GetMutedUsersCountUseCase,
-    private val authQueryUseCase: AuthQueryUseCase,
-    errorHandler: ErrorHandler
-) : BaseViewModel<NotificationSettingsUiState, NotificationSettingsEvent>(errorHandler) {
-
-    override val _uiState = MutableStateFlow(NotificationSettingsUiState())
+    private val authQueryUseCase: AuthQueryUseCase
+) : ModernBaseViewModel<NotificationSettingsUiState>(initialState = NotificationSettingsUiState()) {
 
     init {
         loadNotificationPreferences()
         loadMutedUsersCount()
     }
 
-    override fun handleEvent(event: NotificationSettingsEvent) {
+    fun handleEvent(event: NotificationSettingsEvent) {
         when (event) {
             is NotificationSettingsEvent.RefreshPreferences -> {
                 loadNotificationPreferences()
@@ -371,21 +365,6 @@ class NotificationSettingsViewModel @Inject constructor(
         }
     }
 
-    override fun setLoadingState() {
-        updateState { it.copy(isLoading = true, error = null) }
-    }
-
-    override fun updateErrorState(error: LiftrixError) {
-        updateState { currentState ->
-            currentState.copy(
-                isLoading = false,
-                isUpdatingPreferences = false,
-                error = error.message,
-                preferencesState = UiState.Error(error)
-            )
-        }
-    }
-
     /**
      * Map string delivery frequency to enum
      */
@@ -472,7 +451,7 @@ data class NotificationSettingsUiState(
 /**
  * Events for notification settings screen
  */
-sealed class NotificationSettingsEvent : ViewModelEvent {
+sealed class NotificationSettingsEvent {
     object RefreshPreferences : NotificationSettingsEvent()
     object ErrorDismissed : NotificationSettingsEvent()
     

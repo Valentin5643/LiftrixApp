@@ -7,14 +7,13 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.SearchFilters
 import com.example.liftrix.domain.model.social.UserSearchResult
 import com.example.liftrix.domain.model.FitnessLevel
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.social.SocialSearchUseCase
 import com.example.liftrix.domain.usecase.social.SearchUsersRequest
 import com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase
 import com.example.liftrix.domain.usecase.social.FollowAction
 import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.state.UiState
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,27 +35,24 @@ import javax.inject.Inject
 @HiltViewModel
 class UserSearchViewModel @Inject constructor(
     private val socialSearchUseCase: SocialSearchUseCase,
-    private val socialRelationshipUseCase: SocialRelationshipUseCase,
-    errorHandler: ErrorHandler
-) : BaseViewModel<UserSearchUiState, UserSearchEvent>(errorHandler) {
-
-    override val _uiState = MutableStateFlow(
-        UserSearchUiState(
-            searchQuery = "",
-            searchResults = emptyList(),
-            appliedFilters = SearchFilters(),
-            isSearching = false,
-            error = null,
-            hasSearched = false,
-            isCachedResult = false
-        )
+    private val socialRelationshipUseCase: SocialRelationshipUseCase
+) : ModernBaseViewModel<UserSearchUiState>(
+    initialState = UserSearchUiState(
+        searchQuery = "",
+        searchResults = emptyList(),
+        appliedFilters = SearchFilters(),
+        isSearching = false,
+        error = null,
+        hasSearched = false,
+        isCachedResult = false
     )
+) {
 
     init {
         setupDebouncedSearch()
     }
 
-    override fun handleEvent(event: UserSearchEvent) {
+    fun handleEvent(event: UserSearchEvent) {
         when (event) {
             is UserSearchEvent.UpdateSearchQuery -> {
                 updateSearchQuery(event.query)
@@ -107,7 +103,7 @@ class UserSearchViewModel @Inject constructor(
         }
         
         // Trigger search with new filters if we have a query
-        val currentQuery = _uiState.value.searchQuery
+        val currentQuery = uiState.value.searchQuery
         if (currentQuery.isNotBlank()) {
             performSearch(currentQuery, filters)
         }
@@ -125,7 +121,7 @@ class UserSearchViewModel @Inject constructor(
         }
         
         // Re-search with cleared filters if we have a query
-        val currentQuery = _uiState.value.searchQuery
+        val currentQuery = uiState.value.searchQuery
         if (currentQuery.isNotBlank()) {
             performSearch(currentQuery, SearchFilters())
         }
@@ -135,7 +131,7 @@ class UserSearchViewModel @Inject constructor(
      * Retries the last search
      */
     private fun retrySearch() {
-        val currentState = _uiState.value
+        val currentState = uiState.value
         if (currentState.searchQuery.isNotBlank()) {
             performSearch(currentState.searchQuery, currentState.appliedFilters)
         }
@@ -161,7 +157,7 @@ class UserSearchViewModel @Inject constructor(
      */
     private fun setupDebouncedSearch() {
         viewModelScope.launch {
-            _uiState
+            uiState
                 .debounce(SEARCH_DEBOUNCE_MS)
                 .distinctUntilChanged { old, new ->
                     old.searchQuery == new.searchQuery && old.appliedFilters == new.appliedFilters
@@ -179,65 +175,48 @@ class UserSearchViewModel @Inject constructor(
      * Performs the actual search operation
      */
     private fun performSearch(query: String, filters: SearchFilters) {
-        updateState { currentState ->
-            currentState.copy(
-                isSearching = true,
-                error = null
-            )
-        }
-
-        executeUseCase(
-            useCase = {
-                socialSearchUseCase.searchUsers(
-                    SearchUsersRequest(
-                        query = query,
-                        filters = filters,
-                        limit = SEARCH_RESULTS_LIMIT,
-                        useCache = true
-                    )
+        viewModelScope.launch {
+            updateState { currentState ->
+                currentState.copy(
+                    isSearching = true,
+                    error = null
                 )
-            },
-            onSuccess = { result ->
+            }
+
+            val result = socialSearchUseCase.searchUsers(
+                SearchUsersRequest(
+                    query = query,
+                    filters = filters,
+                    limit = SEARCH_RESULTS_LIMIT,
+                    useCache = true
+                )
+            )
+
+            result.onSuccess { data ->
                 updateState { currentState ->
                     currentState.copy(
-                        searchResults = result.users,
+                        searchResults = data.users,
                         isSearching = false,
                         hasSearched = true,
-                        isCachedResult = result.isCachedResult,
+                        isCachedResult = data.isCachedResult,
                         error = null
                     )
                 }
-                
-                Timber.d("Search completed: ${result.users.size} results (cached: ${result.isCachedResult})")
-            },
-            onError = { error ->
+
+                Timber.d("Search completed: ${data.users.size} results (cached: ${data.isCachedResult})")
+            }.onFailure { error ->
+                logError(error, "searchUsers")
                 updateState { currentState ->
                     currentState.copy(
                         isSearching = false,
                         hasSearched = true,
-                        error = error,
+                        error = error as? LiftrixError ?: LiftrixError.UnknownError(errorMessage = error.message ?: "Search failed"),
                         isCachedResult = false
                     )
                 }
-                
+
                 Timber.e("Search failed: ${error.message}")
-            },
-            showLoading = false // We handle loading state manually
-        )
-    }
-
-    override fun setLoadingState() {
-        updateState { currentState ->
-            currentState.copy(isSearching = true)
-        }
-    }
-
-    override fun updateErrorState(error: LiftrixError) {
-        updateState { currentState ->
-            currentState.copy(
-                error = error,
-                isSearching = false
-            )
+            }
         }
     }
 
@@ -245,7 +224,7 @@ class UserSearchViewModel @Inject constructor(
      * Handles follow/unfollow actions for users in search results
      */
     fun handleFollowAction(targetUserId: String) {
-        val currentResults = _uiState.value.searchResults
+        val currentResults = uiState.value.searchResults
         val user = currentResults.find { it.userId == targetUserId } ?: return
         
         val action = when (user.connectionStatus) {
@@ -256,15 +235,14 @@ class UserSearchViewModel @Inject constructor(
             else -> return // Don't handle other statuses in search
         }
 
-        executeUseCase(
-            useCase = {
-                socialRelationshipUseCase.followAction(
-                    targetUserId = targetUserId,
-                    action = action,
-                    context = "SEARCH_RESULT"
-                )
-            },
-            onSuccess = { followStatus ->
+        viewModelScope.launch {
+            val result = socialRelationshipUseCase.followAction(
+                targetUserId = targetUserId,
+                action = action,
+                context = "SEARCH_RESULT"
+            )
+
+            result.onSuccess { followStatus ->
                 // Update the user's connection status in search results
                 val newConnectionStatus = when (followStatus.name) {
                     "NONE" -> com.example.liftrix.domain.model.social.ConnectionStatus.NONE
@@ -274,7 +252,7 @@ class UserSearchViewModel @Inject constructor(
                     "BLOCKED" -> com.example.liftrix.domain.model.social.ConnectionStatus.BLOCKED
                     else -> com.example.liftrix.domain.model.social.ConnectionStatus.NONE
                 }
-                
+
                 updateState { currentState ->
                     currentState.copy(
                         searchResults = currentState.searchResults.map { result ->
@@ -286,14 +264,13 @@ class UserSearchViewModel @Inject constructor(
                         }
                     )
                 }
-                
+
                 Timber.d("Follow action completed: $action -> $followStatus")
-            },
-            onError = { error ->
+            }.onFailure { error ->
+                logError(error, "followAction")
                 Timber.e("Follow action failed: ${error.message}")
-                // Error handling is managed by BaseViewModel
             }
-        )
+        }
     }
 
     companion object {

@@ -6,9 +6,7 @@ import com.example.liftrix.domain.repository.social.FollowRepository
 import com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase
 import com.example.liftrix.domain.usecase.social.FollowAction
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
-import com.example.liftrix.ui.common.event.ViewModelEvent
-import com.example.liftrix.domain.usecase.common.ErrorHandler
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,13 +38,8 @@ import javax.inject.Inject
 class FollowerListViewModel @Inject constructor(
     private val followRepository: FollowRepository,
     private val socialRelationshipUseCase: SocialRelationshipUseCase,
-    private val authQueryUseCase: AuthQueryUseCase,
-    errorHandler: ErrorHandler
-) : BaseViewModel<FollowerListUiState, FollowerListEvent>(
-    errorHandler = errorHandler
-) {
-    
-    override val _uiState = MutableStateFlow(FollowerListUiState())
+    private val authQueryUseCase: AuthQueryUseCase
+) : ModernBaseViewModel<FollowerListUiState>(initialState = FollowerListUiState()) {
     
     // Search query flow with debouncing
     private val searchQueryFlow = MutableStateFlow("")
@@ -346,7 +339,7 @@ class FollowerListViewModel @Inject constructor(
         }
     }
     
-    override fun handleEvent(event: FollowerListEvent) {
+    fun handleEvent(event: FollowerListEvent) {
         when (event) {
             is FollowerListEvent.LoadFollowerList -> loadFollowerList(event.userId, event.listType)
             is FollowerListEvent.LoadMoreItems -> loadMoreItems()
@@ -396,7 +389,7 @@ data class FollowerListUiState(
 /**
  * Events for follower list interactions
  */
-sealed class FollowerListEvent : ViewModelEvent {
+sealed class FollowerListEvent {
     data class LoadFollowerList(val userId: String, val listType: FollowerListType) : FollowerListEvent()
     data object LoadMoreItems : FollowerListEvent()
     data object ToggleSearch : FollowerListEvent()

@@ -14,10 +14,8 @@ import com.example.liftrix.domain.repository.social.FeedRepository
 import com.example.liftrix.domain.repository.social.EngagementRepository
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.social.SeedWorkoutPostsUseCase
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.service.AnalyticsTracker
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
-import com.example.liftrix.ui.common.event.ViewModelEvent
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.data.service.FirebaseStorageUrlResolver
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -36,9 +34,17 @@ class FeedViewModel @Inject constructor(
     private val authQueryUseCase: AuthQueryUseCase,
     private val seedWorkoutPostsUseCase: SeedWorkoutPostsUseCase,
     private val analyticsTracker: AnalyticsTracker,
-    private val storageUrlResolver: FirebaseStorageUrlResolver,
-    errorHandler: ErrorHandler
-) : BaseViewModel<FeedUiState, FeedEvent>(errorHandler) {
+    private val storageUrlResolver: FirebaseStorageUrlResolver
+) : ModernBaseViewModel<FeedUiState>(
+    initialState = FeedUiState(
+        selectedTab = FeedTab.HOME,
+        likedPosts = emptySet(),
+        savedPosts = emptySet(),
+        currentUserId = null,
+        isLoading = false,
+        error = null
+    )
+) {
 
     private val _selectedTab = MutableStateFlow(FeedTab.HOME)
     private val _likedPosts = MutableStateFlow<Set<String>>(emptySet())
@@ -52,17 +58,6 @@ class FeedViewModel @Inject constructor(
     
     // Expose URL resolver for WorkoutPostCard to resolve storage paths to fresh URLs
     val urlResolver: FirebaseStorageUrlResolver = storageUrlResolver
-    
-    override val _uiState = MutableStateFlow(
-        FeedUiState(
-            selectedTab = FeedTab.HOME,
-            likedPosts = emptySet(),
-            savedPosts = emptySet(),
-            currentUserId = null,
-            isLoading = false,
-            error = null
-        )
-    )
 
     init {
         collectUserState()
@@ -129,7 +124,7 @@ class FeedViewModel @Inject constructor(
         }
         .cachedIn(viewModelScope)
 
-    override fun handleEvent(event: FeedEvent) {
+    fun handleEvent(event: FeedEvent) {
         when (event) {
             is FeedEvent.SelectTab -> selectTab(event.tab)
             is FeedEvent.HandlePostInteraction -> handlePostInteraction(event.interaction)
@@ -137,17 +132,7 @@ class FeedViewModel @Inject constructor(
         }
     }
 
-    fun onEvent(event: FeedEvent) {
-        handleEvent(event)
-    }
-
-    override fun setLoadingState() {
-        updateState { currentState ->
-            currentState.copy(isLoading = true, error = null)
-        }
-    }
-
-    override fun updateErrorState(error: LiftrixError) {
+    private fun handleError(error: LiftrixError) {
         updateState { currentState ->
             currentState.copy(isLoading = false, error = error)
         }
@@ -451,7 +436,7 @@ data class FeedUiState(
  * Events that can be triggered in the feed screen
  */
 @Stable
-sealed class FeedEvent : ViewModelEvent {
+sealed class FeedEvent {
     @Stable
     data class SelectTab(val tab: FeedTab) : FeedEvent()
     @Stable
@@ -489,7 +474,7 @@ sealed class PostInteraction {
  * ViewModel events that trigger UI actions
  */
 @Stable
-sealed class FeedViewModelEvent : ViewModelEvent {
+sealed class FeedViewModelEvent {
     @Stable
     data class SharePost(val shareText: String, val postId: String) : FeedViewModelEvent()
 }

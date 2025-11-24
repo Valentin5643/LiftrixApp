@@ -2,20 +2,15 @@ package com.example.liftrix.ui.chat.settings
 
 import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.chat.ChatPreferences
-import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.chat.ChatOperationsUseCase
 import com.example.liftrix.domain.usecase.chat.ExportFormat
 import com.example.liftrix.domain.usecase.chat.UpdateChatPreferencesUseCase
 import com.example.liftrix.domain.repository.ChatRepository
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
-import com.example.liftrix.ui.common.event.ViewModelEvent
-import com.example.liftrix.domain.usecase.common.ErrorHandler
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.common.state.UiState
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -29,11 +24,10 @@ class AIChatSettingsViewModel @Inject constructor(
     private val updateChatPreferencesUseCase: UpdateChatPreferencesUseCase,
     private val chatOperationsUseCase: ChatOperationsUseCase,
     private val chatRepository: ChatRepository,
-    private val authQueryUseCase: AuthQueryUseCase,
-    errorHandler: ErrorHandler
-) : BaseViewModel<AIChatSettingsUiState, AIChatSettingsEvent>(errorHandler) {
-    
-    override val _uiState = MutableStateFlow(AIChatSettingsUiState())
+    private val authQueryUseCase: AuthQueryUseCase
+) : ModernBaseViewModel<AIChatSettingsUiState>(
+    initialState = AIChatSettingsUiState()
+) {
     
     private var currentUserId: String? = null
     
@@ -87,7 +81,7 @@ class AIChatSettingsViewModel @Inject constructor(
         )
     }
     
-    override fun handleEvent(event: AIChatSettingsEvent) {
+    fun handleEvent(event: AIChatSettingsEvent) {
         when (event) {
             is AIChatSettingsEvent.UpdateLanguagePreference -> updateLanguagePreference(event.language)
             is AIChatSettingsEvent.UpdateAutoDetectLanguage -> updateAutoDetectLanguage(event.enabled)
@@ -293,7 +287,7 @@ data class AIChatSettingsUiState(
 /**
  * Events for AI Chat Settings screen.
  */
-sealed class AIChatSettingsEvent : ViewModelEvent {
+sealed class AIChatSettingsEvent {
     // Language Settings
     data class UpdateLanguagePreference(val language: String) : AIChatSettingsEvent()
     data class UpdateAutoDetectLanguage(val enabled: Boolean) : AIChatSettingsEvent()

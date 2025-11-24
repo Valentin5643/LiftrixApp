@@ -5,10 +5,8 @@ import com.example.liftrix.domain.model.UserAnomalyAction
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.usecase.anomaly.DetectWorkoutAnomaliesUseCase
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.common.state.UiState
-import com.example.liftrix.ui.common.event.ViewModelEvent
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,13 +23,10 @@ import javax.inject.Inject
 @HiltViewModel
 class AnomalyDashboardViewModel @Inject constructor(
     private val detectAnomaliesUseCase: DetectWorkoutAnomaliesUseCase,
-    private val authRepository: AuthRepository,
-    errorHandler: ErrorHandler
-) : BaseViewModel<AnomalyDashboardUiState, AnomalyDashboardEvent>(errorHandler) {
+    private val authRepository: AuthRepository
+) : ModernBaseViewModel<AnomalyDashboardUiState>(initialState = UiState.Loading) {
 
-    override val _uiState: MutableStateFlow<AnomalyDashboardUiState> = MutableStateFlow(UiState.Loading)
-
-    override fun handleEvent(event: AnomalyDashboardEvent) {
+    fun handleEvent(event: AnomalyDashboardEvent) {
         when (event) {
             is AnomalyDashboardEvent.LoadAnomalies -> loadAnomalies()
             is AnomalyDashboardEvent.ResolveAnomaly -> resolveAnomaly(event.anomalyId, event.action)
@@ -147,13 +142,6 @@ class AnomalyDashboardViewModel @Inject constructor(
         loadAnomalies()
     }
 
-    override fun setLoadingState() {
-        _uiState.value = UiState.Loading
-    }
-
-    override fun updateErrorState(error: LiftrixError) {
-        _uiState.value = UiState.Error(error)
-    }
 }
 
 /**
@@ -164,7 +152,7 @@ typealias AnomalyDashboardUiState = UiState<AnomalyDashboardData>
 /**
  * Events for the anomaly dashboard screen
  */
-sealed class AnomalyDashboardEvent : ViewModelEvent {
+sealed class AnomalyDashboardEvent {
     data object LoadAnomalies : AnomalyDashboardEvent()
     data class ResolveAnomaly(val anomalyId: String, val action: UserAnomalyAction) : AnomalyDashboardEvent()
     data object RefreshData : AnomalyDashboardEvent()

@@ -13,9 +13,7 @@ import com.example.liftrix.domain.usecase.profile.ProfileImageOperationsUseCase
 import com.example.liftrix.domain.usecase.profile.ProfileCommandUseCase
 import com.example.liftrix.domain.usecase.profile.CalculateAchievementsUseCase
 import com.example.liftrix.ui.common.state.UiState
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
-import com.example.liftrix.ui.common.event.ViewModelEvent
-import com.example.liftrix.domain.usecase.common.ErrorHandler
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.domain.service.NetworkConnectivityMonitor
 import com.example.liftrix.domain.repository.SyncStatusRepository
 import com.example.liftrix.domain.repository.SyncPreferencesRepository
@@ -85,19 +83,14 @@ class ProfileViewModel @Inject constructor(
     private val syncCoordinator: SyncCoordinator,
     private val syncManager: SyncManager,
     private val syncStatusRepository: SyncStatusRepository,
-    private val syncPreferencesRepository: SyncPreferencesRepository,
-    errorHandler: ErrorHandler
-) : BaseViewModel<ProfileUiState, ProfileEvent>(
-    errorHandler = errorHandler
-) {
-    
+    private val syncPreferencesRepository: SyncPreferencesRepository
+) : ModernBaseViewModel<ProfileUiState>(initialState = ProfileUiState(
+    profileState = ProfileLoadingState.Loading,
+    isLoading = true
+)) {
+
     // Get WorkManager instance directly instead of injecting it
     private val workManager: WorkManager by lazy { WorkManager.getInstance(context) }
-    
-    override val _uiState = MutableStateFlow(ProfileUiState(
-        profileState = ProfileLoadingState.Loading,
-        isLoading = true
-    ))
     
     // Current user ID flow with enhanced error handling and cold-start resilience
     // 🔍 FORENSIC MONITORING - Track userId flow emissions during profile changes
@@ -383,12 +376,12 @@ class ProfileViewModel @Inject constructor(
         loadProfile()
         refreshAchievements()
     }
-    
+
     private fun performStartupDatabaseVerification() {
         // Initialize database connection
     }
-    
-    override fun handleEvent(event: ProfileEvent) {
+
+    fun handleEvent(event: ProfileEvent) {
         when (event) {
             is ProfileEvent.LoadProfile -> loadProfile()
             is ProfileEvent.RefreshProfile -> refreshProfile()
@@ -1255,7 +1248,7 @@ sealed class ProfileOperation {
  * Profile events for user interactions and system actions.
  */
 @Stable
-sealed class ProfileEvent : ViewModelEvent {
+sealed class ProfileEvent {
     data object LoadProfile : ProfileEvent()
     data object RefreshProfile : ProfileEvent()
     data class SaveProfile(val profile: UserProfile) : ProfileEvent()

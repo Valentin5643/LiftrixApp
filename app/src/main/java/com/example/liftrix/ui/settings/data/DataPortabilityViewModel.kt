@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.export.ExportWorkoutsUseCase
 import com.example.liftrix.domain.usecase.export.ExportFormat
 import com.example.liftrix.domain.usecase.export.ExportRequest
@@ -20,8 +19,7 @@ import com.example.liftrix.domain.usecase.data_import.ImportResult
 import com.example.liftrix.domain.usecase.data_import.ImportProgress
 import com.example.liftrix.domain.usecase.data_import.ImportOptions
 import com.example.liftrix.domain.usecase.data_import.ConflictStrategy
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
-import com.example.liftrix.ui.common.event.ViewModelEvent
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.state.dataOrNull
 import com.example.liftrix.ui.common.state.isLoading
@@ -69,16 +67,13 @@ class DataPortabilityViewModel @Inject constructor(
     private val exportWorkoutsUseCase: ExportWorkoutsUseCase,
     private val dataImportUseCase: DataImportUseCase,
     private val authQueryUseCase: AuthQueryUseCase,
-    @ApplicationContext private val context: Context,
-    errorHandler: ErrorHandler
-) : BaseViewModel<DataPortabilityUiState, DataPortabilityEvent>(errorHandler) {
-
-    override val _uiState = MutableStateFlow(
-        DataPortabilityUiState(
-            exportState = UiState.Success(ExportData()),
-            importState = UiState.Success(ImportData())
-        )
+    @ApplicationContext private val context: Context
+) : ModernBaseViewModel<DataPortabilityUiState>(
+    initialState = DataPortabilityUiState(
+        exportState = UiState.Success(ExportData()),
+        importState = UiState.Success(ImportData())
     )
+) {
 
     private var currentUserId: String? = null
     private var currentExportId: String? = null
@@ -88,7 +83,7 @@ class DataPortabilityViewModel @Inject constructor(
         loadCurrentUser()
     }
 
-    override fun handleEvent(event: DataPortabilityEvent) {
+    fun handleEvent(event: DataPortabilityEvent) {
         when (event) {
             is DataPortabilityEvent.LoadData -> loadData()
             is DataPortabilityEvent.SelectExportFormat -> selectExportFormat(event.format)
@@ -107,7 +102,7 @@ class DataPortabilityViewModel @Inject constructor(
         }
     }
 
-    override fun setLoadingState() {
+    private fun setLoadingState() {
         updateState { currentState ->
             currentState.copy(
                 exportState = UiState.Loading,
@@ -116,7 +111,7 @@ class DataPortabilityViewModel @Inject constructor(
         }
     }
 
-    override fun updateErrorState(error: LiftrixError) {
+    private fun updateErrorState(error: LiftrixError) {
         updateState { currentState ->
             currentState.copy(
                 exportState = if (currentState.exportState.isLoading()) {
@@ -218,7 +213,7 @@ class DataPortabilityViewModel @Inject constructor(
     private fun startExport() {
         val userId = currentUserId
         if (userId == null) {
-            handleError(LiftrixError.AuthenticationError("User not authenticated"))
+            updateErrorState(LiftrixError.AuthenticationError("User not authenticated"))
             return
         }
 
@@ -227,7 +222,7 @@ class DataPortabilityViewModel @Inject constructor(
             else -> null
         }
         if (currentExportData == null) {
-            handleError(LiftrixError.ValidationError(
+            updateErrorState(LiftrixError.ValidationError(
                 field = "export_configuration",
                 violations = listOf("Export configuration not available"),
                 analyticsContext = mapOf("operation" to "START_EXPORT")
@@ -237,7 +232,7 @@ class DataPortabilityViewModel @Inject constructor(
 
         // Validate export configuration
         if (currentExportData.selectedDataTypes.isEmpty()) {
-            handleError(LiftrixError.ValidationError(
+            updateErrorState(LiftrixError.ValidationError(
                 field = "data_types",
                 violations = listOf("At least one data type must be selected"),
                 analyticsContext = mapOf("operation" to "START_EXPORT")
@@ -346,7 +341,7 @@ class DataPortabilityViewModel @Inject constructor(
                 Timber.d("Export cancelled successfully")
             } catch (e: Exception) {
                 Timber.e(e, "Failed to cancel export")
-                handleError(LiftrixError.BusinessLogicError(
+                updateErrorState(LiftrixError.BusinessLogicError(
                     code = "CANCEL_EXPORT_FAILED",
                     errorMessage = "Failed to cancel export",
                     analyticsContext = mapOf(
@@ -396,7 +391,7 @@ class DataPortabilityViewModel @Inject constructor(
                     }
                     Timber.e("Import validation failed: $error")
                     // Show error to user
-                    handleError(error as? LiftrixError ?: LiftrixError.BusinessLogicError(
+                    updateErrorState(error as? LiftrixError ?: LiftrixError.BusinessLogicError(
                         code = "IMPORT_VALIDATION_FAILED",
                         errorMessage = "Failed to validate import file: ${error.message}",
                         analyticsContext = mapOf("operation" to "VALIDATE_IMPORT")
@@ -421,14 +416,14 @@ class DataPortabilityViewModel @Inject constructor(
                 if (inputStream != null) {
                     startImport(uri, inputStream)
                 } else {
-                    handleError(LiftrixError.BusinessLogicError(
+                    updateErrorState(LiftrixError.BusinessLogicError(
                         code = "OPEN_FILE_FAILED",
                         errorMessage = "Failed to open selected file",
                         analyticsContext = mapOf("operation" to "REQUEST_IMPORT_START")
                     ))
                 }
             } catch (e: Exception) {
-                handleError(LiftrixError.BusinessLogicError(
+                updateErrorState(LiftrixError.BusinessLogicError(
                     code = "FILE_ACCESS_ERROR",
                     errorMessage = "Cannot access the selected file: ${e.message}",
                     analyticsContext = mapOf(
@@ -443,7 +438,7 @@ class DataPortabilityViewModel @Inject constructor(
     private fun startImport(uri: Uri, inputStream: InputStream) {
         val userId = currentUserId
         if (userId == null) {
-            handleError(LiftrixError.AuthenticationError("User not authenticated"))
+            updateErrorState(LiftrixError.AuthenticationError("User not authenticated"))
             return
         }
 
@@ -452,7 +447,7 @@ class DataPortabilityViewModel @Inject constructor(
             else -> null
         }
         if (currentImportData?.validation == null) {
-            handleError(LiftrixError.ValidationError(
+            updateErrorState(LiftrixError.ValidationError(
                 field = "import_validation",
                 violations = listOf("File must be validated before import"),
                 analyticsContext = mapOf("operation" to "START_IMPORT")
@@ -717,7 +712,7 @@ data class ImportData(
 /**
  * Events for data portability operations.
  */
-sealed class DataPortabilityEvent : ViewModelEvent {
+sealed class DataPortabilityEvent {
     object LoadData : DataPortabilityEvent()
     
     // Export events

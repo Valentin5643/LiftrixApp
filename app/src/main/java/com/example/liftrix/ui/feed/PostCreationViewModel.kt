@@ -8,14 +8,11 @@ import com.example.liftrix.domain.model.social.*
 import com.example.liftrix.domain.repository.social.FeedRepository
 import com.example.liftrix.domain.service.MediaUploadService
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
 import com.example.liftrix.domain.model.WorkoutId
 import com.example.liftrix.domain.model.toSummary
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
-import com.example.liftrix.ui.common.event.ViewModelEvent
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -29,18 +26,15 @@ class PostCreationViewModel @Inject constructor(
     private val feedRepository: FeedRepository,
     private val mediaUploadService: MediaUploadService,
     private val authQueryUseCase: AuthQueryUseCase,
-    private val workoutQueryUseCase: WorkoutQueryUseCase,
-    errorHandler: ErrorHandler
-) : BaseViewModel<PostCreationUiState, PostCreationEvent>(errorHandler) {
-
-    override val _uiState: MutableStateFlow<PostCreationUiState> = MutableStateFlow(PostCreationUiState())
+    private val workoutQueryUseCase: WorkoutQueryUseCase
+) : ModernBaseViewModel<PostCreationUiState>(initialState = PostCreationUiState()) {
     
     // Public method for UI to call
     fun onEvent(event: PostCreationEvent) {
         handleEvent(event)
     }
 
-    override fun handleEvent(event: PostCreationEvent) {
+    fun handleEvent(event: PostCreationEvent) {
         when (event) {
             is PostCreationEvent.LoadWorkout -> loadWorkout(event.workoutId)
             is PostCreationEvent.UpdateCaption -> updateCaption(event.caption)
@@ -287,7 +281,7 @@ data class PostCreationUiState(
 /**
  * Events for post creation screen
  */
-sealed class PostCreationEvent : ViewModelEvent {
+sealed class PostCreationEvent {
     data class LoadWorkout(val workoutId: String) : PostCreationEvent()
     data class UpdateCaption(val caption: String) : PostCreationEvent()
     data class UpdateVisibility(val visibility: PostVisibility) : PostCreationEvent()

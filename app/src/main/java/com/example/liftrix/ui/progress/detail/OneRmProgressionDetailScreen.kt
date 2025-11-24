@@ -65,10 +65,10 @@ fun OneRmProgressionDetailScreen(
             exercises = availableExercises,
             selectedIds = selectedExerciseIds,
             onSelectionChange = { newSelection ->
-                viewModel.handleEvent(OneRmDetailViewModel.Event.UpdateExerciseFilter(newSelection))
+                viewModel.updateExerciseFilter(newSelection)
             },
             onDismiss = {
-                viewModel.handleEvent(OneRmDetailViewModel.Event.HideExerciseFilterSheet)
+                viewModel.hideExerciseFilterSheet()
             }
         )
     }
@@ -98,10 +98,10 @@ fun OneRmProgressionDetailScreen(
             // 1RM controls card
             OneRmControlsCard(
                 onFilterClick = {
-                    viewModel.handleEvent(OneRmDetailViewModel.Event.ShowExerciseFilterSheet)
+                    viewModel.showExerciseFilterSheet()
                 },
                 onExportClick = {
-                    viewModel.handleEvent(OneRmDetailViewModel.Event.ExportData)
+                    viewModel.exportData()
                 },
                 modifier = Modifier.fillMaxWidth()
             )
@@ -125,7 +125,7 @@ fun OneRmProgressionDetailScreen(
                     ErrorDisplay(
                         error = errorState.error,
                         onRetry = {
-                            viewModel.handleEvent(OneRmDetailViewModel.Event.RetryLoad)
+                            viewModel.retryLoad()
                         },
                         modifier = Modifier.fillMaxSize()
                     )
@@ -137,7 +137,7 @@ fun OneRmProgressionDetailScreen(
                         message = emptyState.message,
                         actionText = "Adjust Filters",
                         onActionClick = {
-                            viewModel.handleEvent(OneRmDetailViewModel.Event.ShowExerciseFilterSheet)
+                            viewModel.showExerciseFilterSheet()
                         },
                         modifier = Modifier.fillMaxSize()
                     )
@@ -149,10 +149,10 @@ fun OneRmProgressionDetailScreen(
                         data = successState.data,
                         showEstimated = showEstimated,
                         onToggleShowEstimated = { show ->
-                            viewModel.handleEvent(OneRmDetailViewModel.Event.ToggleShowEstimated(show))
+                            viewModel.toggleShowEstimated(show)
                         },
                         onRefresh = {
-                            viewModel.handleEvent(OneRmDetailViewModel.Event.RefreshData)
+                            viewModel.refreshData()
                         },
                         viewModel = viewModel
                     )

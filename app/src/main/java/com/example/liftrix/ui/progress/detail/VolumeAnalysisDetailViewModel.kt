@@ -2,11 +2,8 @@ package com.example.liftrix.ui.progress.detail
 
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.SavedStateHandle
-import com.example.liftrix.ui.common.viewmodel.StatefulDetailViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernStatefulDetailViewModel
 import com.example.liftrix.ui.common.viewmodel.DetailScreenStateKeys
-import com.example.liftrix.ui.common.state.UiState
-import com.example.liftrix.ui.common.event.ViewModelEvent
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.analytics.AnalyticsQueryUseCase
 import com.example.liftrix.domain.usecase.analytics.AnalyticsExportUseCase
 import com.example.liftrix.domain.usecase.analytics.VolumeAnalysisData as UseCaseVolumeAnalysisData
@@ -18,8 +15,8 @@ import com.example.liftrix.domain.model.analytics.VolumeGrouping
 import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.model.error.LiftrixError
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -51,13 +48,13 @@ import java.io.File
 @HiltViewModel
 class VolumeAnalysisDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    errorHandler: ErrorHandler,
     private val analyticsQueryUseCase: AnalyticsQueryUseCase,
     private val authQueryUseCase: AuthQueryUseCase,
     private val analyticsExportUseCase: AnalyticsExportUseCase
-) : StatefulDetailViewModel<VolumeAnalysisDetailViewModel.UiState, VolumeAnalysisDetailViewModel.Event>(savedStateHandle, errorHandler) {
-
-    override val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+) : ModernStatefulDetailViewModel<VolumeAnalysisDetailViewModel.UiState>(
+    initialState = UiState.Loading,
+    savedStateHandle = savedStateHandle
+) {
 
     /**
      * Current configuration state - persisted using StatefulDetailViewModel
@@ -150,64 +147,87 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
      * Performance target: <500ms load time as per SPEC requirements
      */
     private fun loadVolumeAnalysisData() {
-        executeUseCase(
-            useCase = {
+        viewModelScope.launch {
+            updateState { UiState.Loading }
+
+            try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = { throw Exception("User not authenticated") }
                 )
-                
-                
-                analyticsQueryUseCase.getVolumeAnalysis(
+
+                val result = analyticsQueryUseCase.getVolumeAnalysis(
                     userId = userId,
                     groupBy = groupBy.value,
                     timeRange = timeRange.value
                 )
-            },
-            onSuccess = { useCaseData ->
-                val startTime = System.currentTimeMillis()
-                
-                
-                // Convert use case data to UI data format
-                val uiData = VolumeAnalysisData(
-                    volumeData = useCaseData.volumeData.map { useCasePoint ->
-                        // Convert use case VolumeDataPoint to domain VolumeDataPoint
-                        val date = useCasePoint.date?.let { kotlinx.datetime.LocalDate.parse(it) } 
-                            ?: Clock.System.todayIn(kotlinx.datetime.TimeZone.currentSystemDefault())
-                        com.example.liftrix.domain.model.analytics.VolumeDataPoint.fromKgDouble(
-                            date = date,
-                            volumeKg = useCasePoint.volume,
-                            workoutCount = useCasePoint.sets,
-                            exerciseCount = useCasePoint.exercises,
-                            label = useCasePoint.label
+
+                result.fold(
+                    onSuccess = { useCaseData ->
+                        val startTime = System.currentTimeMillis()
+
+                        // Convert use case data to UI data format
+                        val uiData = VolumeAnalysisData(
+                            volumeData = useCaseData.volumeData.map { useCasePoint ->
+                                // Convert use case VolumeDataPoint to domain VolumeDataPoint
+                                val date = useCasePoint.date?.let { kotlinx.datetime.LocalDate.parse(it) }
+                                    ?: Clock.System.todayIn(kotlinx.datetime.TimeZone.currentSystemDefault())
+                                com.example.liftrix.domain.model.analytics.VolumeDataPoint.fromKgDouble(
+                                    date = date,
+                                    volumeKg = useCasePoint.volume,
+                                    workoutCount = useCasePoint.sets,
+                                    exerciseCount = useCasePoint.exercises,
+                                    label = useCasePoint.label
+                                )
+                            },
+                            totalVolume = useCaseData.totalVolume.toDouble(),
+                            volumeGrowth = useCaseData.volumeGrowth.toDouble(),
+                            averageVolume = useCaseData.averageVolume.toDouble(),
+                            lastUpdated = Clock.System.now()
                         )
+
+                        val loadTime = System.currentTimeMillis() - startTime
+                        Timber.d("Volume analysis data loaded in ${loadTime}ms")
+
+                        // Performance validation - warn if exceeds 500ms target
+                        if (loadTime > 500) {
+                            Timber.w("PERFORMANCE WARNING: Volume analysis load time exceeded 500ms target: ${loadTime}ms")
+                        } else {
+                            Timber.i("PERFORMANCE: Volume analysis load time within target: ${loadTime}ms")
+                        }
+
+                        if (useCaseData.isEmpty) {
+                            updateState { UiState.Empty() }
+                        } else {
+                            updateState { UiState.Success(uiData) }
+                        }
+
+                        Timber.d("Volume analysis data loaded: groupBy=${groupBy.value}, timeRange=${timeRange.value}")
                     },
-                    totalVolume = useCaseData.totalVolume.toDouble(),
-                    volumeGrowth = useCaseData.volumeGrowth.toDouble(),
-                    averageVolume = useCaseData.averageVolume.toDouble(),
-                    lastUpdated = Clock.System.now()
+                    onFailure = { error ->
+                        val liftrixError = if (error is LiftrixError) {
+                            error
+                        } else {
+                            LiftrixError.BusinessLogicError(
+                                code = "VOLUME_ANALYSIS_LOAD_FAILED",
+                                errorMessage = "Failed to load volume analysis data: ${error.message}",
+                                analyticsContext = mapOf("operation" to "LOAD_VOLUME_ANALYSIS")
+                            )
+                        }
+                        updateState { UiState.Error(liftrixError) }
+                        Timber.e(error, "Failed to load volume analysis data")
+                    }
                 )
-                
-                val loadTime = System.currentTimeMillis() - startTime
-                Timber.d("Volume analysis data loaded in ${loadTime}ms")
-                
-                // Performance validation - warn if exceeds 500ms target
-                if (loadTime > 500) {
-                    Timber.w("PERFORMANCE WARNING: Volume analysis load time exceeded 500ms target: ${loadTime}ms")
-                } else {
-                    Timber.i("PERFORMANCE: Volume analysis load time within target: ${loadTime}ms")
-                }
-                
-                
-                if (useCaseData.isEmpty) {
-                    _uiState.value = UiState.Empty()
-                } else {
-                    _uiState.value = UiState.Success(uiData)
-                }
-                
-                Timber.d("Volume analysis data loaded: groupBy=${groupBy.value}, timeRange=${timeRange.value}")
+            } catch (error: Exception) {
+                val liftrixError = LiftrixError.BusinessLogicError(
+                    code = "VOLUME_ANALYSIS_LOAD_FAILED",
+                    errorMessage = "Failed to load volume analysis data: ${error.message}",
+                    analyticsContext = mapOf("operation" to "LOAD_VOLUME_ANALYSIS")
+                )
+                updateState { UiState.Error(liftrixError) }
+                Timber.e(error, "Failed to load volume analysis data")
             }
-        )
+        }
     }
 
     /**
@@ -315,7 +335,7 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
                                     operation = "EXPORT_VOLUME_DATA"
                                 )
                             }
-                            handleError(liftrixError)
+                            updateState { UiState.Error(liftrixError) }
                         }
                     )
                 }
@@ -328,13 +348,13 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
                     errorMessage = "Failed to export volume analysis data: ${error.message}",
                     operation = "EXPORT_VOLUME_DATA"
                 )
-                handleError(liftrixError)
+                updateState { UiState.Error(liftrixError) }
                 Timber.e(error, "Failed to export volume analysis data")
             }
         }
     }
 
-    override fun handleEvent(event: Event) {
+    fun handleEvent(event: Event) {
         when (event) {
             is Event.UpdateGroupBy -> updateGroupBy(event.groupBy)
             is Event.UpdateTimeRange -> updateTimeRange(event.timeRange)
@@ -416,7 +436,7 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
     /**
      * Events for volume analysis detail screen
      */
-    sealed class Event : ViewModelEvent {
+    sealed class Event {
         data class UpdateGroupBy(val groupBy: VolumeGrouping) : Event()
         data class UpdateTimeRange(val timeRange: TimeRangeType) : Event()
         data object ToggleProjections : Event()
@@ -470,14 +490,6 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
             averageVolume = if (volumeData.isNotEmpty()) totalVolume / volumeData.size else 0.0,
             lastUpdated = now
         )
-    }
-
-    override fun updateErrorState(error: LiftrixError) {
-        handleError(error)
-    }
-
-    override fun setLoadingState() {
-        _uiState.value = UiState.Loading
     }
 }
 

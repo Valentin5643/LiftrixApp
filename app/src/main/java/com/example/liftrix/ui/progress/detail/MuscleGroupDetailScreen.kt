@@ -71,7 +71,7 @@ fun MuscleGroupDetailScreen(
             GlobalTimeRangeSelector(
                 selectedTimeRange = currentTimeRange,
                 onTimeRangeChange = { newTimeRange ->
-                    viewModel.handleEvent(MuscleGroupDetailViewModel.Event.UpdateTimeRange(newTimeRange))
+                    viewModel.updateTimeRange(newTimeRange)
                 },
                 modifier = Modifier.fillMaxWidth()
             )
@@ -81,7 +81,7 @@ fun MuscleGroupDetailScreen(
             // Muscle group controls card
             MuscleGroupControlsCard(
                 onExportClick = {
-                    viewModel.handleEvent(MuscleGroupDetailViewModel.Event.ExportData)
+                    viewModel.exportData()
                 },
                 modifier = Modifier.fillMaxWidth()
             )
@@ -105,7 +105,7 @@ fun MuscleGroupDetailScreen(
                     ErrorDisplay(
                         error = errorState.error,
                         onRetry = {
-                            viewModel.handleEvent(MuscleGroupDetailViewModel.Event.RetryLoad)
+                            viewModel.retryLoad()
                         },
                         modifier = Modifier.fillMaxSize()
                     )
@@ -117,7 +117,7 @@ fun MuscleGroupDetailScreen(
                         message = emptyState.message,
                         actionText = "Clear Selection",
                         onActionClick = {
-                            viewModel.handleEvent(MuscleGroupDetailViewModel.Event.ClearMuscleGroupSelection)
+                            viewModel.clearMuscleGroupSelection()
                         },
                         modifier = Modifier.fillMaxSize()
                     )
@@ -129,7 +129,7 @@ fun MuscleGroupDetailScreen(
                     DistributionView(
                         data = successState.data,
                         onMuscleGroupClick = { muscleGroup ->
-                            viewModel.handleEvent(MuscleGroupDetailViewModel.Event.SelectMuscleGroupSegment(muscleGroup))
+                            viewModel.selectMuscleGroupSegment(muscleGroup)
                         }
                     )
                 }

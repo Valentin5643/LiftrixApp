@@ -14,12 +14,10 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import com.example.liftrix.domain.repository.social.EngagementRepository
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.sharing.ShareToExternalPlatformUseCase
 import com.example.liftrix.domain.usecase.sharing.SharePlatform
 import com.example.liftrix.domain.usecase.sharing.ShareContentType
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
-import com.example.liftrix.ui.common.event.ViewModelEvent
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,7 +50,7 @@ data class UserWorkoutsUiState(
  * Events that can occur on the User Workouts screen
  */
 @Stable
-sealed class UserWorkoutsEvent : ViewModelEvent {
+sealed class UserWorkoutsEvent {
     @Stable
     data class ToggleLike(val postId: String) : UserWorkoutsEvent()
     @Stable
@@ -78,11 +76,10 @@ class UserWorkoutsViewModel @Inject constructor(
     private val workoutRepository: WorkoutRepository,
     private val engagementRepository: EngagementRepository,
     private val authQueryUseCase: AuthQueryUseCase,
-    private val shareToExternalPlatformUseCase: ShareToExternalPlatformUseCase,
-    errorHandler: ErrorHandler
-) : BaseViewModel<UserWorkoutsUiState, UserWorkoutsEvent>(errorHandler) {
-    
-    override val _uiState = MutableStateFlow(UserWorkoutsUiState())
+    private val shareToExternalPlatformUseCase: ShareToExternalPlatformUseCase
+) : ModernBaseViewModel<UserWorkoutsUiState>(
+    initialState = UserWorkoutsUiState()
+) {
     
     // Expose workout posts from UI state
     val userWorkouts: Flow<List<WorkoutPost>> = _uiState
@@ -94,13 +91,17 @@ class UserWorkoutsViewModel @Inject constructor(
         loadUserWorkouts()
     }
     
-    override fun handleEvent(event: UserWorkoutsEvent) {
+    fun handleEvent(event: UserWorkoutsEvent) {
         when (event) {
             is UserWorkoutsEvent.ToggleLike -> toggleLike(event.postId)
             is UserWorkoutsEvent.ToggleSave -> toggleSave(event.postId)
             is UserWorkoutsEvent.ShareWorkout -> shareWorkout(event.workoutId)
             UserWorkoutsEvent.RefreshWorkouts -> refreshWorkouts()
         }
+    }
+
+    private fun handleError(error: LiftrixError) {
+        updateState { it.copy(isLoading = false, error = error) }
     }
     
     private fun refreshWorkouts() {

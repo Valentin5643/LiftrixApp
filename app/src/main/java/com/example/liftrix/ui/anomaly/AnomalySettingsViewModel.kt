@@ -5,10 +5,8 @@ import com.example.liftrix.domain.model.AnomalyDetectionSettings
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.usecase.anomaly.DetectWorkoutAnomaliesUseCase
-import com.example.liftrix.domain.usecase.common.ErrorHandler
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.common.state.UiState
-import com.example.liftrix.ui.common.event.ViewModelEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,13 +23,10 @@ import javax.inject.Inject
 @HiltViewModel
 class AnomalySettingsViewModel @Inject constructor(
     private val detectAnomaliesUseCase: DetectWorkoutAnomaliesUseCase,
-    private val authRepository: AuthRepository,
-    errorHandler: ErrorHandler
-) : BaseViewModel<AnomalySettingsUiState, AnomalySettingsEvent>(errorHandler) {
+    private val authRepository: AuthRepository
+) : ModernBaseViewModel<AnomalySettingsUiState>(initialState = UiState.Loading) {
 
-    override val _uiState: MutableStateFlow<AnomalySettingsUiState> = MutableStateFlow(UiState.Loading)
-
-    override fun handleEvent(event: AnomalySettingsEvent) {
+    fun handleEvent(event: AnomalySettingsEvent) {
         when (event) {
             is AnomalySettingsEvent.LoadSettings -> loadSettings()
             is AnomalySettingsEvent.UpdateSettings -> updateSettings(event.settings)
@@ -119,14 +114,6 @@ class AnomalySettingsViewModel @Inject constructor(
             }
         }
     }
-
-    override fun setLoadingState() {
-        _uiState.value = UiState.Loading
-    }
-
-    override fun updateErrorState(error: LiftrixError) {
-        _uiState.value = UiState.Error(error)
-    }
 }
 
 /**
@@ -137,7 +124,7 @@ typealias AnomalySettingsUiState = UiState<AnomalyDetectionSettings>
 /**
  * Events for the anomaly settings screen
  */
-sealed class AnomalySettingsEvent : ViewModelEvent {
+sealed class AnomalySettingsEvent {
     data object LoadSettings : AnomalySettingsEvent()
     data class UpdateSettings(val settings: AnomalyDetectionSettings) : AnomalySettingsEvent()
     data object ResetToDefaults : AnomalySettingsEvent()

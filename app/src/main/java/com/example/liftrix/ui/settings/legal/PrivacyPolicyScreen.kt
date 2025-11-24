@@ -20,12 +20,11 @@ import com.example.liftrix.ui.components.cards.ElevatedLiftrixCard
 import com.example.liftrix.ui.theme.LiftrixTheme
 import com.example.liftrix.ui.settings.legal.LegalDocumentViewModel
 import com.example.liftrix.ui.settings.legal.LegalDocumentUiState
-import com.example.liftrix.ui.settings.legal.LegalDocumentEvent
 import timber.log.Timber
 
 /**
  * Privacy Policy screen displaying the current privacy policy document
- * 
+ *
  * Features:
  * - WebView or text display of privacy policy content
  * - Download as PDF option
@@ -34,7 +33,9 @@ import timber.log.Timber
  * - Offline content caching
  * - Loading and error states
  * - Accessibility support
- * 
+ *
+ * Modernization: Uses direct function calls instead of event-based pattern
+ *
  * @param onNavigateBack Callback to navigate back to previous screen
  * @param viewModel LegalDocumentViewModel for managing content state
  */
@@ -47,7 +48,7 @@ fun PrivacyPolicyScreen(
     val uiState by viewModel.uiState.collectAsState()
     
     LaunchedEffect(viewModel) {
-        viewModel.handleEvent(LegalDocumentEvent.LoadPrivacyPolicy)
+        viewModel.loadPrivacyPolicy()
     }
     
     Scaffold(
@@ -70,20 +71,16 @@ fun PrivacyPolicyScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = { 
-                            viewModel.handleEvent(LegalDocumentEvent.RefreshContent) 
-                        }
+                        onClick = { viewModel.refreshContent() }
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Refresh content"
                         )
                     }
-                    
+
                     IconButton(
-                        onClick = { 
-                            viewModel.handleEvent(LegalDocumentEvent.DownloadAsPdf("privacy_policy")) 
-                        }
+                        onClick = { viewModel.downloadAsPdf("privacy_policy") }
                     ) {
                         Icon(
                             imageVector = Icons.Default.Download,
@@ -112,9 +109,7 @@ fun PrivacyPolicyScreen(
                     document = currentUiState.data.privacyPolicy,
                     lastUpdated = currentUiState.data.privacyPolicyLastUpdated,
                     isRefreshing = currentUiState.data.isRefreshing,
-                    onRefresh = {
-                        viewModel.handleEvent(LegalDocumentEvent.RefreshContent)
-                    },
+                    onRefresh = { viewModel.refreshContent() },
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
@@ -124,20 +119,16 @@ fun PrivacyPolicyScreen(
             is LegalDocumentUiState.Error -> {
                 LegalDocumentErrorContent(
                     error = currentUiState.error,
-                    onRetry = {
-                        viewModel.handleEvent(LegalDocumentEvent.LoadPrivacyPolicy)
-                    },
+                    onRetry = { viewModel.loadPrivacyPolicy() },
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
                 )
             }
-            
+
             is LegalDocumentUiState.Empty -> {
                 LegalDocumentEmptyContent(
-                    onRetry = {
-                        viewModel.handleEvent(LegalDocumentEvent.LoadPrivacyPolicy)
-                    },
+                    onRetry = { viewModel.loadPrivacyPolicy() },
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
@@ -171,7 +162,7 @@ fun TermsOfServiceScreen(
     val uiState by viewModel.uiState.collectAsState()
     
     LaunchedEffect(viewModel) {
-        viewModel.handleEvent(LegalDocumentEvent.LoadTermsOfService)
+        viewModel.loadTermsOfService()
     }
     
     Scaffold(
@@ -194,20 +185,16 @@ fun TermsOfServiceScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = { 
-                            viewModel.handleEvent(LegalDocumentEvent.RefreshContent) 
-                        }
+                        onClick = { viewModel.refreshContent() }
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Refresh content"
                         )
                     }
-                    
+
                     IconButton(
-                        onClick = { 
-                            viewModel.handleEvent(LegalDocumentEvent.DownloadAsPdf("terms_of_service")) 
-                        }
+                        onClick = { viewModel.downloadAsPdf("terms_of_service") }
                     ) {
                         Icon(
                             imageVector = Icons.Default.Download,
@@ -236,32 +223,26 @@ fun TermsOfServiceScreen(
                     document = currentUiState.data.termsOfService,
                     lastUpdated = currentUiState.data.termsOfServiceLastUpdated,
                     isRefreshing = currentUiState.data.isRefreshing,
-                    onRefresh = {
-                        viewModel.handleEvent(LegalDocumentEvent.RefreshContent)
-                    },
+                    onRefresh = { viewModel.refreshContent() },
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
                 )
             }
-            
+
             is LegalDocumentUiState.Error -> {
                 LegalDocumentErrorContent(
                     error = currentUiState.error,
-                    onRetry = {
-                        viewModel.handleEvent(LegalDocumentEvent.LoadTermsOfService)
-                    },
+                    onRetry = { viewModel.loadTermsOfService() },
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
                 )
             }
-            
+
             is LegalDocumentUiState.Empty -> {
                 LegalDocumentEmptyContent(
-                    onRetry = {
-                        viewModel.handleEvent(LegalDocumentEvent.LoadTermsOfService)
-                    },
+                    onRetry = { viewModel.loadTermsOfService() },
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)

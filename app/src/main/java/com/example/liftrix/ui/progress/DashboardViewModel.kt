@@ -9,12 +9,11 @@ import com.example.liftrix.domain.model.analytics.AnalyticsWidget
 import com.example.liftrix.domain.model.analytics.DashboardConfiguration
 import com.example.liftrix.domain.model.analytics.TimeRange
 import com.example.liftrix.domain.model.error.LiftrixError
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.analytics.GetWidgetDataUseCase
 import com.example.liftrix.domain.usecase.analytics.GetDashboardConfigurationUseCase
 import com.example.liftrix.domain.usecase.analytics.WidgetPreferencesUseCase
 import com.example.liftrix.service.WidgetResolver
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.common.state.UiState
 import timber.log.Timber
 
@@ -80,23 +79,17 @@ import timber.log.Timber
  * @param getWidgetDataUseCase Use case for retrieving widget data
  * @param getDashboardConfigurationUseCase Use case for dashboard configuration
  * @param widgetPreferencesUseCase Consolidated use case for widget preference operations
- * @param errorHandler Centralized error handling service
+ * @param widgetResolver Service for resolving widgets from preferences
  */
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val getWidgetDataUseCase: GetWidgetDataUseCase,
     private val getDashboardConfigurationUseCase: GetDashboardConfigurationUseCase,
     private val widgetPreferencesUseCase: WidgetPreferencesUseCase,
-    private val widgetResolver: WidgetResolver,
-    errorHandler: ErrorHandler
-) : BaseViewModel<UiState<DashboardUiState>, DashboardEvent>(errorHandler) {
-
-    /**
-     * Internal mutable state flow for dashboard state management.
-     * Initialized with loading state while configuration and data are loaded.
-     */
-    override val _uiState: MutableStateFlow<UiState<DashboardUiState>> = 
-        MutableStateFlow(UiState.Loading)
+    private val widgetResolver: WidgetResolver
+) : ModernBaseViewModel<UiState<DashboardUiState>>(
+    initialState = UiState.Loading
+) {
 
     /**
      * Current authenticated user state for data scoping.
@@ -150,14 +143,14 @@ class DashboardViewModel @Inject constructor(
 
     /**
      * Handles events from the UI following the MVI pattern.
-     * 
+     *
      * This method processes all user interactions and system events, updating the state
      * accordingly and triggering appropriate data operations. All operations maintain
      * consistency and provide user feedback through reactive state updates.
-     * 
+     *
      * @param event The event to process
      */
-    override fun handleEvent(event: DashboardEvent) {
+    fun handleEvent(event: DashboardEvent) {
         viewModelScope.launch {
             try {
                 when (event) {
@@ -303,12 +296,7 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Updates error state for dashboard-specific error handling.
-     * 
-     * @param error The error to reflect in the state
-     */
-    override fun updateErrorState(error: LiftrixError) {
+    private fun handleError(error: LiftrixError) {
         updateState { currentState ->
             when (currentState) {
                 is UiState.Success -> UiState.Success(
@@ -317,13 +305,6 @@ class DashboardViewModel @Inject constructor(
                 else -> UiState.Error(error)
             }
         }
-    }
-
-    /**
-     * Sets loading state for dashboard operations.
-     */
-    override fun setLoadingState() {
-        updateState { UiState.Loading }
     }
 
     /**
@@ -390,12 +371,12 @@ class DashboardViewModel @Inject constructor(
                 errorMessage = "User not authenticated",
                 analyticsContext = mapOf("operation" to "loadDashboard")
             )
-            updateErrorState(error)
+            updateState { UiState.Error(error) }
             return
         }
 
         if (showLoading) {
-            setLoadingState()
+            updateState { UiState.Loading }
         }
 
         try {
@@ -445,7 +426,7 @@ class DashboardViewModel @Inject constructor(
                         errorMessage = "Failed to load dashboard configuration: ${throwable.message}",
                         analyticsContext = mapOf("operation" to "loadDashboard")
                     )
-                    updateErrorState(error)
+                    updateState { UiState.Error(error) }
                     Timber.e("Failed to load dashboard configuration: ${error.message}")
                 }
                 )
@@ -458,7 +439,7 @@ class DashboardViewModel @Inject constructor(
                     "exception" to exception.message.orEmpty()
                 )
             )
-            updateErrorState(error)
+            updateState { UiState.Error(error) }
             Timber.e(exception, "Unexpected error loading dashboard")
         }
     }
@@ -685,7 +666,7 @@ class DashboardViewModel @Inject constructor(
                 violations = listOf("Invalid widget indices for reordering"),
                 analyticsContext = mapOf("fromIndex" to fromIndex.toString(), "toIndex" to toIndex.toString())
             )
-            updateErrorState(error)
+            updateState { UiState.Error(error) }
             return
         }
         

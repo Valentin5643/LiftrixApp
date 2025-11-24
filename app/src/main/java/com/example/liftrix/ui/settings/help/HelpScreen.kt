@@ -134,19 +134,19 @@ fun HelpScreen(
                 HelpSuccessContent(
                     data = currentUiState.data,
                     onSearchQueryChanged = { query ->
-                        viewModel.handleEvent(HelpEvent.SearchArticles(query))
+                        viewModel.searchArticles(query)
                     },
                     onClearSearch = {
-                        viewModel.handleEvent(HelpEvent.ClearSearch)
+                        viewModel.clearSearch()
                     },
                     onCategorySelected = { category ->
-                        viewModel.handleEvent(HelpEvent.SelectCategory(category))
+                        viewModel.selectCategory(category)
                     },
                     onArticleClicked = { articleId ->
-                        viewModel.handleEvent(HelpEvent.ViewArticle(articleId))
+                        viewModel.viewArticle(articleId)
                     },
                     onRefresh = {
-                        viewModel.handleEvent(HelpEvent.RefreshContent)
+                        viewModel.refreshContent()
                     },
                     onContactSupport = onNavigateToSupport,
                     modifier = Modifier
@@ -154,25 +154,25 @@ fun HelpScreen(
                         .padding(paddingValues)
                 )
             }
-            
+
             is HelpUiState.Error -> {
                 HelpErrorContent(
                     error = currentUiState.error,
                     data = currentUiState.previousData ?: HelpUiState.Data(),
                     onRetry = {
-                        viewModel.handleEvent(HelpEvent.Retry)
+                        viewModel.retry()
                     },
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
                 )
             }
-            
+
             is HelpUiState.Empty -> {
                 HelpEmptyContent(
                     onContactSupport = onNavigateToSupport,
                     onRetry = {
-                        viewModel.handleEvent(HelpEvent.Retry)
+                        viewModel.retry()
                     },
                     modifier = Modifier
                         .fillMaxSize()

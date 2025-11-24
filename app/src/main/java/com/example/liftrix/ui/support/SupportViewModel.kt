@@ -7,8 +7,7 @@ import com.example.liftrix.domain.model.support.SupportCategory
 import com.example.liftrix.domain.service.AppInfoService
 import com.example.liftrix.domain.service.SupportService
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.common.ErrorHandler
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.settings.support.SupportUiState
 import com.example.liftrix.ui.settings.support.TicketForm
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -34,11 +33,8 @@ import javax.inject.Inject
 class SupportViewModel @Inject constructor(
     private val supportService: SupportService,
     private val appInfoService: AppInfoService,
-    private val authQueryUseCase: AuthQueryUseCase,
-    errorHandler: ErrorHandler
-) : BaseViewModel<SupportUiState, SupportEvent>(errorHandler) {
-    
-    override val _uiState = MutableStateFlow<SupportUiState>(SupportUiState.Loading)
+    private val authQueryUseCase: AuthQueryUseCase
+) : ModernBaseViewModel<SupportUiState>(initialState = SupportUiState.Loading) {
     
     private val _sideEffects = MutableSharedFlow<SupportSideEffect>()
     val sideEffects = _sideEffects.asSharedFlow()
@@ -48,7 +44,7 @@ class SupportViewModel @Inject constructor(
         handleEvent(SupportEvent.LoadContent)
     }
     
-    override fun handleEvent(event: SupportEvent) {
+    fun handleEvent(event: SupportEvent) {
         when (event) {
             is SupportEvent.LoadContent -> loadContent()
             is SupportEvent.RefreshTickets -> refreshTickets()

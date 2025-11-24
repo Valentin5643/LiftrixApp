@@ -1,15 +1,12 @@
 package com.example.liftrix.ui.settings.legal
 
 import androidx.lifecycle.viewModelScope
-import com.example.liftrix.domain.model.common.LiftrixResult
-import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.service.LegalDocumentService
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.legal.DownloadPdfUseCase
 import com.example.liftrix.domain.usecase.legal.DownloadPdfResult
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,8 +16,8 @@ import timber.log.Timber
 import javax.inject.Inject
 
 /**
- * ViewModel for legal document screens implementing MVI pattern
- * 
+ * ViewModel for legal document screens using modernized direct function pattern
+ *
  * Features:
  * - Document loading with remote content fetching
  * - Offline content caching for legal documents
@@ -29,43 +26,28 @@ import javax.inject.Inject
  * - User acceptance tracking
  * - Error handling with retry capabilities
  * - Real-time content updates
+ *
+ * Modernization: Converted from event-based MVI to direct function calls for clearer data flow
  */
 @HiltViewModel
 class LegalDocumentViewModel @Inject constructor(
     private val legalDocumentService: LegalDocumentService,
     private val authQueryUseCase: AuthQueryUseCase,
-    private val downloadPdfUseCase: DownloadPdfUseCase,
-    errorHandler: ErrorHandler
-) : BaseViewModel<LegalDocumentUiState, LegalDocumentEvent>(errorHandler) {
-    
-    override val _uiState = MutableStateFlow<LegalDocumentUiState>(LegalDocumentUiState.Loading)
+    private val downloadPdfUseCase: DownloadPdfUseCase
+) : ModernBaseViewModel<LegalDocumentUiState>(initialState = LegalDocumentUiState.Loading) {
     
     private val _sideEffects = MutableSharedFlow<LegalDocumentSideEffect>()
     val sideEffects = _sideEffects.asSharedFlow()
     
     init {
         // Load all documents on initialization
-        handleEvent(LegalDocumentEvent.LoadAllDocuments)
+        loadAllDocuments()
     }
-    
-    override fun handleEvent(event: LegalDocumentEvent) {
-        when (event) {
-            is LegalDocumentEvent.LoadPrivacyPolicy -> loadPrivacyPolicy()
-            is LegalDocumentEvent.LoadTermsOfService -> loadTermsOfService()
-            is LegalDocumentEvent.LoadAllDocuments -> loadAllDocuments()
-            is LegalDocumentEvent.RefreshContent -> refreshContent()
-            is LegalDocumentEvent.DownloadAsPdf -> downloadAsPdf(event.documentType)
-            is LegalDocumentEvent.SearchDocument -> searchDocument(event.query)
-            is LegalDocumentEvent.ClearSearch -> clearSearch()
-            is LegalDocumentEvent.AcceptDocument -> acceptDocument(event.documentType)
-            is LegalDocumentEvent.Retry -> retry()
-        }
-    }
-    
+
     /**
      * Loads privacy policy document
      */
-    private fun loadPrivacyPolicy() {
+    fun loadPrivacyPolicy() {
         viewModelScope.launch {
             updateState { LegalDocumentUiState.Loading }
             
@@ -103,7 +85,7 @@ class LegalDocumentViewModel @Inject constructor(
     /**
      * Loads terms of service document
      */
-    private fun loadTermsOfService() {
+    fun loadTermsOfService() {
         viewModelScope.launch {
             updateState { LegalDocumentUiState.Loading }
             
@@ -141,7 +123,7 @@ class LegalDocumentViewModel @Inject constructor(
     /**
      * Loads all legal documents
      */
-    private fun loadAllDocuments() {
+    fun loadAllDocuments() {
         viewModelScope.launch {
             updateState { LegalDocumentUiState.Loading }
             
@@ -174,7 +156,7 @@ class LegalDocumentViewModel @Inject constructor(
     /**
      * Refreshes document content from remote sources
      */
-    private fun refreshContent() {
+    fun refreshContent() {
         viewModelScope.launch {
             val currentData = getCurrentData()
             updateState { LegalDocumentUiState.Success(currentData.copy(isRefreshing = true)) }
@@ -228,7 +210,7 @@ class LegalDocumentViewModel @Inject constructor(
     /**
      * Downloads document as PDF with full implementation
      */
-    private fun downloadAsPdf(documentType: String) {
+    fun downloadAsPdf(documentType: String) {
         viewModelScope.launch {
             val currentData = getCurrentData()
             updateState { 
@@ -316,46 +298,42 @@ class LegalDocumentViewModel @Inject constructor(
     /**
      * Searches within document content
      */
-    private fun searchDocument(query: String) {
+    fun searchDocument(query: String) {
         if (query.isBlank()) {
             clearSearch()
             return
         }
-        
-        executeUseCase(
-            useCase = {
+
+        viewModelScope.launch {
+            try {
                 val currentData = getCurrentData()
                 val searchResults = mutableListOf<SearchResult>()
-                
+
                 // Search in privacy policy
                 currentData.privacyPolicy?.let { document ->
                     val matches = findTextMatches(document, query, "Privacy Policy")
                     searchResults.addAll(matches)
                 }
-                
+
                 // Search in terms of service
                 currentData.termsOfService?.let { document ->
                     val matches = findTextMatches(document, query, "Terms of Service")
                     searchResults.addAll(matches)
                 }
-                
-                Result.success(searchResults)
-            },
-            onSuccess = { results ->
-                emitSideEffect(LegalDocumentSideEffect.ShowSearchResults(results))
-                Timber.d("Document search completed: ${results.size} results for '$query'")
-            },
-            onError = { error ->
+
+                emitSideEffect(LegalDocumentSideEffect.ShowSearchResults(searchResults))
+                Timber.d("Document search completed: ${searchResults.size} results for '$query'")
+            } catch (e: Exception) {
                 emitSideEffect(LegalDocumentSideEffect.ShowError("Search failed"))
-                Timber.e("Document search failed: $error")
+                Timber.e("Document search failed: $e")
             }
-        )
+        }
     }
     
     /**
      * Clears search results
      */
-    private fun clearSearch() {
+    fun clearSearch() {
         emitSideEffect(LegalDocumentSideEffect.ShowSearchResults(emptyList()))
         Timber.d("Document search cleared")
     }
@@ -363,9 +341,9 @@ class LegalDocumentViewModel @Inject constructor(
     /**
      * Records user acceptance of a document
      */
-    private fun acceptDocument(documentType: String) {
-        executeUseCase(
-            useCase = {
+    fun acceptDocument(documentType: String) {
+        viewModelScope.launch {
+            try {
                 when (documentType) {
                     "privacy_policy" -> {
                         val document = legalDocumentService.getPrivacyPolicy().fold(
@@ -417,26 +395,21 @@ class LegalDocumentViewModel @Inject constructor(
                         analyticsContext = mapOf("operation" to "ACCEPT_LEGAL_DOCUMENT")
                     )
                 }
-                Result.success(Unit)
-            },
-            onSuccess = {
-                viewModelScope.launch {
-                    _sideEffects.emit(LegalDocumentSideEffect.ShowAcceptanceConfirmation(documentType))
-                }
+
+                _sideEffects.emit(LegalDocumentSideEffect.ShowAcceptanceConfirmation(documentType))
                 Timber.d("User accepted document: $documentType")
-            },
-            onError = { error ->
+            } catch (e: Exception) {
                 emitSideEffect(LegalDocumentSideEffect.ShowError("Failed to record acceptance"))
-                Timber.e("Failed to record document acceptance: $error")
+                Timber.e("Failed to record document acceptance: $e")
             }
-        )
+        }
     }
     
     /**
      * Retries the last failed operation
      */
-    private fun retry() {
-        when (val currentState = _uiState.value) {
+    fun retry() {
+        when (val currentState = uiState.value) {
             is LegalDocumentUiState.Error -> {
                 if (currentState.previousData?.hasAnyDocument == true) {
                     // Retry refresh
@@ -497,7 +470,7 @@ class LegalDocumentViewModel @Inject constructor(
      * Gets current data from state or returns default
      */
     private fun getCurrentData(): LegalDocumentUiState.Data {
-        return when (val currentState = _uiState.value) {
+        return when (val currentState = uiState.value) {
             is LegalDocumentUiState.Success -> currentState.data
             is LegalDocumentUiState.Error -> currentState.previousData ?: LegalDocumentUiState.Data()
             else -> LegalDocumentUiState.Data()

@@ -5,7 +5,6 @@ import com.example.liftrix.domain.model.*
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.usecase.workout.WorkoutCommandUseCase
 import com.example.liftrix.domain.usecase.workout.WorkoutQueryUseCase
 import com.example.liftrix.domain.usecase.workout.WorkoutSessionEditingData
@@ -13,10 +12,9 @@ import com.example.liftrix.ui.common.event.ViewModelEvent
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.ui.common.state.EditSessionUiState
 import com.example.liftrix.ui.common.state.EditSessionData
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
@@ -39,11 +37,8 @@ import javax.inject.Inject
 class EditSessionViewModel @Inject constructor(
     private val workoutQueryUseCase: WorkoutQueryUseCase,
     private val workoutCommandUseCase: WorkoutCommandUseCase,
-    private val authQueryUseCase: AuthQueryUseCase,
-    errorHandler: ErrorHandler
-) : BaseViewModel<EditSessionUiState, EditSessionEvent>(errorHandler) {
-
-    override val _uiState = MutableStateFlow<EditSessionUiState>(EditSessionUiState.Loading)
+    private val authQueryUseCase: AuthQueryUseCase
+) : ModernBaseViewModel<EditSessionUiState>(initialState = EditSessionUiState.Loading) {
 
     // Event flow for navigation and UI events
     private val _events = MutableSharedFlow<EditSessionEvent>()
@@ -63,7 +58,7 @@ class EditSessionViewModel @Inject constructor(
         }
     }
 
-    override fun handleEvent(event: EditSessionEvent) {
+    fun handleEvent(event: EditSessionEvent) {
         when (event) {
             is EditSessionEvent.LoadSession -> loadSession(event.sessionId)
             is EditSessionEvent.UpdateSessionNotes -> updateSessionNotes(event.notes)
@@ -76,53 +71,46 @@ class EditSessionViewModel @Inject constructor(
         }
     }
 
-    override fun setLoadingState() {
-        setState(EditSessionUiState.Loading)
-    }
-
-    override fun updateErrorState(error: LiftrixError) {
-        val currentData = _uiState.value.dataOrNull()
-        setState(EditSessionUiState.Error(
-            error = error,
-            previousData = currentData
-        ))
-    }
-
     /**
      * Loads workout session data for historical editing
      */
     private fun loadSession(sessionId: WorkoutId) {
-        executeUseCase(
-            useCase = {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
-                    onFailure = { "" }
-                )
-                workoutQueryUseCase.getSessionForEditing(sessionId, userId)
-            },
-            onSuccess = { editingData ->
+        viewModelScope.launch {
+            updateState { EditSessionUiState.Loading }
+            val userId = authQueryUseCase(waitForAuth = false).fold(
+                onSuccess = { it },
+                onFailure = { "" }
+            )
+            val result = workoutQueryUseCase.getSessionForEditing(sessionId, userId)
+            result.onSuccess { editingData ->
                 originalEditingData = editingData
-                setState(
+                updateState {
                     EditSessionUiState.Success(
                         data = EditSessionData(
                             session = convertWorkoutToUnifiedSession(editingData.session),
                             hasChanges = false
                         )
                     )
-                )
+                }
                 Timber.d("Successfully loaded session for editing: ${editingData.session.name}")
-            },
-            onError = { error ->
+            }.onFailure { error ->
+                logError(error, "loadSession")
+                updateState {
+                    EditSessionUiState.Error(
+                        error = error as? LiftrixError ?: LiftrixError.UnknownError(errorMessage = error.message ?: "Failed to load session"),
+                        previousData = null
+                    )
+                }
                 Timber.e("Failed to load workout session: ${error.message}")
             }
-        )
+        }
     }
 
     /**
      * Updates session notes
      */
     private fun updateSessionNotes(notes: String) {
-        val currentData = _uiState.value.dataOrNull()
+        val currentData = uiState.value.dataOrNull()
         if (currentData != null) {
             val updatedSession = currentData.session.copy(
                 notes = notes.ifBlank { null },
@@ -132,7 +120,7 @@ class EditSessionViewModel @Inject constructor(
                 session = updatedSession,
                 hasChanges = true
             )
-            setState(EditSessionUiState.Success(data = updatedData))
+            updateState { EditSessionUiState.Success(data = updatedData) }
         }
     }
 
@@ -140,11 +128,11 @@ class EditSessionViewModel @Inject constructor(
      * Updates session duration
      */
     private fun updateSessionDuration(duration: Duration) {
-        val currentData = _uiState.value.dataOrNull()
+        val currentData = uiState.value.dataOrNull()
         if (currentData != null) {
             val session = currentData.session
             val newEndTime = session.startedAt.plus(duration)
-            
+
             val updatedSession = session.copy(
                 endedAt = newEndTime,
                 lastModified = Instant.now()
@@ -153,7 +141,7 @@ class EditSessionViewModel @Inject constructor(
                 session = updatedSession,
                 hasChanges = true
             )
-            setState(EditSessionUiState.Success(data = updatedData))
+            updateState { EditSessionUiState.Success(data = updatedData) }
         }
     }
 
@@ -161,20 +149,20 @@ class EditSessionViewModel @Inject constructor(
      * Updates a specific exercise set within the session
      */
     private fun updateExerciseSet(exerciseIndex: Int, setIndex: Int, set: SessionSet) {
-        val currentData = _uiState.value.dataOrNull()
+        val currentData = uiState.value.dataOrNull()
         if (currentData != null) {
             val session = currentData.session
             val updatedExercises = session.exercises.toMutableList()
-            
+
             if (exerciseIndex in updatedExercises.indices) {
                 val exercise = updatedExercises[exerciseIndex]
                 val updatedSets = exercise.sets.toMutableList()
-                
+
                 if (setIndex in updatedSets.indices) {
                     updatedSets[setIndex] = set
                     val updatedExercise = exercise.copy(sets = updatedSets)
                     updatedExercises[exerciseIndex] = updatedExercise
-                    
+
                     val updatedSession = session.copy(
                         exercises = updatedExercises,
                         lastModified = Instant.now()
@@ -183,7 +171,7 @@ class EditSessionViewModel @Inject constructor(
                         session = updatedSession,
                         hasChanges = true
                     )
-                    setState(EditSessionUiState.Success(data = updatedData))
+                    updateState { EditSessionUiState.Success(data = updatedData) }
                 }
             }
         }
@@ -193,32 +181,28 @@ class EditSessionViewModel @Inject constructor(
      * Saves all changes to the workout session
      */
     private fun saveChanges() {
-        val currentData = _uiState.value.dataOrNull()
+        val currentData = uiState.value.dataOrNull()
         val originalData = originalEditingData
         if (currentData != null && originalData != null && currentData.hasChanges) {
-            
+
             // Convert UnifiedWorkoutSession to Workout for the use case
             val workoutFromSession = convertSessionToWorkout(currentData.session)
-            
-            executeUseCase(
-                useCase = {
-                    workoutCommandUseCase.updateSession(
-                        updatedSession = workoutFromSession,
-                        originalCreatedAt = originalData.originalCreatedAt
-                    )
-                },
-                onSuccess = { savedWorkout ->
+
+            viewModelScope.launch {
+                val result = workoutCommandUseCase.updateSession(
+                    updatedSession = workoutFromSession,
+                    originalCreatedAt = originalData.originalCreatedAt
+                )
+                result.onSuccess { savedWorkout ->
                     Timber.i("Successfully saved session changes: ${savedWorkout.name}")
                     // Navigate back after successful save
-                    viewModelScope.launch {
-                        _events.emit(EditSessionEvent.NavigateBack)
-                    }
-                },
-                onError = { error ->
+                    _events.emit(EditSessionEvent.NavigateBack)
+                }.onFailure { error ->
+                    logError(error, "saveChanges")
                     Timber.e("Failed to save session changes: ${error.message}")
                     showError("Failed to save changes: ${error.message}")
                 }
-            )
+            }
         }
     }
 

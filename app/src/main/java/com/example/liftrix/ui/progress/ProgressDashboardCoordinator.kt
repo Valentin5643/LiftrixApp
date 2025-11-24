@@ -7,11 +7,10 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import javax.inject.Inject
 
-import com.example.liftrix.ui.common.viewmodel.BaseViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel
 import com.example.liftrix.ui.common.state.UiState
 import com.example.liftrix.service.UnifiedWorkoutSessionManager
 import com.example.liftrix.domain.repository.AuthRepository
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.model.error.LiftrixError
 import timber.log.Timber
 
@@ -61,11 +60,8 @@ class ProgressDashboardCoordinator @Inject constructor(
     private val sessionManager: UnifiedWorkoutSessionManager,
     private val authRepository: AuthRepository,
     private val settingsQueryUseCase: com.example.liftrix.domain.usecase.settings.SettingsQueryUseCase,
-    private val unitConversionService: com.example.liftrix.domain.service.UnitConversionService,
-    errorHandler: ErrorHandler
-) : BaseViewModel<UiState<CoordinatorState>, CoordinatorEvent>(errorHandler) {
-
-    override val _uiState = MutableStateFlow<UiState<CoordinatorState>>(UiState.Loading)
+    private val unitConversionService: com.example.liftrix.domain.service.UnitConversionService
+) : ModernBaseViewModel<UiState<CoordinatorState>>(initialState = UiState.Loading) {
 
     /**
      * Internal coordinator state for managing coordination logic.
@@ -195,13 +191,11 @@ class ProgressDashboardCoordinator @Inject constructor(
                 .collect { session ->
                     val sessionActive = session != null && session.isActive()
                     val sessionId = session?.id?.value
-                    
-                    coordinatorState.updateValue {
-                        copy(
-                            sessionActive = sessionActive,
-                            currentSessionId = sessionId
-                        )
-                    }
+
+                    coordinatorState.value = coordinatorState.value.copy(
+                        sessionActive = sessionActive,
+                        currentSessionId = sessionId
+                    )
                     
                     // Broadcast session state change event
                     _coordinatorEvents.tryEmit(
@@ -234,11 +228,9 @@ class ProgressDashboardCoordinator @Inject constructor(
                     emit(com.example.liftrix.domain.model.WeightUnit.getSystemDefault())
                 }
                 .collect { weightUnit ->
-                    coordinatorState.updateValue {
-                        copy(
-                            coordinatorPreferences = coordinatorPreferences + ("weightUnit" to weightUnit)
-                        )
-                    }
+                    coordinatorState.value = coordinatorState.value.copy(
+                        coordinatorPreferences = coordinatorState.value.coordinatorPreferences + ("weightUnit" to weightUnit)
+                    )
                     
                     updateUiState()
                     
@@ -269,7 +261,7 @@ class ProgressDashboardCoordinator @Inject constructor(
     /**
      * Handles events from the UI and processes them through the coordinator.
      */
-    override fun handleEvent(event: CoordinatorEvent) {
+    fun handleEvent(event: CoordinatorEvent) {
         viewModelScope.launch {
             _eventQueue.emit(event)
         }
@@ -303,9 +295,7 @@ class ProgressDashboardCoordinator @Inject constructor(
      * Handles workout completion events and coordinates ViewModels refresh.
      */
     private suspend fun handleWorkoutCompleted(event: CoordinatorEvent.WorkoutCompleted) {
-        coordinatorState.updateValue {
-            copy(lastWorkoutCompletion = Clock.System.now())
-        }
+        coordinatorState.value = coordinatorState.value.copy(lastWorkoutCompletion = Clock.System.now())
         
         // Broadcast workout completion to all ViewModels
         _coordinatorEvents.emit(event)
@@ -322,17 +312,15 @@ class ProgressDashboardCoordinator @Inject constructor(
      * Handles refresh all data events and coordinates ViewModels refresh.
      */
     private suspend fun handleRefreshAllData() {
-        coordinatorState.updateValue {
-            copy(
-                lastGlobalRefresh = Clock.System.now(),
-                refreshingViewModels = setOf(
-                    "ProgressChartsViewModel",
-                    "AnalyticsWidgetViewModel", 
-                    "ProgressSummaryViewModel",
-                    "CalorieTrackingViewModel"
-                )
+        coordinatorState.value = coordinatorState.value.copy(
+            lastGlobalRefresh = Clock.System.now(),
+            refreshingViewModels = setOf(
+                "ProgressChartsViewModel",
+                "AnalyticsWidgetViewModel",
+                "ProgressSummaryViewModel",
+                "CalorieTrackingViewModel"
             )
-        }
+        )
         
         // Broadcast refresh event to all ViewModels
         _coordinatorEvents.emit(CoordinatorEvent.RefreshAllData)
@@ -344,9 +332,7 @@ class ProgressDashboardCoordinator @Inject constructor(
         // Clear refreshing state after a delay (ViewModels should report completion)
         viewModelScope.launch {
             kotlinx.coroutines.delay(5000) // 5 second timeout
-            coordinatorState.updateValue {
-                copy(refreshingViewModels = emptySet())
-            }
+            coordinatorState.value = coordinatorState.value.copy(refreshingViewModels = emptySet())
             updateUiState()
         }
     }
@@ -355,9 +341,7 @@ class ProgressDashboardCoordinator @Inject constructor(
      * Handles toggle real-time updates events.
      */
     private suspend fun handleToggleRealtimeUpdates(event: CoordinatorEvent.ToggleRealtimeUpdates) {
-        coordinatorState.updateValue {
-            copy(realtimeUpdates = event.enabled)
-        }
+        coordinatorState.value = coordinatorState.value.copy(realtimeUpdates = event.enabled)
         
         // Broadcast real-time update toggle to ViewModels
         _coordinatorEvents.emit(event)
@@ -373,10 +357,8 @@ class ProgressDashboardCoordinator @Inject constructor(
     private suspend fun handleUserAuthChanged(event: CoordinatorEvent.UserAuthChanged) {
         // Update connected ViewModels count based on auth state
         val connectedCount = if (event.userId != null) 4 else 0 // Assume 4 ViewModels when authenticated
-        
-        coordinatorState.updateValue {
-            copy(connectedViewModels = connectedCount)
-        }
+
+        coordinatorState.value = coordinatorState.value.copy(connectedViewModels = connectedCount)
         
         // Broadcast auth change to ViewModels
         _coordinatorEvents.emit(event)
@@ -399,12 +381,10 @@ class ProgressDashboardCoordinator @Inject constructor(
             Timber.w("Permission denied error detected - implementing graceful fallback: ${event.error}")
             
             // Instead of showing error to user, we'll silently handle it
-            coordinatorState.updateValue {
-                copy(
-                    globalError = null, // Don't show permission errors to users
-                    networkConnected = false // Treat as network issue for UI purposes
-                )
-            }
+            coordinatorState.value = coordinatorState.value.copy(
+                globalError = null, // Don't show permission errors to users
+                networkConnected = false // Treat as network issue for UI purposes
+            )
             
             // Broadcast a graceful fallback event instead of the error
             _coordinatorEvents.emit(
@@ -414,10 +394,8 @@ class ProgressDashboardCoordinator @Inject constructor(
             Timber.d("Permission error handled gracefully - analytics sync disabled")
         } else {
             // Handle non-permission errors normally
-            coordinatorState.updateValue {
-                copy(globalError = event.error)
-            }
-            
+            coordinatorState.value = coordinatorState.value.copy(globalError = event.error)
+
             // Broadcast error to specified ViewModels
             _coordinatorEvents.emit(event)
         }
@@ -435,12 +413,10 @@ class ProgressDashboardCoordinator @Inject constructor(
      * Handles session state changes.
      */
     private suspend fun handleSessionStateChanged(event: CoordinatorEvent.SessionStateChanged) {
-        coordinatorState.updateValue {
-            copy(
-                sessionActive = event.sessionActive,
-                currentSessionId = event.sessionId
-            )
-        }
+        coordinatorState.value = coordinatorState.value.copy(
+            sessionActive = event.sessionActive,
+            currentSessionId = event.sessionId
+        )
         
         // Broadcast session state change
         _coordinatorEvents.emit(event)
@@ -454,9 +430,7 @@ class ProgressDashboardCoordinator @Inject constructor(
      * Handles preferences changes.
      */
     private suspend fun handlePreferencesChanged(event: CoordinatorEvent.PreferencesChanged) {
-        coordinatorState.updateValue {
-            withUpdatedPreferences(event.preferencesChanged)
-        }
+        coordinatorState.value = coordinatorState.value.withUpdatedPreferences(event.preferencesChanged)
         
         // Broadcast preferences change
         _coordinatorEvents.emit(event)
@@ -470,9 +444,7 @@ class ProgressDashboardCoordinator @Inject constructor(
      * Handles refresh specific data events.
      */
     private suspend fun handleRefreshSpecificData(event: CoordinatorEvent.RefreshSpecificData) {
-        coordinatorState.updateValue {
-            copy(refreshingViewModels = event.dataTypes)
-        }
+        coordinatorState.value = coordinatorState.value.copy(refreshingViewModels = event.dataTypes)
         
         // Broadcast specific data refresh
         _coordinatorEvents.emit(event)
@@ -486,9 +458,7 @@ class ProgressDashboardCoordinator @Inject constructor(
      * Handles network connectivity changes.
      */
     private suspend fun handleNetworkConnectivityChanged(event: CoordinatorEvent.NetworkConnectivityChanged) {
-        coordinatorState.updateValue {
-            copy(networkConnected = event.isConnected)
-        }
+        coordinatorState.value = coordinatorState.value.copy(networkConnected = event.isConnected)
         
         // Broadcast network connectivity change
         _coordinatorEvents.emit(event)
@@ -524,9 +494,7 @@ class ProgressDashboardCoordinator @Inject constructor(
      * Handles clear error events and coordinates error dismissal across ViewModels.
      */
     private suspend fun handleClearError() {
-        coordinatorState.updateValue {
-            withClearedGlobalError()
-        }
+        coordinatorState.value = coordinatorState.value.withClearedGlobalError()
         
         // Broadcast clear error event to all ViewModels
         _coordinatorEvents.emit(CoordinatorEvent.ClearError)
@@ -540,14 +508,12 @@ class ProgressDashboardCoordinator @Inject constructor(
      * Handles cleanup coordinator events.
      */
     private suspend fun handleCleanupCoordinator() {
-        coordinatorState.updateValue {
-            copy(
-                isActive = false,
-                realtimeUpdates = false,
-                refreshingViewModels = emptySet(),
-                connectedViewModels = 0
-            )
-        }
+        coordinatorState.value = coordinatorState.value.copy(
+            isActive = false,
+            realtimeUpdates = false,
+            refreshingViewModels = emptySet(),
+            connectedViewModels = 0
+        )
         
         // Broadcast cleanup event
         _coordinatorEvents.emit(CoordinatorEvent.CleanupCoordinator)
@@ -574,9 +540,7 @@ class ProgressDashboardCoordinator @Inject constructor(
      */
     fun clearGlobalError() {
         viewModelScope.launch {
-            coordinatorState.updateValue {
-                withClearedGlobalError()
-            }
+            coordinatorState.value = coordinatorState.value.withClearedGlobalError()
             updateUiState()
         }
     }
@@ -586,9 +550,7 @@ class ProgressDashboardCoordinator @Inject constructor(
      */
     fun reportViewModelRefreshComplete(viewModelName: String) {
         viewModelScope.launch {
-            coordinatorState.updateValue {
-                withoutRefreshingViewModel(viewModelName)
-            }
+            coordinatorState.value = coordinatorState.value.withoutRefreshingViewModel(viewModelName)
             updateUiState()
         }
     }
@@ -603,7 +565,7 @@ class ProgressDashboardCoordinator @Inject constructor(
     /**
      * Handle error states by broadcasting them to ViewModels.
      */
-    override fun updateErrorState(error: LiftrixError) {
+    private fun handleError(error: LiftrixError) {
         viewModelScope.launch {
             val errorEvent = CoordinatorEvent.BroadcastError(
                 error = error.message,

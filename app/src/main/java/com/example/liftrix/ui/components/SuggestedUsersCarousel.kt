@@ -381,13 +381,10 @@ class SuggestedUsersCarouselViewModel @javax.inject.Inject constructor(
     private val followRepository: com.example.liftrix.domain.repository.social.FollowRepository,
     private val socialRelationshipUseCase: com.example.liftrix.domain.usecase.social.SocialRelationshipUseCase,
     private val authQueryUseCase: com.example.liftrix.domain.usecase.auth.AuthQueryUseCase,
-    private val userSearchRepository: com.example.liftrix.domain.repository.UserSearchRepository,
-    errorHandler: com.example.liftrix.domain.usecase.common.ErrorHandler
-) : com.example.liftrix.ui.common.viewmodel.BaseViewModel<SuggestedUsersCarouselUiState, SuggestedUsersCarouselEvent>(
-    errorHandler = errorHandler
+    private val userSearchRepository: com.example.liftrix.domain.repository.UserSearchRepository
+) : com.example.liftrix.ui.common.viewmodel.ModernBaseViewModel<SuggestedUsersCarouselUiState>(
+    initialState = SuggestedUsersCarouselUiState()
 ) {
-    
-    override val _uiState = kotlinx.coroutines.flow.MutableStateFlow(SuggestedUsersCarouselUiState())
     
     /**
      * Load suggested users from repository
@@ -547,7 +544,7 @@ class SuggestedUsersCarouselViewModel @javax.inject.Inject constructor(
         loadSuggestedUsers()
     }
     
-    override fun handleEvent(event: SuggestedUsersCarouselEvent) {
+    fun handleEvent(event: SuggestedUsersCarouselEvent) {
         when (event) {
             is SuggestedUsersCarouselEvent.LoadSuggestions -> loadSuggestedUsers()
             is SuggestedUsersCarouselEvent.FollowUser -> followUser(event.userId)

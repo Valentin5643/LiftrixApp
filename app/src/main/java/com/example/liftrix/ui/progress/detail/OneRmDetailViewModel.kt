@@ -2,11 +2,8 @@ package com.example.liftrix.ui.progress.detail
 
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.SavedStateHandle
-import com.example.liftrix.ui.common.viewmodel.StatefulDetailViewModel
+import com.example.liftrix.ui.common.viewmodel.ModernStatefulDetailViewModel
 import com.example.liftrix.ui.common.viewmodel.DetailScreenStateKeys
-import com.example.liftrix.ui.common.state.UiState
-import com.example.liftrix.ui.common.event.ViewModelEvent
-import com.example.liftrix.domain.usecase.common.ErrorHandler
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.model.ExerciseLibrary
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -19,8 +16,8 @@ import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.exercise.ExerciseQueryUseCase
 import com.example.liftrix.domain.usecase.analytics.ExportOneRmDataRequest
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -50,14 +47,14 @@ import java.io.File
 @HiltViewModel
 class OneRmDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    errorHandler: ErrorHandler,
     private val analyticsQueryUseCase: AnalyticsQueryUseCase,
     private val authQueryUseCase: AuthQueryUseCase,
     private val exerciseQueryUseCase: ExerciseQueryUseCase,
     private val analyticsExportUseCase: AnalyticsExportUseCase
-) : StatefulDetailViewModel<OneRmDetailViewModel.UiState, OneRmDetailViewModel.Event>(savedStateHandle, errorHandler) {
-
-    override val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+) : ModernStatefulDetailViewModel<OneRmDetailViewModel.UiState>(
+    initialState = UiState.Loading,
+    savedStateHandle = savedStateHandle
+) {
 
     /**
      * Current configuration state - persisted using StatefulDetailViewModel
@@ -130,20 +127,6 @@ class OneRmDetailViewModel @Inject constructor(
         data class Empty(val message: String = "No 1RM data available for the selected time range") : UiState()
     }
 
-    /**
-     * Events that can be triggered from the UI
-     */
-    sealed class Event : ViewModelEvent {
-        data class LoadData(val exerciseIds: List<String>?, val timeRange: TimeRangeType) : Event()
-        object RefreshData : Event()
-        data class UpdateTimeRange(val timeRange: TimeRangeType) : Event()
-        data class UpdateExerciseFilter(val exerciseIds: Set<String>) : Event()
-        data class ToggleShowEstimated(val showEstimated: Boolean) : Event()
-        object ShowExerciseFilterSheet : Event()
-        object HideExerciseFilterSheet : Event()
-        object ExportData : Event()
-        object RetryLoad : Event()
-    }
 
     /**
      * Data class for 1RM progression chart data
@@ -234,33 +217,12 @@ class OneRmDetailViewModel @Inject constructor(
         }
     }
 
-    override fun handleEvent(event: Event) {
-        when (event) {
-            is Event.LoadData -> loadData(event.exerciseIds, event.timeRange)
-            Event.RefreshData -> refreshData()
-            is Event.UpdateTimeRange -> updateTimeRange(event.timeRange)
-            is Event.UpdateExerciseFilter -> updateExerciseFilter(event.exerciseIds)
-            is Event.ToggleShowEstimated -> toggleShowEstimated(event.showEstimated)
-            Event.ShowExerciseFilterSheet -> showExerciseFilterSheet()
-            Event.HideExerciseFilterSheet -> hideExerciseFilterSheet()
-            Event.ExportData -> exportData()
-            Event.RetryLoad -> retryLoad()
-        }
-    }
-
-    override fun setLoadingState() {
-        _uiState.value = UiState.Loading
-    }
-
-    override fun updateErrorState(error: LiftrixError) {
-        handleError(error)
-    }
 
     /**
      * Loads 1RM progression data for the specified exercises and time range
      * Performance target: <500ms load time as per SPEC requirements
      */
-    private fun loadData(exerciseIds: List<String>?, timeRange: TimeRangeType) {
+    fun loadData(exerciseIds: List<String>?, timeRange: TimeRangeType) {
         val startTime = System.currentTimeMillis()
         Timber.d("Loading 1RM data for exercises: $exerciseIds, timeRange: $timeRange")
         
@@ -268,51 +230,65 @@ class OneRmDetailViewModel @Inject constructor(
         updateSavedState(DetailScreenStateKeys.ONE_RM_TIME_RANGE, timeRange)
         updateComplexSavedState(DetailScreenStateKeys.ONE_RM_SELECTED_EXERCISES, exerciseIds?.toSet() ?: emptySet())
 
-        executeUseCase(
-            useCase = {
+        viewModelScope.launch {
+            try {
+                setState(UiState.Loading)
+
                 val userId = authQueryUseCase(waitForAuth = false).fold(
                     onSuccess = { it },
                     onFailure = { throw Exception("User not authenticated") }
                 )
-                
-                
-                
-                analyticsQueryUseCase.getOneRmProgression(
+
+                val result = analyticsQueryUseCase.getOneRmProgression(
                     userId = userId,
                     exerciseIds = exerciseIds,
                     timeRange = timeRange,
                     includeEstimated = showEstimated.value
                 )
-            },
-            onSuccess = { useCaseData ->
-                
-                // Convert use case data to ViewModel data format
-                val data = convertToViewModelData(useCaseData)
-                
-                val loadTime = System.currentTimeMillis() - startTime
-                Timber.d("1RM data loaded in ${loadTime}ms")
-                
-                // Performance validation - warn if exceeds 500ms target
-                if (loadTime > 500) {
-                    Timber.w("PERFORMANCE WARNING: 1RM data load time exceeded 500ms target: ${loadTime}ms")
-                } else {
-                    Timber.i("PERFORMANCE: 1RM data load time within target: ${loadTime}ms")
-                }
-                
-                
-                if (data.progressionPoints.isEmpty()) {
-                    _uiState.value = UiState.Empty()
-                } else {
-                    _uiState.value = UiState.Success(data)
-                }
+
+                result.fold(
+                    onSuccess = { useCaseData ->
+                        // Convert use case data to ViewModel data format
+                        val data = convertToViewModelData(useCaseData)
+
+                        val loadTime = System.currentTimeMillis() - startTime
+                        Timber.d("1RM data loaded in ${loadTime}ms")
+
+                        // Performance validation - warn if exceeds 500ms target
+                        if (loadTime > 500) {
+                            Timber.w("PERFORMANCE WARNING: 1RM data load time exceeded 500ms target: ${loadTime}ms")
+                        } else {
+                            Timber.i("PERFORMANCE: 1RM data load time within target: ${loadTime}ms")
+                        }
+
+                        if (data.progressionPoints.isEmpty()) {
+                            setState(UiState.Empty())
+                        } else {
+                            setState(UiState.Success(data))
+                        }
+                    },
+                    onFailure = { error ->
+                        Timber.e("Failed to load 1RM data: $error")
+                        setState(UiState.Error(error as? LiftrixError ?: LiftrixError.BusinessLogicError(
+                            code = "ONE_RM_LOAD_FAILED",
+                            errorMessage = "Failed to load 1RM progression data: ${error.message}"
+                        )))
+                    }
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to load 1RM data")
+                setState(UiState.Error(LiftrixError.BusinessLogicError(
+                    code = "ONE_RM_LOAD_FAILED",
+                    errorMessage = "Failed to load 1RM progression data: ${e.message}"
+                )))
             }
-        )
+        }
     }
 
     /**
      * Refreshes the current data
      */
-    private fun refreshData() {
+    fun refreshData() {
         val currentExerciseIds = selectedExerciseIds.value.toList().takeIf { it.isNotEmpty() }
         loadData(currentExerciseIds, timeRange.value)
     }
@@ -330,7 +306,7 @@ class OneRmDetailViewModel @Inject constructor(
     /**
      * Updates the exercise filter and reloads data
      */
-    private fun updateExerciseFilter(exerciseIds: Set<String>) {
+    fun updateExerciseFilter(exerciseIds: Set<String>) {
         if (exerciseIds != selectedExerciseIds.value) {
             Timber.d("Updating exercise filter to: $exerciseIds")
             updateComplexSavedState(DetailScreenStateKeys.ONE_RM_SELECTED_EXERCISES, exerciseIds)
@@ -340,7 +316,7 @@ class OneRmDetailViewModel @Inject constructor(
     /**
      * Toggles between showing estimated and actual 1RM values
      */
-    private fun toggleShowEstimated(showEstimated: Boolean) {
+    fun toggleShowEstimated(showEstimated: Boolean) {
         if (showEstimated != this.showEstimated.value) {
             updateSavedState(DetailScreenStateKeys.ONE_RM_SHOW_ESTIMATED, showEstimated)
             Timber.d("Toggling show estimated to: $showEstimated")
@@ -350,21 +326,21 @@ class OneRmDetailViewModel @Inject constructor(
     /**
      * Shows the exercise filter bottom sheet
      */
-    private fun showExerciseFilterSheet() {
+    fun showExerciseFilterSheet() {
         updateSavedState(DetailScreenStateKeys.ONE_RM_FILTER_EXPANDED, true)
     }
 
     /**
      * Hides the exercise filter bottom sheet
      */
-    private fun hideExerciseFilterSheet() {
+    fun hideExerciseFilterSheet() {
         updateSavedState(DetailScreenStateKeys.ONE_RM_FILTER_EXPANDED, false)
     }
 
     /**
      * Exports the current 1RM data
      */
-    private fun exportData() {
+    fun exportData() {
         Timber.d("Exporting 1RM progression data")
         
         val currentState = _uiState.value
@@ -418,12 +394,12 @@ class OneRmDetailViewModel @Inject constructor(
                         },
                         onFailure = { error ->
                             Timber.e("Failed to export 1RM data: $error")
-                            handleError(error as? LiftrixError ?: LiftrixError.FileSystemError("Export failed: ${error.message}"))
+                            setState(UiState.Error(error as? LiftrixError ?: LiftrixError.FileSystemError("Export failed: ${error.message}")))
                         }
                     )
                 } catch (e: Exception) {
                     Timber.e(e, "Failed to export 1RM data")
-                    handleError(LiftrixError.FileSystemError("Failed to export data: ${e.message}"))
+                    setState(UiState.Error(LiftrixError.FileSystemError("Failed to export data: ${e.message}")))
                 }
             }
         }
@@ -432,7 +408,7 @@ class OneRmDetailViewModel @Inject constructor(
     /**
      * Retries loading data after an error
      */
-    private fun retryLoad() {
+    fun retryLoad() {
         refreshData()
     }
 

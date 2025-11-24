@@ -2,11 +2,7 @@ package com.example.liftrix.ui.progress.detail
 
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.SavedStateHandle
-import com.example.liftrix.ui.common.viewmodel.StatefulDetailViewModel
-import com.example.liftrix.ui.common.viewmodel.DetailScreenStateKeys
-import com.example.liftrix.ui.common.state.UiState
-import com.example.liftrix.ui.common.event.ViewModelEvent
-import com.example.liftrix.domain.usecase.common.ErrorHandler
+import com.example.liftrix.ui.common.viewmodel.ModernStatefulDetailViewModel
 import com.example.liftrix.domain.model.analytics.TimeRangeType
 import com.example.liftrix.domain.model.MuscleGroup
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -17,7 +13,6 @@ import com.example.liftrix.domain.usecase.analytics.BalanceAnalysis as UseCaseBa
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import timber.log.Timber
@@ -39,13 +34,13 @@ import kotlinx.datetime.*
 @HiltViewModel
 class MuscleGroupDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    errorHandler: ErrorHandler,
     private val analyticsQueryUseCase: AnalyticsQueryUseCase,
     private val authQueryUseCase: AuthQueryUseCase,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
-) : StatefulDetailViewModel<MuscleGroupDetailViewModel.UiState, MuscleGroupDetailViewModel.Event>(savedStateHandle, errorHandler) {
-
-    override val _uiState = MutableStateFlow<UiState>(UiState.Loading)
+) : ModernStatefulDetailViewModel<MuscleGroupDetailViewModel.UiState>(
+    initialState = UiState.Loading,
+    savedStateHandle = savedStateHandle
+) {
 
     /**
      * Current configuration state
@@ -81,19 +76,6 @@ class MuscleGroupDetailViewModel @Inject constructor(
         data class Empty(val message: String = "No muscle group data available for the selected time range") : UiState()
     }
 
-    /**
-     * Events that can be triggered from the UI
-     */
-    sealed class Event : ViewModelEvent {
-        data class LoadData(val muscleGroup: MuscleGroup?, val timeRange: TimeRangeType) : Event()
-        object RefreshData : Event()
-        data class UpdateTimeRange(val timeRange: TimeRangeType) : Event()
-        data class SelectMuscleGroupSegment(val muscleGroup: MuscleGroup) : Event()
-        object ClearMuscleGroupSelection : Event()
-        data class UpdateViewMode(val viewMode: ViewMode) : Event()
-        object RetryLoad : Event()
-        object ExportData : Event()
-    }
 
     /**
      * View modes for the muscle group analysis
@@ -220,32 +202,12 @@ class MuscleGroupDetailViewModel @Inject constructor(
         }
     }
 
-    override fun handleEvent(event: Event) {
-        when (event) {
-            is Event.LoadData -> loadData(event.muscleGroup, event.timeRange)
-            Event.RefreshData -> refreshData()
-            is Event.UpdateTimeRange -> updateTimeRange(event.timeRange)
-            is Event.SelectMuscleGroupSegment -> selectMuscleGroupSegment(event.muscleGroup)
-            Event.ClearMuscleGroupSelection -> clearMuscleGroupSelection()
-            is Event.UpdateViewMode -> updateViewMode(event.viewMode)
-            Event.RetryLoad -> retryLoad()
-            Event.ExportData -> exportData()
-        }
-    }
-
-    override fun setLoadingState() {
-        _uiState.value = UiState.Loading
-    }
-
-    override fun updateErrorState(error: LiftrixError) {
-        handleError(error)
-    }
 
     /**
      * Loads muscle group distribution data
      * Performance target: <500ms load time as per SPEC requirements
      */
-    private fun loadData(muscleGroup: MuscleGroup?, timeRange: TimeRangeType) {
+    fun loadData(muscleGroup: MuscleGroup?, timeRange: TimeRangeType) {
         val startTime = System.currentTimeMillis()
         Timber.d("Loading muscle group data for muscleGroup: $muscleGroup, timeRange: $timeRange")
         
@@ -257,61 +219,60 @@ class MuscleGroupDetailViewModel @Inject constructor(
         savedStateHandle[KEY_SELECTED_MUSCLE_GROUP] = muscleGroup?.name
         savedStateHandle[KEY_TIME_RANGE] = timeRange.name
 
-        executeUseCase(
-            useCase = {
-                val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
-                    onFailure = { return@executeUseCase Result.failure(
-                        LiftrixError.AuthenticationError("User not authenticated")
-                    ) }
-                )
-                
-                val result = analyticsQueryUseCase.getMuscleGroupAnalytics(
-                    userId = userId,
-                    muscleGroup = convertToUseCaseMuscleGroup(muscleGroup),
-                    timeRange = timeRange
-                )
-                
-                result.fold(
-                    onSuccess = { useCaseData ->
-                        // Convert use case data to ViewModel data format
-                        val viewModelData = convertToViewModelData(useCaseData)
-                        Result.success(viewModelData)
-                    },
-                    onFailure = { error -> Result.failure(error) }
-                )
-            },
-            onSuccess = { data ->
+        viewModelScope.launch {
+            setState(UiState.Loading)
+
+            val userIdResult = authQueryUseCase(waitForAuth = false)
+            val userId = userIdResult.fold(
+                onSuccess = { it },
+                onFailure = { error ->
+                    logError(error, "loadData - auth")
+                    setState(UiState.Error(LiftrixError.AuthenticationError("User not authenticated")))
+                    return@launch
+                }
+            )
+
+            val result = analyticsQueryUseCase.getMuscleGroupAnalytics(
+                userId = userId,
+                muscleGroup = convertToUseCaseMuscleGroup(muscleGroup),
+                timeRange = timeRange
+            )
+
+            result.onSuccess { useCaseData ->
+                val viewModelData = convertToViewModelData(useCaseData)
                 val loadTime = System.currentTimeMillis() - startTime
                 Timber.d("Muscle group data loaded in ${loadTime}ms")
-                
+
                 // Performance validation - warn if exceeds 500ms target
                 if (loadTime > 500) {
                     Timber.w("PERFORMANCE WARNING: Muscle group data load time exceeded 500ms target: ${loadTime}ms")
                 } else {
                     Timber.i("PERFORMANCE: Muscle group data load time within target: ${loadTime}ms")
                 }
-                
-                if (data.distribution.isEmpty()) {
-                    _uiState.value = UiState.Empty()
+
+                if (viewModelData.distribution.isEmpty()) {
+                    setState(UiState.Empty())
                 } else {
-                    _uiState.value = UiState.Success(data)
+                    setState(UiState.Success(viewModelData))
                 }
+            }.onFailure { error ->
+                logError(error, "loadData - getMuscleGroupAnalytics")
+                setState(UiState.Error(error as? LiftrixError ?: LiftrixError.UnknownError(errorMessage = error.message ?: "Failed to load muscle group data")))
             }
-        )
+        }
     }
 
     /**
      * Refreshes the current data
      */
-    private fun refreshData() {
+    fun refreshData() {
         loadData(_selectedMuscleGroup.value, _timeRange.value)
     }
 
     /**
      * Updates the time range and reloads data
      */
-    private fun updateTimeRange(newTimeRange: TimeRangeType) {
+    fun updateTimeRange(newTimeRange: TimeRangeType) {
         if (newTimeRange != _timeRange.value) {
             Timber.d("Updating time range to: $newTimeRange")
             loadData(_selectedMuscleGroup.value, newTimeRange)
@@ -321,15 +282,15 @@ class MuscleGroupDetailViewModel @Inject constructor(
     /**
      * Selects a specific muscle group segment for drill-down
      */
-    private fun selectMuscleGroupSegment(muscleGroup: MuscleGroup) {
+    fun selectMuscleGroupSegment(muscleGroup: MuscleGroup) {
         Timber.d("Selecting muscle group segment: $muscleGroup")
-        
-        val currentState = _uiState.value
+
+        val currentState = uiState.value
         if (currentState is UiState.Success) {
             // Update view mode to exercises when selecting a segment
             _viewMode.value = ViewMode.EXERCISES
             savedStateHandle[KEY_VIEW_MODE] = ViewMode.EXERCISES.name
-            
+
             // Load exercises for the selected muscle group
             loadData(muscleGroup, _timeRange.value)
         }
@@ -338,7 +299,7 @@ class MuscleGroupDetailViewModel @Inject constructor(
     /**
      * Clears muscle group selection and returns to overview
      */
-    private fun clearMuscleGroupSelection() {
+    fun clearMuscleGroupSelection() {
         Timber.d("Clearing muscle group selection")
         _viewMode.value = ViewMode.DISTRIBUTION
         savedStateHandle[KEY_VIEW_MODE] = ViewMode.DISTRIBUTION.name
@@ -348,16 +309,16 @@ class MuscleGroupDetailViewModel @Inject constructor(
     /**
      * Updates the view mode
      */
-    private fun updateViewMode(newViewMode: ViewMode) {
+    fun updateViewMode(newViewMode: ViewMode) {
         if (newViewMode != _viewMode.value) {
             Timber.d("Updating view mode to: $newViewMode")
             _viewMode.value = newViewMode
             savedStateHandle[KEY_VIEW_MODE] = newViewMode.name
-            
-            val currentState = _uiState.value
+
+            val currentState = uiState.value
             if (currentState is UiState.Success) {
                 val updatedData = currentState.data.copy(viewMode = newViewMode)
-                _uiState.value = UiState.Success(updatedData)
+                setState(UiState.Success(updatedData))
             }
         }
     }
@@ -365,17 +326,17 @@ class MuscleGroupDetailViewModel @Inject constructor(
     /**
      * Retries loading data after an error
      */
-    private fun retryLoad() {
+    fun retryLoad() {
         loadData(_selectedMuscleGroup.value, _timeRange.value)
     }
 
     /**
      * Exports the current muscle group data
      */
-    private fun exportData() {
+    fun exportData() {
         Timber.d("Exporting muscle group data")
-        
-        val currentState = _uiState.value
+
+        val currentState = uiState.value
         if (currentState is UiState.Success) {
             viewModelScope.launch {
                 try {
@@ -398,7 +359,7 @@ class MuscleGroupDetailViewModel @Inject constructor(
                     Timber.i("Exported muscle group data: ${currentState.data.distribution.size} groups")
                 } catch (e: Exception) {
                     Timber.e(e, "Failed to export muscle group data")
-                    handleError(LiftrixError.FileSystemError("Failed to export data: ${e.message}"))
+                    logError(e, "exportData")
                 }
             }
         }
