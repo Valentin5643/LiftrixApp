@@ -20,6 +20,10 @@ import com.example.liftrix.data.repository.social.BlockRepositoryImpl
 import com.example.liftrix.data.repository.social.ReportRepositoryImpl
 import com.example.liftrix.data.repository.SyncPreferencesRepositoryImpl
 import com.example.liftrix.data.repository.PersonalRecordRepositoryImpl
+import com.example.liftrix.data.repository.session.SessionRepositoryImpl
+import com.example.liftrix.data.repository.exercise.ExerciseRepositoryImpl
+import com.example.liftrix.data.repository.template.TemplateRepositoryImpl
+import com.example.liftrix.data.repository.workout.WorkoutRepositoryImpl
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.CustomExerciseRepository
 import com.example.liftrix.domain.repository.ProfileRepository
@@ -40,6 +44,10 @@ import com.example.liftrix.domain.repository.social.BlockRepository
 import com.example.liftrix.domain.repository.social.ReportRepository
 import com.example.liftrix.domain.repository.SyncPreferencesRepository
 import com.example.liftrix.domain.repository.PersonalRecordRepository
+import com.example.liftrix.domain.repository.session.SessionRepository
+import com.example.liftrix.domain.repository.exercise.ExerciseRepository
+import com.example.liftrix.domain.repository.template.TemplateRepository
+import com.example.liftrix.domain.repository.workout.WorkoutRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -175,5 +183,34 @@ abstract class RepositoryModule {
     abstract fun bindPersonalRecordRepository(
         personalRecordRepositoryImpl: PersonalRecordRepositoryImpl
     ): PersonalRecordRepository
+
+    // ========================================
+    // FEATURE-SPECIFIC REPOSITORIES
+    // Migrated from di/module/* (DI-020)
+    // ========================================
+
+    @Binds
+    @Singleton
+    abstract fun bindSessionRepository(
+        sessionRepositoryImpl: SessionRepositoryImpl
+    ): SessionRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindExerciseRepository(
+        exerciseRepositoryImpl: ExerciseRepositoryImpl
+    ): ExerciseRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindTemplateRepository(
+        templateRepositoryImpl: TemplateRepositoryImpl
+    ): TemplateRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindWorkoutRepository(
+        workoutRepositoryImpl: WorkoutRepositoryImpl
+    ): WorkoutRepository
 
 } 
