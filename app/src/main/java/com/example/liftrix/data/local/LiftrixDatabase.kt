@@ -9,6 +9,7 @@ import com.example.liftrix.data.local.converter.WorkoutConverters
 import com.example.liftrix.data.local.converter.ExerciseConverters
 import com.example.liftrix.data.local.converter.SubscriptionConverters
 import com.example.liftrix.data.local.converter.WeightUnitConverter
+import com.example.liftrix.data.local.converter.UserIdConverter
 import com.example.liftrix.data.local.dao.UserProfileDao
 import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.local.dao.CustomExerciseDao

@@ -1,6 +1,7 @@
 package com.example.liftrix.ui.workout.edit
 
 import androidx.lifecycle.viewModelScope
+import com.example.liftrix.core.identity.UserId
 import com.example.liftrix.domain.model.*
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixSuccess
@@ -75,8 +76,8 @@ class EditWorkoutViewModel @Inject constructor(
 
     // Store original workout for change tracking
     private var originalWorkout: Workout? = null
-    private var currentUserId: String? = null
-    
+    private var currentUserId: UserId? = null
+
     // Track if user ID has been initialized
     private var isUserIdInitialized = false
 
@@ -84,8 +85,8 @@ class EditWorkoutViewModel @Inject constructor(
         viewModelScope.launch {
             Timber.d("EDIT-WORKOUT-DEBUG: EditWorkoutViewModel init - Getting current user ID")
             currentUserId = authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it },
-                onFailure = { null }
+                onSuccess = { userId: UserId -> userId },
+                onFailure = { _: Throwable -> null }
             )
             isUserIdInitialized = true
             Timber.d("EDIT-WORKOUT-DEBUG: EditWorkoutViewModel init - Retrieved userId: $currentUserId")
@@ -128,8 +129,8 @@ class EditWorkoutViewModel @Inject constructor(
                 // Fetch user ID synchronously if not yet available
                 if (currentUserId == null) {
                     currentUserId = authQueryUseCase(waitForAuth = false).fold(
-                        onSuccess = { it },
-                        onFailure = { null }
+                        onSuccess = { userId: UserId -> userId },
+                        onFailure = { _: Throwable -> null }
                     )
                     isUserIdInitialized = true
                     Timber.d("EDIT-WORKOUT-DEBUG: User ID fetched in loadWorkout: $currentUserId")
@@ -164,7 +165,7 @@ class EditWorkoutViewModel @Inject constructor(
             return
         }
 
-        if (userId.isBlank()) {
+        if (userId.value.isBlank()) {
             Timber.e("EDIT-WORKOUT-DEBUG: User authentication failed - userId is blank")
             val error = LiftrixError.AuthenticationError(
                 errorMessage = "User not authenticated",
@@ -187,10 +188,10 @@ class EditWorkoutViewModel @Inject constructor(
 
             val result = if (isTemplate) {
                 Timber.d("EDIT-WORKOUT-DEBUG: Calling templateQueryUseCase.getById for template")
-                templateQueryUseCase.getById(workoutId.value, userId)
+                templateQueryUseCase.getById(workoutId.value, userId.value)
             } else {
                 Timber.d("EDIT-WORKOUT-DEBUG: Calling workoutQueryUseCase.getById for regular workout")
-                workoutQueryUseCase.getById(workoutId, userId)
+                workoutQueryUseCase.getById(workoutId, userId.value)
             }
 
             result.onSuccess { workout ->
@@ -200,8 +201,8 @@ class EditWorkoutViewModel @Inject constructor(
                     Timber.d("EDIT-WORKOUT-DEBUG: Workout found - id: ${workout.id.value}, name: ${workout.name}, userId: ${workout.userId}, status: ${workout.status}")
 
                     // Additional validation check
-                    if (workout.userId != userId) {
-                        Timber.e("EDIT-WORKOUT-DEBUG: User ID mismatch - workout.userId: ${workout.userId}, current userId: $userId")
+                    if (workout.userId != userId.value) {
+                        Timber.e("EDIT-WORKOUT-DEBUG: User ID mismatch - workout.userId: ${workout.userId}, current userId: ${userId.value}")
                         val currentData = uiState.value.dataOrNull()
                         updateState {
                             EditWorkoutUiState.Error(

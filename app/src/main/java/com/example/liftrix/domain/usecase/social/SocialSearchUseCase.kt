@@ -65,7 +65,7 @@ class SocialSearchUseCase @Inject constructor(
             )
         }
     ) {
-        val viewerId = authQueryUseCase(waitForAuth = false).getOrNull()
+        val userId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw IllegalStateException("User not authenticated")
 
         // Validate inputs
@@ -79,7 +79,7 @@ class SocialSearchUseCase @Inject constructor(
             throw IllegalArgumentException("Limit must be between 1 and 100")
         }
 
-        socialProfileRepository.searchProfiles(viewerId, query.trim(), limit).getOrThrow()
+        socialProfileRepository.searchProfiles(userId.value, query.trim(), limit).getOrThrow()
     }
 
     /**
@@ -142,7 +142,7 @@ class SocialSearchUseCase @Inject constructor(
      */
     private suspend fun getCurrentUserId(): String? {
         return try {
-            authRepository.getCurrentUserId()
+            authRepository.getCurrentUserId()?.value
         } catch (e: Exception) {
             Timber.e(e, "Failed to get current user ID")
             null

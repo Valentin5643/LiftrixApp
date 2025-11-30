@@ -74,32 +74,32 @@ class SocialRelationshipUseCase @Inject constructor(
             ?: throw IllegalStateException("User not authenticated")
 
         // Validate action parameters
-        validateFollowAction(currentUserId, targetUserId, action)
+        validateFollowAction(currentUserId.value, targetUserId, action)
 
         // Execute the follow action
         val result = when (action) {
             FollowAction.FOLLOW -> followRepository.sendFollowRequest(
-                followerId = currentUserId,
+                followerId = currentUserId.value,
                 targetUserId = targetUserId,
                 requestSource = context
             )
 
             FollowAction.UNFOLLOW -> {
                 followRepository.unfollowUser(
-                    followerId = currentUserId,
+                    followerId = currentUserId.value,
                     targetUserId = targetUserId
                 )
                 FollowStatus.NONE // Return NONE status after unfollowing
             }
 
             FollowAction.ACCEPT -> followRepository.acceptFollowRequest(
-                targetUserId = currentUserId, // Current user is accepting request
+                targetUserId = currentUserId.value, // Current user is accepting request
                 requesterId = targetUserId    // Target user sent the request
             )
 
             FollowAction.DECLINE -> {
                 followRepository.declineFollowRequest(
-                    targetUserId = currentUserId,
+                    targetUserId = currentUserId.value,
                     requesterId = targetUserId
                 )
                 FollowStatus.NONE
@@ -107,7 +107,7 @@ class SocialRelationshipUseCase @Inject constructor(
 
             FollowAction.CANCEL -> {
                 followRepository.cancelFollowRequest(
-                    followerId = currentUserId,
+                    followerId = currentUserId.value,
                     targetUserId = targetUserId
                 )
                 FollowStatus.NONE
@@ -115,7 +115,7 @@ class SocialRelationshipUseCase @Inject constructor(
 
             FollowAction.BLOCK -> {
                 followRepository.blockUser(
-                    blockerId = currentUserId,
+                    blockerId = currentUserId.value,
                     targetUserId = targetUserId
                 )
                 FollowStatus.BLOCKED
@@ -123,7 +123,7 @@ class SocialRelationshipUseCase @Inject constructor(
 
             FollowAction.UNBLOCK -> {
                 followRepository.unblockUser(
-                    blockerId = currentUserId,
+                    blockerId = currentUserId.value,
                     targetUserId = targetUserId
                 )
                 FollowStatus.NONE
@@ -137,10 +137,10 @@ class SocialRelationshipUseCase @Inject constructor(
         }
 
         // Send notification if appropriate
-        sendNotificationIfNeeded(action, targetUserId, currentUserId, result)
+        sendNotificationIfNeeded(action, targetUserId, currentUserId.value, result)
 
         // Track analytics
-        trackSocialAction(action, targetUserId, currentUserId, context, result)
+        trackSocialAction(action, targetUserId, currentUserId.value, context, result)
 
         result
     }
@@ -174,28 +174,28 @@ class SocialRelationshipUseCase @Inject constructor(
             ?: throw IllegalStateException("User not authenticated")
 
         // Validate not blocking self
-        if (currentUserId == targetUserId) {
+        if (currentUserId.value == targetUserId) {
             throw IllegalArgumentException("Cannot block yourself")
         }
 
         if (shouldBlock) {
             // When blocking, first unfollow in both directions
             try {
-                followRepository.unfollowUser(currentUserId, targetUserId)
-                followRepository.unfollowUser(targetUserId, currentUserId)
+                followRepository.unfollowUser(currentUserId.value, targetUserId)
+                followRepository.unfollowUser(targetUserId, currentUserId.value)
             } catch (e: Exception) {
                 Timber.w(e, "Failed to unfollow during block, continuing with block")
             }
 
             // Block the user
-            blockRepository.blockUser(currentUserId, targetUserId)
+            blockRepository.blockUser(currentUserId.value, targetUserId)
 
-            Timber.d("User blocked: $targetUserId by $currentUserId")
+            Timber.d("User blocked: $targetUserId by ${currentUserId.value}")
         } else {
             // Unblock the user
-            blockRepository.unblockUser(currentUserId, targetUserId)
+            blockRepository.unblockUser(currentUserId.value, targetUserId)
 
-            Timber.d("User unblocked: $targetUserId by $currentUserId")
+            Timber.d("User unblocked: $targetUserId by ${currentUserId.value}")
         }
 
         Unit
@@ -232,30 +232,30 @@ class SocialRelationshipUseCase @Inject constructor(
             ?: throw IllegalStateException("User not authenticated")
 
         // Validate not reporting self
-        if (currentUserId == targetUserId) {
+        if (currentUserId.value == targetUserId) {
             throw IllegalArgumentException("Cannot report yourself")
         }
 
         // Check for existing report to prevent duplicates
         val hasExistingReport = reportRepository.hasExistingReport(
-            reporterId = currentUserId,
+            reporterId = currentUserId.value,
             targetUserId = targetUserId
         )
 
         if (hasExistingReport) {
-            Timber.w("User already reported: $targetUserId by $currentUserId")
+            Timber.w("User already reported: $targetUserId by ${currentUserId.value}")
             return@liftrixCatching Unit
         }
 
         // Submit the report
         reportRepository.submitReport(
-            reporterId = currentUserId,
+            reporterId = currentUserId.value,
             targetUserId = targetUserId,
             reason = reason,
             description = description
         )
 
-        Timber.d("User reported: $targetUserId by $currentUserId for reason: ${reason.name}")
+        Timber.d("User reported: $targetUserId by ${currentUserId.value} for reason: ${reason.name}")
 
         Unit
     }

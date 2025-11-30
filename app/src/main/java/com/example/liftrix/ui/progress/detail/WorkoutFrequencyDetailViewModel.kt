@@ -130,7 +130,7 @@ class WorkoutFrequencyDetailViewModel @Inject constructor(
                 
                 // Use actual use case to get workout frequency analytics
                 val result = analyticsQueryUseCase.getWorkoutFrequency(
-                    userId = userId,
+                    userId = userId.value,
                     timeRange = _timeRange.value
                 )
 

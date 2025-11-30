@@ -74,7 +74,7 @@ class AccountManagementViewModel @Inject constructor(
 
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
+                    onSuccess = { it.value },
                     onFailure = { throw LiftrixError.AuthenticationError(
                         errorMessage = "User not authenticated",
                         errorCode = "NO_USER"

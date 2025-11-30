@@ -233,7 +233,7 @@ class MuscleGroupDetailViewModel @Inject constructor(
             )
 
             val result = analyticsQueryUseCase.getMuscleGroupAnalytics(
-                userId = userId,
+                userId = userId.value,
                 muscleGroup = convertToUseCaseMuscleGroup(muscleGroup),
                 timeRange = timeRange
             )

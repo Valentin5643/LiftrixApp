@@ -100,14 +100,14 @@ class AccountCommandUseCase @Inject constructor(
         )
 
         // Update email in local account repository
-        val updateLocalEmailResult = userAccountRepository.updateEmail(userId, newEmail)
+        val updateLocalEmailResult = userAccountRepository.updateEmail(userId.value, newEmail)
         updateLocalEmailResult.fold(
             onSuccess = { /* Continue */ },
             onFailure = { error -> throw error }
         )
 
         // Mark email as unverified since it was changed
-        val updateVerificationResult = userAccountRepository.updateEmailVerified(userId, false)
+        val updateVerificationResult = userAccountRepository.updateEmailVerified(userId.value, false)
         updateVerificationResult.fold(
             onSuccess = { /* Complete */ },
             onFailure = { error -> throw error }
@@ -186,7 +186,7 @@ class AccountCommandUseCase @Inject constructor(
         )
 
         // Update password change timestamp in local storage
-        val updateTimestampResult = userAccountRepository.updatePasswordChangeTime(userId)
+        val updateTimestampResult = userAccountRepository.updatePasswordChangeTime(userId.value)
         updateTimestampResult.fold(
             onSuccess = { /* Complete */ },
             onFailure = { error -> throw error }
@@ -256,7 +256,7 @@ class AccountCommandUseCase @Inject constructor(
         }
 
         // Update username in repository
-        val updateResult = userAccountRepository.updateUsername(userId, username)
+        val updateResult = userAccountRepository.updateUsername(userId.value, username)
         updateResult.fold(
             onSuccess = { /* Complete */ },
             onFailure = { error -> throw error }
@@ -316,7 +316,7 @@ class AccountCommandUseCase @Inject constructor(
         )
 
         // Delete from local Room database
-        val deleteLocalResult = userAccountRepository.deleteAccount(userId)
+        val deleteLocalResult = userAccountRepository.deleteAccount(userId.value)
         deleteLocalResult.fold(
             onSuccess = { /* Complete */ },
             onFailure = { error -> throw error }

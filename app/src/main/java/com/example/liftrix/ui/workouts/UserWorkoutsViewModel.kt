@@ -112,7 +112,7 @@ class UserWorkoutsViewModel @Inject constructor(
         viewModelScope.launch {
             authQueryUseCase(waitForAuth = false).fold(
                 onSuccess = { userId ->
-                    _uiState.update { it.copy(userId = userId) }
+                    _uiState.update { it.copy(userId = userId.value) }
                 },
                 onFailure = {
                     val error = LiftrixError.UnknownError("Failed to get user ID")
@@ -131,10 +131,10 @@ class UserWorkoutsViewModel @Inject constructor(
                 authQueryUseCase(waitForAuth = false).fold(
                     onSuccess = { userId ->
                         // 🔍 ENHANCED LOGGING: Track workout loading
-                        Timber.d("[WORKOUTS-DEBUG] Loading workouts for user: $userId")
+                        Timber.d("[WORKOUTS-DEBUG] Loading workouts for user: ${userId.value}")
 
                         // Collect workouts from the workout repository and convert to WorkoutPost format
-                        workoutRepository.getWorkoutsByUser(userId).collect { result ->
+                        workoutRepository.getWorkoutsByUser(userId.value).collect { result ->
                         result.fold(
                             onSuccess = { workouts ->
                                 Timber.d("[WORKOUTS-DEBUG] Successfully loaded ${workouts.size} workouts")
@@ -337,7 +337,7 @@ class UserWorkoutsViewModel @Inject constructor(
                     val result = shareToExternalPlatformUseCase.invoke(
                         com.example.liftrix.domain.usecase.sharing.ShareRequest(
                             workoutId = workoutId,
-                            userId = userId,
+                            userId = userId.value,
                             platform = SharePlatform.GENERIC, // Let user choose platform
                             contentType = ShareContentType.WORKOUT_SUMMARY
                         )

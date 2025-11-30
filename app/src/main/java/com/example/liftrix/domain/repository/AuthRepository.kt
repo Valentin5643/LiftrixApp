@@ -1,5 +1,6 @@
 package com.example.liftrix.domain.repository
 
+import com.example.liftrix.core.identity.UserId
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.common.LiftrixResult
 import kotlinx.coroutines.flow.Flow
@@ -22,11 +23,13 @@ interface AuthRepository {
     
     suspend fun getCurrentUser(): User?
     
-    suspend fun getCurrentUserId(): String?
+    suspend fun getCurrentUserId(): UserId?
+
+    fun observeAuthState(): Flow<UserId?>
     
     suspend fun createUserProfile(user: User): LiftrixResult<Unit>
     
-    suspend fun getUserProfile(uid: String): LiftrixResult<User?>
+    suspend fun getUserProfile(uid: UserId): LiftrixResult<User?>
     
     // Account Management Methods
     suspend fun reauthenticate(password: String): LiftrixResult<Unit>

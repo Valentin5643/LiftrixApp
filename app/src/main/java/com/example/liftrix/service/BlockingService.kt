@@ -57,12 +57,12 @@ class BlockingService @Inject constructor(
             ?: throw IllegalStateException("User not authenticated")
 
         // Validate inputs
-        if (currentUserId == targetUserId) {
+        if (currentUserId.value == targetUserId) {
             throw IllegalArgumentException("Cannot block yourself")
         }
 
         // Check if already blocked
-        if (blockedUserDao.isUserBlocked(currentUserId, targetUserId)) {
+        if (blockedUserDao.isUserBlocked(currentUserId.value, targetUserId)) {
             Timber.d("User $targetUserId is already blocked")
             return@liftrixCatching
         }
@@ -70,7 +70,7 @@ class BlockingService @Inject constructor(
         // Create block relationship
         val blockEntity = BlockedUserEntity(
             id = UUID.randomUUID().toString(),
-            userId = currentUserId,
+            userId = currentUserId.value,
             blockedUserId = targetUserId,
             blockedAt = System.currentTimeMillis(),
             reason = reason,
@@ -83,23 +83,23 @@ class BlockingService @Inject constructor(
         // Remove any follow relationships (bidirectional)
         try {
             // Unfollow both directions
-            val unfollowResult1 = followRepository.unfollowUser(currentUserId, targetUserId)
+            val unfollowResult1 = followRepository.unfollowUser(currentUserId.value, targetUserId)
             unfollowResult1.onFailure { exception ->
                 Timber.w("Failed to unfollow $targetUserId: ${exception.message}")
             }
-            
-            val unfollowResult2 = followRepository.unfollowUser(targetUserId, currentUserId)
+
+            val unfollowResult2 = followRepository.unfollowUser(targetUserId, currentUserId.value)
             unfollowResult2.onFailure { exception ->
-                Timber.w("Failed to unfollow $currentUserId: ${exception.message}")
+                Timber.w("Failed to unfollow ${currentUserId.value}: ${exception.message}")
             }
-            
+
             // Cancel any pending follow requests (bidirectional)
-            val cancelResult1 = followRepository.cancelFollowRequest(currentUserId, targetUserId)
+            val cancelResult1 = followRepository.cancelFollowRequest(currentUserId.value, targetUserId)
             cancelResult1.onFailure { exception ->
                 Timber.w("Failed to cancel follow request to $targetUserId: ${exception.message}")
             }
-            
-            val cancelResult2 = followRepository.cancelFollowRequest(targetUserId, currentUserId)
+
+            val cancelResult2 = followRepository.cancelFollowRequest(targetUserId, currentUserId.value)
             cancelResult2.onFailure { exception ->
                 Timber.w("Failed to cancel follow request from $targetUserId: ${exception.message}")
             }
@@ -119,14 +119,14 @@ class BlockingService @Inject constructor(
 
             // Mark as synced
             blockedUserDao.updateSyncStatus(blockEntity.id, true)
-            
+
             Timber.d("Successfully synced block to Firebase: $targetUserId")
         } catch (e: Exception) {
             Timber.w("Failed to sync block to Firebase: ${e.message}")
             // Block is still saved locally, sync will be retried later
         }
 
-        Timber.i("User $targetUserId blocked successfully by $currentUserId")
+        Timber.i("User $targetUserId blocked successfully by ${currentUserId.value}")
     }
 
     /**
@@ -151,7 +151,7 @@ class BlockingService @Inject constructor(
             ?: throw IllegalStateException("User not authenticated")
 
         // Find block relationship
-        val blockEntity = blockedUserDao.getBlockedUser(currentUserId, targetUserId)
+        val blockEntity = blockedUserDao.getBlockedUser(currentUserId.value, targetUserId)
         if (blockEntity == null) {
             Timber.d("User $targetUserId is not blocked")
             return@liftrixCatching
@@ -173,7 +173,7 @@ class BlockingService @Inject constructor(
             // Block is still removed locally
         }
 
-        Timber.i("User $targetUserId unblocked successfully by $currentUserId")
+        Timber.i("User $targetUserId unblocked successfully by ${currentUserId.value}")
     }
 
     /**
@@ -193,7 +193,7 @@ class BlockingService @Inject constructor(
         val currentUserId = authRepository.getCurrentUserId()
             ?: throw IllegalStateException("User not authenticated")
 
-        blockedUserDao.getBlockedUsers(currentUserId)
+        blockedUserDao.getBlockedUsers(currentUserId.value)
             .map { it.toDomainModel() }
     }
 
@@ -214,7 +214,7 @@ class BlockingService @Inject constructor(
         val currentUserId = authRepository.getCurrentUserId()
             ?: throw IllegalStateException("User not authenticated")
 
-        blockedUserDao.getBlockedUserCount(currentUserId)
+        blockedUserDao.getBlockedUserCount(currentUserId.value)
     }
 
     /**
@@ -238,7 +238,7 @@ class BlockingService @Inject constructor(
         val currentUserId = authRepository.getCurrentUserId()
             ?: return@liftrixCatching false // Not authenticated, treat as not blocked
 
-        blockedUserDao.isUserBlocked(currentUserId, targetUserId)
+        blockedUserDao.isUserBlocked(currentUserId.value, targetUserId)
     }
 
     /**
@@ -262,7 +262,7 @@ class BlockingService @Inject constructor(
         val currentUserId = authRepository.getCurrentUserId()
             ?: return@liftrixCatching false // Not authenticated, treat as no relationship
 
-        blockedUserDao.hasBlockRelationship(currentUserId, targetUserId)
+        blockedUserDao.hasBlockRelationship(currentUserId.value, targetUserId)
     }
 
     /**
@@ -289,13 +289,13 @@ class BlockingService @Inject constructor(
         if (userIds.isEmpty()) return@liftrixCatching emptyList()
 
         // Get blocked user IDs
-        val blockedUserIds = blockedUserDao.getBlockedUserIds(currentUserId).toSet()
-        val usersWhoBlockedMe = blockedUserDao.getUsersWhoBlockedMe(currentUserId).toSet()
+        val blockedUserIds = blockedUserDao.getBlockedUserIds(currentUserId.value).toSet()
+        val usersWhoBlockedMe = blockedUserDao.getUsersWhoBlockedMe(currentUserId.value).toSet()
 
         // Filter out blocked users and users who blocked current user
         userIds.filter { userId ->
-            userId != currentUserId && 
-            userId !in blockedUserIds && 
+            userId != currentUserId.value &&
+            userId !in blockedUserIds &&
             userId !in usersWhoBlockedMe
         }
     }
@@ -316,7 +316,7 @@ class BlockingService @Inject constructor(
         val currentUserId = authRepository.getCurrentUserId()
             ?: return@liftrixCatching
 
-        val unsyncedBlocks = blockedUserDao.getUnsyncedBlockedUsers(currentUserId)
+        val unsyncedBlocks = blockedUserDao.getUnsyncedBlockedUsers(currentUserId.value)
         
         if (unsyncedBlocks.isEmpty()) {
             return@liftrixCatching

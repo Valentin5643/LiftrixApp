@@ -1423,11 +1423,11 @@ class SettingsViewModel @Inject constructor(
     
     /**
      * Gets the current authenticated user ID for security validation.
-     * 
+     *
      * @return Current user ID if authenticated, null otherwise
      */
     suspend fun getCurrentUserId(): String? {
-        return authRepository.getCurrentUserId()
+        return authRepository.getCurrentUserId()?.value
     }
     
     override fun onCleared() {

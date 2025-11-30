@@ -212,7 +212,7 @@ fun PostCommentsScreen(
 @Composable
 private fun CommentsContent(
     comments: LazyPagingItems<PostComment>,
-    currentUserId: String?,
+    currentUserId: com.example.liftrix.core.identity.UserId?,
     onCommentLike: (String) -> Unit,
     onCommentReply: (PostComment) -> Unit,
     modifier: Modifier = Modifier
@@ -252,7 +252,7 @@ private fun CommentsContent(
                         if (comment != null) {
                             CommentItem(
                                 comment = comment,
-                                isOwnComment = comment.userId == currentUserId,
+                                isOwnComment = comment.userId == currentUserId?.value,
                                 onLikeClick = { onCommentLike(comment.id) },
                                 onReplyClick = { onCommentReply(comment) },
                                 modifier = Modifier.fillMaxWidth()

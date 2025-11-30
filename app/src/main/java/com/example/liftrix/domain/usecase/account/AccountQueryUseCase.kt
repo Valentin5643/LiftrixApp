@@ -35,7 +35,7 @@ class AccountQueryUseCase @Inject constructor(
     suspend fun asFlow(): Flow<UserAccount?> {
         val userId = authQueryUseCase(waitForAuth = false).getOrNull()
         return if (userId != null) {
-            userAccountRepository.getAccountInfo(userId)
+            userAccountRepository.getAccountInfo(userId.value)
         } else {
             flowOf(null)
         }
@@ -69,7 +69,7 @@ class AccountQueryUseCase @Inject constructor(
                 analyticsContext = mapOf("operation" to "GET_ACCOUNT_INFO")
             )
 
-        val accountResult = userAccountRepository.getAccountInfoSuspend(userId)
+        val accountResult = userAccountRepository.getAccountInfoSuspend(userId.value)
         accountResult.fold(
             onSuccess = { accountInfo -> accountInfo },
             onFailure = { error -> throw error }

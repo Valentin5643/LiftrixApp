@@ -1,6 +1,7 @@
 package com.example.liftrix.data.repository
 
 import com.example.liftrix.core.error.FirebaseErrorMapper
+import com.example.liftrix.core.identity.UserId
 import com.example.liftrix.data.mapper.UserMapper
 import com.example.liftrix.data.remote.dto.UserDto
 import com.example.liftrix.domain.model.User
@@ -316,8 +317,17 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getCurrentUserId(): String? {
-        return firebaseAuth.currentUser?.uid
+    override suspend fun getCurrentUserId(): UserId? {
+        return firebaseAuth.currentUser?.uid?.let { UserId(it) }
+    }
+
+    override fun observeAuthState(): Flow<UserId?> = callbackFlow {
+        val listener = FirebaseAuth.AuthStateListener { auth ->
+            val userId = auth.currentUser?.uid?.let { UserId(it) }
+            trySend(userId)
+        }
+        firebaseAuth.addAuthStateListener(listener)
+        awaitClose { firebaseAuth.removeAuthStateListener(listener) }
     }
     
     /**
@@ -446,15 +456,15 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun getUserProfile(uid: String): LiftrixResult<User?> {
+    override suspend fun getUserProfile(uid: UserId): LiftrixResult<User?> {
         return liftrixCatching(
             errorMapper = { throwable -> FirebaseErrorMapper.handleFirebaseError(throwable) }
         ) {
             val document = firestore.collection("users")
-                .document(uid)
+                .document(uid.value)
                 .get()
                 .await()
-            
+
             if (document.exists()) {
                 val userDto = document.toObject(UserDto::class.java)
                 userDto?.let { UserMapper.fromUserDto(it) }

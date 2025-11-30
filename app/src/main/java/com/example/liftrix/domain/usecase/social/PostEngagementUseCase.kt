@@ -59,10 +59,10 @@ class PostEngagementUseCase @Inject constructor(
         // Get current user ID
         val userId = authQueryUseCase(waitForAuth = false).getOrThrow()
 
-        Timber.d("Toggling like for post: $postId by user: $userId")
+        Timber.d("Toggling like for post: $postId by user: ${userId.value}")
 
         // Toggle like with optimistic update
-        val result = engagementRepository.toggleLike(postId, userId)
+        val result = engagementRepository.toggleLike(postId, userId.value)
 
         result.fold(
             onSuccess = { newLikeState ->
@@ -99,10 +99,10 @@ class PostEngagementUseCase @Inject constructor(
         // Get current user ID
         val userId = authQueryUseCase(waitForAuth = false).getOrThrow()
 
-        Timber.d("Toggling save for post: $postId by user: $userId")
+        Timber.d("Toggling save for post: $postId by user: ${userId.value}")
 
         // Toggle save with optimistic update
-        val result = engagementRepository.toggleSave(postId, userId)
+        val result = engagementRepository.toggleSave(postId, userId.value)
 
         result.fold(
             onSuccess = { newSaveState ->
@@ -156,7 +156,7 @@ class PostEngagementUseCase @Inject constructor(
         // Get current user ID
         val userId = authQueryUseCase(waitForAuth = false).getOrThrow()
 
-        Timber.d("Creating comment for post: $postId by user: $userId")
+        Timber.d("Creating comment for post: $postId by user: ${userId.value}")
 
         // Create comment request
         val request = CreateCommentRequest(
@@ -166,7 +166,7 @@ class PostEngagementUseCase @Inject constructor(
         )
 
         // Create comment with real-time sync
-        val result = engagementRepository.createComment(userId, request)
+        val result = engagementRepository.createComment(userId.value, request)
 
         result.fold(
             onSuccess = { comment ->
@@ -203,18 +203,18 @@ class PostEngagementUseCase @Inject constructor(
         // Get current user ID
         val userId = authQueryUseCase(waitForAuth = false).getOrThrow()
 
-        Timber.d("Getting engagement status for post: $postId by user: $userId")
+        Timber.d("Getting engagement status for post: $postId by user: ${userId.value}")
 
         // Fetch engagement data in parallel for performance
         coroutineScope {
             val likedDeferred = async {
-                engagementRepository.isPostLiked(postId, userId)
+                engagementRepository.isPostLiked(postId, userId.value)
             }
             val savedDeferred = async {
-                engagementRepository.isPostSaved(postId, userId)
+                engagementRepository.isPostSaved(postId, userId.value)
             }
             val statsDeferred = async {
-                engagementRepository.getPostEngagementStats(postId, userId)
+                engagementRepository.getPostEngagementStats(postId, userId.value)
             }
 
             // Await all results

@@ -395,17 +395,18 @@ class SuggestedUsersCarouselViewModel @javax.inject.Inject constructor(
                 updateState { it.copy(isLoading = true, error = null) }
 
                 val currentUserId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
-                    onFailure = {
-                        updateState {
-                            it.copy(
-                                isLoading = false,
-                                error = "User not authenticated"
-                            )
-                        }
-                        return@launch
-                    }
+                    onSuccess = { it?.value },
+                    onFailure = { null }
                 )
+                if (currentUserId == null) {
+                    updateState {
+                        it.copy(
+                            isLoading = false,
+                            error = "User not authenticated"
+                        )
+                    }
+                    return@launch
+                }
                 
                 Timber.d("Loading suggested users for user: $currentUserId")
                 

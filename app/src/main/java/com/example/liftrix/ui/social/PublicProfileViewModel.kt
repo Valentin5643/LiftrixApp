@@ -153,20 +153,20 @@ class PublicProfileViewModel @Inject constructor(
         viewModelScope.launch {
             // Get current user ID, or use empty string for anonymous viewing
             val currentUserId = uiState.value.currentUserId ?: authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it },
+                onSuccess = { it.value },
                 onFailure = { "" }
             )
-            
+
             val postsFlow = feedRepository.getUserPosts(
                 userId = userId,
                 viewerId = currentUserId,
                 pageSize = 20
             ).cachedIn(viewModelScope)
-            
+
             updateState { currentState ->
                 currentState.copy(workoutPosts = postsFlow)
             }
-            
+
             Timber.d("Loading posts for user $userId viewed by $currentUserId")
         }
     }
@@ -409,7 +409,7 @@ class PublicProfileViewModel @Inject constructor(
     private fun loadCurrentUserId() {
         viewModelScope.launch {
             val currentUserId = authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it },
+                onSuccess = { it.value },
                 onFailure = { null }
             )
             updateState { it.copy(currentUserId = currentUserId) }

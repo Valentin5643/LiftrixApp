@@ -27,7 +27,7 @@ class PostCommentsViewModel @Inject constructor(
 ) : ModernBaseViewModel<PostCommentsUiState>(initialState = PostCommentsUiState.Loading) {
 
     private val _postId = MutableStateFlow<String?>(null)
-    private val _currentUserId = MutableStateFlow<String?>(null)
+    private val _currentUserId = MutableStateFlow<com.example.liftrix.core.identity.UserId?>(null)
     private val _commentText = MutableStateFlow("")
     private val _isPosting = MutableStateFlow(false)
     private val _replyingTo = MutableStateFlow<PostComment?>(null)
@@ -95,7 +95,7 @@ class PostCommentsViewModel @Inject constructor(
                     parentCommentId = replyingTo?.id
                 )
 
-                val result = engagementRepository.createComment(currentUserId, request)
+                val result = engagementRepository.createComment(currentUserId.value, request)
                 
                 result.fold(
                     onSuccess = { comment ->
@@ -116,7 +116,7 @@ class PostCommentsViewModel @Inject constructor(
                                 errorMessage = "Failed to post comment: ${throwable.message}",
                                 analyticsContext = mapOf(
                                     "post_id" to postId,
-                                    "user_id" to currentUserId
+                                    "user_id" to currentUserId.value
                                 )
                             )
                         }
@@ -130,7 +130,7 @@ class PostCommentsViewModel @Inject constructor(
                     errorMessage = "Failed to post comment: ${e.message}",
                     analyticsContext = mapOf(
                         "post_id" to postId,
-                        "user_id" to currentUserId
+                        "user_id" to currentUserId.value
                     )
                 )
                 Timber.e(e, "Exception posting comment")
@@ -175,7 +175,7 @@ class PostCommentsViewModel @Inject constructor(
                     analyticsContext = mapOf(
                         "comment_id" to commentId,
                         "post_id" to postId,
-                        "user_id" to currentUserId
+                        "user_id" to currentUserId.value
                     )
                 )
                 Timber.e(e, "Exception toggling comment like: $commentId")
@@ -208,7 +208,7 @@ class PostCommentsViewModel @Inject constructor(
     val commentText: StateFlow<String> = _commentText.asStateFlow()
     val isPosting: StateFlow<Boolean> = _isPosting.asStateFlow()
     val replyingTo: StateFlow<PostComment?> = _replyingTo.asStateFlow()
-    val currentUserId: StateFlow<String?> = _currentUserId.asStateFlow()
+    val currentUserId: StateFlow<com.example.liftrix.core.identity.UserId?> = _currentUserId.asStateFlow()
 
     /**
      * FIX INPUT-006: Sanitize HTML input to prevent XSS attacks (CVSS 7.4)

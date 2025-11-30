@@ -157,7 +157,7 @@ class VolumeAnalysisDetailViewModel @Inject constructor(
                 )
 
                 val result = analyticsQueryUseCase.getVolumeAnalysis(
-                    userId = userId,
+                    userId = userId.value,
                     groupBy = groupBy.value,
                     timeRange = timeRange.value
                 )

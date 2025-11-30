@@ -43,12 +43,12 @@ class CopyWorkoutFromPostUseCase @Inject constructor(
     ) {
         // Get current user ID
         val userId = authQueryUseCase(waitForAuth = false).getOrThrow()
-        
-        Timber.d("Copying workout from post: $postId for user: $userId")
-        
+
+        Timber.d("Copying workout from post: $postId for user: ${userId.value}")
+
         // Copy workout from post
-        val result = engagementRepository.copyWorkoutFromPost(postId, userId)
-        
+        val result = engagementRepository.copyWorkoutFromPost(postId, userId.value)
+
         result.fold(
             onSuccess = { templateId ->
                 Timber.i("Workout copied successfully from post $postId to template $templateId")

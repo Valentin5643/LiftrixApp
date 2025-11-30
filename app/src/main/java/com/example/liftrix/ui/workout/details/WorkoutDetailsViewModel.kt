@@ -49,7 +49,7 @@ class WorkoutDetailsViewModel @Inject constructor(
 
             // Get current user ID
             val currentUserId = authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it },
+                onSuccess = { it.value },
                 onFailure = {
                     _uiState.value = WorkoutDetailsUiState.Error(
                         message = "User not authenticated"

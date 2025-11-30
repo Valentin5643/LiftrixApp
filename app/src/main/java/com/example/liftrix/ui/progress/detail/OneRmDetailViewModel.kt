@@ -240,7 +240,7 @@ class OneRmDetailViewModel @Inject constructor(
                 )
 
                 val result = analyticsQueryUseCase.getOneRmProgression(
-                    userId = userId,
+                    userId = userId.value,
                     exerciseIds = exerciseIds,
                     timeRange = timeRange,
                     includeEstimated = showEstimated.value

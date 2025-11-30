@@ -623,8 +623,8 @@ class FeedRepositoryImpl @Inject constructor(
                     Timber.w("PFP_DEBUG: 🔥 CURRENT_USER_ID_ERROR: Failed to get current user ID", e)
                     null
                 }
-                
-                val firebaseAuthPhoto = if (entity.userId == currentUserId) {
+
+                val firebaseAuthPhoto = if (entity.userId == currentUserId?.value) {
                     try {
                         val authUser = authRepository.getCurrentUser()
                         Timber.d("PFP_DEBUG: 🔍 AUTH_CHECK: User ${entity.userId} is current user, checking Firebase Auth photo")
@@ -1070,8 +1070,8 @@ class FeedRepositoryImpl @Inject constructor(
                 Timber.w("PFP_DEBUG: 🔥 FALLBACK_CURRENT_USER_ERROR: Failed to get current user ID during fallback", e)
                 null
             }
-            
-            val firebaseAuthPhotoUrl = if (userId == currentUserId) {
+
+            val firebaseAuthPhotoUrl = if (userId == currentUserId?.value) {
                 try {
                     val authUser = authRepository.getCurrentUser()
                     Timber.d("PFP_DEBUG: 🔍 FALLBACK_AUTH_CHECK: User $userId is current user, checking Firebase Auth photo")

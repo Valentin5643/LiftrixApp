@@ -219,7 +219,7 @@ class LegalDocumentViewModel @Inject constructor(
             
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
+                    onSuccess = { it.value },
                     onFailure = { throw LiftrixError.BusinessLogicError(
                         code = "USER_NOT_AUTHENTICATED",
                         errorMessage = "User must be authenticated to download documents",
@@ -351,7 +351,7 @@ class LegalDocumentViewModel @Inject constructor(
                             onFailure = { error -> throw error }
                         )
                         val userId = authQueryUseCase(waitForAuth = false).fold(
-                            onSuccess = { it },
+                            onSuccess = { it.value },
                             onFailure = { throw LiftrixError.BusinessLogicError(
                                 code = "USER_NOT_AUTHENTICATED",
                                 errorMessage = "User must be authenticated to accept legal documents",
@@ -373,7 +373,7 @@ class LegalDocumentViewModel @Inject constructor(
                             onFailure = { error -> throw error }
                         )
                         val userId = authQueryUseCase(waitForAuth = false).fold(
-                            onSuccess = { it },
+                            onSuccess = { it.value },
                             onFailure = { throw LiftrixError.BusinessLogicError(
                                 code = "USER_NOT_AUTHENTICATED",
                                 errorMessage = "User must be authenticated to accept legal documents",

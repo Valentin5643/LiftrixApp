@@ -49,15 +49,15 @@ class AddReplyToSupportTicketUseCase @Inject constructor(
     ) {
         // Get current user ID for authentication and scoping
         val userId = authQueryUseCase(waitForAuth = false).getOrThrow()
-        
+
         // Create and validate the reply request
         val request = AddSupportTicketReplyRequest(
             ticketId = ticketId,
-            userId = userId,
+            userId = userId.value,
             content = content.trim(),
             attachments = attachments
         )
-        
+
         // Validate the request
         val validationErrors = request.validate()
         if (validationErrors.isNotEmpty()) {
@@ -70,9 +70,9 @@ class AddReplyToSupportTicketUseCase @Inject constructor(
                 )
             )
         }
-        
+
         // Check if ticket exists and user has permission to reply
-        val existingTicket = supportService.getTicket(ticketId, userId).fold(
+        val existingTicket = supportService.getTicket(ticketId, userId.value).fold(
             onSuccess = { ticket ->
                 ticket ?: throw LiftrixError.BusinessLogicError(
                     code = "TICKET_NOT_FOUND",

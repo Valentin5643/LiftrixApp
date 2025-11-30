@@ -43,7 +43,7 @@ inline fun <T, S> ViewModel.loadDataWithAuth(
     viewModelScope.launch {
         try {
             // Check authentication
-            val userId = authRepository.getCurrentUserId()
+            val userId = authRepository.getCurrentUserId()?.value
             if (userId == null) {
                 uiState.value = uiState.value.updateLoading(false).updateError("User not authenticated")
                 return@launch
@@ -89,7 +89,7 @@ inline fun <T, S> ViewModel.loadDataWithAuth(
 ) {
     viewModelScope.launch {
         try {
-            val userId = authRepository.getCurrentUserId()
+            val userId = authRepository.getCurrentUserId()?.value
             if (userId == null) {
                 uiState.value = uiState.value.updateLoading(false).updateError("User not authenticated")
                 return@launch

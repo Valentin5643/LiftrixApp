@@ -352,7 +352,7 @@ class WorkoutViewModel @Inject constructor(
 
             val userIdResult = authQueryUseCase(waitForAuth = false)
             userIdResult.onSuccess { userId ->
-                val result = workoutRepository.syncNowForUser(userId)
+                val result = workoutRepository.syncNowForUser(userId.value)
 
                 result.onSuccess {
                     Timber.d("Sync started successfully")
@@ -393,7 +393,7 @@ class WorkoutViewModel @Inject constructor(
 
             val userIdResult = authQueryUseCase(waitForAuth = false)
             userIdResult.onSuccess { userId ->
-                val result = workoutRepository.getUnsyncedCountForUser(userId)
+                val result = workoutRepository.getUnsyncedCountForUser(userId.value)
 
                 result.onSuccess { count ->
                     val currentData = uiState.value.dataOrNull() ?: WorkoutScreenData()
@@ -469,7 +469,7 @@ class WorkoutViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
+                    onSuccess = { it.value },
                     onFailure = {
                         Timber.e(it, "Failed to get user ID")
                         return@launch
@@ -527,7 +527,7 @@ class WorkoutViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
+                    onSuccess = { it.value },
                     onFailure = {
                         Timber.e(it, "Failed to get user ID")
                         return@launch
@@ -555,7 +555,7 @@ class WorkoutViewModel @Inject constructor(
 
             val userIdResult = authQueryUseCase(waitForAuth = false)
             userIdResult.onSuccess { userId ->
-                if (userId.isBlank()) {
+                if (userId.value.isBlank()) {
                     val error = LiftrixError.UnknownError(
                         errorMessage = "User not authenticated - cannot create folder"
                     )
@@ -565,7 +565,7 @@ class WorkoutViewModel @Inject constructor(
                     return@launch
                 }
 
-                val result = folderOperationsUseCase.create(userId, folderName)
+                val result = folderOperationsUseCase.create(userId.value, folderName)
 
                 result.onSuccess { folder ->
                     Timber.d("New folder created: ${folder.name} (${folder.id.value})")
@@ -635,7 +635,7 @@ class WorkoutViewModel @Inject constructor(
 
             val userIdResult = authQueryUseCase(waitForAuth = false)
             userIdResult.onSuccess { userId ->
-                if (userId.isBlank()) {
+                if (userId.value.isBlank()) {
                     val error = LiftrixError.UnknownError(
                         errorMessage = "User not authenticated - cannot delete folder"
                     )
@@ -645,7 +645,7 @@ class WorkoutViewModel @Inject constructor(
                     return@launch
                 }
 
-                val result = folderOperationsUseCase.delete(userId, folder.id)
+                val result = folderOperationsUseCase.delete(userId.value, folder.id)
 
                 result.onSuccess {
                     Timber.d("Folder '${folder.name}' deleted successfully")
@@ -687,7 +687,7 @@ class WorkoutViewModel @Inject constructor(
 
             val userIdResult = authQueryUseCase(waitForAuth = false)
             userIdResult.onSuccess { userId ->
-                if (userId.isBlank()) {
+                if (userId.value.isBlank()) {
                     val error = LiftrixError.UnknownError(
                         errorMessage = "User not authenticated - cannot rename folder"
                     )
@@ -780,7 +780,7 @@ class WorkoutViewModel @Inject constructor(
 
             val userIdResult = authQueryUseCase(waitForAuth = false)
             userIdResult.onSuccess { userId ->
-                if (userId.isBlank()) {
+                if (userId.value.isBlank()) {
                     val error = LiftrixError.UnknownError(
                         errorMessage = "User not authenticated - cannot reorder folders"
                     )
@@ -813,7 +813,7 @@ class WorkoutViewModel @Inject constructor(
                     return@launch
                 }
 
-                val result = folderOperationsUseCase.reorder(userId, currentFolders, orderedFolderIds)
+                val result = folderOperationsUseCase.reorder(userId.value, currentFolders, orderedFolderIds)
 
                 result.onSuccess { reorderedFolders ->
                     // ✅ RACE CONDITION FIX: Use cached state instead of re-checking UI state

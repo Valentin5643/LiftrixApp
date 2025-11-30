@@ -109,7 +109,7 @@ class SocialRepositoryImpl @Inject constructor(
             for (document in allResults) {
                 try {
                     // Skip current user from results
-                    if (document.id == currentUserId) continue
+                    if (document.id == currentUserId.value) continue
 
                     val userData = document.data ?: continue
                     val user = User(
@@ -151,12 +151,12 @@ class SocialRepositoryImpl @Inject constructor(
             val currentUserId = authRepository.getCurrentUserId()
                 ?: return Result.failure(Exception("User not authenticated"))
 
-            if (currentUserId == friendUserId) {
+            if (currentUserId.value == friendUserId) {
                 return Result.failure(Exception("Cannot send friend request to yourself"))
             }
 
             // Check if relationship already exists
-            val existingRelationship = friendDao.getFriendRelationship(currentUserId, friendUserId)
+            val existingRelationship = friendDao.getFriendRelationship(currentUserId.value, friendUserId)
             if (existingRelationship != null) {
                 return Result.failure(Exception("Friend relationship already exists"))
             }
@@ -169,11 +169,11 @@ class SocialRepositoryImpl @Inject constructor(
 
             // Create friend request entity
             val friendRequest = friendMapper.createFriendRequest(
-                currentUserId = currentUserId,
+                currentUserId = currentUserId.value,
                 friendUserId = friendUserId,
                 isSynced = false
             )
-            
+
             Timber.d("DEBUG_SEND_FRIEND_REQUEST: Created friend request entity - userId: ${friendRequest.userId}, friendUserId: ${friendRequest.friendUserId}, status: ${friendRequest.status}")
 
             // Save to local database (offline-first)
@@ -181,10 +181,10 @@ class SocialRepositoryImpl @Inject constructor(
             Timber.d("DEBUG_SEND_FRIEND_REQUEST: Inserted friend request to database with ID: $insertId")
 
             // Sync to Firebase
-            syncFriendRequestToFirebase(currentUserId, friendUserId)
+            syncFriendRequestToFirebase(currentUserId.value, friendUserId)
 
             // Invalidate recommendation cache since friend relationships changed
-            recommendationCache.invalidateCacheForUser(currentUserId)
+            recommendationCache.invalidateCacheForUser(currentUserId.value)
 
             Timber.d("Friend request sent successfully: $currentUserId -> $friendUserId")
             Result.success(Unit)
@@ -201,7 +201,7 @@ class SocialRepositoryImpl @Inject constructor(
                 ?: return Result.failure(Exception("User not authenticated"))
 
             // Find the pending friend request
-            val existingRequest = friendDao.getFriendRelationship(friendUserId, currentUserId)
+            val existingRequest = friendDao.getFriendRelationship(friendUserId, currentUserId.value)
             if (existingRequest == null || existingRequest.status != FriendStatus.PENDING.name) {
                 return Result.failure(Exception("No pending friend request found"))
             }
@@ -210,12 +210,12 @@ class SocialRepositoryImpl @Inject constructor(
             val now = Instant.now().toEpochMilli()
 
             // Update the friend request status
-            friendDao.updateFriendStatus(friendUserId, currentUserId, newStatus, now)
+            friendDao.updateFriendStatus(friendUserId, currentUserId.value, newStatus, now)
 
             if (accept) {
                 // Create bidirectional friendship
                 val reciprocalFriend = friendMapper.createFriendRequest(
-                    currentUserId = currentUserId,
+                    currentUserId = currentUserId.value,
                     friendUserId = friendUserId,
                     isSynced = false
                 ).copy(status = FriendStatus.ACCEPTED.name)
@@ -224,11 +224,11 @@ class SocialRepositoryImpl @Inject constructor(
             }
 
             // Sync to Firebase
-            syncFriendResponseToFirebase(currentUserId, friendUserId, accept)
+            syncFriendResponseToFirebase(currentUserId.value, friendUserId, accept)
 
             // Invalidate recommendation cache for both users since friend relationships changed
             if (accept) {
-                recommendationCache.invalidateCacheForUser(currentUserId)
+                recommendationCache.invalidateCacheForUser(currentUserId.value)
                 recommendationCache.invalidateCacheForUser(friendUserId)
             }
 
@@ -394,22 +394,22 @@ class SocialRepositoryImpl @Inject constructor(
                 ?: return Result.failure(Exception("User not authenticated"))
 
             // Update or create blocked relationship
-            val existingRelationship = friendDao.getFriendRelationship(currentUserId, friendUserId)
+            val existingRelationship = friendDao.getFriendRelationship(currentUserId.value, friendUserId)
             val now = Instant.now().toEpochMilli()
 
             if (existingRelationship != null) {
-                friendDao.updateFriendStatus(currentUserId, friendUserId, FriendStatus.BLOCKED.name, now)
+                friendDao.updateFriendStatus(currentUserId.value, friendUserId, FriendStatus.BLOCKED.name, now)
             } else {
-                val blockedUser = friendMapper.createFriendRequest(currentUserId, friendUserId)
+                val blockedUser = friendMapper.createFriendRequest(currentUserId.value, friendUserId)
                     .copy(status = FriendStatus.BLOCKED.name)
                 friendDao.insertFriend(blockedUser)
             }
 
             // Remove any reciprocal friendship
-            friendDao.deleteFriendRelationship(friendUserId, currentUserId)
+            friendDao.deleteFriendRelationship(friendUserId, currentUserId.value)
 
             // Sync to Firebase
-            syncBlockUserToFirebase(currentUserId, friendUserId)
+            syncBlockUserToFirebase(currentUserId.value, friendUserId)
 
             Timber.d("User blocked successfully: $currentUserId blocked $friendUserId")
             Result.success(Unit)
@@ -426,10 +426,10 @@ class SocialRepositoryImpl @Inject constructor(
                 ?: return Result.failure(Exception("User not authenticated"))
 
             // Remove blocked relationship
-            friendDao.deleteFriendRelationship(currentUserId, friendUserId)
+            friendDao.deleteFriendRelationship(currentUserId.value, friendUserId)
 
             // Sync to Firebase
-            syncUnblockUserToFirebase(currentUserId, friendUserId)
+            syncUnblockUserToFirebase(currentUserId.value, friendUserId)
 
             Timber.d("User unblocked successfully: $currentUserId unblocked $friendUserId")
             Result.success(Unit)
@@ -446,13 +446,13 @@ class SocialRepositoryImpl @Inject constructor(
                 ?: return Result.failure(Exception("User not authenticated"))
 
             // Remove bidirectional friendship
-            friendDao.deleteBidirectionalFriendRelationship(currentUserId, friendUserId)
+            friendDao.deleteBidirectionalFriendRelationship(currentUserId.value, friendUserId)
 
             // Sync to Firebase
-            syncRemoveFriendToFirebase(currentUserId, friendUserId)
+            syncRemoveFriendToFirebase(currentUserId.value, friendUserId)
 
             // Invalidate recommendation cache for both users since friend relationships changed
-            recommendationCache.invalidateCacheForUser(currentUserId)
+            recommendationCache.invalidateCacheForUser(currentUserId.value)
             recommendationCache.invalidateCacheForUser(friendUserId)
 
             Timber.d("Friend removed successfully: $currentUserId removed $friendUserId")
@@ -512,7 +512,7 @@ class SocialRepositoryImpl @Inject constructor(
             
             // Step 1: Check cache first (only for first page)
             if (offset == 0) {
-                val cachedRecommendations = recommendationCache.getCachedRecommendations(currentUserId)
+                val cachedRecommendations = recommendationCache.getCachedRecommendations(currentUserId.value)
                 if (cachedRecommendations != null) {
                     val cachedResults = cachedRecommendations.take(limit)
                     Timber.d("Cache hit: returning ${cachedResults.size} cached recommendations")
@@ -521,36 +521,36 @@ class SocialRepositoryImpl @Inject constructor(
                 }
                 Timber.d("Cache miss: proceeding with fresh API call")
             }
-            
+
             // Step 2: Get current user's friends to exclude from recommendations
-            val existingFriendIds = friendDao.getFriends(currentUserId).map { friendEntities ->
+            val existingFriendIds = friendDao.getFriends(currentUserId.value).map { friendEntities ->
                 friendEntities.map { it.friendUserId }.toSet()
             }.catch { emit(emptySet()) }
-                
+
             existingFriendIds.collect { friendIds ->
                 val recommendations = mutableListOf<RecommendedUser>()
-                
+
                 // Step 3: Get mutual friends recommendations (50% of limit)
                 val mutualFriendsLimit = (limit * MUTUAL_FRIENDS_WEIGHT).toInt()
                 if (mutualFriendsLimit > 0) {
                     val mutualFriendsUsers = getMutualFriendsRecommendations(
-                        currentUserId = currentUserId,
+                        currentUserId = currentUserId.value,
                         existingFriendIds = friendIds,
                         limit = mutualFriendsLimit,
                         offset = offset / 2
                     )
                     recommendations.addAll(mutualFriendsUsers)
                 }
-                
+
                 // Step 4: Get discovery recommendations to fill remaining slots
                 val remainingSlots = limit - recommendations.size
                 if (remainingSlots > 0) {
                         // For new users (< 3 friends), use sophisticated UserSuggestionService
                     if (friendIds.size < 3) {
-                        
+
                         try {
                             // Use the sophisticated recommendation service for new users
-                            val suggestionResult = userSuggestionService.getNewUserSuggestions(currentUserId, remainingSlots)
+                            val suggestionResult = userSuggestionService.getNewUserSuggestions(currentUserId.value, remainingSlots)
                             
                             suggestionResult.fold(
                                 onSuccess = { suggestions ->
@@ -567,7 +567,7 @@ class SocialRepositoryImpl @Inject constructor(
                                 onFailure = { error ->
                                     // Fallback to basic recommendations
                                     val generalUsers = getGeneralRecommendations(
-                                        currentUserId = currentUserId,
+                                        currentUserId = currentUserId.value,
                                         excludeUserIds = friendIds + recommendations.map { it.userId }.toSet(),
                                         limit = remainingSlots,
                                         offset = offset
@@ -578,7 +578,7 @@ class SocialRepositoryImpl @Inject constructor(
                         } catch (e: Exception) {
                             // Fallback to basic recommendations
                             val generalUsers = getGeneralRecommendations(
-                                currentUserId = currentUserId,
+                                currentUserId = currentUserId.value,
                                 excludeUserIds = friendIds + recommendations.map { it.userId }.toSet(),
                                 limit = remainingSlots,
                                 offset = offset
@@ -588,7 +588,7 @@ class SocialRepositoryImpl @Inject constructor(
                     } else {
                         // For established users, use the basic Firebase query approach
                         val generalUsers = getGeneralRecommendations(
-                            currentUserId = currentUserId,
+                            currentUserId = currentUserId.value,
                             excludeUserIds = friendIds + recommendations.map { it.userId }.toSet(),
                             limit = remainingSlots,
                             offset = offset
@@ -596,15 +596,15 @@ class SocialRepositoryImpl @Inject constructor(
                         recommendations.addAll(generalUsers)
                     }
                 }
-                
+
                 // Remove duplicates and limit results
                 val finalRecommendations = recommendations
                     .distinctBy { it.userId }
                     .take(limit)
-                
+
                 // Step 5: Cache fresh recommendations (only for first page)
                 if (offset == 0 && finalRecommendations.isNotEmpty()) {
-                    recommendationCache.cacheRecommendations(currentUserId, finalRecommendations)
+                    recommendationCache.cacheRecommendations(currentUserId.value, finalRecommendations)
                 }
                 
                 Timber.d("Generated ${finalRecommendations.size} recommendations for user: $currentUserId")
@@ -628,7 +628,7 @@ class SocialRepositoryImpl @Inject constructor(
             Timber.d("DEBUG_REPO_FOLLOW: followUser called - currentUserId: $currentUserId, targetUserId: $userId")
 
             // Check if there's already a pending request from the target user
-            val incomingRequest = friendDao.getFriendRelationship(userId, currentUserId)
+            val incomingRequest = friendDao.getFriendRelationship(userId, currentUserId.value)
             Timber.d("DEBUG_REPO_FOLLOW: Checked for incoming request - found: ${incomingRequest != null}, status: ${incomingRequest?.status}")
             
             if (incomingRequest != null && incomingRequest.status == FriendStatus.PENDING.name) {
@@ -654,7 +654,7 @@ class SocialRepositoryImpl @Inject constructor(
             val currentUserId = authRepository.getCurrentUserId()
             if (currentUserId != null) {
                 // Clear cached recommendations to trigger fresh discovery
-                recommendationCache.invalidateCacheForUser(currentUserId)
+                recommendationCache.invalidateCacheForUser(currentUserId.value)
                 Timber.d("Discovery cache refreshed successfully for user: $currentUserId")
             } else {
                 Timber.w("Cannot refresh cache: user not authenticated")
@@ -674,7 +674,7 @@ class SocialRepositoryImpl @Inject constructor(
             Timber.d("Starting friends' workouts sync for user: $currentUserId")
 
             // Get list of accepted friends
-            val friendIds = friendDao.getFriends(currentUserId).map { friendEntities ->
+            val friendIds = friendDao.getFriends(currentUserId.value).map { friendEntities ->
                 friendEntities.filter { it.status == FriendStatus.ACCEPTED.name }
                     .map { it.friendUserId }
             }.catch { emit(emptyList()) }
@@ -721,7 +721,7 @@ class SocialRepositoryImpl @Inject constructor(
                 Timber.d("Setting up real-time feed listener for user: $currentUserId")
 
                 // Get friend IDs for real-time workout updates
-                val friendIds = friendDao.getFriends(currentUserId).map { friendEntities ->
+                val friendIds = friendDao.getFriends(currentUserId.value).map { friendEntities ->
                     friendEntities.filter { it.status == FriendStatus.ACCEPTED.name }
                         .map { it.friendUserId }
                 }.catch { emit(emptyList()) }
@@ -780,11 +780,11 @@ class SocialRepositoryImpl @Inject constructor(
             val presenceData = mapOf(
                 "status" to "online",
                 "last_active" to com.google.firebase.Timestamp.now(),
-                "user_id" to currentUserId
+                "user_id" to currentUserId.value
             )
 
             firestore.collection("user_presence")
-                .document(currentUserId)
+                .document(currentUserId.value)
                 .set(presenceData)
                 .await()
 

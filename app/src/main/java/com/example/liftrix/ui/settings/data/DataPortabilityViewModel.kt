@@ -128,7 +128,7 @@ class DataPortabilityViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
+                    onSuccess = { it.value },
                     onFailure = { null }
                 )
                 if (userId != null) {

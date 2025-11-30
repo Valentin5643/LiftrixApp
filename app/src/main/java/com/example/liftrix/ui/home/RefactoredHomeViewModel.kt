@@ -138,11 +138,11 @@ class RefactoredHomeViewModel @Inject constructor(
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
                     onSuccess = { it },
-                    onFailure = { "" }
+                    onFailure = { null }
                 )
-                if (userId.isNotEmpty()) {
+                if (userId?.value?.isNotEmpty() == true) {
                     // Load all data concurrently
-                    launch { loadHomeData(userId) }
+                    launch { loadHomeData(userId.value) }
                     launch { loadFeedWorkouts() }
                     launch { loadRecommendations() }
                 }
@@ -177,13 +177,13 @@ class RefactoredHomeViewModel @Inject constructor(
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
                     onSuccess = { it },
-                    onFailure = { "" }
+                    onFailure = { null }
                 )
-                if (userId.isNotEmpty()) {
+                if (userId?.value?.isNotEmpty() == true) {
                     setState(UiState.Loading)
                     // Refresh all data concurrently
                     launch {
-                        homeDataManager.refreshHomeData(userId).collect { result ->
+                        homeDataManager.refreshHomeData(userId.value).collect { result ->
                             result.fold(
                                 onSuccess = { homeData ->
                                     setState(UiState.Success(homeData))
@@ -210,17 +210,17 @@ class RefactoredHomeViewModel @Inject constructor(
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
                     onSuccess = { it },
-                    onFailure = { "" }
+                    onFailure = { null }
                 )
-                if (userId.isNotEmpty()) {
+                if (userId?.value?.isNotEmpty() == true) {
                     _feedState.value = FeedState.Loading
-                    
+
                     // Load feed with proper filtering based on Following/Explore selection
                     val includeOthers = _showAllUsersInFeed.value
-                    
-                    
+
+
                     // Pass the includeOthers parameter to filter feed content
-                    homeFeedManager.loadFeedWorkouts(userId, includeOthers).collect { result ->
+                    homeFeedManager.loadFeedWorkouts(userId.value, includeOthers).collect { result ->
                         result.fold(
                             onSuccess = { feedState ->
                                 _feedState.value = feedState
@@ -251,16 +251,16 @@ class RefactoredHomeViewModel @Inject constructor(
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
                     onSuccess = { it },
-                    onFailure = { "" }
+                    onFailure = { null }
                 )
                 val currentState = _feedState.value
                 val currentWorkouts = if (currentState is FeedState.Success) currentState.workouts else emptyList()
 
-                if (userId.isNotEmpty() && currentState is FeedState.Success && currentState.hasMore && !currentState.isLoadingMore) {
+                if (userId?.value?.isNotEmpty() == true && currentState is FeedState.Success && currentState.hasMore && !currentState.isLoadingMore) {
                     _feedState.value = FeedState.Loading
-                    
+
                     val includeOthers = _showAllUsersInFeed.value
-                    homeFeedManager.loadMoreFeedWorkouts(userId, currentWorkouts, includeOthers).collect { result ->
+                    homeFeedManager.loadMoreFeedWorkouts(userId.value, currentWorkouts, includeOthers).collect { result ->
                         result.fold(
                             onSuccess = { feedState ->
                                 _feedState.value = feedState
@@ -291,13 +291,13 @@ class RefactoredHomeViewModel @Inject constructor(
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
                     onSuccess = { it },
-                    onFailure = { "" }
+                    onFailure = { null }
                 )
-                if (userId.isNotEmpty()) {
+                if (userId?.value?.isNotEmpty() == true) {
                     _feedState.value = FeedState.Loading
-                    
+
                     val includeOthers = _showAllUsersInFeed.value
-                    homeFeedManager.refreshFeed(userId, includeOthers).collect { result ->
+                    homeFeedManager.refreshFeed(userId.value, includeOthers).collect { result ->
                         result.fold(
                             onSuccess = { feedState ->
                                 _feedState.value = feedState
@@ -324,12 +324,12 @@ class RefactoredHomeViewModel @Inject constructor(
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
                     onSuccess = { it },
-                    onFailure = { "" }
+                    onFailure = { null }
                 )
-                if (userId.isNotEmpty()) {
+                if (userId?.value?.isNotEmpty() == true) {
                     _recommendationsState.value = RecommendationsState.Loading
-                    
-                    homeFeedManager.loadRecommendations(userId).collect { result ->
+
+                    homeFeedManager.loadRecommendations(userId.value).collect { result ->
                         result.fold(
                             onSuccess = { recommendationsState ->
                                 _recommendationsState.value = recommendationsState
@@ -360,15 +360,15 @@ class RefactoredHomeViewModel @Inject constructor(
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
                     onSuccess = { it },
-                    onFailure = { "" }
+                    onFailure = { null }
                 )
                 val currentState = _recommendationsState.value
                 val currentUsers = if (currentState is RecommendationsState.Success) currentState.users else emptyList()
 
-                if (userId.isNotEmpty() && currentState is RecommendationsState.Success && currentState.hasMore && !currentState.isLoadingMore) {
+                if (userId?.value?.isNotEmpty() == true && currentState is RecommendationsState.Success && currentState.hasMore && !currentState.isLoadingMore) {
                     _recommendationsState.value = RecommendationsState.Loading
-                    
-                    homeFeedManager.loadMoreRecommendations(userId, currentUsers).collect { result ->
+
+                    homeFeedManager.loadMoreRecommendations(userId.value, currentUsers).collect { result ->
                         result.fold(
                             onSuccess = { recommendationsState ->
                                 _recommendationsState.value = recommendationsState
@@ -399,10 +399,10 @@ class RefactoredHomeViewModel @Inject constructor(
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
                     onSuccess = { it },
-                    onFailure = { "" }
+                    onFailure = { null }
                 )
-                if (userId.isNotEmpty()) {
-                    homeFeedManager.followUser(userId, userIdToFollow).collect { result ->
+                if (userId?.value?.isNotEmpty() == true) {
+                    homeFeedManager.followUser(userId.value, userIdToFollow).collect { result ->
                         result.fold(
                             onSuccess = {
                                 homeAnalyticsManager.trackUserFollowed(userIdToFollow, viewModelScope)
@@ -429,10 +429,10 @@ class RefactoredHomeViewModel @Inject constructor(
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
                     onSuccess = { it },
-                    onFailure = { "" }
+                    onFailure = { null }
                 )
-                if (userId.isNotEmpty()) {
-                    homeFeedManager.unfollowUser(userId, userIdToUnfollow).collect { result ->
+                if (userId?.value?.isNotEmpty() == true) {
+                    homeFeedManager.unfollowUser(userId.value, userIdToUnfollow).collect { result ->
                         result.fold(
                             onSuccess = {
                                 homeAnalyticsManager.trackUserUnfollowed(userIdToUnfollow, viewModelScope)
@@ -462,10 +462,10 @@ class RefactoredHomeViewModel @Inject constructor(
                         viewModelScope.launch {
                             val userId = authQueryUseCase(waitForAuth = false).fold(
                                 onSuccess = { it },
-                                onFailure = { "" }
+                                onFailure = { null }
                             )
-                            if (userId.isNotEmpty()) {
-                                loadHomeData(userId)
+                            if (userId?.value?.isNotEmpty() == true) {
+                                loadHomeData(userId.value)
                             }
                         }
                     } else {

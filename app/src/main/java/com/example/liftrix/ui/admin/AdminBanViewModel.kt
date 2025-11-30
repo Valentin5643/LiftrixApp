@@ -74,12 +74,13 @@ class AdminBanViewModel @Inject constructor(
     fun checkAdminPermissions() {
         viewModelScope.launch {
             val userId = authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it },
-                onFailure = {
-                    Timber.e("Authentication failed")
-                    return@launch
-                }
+                onSuccess = { it?.value },
+                onFailure = { null }
             )
+            if (userId == null) {
+                Timber.e("Authentication failed")
+                return@launch
+            }
             
             checkAdminPermissionsUseCase(userId).fold(
                 onSuccess = { isAdmin ->

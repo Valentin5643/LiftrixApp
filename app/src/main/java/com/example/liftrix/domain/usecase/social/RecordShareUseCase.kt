@@ -53,12 +53,12 @@ class RecordShareUseCase @Inject constructor(
         
         // Get current user ID
         val userId = authQueryUseCase(waitForAuth = false).getOrThrow()
-        
-        Timber.d("Recording share for post: $postId by user: $userId via $shareMethod")
-        
+
+        Timber.d("Recording share for post: $postId by user: ${userId.value} via $shareMethod")
+
         // Record share action
-        val result = engagementRepository.recordShare(postId, userId, shareMethod)
-        
+        val result = engagementRepository.recordShare(postId, userId.value, shareMethod)
+
         result.fold(
             onSuccess = {
                 Timber.i("Share recorded successfully for post $postId via $shareMethod")

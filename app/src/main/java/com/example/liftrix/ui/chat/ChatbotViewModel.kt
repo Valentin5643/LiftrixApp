@@ -72,9 +72,15 @@ class ChatbotViewModel @Inject constructor(
                 // Get authenticated user ID
                 authQueryUseCase(waitForAuth = false).fold(
                     onSuccess = { userIdResult ->
-                        userId = userIdResult
-                        setupConversation(userIdResult)
-                        checkUsageLimits()
+                        userId = userIdResult?.value
+                        if (userId != null) {
+                            setupConversation(userId!!)
+                            checkUsageLimits()
+                        } else {
+                            handleError(LiftrixError.AuthenticationError(
+                                errorMessage = "Failed to get current user ID"
+                            ))
+                        }
                     },
                     onFailure = {
                         handleError(LiftrixError.AuthenticationError(

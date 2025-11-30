@@ -53,17 +53,17 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
             val userIdResult = authQueryUseCase(waitForAuth = false)
 
             userIdResult.fold(
-                onSuccess = { userIdValue ->
+                onSuccess = { userId ->
                         val updateResult = liftrixCatching(
                             errorMapper = { throwable ->
                                 LiftrixError.NetworkError(
                                     errorMessage = "Failed to update FCM token",
-                                    analyticsContext = mapOf("user_id" to userIdValue)
+                                    analyticsContext = mapOf("user_id" to userId.value)
                                 )
                             }
                         ) {
                             tokenRepository.updateToken(
-                                userId = userIdValue,
+                                userId = userId.value,
                                 token = token,
                                 deviceId = getLiftrixDeviceId(),
                                 platform = "ANDROID",
@@ -71,7 +71,7 @@ class LiftrixFirebaseMessagingService : FirebaseMessagingService() {
                             )
                         }
                         updateResult.fold(
-                            onSuccess = { Timber.d("FCM token updated for user: $userIdValue") },
+                            onSuccess = { Timber.d("FCM token updated for user: ${userId.value}") },
                             onFailure = { error -> Timber.e("Failed to update FCM token: $error") }
                         )
                 },

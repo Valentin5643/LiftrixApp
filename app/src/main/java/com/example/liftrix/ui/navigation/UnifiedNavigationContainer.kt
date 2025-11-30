@@ -566,8 +566,9 @@ fun UnifiedNavigationContainer(
                     var isLoading by remember { mutableStateOf(true) }
 
                     LaunchedEffect(Unit) {
-                        currentUserId = authQueryUseCase(waitForAuth = false).fold(
-                            onSuccess = { it },
+                        val result = authQueryUseCase(waitForAuth = false)
+                        currentUserId = result.fold(
+                            onSuccess = { it.value },
                             onFailure = { null }
                         )
                         isLoading = false
@@ -1142,7 +1143,7 @@ fun UnifiedNavigationContainer(
                         "PENDING_REQUESTS" -> com.example.liftrix.ui.profile.FollowerListType.PENDING_REQUESTS
                         else -> com.example.liftrix.ui.profile.FollowerListType.FOLLOWERS
                     }
-                    
+
                     com.example.liftrix.ui.profile.FollowerListScreen(
                         userId = route.userId,
                         listType = listType,
@@ -1154,7 +1155,7 @@ fun UnifiedNavigationContainer(
                         }
                     )
                 }
-                
+
                 composable<LiftrixRoute.FollowingList> { backStackEntry ->
                     val route = backStackEntry.toRoute<LiftrixRoute.FollowingList>()
                     val listType = when (route.listType) {
@@ -1163,7 +1164,7 @@ fun UnifiedNavigationContainer(
                         "PENDING_REQUESTS" -> com.example.liftrix.ui.profile.FollowerListType.PENDING_REQUESTS
                         else -> com.example.liftrix.ui.profile.FollowerListType.FOLLOWING
                     }
-                    
+
                     com.example.liftrix.ui.profile.FollowerListScreen(
                         userId = route.userId,
                         listType = listType,
@@ -1484,8 +1485,9 @@ class UnifiedNavigationViewModel @Inject constructor(
      */
     suspend fun getCurrentUserId(): String? {
         return try {
-            authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it },
+            val result = authQueryUseCase(waitForAuth = false)
+            result.fold(
+                onSuccess = { it?.value },
                 onFailure = { null }
             )
         } catch (e: Exception) {

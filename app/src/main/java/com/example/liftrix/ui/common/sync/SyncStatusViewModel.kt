@@ -209,7 +209,7 @@ class SyncStatusViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val userId = authQueryUseCase(waitForAuth = false).fold(
-                    onSuccess = { it },
+                    onSuccess = { it?.value },
                     onFailure = { null }
                 )
                 _currentUserId.value = userId

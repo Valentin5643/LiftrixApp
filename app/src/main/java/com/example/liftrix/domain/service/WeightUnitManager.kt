@@ -63,7 +63,7 @@ class WeightUnitManager @Inject constructor(
     suspend fun initialize() {
         try {
             val userId = authQueryUseCase(waitForAuth = false).getOrNull() ?: return
-            val userSettings = settingsRepository.getUserSettings(userId)
+            val userSettings = settingsRepository.getUserSettings(userId.value)
                 .filterNotNull()
                 .map { it.weightUnit }
                 .distinctUntilChanged()

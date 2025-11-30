@@ -43,16 +43,16 @@ class QRCodeGenerationUseCase @Inject constructor(
             // Get current user ID for authentication
             val currentUserId = getCurrentUserId()
                 ?: return liftrixFailure(LiftrixError.AuthenticationError("User not authenticated"))
-            
+
             // Validate request
             val validationResult = validateRequest(request, currentUserId)
             if (validationResult.isFailure) {
                 return validationResult as LiftrixResult<QRCodeGenerationResult>
             }
-            
+
             // Determine target user ID (default to current user)
             val targetUserId = request.targetUserId ?: currentUserId
-            
+
             // Validate permission to generate QR code for target user
             if (targetUserId != currentUserId && !canGenerateForUser(targetUserId, currentUserId)) {
                 return liftrixFailure(
@@ -145,7 +145,7 @@ class QRCodeGenerationUseCase @Inject constructor(
      */
     private suspend fun getCurrentUserId(): String? {
         return try {
-            authRepository.getCurrentUserId()
+            authRepository.getCurrentUserId()?.value
         } catch (e: Exception) {
             Timber.e(e, "Failed to get current user ID")
             null

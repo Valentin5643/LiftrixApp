@@ -114,12 +114,12 @@ class WorkoutCommandUseCase @Inject constructor(
     ) {
         // Get current user ID for security validation
         val currentUserId = authQueryUseCase(waitForAuth = false).getOrNull()
-        if (currentUserId.isNullOrBlank()) {
+        if (currentUserId?.value.isNullOrBlank()) {
             throw IllegalStateException("User not authenticated")
         }
 
         // Validate that the user owns this session
-        if (updatedSession.userId != currentUserId) {
+        if (updatedSession.userId != currentUserId?.value) {
             throw SecurityException("Cannot update session belonging to another user")
         }
 
@@ -134,7 +134,7 @@ class WorkoutCommandUseCase @Inject constructor(
             updatedAt = Instant.now(),
             // Preserve original creation timestamp and user ID
             createdAt = originalCreatedAt ?: updatedSession.createdAt,
-            userId = currentUserId
+            userId = currentUserId?.value!!
         )
 
         Timber.d("Updating workout session for user: $currentUserId")
@@ -227,7 +227,7 @@ class WorkoutCommandUseCase @Inject constructor(
         Timber.d("🔥 ADD-EXERCISE-DEBUG: Adding exercise $exerciseLibraryId to workout ${workoutId.value}")
 
         val userId = authQueryUseCase(waitForAuth = false).getOrNull()
-        if (userId.isNullOrBlank()) {
+        if (userId?.value.isNullOrBlank()) {
             throw IllegalStateException("User not authenticated")
         }
 
@@ -236,7 +236,7 @@ class WorkoutCommandUseCase @Inject constructor(
             throw IllegalArgumentException("Initial sets must be between 1 and 10")
         }
 
-        val workoutResult = workoutRepository.getWorkoutById(workoutId, userId)
+        val workoutResult = workoutRepository.getWorkoutById(workoutId, userId?.value!!)
         val existingWorkout = workoutResult.fold(
             onSuccess = { workout ->
                 workout ?: throw IllegalArgumentException("Workout not found or access denied")
@@ -386,7 +386,7 @@ class WorkoutCommandUseCase @Inject constructor(
         }
 
         val userId = authQueryUseCase(waitForAuth = false).getOrNull()
-        if (userId.isNullOrBlank()) {
+        if (userId?.value.isNullOrBlank()) {
             throw IllegalStateException("User not authenticated")
         }
 
@@ -396,7 +396,7 @@ class WorkoutCommandUseCase @Inject constructor(
         }
 
         // 🚀 PERF-P1-OPT3: Load workout and exercise library ONCE upfront
-        val currentWorkout = workoutRepository.getWorkoutById(workoutId, userId).fold(
+        val currentWorkout = workoutRepository.getWorkoutById(workoutId, userId?.value!!).fold(
             onSuccess = { it ?: throw IllegalArgumentException("Workout not found") },
             onFailure = { error -> throw Exception("Failed to retrieve workout: ${error.message}") }
         )
@@ -611,12 +611,12 @@ class WorkoutCommandUseCase @Inject constructor(
         }
     ) {
         val userId = authQueryUseCase(waitForAuth = false).getOrNull()
-        if (userId.isNullOrBlank()) {
+        if (userId?.value.isNullOrBlank()) {
             throw IllegalStateException("User not authenticated")
         }
 
         // Validate user ownership
-        if (workout.userId != userId) {
+        if (workout.userId != userId?.value) {
             throw SecurityException("Cannot save workout belonging to another user")
         }
 
@@ -669,12 +669,12 @@ class WorkoutCommandUseCase @Inject constructor(
     ) {
         // Validate user authentication
         val userId = authQueryUseCase(waitForAuth = false).getOrNull()
-        if (userId.isNullOrBlank()) {
+        if (userId?.value.isNullOrBlank()) {
             throw IllegalStateException("User not authenticated")
         }
 
         // Validate request matches authenticated user
-        if (request.userId != userId) {
+        if (request.userId != userId?.value) {
             throw SecurityException("Cannot create workout for another user")
         }
 
@@ -711,7 +711,7 @@ class WorkoutCommandUseCase @Inject constructor(
 
         // Check for existing active workout if creating an active workout
         if (request.status == WorkoutStatus.IN_PROGRESS) {
-            val activeWorkoutResult = workoutRepository.getActiveWorkout(userId)
+            val activeWorkoutResult = workoutRepository.getActiveWorkout(userId?.value!!)
             val existingActiveWorkout = activeWorkoutResult.fold(
                 onSuccess = { it },
                 onFailure = { error -> throw Exception("Failed to check for active workout: ${error.message}") }
@@ -725,7 +725,7 @@ class WorkoutCommandUseCase @Inject constructor(
         // Check for duplicate workout name on the same date
         val workoutsByDateResult = workoutRepository.getWorkoutsByDate(
             request.date.toKotlinxLocalDate(),
-            userId
+            userId?.value!!
         ).first()
 
         val workoutsOnDate = workoutsByDateResult.fold(
@@ -744,7 +744,7 @@ class WorkoutCommandUseCase @Inject constructor(
         // Build workout
         val now = Instant.now()
         val newWorkout = Workout(
-            userId = userId,
+            userId = userId?.value!!,
             id = WorkoutId.generate(),
             name = request.name,
             date = request.date,

@@ -216,7 +216,7 @@ class NotificationSettingsViewModel @Inject constructor(
 
         viewModelScope.launch {
             val userId = authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it },
+                onSuccess = { it.value },
                 onFailure = {
                     updateState { currentState ->
                         currentState.copy(
@@ -303,7 +303,7 @@ class NotificationSettingsViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             val userId = authQueryUseCase(waitForAuth = false).fold(
-                onSuccess = { it },
+                onSuccess = { it.value },
                 onFailure = {
                     updateState { currentState -> currentState.copy(error = "User not authenticated") }
                     return@launch
