@@ -141,9 +141,60 @@ interface PostCommentDao {
     suspend fun getUnsyncedComments(userId: String): List<PostCommentEntity>
     
     @Query("""
-        UPDATE post_comments 
+        UPDATE post_comments
         SET is_synced = 1, sync_version = :syncVersion
         WHERE id = :commentId
     """)
     suspend fun markAsSynced(commentId: String, syncVersion: Int)
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert comment from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(comment: PostCommentEntity) {
+        val entity = comment.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert comment from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    suspend fun upsertFromRemote(comment: PostCommentEntity) {
+        val local = getCommentById(comment.id)
+        if (local == null || comment.lastModified > local.lastModified) {
+            val entity = comment.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis().toInt()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(comment: PostCommentEntity)
+
+    /**
+     * Get dirty comments that need upload to Firestore.
+     */
+    @Query("SELECT * FROM post_comments WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyComments(userId: String): List<PostCommentEntity>
+
+    /**
+     * Mark comments as clean after successful Firestore upload.
+     */
+    @Query("UPDATE post_comments SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }

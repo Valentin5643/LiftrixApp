@@ -2,11 +2,12 @@ package com.example.liftrix.data.repository.social
 
 import com.example.liftrix.data.local.dao.BlockedUserDao
 import com.example.liftrix.data.local.entity.BlockedUserEntity
+import com.example.liftrix.config.OfflineArchitectureFlags
+import com.example.liftrix.data.remote.legacy.LegacyBlockFirestoreDataSource
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.social.BlockRepository
-import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
@@ -21,12 +22,8 @@ import javax.inject.Singleton
 @Singleton
 class BlockRepositoryImpl @Inject constructor(
     private val blockedUserDao: BlockedUserDao,
-    private val firestore: FirebaseFirestore
+    private val legacyDataSource: LegacyBlockFirestoreDataSource
 ) : BlockRepository {
-    
-    companion object {
-        private const val BLOCKS_COLLECTION = "user_blocks"
-    }
     
     override suspend fun blockUser(
         blockerId: String,
@@ -50,27 +47,17 @@ class BlockRepositoryImpl @Inject constructor(
             blockedAt = currentTime,
             isSynced = false
         )
-        
-        blockedUserDao.insertBlockedUser(blockEntity)
-        
-        // Sync to Firebase
-        try {
-            val blockData = mapOf(
-                "id" to blockId,
-                "blockerId" to blockerId,
-                "blockedUserId" to blockedUserId,
-                "blockedAt" to currentTime
-            )
-            
-            firestore.collection(BLOCKS_COLLECTION)
-                .document(blockId)
-                .set(blockData)
-                .await()
-            
-            // Mark as synced
-            blockedUserDao.updateSyncStatus(blockId, true)
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to sync block to Firebase, but local block saved")
+
+        if (OfflineArchitectureFlags.FIX_BLOCK_REPOSITORY) {
+            blockedUserDao.upsertLocal(blockEntity)
+        } else {
+            blockedUserDao.insertBlockedUser(blockEntity)
+            try {
+                legacyDataSource.blockUser(blockId, blockerId, blockedUserId, currentTime)
+                blockedUserDao.updateSyncStatus(blockId, true)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to sync block to Firebase, but local block saved")
+            }
         }
         
         Unit
@@ -89,20 +76,13 @@ class BlockRepositoryImpl @Inject constructor(
     ) {
         // Remove from local database
         blockedUserDao.unblockUser(blockerId, blockedUserId)
-        
-        // Remove from Firebase
-        try {
-            val query = firestore.collection(BLOCKS_COLLECTION)
-                .whereEqualTo("blockerId", blockerId)
-                .whereEqualTo("blockedUserId", blockedUserId)
-                .get()
-                .await()
-            
-            for (document in query.documents) {
-                document.reference.delete().await()
+
+        if (!OfflineArchitectureFlags.FIX_BLOCK_REPOSITORY) {
+            try {
+                legacyDataSource.unblockUser(blockerId, blockedUserId)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to sync unblock to Firebase, but local unblock completed")
             }
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to sync unblock to Firebase, but local unblock completed")
         }
         
         Unit

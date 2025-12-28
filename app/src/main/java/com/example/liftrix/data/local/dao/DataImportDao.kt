@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.DataImportEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -58,4 +59,61 @@ interface DataImportDao {
     
     @Update
     suspend fun updateImport(dataImport: DataImportEntity)
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert dataimport from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(dataImport: DataImportEntity) {
+        val entity = dataImport.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert dataimport from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(dataImport: DataImportEntity) {
+        val local = getDataImportForSync(dataImport.importId, dataImport.userId)
+        if (local == null || dataImport.lastModified > local.lastModified) {
+            val entity = dataImport.copy(
+                isDirty = false,
+                isSynced = true
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: DataImportEntity)
+
+    /**
+     * Get dirty dataimport that need upload to Firestore.
+     */
+    @Query("SELECT * FROM data_imports WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyDataImports(userId: String): List<DataImportEntity>
+
+    /**
+     * Mark dataimport as clean after successful Firestore upload.
+     */
+    @Query("UPDATE data_imports SET is_dirty = 0, is_synced = 1 WHERE import_id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String): Int
+
+    /**
+     * Get local dataimport for remote deduplication.
+     */
+    @Query("SELECT * FROM data_imports WHERE import_id = :id AND user_id = :userId LIMIT 1")
+    suspend fun getDataImportForSync(id: String, userId: String): DataImportEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }

@@ -231,4 +231,120 @@ interface WidgetPreferencesDao {
      */
     @Query("SELECT COUNT(*) > 0 FROM dashboard_configurations WHERE user_id = :userId")
     suspend fun hasDashboardConfiguration(userId: String): Boolean
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert widgetpreference from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(widgetPreference: WidgetPreferenceEntity) {
+        val entity = widgetPreference.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert widgetpreference from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(widgetPreference: WidgetPreferenceEntity) {
+        val local = getWidgetPreferenceForSync(widgetPreference.userId, widgetPreference.widgetType)
+        if (local == null || widgetPreference.lastModified > local.lastModified) {
+            val entity = widgetPreference.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: WidgetPreferenceEntity)
+
+    /**
+     * Get dirty widgetpreference that need upload to Firestore.
+     */
+    @Query("SELECT * FROM widget_preferences WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyWidgetPreferences(userId: String): List<WidgetPreferenceEntity>
+
+    /**
+     * Mark widgetpreference as clean after successful Firestore upload.
+     */
+    @Query("UPDATE widget_preferences SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE user_id = :userId AND widget_type IN (:ids)")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local widgetpreference for remote deduplication.
+     */
+    @Query("SELECT * FROM widget_preferences WHERE user_id = :userId AND widget_type = :widgetType LIMIT 1")
+    suspend fun getWidgetPreferenceForSync(userId: String, widgetType: String): WidgetPreferenceEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert dashboardconfiguration from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(dashboardConfiguration: DashboardConfigurationEntity) {
+        val entity = dashboardConfiguration.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert dashboardconfiguration from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(dashboardConfiguration: DashboardConfigurationEntity) {
+        val local = getDashboardConfigurationForSync(dashboardConfiguration.userId)
+        if (local == null || dashboardConfiguration.lastModified > local.lastModified) {
+            val entity = dashboardConfiguration.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: DashboardConfigurationEntity)
+
+    /**
+     * Get dirty dashboardconfiguration that need upload to Firestore.
+     */
+    @Query("SELECT * FROM dashboard_configurations WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyDashboardConfigurations(userId: String): List<DashboardConfigurationEntity>
+
+    /**
+     * Mark dashboardconfiguration as clean after successful Firestore upload.
+     */
+    @Query("UPDATE dashboard_configurations SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE user_id IN (:ids) AND user_id = :userId")
+    suspend fun markDashboardConfigurationsAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local dashboardconfiguration for remote deduplication.
+     */
+    @Query("SELECT * FROM dashboard_configurations WHERE user_id = :userId LIMIT 1")
+    suspend fun getDashboardConfigurationForSync(userId: String): DashboardConfigurationEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }

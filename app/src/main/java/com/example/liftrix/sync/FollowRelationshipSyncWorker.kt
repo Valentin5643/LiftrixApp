@@ -17,6 +17,7 @@ import com.example.liftrix.data.local.dao.SafeFollowRelationshipDaoImpl
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.WriteBatch
+import com.example.liftrix.config.OfflineArchitectureFlags
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
@@ -132,6 +133,8 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
             
             val forceSync = inputData.getBoolean("forceSync", false)
             val restoreFromFirebase = inputData.getBoolean("restoreFromFirebase", false)
+            val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
+                OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
 
             // 🔥 FOLLOW-SYNC-FIX: Check if we need to restore relationships from Firebase first
             if (restoreFromFirebase) {
@@ -140,7 +143,11 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                 Timber.d("🔥 FOLLOW-SYNC-FIX: Restored $restoredCount follow relationships from Firebase")
             }
 
-            val unsyncedRelationships = followDao.getUnsyncedRelationships(userId)
+            val unsyncedRelationships = if (useDirtyFlagGating) {
+                followDao.getDirtyFollowRelationships(userId)
+            } else {
+                followDao.getUnsyncedRelationships(userId)
+            }
             
             // 🔥 FOLLOW-SYNC-FIX: For login scenarios, always check Firebase even if no local unsynced data
             if (unsyncedRelationships.isEmpty() && !forceSync && !restoreFromFirebase) {
@@ -169,11 +176,11 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                 )
             }
 
-            Timber.d("Syncing ${unsyncedRelationships.size} follow relationships for user $userId")
+            Timber.d("Syncing ${unsyncedRelationships.size} follow relationships for user $userId (dirty gating: $useDirtyFlagGating)")
             
             // Process relationships in batches of 10 for efficient Firestore writes
             val processed = unsyncedRelationships.chunked(10).fold(0) { total, batch ->
-                syncRelationshipBatch(batch) + total
+                syncRelationshipBatch(batch, userId) + total
             }
             
             Timber.d("Successfully synced $processed follow relationships for user $userId")
@@ -200,11 +207,54 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
         }
     }
     
-    private suspend fun syncRelationshipBatch(relationships: List<com.example.liftrix.data.local.entity.FollowRelationshipEntity>): Int {
+    private suspend fun syncRelationshipBatch(
+        relationships: List<com.example.liftrix.data.local.entity.FollowRelationshipEntity>,
+        userId: String
+    ): Int {
+        val relationshipsToUpload = mutableListOf<com.example.liftrix.data.local.entity.FollowRelationshipEntity>()
+
+        for (relationship in relationships) {
+            val docRef = firestore
+                .collection("follow_relationships")
+                .document(relationship.id)
+
+            val remoteDoc = docRef.get().await()
+            if (remoteDoc.exists()) {
+                val remoteLastModified = when (val remoteValue = remoteDoc.get("lastModified")) {
+                    is com.google.firebase.Timestamp -> remoteValue.toDate().time
+                    is Number -> remoteValue.toLong()
+                    else -> 0L
+                }
+                if (remoteLastModified > relationship.lastModified) {
+                    val remoteEntity = relationship.copy(
+                        followerId = remoteDoc.getString("followerId") ?: relationship.followerId,
+                        followingId = remoteDoc.getString("followingId") ?: relationship.followingId,
+                        status = remoteDoc.getString("status") ?: relationship.status,
+                        createdAt = remoteDoc.getLong("createdAt") ?: relationship.createdAt,
+                        acceptedAt = remoteDoc.getLong("acceptedAt") ?: relationship.acceptedAt,
+                        blockedAt = remoteDoc.getLong("blockedAt") ?: relationship.blockedAt,
+                        isDirty = false,
+                        isSynced = true,
+                        syncVersion = (remoteDoc.getLong("syncVersion")
+                            ?: relationship.syncVersion.toLong()).toInt(),
+                        lastModified = remoteLastModified
+                    )
+                    followDao.upsertFromRemote(remoteEntity)
+                    continue
+                }
+            }
+
+            relationshipsToUpload.add(relationship)
+        }
+
+        if (relationshipsToUpload.isEmpty()) {
+            return 0
+        }
+
         val batch: WriteBatch = firestore.batch()
         val timestamp = System.currentTimeMillis()
         
-        relationships.forEach { relationship ->
+        relationshipsToUpload.forEach { relationship ->
             // Add relationship document to Firestore
             val docRef = firestore
                 .collection("follow_relationships")
@@ -218,6 +268,7 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                 "createdAt" to relationship.createdAt,
                 "acceptedAt" to relationship.acceptedAt,
                 "syncVersion" to timestamp,
+                "lastModified" to relationship.lastModified,
                 "updatedAt" to FieldValue.serverTimestamp()
             )
             
@@ -247,15 +298,13 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
         batch.commit().await()
         
         // Mark relationships as synced in local database
-        relationships.forEach { relationship ->
-            followDao.updateSyncStatus(
-                relationshipId = relationship.id,
-                isSynced = true,
-                version = timestamp.toInt()
-            )
-        }
+        followDao.markAsClean(
+            ids = relationshipsToUpload.map { it.id },
+            userId = userId,
+            syncVersion = timestamp
+        )
         
-        return relationships.size
+        return relationshipsToUpload.size
     }
     
     /**
@@ -285,6 +334,11 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
             for (doc in followingQuery.documents) {
                 val data = doc.data ?: continue
                 try {
+                    val remoteLastModified = when (val remoteValue = data["lastModified"]) {
+                        is com.google.firebase.Timestamp -> remoteValue.toDate().time
+                        is Number -> remoteValue.toLong()
+                        else -> currentTime
+                    }
                     val relationship = com.example.liftrix.data.local.entity.FollowRelationshipEntity(
                         id = doc.id,
                         followerId = data["followerId"] as String,
@@ -295,7 +349,8 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                         blockedAt = (data["blockedAt"] as? Long),
                         isSynced = true, // Mark as synced since we're fetching from Firebase
                         syncVersion = (data["syncVersion"] as? Long)?.toInt() ?: 1,
-                        lastModified = currentTime
+                        lastModified = remoteLastModified,
+                        isDirty = false
                     )
                     restoredRelationships.add(relationship)
                 } catch (e: Exception) {
@@ -318,6 +373,11 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                 if (restoredRelationships.any { it.id == doc.id }) continue
                 
                 try {
+                    val remoteLastModified = when (val remoteValue = data["lastModified"]) {
+                        is com.google.firebase.Timestamp -> remoteValue.toDate().time
+                        is Number -> remoteValue.toLong()
+                        else -> currentTime
+                    }
                     val relationship = com.example.liftrix.data.local.entity.FollowRelationshipEntity(
                         id = doc.id,
                         followerId = data["followerId"] as String,
@@ -328,7 +388,8 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                         blockedAt = (data["blockedAt"] as? Long),
                         isSynced = true,
                         syncVersion = (data["syncVersion"] as? Long)?.toInt() ?: 1,
-                        lastModified = currentTime
+                        lastModified = remoteLastModified,
+                        isDirty = false
                     )
                     restoredRelationships.add(relationship)
                 } catch (e: Exception) {
@@ -340,6 +401,10 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
             if (restoredRelationships.isNotEmpty()) {
                 val insertedCount = safeFollowDao.insertFollowRelationshipsWithUserValidation(restoredRelationships)
                 Timber.i("🔥 FOLLOW-SYNC-FIX: Successfully restored $insertedCount/${restoredRelationships.size} follow relationships from Firebase with user validation")
+
+                restoredRelationships.forEach { relationship ->
+                    followDao.upsertFromRemote(relationship)
+                }
                 
                 // 🔥 FIX: Actively fetch and cache missing user profiles for restored relationships
                 val allUserIds = restoredRelationships.flatMap { listOf(it.followerId, it.followingId) }.distinct()

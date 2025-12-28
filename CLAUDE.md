@@ -39,6 +39,142 @@ Firebase (8 services + Firestore sync)
 
 ### Critical Architectural Rules
 
+#### 0. Room-First Offline Architecture (SPEC-20241228 - MANDATORY)
+**Room is the single source of truth. Firestore offline persistence is DISABLED.**
+
+**Core Principles:**
+1. **Single Authority**: Room is the authoritative database; Firestore is stateless sync target
+2. **Origin-Aware Writes**: All writes use `upsertLocal()` or `upsertFromRemote()` to distinguish source
+3. **Dirty Flag Gating**: Only entities with `isDirty=true` are synced to Firestore
+4. **Idempotent Listeners**: Real-time Firestore updates use `upsertFromRemote()` (no feedback loops)
+5. **Timestamp Deduplication**: Remote updates only applied if `remote.lastModified > local.lastModified`
+6. **Repository Bypass Eliminated**: ALL repository writes go to Room first, then queue for sync
+
+**DAO Method Pattern:**
+```kotlin
+// ✅ LOCAL ORIGIN - Sets isDirty=true, triggers sync
+suspend fun upsertLocal(workout: WorkoutEntity) {
+    val entity = workout.copy(
+        isDirty = true,
+        lastModified = System.currentTimeMillis()
+    )
+    _insert(entity)
+}
+
+// ✅ REMOTE ORIGIN - Sets isDirty=false, NO sync trigger
+@Transaction
+suspend fun upsertFromRemote(workout: WorkoutEntity) {
+    val local = getWorkoutById(workout.id, workout.userId)
+    if (local == null || workout.lastModified > local.lastModified) {
+        _insert(workout.copy(isDirty = false, isSynced = true))
+    }
+}
+
+// ✅ SYNC WORKERS - Query only dirty entities
+@Query("SELECT * FROM workouts WHERE user_id = :userId AND is_dirty = 1")
+suspend fun getDirtyWorkouts(userId: String): List<WorkoutEntity>
+
+// ✅ POST-UPLOAD - Mark entities as clean
+@Query("UPDATE workouts SET is_dirty = 0, is_synced = 1, sync_version = :version WHERE id IN (:ids)")
+suspend fun markAsClean(ids: List<String>, userId: String, version: Long = System.currentTimeMillis())
+
+// ❌ NEVER USE - Generic inserts don't distinguish origin
+@Insert suspend fun insert(workout: WorkoutEntity) // FORBIDDEN
+```
+
+**Sync Worker Pattern:**
+```kotlin
+override suspend fun performSync(userId: String): Result {
+    // 1. Get dirty entities (isDirty=true only)
+    val dirtyWorkouts = workoutDao.getDirtyWorkouts(userId)
+    if (dirtyWorkouts.isEmpty()) return Result.success()
+
+    // 2. Upload to Firestore with conflict check
+    dirtyWorkouts.forEach { workout ->
+        val remote = firebaseDataSource.getWorkout(userId, workout.id)
+        if (remote != null && remote.lastModified > workout.lastModified) {
+            // Remote is newer, skip upload
+            continue
+        }
+        batch.set(userId, "workouts", workout.id, workout.toDto())
+    }
+    batch.commit()
+
+    // 3. Mark as clean AFTER successful upload
+    workoutDao.markAsClean(dirtyWorkouts.map { it.id }, userId)
+
+    // 4. Download remote updates (separate from upload)
+    val remoteWorkouts = firebaseDataSource.getWorkouts(userId)
+    remoteWorkouts.forEach { workoutDao.upsertFromRemote(it) }
+
+    return Result.success()
+}
+```
+
+**Real-Time Listener Pattern:**
+```kotlin
+// ✅ CORRECT - Idempotent, no feedback loop
+private suspend fun onRemoteEngagement(doc: DocumentSnapshot) {
+    val likeCount = doc.getLong("likeCount")?.toInt() ?: 0
+    val lastModified = doc.getLong("lastModified") ?: System.currentTimeMillis()
+
+    workoutPostDao.upsertEngagementFromRemote(
+        postId = doc.id,
+        likeCount = likeCount,
+        lastModified = lastModified
+    ) // Sets isDirty=false, NO sync trigger
+}
+
+// ❌ WRONG - Creates feedback loop
+private suspend fun onRemoteEngagement(doc: DocumentSnapshot) {
+    postDao.updateLikeCount(doc.id, likeCount) // Generic update, isDirty unclear
+    syncCoordinator.triggerSync() // FEEDBACK LOOP!
+}
+```
+
+**Repository Pattern:**
+```kotlin
+// ✅ CORRECT - Room-first with feature flag
+override suspend fun createUserProfile(...): LiftrixResult<Unit> {
+    if (OfflineArchitectureFlags.FIX_AUTH_REPOSITORY) {
+        // Room-first: write to Room, queue for Firestore sync
+        userProfileDao.upsertLocal(profileEntity)
+        offlineQueueManager.queueOperation(...)
+        syncCoordinator.triggerImmediateSync(userId)
+    } else {
+        // Legacy: direct Firestore write (rollback path)
+        firestore.batch().set(...).commit()
+    }
+}
+
+// ❌ WRONG - Bypasses Room
+override suspend fun createUserProfile(...): LiftrixResult<Unit> {
+    firestore.collection("users").document(uid).set(...).await()
+}
+```
+
+**Feature Flags (Rollback Switches):**
+- `ROOM_FIRST_ENABLED`: Master switch (default: true)
+- `DISABLE_FIRESTORE_PERSISTENCE`: Disables Firestore offline cache (default: true)
+- `USE_DIRTY_FLAG_GATING`: Sync workers use getDirty* queries (default: true)
+- `USE_IDEMPOTENT_LISTENERS`: Listeners use upsertFromRemote (default: true)
+- `FIX_*_REPOSITORY`: Per-repository Room-first switches (default: true)
+
+**Validation Commands:**
+```bash
+# Verify no direct Firestore writes
+rg "firestore\.(set|update|delete|batch)" --type kotlin
+
+# Verify all DAOs have origin-aware methods
+rg "suspend fun upsert(Local|FromRemote)" app/src/main/java/com/example/liftrix/data/local/dao/
+
+# Verify sync workers use dirty flag gating
+rg "getDirty\w+" app/src/main/java/com/example/liftrix/sync/
+
+# Check feature flag configuration
+cat app/src/main/java/com/example/liftrix/config/OfflineArchitectureFlags.kt
+```
+
 #### 1. User Scoping (MANDATORY)
 **ALL database operations MUST filter by userId to prevent data leakage:**
 ```kotlin

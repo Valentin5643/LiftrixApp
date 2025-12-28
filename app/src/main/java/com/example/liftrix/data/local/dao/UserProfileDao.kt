@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDateTime
@@ -122,4 +123,62 @@ interface UserProfileDao {
     // For now, update last_active_at for profile view tracking  
     @Query("UPDATE user_profiles SET last_active_at = :viewedAt WHERE user_id = :userId")
     suspend fun updateProfileView(userId: String, viewedAt: LocalDateTime): Int
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert userprofile from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(userProfile: UserProfileEntity) {
+        val entity = userProfile.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert userprofile from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(userProfile: UserProfileEntity) {
+        val local = getUserProfileForSync(userProfile.id, userProfile.userId)
+        if (local == null || userProfile.lastModified > local.lastModified) {
+            val entity = userProfile.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: UserProfileEntity)
+
+    /**
+     * Get dirty userprofile that need upload to Firestore.
+     */
+    @Query("SELECT * FROM user_profiles WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyUserProfiles(userId: String): List<UserProfileEntity>
+
+    /**
+     * Mark userprofile as clean after successful Firestore upload.
+     */
+    @Query("UPDATE user_profiles SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local userprofile for remote deduplication.
+     */
+    @Query("SELECT * FROM user_profiles WHERE id = :id AND user_id = :userId LIMIT 1")
+    suspend fun getUserProfileForSync(id: String, userId: String): UserProfileEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 } 

@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Upsert
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.SyncPreferencesEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -143,4 +144,62 @@ interface SyncPreferencesDao {
      */
     @Query("SELECT COUNT(*) FROM sync_preferences")
     suspend fun getPreferencesCount(): Int
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert syncpreferences from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(syncPreferences: SyncPreferencesEntity) {
+        val entity = syncPreferences.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert syncpreferences from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(syncPreferences: SyncPreferencesEntity) {
+        val local = getSyncPreferencesForSync(syncPreferences.userId)
+        if (local == null || syncPreferences.lastModified > local.lastModified) {
+            val entity = syncPreferences.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: SyncPreferencesEntity)
+
+    /**
+     * Get dirty syncpreferences that need upload to Firestore.
+     */
+    @Query("SELECT * FROM sync_preferences WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtySyncPreferences(userId: String): List<SyncPreferencesEntity>
+
+    /**
+     * Mark syncpreferences as clean after successful Firestore upload.
+     */
+    @Query("UPDATE sync_preferences SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE user_id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local syncpreferences for remote deduplication.
+     */
+    @Query("SELECT * FROM sync_preferences WHERE user_id = :userId LIMIT 1")
+    suspend fun getSyncPreferencesForSync(userId: String): SyncPreferencesEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }

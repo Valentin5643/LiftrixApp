@@ -189,15 +189,116 @@ interface WorkoutPostDao {
     suspend fun markAsSynced(postId: String, syncVersion: Int)
     
     @Query("""
-        SELECT * FROM workout_posts 
-        WHERE visibility = 'PUBLIC' 
+        SELECT * FROM workout_posts
+        WHERE visibility = 'PUBLIC'
         AND user_id NOT IN (:excludeUserIds)
         ORDER BY created_at DESC
         LIMIT :limit OFFSET :offset
     """)
     suspend fun getPublicPostsExcludingUsers(
-        excludeUserIds: List<String>, 
-        limit: Int, 
+        excludeUserIds: List<String>,
+        limit: Int,
         offset: Int
     ): List<WorkoutPostEntity>
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert post from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(post: WorkoutPostEntity) {
+        val entity = post.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert post from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    suspend fun upsertFromRemote(post: WorkoutPostEntity) {
+        val local = getPostById(post.id)
+        if (local == null || post.lastModified > local.lastModified) {
+            val entity = post.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis().toInt()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Upsert engagement metrics from REMOTE (real-time listener).
+     * Idempotent - only updates if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    suspend fun upsertEngagementFromRemote(
+        postId: String,
+        likeCount: Int,
+        commentCount: Int,
+        shareCount: Int,
+        saveCount: Int,
+        lastModified: Long
+    ) {
+        val existing = getPostById(postId)
+        if (existing == null || lastModified > existing.lastModified) {
+            _updateEngagementMetrics(
+                postId = postId,
+                likeCount = likeCount,
+                commentCount = commentCount,
+                shareCount = shareCount,
+                saveCount = saveCount,
+                lastModified = lastModified,
+                isDirty = false
+            )
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(post: WorkoutPostEntity)
+
+    /**
+     * Internal update for engagement metrics.
+     */
+    @Query("""
+        UPDATE workout_posts
+        SET like_count = :likeCount,
+            comment_count = :commentCount,
+            share_count = :shareCount,
+            save_count = :saveCount,
+            last_modified = :lastModified,
+            is_dirty = :isDirty
+        WHERE id = :postId
+    """)
+    suspend fun _updateEngagementMetrics(
+        postId: String,
+        likeCount: Int,
+        commentCount: Int,
+        shareCount: Int,
+        saveCount: Int,
+        lastModified: Long,
+        isDirty: Boolean
+    )
+
+    /**
+     * Get dirty posts that need upload to Firestore.
+     */
+    @Query("SELECT * FROM workout_posts WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyPosts(userId: String): List<WorkoutPostEntity>
+
+    /**
+     * Mark posts as clean after successful Firestore upload.
+     */
+    @Query("UPDATE workout_posts SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }

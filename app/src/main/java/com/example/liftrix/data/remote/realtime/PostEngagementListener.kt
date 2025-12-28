@@ -1,5 +1,6 @@
 package com.example.liftrix.data.remote.realtime
 
+import com.example.liftrix.config.OfflineArchitectureFlags
 import com.example.liftrix.data.local.dao.PostLikeDao
 import com.example.liftrix.data.local.dao.WorkoutPostDao
 import com.example.liftrix.data.local.entity.PostLikeEntity
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -21,6 +23,11 @@ import javax.inject.Singleton
 /**
  * Service for real-time post engagement synchronization
  * Handles likes, shares, and engagement metrics updates
+ *
+ * Refactored for offline-first architecture (SPEC-20241228):
+ * - Uses shared CoroutineScope with SupervisorJob for listener operations
+ * - Uses upsertFromRemote() for idempotent listener writes
+ * - Feature-flag gated for rollback support
  */
 @Singleton
 class PostEngagementListener @Inject constructor(
@@ -28,6 +35,7 @@ class PostEngagementListener @Inject constructor(
     private val postLikeDao: PostLikeDao,
     private val workoutPostDao: WorkoutPostDao
 ) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val listeners = mutableMapOf<String, ListenerRegistration>()
 
     /**
@@ -54,19 +62,19 @@ class PostEngagementListener @Inject constructor(
 
                     snapshot?.let { querySnapshot ->
                         try {
-                            // Process like changes
+                            // Process like changes using shared scope
                             for (change in querySnapshot.documentChanges) {
                                 when (change.type) {
                                     DocumentChange.Type.ADDED -> {
                                         val like = parseLikeDocument(change.document.data, change.document.id)
                                         like?.let {
-                                            CoroutineScope(Dispatchers.IO).launch {
-                                                insertLikeLocally(it)
+                                            scope.launch {
+                                                insertLikeFromRemote(it)
                                             }
                                         }
                                     }
                                     DocumentChange.Type.REMOVED -> {
-                                        CoroutineScope(Dispatchers.IO).launch {
+                                        scope.launch {
                                             deleteLikeLocally(change.document.id)
                                         }
                                     }
@@ -74,12 +82,9 @@ class PostEngagementListener @Inject constructor(
                                 }
                             }
 
-                            // Update post like count
-                            val totalLikes = querySnapshot.size()
-                            CoroutineScope(Dispatchers.IO).launch {
-                                updatePostLikeCount(postId, totalLikes)
-                            }
-                            
+                            // Note: Post like count is updated by EngagementRealtimeSyncService
+                            // via upsertEngagementFromRemote(). No need to duplicate here.
+
                             trySend(Result.success(Unit))
                         } catch (e: Exception) {
                             Timber.e(e, "Error processing like changes for post: $postId")
@@ -87,38 +92,12 @@ class PostEngagementListener @Inject constructor(
                     }
                 }
 
-            // Listen to post engagement metrics
-            val postListener = firestore.collection("workout_posts")
-                .document(postId)
-                .addSnapshotListener { snapshot, error ->
-                    if (error != null) {
-                        Timber.e(error, "Error in post metrics sync for post: $postId")
-                        return@addSnapshotListener
-                    }
+            // Note: Post engagement metrics are now handled by EngagementRealtimeSyncService
+            // which uses upsertEngagementFromRemote() for idempotent updates.
+            // This listener is kept for backward compatibility but should migrate to the service.
 
-                    snapshot?.let { document ->
-                        if (document.exists()) {
-                            try {
-                                val data = document.data!!
-                                CoroutineScope(Dispatchers.IO).launch {
-                                    updatePostEngagementMetrics(
-                                        postId = postId,
-                                        likeCount = (data["like_count"] as? Long)?.toInt() ?: 0,
-                                        commentCount = (data["comment_count"] as? Long)?.toInt() ?: 0,
-                                        shareCount = (data["share_count"] as? Long)?.toInt() ?: 0,
-                                        saveCount = (data["save_count"] as? Long)?.toInt() ?: 0
-                                    )
-                                }
-                            } catch (e: Exception) {
-                                Timber.e(e, "Error updating post metrics for: $postId")
-                            }
-                        }
-                    }
-                }
-
-            // Store listeners for cleanup
+            // Store listener for cleanup
             listeners["${postId}_likes"] = likesListener
-            listeners["${postId}_post"] = postListener
             
             Timber.d("Started engagement sync for post: $postId")
 
@@ -144,9 +123,7 @@ class PostEngagementListener @Inject constructor(
      */
     fun stopEngagementSync(postId: String) {
         listeners["${postId}_likes"]?.remove()
-        listeners["${postId}_post"]?.remove()
         listeners.remove("${postId}_likes")
-        listeners.remove("${postId}_post")
         Timber.d("Stopped engagement sync for post: $postId")
     }
 
@@ -229,12 +206,24 @@ class PostEngagementListener @Inject constructor(
         }
     }
 
-    private suspend fun insertLikeLocally(like: PostLikeEntity) {
+    /**
+     * IDEMPOTENT: Insert like from REMOTE origin (Firestore listener ADDED).
+     * Uses upsertFromRemote() with timestamp deduplication, sets isDirty=false.
+     * Feature-flag gated for rollback support.
+     */
+    private suspend fun insertLikeFromRemote(like: PostLikeEntity) {
         try {
-            postLikeDao.insertLike(like)
-            Timber.v("Inserted like locally: ${like.id}")
+            if (OfflineArchitectureFlags.USE_IDEMPOTENT_LISTENERS) {
+                // NEW: Room-first idempotent pattern
+                postLikeDao.upsertFromRemote(like)
+                Timber.v("✅ IDEMPOTENT: Inserted like from remote: ${like.id}")
+            } else {
+                // LEGACY: Direct insert (feedback loop risk)
+                postLikeDao.insertLike(like)
+                Timber.w("⚠️ LEGACY: Inserted like (feedback loop risk): ${like.id}")
+            }
         } catch (e: Exception) {
-            Timber.e(e, "Failed to insert like locally: ${like.id}")
+            Timber.e(e, "Failed to insert like from remote: ${like.id}")
         }
     }
 
@@ -252,36 +241,9 @@ class PostEngagementListener @Inject constructor(
         }
     }
 
-    private suspend fun updatePostLikeCount(postId: String, likeCount: Int) {
-        try {
-            workoutPostDao.updateLikeCount(postId, likeCount, System.currentTimeMillis())
-            Timber.v("Updated post like count: $postId -> $likeCount")
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to update post like count: $postId")
-        }
-    }
-
-    private suspend fun updatePostEngagementMetrics(
-        postId: String,
-        likeCount: Int,
-        commentCount: Int,
-        shareCount: Int,
-        saveCount: Int
-    ) {
-        try {
-            workoutPostDao.updateEngagementMetrics(
-                postId = postId,
-                likeCount = likeCount,
-                commentCount = commentCount,
-                shareCount = shareCount,
-                saveCount = saveCount,
-                updatedAt = System.currentTimeMillis()
-            )
-            Timber.v("Updated post engagement metrics: $postId")
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to update post engagement metrics: $postId")
-        }
-    }
+    // Note: updatePostLikeCount() and updatePostEngagementMetrics() removed
+    // These are now handled by EngagementRealtimeSyncService.upsertEngagementFromRemote()
+    // which provides idempotent updates with timestamp deduplication.
 
     private fun parseLikeDocument(data: Map<String, Any>, documentId: String): PostLikeEntity? {
         return try {

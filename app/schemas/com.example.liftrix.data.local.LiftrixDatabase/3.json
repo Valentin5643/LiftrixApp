@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 3,
-    "identityHash": "86d8df78a759a1ab7993f0e9c3e0f668",
+    "identityHash": "a0922733eae4b0d06bb6948e688b725f",
     "entities": [
       {
         "tableName": "workouts",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `name` TEXT NOT NULL, `date` TEXT NOT NULL, `exercises_json` TEXT NOT NULL, `status` TEXT NOT NULL, `start_time` TEXT, `end_time` TEXT, `notes` TEXT, `template_id` TEXT, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `name` TEXT NOT NULL, `date` TEXT NOT NULL, `exercises_json` TEXT NOT NULL, `status` TEXT NOT NULL, `start_time` TEXT, `end_time` TEXT, `notes` TEXT, `template_id` TEXT, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -90,6 +90,20 @@
           {
             "fieldPath": "syncVersion",
             "columnName": "sync_version",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
@@ -212,7 +226,7 @@
       },
       {
         "tableName": "user_profiles",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `display_name` TEXT NOT NULL, `age` INTEGER, `weight_kg` REAL, `height_cm` REAL, `fitness_level` TEXT, `goals` TEXT, `available_equipment` TEXT, `workout_frequency` INTEGER, `preferred_workout_duration` INTEGER, `completed_at` TEXT, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 1, `bio` TEXT, `is_public` INTEGER NOT NULL DEFAULT 1, `last_active_at` TEXT, `total_workouts` INTEGER NOT NULL DEFAULT 0, `current_streak` INTEGER NOT NULL DEFAULT 0, `longest_streak` INTEGER NOT NULL DEFAULT 0, `member_since` TEXT NOT NULL, `profile_completion_percentage` INTEGER NOT NULL DEFAULT 0, `profile_image_url` TEXT, `profile_image_updated_at` TEXT, `has_custom_profile_image` INTEGER NOT NULL DEFAULT 0, `search_keywords` TEXT, `last_profile_view_at` TEXT, `profile_views_count` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `display_name` TEXT NOT NULL, `age` INTEGER, `weight_kg` REAL, `height_cm` REAL, `fitness_level` TEXT, `goals` TEXT, `available_equipment` TEXT, `workout_frequency` INTEGER, `preferred_workout_duration` INTEGER, `completed_at` TEXT, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 1, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, `bio` TEXT, `is_public` INTEGER NOT NULL DEFAULT 1, `last_active_at` TEXT, `total_workouts` INTEGER NOT NULL DEFAULT 0, `current_streak` INTEGER NOT NULL DEFAULT 0, `longest_streak` INTEGER NOT NULL DEFAULT 0, `member_since` TEXT NOT NULL, `profile_completion_percentage` INTEGER NOT NULL DEFAULT 0, `profile_image_url` TEXT, `profile_image_updated_at` TEXT, `has_custom_profile_image` INTEGER NOT NULL DEFAULT 0, `search_keywords` TEXT, `last_profile_view_at` TEXT, `profile_views_count` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -311,6 +325,20 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "1"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           },
           {
             "fieldPath": "bio",
@@ -425,7 +453,7 @@
       },
       {
         "tableName": "user_accounts",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `email` TEXT NOT NULL, `username` TEXT, `email_verified` INTEGER NOT NULL DEFAULT 0, `display_name` TEXT, `last_password_change` TEXT, `account_created_at` TEXT NOT NULL, `last_email_update` TEXT, `deletion_requested_at` TEXT, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(`user_id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `email` TEXT NOT NULL, `username` TEXT, `email_verified` INTEGER NOT NULL DEFAULT 0, `display_name` TEXT, `last_password_change` TEXT, `account_created_at` TEXT NOT NULL, `last_email_update` TEXT, `deletion_requested_at` TEXT, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 1, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`user_id`))",
         "fields": [
           {
             "fieldPath": "userId",
@@ -495,6 +523,20 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "1"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -545,7 +587,7 @@
       },
       {
         "tableName": "custom_exercises",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `name` TEXT NOT NULL, `primary_muscle_group` TEXT NOT NULL, `equipment` TEXT NOT NULL, `exercise_type` TEXT NOT NULL, `description` TEXT, `secondary_muscle_groups` TEXT, `difficulty` INTEGER, `instructions` TEXT, `main_image_url` TEXT, `additional_image_urls` TEXT, `video_url` TEXT, `tags` TEXT, `categories` TEXT, `notes` TEXT, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 1, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `name` TEXT NOT NULL, `primary_muscle_group` TEXT NOT NULL, `equipment` TEXT NOT NULL, `exercise_type` TEXT NOT NULL, `description` TEXT, `secondary_muscle_groups` TEXT, `difficulty` INTEGER, `instructions` TEXT, `main_image_url` TEXT, `additional_image_urls` TEXT, `video_url` TEXT, `tags` TEXT, `categories` TEXT, `notes` TEXT, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 1, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -670,6 +712,13 @@
             "defaultValue": "1"
           },
           {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
             "fieldPath": "lastModified",
             "columnName": "last_modified",
             "affinity": "INTEGER",
@@ -744,7 +793,7 @@
       },
       {
         "tableName": "workout_templates",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `name` TEXT NOT NULL, `description` TEXT, `template_exercises_json` TEXT NOT NULL, `estimated_duration_minutes` INTEGER, `difficulty_level` INTEGER, `folder_id` TEXT, `usage_count` INTEGER NOT NULL DEFAULT 0, `last_used_at` TEXT, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `name` TEXT NOT NULL, `description` TEXT, `template_exercises_json` TEXT NOT NULL, `estimated_duration_minutes` INTEGER, `difficulty_level` INTEGER, `folder_id` TEXT, `usage_count` INTEGER NOT NULL DEFAULT 0, `last_used_at` TEXT, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 1, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -832,6 +881,20 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "1"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -1446,7 +1509,7 @@
       },
       {
         "tableName": "friends",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `friend_user_id` TEXT NOT NULL, `status` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`user_id`, `friend_user_id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `friend_user_id` TEXT NOT NULL, `status` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`user_id`, `friend_user_id`))",
         "fields": [
           {
             "fieldPath": "userId",
@@ -1481,6 +1544,20 @@
           {
             "fieldPath": "isSynced",
             "columnName": "is_synced",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
@@ -1579,7 +1656,7 @@
       },
       {
         "tableName": "folders",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `name` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `template_count` INTEGER NOT NULL DEFAULT 0, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(`id`), FOREIGN KEY(`user_id`) REFERENCES `user_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `name` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `template_count` INTEGER NOT NULL DEFAULT 0, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 1, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`user_id`) REFERENCES `user_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -1631,6 +1708,20 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "1"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -1685,7 +1776,7 @@
       },
       {
         "tableName": "user_settings",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `dark_mode` INTEGER NOT NULL, `notifications_enabled` INTEGER NOT NULL, `weight_unit` TEXT NOT NULL, `terminology_preference` TEXT NOT NULL DEFAULT 'NEW', `migration_completed` INTEGER NOT NULL DEFAULT 0, `migration_explanation_seen` INTEGER NOT NULL DEFAULT 0, `settings_version` INTEGER NOT NULL DEFAULT 1, `last_sync_timestamp` INTEGER, `updated_at` TEXT NOT NULL, `distance_unit` TEXT NOT NULL DEFAULT 'KM', `private_profile` INTEGER NOT NULL DEFAULT 0, `hide_stats` INTEGER NOT NULL DEFAULT 0, `allow_messages` INTEGER NOT NULL DEFAULT 1, `auto_play_videos` INTEGER NOT NULL DEFAULT 1, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`user_id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `dark_mode` INTEGER NOT NULL, `notifications_enabled` INTEGER NOT NULL, `weight_unit` TEXT NOT NULL, `terminology_preference` TEXT NOT NULL DEFAULT 'NEW', `migration_completed` INTEGER NOT NULL DEFAULT 0, `migration_explanation_seen` INTEGER NOT NULL DEFAULT 0, `settings_version` INTEGER NOT NULL DEFAULT 1, `last_sync_timestamp` INTEGER, `updated_at` TEXT NOT NULL, `distance_unit` TEXT NOT NULL DEFAULT 'KM', `private_profile` INTEGER NOT NULL DEFAULT 0, `hide_stats` INTEGER NOT NULL DEFAULT 0, `allow_messages` INTEGER NOT NULL DEFAULT 1, `auto_play_videos` INTEGER NOT NULL DEFAULT 1, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`user_id`))",
         "fields": [
           {
             "fieldPath": "userId",
@@ -1799,6 +1890,20 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -1812,7 +1917,7 @@
       },
       {
         "tableName": "user_subscriptions",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `tier` TEXT NOT NULL, `status` TEXT NOT NULL, `provider` TEXT NOT NULL, `product_id` TEXT, `subscription_id` TEXT, `started_at` TEXT NOT NULL, `expires_at` TEXT, `cancelled_at` TEXT, `trial_ends_at` TEXT, `auto_renew` INTEGER NOT NULL, `price_cents` INTEGER, `currency` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(`user_id`), FOREIGN KEY(`user_id`) REFERENCES `user_profiles`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `tier` TEXT NOT NULL, `status` TEXT NOT NULL, `provider` TEXT NOT NULL, `product_id` TEXT, `subscription_id` TEXT, `started_at` TEXT NOT NULL, `expires_at` TEXT, `cancelled_at` TEXT, `trial_ends_at` TEXT, `auto_renew` INTEGER NOT NULL, `price_cents` INTEGER, `currency` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 1, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`user_id`), FOREIGN KEY(`user_id`) REFERENCES `user_profiles`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "userId",
@@ -1917,6 +2022,20 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "1"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -2546,7 +2665,7 @@
       },
       {
         "tableName": "widget_preferences",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `widget_type` TEXT NOT NULL, `is_enabled` INTEGER NOT NULL DEFAULT 1, `position` INTEGER NOT NULL, `size_mode` TEXT NOT NULL DEFAULT 'STANDARD', `refresh_rate_minutes` INTEGER NOT NULL DEFAULT 30, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(`user_id`, `widget_type`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `widget_type` TEXT NOT NULL, `is_enabled` INTEGER NOT NULL DEFAULT 1, `position` INTEGER NOT NULL, `size_mode` TEXT NOT NULL DEFAULT 'STANDARD', `refresh_rate_minutes` INTEGER NOT NULL DEFAULT 30, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 1, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`user_id`, `widget_type`))",
         "fields": [
           {
             "fieldPath": "userId",
@@ -2612,6 +2731,20 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "1"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -2626,7 +2759,7 @@
       },
       {
         "tableName": "dashboard_configurations",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `layout_mode` TEXT NOT NULL DEFAULT 'GRID', `columns_portrait` INTEGER NOT NULL DEFAULT 1, `columns_landscape` INTEGER NOT NULL DEFAULT 2, `auto_refresh_enabled` INTEGER NOT NULL DEFAULT 1, `theme_variant` TEXT NOT NULL DEFAULT 'DEFAULT', `show_widget_headers` INTEGER NOT NULL DEFAULT 1, `animate_transitions` INTEGER NOT NULL DEFAULT 1, `use_modern_charts` INTEGER NOT NULL DEFAULT 1, `has_seen_widget_migration_notice` INTEGER NOT NULL DEFAULT 0, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(`user_id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `layout_mode` TEXT NOT NULL DEFAULT 'GRID', `columns_portrait` INTEGER NOT NULL DEFAULT 1, `columns_landscape` INTEGER NOT NULL DEFAULT 2, `auto_refresh_enabled` INTEGER NOT NULL DEFAULT 1, `theme_variant` TEXT NOT NULL DEFAULT 'DEFAULT', `show_widget_headers` INTEGER NOT NULL DEFAULT 1, `animate_transitions` INTEGER NOT NULL DEFAULT 1, `use_modern_charts` INTEGER NOT NULL DEFAULT 1, `has_seen_widget_migration_notice` INTEGER NOT NULL DEFAULT 0, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 1, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`user_id`))",
         "fields": [
           {
             "fieldPath": "userId",
@@ -2722,6 +2855,20 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "1"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -2735,7 +2882,7 @@
       },
       {
         "tableName": "user_achievements",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `achievement_type` TEXT NOT NULL, `achievement_title` TEXT NOT NULL, `achievement_description` TEXT NOT NULL, `unlocked_at` TEXT NOT NULL, `is_displayed` INTEGER NOT NULL DEFAULT 1, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(`id`), FOREIGN KEY(`user_id`) REFERENCES `user_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `achievement_type` TEXT NOT NULL, `achievement_title` TEXT NOT NULL, `achievement_description` TEXT NOT NULL, `unlocked_at` TEXT NOT NULL, `is_displayed` INTEGER NOT NULL DEFAULT 1, `created_at` TEXT NOT NULL, `updated_at` TEXT NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 1, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`user_id`) REFERENCES `user_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -2805,6 +2952,20 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "1"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -2984,7 +3145,7 @@
       },
       {
         "tableName": "social_profiles",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `username` TEXT NOT NULL, `display_name` TEXT, `bio` TEXT, `profile_photo_url` TEXT, `cover_photo_url` TEXT, `workout_count` INTEGER NOT NULL DEFAULT 0, `follower_count` INTEGER NOT NULL DEFAULT 0, `following_count` INTEGER NOT NULL DEFAULT 0, `member_since` INTEGER NOT NULL, `last_active` INTEGER, `is_verified` INTEGER NOT NULL DEFAULT 0, `is_private` INTEGER NOT NULL DEFAULT 1, `hide_from_suggestions` INTEGER NOT NULL DEFAULT 0, `allow_friend_requests` INTEGER NOT NULL DEFAULT 1, `instagram_handle` TEXT, `youtube_channel` TEXT, `personal_website` TEXT, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`user_id`), FOREIGN KEY(`user_id`) REFERENCES `user_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `username` TEXT NOT NULL, `display_name` TEXT, `bio` TEXT, `profile_photo_url` TEXT, `cover_photo_url` TEXT, `workout_count` INTEGER NOT NULL DEFAULT 0, `follower_count` INTEGER NOT NULL DEFAULT 0, `following_count` INTEGER NOT NULL DEFAULT 0, `member_since` INTEGER NOT NULL, `last_active` INTEGER, `is_verified` INTEGER NOT NULL DEFAULT 0, `is_private` INTEGER NOT NULL DEFAULT 1, `hide_from_suggestions` INTEGER NOT NULL DEFAULT 0, `allow_friend_requests` INTEGER NOT NULL DEFAULT 1, `instagram_handle` TEXT, `youtube_channel` TEXT, `personal_website` TEXT, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`user_id`), FOREIGN KEY(`user_id`) REFERENCES `user_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "userId",
@@ -3116,6 +3277,20 @@
             "defaultValue": "0"
           },
           {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
             "fieldPath": "createdAt",
             "columnName": "created_at",
             "affinity": "INTEGER",
@@ -3210,7 +3385,7 @@
       },
       {
         "tableName": "follow_relationships",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `follower_id` TEXT NOT NULL, `following_id` TEXT NOT NULL, `status` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `accepted_at` INTEGER, `blocked_at` INTEGER, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(`id`), FOREIGN KEY(`follower_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`following_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `follower_id` TEXT NOT NULL, `following_id` TEXT NOT NULL, `status` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `accepted_at` INTEGER, `blocked_at` INTEGER, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT CURRENT_TIMESTAMP, `is_dirty` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`follower_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`following_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -3274,6 +3449,13 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "CURRENT_TIMESTAMP"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -3373,7 +3555,7 @@
       },
       {
         "tableName": "follow_requests",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `requester_id` TEXT NOT NULL, `target_id` TEXT NOT NULL, `status` TEXT NOT NULL, `request_message` TEXT, `created_at` INTEGER NOT NULL, `processed_at` INTEGER, `expires_at` INTEGER NOT NULL, `request_source` TEXT NOT NULL, `notification_sent` INTEGER NOT NULL DEFAULT 0, `reminder_count` INTEGER NOT NULL DEFAULT 0, `last_reminder_at` INTEGER, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`requester_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`target_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `requester_id` TEXT NOT NULL, `target_id` TEXT NOT NULL, `status` TEXT NOT NULL, `request_message` TEXT, `created_at` INTEGER NOT NULL, `processed_at` INTEGER, `expires_at` INTEGER NOT NULL, `request_source` TEXT NOT NULL, `notification_sent` INTEGER NOT NULL DEFAULT 0, `reminder_count` INTEGER NOT NULL DEFAULT 0, `last_reminder_at` INTEGER, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`requester_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`target_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -3459,6 +3641,20 @@
           {
             "fieldPath": "syncVersion",
             "columnName": "sync_version",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
@@ -3553,7 +3749,7 @@
       },
       {
         "tableName": "gym_buddies",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `buddy_id` TEXT NOT NULL, `buddy_nickname` TEXT, `created_at` INTEGER NOT NULL, `last_pr_notification_sent` INTEGER, `notification_cooldown_hours` INTEGER NOT NULL DEFAULT 24, `paired_via_qr` INTEGER NOT NULL DEFAULT 1, `pairing_location` TEXT, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`buddy_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `buddy_id` TEXT NOT NULL, `buddy_nickname` TEXT, `created_at` INTEGER NOT NULL, `last_pr_notification_sent` INTEGER, `notification_cooldown_hours` INTEGER NOT NULL DEFAULT 24, `paired_via_qr` INTEGER NOT NULL DEFAULT 1, `pairing_location` TEXT, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`buddy_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -3624,6 +3820,20 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -3689,7 +3899,7 @@
       },
       {
         "tableName": "privacy_settings",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `social_enabled` INTEGER NOT NULL DEFAULT 0, `profile_visibility` TEXT NOT NULL DEFAULT 'PRIVATE', `allow_follow_requests` INTEGER NOT NULL DEFAULT 0, `workout_sharing_enabled` INTEGER NOT NULL DEFAULT 0, `gym_buddies_enabled` INTEGER NOT NULL DEFAULT 0, `community_participation` INTEGER NOT NULL DEFAULT 0, `challenge_participation` INTEGER NOT NULL DEFAULT 0, `routine_sharing_enabled` INTEGER NOT NULL DEFAULT 0, `default_workout_visibility` TEXT NOT NULL DEFAULT 'PRIVATE', `show_workout_stats` INTEGER NOT NULL DEFAULT 1, `show_achievements` INTEGER NOT NULL DEFAULT 1, `show_workout_streak` INTEGER NOT NULL DEFAULT 1, `hide_from_suggestions` INTEGER NOT NULL DEFAULT 1, `hide_from_search` INTEGER NOT NULL DEFAULT 0, `notification_settings` TEXT NOT NULL DEFAULT '{}', `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`user_id`), FOREIGN KEY(`user_id`) REFERENCES `user_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `social_enabled` INTEGER NOT NULL DEFAULT 0, `profile_visibility` TEXT NOT NULL DEFAULT 'PRIVATE', `allow_follow_requests` INTEGER NOT NULL DEFAULT 0, `workout_sharing_enabled` INTEGER NOT NULL DEFAULT 0, `gym_buddies_enabled` INTEGER NOT NULL DEFAULT 0, `community_participation` INTEGER NOT NULL DEFAULT 0, `challenge_participation` INTEGER NOT NULL DEFAULT 0, `routine_sharing_enabled` INTEGER NOT NULL DEFAULT 0, `default_workout_visibility` TEXT NOT NULL DEFAULT 'PRIVATE', `show_workout_stats` INTEGER NOT NULL DEFAULT 1, `show_achievements` INTEGER NOT NULL DEFAULT 1, `show_workout_streak` INTEGER NOT NULL DEFAULT 1, `hide_from_suggestions` INTEGER NOT NULL DEFAULT 1, `hide_from_search` INTEGER NOT NULL DEFAULT 0, `notification_settings` TEXT NOT NULL DEFAULT '{}', `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`user_id`), FOREIGN KEY(`user_id`) REFERENCES `user_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "userId",
@@ -3817,6 +4027,20 @@
             "defaultValue": "0"
           },
           {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
             "fieldPath": "updatedAt",
             "columnName": "updated_at",
             "affinity": "INTEGER",
@@ -3856,7 +4080,7 @@
       },
       {
         "tableName": "blocked_users",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `blocked_user_id` TEXT NOT NULL, `reason` TEXT, `blocked_at` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`blocked_user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `blocked_user_id` TEXT NOT NULL, `reason` TEXT, `blocked_at` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`blocked_user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -3891,6 +4115,20 @@
           {
             "fieldPath": "isSynced",
             "columnName": "is_synced",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
@@ -3959,7 +4197,7 @@
       },
       {
         "tableName": "profile_views",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `viewer_id` TEXT NOT NULL, `profile_id` TEXT NOT NULL, `viewed_at` INTEGER NOT NULL, `view_source` TEXT NOT NULL, `view_duration_ms` INTEGER, `interaction_type` TEXT, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `created_at` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`viewer_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`profile_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `viewer_id` TEXT NOT NULL, `profile_id` TEXT NOT NULL, `viewed_at` INTEGER NOT NULL, `view_source` TEXT NOT NULL, `view_duration_ms` INTEGER, `interaction_type` TEXT, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, `created_at` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`viewer_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`profile_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -4013,6 +4251,20 @@
           {
             "fieldPath": "syncVersion",
             "columnName": "sync_version",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
@@ -4090,7 +4342,7 @@
       },
       {
         "tableName": "workout_posts",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `workout_id` TEXT NOT NULL, `caption` TEXT, `media_urls` TEXT, `media_thumbnails` TEXT, `workout_duration` INTEGER, `total_volume` REAL, `exercises_count` INTEGER, `prs_count` INTEGER NOT NULL DEFAULT 0, `like_count` INTEGER NOT NULL DEFAULT 0, `comment_count` INTEGER NOT NULL DEFAULT 0, `share_count` INTEGER NOT NULL DEFAULT 0, `save_count` INTEGER NOT NULL DEFAULT 0, `visibility` TEXT NOT NULL DEFAULT 'FOLLOWERS', `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`workout_id`) REFERENCES `workouts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `workout_id` TEXT NOT NULL, `caption` TEXT, `media_urls` TEXT, `media_thumbnails` TEXT, `workout_duration` INTEGER, `total_volume` REAL, `exercises_count` INTEGER, `prs_count` INTEGER NOT NULL DEFAULT 0, `like_count` INTEGER NOT NULL DEFAULT 0, `comment_count` INTEGER NOT NULL DEFAULT 0, `share_count` INTEGER NOT NULL DEFAULT 0, `save_count` INTEGER NOT NULL DEFAULT 0, `visibility` TEXT NOT NULL DEFAULT 'FOLLOWERS', `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`workout_id`) REFERENCES `workouts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -4213,6 +4465,20 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -4331,7 +4597,7 @@
       },
       {
         "tableName": "post_likes",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `post_id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`post_id`) REFERENCES `workout_posts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `post_id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`post_id`) REFERENCES `workout_posts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -4360,6 +4626,20 @@
           {
             "fieldPath": "isSynced",
             "columnName": "is_synced",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
@@ -4399,6 +4679,26 @@
             ],
             "orders": [],
             "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `idx_post_likes_unique` ON `${TABLE_NAME}` (`post_id`, `user_id`)"
+          },
+          {
+            "name": "idx_post_likes_user_timeline",
+            "unique": false,
+            "columnNames": [
+              "user_id",
+              "created_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_post_likes_user_timeline` ON `${TABLE_NAME}` (`user_id`, `created_at`)"
+          },
+          {
+            "name": "idx_post_likes_post_timeline",
+            "unique": false,
+            "columnNames": [
+              "post_id",
+              "created_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_post_likes_post_timeline` ON `${TABLE_NAME}` (`post_id`, `created_at`)"
           }
         ],
         "foreignKeys": [
@@ -4428,7 +4728,7 @@
       },
       {
         "tableName": "post_comments",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `post_id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `content` TEXT NOT NULL, `reply_to_comment_id` TEXT, `like_count` INTEGER NOT NULL DEFAULT 0, `is_edited` INTEGER NOT NULL DEFAULT 0, `created_at` INTEGER NOT NULL, `edited_at` INTEGER, `updated_at` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`post_id`) REFERENCES `workout_posts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`reply_to_comment_id`) REFERENCES `post_comments`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `post_id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `content` TEXT NOT NULL, `reply_to_comment_id` TEXT, `like_count` INTEGER NOT NULL DEFAULT 0, `is_edited` INTEGER NOT NULL DEFAULT 0, `created_at` INTEGER NOT NULL, `edited_at` INTEGER, `updated_at` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`post_id`) REFERENCES `workout_posts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`reply_to_comment_id`) REFERENCES `post_comments`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -4505,6 +4805,20 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -4541,6 +4855,26 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_post_comments_reply_to_comment_id` ON `${TABLE_NAME}` (`reply_to_comment_id`)"
+          },
+          {
+            "name": "idx_post_comments_user_timeline",
+            "unique": false,
+            "columnNames": [
+              "user_id",
+              "created_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_post_comments_user_timeline` ON `${TABLE_NAME}` (`user_id`, `created_at`)"
+          },
+          {
+            "name": "idx_post_comments_replies",
+            "unique": false,
+            "columnNames": [
+              "reply_to_comment_id",
+              "created_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_post_comments_replies` ON `${TABLE_NAME}` (`reply_to_comment_id`, `created_at`)"
           }
         ],
         "foreignKeys": [
@@ -4641,6 +4975,27 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `idx_feed_cache_post` ON `${TABLE_NAME}` (`post_id`)"
+          },
+          {
+            "name": "idx_feed_cache_user_time",
+            "unique": false,
+            "columnNames": [
+              "user_id",
+              "fetched_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_feed_cache_user_time` ON `${TABLE_NAME}` (`user_id`, `fetched_at`)"
+          },
+          {
+            "name": "idx_feed_cache_type",
+            "unique": false,
+            "columnNames": [
+              "user_id",
+              "feed_type",
+              "score"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_feed_cache_type` ON `${TABLE_NAME}` (`user_id`, `feed_type`, `score`)"
           }
         ],
         "foreignKeys": [
@@ -4761,7 +5116,7 @@
       },
       {
         "tableName": "fcm_tokens",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `token` TEXT NOT NULL, `device_id` TEXT NOT NULL, `device_name` TEXT, `platform` TEXT NOT NULL, `app_version` TEXT, `is_active` INTEGER NOT NULL DEFAULT 1, `last_used` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`user_id`) REFERENCES `user_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `token` TEXT NOT NULL, `device_id` TEXT NOT NULL, `device_name` TEXT, `platform` TEXT NOT NULL, `app_version` TEXT, `is_active` INTEGER NOT NULL DEFAULT 1, `last_used` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`user_id`) REFERENCES `user_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -4833,6 +5188,20 @@
           {
             "fieldPath": "isSynced",
             "columnName": "is_synced",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
@@ -5361,6 +5730,28 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_notification_history_is_read` ON `${TABLE_NAME}` (`is_read`)"
+          },
+          {
+            "name": "idx_notification_history_unread",
+            "unique": false,
+            "columnNames": [
+              "user_id",
+              "is_read",
+              "received_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_notification_history_unread` ON `${TABLE_NAME}` (`user_id`, `is_read`, `received_at`)"
+          },
+          {
+            "name": "idx_notification_history_type",
+            "unique": false,
+            "columnNames": [
+              "user_id",
+              "type",
+              "received_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_notification_history_type` ON `${TABLE_NAME}` (`user_id`, `type`, `received_at`)"
           }
         ],
         "foreignKeys": [
@@ -5379,7 +5770,7 @@
       },
       {
         "tableName": "media_items",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `post_id` TEXT, `type` TEXT NOT NULL, `original_url` TEXT NOT NULL, `cdn_url` TEXT, `thumbnail_url` TEXT, `blurhash` TEXT, `width` INTEGER, `height` INTEGER, `size_bytes` INTEGER, `duration_seconds` INTEGER, `mime_type` TEXT, `processing_status` TEXT NOT NULL DEFAULT 'PENDING', `processed_at` INTEGER, `compression_ratio` REAL, `is_public` INTEGER NOT NULL DEFAULT 0, `created_at` INTEGER NOT NULL, `expires_at` INTEGER, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`post_id`) REFERENCES `workout_posts`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `post_id` TEXT, `type` TEXT NOT NULL, `original_url` TEXT NOT NULL, `cdn_url` TEXT, `thumbnail_url` TEXT, `blurhash` TEXT, `width` INTEGER, `height` INTEGER, `size_bytes` INTEGER, `duration_seconds` INTEGER, `mime_type` TEXT, `processing_status` TEXT NOT NULL DEFAULT 'PENDING', `processed_at` INTEGER, `compression_ratio` REAL, `is_public` INTEGER NOT NULL DEFAULT 0, `created_at` INTEGER NOT NULL, `expires_at` INTEGER, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`post_id`) REFERENCES `workout_posts`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
         "fields": [
           {
             "fieldPath": "id",
@@ -5510,6 +5901,20 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -5584,7 +5989,7 @@
       },
       {
         "tableName": "shared_routines",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `routine_id` TEXT NOT NULL, `share_token` TEXT NOT NULL, `share_url` TEXT NOT NULL, `routine_name` TEXT NOT NULL, `description` TEXT, `routine_data` TEXT NOT NULL, `preview_image_url` TEXT, `exercise_count` INTEGER, `estimated_duration` INTEGER, `difficulty_level` TEXT, `equipment_needed` TEXT, `view_count` INTEGER NOT NULL DEFAULT 0, `import_count` INTEGER NOT NULL DEFAULT 0, `like_count` INTEGER NOT NULL DEFAULT 0, `version` INTEGER NOT NULL DEFAULT 1, `parent_routine_id` TEXT, `is_active` INTEGER NOT NULL DEFAULT 1, `is_featured` INTEGER NOT NULL DEFAULT 0, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `routine_id` TEXT NOT NULL, `share_token` TEXT NOT NULL, `share_url` TEXT NOT NULL, `routine_name` TEXT NOT NULL, `description` TEXT, `routine_data` TEXT NOT NULL, `preview_image_url` TEXT, `exercise_count` INTEGER, `estimated_duration` INTEGER, `difficulty_level` TEXT, `equipment_needed` TEXT, `view_count` INTEGER NOT NULL DEFAULT 0, `import_count` INTEGER NOT NULL DEFAULT 0, `like_count` INTEGER NOT NULL DEFAULT 0, `version` INTEGER NOT NULL DEFAULT 1, `parent_routine_id` TEXT, `is_active` INTEGER NOT NULL DEFAULT 1, `is_featured` INTEGER NOT NULL DEFAULT 0, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -5734,6 +6139,20 @@
           {
             "fieldPath": "syncVersion",
             "columnName": "sync_version",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
@@ -5927,7 +6346,7 @@
       },
       {
         "tableName": "progress_photos",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `media_id` TEXT NOT NULL, `body_part` TEXT, `photo_type` TEXT, `weight_kg` REAL, `body_fat_percent` REAL, `comparison_group_id` TEXT, `is_before` INTEGER, `is_private` INTEGER NOT NULL DEFAULT 1, `taken_at` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`media_id`) REFERENCES `media_items`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `media_id` TEXT NOT NULL, `body_part` TEXT, `photo_type` TEXT, `weight_kg` REAL, `body_fat_percent` REAL, `comparison_group_id` TEXT, `is_before` INTEGER, `is_private` INTEGER NOT NULL DEFAULT 1, `taken_at` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`media_id`) REFERENCES `media_items`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -6012,6 +6431,20 @@
           {
             "fieldPath": "syncVersion",
             "columnName": "sync_version",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
@@ -6523,7 +6956,7 @@
       },
       {
         "tableName": "content_reports",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `reporter_user_id` TEXT NOT NULL, `content_type` TEXT NOT NULL, `content_id` TEXT NOT NULL, `reason` TEXT NOT NULL, `description` TEXT, `reported_at` INTEGER NOT NULL, `status` TEXT NOT NULL DEFAULT 'PENDING', `reviewed_by` TEXT, `reviewed_at` INTEGER, `action_taken` TEXT, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`reporter_user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `reporter_user_id` TEXT NOT NULL, `content_type` TEXT NOT NULL, `content_id` TEXT NOT NULL, `reason` TEXT NOT NULL, `description` TEXT, `reported_at` INTEGER NOT NULL, `status` TEXT NOT NULL DEFAULT 'PENDING', `reviewed_by` TEXT, `reviewed_at` INTEGER, `action_taken` TEXT, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`), FOREIGN KEY(`reporter_user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -6605,6 +7038,20 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -6668,7 +7115,7 @@
       },
       {
         "tableName": "data_exports",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`export_id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `export_type` TEXT NOT NULL, `data_types` TEXT NOT NULL, `status` TEXT NOT NULL, `file_uri` TEXT, `file_size_bytes` INTEGER, `record_count` INTEGER, `date_range_start` INTEGER, `date_range_end` INTEGER, `requested_at` INTEGER NOT NULL, `completed_at` INTEGER, `expires_at` INTEGER, `error_message` TEXT, `is_synced` INTEGER NOT NULL, `sync_version` INTEGER NOT NULL, PRIMARY KEY(`export_id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`export_id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `export_type` TEXT NOT NULL, `data_types` TEXT NOT NULL, `status` TEXT NOT NULL, `file_uri` TEXT, `file_size_bytes` INTEGER, `record_count` INTEGER, `date_range_start` INTEGER, `date_range_end` INTEGER, `requested_at` INTEGER NOT NULL, `completed_at` INTEGER, `expires_at` INTEGER, `error_message` TEXT, `is_synced` INTEGER NOT NULL, `sync_version` INTEGER NOT NULL, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`export_id`))",
         "fields": [
           {
             "fieldPath": "exportId",
@@ -6765,6 +7212,20 @@
             "columnName": "sync_version",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -6778,7 +7239,7 @@
       },
       {
         "tableName": "data_imports",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`import_id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `source_format` TEXT NOT NULL, `source_app` TEXT, `status` TEXT NOT NULL, `total_records` INTEGER, `imported_records` INTEGER, `skipped_records` INTEGER, `conflict_resolution` TEXT, `validation_errors` TEXT, `started_at` INTEGER NOT NULL, `completed_at` INTEGER, `rollback_available` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL, PRIMARY KEY(`import_id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`import_id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `source_format` TEXT NOT NULL, `source_app` TEXT, `status` TEXT NOT NULL, `total_records` INTEGER, `imported_records` INTEGER, `skipped_records` INTEGER, `conflict_resolution` TEXT, `validation_errors` TEXT, `started_at` INTEGER NOT NULL, `completed_at` INTEGER, `rollback_available` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`import_id`))",
         "fields": [
           {
             "fieldPath": "importId",
@@ -6863,6 +7324,20 @@
             "columnName": "is_synced",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -6962,7 +7437,7 @@
       },
       {
         "tableName": "support_tickets",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ticket_id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `category` TEXT NOT NULL, `subject` TEXT NOT NULL, `description` TEXT NOT NULL, `device_info` TEXT, `app_version` TEXT, `status` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT, `is_synced` INTEGER NOT NULL, `sync_version` INTEGER NOT NULL, PRIMARY KEY(`ticket_id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`ticket_id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `category` TEXT NOT NULL, `subject` TEXT NOT NULL, `description` TEXT NOT NULL, `device_info` TEXT, `app_version` TEXT, `status` TEXT NOT NULL, `created_at` TEXT NOT NULL, `updated_at` TEXT, `is_synced` INTEGER NOT NULL, `sync_version` INTEGER NOT NULL, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`ticket_id`))",
         "fields": [
           {
             "fieldPath": "ticketId",
@@ -7035,6 +7510,20 @@
             "columnName": "sync_version",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -7416,7 +7905,7 @@
       },
       {
         "tableName": "sync_preferences",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `auto_sync_enabled` INTEGER NOT NULL, `sync_interval_minutes` INTEGER NOT NULL, `sync_on_wifi_only` INTEGER NOT NULL, `sync_on_battery_saver` INTEGER NOT NULL, `last_sync_timestamp` INTEGER, `sync_workout_data` INTEGER NOT NULL, `sync_profile_data` INTEGER NOT NULL, `sync_social_data` INTEGER NOT NULL, `sync_settings` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL, `sync_version` INTEGER NOT NULL, `last_modified` INTEGER NOT NULL, PRIMARY KEY(`user_id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `auto_sync_enabled` INTEGER NOT NULL, `sync_interval_minutes` INTEGER NOT NULL, `sync_on_wifi_only` INTEGER NOT NULL, `sync_on_battery_saver` INTEGER NOT NULL, `last_sync_timestamp` INTEGER, `sync_workout_data` INTEGER NOT NULL, `sync_profile_data` INTEGER NOT NULL, `sync_social_data` INTEGER NOT NULL, `sync_settings` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL, `sync_version` INTEGER NOT NULL, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL, PRIMARY KEY(`user_id`))",
         "fields": [
           {
             "fieldPath": "userId",
@@ -7491,6 +7980,13 @@
             "notNull": true
           },
           {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
             "fieldPath": "lastModified",
             "columnName": "last_modified",
             "affinity": "INTEGER",
@@ -7545,7 +8041,7 @@
       },
       {
         "tableName": "chat_preferences",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `preferred_language` TEXT NOT NULL DEFAULT 'en', `auto_detect_language` INTEGER NOT NULL DEFAULT 1, `chat_notifications_enabled` INTEGER NOT NULL DEFAULT 1, `conversation_history_enabled` INTEGER NOT NULL DEFAULT 1, `workout_context_sharing` INTEGER NOT NULL DEFAULT 1, `max_messages_per_day` INTEGER NOT NULL DEFAULT 100, `max_tokens_per_month` INTEGER NOT NULL DEFAULT 10000, `auto_clear_days` INTEGER NOT NULL DEFAULT 30, `user_context_prompt` TEXT, `ai_response_style` TEXT NOT NULL DEFAULT 'balanced', `include_workout_history` INTEGER NOT NULL DEFAULT 1, `include_exercise_form_tips` INTEGER NOT NULL DEFAULT 1, `usage_notifications_threshold` INTEGER NOT NULL DEFAULT 80, `conversation_save_enabled` INTEGER NOT NULL DEFAULT 1, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`user_id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `preferred_language` TEXT NOT NULL DEFAULT 'en', `auto_detect_language` INTEGER NOT NULL DEFAULT 1, `chat_notifications_enabled` INTEGER NOT NULL DEFAULT 1, `conversation_history_enabled` INTEGER NOT NULL DEFAULT 1, `workout_context_sharing` INTEGER NOT NULL DEFAULT 1, `max_messages_per_day` INTEGER NOT NULL DEFAULT 100, `max_tokens_per_month` INTEGER NOT NULL DEFAULT 10000, `auto_clear_days` INTEGER NOT NULL DEFAULT 30, `user_context_prompt` TEXT, `ai_response_style` TEXT NOT NULL DEFAULT 'balanced', `include_workout_history` INTEGER NOT NULL DEFAULT 1, `include_exercise_form_tips` INTEGER NOT NULL DEFAULT 1, `usage_notifications_threshold` INTEGER NOT NULL DEFAULT 80, `conversation_save_enabled` INTEGER NOT NULL DEFAULT 1, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`user_id`))",
         "fields": [
           {
             "fieldPath": "userId",
@@ -7665,6 +8161,20 @@
             "defaultValue": "0"
           },
           {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
             "fieldPath": "updatedAt",
             "columnName": "updated_at",
             "affinity": "INTEGER",
@@ -7682,7 +8192,7 @@
       },
       {
         "tableName": "chat_history",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `conversation_id` TEXT NOT NULL, `message_type` TEXT NOT NULL, `language` TEXT NOT NULL, `content` TEXT NOT NULL, `workout_context` TEXT, `token_count` INTEGER, `processing_time_ms` INTEGER, `created_at` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `conversation_id` TEXT NOT NULL, `message_type` TEXT NOT NULL, `language` TEXT NOT NULL, `content` TEXT NOT NULL, `workout_context` TEXT, `token_count` INTEGER, `processing_time_ms` INTEGER, `created_at` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL DEFAULT 0, `sync_version` INTEGER NOT NULL DEFAULT 0, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -7757,6 +8267,20 @@
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastModified",
+            "columnName": "last_modified",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           }
         ],
         "primaryKey": {
@@ -7801,7 +8325,7 @@
       },
       {
         "tableName": "pr_reactions",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `buddy_user_id` TEXT NOT NULL, `pr_id` TEXT NOT NULL, `reaction_type` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL, `sync_version` INTEGER NOT NULL, `last_modified` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`pr_id`) REFERENCES `pr_notifications`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`buddy_user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `buddy_user_id` TEXT NOT NULL, `pr_id` TEXT NOT NULL, `reaction_type` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL, `sync_version` INTEGER NOT NULL, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`pr_id`) REFERENCES `pr_notifications`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`buddy_user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -7850,6 +8374,13 @@
             "columnName": "sync_version",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
           },
           {
             "fieldPath": "lastModified",
@@ -7950,7 +8481,7 @@
       },
       {
         "tableName": "pr_notification_preferences",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `enable_pr_notifications` INTEGER NOT NULL, `enable_reaction_notifications` INTEGER NOT NULL, `only_from_buddies` INTEGER NOT NULL, `quiet_hours_enabled` INTEGER NOT NULL, `quiet_hours_start` TEXT NOT NULL, `quiet_hours_end` TEXT NOT NULL, `minimum_pr_significance` TEXT NOT NULL, `max_notifications_per_day` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL, `sync_version` INTEGER NOT NULL, `last_modified` INTEGER NOT NULL, PRIMARY KEY(`user_id`), FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`user_id` TEXT NOT NULL, `enable_pr_notifications` INTEGER NOT NULL, `enable_reaction_notifications` INTEGER NOT NULL, `only_from_buddies` INTEGER NOT NULL, `quiet_hours_enabled` INTEGER NOT NULL, `quiet_hours_start` TEXT NOT NULL, `quiet_hours_end` TEXT NOT NULL, `minimum_pr_significance` TEXT NOT NULL, `max_notifications_per_day` INTEGER NOT NULL, `is_synced` INTEGER NOT NULL, `sync_version` INTEGER NOT NULL, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL, PRIMARY KEY(`user_id`), FOREIGN KEY(`user_id`) REFERENCES `social_profiles`(`user_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "userId",
@@ -8019,6 +8550,13 @@
             "notNull": true
           },
           {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
             "fieldPath": "lastModified",
             "columnName": "last_modified",
             "affinity": "INTEGER",
@@ -8058,7 +8596,7 @@
       },
       {
         "tableName": "personal_records",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `exercise_name` TEXT NOT NULL, `pr_type` TEXT NOT NULL, `weight_kg` REAL, `reps` INTEGER NOT NULL, `volume` REAL, `estimated_one_rm` REAL, `achieved_at` INTEGER NOT NULL, `workout_id` TEXT NOT NULL, `previous_best` REAL, `improvement_percent` REAL, `is_synced` INTEGER NOT NULL, `sync_version` INTEGER NOT NULL, `last_modified` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_id` TEXT NOT NULL, `exercise_name` TEXT NOT NULL, `pr_type` TEXT NOT NULL, `weight_kg` REAL, `reps` INTEGER NOT NULL, `volume` REAL, `estimated_one_rm` REAL, `achieved_at` INTEGER NOT NULL, `workout_id` TEXT NOT NULL, `previous_best` REAL, `improvement_percent` REAL, `is_synced` INTEGER NOT NULL, `sync_version` INTEGER NOT NULL, `is_dirty` INTEGER NOT NULL DEFAULT 0, `last_modified` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -8145,6 +8683,13 @@
             "notNull": true
           },
           {
+            "fieldPath": "isDirty",
+            "columnName": "is_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
             "fieldPath": "lastModified",
             "columnName": "last_modified",
             "affinity": "INTEGER",
@@ -8205,7 +8750,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '86d8df78a759a1ab7993f0e9c3e0f668')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a0922733eae4b0d06bb6948e688b725f')"
     ]
   }
 }

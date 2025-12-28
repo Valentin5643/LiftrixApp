@@ -18,6 +18,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.WriteBatch
 import com.google.gson.Gson
 import com.google.gson.JsonElement
+import com.example.liftrix.config.OfflineArchitectureFlags
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
@@ -122,7 +123,13 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
             // 🔥 ENHANCED: Comprehensive logging for workout post sync
             Timber.i("[POST-SYNC] 🔍 Starting WorkoutPostSyncWorker for user $userId (forceSync: $forceSync)")
             
-            val unsyncedPosts = postDao.getUnsyncedPosts(userId)
+            val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
+                OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
+            val unsyncedPosts = if (useDirtyFlagGating) {
+                postDao.getDirtyPosts(userId)
+            } else {
+                postDao.getUnsyncedPosts(userId)
+            }
             
             if (unsyncedPosts.isEmpty() && !forceSync) {
                 Timber.i("[POST-SYNC] ✅ No unsynced workout posts found for user $userId")
@@ -133,7 +140,7 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
                 )
             }
 
-            Timber.i("[POST-SYNC] 📊 Found ${unsyncedPosts.size} unsynced workout posts for user $userId")
+            Timber.i("[POST-SYNC] 📊 Found ${unsyncedPosts.size} workout posts to sync for user $userId (dirty gating: $useDirtyFlagGating)")
             unsyncedPosts.forEachIndexed { index, post ->
                 Timber.d("[POST-SYNC]   - Post ${index + 1}: ${post.id} (workout: ${post.workoutId})")
                 Timber.d("[POST-SYNC]     - Caption: '${post.caption?.take(50) ?: "No caption"}${if (post.caption?.length ?: 0 > 50) "..." else ""}'")
@@ -168,13 +175,70 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
     }
     
     private suspend fun syncPostBatch(posts: List<com.example.liftrix.data.local.entity.WorkoutPostEntity>): Int {
+        val postsToUpload = mutableListOf<com.example.liftrix.data.local.entity.WorkoutPostEntity>()
+
+        for (post in posts) {
+            val docRef = firestore
+                .collection("workout_posts")
+                .document(post.id)
+
+            val remoteDoc = docRef.get().await()
+            if (remoteDoc.exists()) {
+                val remoteLastModified = when (val remoteValue = remoteDoc.get("lastModified")) {
+                    is com.google.firebase.Timestamp -> remoteValue.toDate().time
+                    is Number -> remoteValue.toLong()
+                    else -> 0L
+                }
+                if (remoteLastModified > post.lastModified) {
+                    val mediaUrlsJson = when (val remoteMediaUrls = remoteDoc.get("mediaUrls")) {
+                        is List<*> -> gson.toJson(remoteMediaUrls)
+                        is String -> remoteMediaUrls
+                        else -> post.mediaUrls
+                    }
+                    val thumbnailsJson = when (val remoteMediaThumbnails = remoteDoc.get("mediaThumbnails")) {
+                        is List<*> -> gson.toJson(remoteMediaThumbnails)
+                        is String -> remoteMediaThumbnails
+                        else -> post.mediaThumbnails
+                    }
+                    val remoteEntity = post.copy(
+                        caption = remoteDoc.getString("caption") ?: post.caption,
+                        mediaUrls = mediaUrlsJson,
+                        mediaThumbnails = thumbnailsJson,
+                        workoutDuration = remoteDoc.getLong("workoutDuration")?.toInt() ?: post.workoutDuration,
+                        totalVolume = remoteDoc.getDouble("totalVolume") ?: post.totalVolume,
+                        exercisesCount = remoteDoc.getLong("exercisesCount")?.toInt() ?: post.exercisesCount,
+                        prsCount = remoteDoc.getLong("prsCount")?.toInt() ?: post.prsCount,
+                        likeCount = remoteDoc.getLong("likeCount")?.toInt() ?: post.likeCount,
+                        commentCount = remoteDoc.getLong("commentCount")?.toInt() ?: post.commentCount,
+                        shareCount = remoteDoc.getLong("shareCount")?.toInt() ?: post.shareCount,
+                        saveCount = remoteDoc.getLong("saveCount")?.toInt() ?: post.saveCount,
+                        visibility = remoteDoc.getString("visibility") ?: post.visibility,
+                        createdAt = remoteDoc.getLong("createdAt") ?: post.createdAt,
+                        updatedAt = remoteDoc.getTimestamp("updatedAt")?.toDate()?.time ?: post.updatedAt,
+                        isDirty = false,
+                        isSynced = true,
+                        syncVersion = (remoteDoc.getLong("syncVersion") ?: post.syncVersion.toLong()).toInt(),
+                        lastModified = remoteLastModified
+                    )
+                    postDao.upsertFromRemote(remoteEntity)
+                    continue
+                }
+            }
+
+            postsToUpload.add(post)
+        }
+
+        if (postsToUpload.isEmpty()) {
+            return 0
+        }
+
         val batch: WriteBatch = firestore.batch()
         val timestamp = System.currentTimeMillis()
         
         // 🔥 ENHANCED: Log batch processing start
-        Timber.d("[POST-BATCH] 🚀 Processing batch of ${posts.size} workout posts")
+        Timber.d("[POST-BATCH] 🚀 Processing batch of ${postsToUpload.size} workout posts")
         
-        posts.forEach { post ->
+        postsToUpload.forEach { post ->
             val docRef = firestore
                 .collection("workout_posts")
                 .document(post.id)
@@ -203,7 +267,8 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
                 "saveCount" to post.saveCount,
                 "createdAt" to post.createdAt,
                 "updatedAt" to FieldValue.serverTimestamp(),
-                "syncVersion" to timestamp
+                "syncVersion" to timestamp,
+                "lastModified" to post.lastModified
             )
             
             batch.set(docRef, postData, SetOptions.merge())
@@ -211,7 +276,7 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
         
         // 🔥 ENHANCED: Log batch commit with timing
         val batchCommitStart = System.currentTimeMillis()
-        Timber.d("[POST-BATCH] 📤 Committing batch of ${posts.size} posts to Firestore")
+        Timber.d("[POST-BATCH] 📤 Committing batch of ${postsToUpload.size} posts to Firestore")
         
         try {
             batch.commit().await()
@@ -220,26 +285,20 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
             Timber.i("[POST-BATCH] ✅ Batch commit successful in ${batchCommitDuration}ms")
             
             // Mark posts as synced in local database
-            posts.forEach { post ->
-                try {
-                    postDao.markAsSynced(
-                        postId = post.id,
-                        syncVersion = timestamp.toInt()
-                    )
-                    Timber.d("[POST-BATCH] ✅ Marked post as synced: ${post.id}")
-                } catch (e: Exception) {
-                    Timber.w(e, "[POST-BATCH] ⚠️ Failed to mark post as synced: ${post.id}")
-                }
-            }
+            postDao.markAsClean(
+                ids = postsToUpload.map { it.id },
+                userId = postsToUpload.first().userId,
+                syncVersion = timestamp
+            )
             
-            Timber.i("[POST-BATCH] 📊 Successfully synced batch of ${posts.size} workout posts")
-            return posts.size
+            Timber.i("[POST-BATCH] 📊 Successfully synced batch of ${postsToUpload.size} workout posts")
+            return postsToUpload.size
             
         } catch (e: Exception) {
-            Timber.e(e, "[POST-BATCH] ❌ Failed to commit batch of ${posts.size} workout posts")
+            Timber.e(e, "[POST-BATCH] ❌ Failed to commit batch of ${postsToUpload.size} workout posts")
             Timber.e("[POST-BATCH]   - Error type: ${e.javaClass.simpleName}")
             Timber.e("[POST-BATCH]   - Error message: ${e.message}")
-            posts.forEach { post ->
+            postsToUpload.forEach { post ->
                 Timber.w("[POST-BATCH]   - Failed post: ${post.id} (workout: ${post.workoutId})")
             }
             throw e

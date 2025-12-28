@@ -60,6 +60,7 @@ import java.time.LocalDateTime
  * @param onNavigateToAbout Callback to navigate to about screen
  * @param onNavigateToPrivacyPolicy Callback to navigate to privacy policy screen
  * @param onNavigateToTermsOfService Callback to navigate to terms of service screen
+ * @param onNavigateToCommunityGuidelines Callback to navigate to community guidelines screen
  * @param modifier Modifier for styling the screen
  * @param viewModel SettingsViewModel for state management (injectable for testing)
  */
@@ -82,6 +83,7 @@ fun SettingsScreen(
     onNavigateToAbout: (() -> Unit)? = null,
     onNavigateToPrivacyPolicy: (() -> Unit)? = null,
     onNavigateToTermsOfService: (() -> Unit)? = null,
+    onNavigateToCommunityGuidelines: (() -> Unit)? = null,
     onNavigateToDataPortability: (() -> Unit)? = null,
     onNavigateToAIChatSettings: (() -> Unit)? = null,
     onNavigateToAdminBanManagement: (() -> Unit)? = null,
@@ -114,6 +116,7 @@ fun SettingsScreen(
         val stableOnNavigateToAbout = remember(onNavigateToAbout) { onNavigateToAbout }
         val stableOnNavigateToPrivacyPolicy = remember(onNavigateToPrivacyPolicy) { onNavigateToPrivacyPolicy }
         val stableOnNavigateToTermsOfService = remember(onNavigateToTermsOfService) { onNavigateToTermsOfService }
+        val stableOnNavigateToCommunityGuidelines = remember(onNavigateToCommunityGuidelines) { onNavigateToCommunityGuidelines }
         val stableOnNavigateToDataPortability = remember(onNavigateToDataPortability) { onNavigateToDataPortability }
         val stableOnNavigateToAIChatSettings = remember(onNavigateToAIChatSettings) { onNavigateToAIChatSettings }
         
@@ -236,6 +239,7 @@ private fun SettingsContent(
     onNavigateToUsernameChange: (() -> Unit)? = null,
     onNavigateToAccountDeletion: (() -> Unit)? = null,
     onNavigateToPrivacyPolicy: (() -> Unit)? = null,
+    onNavigateToCommunityGuidelines: (() -> Unit)? = null,
     onNavigateToDataPortability: (() -> Unit)? = null,
     onNavigateToHelpCenter: (() -> Unit)? = null,
     onNavigateToAbout: (() -> Unit)? = null,
@@ -352,6 +356,7 @@ private fun SettingsCategoryContent(
     onNavigateToUsernameChange: (() -> Unit)? = null,
     onNavigateToAccountDeletion: (() -> Unit)? = null,
     onNavigateToPrivacyPolicy: (() -> Unit)? = null,
+    onNavigateToCommunityGuidelines: (() -> Unit)? = null,
     onNavigateToDataPortability: (() -> Unit)? = null,
     onNavigateToAdminBanManagement: (() -> Unit)? = null,
     onNavigateToHelpCenter: (() -> Unit)? = null,
@@ -604,6 +609,7 @@ private fun PrivacySettings(
     onNavigateToUsernameChange: (() -> Unit)? = null,
     onNavigateToAccountDeletion: (() -> Unit)? = null,
     onNavigateToPrivacyPolicy: (() -> Unit)? = null,
+    onNavigateToCommunityGuidelines: (() -> Unit)? = null,
     onNavigateToDataPortability: (() -> Unit)? = null,
     onNavigateToAdminBanManagement: (() -> Unit)? = null
 ) {
@@ -672,17 +678,26 @@ private fun PrivacySettings(
             title = "Privacy Policy",
             subtitle = "View our privacy policy",
             icon = LiftrixIcons.State.Info,
-            onClick = { 
+            onClick = {
                 stableOnEvent(SettingsEvent.NavigateToPrivacy)
                 stableOnNavigateToPrivacyPolicy?.invoke()
             }
         )
-        
+
+        SettingsNavigationItem(
+            title = "Community Guidelines",
+            subtitle = "View content and conduct policies",
+            icon = LiftrixIcons.State.Info,
+            onClick = {
+                stableOnEvent(SettingsEvent.NavigateToCommunityGuidelines)
+            }
+        )
+
         SettingsNavigationItem(
             title = "Export Data",
             subtitle = "Download your workout data",
             icon = LiftrixIcons.Actions.Share,
-            onClick = { 
+            onClick = {
                 stableOnEvent(SettingsEvent.NavigateToDataPortability)
                 stableOnNavigateToDataPortability?.invoke()
             }

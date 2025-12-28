@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.ChatPreferencesEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -83,4 +84,62 @@ interface ChatPreferencesDao {
      */
     @Query("SELECT * FROM chat_preferences WHERE user_id = :userId")
     suspend fun getChatPreferencesSync(userId: String): ChatPreferencesEntity?
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert chatpreferences from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(chatPreferences: ChatPreferencesEntity) {
+        val entity = chatPreferences.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert chatpreferences from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(chatPreferences: ChatPreferencesEntity) {
+        val local = getChatPreferencesForSync(chatPreferences.userId)
+        if (local == null || chatPreferences.lastModified > local.lastModified) {
+            val entity = chatPreferences.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis().toInt()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: ChatPreferencesEntity)
+
+    /**
+     * Get dirty chatpreferences that need upload to Firestore.
+     */
+    @Query("SELECT * FROM chat_preferences WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyChatPreferences(userId: String): List<ChatPreferencesEntity>
+
+    /**
+     * Mark chatpreferences as clean after successful Firestore upload.
+     */
+    @Query("UPDATE chat_preferences SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE user_id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local chatpreferences for remote deduplication.
+     */
+    @Query("SELECT * FROM chat_preferences WHERE user_id = :userId LIMIT 1")
+    suspend fun getChatPreferencesForSync(userId: String): ChatPreferencesEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }

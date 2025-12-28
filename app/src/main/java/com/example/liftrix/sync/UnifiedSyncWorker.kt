@@ -14,6 +14,7 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import com.example.liftrix.data.sync.OfflineQueueManager
 import com.example.liftrix.domain.model.common.LiftrixResult
+import com.example.liftrix.config.OfflineArchitectureFlags
 import kotlinx.coroutines.CancellationException
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
@@ -206,6 +207,12 @@ class UnifiedSyncWorker @AssistedInject constructor(
     override suspend fun performSync(userId: String): Result {
         try {
             val syncStartTime = System.currentTimeMillis()
+            val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
+                OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
+            if (!OfflineArchitectureFlags.ROOM_FIRST_ENABLED) {
+                Timber.w("$workerName running in legacy mode (Room-first disabled)")
+            }
+            Timber.d("$workerName dirty gating enabled: $useDirtyFlagGating")
             
             // Extract sync parameters from input data
             val syncType = inputData.getString(KEY_SYNC_TYPE) ?: DEFAULT_SYNC_TYPE

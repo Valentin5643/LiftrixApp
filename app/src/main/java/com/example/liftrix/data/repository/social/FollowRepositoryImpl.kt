@@ -21,10 +21,10 @@ import com.example.liftrix.domain.model.social.ConnectionStatus
 import com.example.liftrix.domain.model.social.FollowStatus
 import com.example.liftrix.domain.repository.social.FollowRepository
 import com.example.liftrix.domain.repository.social.FollowCounts
-import com.google.firebase.firestore.FirebaseFirestore
+import com.example.liftrix.config.OfflineArchitectureFlags
+import com.example.liftrix.data.remote.legacy.LegacyFollowFirestoreDataSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -55,14 +55,10 @@ class FollowRepositoryImpl @Inject constructor(
     private val blockedUserDao: BlockedUserDao,
     private val userProfileDao: UserProfileDao,
     private val safeFollowDao: SafeFollowRelationshipDaoImpl,
-    private val firestore: FirebaseFirestore
+    private val legacyDataSource: LegacyFollowFirestoreDataSource
 ) : FollowRepository {
 
     companion object {
-        private const val FOLLOW_RELATIONSHIPS_COLLECTION = "follow_relationships"
-        private const val FOLLOW_REQUESTS_COLLECTION = "follow_requests"
-        private const val SOCIAL_PROFILES_COLLECTION = "social_profiles"
-        private const val PROFILE_VIEWS_COLLECTION = "profile_views"
         private const val REQUEST_EXPIRATION_DAYS = 30L
     }
 
@@ -761,22 +757,12 @@ class FollowRepositoryImpl @Inject constructor(
     }
 
     private suspend fun syncRelationshipToFirebase(relationship: FollowRelationshipEntity) {
+        if (OfflineArchitectureFlags.FIX_FOLLOW_REPOSITORY) {
+            return
+        }
+
         try {
-            val data = mapOf(
-                "id" to relationship.id,
-                "followerId" to relationship.followerId,
-                "followingId" to relationship.followingId,
-                "status" to relationship.status,
-                "createdAt" to relationship.createdAt,
-                "acceptedAt" to relationship.acceptedAt,
-                "blockedAt" to relationship.blockedAt,
-                "syncedAt" to System.currentTimeMillis()
-            )
-            
-            firestore.collection(FOLLOW_RELATIONSHIPS_COLLECTION)
-                .document(relationship.id)
-                .set(data)
-                .await()
+            legacyDataSource.syncRelationship(relationship)
                 
             // Update sync status
             followRelationshipDao.updateSyncStatus(relationship.id, true, relationship.syncVersion + 1)
@@ -786,24 +772,12 @@ class FollowRepositoryImpl @Inject constructor(
     }
 
     private suspend fun syncFollowRequestToFirebase(request: FollowRequestEntity) {
+        if (OfflineArchitectureFlags.FIX_FOLLOW_REPOSITORY) {
+            return
+        }
+
         try {
-            val data = mapOf(
-                "id" to request.id,
-                "requesterId" to request.requesterId,
-                "targetId" to request.targetId,
-                "status" to request.status,
-                "requestMessage" to request.requestMessage,
-                "createdAt" to request.createdAt,
-                "processedAt" to request.processedAt,
-                "expiresAt" to request.expiresAt,
-                "requestSource" to request.requestSource,
-                "syncedAt" to System.currentTimeMillis()
-            )
-            
-            firestore.collection(FOLLOW_REQUESTS_COLLECTION)
-                .document(request.id)
-                .set(data)
-                .await()
+            legacyDataSource.syncFollowRequest(request)
                 
             // Update sync status
             followRequestDao.updateSyncStatus(request.id, true, request.syncVersion + 1, System.currentTimeMillis())
@@ -813,18 +787,12 @@ class FollowRepositoryImpl @Inject constructor(
     }
 
     private suspend fun syncRelationshipDeletionToFirebase(followerId: String, targetUserId: String) {
+        if (OfflineArchitectureFlags.FIX_FOLLOW_REPOSITORY) {
+            return
+        }
+
         try {
-            // In a production app, you might want to mark as deleted rather than actually delete
-            // for audit trail purposes
-            val query = firestore.collection(FOLLOW_RELATIONSHIPS_COLLECTION)
-                .whereEqualTo("followerId", followerId)
-                .whereEqualTo("followingId", targetUserId)
-                .get()
-                .await()
-            
-            query.documents.forEach { doc ->
-                doc.reference.delete().await()
-            }
+            legacyDataSource.deleteRelationship(followerId, targetUserId)
         } catch (e: Exception) {
             Timber.e(e, "Failed to sync relationship deletion to Firebase")
         }
@@ -838,38 +806,46 @@ class FollowRepositoryImpl @Inject constructor(
      * @return The number of relationships synced
      */
     suspend fun syncFollowRelationshipsFromFirebaseUpsert(userId: String): Int {
+        if (OfflineArchitectureFlags.FIX_FOLLOW_REPOSITORY) {
+            return 0
+        }
+
         return try {
             Timber.d("🔥 SYNC-FIX: Starting upsert-based follow sync for user $userId")
             
             // Fetch follower relationships (where user is being followed)
-            val followerQuery = firestore.collection(FOLLOW_RELATIONSHIPS_COLLECTION)
-                .whereEqualTo("followingId", userId)
-                .whereEqualTo("status", "ACCEPTED")
-                .get()
-                .await()
+            val followerDocs = legacyDataSource.fetchFollowerRelationships(userId)
             
             // Fetch following relationships (where user is following others)
-            val followingQuery = firestore.collection(FOLLOW_RELATIONSHIPS_COLLECTION)
-                .whereEqualTo("followerId", userId)
-                .whereEqualTo("status", "ACCEPTED")
-                .get()
-                .await()
+            val followingDocs = legacyDataSource.fetchFollowingRelationships(userId)
             
             val relationshipsToUpsert = mutableListOf<FollowRelationshipEntity>()
             val currentTime = System.currentTimeMillis()
             
             // Process follower relationships
-            followerQuery.documents.forEach { doc ->
-                val data = doc.data ?: return@forEach
+            followerDocs.forEach { data ->
+                val id = data["id"] as? String ?: java.util.UUID.randomUUID().toString()
                 relationshipsToUpsert.add(
                     FollowRelationshipEntity(
-                        id = doc.id,
+                        id = id,
                         followerId = data["followerId"] as String,
                         followingId = data["followingId"] as String,
                         status = data["status"] as String,
-                        createdAt = (data["createdAt"] as? com.google.firebase.Timestamp)?.toDate()?.time ?: currentTime,
-                        acceptedAt = (data["acceptedAt"] as? com.google.firebase.Timestamp)?.toDate()?.time,
-                        blockedAt = (data["blockedAt"] as? com.google.firebase.Timestamp)?.toDate()?.time,
+                        createdAt = when (val created = data["createdAt"]) {
+                            is com.google.firebase.Timestamp -> created.toDate().time
+                            is Number -> created.toLong()
+                            else -> currentTime
+                        },
+                        acceptedAt = when (val accepted = data["acceptedAt"]) {
+                            is com.google.firebase.Timestamp -> accepted.toDate().time
+                            is Number -> accepted.toLong()
+                            else -> null
+                        },
+                        blockedAt = when (val blocked = data["blockedAt"]) {
+                            is com.google.firebase.Timestamp -> blocked.toDate().time
+                            is Number -> blocked.toLong()
+                            else -> null
+                        },
                         isSynced = true,
                         syncVersion = (data["syncVersion"] as? Number)?.toInt() ?: 1,
                         lastModified = currentTime
@@ -878,10 +854,9 @@ class FollowRepositoryImpl @Inject constructor(
             }
             
             // Process following relationships
-            followingQuery.documents.forEach { doc ->
-                val data = doc.data ?: return@forEach
+            followingDocs.forEach { data ->
+                val id = data["id"] as? String ?: java.util.UUID.randomUUID().toString()
                 // Check if not already added (to avoid duplicates)
-                val id = doc.id
                 if (relationshipsToUpsert.none { it.id == id }) {
                     relationshipsToUpsert.add(
                         FollowRelationshipEntity(
@@ -889,9 +864,21 @@ class FollowRepositoryImpl @Inject constructor(
                             followerId = data["followerId"] as String,
                             followingId = data["followingId"] as String,
                             status = data["status"] as String,
-                            createdAt = (data["createdAt"] as? com.google.firebase.Timestamp)?.toDate()?.time ?: currentTime,
-                            acceptedAt = (data["acceptedAt"] as? com.google.firebase.Timestamp)?.toDate()?.time,
-                            blockedAt = (data["blockedAt"] as? com.google.firebase.Timestamp)?.toDate()?.time,
+                            createdAt = when (val created = data["createdAt"]) {
+                                is com.google.firebase.Timestamp -> created.toDate().time
+                                is Number -> created.toLong()
+                                else -> currentTime
+                            },
+                            acceptedAt = when (val accepted = data["acceptedAt"]) {
+                                is com.google.firebase.Timestamp -> accepted.toDate().time
+                                is Number -> accepted.toLong()
+                                else -> null
+                            },
+                            blockedAt = when (val blocked = data["blockedAt"]) {
+                                is com.google.firebase.Timestamp -> blocked.toDate().time
+                                is Number -> blocked.toLong()
+                                else -> null
+                            },
                             isSynced = true,
                             syncVersion = (data["syncVersion"] as? Number)?.toInt() ?: 1,
                             lastModified = currentTime
@@ -925,6 +912,10 @@ class FollowRepositoryImpl @Inject constructor(
      * @return The created SocialProfileEntity or null if not found
      */
     private suspend fun fetchAndCreateSocialProfileFromFirebase(userId: String): SocialProfileEntity? {
+        if (OfflineArchitectureFlags.FIX_FOLLOW_REPOSITORY) {
+            return null
+        }
+
         return try {
             Timber.d("Attempting to fetch social profile from Firebase for user: $userId")
             
@@ -934,23 +925,7 @@ class FollowRepositoryImpl @Inject constructor(
                 Timber.d("User profile doesn't exist locally, will create it first")
             }
             
-            // Try to get from social_profiles collection first
-            var profileData = firestore.collection(SOCIAL_PROFILES_COLLECTION)
-                .document(userId)
-                .get()
-                .await()
-            
-            // If not found in social_profiles, log warning (should not happen with unified collection)
-            if (!profileData.exists()) {
-                Timber.w("Profile not found in social_profiles collection for userId: $userId - this indicates sync issue")
-            }
-            
-            if (!profileData.exists()) {
-                Timber.w("User profile not found in any Firebase collection for userId: $userId")
-                return null
-            }
-            
-            val data = profileData.data ?: return null
+            val data = legacyDataSource.fetchSocialProfileData(userId) ?: return null
             val currentTime = System.currentTimeMillis()
             val currentDateTime = java.time.LocalDateTime.now()
             

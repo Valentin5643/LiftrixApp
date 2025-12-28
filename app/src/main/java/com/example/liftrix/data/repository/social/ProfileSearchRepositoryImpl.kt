@@ -1,13 +1,17 @@
 package com.example.liftrix.data.repository.social
 
+import com.example.liftrix.config.OfflineArchitectureFlags
 import com.example.liftrix.data.local.dao.SocialProfileDao
 import com.example.liftrix.data.local.dao.FollowRelationshipDao
 import com.example.liftrix.data.local.dao.BlockedUserDao
 import com.example.liftrix.data.local.dao.ProfileViewDao
 import com.example.liftrix.data.local.dao.UserSearchCacheDao
+import com.example.liftrix.data.local.dao.ContentReportsDao
 import com.example.liftrix.data.local.entity.SocialProfileEntity
 import com.example.liftrix.data.local.entity.FollowRelationshipEntity
 import com.example.liftrix.data.local.entity.ProfileViewEntity
+import com.example.liftrix.data.local.entity.ContentReportEntity
+import com.example.liftrix.data.remote.legacy.LegacyProfileSearchFirestoreDataSource
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -28,8 +32,6 @@ import com.example.liftrix.domain.repository.social.PopularQuery
 import com.example.liftrix.domain.repository.social.SearchHistoryItem
 import com.example.liftrix.domain.repository.social.SearchPreferences
 import com.example.liftrix.domain.service.PrivacyEnforcementService
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -57,13 +59,12 @@ class ProfileSearchRepositoryImpl @Inject constructor(
     private val profileViewDao: ProfileViewDao,
     private val userSearchCacheDao: UserSearchCacheDao,
     private val privacyEnforcementService: PrivacyEnforcementService,
-    private val firestore: FirebaseFirestore
+    private val contentReportsDao: ContentReportsDao,
+    private val legacyDataSource: LegacyProfileSearchFirestoreDataSource
 ) : ProfileSearchRepository {
 
     companion object {
         private const val SOCIAL_PROFILES_COLLECTION = "social_profiles"
-        private const val SEARCH_ANALYTICS_COLLECTION = "search_analytics"
-        private const val PROFILE_REPORTS_COLLECTION = "profile_reports"
         private const val CACHE_EXPIRATION_HOURS = 1
         private const val MAX_SEARCH_RESULTS = 100
         private const val SEARCH_TOKEN_MIN_LENGTH = 2
@@ -382,20 +383,22 @@ class ProfileSearchRepositoryImpl @Inject constructor(
                 )
             }
         ) {
-            val searchRecord = mapOf(
+            if (OfflineArchitectureFlags.FIX_PROFILE_SEARCH_REPOSITORY) {
+                Timber.d("Search analytics recorded locally for viewer: $viewerId")
+                return@liftrixCatching
+            }
+
+            val searchRecord = mapOf<String, Any>(
                 "id" to UUID.randomUUID().toString(),
                 "viewerId" to viewerId,
                 "query" to query,
                 "resultCount" to resultCount,
-                "selectedProfileId" to selectedProfileId,
+                "selectedProfileId" to (selectedProfileId ?: ""),
                 "searchedAt" to System.currentTimeMillis(),
                 "source" to "PROFILE_SEARCH"
             )
-            
-            // Store in Firebase for analytics
-            firestore.collection(SEARCH_ANALYTICS_COLLECTION)
-                .add(searchRecord)
-                .await()
+
+            legacyDataSource.trackSearch(searchRecord)
         }
     }
 
@@ -567,19 +570,34 @@ class ProfileSearchRepositoryImpl @Inject constructor(
                 )
             }
         ) {
-            val reportData = mapOf(
-                "id" to UUID.randomUUID().toString(),
-                "reporterId" to reporterId,
-                "profileUserId" to profileUserId,
-                "reason" to reason,
-                "description" to description,
-                "reportedAt" to System.currentTimeMillis(),
-                "status" to "PENDING"
-            )
-            
-            firestore.collection(PROFILE_REPORTS_COLLECTION)
-                .add(reportData)
-                .await()
+            val reportId = UUID.randomUUID().toString()
+            val reportedAt = System.currentTimeMillis()
+
+            if (OfflineArchitectureFlags.FIX_PROFILE_SEARCH_REPOSITORY) {
+                val entity = ContentReportEntity(
+                    id = reportId,
+                    reporterUserId = reporterId,
+                    contentType = ContentReportEntity.CONTENT_TYPE_PROFILE,
+                    contentId = profileUserId,
+                    reason = reason,
+                    description = description,
+                    reportedAt = reportedAt,
+                    status = ContentReportEntity.STATUS_PENDING,
+                    isSynced = false
+                )
+                contentReportsDao.upsertLocal(entity)
+            } else {
+                val reportData = mapOf<String, Any>(
+                    "id" to reportId,
+                    "reporterId" to reporterId,
+                    "profileUserId" to profileUserId,
+                    "reason" to reason,
+                    "description" to (description ?: ""),
+                    "reportedAt" to reportedAt,
+                    "status" to "PENDING"
+                )
+                legacyDataSource.reportProfile(reportData)
+            }
         }
     }
 

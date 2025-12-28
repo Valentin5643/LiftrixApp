@@ -76,7 +76,13 @@ sealed class SettingsEvent : ViewModelEvent {
      * Should navigate to privacy settings screen.
      */
     object NavigateToPrivacy : SettingsEvent()
-    
+
+    /**
+     * Triggered when user taps on community guidelines.
+     * Should navigate to community guidelines screen.
+     */
+    object NavigateToCommunityGuidelines : SettingsEvent()
+
     /**
      * Triggered when user taps on help and support.
      * Should navigate to help screen or open support.

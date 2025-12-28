@@ -108,9 +108,60 @@ interface WorkoutDao {
     @Query("SELECT * FROM workouts WHERE user_id = :userId ORDER BY date DESC")
     suspend fun getAllWorkoutsForUserSync(userId: String): List<WorkoutEntity>
     
-    @Query("SELECT * FROM workouts WHERE user_id = :userId AND date >= :startDate AND date <= :endDate ORDER BY date DESC")  
+    @Query("SELECT * FROM workouts WHERE user_id = :userId AND date >= :startDate AND date <= :endDate ORDER BY date DESC")
     suspend fun getWorkoutsInDateRangeForExport(userId: String, startDate: String, endDate: String): List<WorkoutEntity>
-    
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert workout from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(workout: WorkoutEntity) {
+        val entity = workout.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert workout from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    suspend fun upsertFromRemote(workout: WorkoutEntity) {
+        val local = getWorkoutByIdForUser(workout.id, workout.userId)
+        if (local == null || workout.lastModified > local.lastModified) {
+            val entity = workout.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(workout: WorkoutEntity): Long
+
+    /**
+     * Get dirty workouts that need upload to Firestore.
+     */
+    @Query("SELECT * FROM workouts WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyWorkouts(userId: String): List<WorkoutEntity>
+
+    /**
+     * Mark workouts as clean after successful Firestore upload.
+     */
+    @Query("UPDATE workouts SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    // ========== END OFFLINE-FIRST METHODS ==========
+
     // Legacy methods without user filtering - deprecated for migration
     @Deprecated("Use user-scoped methods instead")
     @Query("SELECT * FROM workouts ORDER BY date DESC, created_at DESC")

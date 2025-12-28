@@ -5,6 +5,7 @@ import com.example.liftrix.data.local.LiftrixDatabase
 import com.example.liftrix.data.local.dao.*
 import com.example.liftrix.data.mapper.EngagementMapper
 import com.example.liftrix.data.mapper.WorkoutPostMapper
+import com.example.liftrix.data.remote.legacy.LegacyFollowFirestoreDataSource
 import com.example.liftrix.data.repository.ChatRepositoryImpl
 import com.example.liftrix.data.repository.NotificationRepositoryImpl
 import com.example.liftrix.data.repository.social.*
@@ -192,12 +193,12 @@ abstract class FeatureModule {
             blockedUserDao: BlockedUserDao,
             userProfileDao: UserProfileDao,
             safeFollowDao: SafeFollowRelationshipDaoImpl,
-            firestore: FirebaseFirestore
+            legacyFollowDataSource: LegacyFollowFirestoreDataSource
         ): FollowRepository =
             FollowRepositoryImpl(
                 followRelationshipDao, followRequestDao, profileViewDao,
                 socialProfileDao, blockedUserDao, userProfileDao,
-                safeFollowDao, firestore
+                safeFollowDao, legacyFollowDataSource
             )
 
         @Provides

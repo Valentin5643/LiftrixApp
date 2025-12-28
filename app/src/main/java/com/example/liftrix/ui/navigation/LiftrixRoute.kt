@@ -494,12 +494,18 @@ sealed class LiftrixRoute {
      */
     @Serializable
     data object PrivacyPolicy : LiftrixRoute()
-    
+
     /**
      * Terms of service screen for viewing legal documents
      */
     @Serializable
     data object TermsOfService : LiftrixRoute()
+
+    /**
+     * Community guidelines screen for viewing community standards and acceptable behavior
+     */
+    @Serializable
+    data object CommunityGuidelines : LiftrixRoute()
     
     /**
      * Data portability screen for importing and exporting workout data

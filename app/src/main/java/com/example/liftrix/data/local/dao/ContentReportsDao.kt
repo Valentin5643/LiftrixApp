@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.ContentReportEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -171,4 +172,62 @@ interface ContentReportsDao {
         @ColumnInfo(name = "content_type") val contentType: String,
         @ColumnInfo(name = "report_count") val reportCount: Int
     )
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert contentreport from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(contentReport: ContentReportEntity) {
+        val entity = contentReport.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert contentreport from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(contentReport: ContentReportEntity) {
+        val local = getContentReportForSync(contentReport.id, contentReport.reporterUserId)
+        if (local == null || contentReport.lastModified > local.lastModified) {
+            val entity = contentReport.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis().toInt()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: ContentReportEntity)
+
+    /**
+     * Get dirty contentreport that need upload to Firestore.
+     */
+    @Query("SELECT * FROM content_reports WHERE reporter_user_id = :reporterUserId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyContentReports(reporterUserId: String): List<ContentReportEntity>
+
+    /**
+     * Mark contentreport as clean after successful Firestore upload.
+     */
+    @Query("UPDATE content_reports SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE id IN (:ids) AND reporter_user_id = :reporterUserId")
+    suspend fun markAsClean(ids: List<String>, reporterUserId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local contentreport for remote deduplication.
+     */
+    @Query("SELECT * FROM content_reports WHERE id = :id AND reporter_user_id = :reporterUserId LIMIT 1")
+    suspend fun getContentReportForSync(id: String, reporterUserId: String): ContentReportEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }

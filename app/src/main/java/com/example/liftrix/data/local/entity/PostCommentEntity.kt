@@ -19,7 +19,11 @@ import androidx.room.PrimaryKey
     indices = [
         Index(value = ["post_id", "created_at"], name = "idx_post_comments_post"),
         Index(value = ["user_id"], name = "idx_post_comments_user"),
-        Index(value = ["reply_to_comment_id"])
+        Index(value = ["reply_to_comment_id"]),
+        // P0-PERF-001: User comment history - critical for "My Comments" activity feed
+        Index(value = ["user_id", "created_at"], name = "idx_post_comments_user_timeline"),
+        // P0-PERF-001: Reply threading - optimizes nested comment loading
+        Index(value = ["reply_to_comment_id", "created_at"], name = "idx_post_comments_replies")
     ],
     foreignKeys = [
         ForeignKey(
@@ -82,5 +86,12 @@ data class PostCommentEntity(
     val isSynced: Boolean = false,
 
     @ColumnInfo(name = "sync_version", defaultValue = "0")
-    val syncVersion: Int = 0
+    val syncVersion: Int = 0,
+
+    // Offline-first architecture fields (SPEC-20241228)
+    @ColumnInfo(name = "is_dirty", defaultValue = "0")
+    val isDirty: Boolean = false,
+
+    @ColumnInfo(name = "last_modified", defaultValue = "0")
+    val lastModified: Long = 0L
 )

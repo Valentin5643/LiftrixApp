@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "data_source": {
+    "Tantivy": {
+      "path": "C:\\Users\\Administrator\\LiftrixAPp\\.codanna\\index\\tantivy",
+      "doc_count": 61461,
+      "timestamp": 1766362002
+    }
+  },
+  "symbol_count": 22126,
+  "file_count": 1351,
+  "last_modified": 1766362002,
+  "indexed_paths": [
+    "\\\\?\\C:\\Users\\Administrator\\LiftrixApp"
+  ]
+}

@@ -79,7 +79,11 @@ data class FollowRelationshipEntity(
     val syncVersion: Int = 0,
 
     @ColumnInfo(name = "last_modified", defaultValue = "CURRENT_TIMESTAMP")
-    val lastModified: Long = System.currentTimeMillis()
+    val lastModified: Long = System.currentTimeMillis(),
+
+    // Offline-first architecture fields (SPEC-20241228)
+    @ColumnInfo(name = "is_dirty", defaultValue = "0")
+    val isDirty: Boolean = false
 ) {
     companion object {
         const val STATUS_PENDING = "PENDING"

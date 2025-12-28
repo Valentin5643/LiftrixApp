@@ -1,5 +1,6 @@
 package com.example.liftrix.sync
 
+import com.example.liftrix.config.OfflineArchitectureFlags
 import com.example.liftrix.data.local.dao.WorkoutPostDao
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
@@ -46,23 +47,7 @@ class EngagementRealtimeSyncService @Inject constructor(
                 snapshot?.data?.let { data ->
                     scope.launch {
                         try {
-                            val likeCount = (data["likeCount"] as? Long)?.toInt() ?: 0
-                            val commentCount = (data["commentCount"] as? Long)?.toInt() ?: 0
-                            val shareCount = (data["shareCount"] as? Long)?.toInt() ?: 0
-                            val saveCount = (data["saveCount"] as? Long)?.toInt() ?: 0
-                            
-                            // Update local database with real-time engagement counts
-                            postDao.updateEngagementMetrics(
-                                postId = postId,
-                                likeCount = likeCount,
-                                commentCount = commentCount,
-                                shareCount = shareCount,
-                                saveCount = saveCount,
-                                updatedAt = System.currentTimeMillis()
-                            )
-                            
-                            Timber.d("Updated engagement for post $postId: likes=$likeCount, comments=$commentCount")
-                            
+                            updateEngagementFromRemote(postId, data)
                         } catch (e: Exception) {
                             Timber.e(e, "Failed to update engagement metrics for post $postId")
                         }
@@ -80,7 +65,53 @@ class EngagementRealtimeSyncService @Inject constructor(
         }
         Timber.d("Started real-time engagement listening for ${postIds.size} posts")
     }
-    
+
+    /**
+     * IDEMPOTENT: Update engagement metrics from remote Firestore data.
+     * Uses upsertFromRemote to apply only if newer, prevents feedback loops.
+     * Feature-flag gated for rollback support.
+     */
+    private suspend fun updateEngagementFromRemote(postId: String, data: Map<String, Any>) {
+        if (OfflineArchitectureFlags.USE_IDEMPOTENT_LISTENERS) {
+            // NEW: Room-first idempotent pattern
+            val likeCount = (data["likeCount"] as? Long)?.toInt() ?: 0
+            val commentCount = (data["commentCount"] as? Long)?.toInt() ?: 0
+            val shareCount = (data["shareCount"] as? Long)?.toInt() ?: 0
+            val saveCount = (data["saveCount"] as? Long)?.toInt() ?: 0
+            val remoteModified = (data["lastModified"] as? Long) ?: System.currentTimeMillis()
+
+            // IDEMPOTENT: Only applies if remote is newer
+            postDao.upsertEngagementFromRemote(
+                postId = postId,
+                likeCount = likeCount,
+                commentCount = commentCount,
+                shareCount = shareCount,
+                saveCount = saveCount,
+                lastModified = remoteModified
+            )
+            // NO SYNC TRIGGER - already from Firestore
+
+            Timber.d("✅ IDEMPOTENT: Updated engagement for post $postId (Room-first)")
+        } else {
+            // LEGACY: Direct update (feedback loop risk)
+            val likeCount = (data["likeCount"] as? Long)?.toInt() ?: 0
+            val commentCount = (data["commentCount"] as? Long)?.toInt() ?: 0
+            val shareCount = (data["shareCount"] as? Long)?.toInt() ?: 0
+            val saveCount = (data["saveCount"] as? Long)?.toInt() ?: 0
+
+            postDao.updateEngagementMetrics(
+                postId = postId,
+                likeCount = likeCount,
+                commentCount = commentCount,
+                shareCount = shareCount,
+                saveCount = saveCount,
+                updatedAt = System.currentTimeMillis()
+            )
+
+            Timber.w("⚠️ LEGACY: Updated engagement for post $postId (feedback loop risk)")
+        }
+    }
+
     /**
      * Stop listening to real-time updates for a specific post
      */

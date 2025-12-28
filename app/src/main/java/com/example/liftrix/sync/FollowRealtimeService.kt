@@ -1,6 +1,8 @@
 package com.example.liftrix.sync
 
+import com.example.liftrix.config.OfflineArchitectureFlags
 import com.example.liftrix.data.local.dao.SocialProfileDao
+import com.example.liftrix.data.local.entity.SocialProfileEntity
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.CoroutineScope
@@ -46,41 +48,7 @@ class FollowRealtimeService @Inject constructor(
                 snapshot?.data?.let { data ->
                     scope.launch {
                         try {
-                            val followerCount = (data["followerCount"] as? Long)?.toInt() ?: 0
-                            val followingCount = (data["followingCount"] as? Long)?.toInt() ?: 0
-                            val workoutCount = (data["workoutCount"] as? Long)?.toInt() ?: 0
-                            val currentTime = System.currentTimeMillis()
-                            
-                            // Update follower count
-                            socialProfileDao.updateFollowerCount(
-                                userId = userId,
-                                count = followerCount,
-                                updatedAt = currentTime
-                            )
-                            
-                            // Update following count
-                            socialProfileDao.updateFollowingCount(
-                                userId = userId,
-                                count = followingCount,
-                                updatedAt = currentTime
-                            )
-                            
-                            // Update workout count if provided
-                            socialProfileDao.updateWorkoutCount(
-                                userId = userId,
-                                count = workoutCount,
-                                updatedAt = currentTime
-                            )
-                            
-                            // Update last active timestamp
-                            socialProfileDao.updateLastActive(
-                                userId = userId,
-                                lastActive = currentTime,
-                                updatedAt = currentTime
-                            )
-                            
-                            Timber.d("Updated follow counts for user $userId: followers=$followerCount, following=$followingCount")
-                            
+                            updateSocialProfileFromRemote(userId, data)
                         } catch (e: Exception) {
                             Timber.e(e, "Failed to update follow counts for user $userId")
                         }
@@ -98,7 +66,47 @@ class FollowRealtimeService @Inject constructor(
         }
         Timber.d("Started real-time follow count listening for ${userIds.size} profiles")
     }
-    
+
+    /**
+     * IDEMPOTENT: Update social profile from remote Firestore data.
+     * Uses updateStatsFromRemote() for atomic stat updates with timestamp deduplication.
+     * Feature-flag gated for rollback support.
+     */
+    private suspend fun updateSocialProfileFromRemote(userId: String, data: Map<String, Any>) {
+        if (OfflineArchitectureFlags.USE_IDEMPOTENT_LISTENERS) {
+            // NEW: Room-first idempotent pattern with atomic stat update
+            val followerCount = (data["followerCount"] as? Long)?.toInt() ?: 0
+            val followingCount = (data["followingCount"] as? Long)?.toInt() ?: 0
+            val workoutCount = (data["workoutCount"] as? Long)?.toInt() ?: 0
+            val remoteModified = (data["lastModified"] as? Long) ?: System.currentTimeMillis()
+
+            // IDEMPOTENT: Single atomic update with timestamp deduplication + isDirty=false
+            socialProfileDao.updateStatsFromRemote(
+                userId = userId,
+                followerCount = followerCount,
+                followingCount = followingCount,
+                workoutCount = workoutCount,
+                remoteModified = remoteModified
+            )
+            // NO SYNC TRIGGER - already from Firestore
+
+            Timber.d("✅ IDEMPOTENT: Updated social stats for $userId (Room-first)")
+        } else {
+            // LEGACY: Direct update (feedback loop risk)
+            val followerCount = (data["followerCount"] as? Long)?.toInt() ?: 0
+            val followingCount = (data["followingCount"] as? Long)?.toInt() ?: 0
+            val workoutCount = (data["workoutCount"] as? Long)?.toInt() ?: 0
+            val currentTime = System.currentTimeMillis()
+
+            socialProfileDao.updateFollowerCount(userId, followerCount, currentTime)
+            socialProfileDao.updateFollowingCount(userId, followingCount, currentTime)
+            socialProfileDao.updateWorkoutCount(userId, workoutCount, currentTime)
+            socialProfileDao.updateLastActive(userId, currentTime, currentTime)
+
+            Timber.w("⚠️ LEGACY: Updated social profile for $userId (feedback loop risk)")
+        }
+    }
+
     /**
      * Stop listening to real-time updates for a specific user profile
      */

@@ -6,6 +6,7 @@ import androidx.room.MapColumn
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.SupportTicketEntity
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
@@ -225,4 +226,62 @@ interface SupportTicketDao {
      */
     @Query("SELECT status, COUNT(*) as count FROM support_tickets WHERE user_id = :userId GROUP BY status")
     suspend fun getTicketStatistics(userId: String): Map<@MapColumn(columnName = "status") String, @MapColumn(columnName = "count") Int>
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert supportticket from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(supportTicket: SupportTicketEntity) {
+        val entity = supportTicket.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert supportticket from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(supportTicket: SupportTicketEntity) {
+        val local = getSupportTicketForSync(supportTicket.ticketId, supportTicket.userId)
+        if (local == null || supportTicket.lastModified > local.lastModified) {
+            val entity = supportTicket.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis().toInt()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: SupportTicketEntity)
+
+    /**
+     * Get dirty supportticket that need upload to Firestore.
+     */
+    @Query("SELECT * FROM support_tickets WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtySupportTickets(userId: String): List<SupportTicketEntity>
+
+    /**
+     * Mark supportticket as clean after successful Firestore upload.
+     */
+    @Query("UPDATE support_tickets SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE ticket_id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local supportticket for remote deduplication.
+     */
+    @Query("SELECT * FROM support_tickets WHERE ticket_id = :id AND user_id = :userId LIMIT 1")
+    suspend fun getSupportTicketForSync(id: String, userId: String): SupportTicketEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }

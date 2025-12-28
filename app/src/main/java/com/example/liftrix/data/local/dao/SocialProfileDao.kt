@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.SocialProfileEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -329,4 +330,112 @@ interface SocialProfileDao {
     
     @Query("SELECT COUNT(*) FROM social_profiles")
     suspend fun getTotalProfileCount(): Int
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert socialprofile from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(socialProfile: SocialProfileEntity) {
+        val entity = socialProfile.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert socialprofile from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(socialProfile: SocialProfileEntity) {
+        val local = getSocialProfileForSync(socialProfile.userId)
+        if (local == null || socialProfile.lastModified > local.lastModified) {
+            val entity = socialProfile.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis().toInt()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: SocialProfileEntity)
+
+    /**
+     * Get dirty socialprofile that need upload to Firestore.
+     */
+    @Query("SELECT * FROM social_profiles WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtySocialProfiles(userId: String): List<SocialProfileEntity>
+
+    /**
+     * Mark socialprofile as clean after successful Firestore upload.
+     */
+    @Query("UPDATE social_profiles SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE user_id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local socialprofile for remote deduplication.
+     */
+    @Query("SELECT * FROM social_profiles WHERE user_id = :userId LIMIT 1")
+    suspend fun getSocialProfileForSync(userId: String): SocialProfileEntity?
+
+    /**
+     * IDEMPOTENT: Update social stats from REMOTE origin (Firestore listener).
+     * Only applies if remote timestamp is newer, sets isDirty=false (no sync trigger).
+     * Used by FollowRealtimeService for partial stat updates.
+     */
+    @Transaction
+    suspend fun updateStatsFromRemote(
+        userId: String,
+        followerCount: Int,
+        followingCount: Int,
+        workoutCount: Int,
+        remoteModified: Long
+    ) {
+        val local = getSocialProfileForSync(userId)
+
+        // Only apply if remote is newer (or doesn't exist locally)
+        if (local == null || remoteModified > local.lastModified) {
+            _updateStatsInternal(
+                userId = userId,
+                followerCount = followerCount,
+                followingCount = followingCount,
+                workoutCount = workoutCount,
+                lastModified = remoteModified,
+                isDirty = false  // Don't sync back - already from Firestore
+            )
+        }
+    }
+
+    /**
+     * Internal stat update - sets all stats + timestamp + dirty flag atomically.
+     */
+    @Query("""
+        UPDATE social_profiles
+        SET follower_count = :followerCount,
+            following_count = :followingCount,
+            workout_count = :workoutCount,
+            last_modified = :lastModified,
+            is_dirty = :isDirty,
+            updated_at = :lastModified
+        WHERE user_id = :userId
+    """)
+    suspend fun _updateStatsInternal(
+        userId: String,
+        followerCount: Int,
+        followingCount: Int,
+        workoutCount: Int,
+        lastModified: Long,
+        isDirty: Boolean
+    )
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }

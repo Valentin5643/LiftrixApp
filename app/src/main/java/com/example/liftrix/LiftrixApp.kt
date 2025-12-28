@@ -92,13 +92,16 @@ class LiftrixApp : Application(), Configuration.Provider {
     
     override fun onCreate() {
         super.onCreate()
-        
+
         // Set the singleton instance
         INSTANCE = this
-        
+
         // Initialize Timber for logging
         Timber.plant(Timber.DebugTree())
-        
+
+        // SPEC-20241228: Log Room-First Architecture Configuration
+        logOfflineArchitectureMode()
+
         // WorkManager initialization is now handled automatically via Configuration.Provider
         // The workManagerConfiguration property provides HiltWorkerFactory
         Timber.d("WorkManager will be initialized automatically with HiltWorkerFactory")
@@ -216,9 +219,50 @@ class LiftrixApp : Application(), Configuration.Provider {
         val manager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         val processName = manager.runningAppProcesses?.firstOrNull { it.pid == pid }?.processName
         val isMain = processName == packageName
-        
+
         Timber.d("Process check - PID: $pid, Process: $processName, Package: $packageName, IsMain: $isMain")
         return isMain
+    }
+
+    /**
+     * SPEC-20241228: Log Room-First Offline Architecture configuration at app startup.
+     * Provides visibility into which architecture mode is active and why.
+     */
+    private fun logOfflineArchitectureMode() {
+        val flags = com.example.liftrix.config.OfflineArchitectureFlags
+
+        Timber.i("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        Timber.i("🏗️  OFFLINE ARCHITECTURE MODE: ${if (flags.ROOM_FIRST_ENABLED) "ROOM-FIRST" else "LEGACY"}")
+        Timber.i("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+        if (flags.ROOM_FIRST_ENABLED) {
+            Timber.i("✅ Room is single source of truth (Firestore persistence disabled)")
+            Timber.i("✅ Origin-aware writes enabled (upsertLocal/upsertFromRemote)")
+            Timber.i("✅ Dirty flag sync gating enabled (only isDirty=true synced)")
+            Timber.i("✅ Idempotent real-time listeners enabled (no feedback loops)")
+            Timber.i("✅ Repository Firestore bypass eliminated (Room-first writes)")
+        } else {
+            Timber.w("⚠️ LEGACY MODE: Dual authority with Firestore offline persistence")
+            Timber.w("⚠️ Risk: Potential sync conflicts between Room and Firestore caches")
+            Timber.w("⚠️ Risk: Feedback loops from real-time listeners possible")
+        }
+
+        Timber.i("📊 Feature Flags:")
+        Timber.i("   • DISABLE_FIRESTORE_PERSISTENCE = ${flags.DISABLE_FIRESTORE_PERSISTENCE}")
+        Timber.i("   • USE_DIRTY_FLAG_GATING = ${flags.USE_DIRTY_FLAG_GATING}")
+        Timber.i("   • USE_IDEMPOTENT_LISTENERS = ${flags.USE_IDEMPOTENT_LISTENERS}")
+        Timber.i("   • FIX_AUTH_REPOSITORY = ${flags.FIX_AUTH_REPOSITORY}")
+        Timber.i("   • FIX_SEARCH_REPOSITORY = ${flags.FIX_SEARCH_REPOSITORY}")
+        Timber.i("   • FIX_PROFILE_REPOSITORY = ${flags.FIX_PROFILE_REPOSITORY}")
+        Timber.i("   • FIX_CUSTOM_EXERCISE_REPOSITORY = ${flags.FIX_CUSTOM_EXERCISE_REPOSITORY}")
+        Timber.i("   • FIX_BLOCK_REPOSITORY = ${flags.FIX_BLOCK_REPOSITORY}")
+        Timber.i("   • FIX_REPORT_REPOSITORY = ${flags.FIX_REPORT_REPOSITORY}")
+        Timber.i("   • FIX_ACHIEVEMENT_REPOSITORY = ${flags.FIX_ACHIEVEMENT_REPOSITORY}")
+        Timber.i("   • FIX_FOLLOW_REPOSITORY = ${flags.FIX_FOLLOW_REPOSITORY}")
+        Timber.i("   • FIX_PROFILE_SEARCH_REPOSITORY = ${flags.FIX_PROFILE_SEARCH_REPOSITORY}")
+        Timber.i("   • FIX_SOCIAL_REPOSITORY = ${flags.FIX_SOCIAL_REPOSITORY}")
+        Timber.i("   • VERBOSE_SYNC_LOGGING = ${flags.VERBOSE_SYNC_LOGGING}")
+        Timber.i("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     }
     
     

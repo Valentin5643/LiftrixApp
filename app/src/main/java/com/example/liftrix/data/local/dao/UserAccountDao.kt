@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.UserAccountEntity
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDateTime
@@ -139,4 +140,62 @@ interface UserAccountDao {
     
     @Query("SELECT COUNT(*) FROM user_accounts")
     suspend fun getTotalAccountsCount(): Int
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert useraccount from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(userAccount: UserAccountEntity) {
+        val entity = userAccount.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert useraccount from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(userAccount: UserAccountEntity) {
+        val local = getUserAccountForSync(userAccount.userId)
+        if (local == null || userAccount.lastModified > local.lastModified) {
+            val entity = userAccount.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: UserAccountEntity)
+
+    /**
+     * Get dirty useraccount that need upload to Firestore.
+     */
+    @Query("SELECT * FROM user_accounts WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyUserAccounts(userId: String): List<UserAccountEntity>
+
+    /**
+     * Mark useraccount as clean after successful Firestore upload.
+     */
+    @Query("UPDATE user_accounts SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE user_id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local useraccount for remote deduplication.
+     */
+    @Query("SELECT * FROM user_accounts WHERE user_id = :userId LIMIT 1")
+    suspend fun getUserAccountForSync(userId: String): UserAccountEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }

@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.BlockedUserEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -179,4 +180,61 @@ interface BlockedUserDao {
         val reason: String,
         val count: Int
     )
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert blockeduser from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(blockedUser: BlockedUserEntity) {
+        val entity = blockedUser.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert blockeduser from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(blockedUser: BlockedUserEntity) {
+        val local = getBlockedUserForSync(blockedUser.id, blockedUser.userId)
+        if (local == null || blockedUser.lastModified > local.lastModified) {
+            val entity = blockedUser.copy(
+                isDirty = false,
+                isSynced = true
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: BlockedUserEntity)
+
+    /**
+     * Get dirty blockeduser that need upload to Firestore.
+     */
+    @Query("SELECT * FROM blocked_users WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyBlockedUsers(userId: String): List<BlockedUserEntity>
+
+    /**
+     * Mark blockeduser as clean after successful Firestore upload.
+     */
+    @Query("UPDATE blocked_users SET is_dirty = 0, is_synced = 1 WHERE id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String): Int
+
+    /**
+     * Get local blockeduser for remote deduplication.
+     */
+    @Query("SELECT * FROM blocked_users WHERE id = :id AND user_id = :userId LIMIT 1")
+    suspend fun getBlockedUserForSync(id: String, userId: String): BlockedUserEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }

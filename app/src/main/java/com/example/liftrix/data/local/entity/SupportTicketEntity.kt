@@ -53,7 +53,13 @@ data class SupportTicketEntity(
     val isSynced: Boolean = false,
     
     @ColumnInfo(name = "sync_version")
-    val syncVersion: Int = 1
+    val syncVersion: Int = 1,
+    
+    @ColumnInfo(name = "is_dirty", defaultValue = "0")
+    val isDirty: Boolean = false,
+    
+    @ColumnInfo(name = "last_modified", defaultValue = "0")
+    val lastModified: Long = 0L
 ) {
     companion object {
         /**

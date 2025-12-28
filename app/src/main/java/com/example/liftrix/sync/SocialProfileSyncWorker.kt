@@ -14,6 +14,7 @@ import com.example.liftrix.data.local.dao.SocialProfileDao
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.FieldValue
+import com.example.liftrix.config.OfflineArchitectureFlags
 import androidx.hilt.work.HiltWorker
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -74,6 +75,8 @@ class SocialProfileSyncWorker @AssistedInject constructor(
             )
             
             val forceSync = inputData.getBoolean("forceSync", false)
+            val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
+                OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
             
             Timber.i("[SOCIAL-SYNC] 🔄 Starting social profile sync for user: $userId")
             Timber.d("[SOCIAL-SYNC]   - Force sync: $forceSync")
@@ -91,7 +94,19 @@ class SocialProfileSyncWorker @AssistedInject constructor(
                     Timber.e("[SOCIAL-SYNC]   - Check CreateSocialProfileUseCase execution")
                 }
             
-            if (profile.isSynced && !forceSync) {
+            if (useDirtyFlagGating && !profile.isDirty) {
+                Timber.d("[SOCIAL-SYNC] ✅ Profile not dirty for user $userId, skipping (dirty gating enabled)")
+                if (forceSync) {
+                    Timber.d("[SOCIAL-SYNC]   - Force sync requested but ignored due to dirty gating")
+                }
+                return@withContext Result.success(
+                    Data.Builder()
+                        .putInt(KEY_SYNC_COUNT, 0)
+                        .build()
+                )
+            }
+
+            if (!useDirtyFlagGating && profile.isSynced && !forceSync) {
                 Timber.d("[SOCIAL-SYNC] ✅ Profile already synced for user $userId, skipping")
                 Timber.d("[SOCIAL-SYNC]   - User should already be discoverable in search")
                 return@withContext Result.success(
@@ -119,6 +134,52 @@ class SocialProfileSyncWorker @AssistedInject constructor(
             val docRef = firestore
                 .collection("social_profiles")
                 .document(userId)
+
+            val remoteDoc = docRef.get().await()
+            if (remoteDoc.exists()) {
+                val remoteLastModified = when (val remoteValue = remoteDoc.get("lastModified")) {
+                    is com.google.firebase.Timestamp -> remoteValue.toDate().time
+                    is Number -> remoteValue.toLong()
+                    else -> 0L
+                }
+                if (remoteLastModified > profile.lastModified) {
+                    val remoteEntity = profile.copy(
+                        username = remoteDoc.getString("username") ?: profile.username,
+                        displayName = remoteDoc.getString("displayName") ?: profile.displayName,
+                        bio = remoteDoc.getString("bio") ?: profile.bio,
+                        profilePhotoUrl = remoteDoc.getString("profilePhotoUrl") ?: profile.profilePhotoUrl,
+                        coverPhotoUrl = remoteDoc.getString("coverPhotoUrl") ?: profile.coverPhotoUrl,
+                        workoutCount = remoteDoc.getLong("workoutCount")?.toInt() ?: profile.workoutCount,
+                        followerCount = remoteDoc.getLong("followerCount")?.toInt() ?: profile.followerCount,
+                        followingCount = remoteDoc.getLong("followingCount")?.toInt() ?: profile.followingCount,
+                        memberSince = remoteDoc.getLong("memberSince") ?: profile.memberSince,
+                        lastActive = remoteDoc.getTimestamp("lastActive")?.toDate()?.time ?: profile.lastActive,
+                        isVerified = remoteDoc.getBoolean("isVerified") ?: profile.isVerified,
+                        isPrivate = remoteDoc.getBoolean("isPrivate") ?: profile.isPrivate,
+                        hideFromSuggestions = remoteDoc.getBoolean("hideFromSuggestions")
+                            ?: profile.hideFromSuggestions,
+                        allowFriendRequests = remoteDoc.getBoolean("allowFriendRequests")
+                            ?: profile.allowFriendRequests,
+                        instagramHandle = remoteDoc.getString("instagramHandle") ?: profile.instagramHandle,
+                        youtubeChannel = remoteDoc.getString("youtubeChannel") ?: profile.youtubeChannel,
+                        personalWebsite = remoteDoc.getString("personalWebsite") ?: profile.personalWebsite,
+                        isDirty = false,
+                        isSynced = true,
+                        syncVersion = (remoteDoc.getLong("syncVersion")
+                            ?: profile.syncVersion.toLong()).toInt(),
+                        lastModified = remoteLastModified,
+                        createdAt = remoteDoc.getLong("createdAt") ?: profile.createdAt,
+                        updatedAt = remoteDoc.getTimestamp("updatedAt")?.toDate()?.time ?: profile.updatedAt
+                    )
+                    socialProfileDao.upsertFromRemote(remoteEntity)
+                    Timber.d("[SOCIAL-SYNC] ✅ Remote profile newer; local updated and upload skipped")
+                    return@withContext Result.success(
+                        Data.Builder()
+                            .putInt(KEY_SYNC_COUNT, 0)
+                            .build()
+                    )
+                }
+            }
             
             // Complete social profile data as per specification
             val profileData = mapOf(
@@ -142,6 +203,7 @@ class SocialProfileSyncWorker @AssistedInject constructor(
                 "personalWebsite" to profile.personalWebsite,
                 "createdAt" to profile.createdAt,  // Critical for discovery ordering
                 "syncVersion" to System.currentTimeMillis(),
+                "lastModified" to profile.lastModified,
                 "updatedAt" to FieldValue.serverTimestamp()
             )
             
@@ -152,10 +214,10 @@ class SocialProfileSyncWorker @AssistedInject constructor(
             
             // Mark as synced in local database
             Timber.d("[SOCIAL-SYNC] 📋 Updating local sync status for user: $userId")
-            socialProfileDao.updateSyncStatus(
+            socialProfileDao.markAsClean(
+                ids = listOf(userId),
                 userId = userId,
-                isSynced = true,
-                version = System.currentTimeMillis().toInt()
+                syncVersion = System.currentTimeMillis()
             )
             Timber.d("[SOCIAL-SYNC] ✅ Local sync status updated")
             

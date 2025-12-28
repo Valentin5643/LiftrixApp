@@ -10,11 +10,13 @@ import androidx.work.NetworkType
 import androidx.work.BackoffPolicy
 import androidx.work.workDataOf
 import com.example.liftrix.data.local.dao.AchievementDao
+import com.example.liftrix.data.local.entity.UserAchievementEntity
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.auth.FirebaseAuth
+import com.example.liftrix.config.OfflineArchitectureFlags
 import androidx.hilt.work.HiltWorker
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -146,27 +148,38 @@ class AchievementSyncWorker @AssistedInject constructor(
             }
             
             Timber.d("$workerName: Auth validation passed for user $userId")
-            val unsyncedAchievements = achievementDao.getUnsyncedAchievements(userId)
+            val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
+                OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
+            val achievementsToProcess = if (useDirtyFlagGating) {
+                achievementDao.getDirtyUserAchievements(userId)
+            } else {
+                achievementDao.getUnsyncedAchievements(userId)
+            }
             
-            if (unsyncedAchievements.isEmpty()) {
+            if (achievementsToProcess.isEmpty()) {
                 Timber.d("No unsynced achievements found for user $userId")
                 return@withContext Result.success()
             }
 
-            Timber.d("Found ${unsyncedAchievements.size} unsynced achievements for user $userId")
+            Timber.d("Found ${achievementsToProcess.size} achievements to sync for user $userId (dirty gating: $useDirtyFlagGating)")
             
             // Process achievements in batches for efficiency
-            val batches = unsyncedAchievements.chunked(BATCH_SIZE)
+            val batches = achievementsToProcess.chunked(BATCH_SIZE)
             var successCount = 0
             var failureCount = 0
             var deduplicatedCount = 0
 
             batches.forEach { batch ->
                 val firestoreBatch = firestore.batch()
-                val achievementsToSync = mutableListOf<String>() // Track achievement IDs to mark as synced
+                val achievementsToMarkClean = mutableListOf<String>() // Track achievement IDs to mark as clean
+                var batchHasWrites = false
                 
                 batch.forEach { achievement ->
                     try {
+                        if (useDirtyFlagGating && !achievement.isDirty) {
+                            return@forEach
+                        }
+
                         val collectionRef = firestore
                             .collection("users")
                             .document(userId)
@@ -193,15 +206,47 @@ class AchievementSyncWorker @AssistedInject constructor(
                                 "unlockedAt" to achievement.unlockedAt.atZone(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(),
                                 "isDisplayed" to achievement.isDisplayed,
                                 "syncVersion" to System.currentTimeMillis(),
+                                "lastModified" to achievement.lastModified,
                                 "createdAt" to FieldValue.serverTimestamp()
                             )
                             
                             firestoreBatch.set(docRef, achievementData)
-                            achievementsToSync.add(achievement.id)
+                            batchHasWrites = true
+                            achievementsToMarkClean.add(achievement.id)
                             
                         } else {
                             // Duplicate found, check which unlock time is earlier
                             val existingDoc = existingDocs.documents.first()
+                            val remoteLastModified = when (val remoteValue = existingDoc.get("lastModified")) {
+                                is com.google.firebase.Timestamp -> remoteValue.toDate().time
+                                is Number -> remoteValue.toLong()
+                                else -> 0L
+                            }
+
+                            if (existingDoc.id == achievement.id &&
+                                remoteLastModified > achievement.lastModified
+                            ) {
+                                val currentTime = System.currentTimeMillis()
+                                val remoteEntity = UserAchievementEntity(
+                                    id = existingDoc.id,
+                                    userId = userId,
+                                    achievementType = existingDoc.getString("type") ?: achievement.achievementType,
+                                    achievementTitle = existingDoc.getString("title") ?: achievement.achievementTitle,
+                                    achievementDescription = existingDoc.getString("description")
+                                        ?: achievement.achievementDescription,
+                                    unlockedAt = achievement.unlockedAt,
+                                    isDisplayed = existingDoc.getBoolean("isDisplayed") ?: achievement.isDisplayed,
+                                    createdAt = achievement.createdAt,
+                                    updatedAt = achievement.updatedAt,
+                                    isSynced = true,
+                                    syncVersion = existingDoc.getLong("syncVersion") ?: achievement.syncVersion,
+                                    isDirty = false,
+                                    lastModified = remoteLastModified
+                                )
+                                achievementDao.upsertFromRemote(remoteEntity)
+                                return@forEach
+                            }
+
                             val existingUnlockedAt = existingDoc.getLong("unlockedAt") ?: Long.MAX_VALUE
                             val localUnlockedAtMillis = achievement.unlockedAt.atZone(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
                             
@@ -214,12 +259,13 @@ class AchievementSyncWorker @AssistedInject constructor(
                                 )
                                 
                                 firestoreBatch.update(existingDoc.reference, achievementData)
+                                batchHasWrites = true
                                 Timber.d("Updated remote achievement ${achievement.id} with earlier unlock time")
                             } else {
                                 Timber.d("Remote achievement ${achievement.achievementTitle} has earlier or same unlock time, keeping remote version")
                             }
                             
-                            achievementsToSync.add(achievement.id)
+                            achievementsToMarkClean.add(achievement.id)
                             deduplicatedCount++
                         }
                         
@@ -230,17 +276,21 @@ class AchievementSyncWorker @AssistedInject constructor(
                 }
                 
                 try {
-                    if (achievementsToSync.isNotEmpty()) {
+                    if (batchHasWrites) {
                         firestoreBatch.commit().await()
+                    }
                         
                         // Mark achievements as synced
-                        achievementsToSync.forEach { achievementId ->
-                            achievementDao.markAsSynced(achievementId, System.currentTimeMillis())
+                        if (achievementsToMarkClean.isNotEmpty()) {
+                            achievementDao.markAsClean(
+                                ids = achievementsToMarkClean,
+                                userId = userId,
+                                syncVersion = System.currentTimeMillis()
+                            )
                         }
                         
-                        successCount += achievementsToSync.size
-                        Timber.d("Successfully synced batch of ${achievementsToSync.size} achievements")
-                    }
+                        successCount += achievementsToMarkClean.size
+                        Timber.d("Successfully synced batch of ${achievementsToMarkClean.size} achievements")
                     
                 } catch (e: FirebaseFirestoreException) {
                     when (e.code) {
@@ -256,13 +306,13 @@ class AchievementSyncWorker @AssistedInject constructor(
                             throw e
                         }
                         else -> {
-                            Timber.e(e, "$workerName: Batch sync failed for ${achievementsToSync.size} achievements")
-                            failureCount += achievementsToSync.size
+                            Timber.e(e, "$workerName: Batch sync failed for ${achievementsToMarkClean.size} achievements")
+                            failureCount += achievementsToMarkClean.size
                         }
                     }
                 } catch (e: Exception) {
-                    Timber.e(e, "$workerName: Batch sync failed for ${achievementsToSync.size} achievements")
-                    failureCount += achievementsToSync.size
+                    Timber.e(e, "$workerName: Batch sync failed for ${achievementsToMarkClean.size} achievements")
+                    failureCount += achievementsToMarkClean.size
                 }
             }
             

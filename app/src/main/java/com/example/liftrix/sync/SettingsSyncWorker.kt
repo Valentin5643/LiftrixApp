@@ -14,6 +14,7 @@ import com.example.liftrix.domain.service.SettingsValidator
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import com.example.liftrix.config.OfflineArchitectureFlags
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.tasks.await
@@ -66,6 +67,8 @@ class SettingsSyncWorker @AssistedInject constructor(
             }
 
             Timber.d("Starting enhanced settings sync with persistence validation for user: $targetUserId")
+            val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
+                OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
 
             // Validate settings integrity before sync
             val integrityValid = settingsPersistenceManager.validateSettingsIntegrity(targetUserId).fold(
@@ -82,7 +85,7 @@ class SettingsSyncWorker @AssistedInject constructor(
             }
 
             // Perform bidirectional sync with enhanced conflict resolution
-            val syncResult = performEnhancedBidirectionalSync(targetUserId)
+            val syncResult = performEnhancedBidirectionalSync(targetUserId, useDirtyFlagGating)
             
             when (syncResult) {
                 is SyncResult.Success -> {
@@ -132,7 +135,14 @@ class SettingsSyncWorker @AssistedInject constructor(
     /**
      * Performs enhanced bidirectional sync between local and Firebase with conflict resolution.
      */
-    private suspend fun performEnhancedBidirectionalSync(userId: String): SyncResult {
+    private suspend fun performEnhancedBidirectionalSync(
+        userId: String,
+        useDirtyFlagGating: Boolean
+    ): SyncResult {
+        if (useDirtyFlagGating) {
+            return performDirtyFlagSync(userId)
+        }
+
         return try {
             // Get local settings
             val localEntity = settingsDao.getUserSettingsSync(userId)
@@ -203,6 +213,50 @@ class SettingsSyncWorker @AssistedInject constructor(
     }
 
     /**
+     * Performs Room-first dirty-flag sync for settings.
+     */
+    private suspend fun performDirtyFlagSync(userId: String): SyncResult {
+        return try {
+            // Remote -> local
+            val remoteSettings = syncSettingsFromFirebase(userId)
+            val remoteLastModified = remoteSettings?.updatedAt?.toEpochMilli() ?: 0L
+            if (remoteSettings != null) {
+                val remoteEntity = settingsMapper.toEntity(remoteSettings).copy(
+                    isDirty = false,
+                    isSynced = true,
+                    syncVersion = System.currentTimeMillis().toInt(),
+                    lastModified = remoteLastModified
+                )
+                settingsDao.upsertFromRemote(remoteEntity)
+            }
+
+            // Local -> remote (dirty only)
+            val dirtySettings = settingsDao.getDirtySettings(userId)
+            if (dirtySettings.isEmpty()) {
+                return SyncResult.NoChanges
+            }
+
+            dirtySettings.forEach { entity ->
+                if (remoteLastModified > entity.lastModified) {
+                    return@forEach
+                }
+
+                val settings = settingsMapper.toDomain(entity)
+                syncEnhancedSettingsToFirebase(userId, settings)
+                settingsDao.markAsClean(
+                    ids = listOf(userId),
+                    userId = userId,
+                    syncVersion = System.currentTimeMillis()
+                )
+            }
+
+            SyncResult.Success
+        } catch (e: Exception) {
+            SyncResult.Error(e)
+        }
+    }
+
+    /**
      * Syncs local settings to Firebase Firestore (legacy method).
      */
     private suspend fun syncSettingsToFirebase(userId: String, settings: UserSettings) {
@@ -211,6 +265,7 @@ class SettingsSyncWorker @AssistedInject constructor(
             "darkMode" to settings.darkMode,
             "notificationsEnabled" to settings.notificationsEnabled,
             "updatedAt" to settings.updatedAt.toEpochMilli(),
+            "lastModified" to settings.updatedAt.toEpochMilli(),
             "syncedAt" to System.currentTimeMillis()
         )
 
@@ -235,6 +290,7 @@ class SettingsSyncWorker @AssistedInject constructor(
             "notificationsEnabled" to settings.notificationsEnabled,
             "weightUnit" to settings.weightUnit.name, // Now includes weight unit
             "updatedAt" to settings.updatedAt.toEpochMilli(),
+            "lastModified" to settings.updatedAt.toEpochMilli(),
             "syncedAt" to System.currentTimeMillis(),
             "syncVersion" to 2 // Version 2 indicates enhanced sync format
         )

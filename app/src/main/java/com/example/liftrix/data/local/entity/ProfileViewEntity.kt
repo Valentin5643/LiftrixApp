@@ -71,6 +71,12 @@ data class ProfileViewEntity(
     @ColumnInfo(name = "sync_version", defaultValue = "0")
     val syncVersion: Int = 0,
 
+    @ColumnInfo(name = "is_dirty", defaultValue = "0")
+    val isDirty: Boolean = false,
+    
+    @ColumnInfo(name = "last_modified", defaultValue = "0")
+    val lastModified: Long = 0L,
+    
     @ColumnInfo(name = "created_at")
     val createdAt: Long
 ) {

@@ -53,8 +53,10 @@ class RemoteConfigManager @Inject constructor(
         // Legal document keys
         const val PRIVACY_POLICY_URL = "privacy_policy_url"
         const val TERMS_OF_SERVICE_URL = "terms_of_service_url"
+        const val COMMUNITY_GUIDELINES_URL = "community_guidelines_url"
         const val PRIVACY_POLICY_VERSION = "privacy_policy_version"
         const val TERMS_VERSION = "terms_version"
+        const val COMMUNITY_GUIDELINES_VERSION = "community_guidelines_version"
         
         // App configuration keys
         const val HELP_SEARCH_ENABLED = "help_search_enabled"
@@ -91,8 +93,10 @@ class RemoteConfigManager @Inject constructor(
             SUPPORT_FAQ_JSON to "[]",
             PRIVACY_POLICY_VERSION to "1.0",
             TERMS_VERSION to "1.0",
+            COMMUNITY_GUIDELINES_VERSION to "1.0",
             PRIVACY_POLICY_URL to "",
             TERMS_OF_SERVICE_URL to "",
+            COMMUNITY_GUIDELINES_URL to "",
             
             // AI Chat defaults
             AI_CHAT_ENABLED to true,
@@ -332,7 +336,12 @@ class RemoteConfigManager @Inject constructor(
      * Gets terms of service URL from Remote Config
      */
     suspend fun getTermsOfServiceUrl(): LiftrixResult<String> = getString(TERMS_OF_SERVICE_URL)
-    
+
+    /**
+     * Gets community guidelines URL from Remote Config
+     */
+    suspend fun getCommunityGuidelinesUrl(): LiftrixResult<String> = getString(COMMUNITY_GUIDELINES_URL)
+
     /**
      * Gets privacy policy version from Remote Config
      */
@@ -342,7 +351,12 @@ class RemoteConfigManager @Inject constructor(
      * Gets terms version from Remote Config
      */
     suspend fun getTermsVersion(): LiftrixResult<String> = getString(TERMS_VERSION)
-    
+
+    /**
+     * Gets community guidelines version from Remote Config
+     */
+    suspend fun getCommunityGuidelinesVersion(): LiftrixResult<String> = getString(COMMUNITY_GUIDELINES_VERSION)
+
     /**
      * Checks if help search is enabled
      */

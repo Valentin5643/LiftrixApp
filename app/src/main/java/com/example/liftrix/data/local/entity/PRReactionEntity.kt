@@ -67,6 +67,9 @@ data class PRReactionEntity(
     @ColumnInfo(name = "sync_version")
     override val syncVersion: Long = 0,
     
+    @ColumnInfo(name = "is_dirty", defaultValue = "0")
+    val isDirty: Boolean = false,
+    
     @ColumnInfo(name = "last_modified")
     override val lastModified: Long = System.currentTimeMillis()
 ) : SyncableEntity

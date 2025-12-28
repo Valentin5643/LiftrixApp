@@ -92,6 +92,7 @@ import com.example.liftrix.ui.support.SupportTicketScreen
 import com.example.liftrix.ui.settings.about.AboutScreen
 import com.example.liftrix.ui.settings.legal.PrivacyPolicyScreen
 import com.example.liftrix.ui.settings.legal.TermsOfServiceScreen
+import com.example.liftrix.ui.settings.CommunityGuidelinesScreen
 import com.example.liftrix.ui.chat.ChatbotScreen
 import com.example.liftrix.ui.chat.settings.AIChatSettingsScreen
 import com.example.liftrix.ui.social.SocialViewModel
@@ -545,6 +546,9 @@ fun UnifiedNavigationContainer(
                         onNavigateToTermsOfService = {
                             navController.navigate(LiftrixRoute.TermsOfService)
                         },
+                        onNavigateToCommunityGuidelines = {
+                            navController.navigate(LiftrixRoute.CommunityGuidelines)
+                        },
                         onNavigateToDataPortability = {
                             navController.navigate(LiftrixRoute.DataPortability)
                         },
@@ -739,7 +743,15 @@ fun UnifiedNavigationContainer(
                         }
                     )
                 }
-                
+
+                composable<LiftrixRoute.CommunityGuidelines> {
+                    CommunityGuidelinesScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+
                 composable<LiftrixRoute.DataPortability> {
                     com.example.liftrix.ui.settings.data.DataPortabilityScreen(
                         onNavigateBack = {

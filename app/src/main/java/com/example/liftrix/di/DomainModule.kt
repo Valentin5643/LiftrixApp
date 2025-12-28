@@ -580,12 +580,6 @@ abstract class DomainModule {
 
     @dagger.Binds
     @javax.inject.Singleton
-    abstract fun bindLocationService(
-        impl: com.example.liftrix.service.LocationServiceImpl
-    ): com.example.liftrix.domain.service.LocationService
-
-    @dagger.Binds
-    @javax.inject.Singleton
     abstract fun bindAdminFirebaseService(
         impl: com.example.liftrix.data.service.AdminFirebaseServiceImpl
     ): com.example.liftrix.domain.service.AdminFirebaseService

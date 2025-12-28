@@ -15,6 +15,7 @@ import com.example.liftrix.data.local.dao.GymBuddyDao
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.WriteBatch
+import com.example.liftrix.config.OfflineArchitectureFlags
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
@@ -76,7 +77,13 @@ class GymBuddySyncWorker @AssistedInject constructor(
             
             val forceSync = inputData.getBoolean("forceSync", false)
 
-            val unsyncedBuddies = gymBuddyDao.getUnsyncedGymBuddies(userId)
+            val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
+                OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
+            val unsyncedBuddies = if (useDirtyFlagGating) {
+                gymBuddyDao.getDirtyGymBuddies(userId)
+            } else {
+                gymBuddyDao.getUnsyncedGymBuddies(userId)
+            }
             
             if (unsyncedBuddies.isEmpty() && !forceSync) {
                 Timber.d("No unsynced gym buddies found for user $userId")
@@ -126,10 +133,52 @@ class GymBuddySyncWorker @AssistedInject constructor(
         buddies: List<com.example.liftrix.data.local.entity.GymBuddyEntity>,
         userId: String
     ): Int {
+        val buddiesToUpload = mutableListOf<com.example.liftrix.data.local.entity.GymBuddyEntity>()
+
+        for (buddy in buddies) {
+            val userBuddyRef = firestore
+                .collection("users")
+                .document(userId)
+                .collection("gym_buddies")
+                .document(buddy.buddyId)
+
+            val remoteDoc = userBuddyRef.get().await()
+            if (remoteDoc.exists()) {
+                val remoteLastModified = when (val remoteValue = remoteDoc.get("lastModified")) {
+                    is com.google.firebase.Timestamp -> remoteValue.toDate().time
+                    is Number -> remoteValue.toLong()
+                    else -> 0L
+                }
+                if (remoteLastModified > buddy.lastModified) {
+                    val remoteEntity = buddy.copy(
+                        buddyNickname = remoteDoc.getString("nickname") ?: buddy.buddyNickname,
+                        pairedViaQr = remoteDoc.getBoolean("pairedViaQr") ?: buddy.pairedViaQr,
+                        pairingLocation = remoteDoc.getString("pairingLocation") ?: buddy.pairingLocation,
+                        createdAt = remoteDoc.getLong("createdAt") ?: buddy.createdAt,
+                        lastPrNotificationSent = remoteDoc.getLong("lastPrNotificationSent") ?: buddy.lastPrNotificationSent,
+                        notificationCooldownHours = remoteDoc.getLong("notificationCooldownHours")?.toInt()
+                            ?: buddy.notificationCooldownHours,
+                        isDirty = false,
+                        isSynced = true,
+                        syncVersion = (remoteDoc.getLong("syncVersion") ?: buddy.syncVersion.toLong()).toInt(),
+                        lastModified = remoteLastModified
+                    )
+                    gymBuddyDao.upsertFromRemote(remoteEntity)
+                    continue
+                }
+            }
+
+            buddiesToUpload.add(buddy)
+        }
+
+        if (buddiesToUpload.isEmpty()) {
+            return 0
+        }
+
         val batch: WriteBatch = firestore.batch()
         val timestamp = System.currentTimeMillis()
         
-        buddies.forEach { buddy ->
+        buddiesToUpload.forEach { buddy ->
             // Create bidirectional relationship as per specification
             val userBuddyRef = firestore
                 .collection("users")
@@ -152,6 +201,7 @@ class GymBuddySyncWorker @AssistedInject constructor(
                 "prNotificationsEnabled" to true, // Default to enabled
                 "createdAt" to buddy.createdAt,
                 "syncVersion" to timestamp,
+                "lastModified" to buddy.lastModified,
                 "updatedAt" to FieldValue.serverTimestamp()
             )
             
@@ -163,6 +213,7 @@ class GymBuddySyncWorker @AssistedInject constructor(
                 "prNotificationsEnabled" to true, // Default to enabled
                 "createdAt" to buddy.createdAt,
                 "syncVersion" to timestamp,
+                "lastModified" to buddy.lastModified,
                 "updatedAt" to FieldValue.serverTimestamp()
             )
             
@@ -174,14 +225,12 @@ class GymBuddySyncWorker @AssistedInject constructor(
         batch.commit().await()
         
         // Mark buddies as synced in local database
-        buddies.forEach { buddy ->
-            gymBuddyDao.updateSyncStatus(
-                gymBuddyId = buddy.id,
-                isSynced = true,
-                version = timestamp.toInt()
-            )
-        }
+        gymBuddyDao.markAsClean(
+            ids = buddiesToUpload.map { it.id },
+            userId = userId,
+            syncVersion = timestamp
+        )
         
-        return buddies.size
+        return buddiesToUpload.size
     }
 }

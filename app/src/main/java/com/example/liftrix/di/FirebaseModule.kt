@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.liftrix.analytics.CognitiveLoadMeasurement
 import com.example.liftrix.analytics.TaskCompletionTracker
 import com.example.liftrix.analytics.UxMetricsTracker
+import com.example.liftrix.config.OfflineArchitectureFlags
 import com.example.liftrix.core.analytics.ArchitectureAnalytics
 import com.example.liftrix.core.time.SystemTimeProvider
 import com.example.liftrix.core.time.TimeProvider
@@ -119,14 +120,28 @@ abstract class FirebaseModule {
         @Singleton
         fun provideFirebaseFirestore(): FirebaseFirestore {
             return FirebaseFirestore.getInstance().apply {
-                // Configure Firestore with proper settings
+                // SPEC-20241228: Room-First Architecture - Conditional Firestore Persistence
+                val persistenceEnabled = !OfflineArchitectureFlags.DISABLE_FIRESTORE_PERSISTENCE
+
                 firestoreSettings = com.google.firebase.firestore.FirebaseFirestoreSettings.Builder()
-                    .setPersistenceEnabled(true) // Enable offline persistence
-                    .setCacheSizeBytes(com.google.firebase.firestore.FirebaseFirestoreSettings.CACHE_SIZE_UNLIMITED)
+                    .setPersistenceEnabled(persistenceEnabled)
+                    .apply {
+                        // Only set cache size if persistence is enabled
+                        if (persistenceEnabled) {
+                            setCacheSizeBytes(com.google.firebase.firestore.FirebaseFirestoreSettings.CACHE_SIZE_UNLIMITED)
+                        }
+                    }
                     .build()
 
-                // Log Firestore initialization
-                Timber.d("FirebaseFirestore initialized with offline persistence enabled")
+                // Log configuration
+                if (OfflineArchitectureFlags.DISABLE_FIRESTORE_PERSISTENCE) {
+                    Timber.i("✅ ROOM-FIRST MODE: Firestore offline persistence DISABLED (Room is authority)")
+                    if (OfflineArchitectureFlags.VERBOSE_SYNC_LOGGING) {
+                        Timber.d(OfflineArchitectureFlags.getConfigSummary())
+                    }
+                } else {
+                    Timber.w("⚠️ LEGACY MODE: Firestore offline persistence ENABLED (dual authority)")
+                }
             }
         }
 

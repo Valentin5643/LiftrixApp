@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.ChatHistoryEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -178,4 +179,62 @@ interface ChatHistoryDao {
      */
     @Query("SELECT SUM(token_count) FROM chat_history WHERE user_id = :userId")
     suspend fun getTotalTokenUsage(userId: String): Int?
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert chathistory from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(chatHistory: ChatHistoryEntity) {
+        val entity = chatHistory.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert chathistory from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(chatHistory: ChatHistoryEntity) {
+        val local = getChatHistoryForSync(chatHistory.id, chatHistory.userId)
+        if (local == null || chatHistory.lastModified > local.lastModified) {
+            val entity = chatHistory.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis().toInt()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: ChatHistoryEntity)
+
+    /**
+     * Get dirty chathistory that need upload to Firestore.
+     */
+    @Query("SELECT * FROM chat_history WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyChatHistories(userId: String): List<ChatHistoryEntity>
+
+    /**
+     * Mark chathistory as clean after successful Firestore upload.
+     */
+    @Query("UPDATE chat_history SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local chathistory for remote deduplication.
+     */
+    @Query("SELECT * FROM chat_history WHERE id = :id AND user_id = :userId LIMIT 1")
+    suspend fun getChatHistoryForSync(id: String, userId: String): ChatHistoryEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }

@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.SubscriptionEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -82,4 +83,62 @@ interface SubscriptionDao {
         )
     """)
     suspend fun hasActivePremiumSubscription(userId: String, currentTime: Long): Boolean
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert subscription from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(subscription: SubscriptionEntity) {
+        val entity = subscription.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert subscription from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(subscription: SubscriptionEntity) {
+        val local = getSubscriptionForSync(subscription.userId)
+        if (local == null || subscription.lastModified > local.lastModified) {
+            val entity = subscription.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: SubscriptionEntity)
+
+    /**
+     * Get dirty subscription that need upload to Firestore.
+     */
+    @Query("SELECT * FROM user_subscriptions WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtySubscriptions(userId: String): List<SubscriptionEntity>
+
+    /**
+     * Mark subscription as clean after successful Firestore upload.
+     */
+    @Query("UPDATE user_subscriptions SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE user_id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local subscription for remote deduplication.
+     */
+    @Query("SELECT * FROM user_subscriptions WHERE user_id = :userId LIMIT 1")
+    suspend fun getSubscriptionForSync(userId: String): SubscriptionEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }

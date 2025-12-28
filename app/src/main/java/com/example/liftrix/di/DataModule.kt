@@ -105,6 +105,7 @@ abstract class DataModule {
                 .setTransactionExecutor(Dispatchers.IO.asExecutor())
                 .setQueryExecutor(Dispatchers.IO.asExecutor())
                 .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING) // WAL mode for better data persistence
+                .fallbackToDestructiveMigrationFrom(3) // TEMPORARY: One-time reset for schema hash mismatch during testing
                 .fallbackToDestructiveMigration() // Allow destructive migration for development
                 // 🛡️ DATABASE LIFECYCLE: Add callback for database lifecycle events
                 .addCallback(object : RoomDatabase.Callback() {
@@ -474,89 +475,5 @@ abstract class DataModule {
             return com.example.liftrix.data.service.KotlinxWorkoutSerializationService(jsonValidator, performanceMonitor, cacheManager)
         }
 
-        // ========================================
-        // CACHE INFRASTRUCTURE
-        // ========================================
-
-        /**
-         * Provides CacheManager singleton for service-layer caching.
-         *
-         * Configures cache with 200 entries max and 15-minute default TTL
-         * for optimal performance in analytics data caching scenarios.
-         */
-        @Provides
-        @Singleton
-        fun provideCacheManager(): com.example.liftrix.core.cache.CacheManager = com.example.liftrix.core.cache.CacheManager(
-            maxSize = 200,
-            defaultTtl = 15.minutes
-        )
-
-        /**
-         * Provides CacheConfiguration for enhanced cache system.
-         *
-         * Configures enhanced cache with appropriate memory and disk limits,
-         * TTL settings, and cleanup intervals for optimal performance.
-         */
-        @Provides
-        @Singleton
-        fun provideCacheConfiguration(): com.example.liftrix.core.cache.CacheConfiguration = com.example.liftrix.core.cache.CacheConfiguration(
-            memoryCacheSizeMB = 50,
-            diskCacheSizeMB = 200,
-            defaultTTL = 15.minutes
-        )
-
-        /**
-         * Provides CacheKeyGenerator singleton for intelligent cache key generation.
-         *
-         * The CacheKeyGenerator provides structured, collision-resistant cache keys
-         * with proper scoping and pattern-based invalidation support.
-         */
-        @Provides
-        @Singleton
-        fun provideCacheKeyGenerator(): com.example.liftrix.core.cache.CacheKeyGenerator = com.example.liftrix.core.cache.CacheKeyGenerator
-
-        // ========================================
-        // COROUTINE DISPATCHERS
-        // ========================================
-
-        /**
-         * Provides Default dispatcher for CPU-intensive operations.
-         *
-         * Used for computational tasks like analytics calculations, data processing,
-         * and other CPU-bound operations that should not block the main thread.
-         */
-        @Provides
-        @DefaultDispatcher
-        fun provideDefaultDispatcher(): kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.Default
-
-        /**
-         * Provides IO dispatcher for I/O operations.
-         *
-         * Used for database operations, network requests, file operations,
-         * and other I/O-bound operations that should not block the main thread.
-         */
-        @Provides
-        @IoDispatcher
-        fun provideIoDispatcher(): kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
     }
-
-    // ========================================
-    // ERROR HANDLING (Abstract binding)
-    // ========================================
-
-    /**
-     * Binds ErrorHandler interface to its implementation.
-     *
-     * Provides singleton ErrorHandler instance for centralized error processing
-     * throughout the application. The ErrorHandlerImpl integrates with:
-     * - AnalyticsService for error reporting to Firebase Crashlytics
-     * - Timber for structured error logging
-     * - ErrorMapper for user-friendly error messages
-     * - RetryPolicyFactory for intelligent retry logic
-     */
-    @dagger.Binds
-    @Singleton
-    abstract fun bindErrorHandler(
-        errorHandlerImpl: com.example.liftrix.data.error.ErrorHandlerImpl
-    ): com.example.liftrix.domain.usecase.common.ErrorHandler
 }

@@ -13,16 +13,17 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.hilt.work.HiltWorker
+import com.example.liftrix.config.OfflineArchitectureFlags
 import com.example.liftrix.data.local.dao.AchievementDao
 import com.example.liftrix.data.mapper.AchievementMapper
+import com.example.liftrix.data.remote.legacy.LegacyAchievementFirestoreDataSource
+import com.example.liftrix.data.sync.OfflineQueueManager
 import com.example.liftrix.domain.model.UserAchievement
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.repository.AchievementRepository
 import com.example.liftrix.sync.AchievementSyncWorker
-import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -35,7 +36,8 @@ import javax.inject.Singleton
 class AchievementRepositoryImpl @Inject constructor(
     private val achievementDao: AchievementDao,
     private val achievementMapper: AchievementMapper,
-    private val firestore: FirebaseFirestore,
+    private val offlineQueueManager: OfflineQueueManager,
+    private val legacyDataSource: LegacyAchievementFirestoreDataSource,
     @ApplicationContext private val context: Context
 ) : AchievementRepository {
     
@@ -153,13 +155,31 @@ class AchievementRepositoryImpl @Inject constructor(
 
     override suspend fun deleteAchievement(achievementId: String, userId: String): LiftrixResult<Unit> {
         return try {
-            achievementDao.deleteAchievement(achievementId, userId)
-
-            // Also delete from Firestore
-            firestore.collection("user_achievements")
-                .document(achievementId)
-                .delete()
-                .await()
+            if (OfflineArchitectureFlags.FIX_ACHIEVEMENT_REPOSITORY) {
+                val entity = achievementDao.getUserAchievements(userId).firstOrNull { it.id == achievementId }
+                if (entity != null) {
+                    val payload = com.example.liftrix.data.model.SyncPayload.AchievementPayload(
+                        achievementId = entity.id,
+                        userId = entity.userId,
+                        type = entity.achievementType,
+                        title = entity.achievementTitle,
+                        description = entity.achievementDescription,
+                        unlockedAt = entity.unlockedAt.atZone(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(),
+                        syncVersion = entity.syncVersion
+                    )
+                    offlineQueueManager.queueOperation(
+                        userId = userId,
+                        entityType = "ACHIEVEMENT",
+                        entityId = achievementId,
+                        operation = "DELETE",
+                        data = payload
+                    )
+                }
+                achievementDao.deleteAchievement(achievementId, userId)
+            } else {
+                achievementDao.deleteAchievement(achievementId, userId)
+                legacyDataSource.deleteAchievement(achievementId)
+            }
 
             Result.success(Unit)
 

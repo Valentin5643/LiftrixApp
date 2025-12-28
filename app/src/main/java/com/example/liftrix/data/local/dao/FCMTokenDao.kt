@@ -7,6 +7,7 @@ import androidx.room.MapColumn
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.FCMTokenEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -126,4 +127,61 @@ interface FCMTokenDao {
 
     @Query("SELECT platform, COUNT(*) as count FROM fcm_tokens WHERE user_id = :userId AND is_active = 1 GROUP BY platform")
     suspend fun getTokenCountByPlatform(userId: String): Map<@MapColumn(columnName = "platform") String, @MapColumn(columnName = "count") Int>
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert fcmtoken from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(fCMToken: FCMTokenEntity) {
+        val entity = fCMToken.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert fcmtoken from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(fCMToken: FCMTokenEntity) {
+        val local = getFCMTokenForSync(fCMToken.id, fCMToken.userId)
+        if (local == null || fCMToken.lastModified > local.lastModified) {
+            val entity = fCMToken.copy(
+                isDirty = false,
+                isSynced = true
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: FCMTokenEntity)
+
+    /**
+     * Get dirty fcmtoken that need upload to Firestore.
+     */
+    @Query("SELECT * FROM fcm_tokens WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyFCMTokens(userId: String): List<FCMTokenEntity>
+
+    /**
+     * Mark fcmtoken as clean after successful Firestore upload.
+     */
+    @Query("UPDATE fcm_tokens SET is_dirty = 0, is_synced = 1 WHERE id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String): Int
+
+    /**
+     * Get local fcmtoken for remote deduplication.
+     */
+    @Query("SELECT * FROM fcm_tokens WHERE id = :id AND user_id = :userId LIMIT 1")
+    suspend fun getFCMTokenForSync(id: String, userId: String): FCMTokenEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }

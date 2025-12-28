@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.SettingsEntity
 import com.example.liftrix.domain.model.WeightUnit
 import kotlinx.coroutines.flow.Flow
@@ -217,4 +218,62 @@ interface SettingsDao {
      */
     @Query("UPDATE user_settings SET allow_messages = :allowMessages, auto_play_videos = :autoPlayVideos, updated_at = datetime('now') WHERE user_id = :userId")
     suspend fun updateCommunicationSettings(userId: String, allowMessages: Boolean, autoPlayVideos: Boolean)
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert settings from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(settings: SettingsEntity) {
+        val entity = settings.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert settings from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(settings: SettingsEntity) {
+        val local = getSettingsForSync(settings.userId)
+        if (local == null || settings.lastModified > local.lastModified) {
+            val entity = settings.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis().toInt()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: SettingsEntity)
+
+    /**
+     * Get dirty settings that need upload to Firestore.
+     */
+    @Query("SELECT * FROM user_settings WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtySettings(userId: String): List<SettingsEntity>
+
+    /**
+     * Mark settings as clean after successful Firestore upload.
+     */
+    @Query("UPDATE user_settings SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE user_id IN (:ids) AND user_id = :userId")
+    suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local settings for remote deduplication.
+     */
+    @Query("SELECT * FROM user_settings WHERE user_id = :userId LIMIT 1")
+    suspend fun getSettingsForSync(userId: String): SettingsEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 } 

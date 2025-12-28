@@ -3,8 +3,10 @@ package com.example.liftrix.data.repository
 import com.example.liftrix.data.cache.RecommendationCache
 import com.example.liftrix.data.local.dao.FriendDao
 import com.example.liftrix.data.local.dao.PrivacySettingsDao
+import com.example.liftrix.data.local.dao.SocialProfileDao
 import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.mapper.FriendMapper
+import com.example.liftrix.data.remote.legacy.LegacySocialFirestoreDataSource
 import com.example.liftrix.domain.model.Friend
 import com.example.liftrix.domain.model.FriendStatus
 import com.example.liftrix.domain.model.RecommendedUser
@@ -12,18 +14,20 @@ import com.example.liftrix.domain.model.SharedWorkout
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.WorkoutStatus
 import java.time.Duration
+import com.example.liftrix.config.OfflineArchitectureFlags
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SocialRepository
 import com.example.liftrix.domain.usecase.social.SocialProfileQueryUseCase
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
+import com.example.liftrix.sync.SyncCoordinator
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.time.Instant
 import javax.inject.Inject
@@ -37,18 +41,18 @@ import javax.inject.Singleton
 class SocialRepositoryImpl @Inject constructor(
     private val friendDao: FriendDao,
     private val privacySettingsDao: PrivacySettingsDao,
+    private val socialProfileDao: SocialProfileDao,
     private val workoutDao: WorkoutDao,
     private val friendMapper: FriendMapper,
     private val authRepository: AuthRepository,
-    private val firestore: FirebaseFirestore,
     private val recommendationCache: RecommendationCache,
     private val socialProfileQueryUseCase: SocialProfileQueryUseCase,
-    private val userSuggestionService: com.example.liftrix.domain.service.UserSuggestionService
+    private val userSuggestionService: com.example.liftrix.domain.service.UserSuggestionService,
+    private val syncCoordinator: SyncCoordinator,
+    private val legacyDataSource: LegacySocialFirestoreDataSource
 ) : SocialRepository {
 
     companion object {
-        private const val USERS_COLLECTION = "users"
-        private const val FRIENDSHIPS_COLLECTION = "friendships"
         private const val MAX_SEARCH_RESULTS = 20
         private const val DISCOVERY_BATCH_SIZE = 10
         private const val MUTUAL_FRIENDS_WEIGHT = 0.5 // 50% mutual friends, 50% general discovery
@@ -85,53 +89,10 @@ class SocialRepositoryImpl @Inject constructor(
                 return@flow
             }
 
-            // Search Firebase users collection by display name and email
-            val searchResults = mutableListOf<User>()
-
-            // Search by display name (case-insensitive prefix search)
-            val displayNameQuery = firestore.collection(USERS_COLLECTION)
-                .whereGreaterThanOrEqualTo("displayName", query)
-                .whereLessThanOrEqualTo("displayName", query + "\uf8ff")
-                .limit(MAX_SEARCH_RESULTS.toLong())
-                .get()
-                .await()
-
-            // Search by email (exact match for privacy)
-            val emailQuery = firestore.collection(USERS_COLLECTION)
-                .whereEqualTo("email", query.lowercase())
-                .limit(5)
-                .get()
-                .await()
-
-            // Combine and deduplicate results
-            val allResults = (displayNameQuery.documents + emailQuery.documents).distinctBy { it.id }
-            
-            for (document in allResults) {
-                try {
-                    // Skip current user from results
-                    if (document.id == currentUserId.value) continue
-
-                    val userData = document.data ?: continue
-                    val user = User(
-                        uid = document.id,
-                        email = userData["email"] as? String ?: "",
-                        displayName = userData["displayName"] as? String,
-                        photoUrl = userData["photoUrl"] as? String,
-                        isAnonymous = userData["isAnonymous"] as? Boolean ?: false,
-                        subscriptionTier = com.example.liftrix.domain.model.SubscriptionTier.FREE, // Default
-                        subscriptionStatus = com.example.liftrix.domain.model.SubscriptionStatus.ACTIVE, // Default
-                        subscriptionExpiresAt = null,
-                        premiumFeaturesEnabled = false,
-                        onboardingCompleted = userData["onboardingCompleted"] as? Boolean ?: false,
-                        profileVersion = userData["profileVersion"] as? Long ?: 1L,
-                        createdAt = java.time.LocalDateTime.now(), // Placeholder
-                        lastSignInAt = java.time.LocalDateTime.now(), // Placeholder
-                        updatedAt = java.time.LocalDateTime.now() // Placeholder
-                    )
-                    searchResults.add(user)
-                } catch (e: Exception) {
-                    Timber.w(e, "Failed to parse user document: ${document.id}")
-                }
+            val searchResults = if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
+                searchUsersRoomFirst(query, currentUserId.value)
+            } else {
+                searchUsersLegacy(query, currentUserId.value)
             }
 
             emit(searchResults)
@@ -176,12 +137,18 @@ class SocialRepositoryImpl @Inject constructor(
 
             Timber.d("DEBUG_SEND_FRIEND_REQUEST: Created friend request entity - userId: ${friendRequest.userId}, friendUserId: ${friendRequest.friendUserId}, status: ${friendRequest.status}")
 
-            // Save to local database (offline-first)
-            val insertId = friendDao.insertFriend(friendRequest)
-            Timber.d("DEBUG_SEND_FRIEND_REQUEST: Inserted friend request to database with ID: $insertId")
+            if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
+                friendDao.upsertLocal(friendRequest)
+                Timber.d("DEBUG_SEND_FRIEND_REQUEST: Upserted friend request locally")
+                triggerImmediateSyncSafely(currentUserId.value)
+            } else {
+                // Save to local database (legacy path)
+                val insertId = friendDao.insertFriend(friendRequest)
+                Timber.d("DEBUG_SEND_FRIEND_REQUEST: Inserted friend request to database with ID: $insertId")
 
-            // Sync to Firebase
-            syncFriendRequestToFirebase(currentUserId.value, friendUserId)
+                // Sync to Firebase (legacy path)
+                legacyDataSource.syncFriendRequest(currentUserId.value, friendUserId)
+            }
 
             // Invalidate recommendation cache since friend relationships changed
             recommendationCache.invalidateCacheForUser(currentUserId.value)
@@ -209,8 +176,16 @@ class SocialRepositoryImpl @Inject constructor(
             val newStatus = if (accept) FriendStatus.ACCEPTED.name else "DECLINED"
             val now = Instant.now().toEpochMilli()
 
-            // Update the friend request status
-            friendDao.updateFriendStatus(friendUserId, currentUserId.value, newStatus, now)
+            if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
+                val updatedRequest = existingRequest.copy(
+                    status = newStatus,
+                    updatedAt = Instant.ofEpochMilli(now)
+                )
+                friendDao.upsertLocal(updatedRequest)
+            } else {
+                // Update the friend request status (legacy path)
+                friendDao.updateFriendStatus(friendUserId, currentUserId.value, newStatus, now)
+            }
 
             if (accept) {
                 // Create bidirectional friendship
@@ -220,11 +195,19 @@ class SocialRepositoryImpl @Inject constructor(
                     isSynced = false
                 ).copy(status = FriendStatus.ACCEPTED.name)
 
-                friendDao.insertFriend(reciprocalFriend)
+                if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
+                    friendDao.upsertLocal(reciprocalFriend)
+                } else {
+                    friendDao.insertFriend(reciprocalFriend)
+                }
             }
 
-            // Sync to Firebase
-            syncFriendResponseToFirebase(currentUserId.value, friendUserId, accept)
+            if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
+                triggerImmediateSyncSafely(currentUserId.value)
+            } else {
+                // Sync to Firebase (legacy path)
+                legacyDataSource.syncFriendResponse(currentUserId.value, friendUserId, accept)
+            }
 
             // Invalidate recommendation cache for both users since friend relationships changed
             if (accept) {
@@ -398,18 +381,34 @@ class SocialRepositoryImpl @Inject constructor(
             val now = Instant.now().toEpochMilli()
 
             if (existingRelationship != null) {
-                friendDao.updateFriendStatus(currentUserId.value, friendUserId, FriendStatus.BLOCKED.name, now)
+                if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
+                    val updatedRelationship = existingRelationship.copy(
+                        status = FriendStatus.BLOCKED.name,
+                        updatedAt = Instant.ofEpochMilli(now)
+                    )
+                    friendDao.upsertLocal(updatedRelationship)
+                } else {
+                    friendDao.updateFriendStatus(currentUserId.value, friendUserId, FriendStatus.BLOCKED.name, now)
+                }
             } else {
                 val blockedUser = friendMapper.createFriendRequest(currentUserId.value, friendUserId)
                     .copy(status = FriendStatus.BLOCKED.name)
-                friendDao.insertFriend(blockedUser)
+                if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
+                    friendDao.upsertLocal(blockedUser)
+                } else {
+                    friendDao.insertFriend(blockedUser)
+                }
             }
 
             // Remove any reciprocal friendship
             friendDao.deleteFriendRelationship(friendUserId, currentUserId.value)
 
-            // Sync to Firebase
-            syncBlockUserToFirebase(currentUserId.value, friendUserId)
+            if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
+                triggerImmediateSyncSafely(currentUserId.value)
+            } else {
+                // Sync to Firebase (legacy path)
+                legacyDataSource.syncBlockUser(currentUserId.value, friendUserId)
+            }
 
             Timber.d("User blocked successfully: $currentUserId blocked $friendUserId")
             Result.success(Unit)
@@ -428,8 +427,12 @@ class SocialRepositoryImpl @Inject constructor(
             // Remove blocked relationship
             friendDao.deleteFriendRelationship(currentUserId.value, friendUserId)
 
-            // Sync to Firebase
-            syncUnblockUserToFirebase(currentUserId.value, friendUserId)
+            if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
+                triggerImmediateSyncSafely(currentUserId.value)
+            } else {
+                // Sync to Firebase (legacy path)
+                legacyDataSource.syncUnblockUser(currentUserId.value, friendUserId)
+            }
 
             Timber.d("User unblocked successfully: $currentUserId unblocked $friendUserId")
             Result.success(Unit)
@@ -448,8 +451,12 @@ class SocialRepositoryImpl @Inject constructor(
             // Remove bidirectional friendship
             friendDao.deleteBidirectionalFriendRelationship(currentUserId.value, friendUserId)
 
-            // Sync to Firebase
-            syncRemoveFriendToFirebase(currentUserId.value, friendUserId)
+            if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
+                triggerImmediateSyncSafely(currentUserId.value)
+            } else {
+                // Sync to Firebase (legacy path)
+                legacyDataSource.syncRemoveFriend(currentUserId.value, friendUserId)
+            }
 
             // Invalidate recommendation cache for both users since friend relationships changed
             recommendationCache.invalidateCacheForUser(currentUserId.value)
@@ -465,37 +472,10 @@ class SocialRepositoryImpl @Inject constructor(
     }
     
     override suspend fun getUserById(userId: String): User? {
-        return try {
-            val document = firestore.collection(USERS_COLLECTION)
-                .document(userId)
-                .get()
-                .await()
-                
-            if (!document.exists()) {
-                Timber.w("User not found: $userId")
-                return null
-            }
-            
-            val userData = document.data ?: return null
-            User(
-                uid = document.id,
-                email = userData["email"] as? String ?: "",
-                displayName = userData["displayName"] as? String,
-                photoUrl = userData["photoUrl"] as? String,
-                isAnonymous = userData["isAnonymous"] as? Boolean ?: false,
-                subscriptionTier = com.example.liftrix.domain.model.SubscriptionTier.FREE,
-                subscriptionStatus = com.example.liftrix.domain.model.SubscriptionStatus.ACTIVE,
-                subscriptionExpiresAt = null,
-                premiumFeaturesEnabled = false,
-                onboardingCompleted = userData["onboardingCompleted"] as? Boolean ?: false,
-                profileVersion = userData["profileVersion"] as? Long ?: 1L,
-                createdAt = java.time.LocalDateTime.now(),
-                lastSignInAt = java.time.LocalDateTime.now(),
-                updatedAt = java.time.LocalDateTime.now()
-            )
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to get user by ID: $userId")
-            null
+        return if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
+            getUserByIdRoomFirst(userId)
+        } else {
+            getUserByIdLegacy(userId)
         }
     }
 
@@ -681,20 +661,13 @@ class SocialRepositoryImpl @Inject constructor(
 
             friendIds.collect { friends ->
                 if (friends.isNotEmpty()) {
-                    // Query Firebase for friends' recent workouts
-                    val friendsWorkouts = firestore.collection("workouts")
-                        .whereIn("userId", friends.take(10)) // Firestore limit of 10 items in whereIn
-                        .whereNotEqualTo("completedAt", null)
-                        .orderBy("completedAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                        .limit(50)
-                        .get()
-                        .await()
-
-                    Timber.d("Retrieved ${friendsWorkouts.documents.size} friends' workouts from Firebase")
-
-                    // Process and cache friends' workouts locally for feed display
-                    // Note: This is a placeholder for future workout caching implementation
-                    // Current focus is on real-time listener setup
+                    if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
+                        // Room-first: rely on local workouts + sync workers to refresh data
+                        triggerImmediateSyncSafely(currentUserId.value)
+                    } else {
+                        val fetchedCount = legacyDataSource.fetchFriendsWorkouts(friends)
+                        Timber.d("Retrieved $fetchedCount friends' workouts from Firebase")
+                    }
                 }
             }
 
@@ -706,69 +679,52 @@ class SocialRepositoryImpl @Inject constructor(
     }
 
     fun setupRealtimeFeedListener(): Flow<Unit> {
-        return kotlinx.coroutines.flow.callbackFlow {
-            var listener: com.google.firebase.firestore.ListenerRegistration? = null
-
-            try {
-                val currentUserId = authRepository.getCurrentUserId()
-                if (currentUserId == null) {
-                    Timber.w("Cannot setup realtime feed listener: user not authenticated")
-                    trySend(Unit)
-                    close()
-                    return@callbackFlow
-                }
-
-                Timber.d("Setting up real-time feed listener for user: $currentUserId")
-
-                // Get friend IDs for real-time workout updates
-                val friendIds = friendDao.getFriends(currentUserId.value).map { friendEntities ->
-                    friendEntities.filter { it.status == FriendStatus.ACCEPTED.name }
-                        .map { it.friendUserId }
-                }.catch { emit(emptyList()) }
-
-                friendIds.collect { friends ->
-                    // Remove existing listener if any
-                    listener?.remove()
-
-                    if (friends.isNotEmpty()) {
-                        // Setup real-time listener for friends' workouts
-                        listener = firestore.collection("workouts")
-                            .whereIn("userId", friends.take(10))
-                            .whereNotEqualTo("completedAt", null)
-                            .orderBy("completedAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                            .limit(20)
-                            .addSnapshotListener { snapshot, error ->
-                                if (error != null) {
-                                    Timber.e(error, "Error in real-time feed listener")
-                                    return@addSnapshotListener
-                                }
-
-                                snapshot?.let { querySnapshot ->
-                                    val workoutCount = querySnapshot.documents.size
-                                    Timber.d("Real-time feed update: $workoutCount friends' workouts")
-
-                                    // Notify that feed data has been updated
-                                    trySend(Unit)
-                                }
-                            }
-
-                        Timber.d("Real-time feed listener established for ${friends.size} friends")
-                    } else {
-                        Timber.d("No friends found - real-time feed listener not needed")
+        return if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
+            callbackFlow {
+                try {
+                    val currentUserId = authRepository.getCurrentUserId()
+                    if (currentUserId == null) {
+                        Timber.w("Cannot setup local feed listener: user not authenticated")
+                        trySend(Unit)
+                        close()
+                        return@callbackFlow
                     }
 
-                    trySend(Unit)
+                    Timber.d("Setting up local feed listener for user: $currentUserId")
+                    val job = launch {
+                        friendDao.getFriends(currentUserId.value).collect {
+                            trySend(Unit)
+                        }
+                    }
+
+                    awaitClose {
+                        job.cancel()
+                        Timber.d("Local feed listener removed")
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to setup local feed listener")
+                    close(e)
+                }
+            }
+        } else {
+            val friendIdsFlow = flow {
+                val currentUserId = authRepository.getCurrentUserId()
+                if (currentUserId == null) {
+                    emit(emptyList())
+                    return@flow
                 }
 
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to setup real-time feed listener")
-                close(e)
+                emitAll(
+                    friendDao.getFriends(currentUserId.value)
+                        .map { friendEntities ->
+                            friendEntities.filter { it.status == FriendStatus.ACCEPTED.name }
+                                .map { it.friendUserId }
+                        }
+                        .catch { emit(emptyList()) }
+                )
             }
 
-            awaitClose {
-                listener?.remove()
-                Timber.d("Real-time feed listener removed")
-            }
+            legacyDataSource.setupRealtimeFeedListener(friendIdsFlow)
         }
     }
 
@@ -777,16 +733,19 @@ class SocialRepositoryImpl @Inject constructor(
             val currentUserId = authRepository.getCurrentUserId()
                 ?: return Result.failure(Exception("User not authenticated"))
 
-            val presenceData = mapOf(
-                "status" to "online",
-                "last_active" to com.google.firebase.Timestamp.now(),
-                "user_id" to currentUserId.value
-            )
-
-            firestore.collection("user_presence")
-                .document(currentUserId.value)
-                .set(presenceData)
-                .await()
+            if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
+                val existingProfile = socialProfileDao.getSocialProfileByUserId(currentUserId.value)
+                    ?: return Result.failure(Exception("Social profile not found"))
+                val now = System.currentTimeMillis()
+                val updatedProfile = existingProfile.copy(
+                    lastActive = now,
+                    updatedAt = now
+                )
+                socialProfileDao.upsertLocal(updatedProfile)
+                triggerImmediateSyncSafely(currentUserId.value)
+            } else {
+                legacyDataSource.updateUserPresence(currentUserId.value)
+            }
 
             Timber.d("User presence updated successfully for user: $currentUserId")
             Result.success(Unit)
@@ -806,61 +765,10 @@ class SocialRepositoryImpl @Inject constructor(
         limit: Int,
         offset: Int
     ): List<RecommendedUser> {
-        return try {
-            if (existingFriendIds.isEmpty()) {
-                return emptyList()
-            }
-            
-            // Query Firebase for users who are friends with current user's friends
-            val mutualFriendsQuery = firestore.collection(FRIENDSHIPS_COLLECTION)
-                .whereIn("senderId", existingFriendIds.toList())
-                .whereEqualTo("status", "accepted")
-                .limit((limit + offset).toLong())
-                .get()
-                .await()
-                
-            val potentialFriends = mutableSetOf<String>()
-            
-            for (document in mutualFriendsQuery.documents) {
-                val receiverId = document.getString("receiverId")
-                if (receiverId != null && 
-                    receiverId != currentUserId && 
-                    receiverId !in existingFriendIds) {
-                    potentialFriends.add(receiverId)
-                }
-            }
-            
-            // Get user details for mutual friends recommendations
-            val recommendations = mutableListOf<RecommendedUser>()
-            
-            for (userId in potentialFriends.drop(offset).take(limit)) {
-                val user = getUserById(userId)
-                if (user != null) {
-                    // Check actual follow status instead of hardcoding false
-                    val isFollowing = friendDao.getFriendRelationship(currentUserId, userId)?.status == FriendStatus.ACCEPTED.name
-                    recommendations.add(
-                        RecommendedUser.fromUser(user, isFollowing = isFollowing)
-                    )
-                }
-            }
-            
-            Timber.d("Found ${recommendations.size} mutual friends recommendations")
-            recommendations
-            
-        } catch (e: com.google.firebase.firestore.FirebaseFirestoreException) {
-            when (e.code) {
-                com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED -> {
-                    Timber.w("Permission denied for mutual friends recommendations - social features may be disabled")
-                    emptyList()
-                }
-                else -> {
-                    Timber.e(e, "Failed to get mutual friends recommendations")
-                    emptyList()
-                }
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to get mutual friends recommendations")
-            emptyList()
+        return if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
+            getMutualFriendsRecommendationsRoomFirst(currentUserId, existingFriendIds, limit, offset)
+        } else {
+            getMutualFriendsRecommendationsLegacy(currentUserId, existingFriendIds, limit, offset)
         }
     }
 
@@ -874,245 +782,230 @@ class SocialRepositoryImpl @Inject constructor(
         limit: Int,
         offset: Int
     ): List<RecommendedUser> {
+        return if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
+            getGeneralRecommendationsRoomFirst(currentUserId, excludeUserIds, limit, offset)
+        } else {
+            getGeneralRecommendationsLegacy(currentUserId, excludeUserIds, limit, offset)
+        }
+    }
+
+    private suspend fun searchUsersRoomFirst(query: String, currentUserId: String): List<User> {
+        val displayMatches = socialProfileDao.searchProfilesByDisplayName(query, MAX_SEARCH_RESULTS)
+        val usernameMatches = socialProfileDao.searchProfiles(currentUserId, query, MAX_SEARCH_RESULTS)
+        return (displayMatches + usernameMatches)
+            .distinctBy { it.userId }
+            .filter { it.userId != currentUserId }
+            .take(MAX_SEARCH_RESULTS)
+            .map { mapSocialProfileToUser(it) }
+    }
+
+    private suspend fun searchUsersLegacy(query: String, currentUserId: String): List<User> {
         return try {
-            // TEMPORARY: Most basic query to test permissions
-            // First, try to get any social profiles collection documents
-            val socialProfilesQuery = firestore.collection("social_profiles")
-                .limit(10) // Very basic query with no where clauses
-                .get()
-                .await()
-            
-            val recommendations = mutableListOf<RecommendedUser>()
-            
-            // Process social profiles first
-            for (document in socialProfilesQuery.documents) {
-                val userId = document.getString("userId") ?: continue
-                
-                // Skip current user and excluded users
-                if (userId == currentUserId || userId in excludeUserIds) {
-                    continue
-                }
-                
-                try {
-                    val profileData = document.data ?: continue
-                    
-                    // TEMPORARY: Client-side filtering for basic query
-                    val isPrivate = profileData["isPrivate"] as? Boolean ?: true
-                    val hideFromSuggestions = profileData["hideFromSuggestions"] as? Boolean ?: false
-                    
-                    if (isPrivate) {
-                        continue
+            legacyDataSource.searchUsers(query, MAX_SEARCH_RESULTS, 5)
+                .mapNotNull { record ->
+                    if (record.id == currentUserId) {
+                        return@mapNotNull null
                     }
-                    
-                    if (hideFromSuggestions) {
-                        continue
-                    }
-                    
-                    val username = profileData["username"] as? String ?: continue
-                    val displayName = profileData["displayName"] as? String
-                    val profilePhotoUrl = profileData["profilePhotoUrl"] as? String
-                    
-                    // Check actual follow status instead of hardcoding false
-                    val isFollowing = friendDao.getFriendRelationship(currentUserId, userId)?.status == FriendStatus.ACCEPTED.name
-                    
-                    recommendations.add(
-                        RecommendedUser(
-                            userId = userId,
-                            username = displayName ?: username,
-                            profileImageUrl = profilePhotoUrl,
-                            isFollowing = isFollowing
-                        )
-                    )
-                    
-                    // Stop if we have enough recommendations
-                    if (recommendations.size >= limit) {
-                        break
-                    }
-                } catch (e: Exception) {
-                    Timber.w(e, "Failed to parse social profile for recommendations: $userId")
-                }
-            }
-            
-            // Fallback to users collection if we don't have enough recommendations from social_profiles
-            if (recommendations.size < limit) {
-                try {
-                    // 🔍 DEBUG: Confirm authentication state before query
-                    val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-                    Timber.d("AUTH_DEBUG: Current user before users query: ${currentUser?.uid}")
-                    
-                    if (currentUser == null) {
-                        Timber.w("AUTH_DEBUG: No authenticated user - query will fail with PERMISSION_DENIED")
-                        // Don't use return here, just skip the query
-                    } else {
-                    
-                    Timber.d("AUTH_DEBUG: Executing users collection query with isPublic=true filter")
-                    val usersQuery = firestore.collection("users")
-                        .whereEqualTo("isPublic", true)
-                        .limit((limit - recommendations.size + 5).toLong()) // Get a few extra to account for filtering
-                        .get()
-                        .await()
-                    
-                    
-                    Timber.d("AUTH_DEBUG: Query returned ${usersQuery.documents.size} documents")
-                    
-                    for (userDoc in usersQuery.documents) {
-                        if (recommendations.size >= limit) break
-                        
-                        // 🔍 DEBUG: Log document data to verify isPublic field
-                        val docData = userDoc.data
-                        val hasIsPublic = docData?.containsKey("isPublic") ?: false
-                        val isPublicValue = docData?.get("isPublic")
-                        Timber.d("AUTH_DEBUG: Doc ${userDoc.id} - hasIsPublic: $hasIsPublic, isPublic: $isPublicValue")
-                        
-                        val userId = userDoc.id
-                        if (userId == currentUserId || userId in excludeUserIds) continue
-                        
-                        val userData = userDoc.data ?: continue
-                        val username = userData["username"] as? String ?: continue
-                        val displayName = userData["displayName"] as? String
-                        
-                        // Check if this user already has a social profile (to avoid duplicates)
-                        val hasSocialProfile = recommendations.any { it.userId == userId }
-                        if (!hasSocialProfile) {
-                            // Check actual follow status instead of hardcoding false
-                            val isFollowing = friendDao.getFriendRelationship(currentUserId, userId)?.status == FriendStatus.ACCEPTED.name
-                            recommendations.add(
-                                RecommendedUser(
-                                    userId = userId,
-                                    username = displayName ?: username,
-                                    profileImageUrl = null,
-                                    isFollowing = isFollowing
-                                )
-                            )
-                        }
-                    }
-                    } // Close the else block here
-                } catch (fallbackError: Exception) {
-                    when (fallbackError.message?.contains("PERMISSION_DENIED")) {
-                        true -> {
-                            Timber.w("AUTH_DEBUG: PERMISSION_DENIED error in users collection query")
-                            Timber.w("AUTH_DEBUG: Auth state: ${com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid}")
-                            Timber.w("AUTH_DEBUG: Error details: ${fallbackError.message}")
-                        }
-                        else -> Timber.w(fallbackError, "Fallback to users collection failed")
+                    try {
+                        mapLegacyUserRecordToUser(record)
+                    } catch (e: Exception) {
+                        Timber.w(e, "Failed to parse legacy user record: ${record.id}")
+                        null
                     }
                 }
-            }
-            
-            val finalRecommendations = recommendations.drop(offset).take(limit)
-            Timber.d("Found ${finalRecommendations.size} general recommendations")
-            finalRecommendations
-            
-        } catch (e: com.google.firebase.firestore.FirebaseFirestoreException) {
-            when (e.code) {
-                com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED -> {
-                    Timber.w("Permission denied for user recommendations - social features may be disabled")
-                    emptyList()
-                }
-                else -> {
-                    Timber.e(e, "Failed to get general recommendations")
-                    emptyList()
-                }
-            }
         } catch (e: Exception) {
-            Timber.e(e, "Failed to get general recommendations")
+            Timber.e(e, "Legacy user search failed")
             emptyList()
         }
     }
 
-    // Private helper methods for Firebase sync
+    private suspend fun getUserByIdRoomFirst(userId: String): User? {
+        val profile = socialProfileDao.getSocialProfileByUserId(userId) ?: return null
+        return mapSocialProfileToUser(profile)
+    }
 
-    private suspend fun syncFriendRequestToFirebase(senderId: String, receiverId: String) {
-        try {
-            val friendshipData = mapOf(
-                "senderId" to senderId,
-                "receiverId" to receiverId,
-                "status" to "pending",
-                "created_at" to com.google.firebase.Timestamp.now(),
-                "updated_at" to com.google.firebase.Timestamp.now()
+    private suspend fun getUserByIdLegacy(userId: String): User? {
+        return try {
+            legacyDataSource.getUserRecord(userId)?.let { mapLegacyUserRecordToUser(it) }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get user by ID: $userId")
+            null
+        }
+    }
+
+    private fun mapSocialProfileToUser(profile: com.example.liftrix.data.local.entity.SocialProfileEntity): User {
+        return User.forSocialDisplay(
+            uid = profile.userId,
+            displayName = profile.displayName ?: profile.username,
+            photoUrl = profile.profilePhotoUrl
+        )
+    }
+
+    private fun mapLegacyUserRecordToUser(record: LegacySocialFirestoreDataSource.LegacyUserRecord): User {
+        val userData = record.data
+        val now = java.time.LocalDateTime.now()
+        return User(
+            uid = record.id,
+            email = userData["email"] as? String ?: "",
+            displayName = userData["displayName"] as? String,
+            photoUrl = userData["photoUrl"] as? String,
+            isAnonymous = userData["isAnonymous"] as? Boolean ?: false,
+            subscriptionTier = com.example.liftrix.domain.model.SubscriptionTier.FREE,
+            subscriptionStatus = com.example.liftrix.domain.model.SubscriptionStatus.ACTIVE,
+            subscriptionExpiresAt = null,
+            premiumFeaturesEnabled = false,
+            onboardingCompleted = userData["onboardingCompleted"] as? Boolean ?: false,
+            profileVersion = userData["profileVersion"] as? Long ?: 1L,
+            createdAt = now,
+            lastSignInAt = now,
+            updatedAt = now
+        )
+    }
+
+    private suspend fun getMutualFriendsRecommendationsRoomFirst(
+        currentUserId: String,
+        existingFriendIds: Set<String>,
+        limit: Int,
+        offset: Int
+    ): List<RecommendedUser> {
+        if (existingFriendIds.isEmpty()) {
+            return emptyList()
+        }
+
+        val suggestions = userSuggestionService
+            .getMutualConnectionSuggestions(currentUserId, limit + offset)
+            .getOrElse {
+                Timber.w(it, "Failed to get mutual connection suggestions")
+                emptyList()
+            }
+
+        return suggestions
+            .mapNotNull { suggestion ->
+                val userId = suggestion.userSearchResult.userId
+                if (userId == currentUserId || userId in existingFriendIds) {
+                    return@mapNotNull null
+                }
+                val isFollowing = friendDao.getFriendRelationship(currentUserId, userId)?.status == FriendStatus.ACCEPTED.name
+                RecommendedUser(
+                    userId = userId,
+                    username = suggestion.userSearchResult.displayName.ifBlank { "Unknown User" },
+                    profileImageUrl = suggestion.userSearchResult.profileImageUrl,
+                    isFollowing = isFollowing
+                )
+            }
+            .drop(offset)
+            .take(limit)
+    }
+
+    private suspend fun getMutualFriendsRecommendationsLegacy(
+        currentUserId: String,
+        existingFriendIds: Set<String>,
+        limit: Int,
+        offset: Int
+    ): List<RecommendedUser> {
+        return try {
+            val candidateIds = legacyDataSource.getMutualFriendUserIds(existingFriendIds, limit, offset)
+            val recommendations = mutableListOf<RecommendedUser>()
+
+            for (userId in candidateIds) {
+                if (userId == currentUserId || userId in existingFriendIds) continue
+                val user = getUserByIdLegacy(userId)
+                if (user != null) {
+                    val isFollowing = friendDao.getFriendRelationship(currentUserId, userId)?.status == FriendStatus.ACCEPTED.name
+                    recommendations.add(RecommendedUser.fromUser(user, isFollowing = isFollowing))
+                }
+            }
+
+            Timber.d("Found ${recommendations.size} mutual friends recommendations")
+            recommendations
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get mutual friends recommendations")
+            emptyList()
+        }
+    }
+
+    private suspend fun getGeneralRecommendationsRoomFirst(
+        currentUserId: String,
+        excludeUserIds: Set<String>,
+        limit: Int,
+        offset: Int
+    ): List<RecommendedUser> {
+        val suggestions = userSuggestionService
+            .getPersonalizedSuggestions(currentUserId, limit + offset)
+            .getOrElse {
+                Timber.w(it, "Failed to get personalized suggestions")
+                emptyList()
+            }
+
+        val personalized = suggestions
+            .mapNotNull { suggestion ->
+                val userId = suggestion.userSearchResult.userId
+                if (userId == currentUserId || userId in excludeUserIds) {
+                    return@mapNotNull null
+                }
+                val isFollowing = friendDao.getFriendRelationship(currentUserId, userId)?.status == FriendStatus.ACCEPTED.name
+                RecommendedUser(
+                    userId = userId,
+                    username = suggestion.userSearchResult.displayName.ifBlank { "Unknown User" },
+                    profileImageUrl = suggestion.userSearchResult.profileImageUrl,
+                    isFollowing = isFollowing
+                )
+            }
+            .drop(offset)
+            .take(limit)
+
+        if (personalized.isNotEmpty()) {
+            return personalized
+        }
+
+        val fallbackProfiles = socialProfileDao.getDiscoverableProfiles(currentUserId, limit + offset)
+        return fallbackProfiles
+            .filter { it.userId != currentUserId && it.userId !in excludeUserIds }
+            .drop(offset)
+            .take(limit)
+            .map { profile ->
+                val isFollowing = friendDao.getFriendRelationship(currentUserId, profile.userId)?.status == FriendStatus.ACCEPTED.name
+                RecommendedUser(
+                    userId = profile.userId,
+                    username = (profile.displayName ?: profile.username).ifBlank { "Unknown User" },
+                    profileImageUrl = profile.profilePhotoUrl,
+                    isFollowing = isFollowing
+                )
+            }
+    }
+
+    private suspend fun getGeneralRecommendationsLegacy(
+        currentUserId: String,
+        excludeUserIds: Set<String>,
+        limit: Int,
+        offset: Int
+    ): List<RecommendedUser> {
+        val candidates = legacyDataSource.getGeneralRecommendationCandidates(
+            currentUserId = currentUserId,
+            excludeUserIds = excludeUserIds,
+            limit = limit,
+            offset = offset
+        )
+
+        return candidates.mapNotNull { candidate ->
+            val isFollowing = friendDao.getFriendRelationship(currentUserId, candidate.userId)?.status == FriendStatus.ACCEPTED.name
+            val displayName = (candidate.displayName ?: candidate.username).ifBlank { "Unknown User" }
+            if (displayName.isBlank()) {
+                return@mapNotNull null
+            }
+            RecommendedUser(
+                userId = candidate.userId,
+                username = displayName,
+                profileImageUrl = candidate.profilePhotoUrl,
+                isFollowing = isFollowing
             )
-
-            firestore.collection(FRIENDSHIPS_COLLECTION)
-                .document("${senderId}_${receiverId}")
-                .set(friendshipData)
-                .await()
-
-            Timber.d("Friend request synced to Firebase: $senderId -> $receiverId")
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to sync friend request to Firebase")
-            // Don't fail the operation - offline-first approach
         }
     }
 
-    private suspend fun syncFriendResponseToFirebase(receiverId: String, senderId: String, accepted: Boolean) {
-        try {
-            val status = if (accepted) "accepted" else "declined"
-            val updateData = mapOf(
-                "status" to status,
-                "updated_at" to com.google.firebase.Timestamp.now()
-            )
-
-            firestore.collection(FRIENDSHIPS_COLLECTION)
-                .document("${senderId}_${receiverId}")
-                .update(updateData)
-                .await()
-
-            Timber.d("Friend response synced to Firebase: $receiverId $status $senderId")
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to sync friend response to Firebase")
-        }
-    }
-
-    private suspend fun syncBlockUserToFirebase(blockerId: String, blockedId: String) {
-        try {
-            val blockData = mapOf(
-                "senderId" to blockerId,
-                "receiverId" to blockedId,
-                "status" to "blocked",
-                "created_at" to com.google.firebase.Timestamp.now(),
-                "updated_at" to com.google.firebase.Timestamp.now()
-            )
-
-            firestore.collection(FRIENDSHIPS_COLLECTION)
-                .document("${blockerId}_${blockedId}")
-                .set(blockData)
-                .await()
-
-            Timber.d("User block synced to Firebase: $blockerId blocked $blockedId")
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to sync block user to Firebase")
-        }
-    }
-
-    private suspend fun syncUnblockUserToFirebase(unblockerId: String, unblockedId: String) {
-        try {
-            firestore.collection(FRIENDSHIPS_COLLECTION)
-                .document("${unblockerId}_${unblockedId}")
-                .delete()
-                .await()
-
-            Timber.d("User unblock synced to Firebase: $unblockerId unblocked $unblockedId")
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to sync unblock user to Firebase")
-        }
-    }
-
-    private suspend fun syncRemoveFriendToFirebase(userId: String, friendId: String) {
-        try {
-            // Remove both directions of the friendship
-            firestore.collection(FRIENDSHIPS_COLLECTION)
-                .document("${userId}_${friendId}")
-                .delete()
-                .await()
-
-            firestore.collection(FRIENDSHIPS_COLLECTION)
-                .document("${friendId}_${userId}")
-                .delete()
-                .await()
-
-            Timber.d("Friend removal synced to Firebase: $userId removed $friendId")
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to sync friend removal to Firebase")
+    private suspend fun triggerImmediateSyncSafely(userId: String) {
+        val result = syncCoordinator.triggerImmediateSync(userId)
+        result.exceptionOrNull()?.let { error ->
+            Timber.w(error, "Immediate sync failed for user: $userId")
         }
     }
     

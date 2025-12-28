@@ -43,7 +43,8 @@ import javax.inject.Singleton
 @Singleton
 class SupportServiceImpl @Inject constructor(
     private val supportTicketDao: SupportTicketDao,
-    private val appInfoService: AppInfoService
+    private val appInfoService: AppInfoService,
+    private val firestore: FirebaseFirestore
 ) : SupportService {
     
     override suspend fun createTicket(
@@ -427,7 +428,6 @@ class SupportServiceImpl @Inject constructor(
             }
             
             // Sync tickets to Firestore which will trigger email sending
-            val firestore = FirebaseFirestore.getInstance()
             val batch = firestore.batch()
             
             for (ticket in unsyncedTickets) {

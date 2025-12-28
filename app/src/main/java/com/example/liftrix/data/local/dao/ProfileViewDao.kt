@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import com.example.liftrix.data.local.entity.ProfileViewEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -165,6 +166,64 @@ interface ProfileViewDao {
         WHERE id = :viewId
     """)
     suspend fun updateSyncStatus(viewId: String, isSynced: Boolean, version: Int): Int
+
+    // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
+
+    /**
+     * Upsert profileview from LOCAL origin (user edit).
+     * Sets isDirty=true and lastModified, triggering sync queue.
+     */
+    suspend fun upsertLocal(profileView: ProfileViewEntity) {
+        val entity = profileView.copy(
+            isDirty = true,
+            lastModified = System.currentTimeMillis()
+        )
+        _insert(entity)
+    }
+
+    /**
+     * Upsert profileview from REMOTE origin (Firestore listener/sync).
+     * Sets isDirty=false, only applies if remote is newer.
+     * Does NOT trigger sync queue.
+     */
+    @Transaction
+    suspend fun upsertFromRemote(profileView: ProfileViewEntity) {
+        val local = getProfileViewForSync(profileView.id, profileView.viewerId)
+        if (local == null || profileView.lastModified > local.lastModified) {
+            val entity = profileView.copy(
+                isDirty = false,
+                isSynced = true,
+                syncVersion = System.currentTimeMillis().toInt()
+            )
+            _insert(entity)
+        }
+    }
+
+    /**
+     * Internal insert for shared logic.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun _insert(entity: ProfileViewEntity)
+
+    /**
+     * Get dirty profileview that need upload to Firestore.
+     */
+    @Query("SELECT * FROM profile_views WHERE viewer_id = :viewerId AND is_dirty = 1 ORDER BY last_modified ASC")
+    suspend fun getDirtyProfileViews(viewerId: String): List<ProfileViewEntity>
+
+    /**
+     * Mark profileview as clean after successful Firestore upload.
+     */
+    @Query("UPDATE profile_views SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE id IN (:ids) AND viewer_id = :viewerId")
+    suspend fun markAsClean(ids: List<String>, viewerId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Get local profileview for remote deduplication.
+     */
+    @Query("SELECT * FROM profile_views WHERE id = :id AND viewer_id = :viewerId LIMIT 1")
+    suspend fun getProfileViewForSync(id: String, viewerId: String): ProfileViewEntity?
+
+    // ========== END OFFLINE-FIRST METHODS ==========
 }
 
 /**

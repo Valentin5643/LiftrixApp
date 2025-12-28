@@ -7,6 +7,7 @@ import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.service.AnalyticsService
 import com.example.liftrix.domain.service.SettingsPersistenceManager
 import com.example.liftrix.domain.service.SettingsValidator
+import com.example.liftrix.service.ImageProcessingService
 import com.example.liftrix.domain.usecase.auth.AuthCommandUseCase
 import com.example.liftrix.domain.usecase.settings.SettingsQueryUseCase
 import com.example.liftrix.domain.usecase.settings.SettingsCommandUseCase
@@ -60,6 +61,7 @@ class SettingsViewModel @Inject constructor(
     private val socialProfileQueryUseCase: SocialProfileQueryUseCase,
     private val authCommandUseCase: AuthCommandUseCase,
     private val profileImageOperationsUseCase: ProfileImageOperationsUseCase,
+    private val imageProcessingService: ImageProcessingService,
     private val authRepository: AuthRepository,
     private val analyticsService: AnalyticsService,
     private val settingsPersistenceManager: SettingsPersistenceManager,
@@ -168,6 +170,7 @@ class SettingsViewModel @Inject constructor(
             is SettingsEvent.NavigateToProfile -> handleProfileNavigation()
             is SettingsEvent.NavigateToSubscription -> handleSubscriptionNavigation()
             is SettingsEvent.NavigateToPrivacy -> handlePrivacyNavigation()
+            is SettingsEvent.NavigateToCommunityGuidelines -> handleCommunityGuidelinesNavigation()
             is SettingsEvent.NavigateToHelp -> handleHelpNavigation()
             is SettingsEvent.NavigateToAbout -> handleAboutNavigation()
             is SettingsEvent.NavigateToAnomalyDetection -> handleAnomalyDetectionNavigation()
@@ -725,6 +728,14 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
+     * Handles community guidelines navigation event.
+     */
+    private fun handleCommunityGuidelinesNavigation() {
+        trackNavigationEvent("community_guidelines")
+        // Navigation will be handled by the UI layer
+    }
+
+    /**
      * Handles help navigation event.
      */
     private fun handleHelpNavigation() {
@@ -914,61 +925,95 @@ class SettingsViewModel @Inject constructor(
                 
                 Timber.d("Starting profile image upload for user: ${currentUser.uid}")
 
-                // Show loading state (could be enhanced with specific image upload loading state)
-                _uiState.value = _uiState.value.copy(isUpdatingSettings = true)
+                // Show loading state
+                _uiState.value = _uiState.value.copy(isUpdatingSettings = true, error = null)
 
-                // TODO: Need to process imageUri to bytes using ImageProcessingService before calling upload()
-                // For now, using repository directly with the upload operation
-                // Upload image using the use case
-                // Note: ProfileImageOperationsUseCase.upload() requires imageBytes, not imageUri
-                // This needs ImageProcessingService integration to convert URI -> ByteArray
-                Timber.w("Profile image upload from Settings requires ImageProcessingService integration")
-                _uiState.value = _uiState.value.copy(
-                    isUpdatingSettings = false,
-                    error = "Profile image upload from settings not yet implemented with new API"
-                )
-                return@launch
+                // Step 1: Process image URI to bytes using ImageProcessingService
+                val processResult = imageProcessingService.processProfileImage(imageUri)
 
-                /*val result = profileImageOperationsUseCase.upload(
-                    userId = currentUser.uid,
-                    imageBytes = imageBytes // Need to convert imageUri to ByteArray first
-                )
+                when {
+                    processResult.isSuccess -> {
+                        val processedImage = processResult.getOrNull()!!
+                        Timber.d("Image processed successfully: ${processedImage.fileSizeBytes} bytes")
 
-                result.fold(
-                    onSuccess = { imageUrl ->
-                        Timber.i("Profile image upload successful: $imageUrl")
-
-                        // Clear loading state
-                        _uiState.value = _uiState.value.copy(isUpdatingSettings = false)
-
-                        // Track successful upload
-                        analyticsService.logEvent(
-                            "profile_image_uploaded",
-                            mapOf(
-                                "source" to "settings_screen",
-                                "success" to true
-                            )
+                        // Step 2: Upload processed image bytes
+                        val uploadResult = profileImageOperationsUseCase.upload(
+                            userId = currentUser.uid,
+                            imageBytes = processedImage.imageBytes
                         )
-                    },
-                    onFailure = { error ->
-                        val errorMessage = error.message ?: "Failed to upload profile image"
-                        Timber.e("Profile image upload failed: $error")
+
+                        uploadResult.fold(
+                            onSuccess = { storagePath ->
+                                Timber.i("Profile image upload successful: $storagePath")
+
+                                // Update UI state with success
+                                _uiState.value = _uiState.value.copy(
+                                    isUpdatingSettings = false,
+                                    error = null
+                                )
+
+                                // Reload settings to show updated profile image
+                                loadSettings()
+
+                                // Track successful upload
+                                analyticsService.logEvent(
+                                    "profile_image_uploaded",
+                                    mapOf(
+                                        "source" to "settings_screen",
+                                        "success" to true,
+                                        "file_size_bytes" to processedImage.fileSizeBytes.toString()
+                                    )
+                                )
+                            },
+                            onFailure = { error ->
+                                val errorMessage = when (error) {
+                                    is LiftrixError.ValidationError -> error.violations.firstOrNull() ?: "Image validation failed"
+                                    is LiftrixError.NetworkError -> "Network error: ${error.message}"
+                                    else -> "Failed to upload profile image"
+                                }
+                                Timber.e("Profile image upload failed: $error")
+
+                                _uiState.value = _uiState.value.copy(
+                                    isUpdatingSettings = false,
+                                    error = errorMessage
+                                )
+
+                                // Track failed upload
+                                analyticsService.logEvent(
+                                    "profile_image_upload_failed",
+                                    mapOf(
+                                        "source" to "settings_screen",
+                                        "error" to errorMessage
+                                    )
+                                )
+                            }
+                        )
+                    }
+                    else -> {
+                        // Image processing failed
+                        val error = processResult.exceptionOrNull()
+                        val errorMessage = when {
+                            error?.message?.contains("too large") == true -> "Image too large to process"
+                            error?.message?.contains("format") == true -> "Unsupported image format"
+                            else -> "Failed to process image"
+                        }
+                        Timber.e(error, "Image processing failed")
 
                         _uiState.value = _uiState.value.copy(
                             isUpdatingSettings = false,
                             error = errorMessage
                         )
 
-                        // Track failed upload
+                        // Track processing failure
                         analyticsService.logEvent(
-                            "profile_image_upload_failed",
+                            "profile_image_processing_failed",
                             mapOf(
                                 "source" to "settings_screen",
                                 "error" to errorMessage
                             )
                         )
                     }
-                )*/
+                }
 
             } catch (e: Exception) {
                 Timber.e(e, "Unexpected error during profile image upload")

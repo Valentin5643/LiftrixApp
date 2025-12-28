@@ -18,7 +18,11 @@ import androidx.room.Index
     primaryKeys = ["user_id", "post_id"],
     indices = [
         Index(value = ["user_id", "score"], name = "idx_feed_cache_user_score"),
-        Index(value = ["post_id"], name = "idx_feed_cache_post")
+        Index(value = ["post_id"], name = "idx_feed_cache_post"),
+        // P0-PERF-001: Cache invalidation - supports TTL-based cleanup every 15 minutes
+        Index(value = ["user_id", "fetched_at"], name = "idx_feed_cache_user_time"),
+        // P0-PERF-001: Feed type filtering - supports HOME/DISCOVERY/TRENDING queries
+        Index(value = ["user_id", "feed_type", "score"], name = "idx_feed_cache_type")
     ],
     foreignKeys = [
         ForeignKey(
