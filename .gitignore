@@ -5486,3 +5486,12 @@ liftrix-release.keystore
 /.specgen/specdash/package-lock.json
 /.specgen/specdash/server.js
 nul
+
+# Code intelligence and agent memory caches
+.codanna/
+.serena/
+
+# Code intelligence and agent memory (local only)
+.codanna/
+.serena/
+.fastembed_cache
