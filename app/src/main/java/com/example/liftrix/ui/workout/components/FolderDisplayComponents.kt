@@ -217,7 +217,7 @@ private fun FolderHeader(
             ) {
                 Icon(
                     imageVector = if (isExpanded) Icons.Filled.FolderOpen else Icons.Filled.Folder,
-                    contentDescription = null,
+                    contentDescription = if (isExpanded) "Folder open" else "Folder closed",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
@@ -261,7 +261,7 @@ private fun FolderHeader(
                 // Expand/Collapse Arrow
                 Icon(
                     imageVector = Icons.Filled.ExpandMore,
-                    contentDescription = null,
+                    contentDescription = if (isExpanded) "Collapse folder" else "Expand folder",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .size(20.dp)
@@ -423,7 +423,7 @@ private fun WorkoutStatItem(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = text,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(14.dp)
         )
@@ -455,7 +455,7 @@ private fun EmptyFolderContent(
     ) {
         Icon(
             imageVector = Icons.Outlined.Folder,
-            contentDescription = null,
+            contentDescription = "Empty folder",
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             modifier = Modifier.size(48.dp)
         )
@@ -476,7 +476,7 @@ private fun EmptyFolderContent(
         ) {
             Icon(
                 imageVector = Icons.Filled.Add,
-                contentDescription = null,
+                contentDescription = "Create workout",
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))

@@ -92,7 +92,7 @@ fun GoalProgressCard(
                 ) {
                     Icon(
                         imageVector = getGoalTypeIcon(goal.type),
-                        contentDescription = null,
+                        contentDescription = goal.type.displayName,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
                     )
@@ -169,7 +169,7 @@ fun GoalProgressCard(
                         // Milestone icon + count
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
+                            contentDescription = "Milestones",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(14.dp)
                         )
@@ -192,7 +192,7 @@ fun GoalProgressCard(
                         // Deadline icon + text
                         Icon(
                             imageVector = Icons.Default.Schedule,
-                            contentDescription = null,
+                            contentDescription = "Deadline",
                             tint = getDeadlineColor(goal.daysRemaining),
                             modifier = Modifier.size(14.dp)
                         )
@@ -212,7 +212,7 @@ fun GoalProgressCard(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Schedule,
-                            contentDescription = null,
+                            contentDescription = "Deadline",
                             tint = getDeadlineColor(goal.daysRemaining),
                             modifier = Modifier.size(14.dp)
                         )
@@ -243,7 +243,7 @@ fun GoalProgressCard(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Flag,
-                            contentDescription = null,
+                            contentDescription = "Next milestone",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(12.dp)
                         )

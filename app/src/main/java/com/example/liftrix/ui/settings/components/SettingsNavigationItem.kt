@@ -75,7 +75,7 @@ fun SettingsNavigationItem(
                 {
                     Icon(
                         imageVector = leadingIcon,
-                        contentDescription = null,
+                        contentDescription = title,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -83,7 +83,7 @@ fun SettingsNavigationItem(
             trailingContent = {
                 Icon(
                     imageVector = Icons.Default.ArrowForward,
-                    contentDescription = null,
+                    contentDescription = "Open setting",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

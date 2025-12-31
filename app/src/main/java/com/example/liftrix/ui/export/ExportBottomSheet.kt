@@ -290,7 +290,7 @@ private fun ExportTypeOption(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = title,
                 tint = if (isSelected) {
                     MaterialTheme.colorScheme.onPrimaryContainer
                 } else {
@@ -427,7 +427,7 @@ private fun FormatChip(
         leadingIcon = {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = text,
                 modifier = Modifier.size(16.dp)
             )
         },
@@ -491,7 +491,7 @@ private fun DataTypeSelection(
                         
                         Icon(
                             imageVector = icon,
-                            contentDescription = null,
+                            contentDescription = title,
                             modifier = Modifier.size(20.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -719,7 +719,7 @@ private fun ExportActions(
         ) {
             Icon(
                 imageVector = Icons.Default.FileDownload,
-                contentDescription = null,
+                contentDescription = "Start export",
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -780,7 +780,7 @@ private fun ExportProgressOverlay(
             is ExportProgress.Failed -> {
                 Icon(
                     imageVector = Icons.Default.Error,
-                    contentDescription = null,
+                    contentDescription = "Export failed",
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(48.dp)
                 )
@@ -799,7 +799,7 @@ private fun ExportProgressOverlay(
             is ExportProgress.Cancelled -> {
                 Icon(
                     imageVector = Icons.Default.Cancel,
-                    contentDescription = null,
+                    contentDescription = "Export cancelled",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(48.dp)
                 )

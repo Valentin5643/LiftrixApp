@@ -51,42 +51,8 @@ class AchievementSyncWorker @AssistedInject constructor(
     private val firebaseAuth: FirebaseAuth
 ) : BaseSyncWorker(context, params) {
 
-    // 🔧 HOTFIX: Fallback constructor for when Hilt factory generation fails
-    // This allows WorkManager to instantiate the worker via reflection
-    // TEMPORARY: Remove once Hilt assisted factories are confirmed working
-    constructor(context: Context, params: WorkerParameters) : this(
-        context,
-        params,
-        WorkerServiceLocator.getAchievementSyncDependencies(context).run {
-            Timber.w("⚠️ AchievementSyncWorker using FALLBACK constructor - Hilt factory failed!")
-            return@run this
-        }
-    )
-    
-    // Helper constructor to unpack the dependency structure
-    private constructor(
-        context: Context,
-        params: WorkerParameters,
-        deps: WorkerServiceLocator.AchievementSyncDependencies
-    ) : this(
-        context, params,
-        deps.achievementDao, deps.firestore, deps.firebaseAuth
-    )
-
     init {
-        val processName = getProcessName()
-        Timber.d("✅ AchievementSyncWorker constructed with Hilt dependency injection in process: $processName")
-    }
-    
-    private fun getProcessName(): String {
-        return try {
-            val processName = applicationContext.packageManager
-                .getApplicationLabel(applicationContext.applicationInfo)
-                .toString()
-            processName
-        } catch (e: Exception) {
-            "unknown"
-        }
+        Timber.d("✅ AchievementSyncWorker constructed with Hilt dependency injection")
     }
 
     override val workerName: String = "AchievementSyncWorker"

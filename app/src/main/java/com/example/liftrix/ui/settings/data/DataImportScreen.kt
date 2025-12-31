@@ -327,7 +327,7 @@ private fun FileSelectionCard(
                     ) {
                         Icon(
                             imageVector = Icons.Default.InsertDriveFile,
-                            contentDescription = null,
+                            contentDescription = "Selected file",
                             tint = LiftrixColorsV2.Teal
                         )
                         
@@ -353,7 +353,7 @@ private fun FileSelectionCard(
                         } else {
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
-                                contentDescription = null,
+                                contentDescription = "File validated",
                                 tint = LiftrixColorsV2.Light.Success
                             )
                         }
@@ -409,7 +409,7 @@ private fun ValidationResultCard(
             ) {
                 Icon(
                     imageVector = if (validation.isValid) Icons.Default.CheckCircle else Icons.Default.Error,
-                    contentDescription = null,
+                    contentDescription = if (validation.isValid) "Validation success" else "Validation failed",
                     tint = if (validation.isValid) LiftrixColorsV2.Light.Success else LiftrixColorsV2.Light.Error,
                     modifier = Modifier.size(24.dp)
                 )
@@ -670,7 +670,7 @@ private fun ConflictStrategyOption(
         
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = title,
             tint = if (isSelected) LiftrixColorsV2.Teal else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
             modifier = Modifier.size(24.dp)
         )
@@ -809,7 +809,7 @@ private fun ImportResultCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
+                    contentDescription = "Import complete",
                     tint = LiftrixColorsV2.Light.Success,
                     modifier = Modifier.size(24.dp)
                 )
@@ -866,7 +866,7 @@ private fun ImportErrorCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.Error,
-                    contentDescription = null,
+                    contentDescription = "Import failed",
                     tint = LiftrixColorsV2.Light.Error,
                     modifier = Modifier.size(24.dp)
                 )
@@ -930,7 +930,7 @@ private fun ValidationErrorCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.Error,
-                    contentDescription = null,
+                    contentDescription = "Validation failed",
                     tint = LiftrixColorsV2.Light.Error,
                     modifier = Modifier.size(24.dp)
                 )
@@ -987,7 +987,7 @@ private fun ErrorState(
         ) {
             Icon(
                 imageVector = Icons.Default.Error,
-                contentDescription = null,
+                contentDescription = "Error",
                 tint = LiftrixColorsV2.Light.Error,
                 modifier = Modifier.size(48.dp)
             )

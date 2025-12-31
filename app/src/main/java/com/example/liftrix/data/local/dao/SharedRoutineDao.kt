@@ -132,7 +132,7 @@ interface SharedRoutineDao {
         SET is_synced = 1, sync_version = :syncVersion
         WHERE id = :routineId
     """)
-    suspend fun markAsSynced(routineId: String, syncVersion: Int)
+    suspend fun markAsSynced(routineId: String, syncVersion: Long)
     
     @Query("""
         SELECT * FROM shared_routines 
@@ -167,7 +167,7 @@ interface SharedRoutineDao {
             val entity = sharedRoutine.copy(
                 isDirty = false,
                 isSynced = true,
-                syncVersion = System.currentTimeMillis().toInt()
+                syncVersion = System.currentTimeMillis()
             )
             _insert(entity)
         }

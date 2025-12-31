@@ -121,6 +121,8 @@ abstract class FirebaseModule {
         fun provideFirebaseFirestore(): FirebaseFirestore {
             return FirebaseFirestore.getInstance().apply {
                 // SPEC-20241228: Room-First Architecture - Conditional Firestore Persistence
+                validateFirestorePersistenceConfig()
+
                 val persistenceEnabled = !OfflineArchitectureFlags.DISABLE_FIRESTORE_PERSISTENCE
 
                 firestoreSettings = com.google.firebase.firestore.FirebaseFirestoreSettings.Builder()
@@ -142,6 +144,17 @@ abstract class FirebaseModule {
                 } else {
                     Timber.w("⚠️ LEGACY MODE: Firestore offline persistence ENABLED (dual authority)")
                 }
+            }
+        }
+
+        internal fun validateFirestorePersistenceConfig(
+            roomFirstEnabled: Boolean = OfflineArchitectureFlags.ROOM_FIRST_ENABLED,
+            disableFirestorePersistence: Boolean = OfflineArchitectureFlags.DISABLE_FIRESTORE_PERSISTENCE
+        ) {
+            if (roomFirstEnabled && !disableFirestorePersistence) {
+                throw IllegalStateException(
+                    "ARCHITECTURAL VIOLATION: Firestore persistence must be disabled when ROOM_FIRST_ENABLED=true"
+                )
             }
         }
 

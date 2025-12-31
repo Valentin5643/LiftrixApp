@@ -116,7 +116,7 @@ fun SocialSyncStatusIndicator(
             } else {
                 Icon(
                     imageVector = icon,
-                    contentDescription = null,
+                    contentDescription = contentDesc,
                     tint = color,
                     modifier = Modifier.size(16.dp)
                 )

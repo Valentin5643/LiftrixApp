@@ -59,7 +59,7 @@ fun UsageLimitsCard(
             ) {
                 Icon(
                     Icons.Default.Analytics,
-                    contentDescription = null,
+                    contentDescription = "Usage limits",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )

@@ -18,7 +18,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -39,18 +41,23 @@ import com.example.liftrix.ui.theme.ProvideWeightUnitManager
 import com.example.liftrix.domain.service.WeightUnitManager
 import com.example.liftrix.data.service.FirebaseStorageUrlResolver
 import com.example.liftrix.ui.common.LocalFirebaseStorageUrlResolver
+import com.example.liftrix.ui.common.LocalProfileImageCache
+import com.example.liftrix.service.ProfileImageCache
 import androidx.compose.runtime.CompositionLocalProvider
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-    
+
     @Inject
     lateinit var weightUnitManager: WeightUnitManager
-    
+
     @Inject
     lateinit var firebaseStorageUrlResolver: FirebaseStorageUrlResolver
+
+    @Inject
+    lateinit var profileImageCache: ProfileImageCache
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,7 +79,10 @@ class MainActivity : ComponentActivity() {
                 themeManager = themeManager
             ) {
                 ProvideWeightUnitManager(weightUnitManager = weightUnitManager) {
-                    CompositionLocalProvider(LocalFirebaseStorageUrlResolver provides firebaseStorageUrlResolver) {
+                    CompositionLocalProvider(
+                        LocalFirebaseStorageUrlResolver provides firebaseStorageUrlResolver,
+                        LocalProfileImageCache provides profileImageCache
+                    ) {
                         Surface(
                             modifier = Modifier.fillMaxSize(),
                             color = MaterialTheme.colorScheme.background
@@ -153,21 +163,50 @@ fun LoadingScreen() {
 @Composable
 fun AuthenticatedContent(
     user: com.example.liftrix.domain.model.User,
-    onNavigateToAuth: () -> Unit
+    onNavigateToAuth: () -> Unit,
+    viewModel: MainViewModel = hiltViewModel()
 ) {
-    // Trigger immediate sync when user is authenticated
+    var profileCheckComplete by remember { mutableStateOf(false) }
+
+    // Verify profile exists before showing main UI
     LaunchedEffect(user.uid) {
         try {
-            // This would require SyncCoordinator to be injected here
-            // For now, we'll rely on the LiftrixApp to handle the sync setup
-            // The auth state listener in LiftrixApp will catch this authentication
             Timber.d("User authenticated in MainActivity: ${user.uid}")
+
+            // Check if profile exists, wait up to 5 seconds for it to be created
+            var attempts = 0
+            val maxAttempts = 10 // 5 seconds total (10 * 500ms)
+
+            while (attempts < maxAttempts && !profileCheckComplete) {
+                val hasProfile = viewModel.checkProfileExists(user.uid)
+
+                if (hasProfile) {
+                    Timber.i("Profile verified for user: ${user.uid}")
+                    profileCheckComplete = true
+                    break
+                } else {
+                    Timber.d("Profile not found yet for user: ${user.uid}, attempt ${attempts + 1}/$maxAttempts")
+                    kotlinx.coroutines.delay(500) // Wait 500ms between checks
+                    attempts++
+                }
+            }
+
+            if (!profileCheckComplete) {
+                Timber.w("Profile verification timeout for user: ${user.uid}, proceeding anyway")
+                profileCheckComplete = true // Proceed anyway after timeout
+            }
         } catch (e: Exception) {
-            Timber.e(e, "Error during authentication sync setup")
+            Timber.e(e, "Error during profile verification")
+            profileCheckComplete = true // Proceed on error
         }
     }
-    
-    // Main navigation with type-safe navigation system
-    UnifiedNavigationContainer()
+
+    // Show loading while verifying profile existence
+    if (!profileCheckComplete) {
+        LoadingScreen()
+    } else {
+        // Main navigation with type-safe navigation system
+        UnifiedNavigationContainer()
+    }
 }
 

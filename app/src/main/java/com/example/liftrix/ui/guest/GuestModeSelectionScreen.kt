@@ -124,7 +124,7 @@ private fun GuestModeOptionCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.Person,
-                    contentDescription = null,
+                    contentDescription = "Guest mode",
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.size(24.dp)
                 )
@@ -204,7 +204,7 @@ private fun AccountOptionsCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.PersonAdd,
-                    contentDescription = null,
+                    contentDescription = "Create account",
                     tint = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.size(24.dp)
                 )
@@ -289,7 +289,7 @@ private fun GuestLimitationItem(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = text,
             tint = MaterialTheme.colorScheme.onPrimaryContainer,
             modifier = Modifier.size(16.dp)
         )
@@ -317,7 +317,7 @@ private fun AccountBenefitItem(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = text,
             tint = MaterialTheme.colorScheme.onSecondaryContainer,
             modifier = Modifier.size(16.dp)
         )

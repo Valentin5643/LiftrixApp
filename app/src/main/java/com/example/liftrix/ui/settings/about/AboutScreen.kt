@@ -404,7 +404,7 @@ private fun StatisticItem(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = text,
             modifier = Modifier.size(20.dp),
             tint = MaterialTheme.colorScheme.primary
         )
@@ -501,7 +501,7 @@ private fun SocialLinkItem(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = title,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
             )
@@ -632,7 +632,7 @@ private fun DebugInformationCard(
                     Text(if (expanded) "Hide" else "Show")
                     Icon(
                         imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                        contentDescription = null
+                        contentDescription = if (expanded) "Collapse debug info" else "Expand debug info"
                     )
                 }
             }

@@ -8,19 +8,47 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import com.example.liftrix.data.local.entity.ExerciseSetEntity
+import com.example.liftrix.annotations.UserScoped
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ExerciseSetDao {
     
-    @Query("SELECT * FROM exercise_sets WHERE exercise_id = :exerciseId ORDER BY set_number ASC")
-    suspend fun getSetsByExercise(exerciseId: Long): List<ExerciseSetEntity>
+    suspend fun getSetsByExercise(exerciseId: Long, userId: String): List<ExerciseSetEntity> {
+        return getSetsForExercise(exerciseId, userId)
+    }
+
+    @Query("""
+        SELECT es.* FROM exercise_sets es
+        JOIN exercises e ON es.exercise_id = e.id
+        JOIN workouts w ON e.workout_id = w.id
+        WHERE e.id = :exerciseId
+        AND w.user_id = :userId
+        ORDER BY es.set_number ASC
+    """)
+    @UserScoped
+    suspend fun getSetsForExercise(exerciseId: Long, userId: String): List<ExerciseSetEntity>
     
-    @Query("SELECT * FROM exercise_sets WHERE exercise_id = :exerciseId ORDER BY set_number ASC")
-    fun getSetsByExerciseFlow(exerciseId: Long): Flow<List<ExerciseSetEntity>>
+    @Query("""
+        SELECT es.* FROM exercise_sets es
+        JOIN exercises e ON es.exercise_id = e.id
+        JOIN workouts w ON e.workout_id = w.id
+        WHERE e.id = :exerciseId
+        AND w.user_id = :userId
+        ORDER BY es.set_number ASC
+    """)
+    @UserScoped
+    fun getSetsByExerciseFlow(exerciseId: Long, userId: String): Flow<List<ExerciseSetEntity>>
     
-    @Query("SELECT * FROM exercise_sets WHERE id = :setId")
-    suspend fun getSetById(setId: Long): ExerciseSetEntity?
+    @Query("""
+        SELECT es.* FROM exercise_sets es
+        JOIN exercises e ON es.exercise_id = e.id
+        JOIN workouts w ON e.workout_id = w.id
+        WHERE es.id = :setId
+        AND w.user_id = :userId
+    """)
+    @UserScoped
+    suspend fun getSetById(setId: Long, userId: String): ExerciseSetEntity?
     
     @Query("""
         SELECT es.* FROM exercise_sets es 
@@ -32,10 +60,20 @@ interface ExerciseSetDao {
         ORDER BY es.completed_at DESC 
         LIMIT :limit
     """)
+    @UserScoped
     suspend fun getExerciseHistory(userId: String, exerciseLibraryId: String, limit: Int): List<ExerciseSetEntity>
     
-    @Query("SELECT * FROM exercise_sets WHERE completed_at IS NOT NULL ORDER BY completed_at DESC LIMIT :limit")
-    suspend fun getRecentCompletedSets(limit: Int): List<ExerciseSetEntity>
+    @Query("""
+        SELECT es.* FROM exercise_sets es
+        JOIN exercises e ON es.exercise_id = e.id
+        JOIN workouts w ON e.workout_id = w.id
+        WHERE w.user_id = :userId
+        AND es.completed_at IS NOT NULL
+        ORDER BY es.completed_at DESC
+        LIMIT :limit
+    """)
+    @UserScoped
+    suspend fun getRecentCompletedSets(userId: String, limit: Int): List<ExerciseSetEntity>
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSet(set: ExerciseSetEntity): Long
@@ -52,55 +90,138 @@ interface ExerciseSetDao {
     @Delete
     suspend fun deleteSet(set: ExerciseSetEntity): Int
     
-    @Query("DELETE FROM exercise_sets WHERE id = :setId")
-    suspend fun deleteSetById(setId: Long): Int
+    @Query("""
+        DELETE FROM exercise_sets
+        WHERE id = :setId
+        AND exercise_id IN (
+            SELECT e.id FROM exercises e
+            JOIN workouts w ON e.workout_id = w.id
+            WHERE w.user_id = :userId
+        )
+    """)
+    @UserScoped
+    suspend fun deleteSetById(setId: Long, userId: String): Int
     
-    @Query("DELETE FROM exercise_sets WHERE exercise_id = :exerciseId")
-    suspend fun deleteSetsForExercise(exerciseId: Long): Int
+    @Query("""
+        DELETE FROM exercise_sets
+        WHERE exercise_id = :exerciseId
+        AND exercise_id IN (
+            SELECT e.id FROM exercises e
+            JOIN workouts w ON e.workout_id = w.id
+            WHERE w.user_id = :userId
+        )
+    """)
+    @UserScoped
+    suspend fun deleteSetsForExercise(exerciseId: Long, userId: String): Int
     
-    @Query("DELETE FROM exercise_sets WHERE exercise_id IN (SELECT id FROM exercises WHERE workout_id = :workoutId)")
-    suspend fun deleteSetsForWorkout(workoutId: String): Int
+    @Query("""
+        DELETE FROM exercise_sets
+        WHERE exercise_id IN (
+            SELECT e.id FROM exercises e
+            JOIN workouts w ON e.workout_id = w.id
+            WHERE w.id = :workoutId
+            AND w.user_id = :userId
+        )
+    """)
+    @UserScoped
+    suspend fun deleteSetsForWorkout(workoutId: String, userId: String): Int
     
-    @Query("SELECT COUNT(*) FROM exercise_sets WHERE exercise_id = :exerciseId")
-    suspend fun getSetCountForExercise(exerciseId: Long): Int
+    @Query("""
+        SELECT COUNT(*) FROM exercise_sets
+        WHERE exercise_id = :exerciseId
+        AND exercise_id IN (
+            SELECT e.id FROM exercises e
+            JOIN workouts w ON e.workout_id = w.id
+            WHERE w.user_id = :userId
+        )
+    """)
+    @UserScoped
+    suspend fun getSetCountForExercise(exerciseId: Long, userId: String): Int
     
-    @Query("SELECT COUNT(*) FROM exercise_sets WHERE exercise_id = :exerciseId AND completed_at IS NOT NULL")
-    suspend fun getCompletedSetCountForExercise(exerciseId: Long): Int
+    @Query("""
+        SELECT COUNT(*) FROM exercise_sets
+        WHERE exercise_id = :exerciseId
+        AND completed_at IS NOT NULL
+        AND exercise_id IN (
+            SELECT e.id FROM exercises e
+            JOIN workouts w ON e.workout_id = w.id
+            WHERE w.user_id = :userId
+        )
+    """)
+    @UserScoped
+    suspend fun getCompletedSetCountForExercise(exerciseId: Long, userId: String): Int
     
-    @Query("UPDATE exercise_sets SET completed_at = :completedAt WHERE id = :setId")
-    suspend fun markSetCompleted(setId: Long, completedAt: Long): Int
+    @Query("""
+        UPDATE exercise_sets
+        SET completed_at = :completedAt
+        WHERE id = :setId
+        AND exercise_id IN (
+            SELECT e.id FROM exercises e
+            JOIN workouts w ON e.workout_id = w.id
+            WHERE w.user_id = :userId
+        )
+    """)
+    @UserScoped
+    suspend fun markSetCompleted(setId: Long, userId: String, completedAt: Long): Int
     
-    @Query("UPDATE exercise_sets SET completed_at = NULL WHERE id = :setId")
-    suspend fun markSetIncomplete(setId: Long): Int
+    @Query("""
+        UPDATE exercise_sets
+        SET completed_at = NULL
+        WHERE id = :setId
+        AND exercise_id IN (
+            SELECT e.id FROM exercises e
+            JOIN workouts w ON e.workout_id = w.id
+            WHERE w.user_id = :userId
+        )
+    """)
+    @UserScoped
+    suspend fun markSetIncomplete(setId: Long, userId: String): Int
     
     @Transaction
-    suspend fun replaceAllSetsForExercise(exerciseId: Long, newSets: List<ExerciseSetEntity>) {
-        deleteSetsForExercise(exerciseId)
-        insertSets(newSets.map { it.copy(exerciseId = exerciseId) })
+    suspend fun replaceAllSetsForExercise(
+        exerciseId: Long,
+        userId: String,
+        newSets: List<ExerciseSetEntity>
+    ) {
+        deleteSetsForExercise(exerciseId, userId)
+        insertSets(newSets.map { it.copy(exerciseId = exerciseId, userId = userId) })
     }
     
-    @Query("SELECT MAX(set_number) FROM exercise_sets WHERE exercise_id = :exerciseId")
-    suspend fun getMaxSetNumber(exerciseId: Long): Int?
+    @Query("""
+        SELECT MAX(set_number) FROM exercise_sets
+        WHERE exercise_id = :exerciseId
+        AND exercise_id IN (
+            SELECT e.id FROM exercises e
+            JOIN workouts w ON e.workout_id = w.id
+            WHERE w.user_id = :userId
+        )
+    """)
+    @UserScoped
+    suspend fun getMaxSetNumber(exerciseId: Long, userId: String): Int?
     
     @Query("""
-        SELECT AVG(weight_kg) FROM exercise_sets 
-        WHERE exercise_id IN (
-            SELECT id FROM exercises WHERE exercise_library_id = :exerciseLibraryId
-        ) 
-        AND weight_kg IS NOT NULL 
-        AND completed_at IS NOT NULL
+        SELECT AVG(es.weight_kg) FROM exercise_sets es
+        JOIN exercises e ON es.exercise_id = e.id
+        JOIN workouts w ON e.workout_id = w.id
+        WHERE w.user_id = :userId
+        AND e.exercise_library_id = :exerciseLibraryId
+        AND es.weight_kg IS NOT NULL
+        AND es.completed_at IS NOT NULL
     """)
-    suspend fun getAverageWeightForExercise(exerciseLibraryId: String): Float?
+    @UserScoped
+    suspend fun getAverageWeightForExercise(exerciseLibraryId: String, userId: String): Float?
     
     @Query("""
-        SELECT MAX(weight_kg) FROM exercise_sets 
-        WHERE exercise_id IN (
-            SELECT id FROM exercises WHERE exercise_library_id = :exerciseLibraryId
-        ) 
-        AND weight_kg IS NOT NULL 
-        AND completed_at IS NOT NULL
+        SELECT MAX(es.weight_kg) FROM exercise_sets es
+        JOIN exercises e ON es.exercise_id = e.id
+        JOIN workouts w ON e.workout_id = w.id
+        WHERE w.user_id = :userId
+        AND e.exercise_library_id = :exerciseLibraryId
+        AND es.weight_kg IS NOT NULL
+        AND es.completed_at IS NOT NULL
     """)
-    suspend fun getMaxWeightForExercise(exerciseLibraryId: String): Float?
+    @UserScoped
+    suspend fun getMaxWeightForExercise(exerciseLibraryId: String, userId: String): Float?
     
     // Optimized analytics queries for real-time dashboard data integration
     
@@ -137,6 +258,7 @@ interface ExerciseSetDao {
         ORDER BY es.completed_at DESC, es.weight_kg DESC
         LIMIT :limit
     """)
+    @UserScoped
     suspend fun getOneRmDataForExercises(
         userId: String,
         exerciseLibraryIds: List<String>,
@@ -179,6 +301,7 @@ interface ExerciseSetDao {
         ORDER BY total_volume DESC
         LIMIT :limit
     """)
+    @UserScoped
     suspend fun getVolumeDataByExercise(
         userId: String,
         startDate: String,
@@ -217,6 +340,7 @@ interface ExerciseSetDao {
         ORDER BY total_volume DESC
         LIMIT :limit
     """)
+    @UserScoped
     suspend fun getVolumeDataByMuscleGroup(
         userId: String,
         startDate: String,
@@ -254,6 +378,7 @@ interface ExerciseSetDao {
         ORDER BY es.completed_at DESC, es.weight_kg DESC
         LIMIT 5000
     """)
+    @UserScoped
     suspend fun getAllOneRmData(
         userId: String,
         startDate: String,
@@ -290,6 +415,7 @@ interface ExerciseSetDao {
         GROUP BY COALESCE(DATE(es.completed_at / 1000, 'unixepoch'), w.date), e.exercise_library_id, el.name
         ORDER BY date ASC, el.name ASC
     """)
+    @UserScoped
     suspend fun getDailyVolumeDataByExercise(
         userId: String,
         startDate: String,
@@ -326,6 +452,7 @@ interface ExerciseSetDao {
         GROUP BY COALESCE(DATE(es.completed_at / 1000, 'unixepoch'), w.date), el.primary_muscle_group
         ORDER BY date ASC, el.primary_muscle_group ASC
     """)
+    @UserScoped
     suspend fun getDailyVolumeDataByMuscleGroup(
         userId: String,
         startDate: String,
@@ -361,6 +488,7 @@ interface ExerciseSetDao {
         GROUP BY COALESCE(DATE(es.completed_at / 1000, 'unixepoch'), w.date)
         ORDER BY date ASC
     """)
+    @UserScoped
     suspend fun getDailyVolumeData(
         userId: String,
         startDate: String,
@@ -368,16 +496,20 @@ interface ExerciseSetDao {
     ): List<DailyVolumeResult>
     
     @Query("SELECT COUNT(*) FROM exercise_sets es JOIN exercises e ON es.exercise_id = e.id JOIN workouts w ON e.workout_id = w.id WHERE w.user_id = :userId AND es.completed_at IS NOT NULL")
+    @UserScoped
     suspend fun getUserSetCount(userId: String): Int
     
     @Query("SELECT COUNT(*) FROM workouts WHERE user_id = :userId")
+    @UserScoped
     suspend fun getUserWorkoutCount(userId: String): Int
     
     // Debug queries to diagnose the volume data issue
     @Query("SELECT COUNT(*) FROM exercise_sets es JOIN exercises e ON es.exercise_id = e.id JOIN workouts w ON e.workout_id = w.id WHERE w.user_id = :userId")
+    @UserScoped
     suspend fun getAllUserSetCount(userId: String): Int
     
     @Query("SELECT COUNT(*) FROM exercise_sets es JOIN exercises e ON es.exercise_id = e.id JOIN workouts w ON e.workout_id = w.id WHERE w.user_id = :userId AND es.completed_at IS NULL")
+    @UserScoped
     suspend fun getNullCompletedSetCount(userId: String): Int
     
     @Query("""
@@ -396,9 +528,11 @@ interface ExerciseSetDao {
         ORDER BY es.id DESC 
         LIMIT 10
     """)
+    @UserScoped
     suspend fun getDebugSetSample(userId: String): List<DebugSetResult>
     
     @Query("SELECT COUNT(*) FROM exercise_sets es JOIN exercises e ON es.exercise_id = e.id JOIN workouts w ON e.workout_id = w.id WHERE w.user_id = :userId AND es.weight_kg > 0 AND es.reps > 0")
+    @UserScoped
     suspend fun getUserValidSetCount(userId: String): Int
     
     /**
@@ -441,6 +575,7 @@ interface ExerciseSetDao {
         ORDER BY performance_score DESC
         LIMIT :limit
     """)
+    @UserScoped
     suspend fun getExerciseRankings(
         userId: String,
         startDate: String,

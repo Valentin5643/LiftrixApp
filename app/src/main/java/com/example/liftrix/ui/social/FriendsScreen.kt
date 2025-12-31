@@ -100,7 +100,7 @@ fun FriendsScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.People,
-                            contentDescription = null,
+                            contentDescription = "Following tab",
                             tint = if (selectedTabIndex == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -128,7 +128,7 @@ fun FriendsScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.PersonAdd,
-                            contentDescription = null,
+                            contentDescription = "Followers tab",
                             tint = if (selectedTabIndex == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -249,7 +249,7 @@ private fun SearchFollowingUsers(
             leadingIcon = {
                 Icon(
                     imageVector = Icons.Default.Search,
-                    contentDescription = null
+                    contentDescription = "Search following"
                 )
             },
             trailingIcon = if (searchQuery.isNotEmpty()) {
@@ -311,7 +311,7 @@ private fun SearchUsers(
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Search,
-                        contentDescription = null
+                        contentDescription = "Search users"
                     )
                 },
                 trailingIcon = if (searchQuery.isNotEmpty()) {
@@ -411,7 +411,7 @@ private fun SearchResultItem(
         ) {
             Icon(
                 imageVector = Icons.Default.PersonAdd,
-                contentDescription = null,
+                contentDescription = "Follow user",
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))
@@ -717,7 +717,7 @@ private fun FollowerItem(
             ) {
                 Icon(
                     imageVector = Icons.Default.PersonAdd,
-                    contentDescription = null,
+                    contentDescription = "Follow back",
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
@@ -775,7 +775,7 @@ private fun EmptyStateContent(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = title,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             modifier = Modifier.size(64.dp)
         )
@@ -817,7 +817,7 @@ private fun ErrorState(
     ) {
         Icon(
             imageVector = Icons.Default.Error,
-            contentDescription = null,
+            contentDescription = "Error",
             tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(48.dp)
         )
@@ -846,7 +846,7 @@ private fun ErrorState(
         Button(onClick = onRetry) {
             Icon(
                 imageVector = Icons.Default.Sync,
-                contentDescription = null,
+                contentDescription = "Retry",
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))

@@ -370,7 +370,7 @@ private fun MetricDisplay(
             ) {
                 Icon(
                     imageVector = icon,
-                    contentDescription = null,
+                    contentDescription = "Metric",
                     tint = primaryColor,
                     modifier = Modifier.size(22.dp)
                 )

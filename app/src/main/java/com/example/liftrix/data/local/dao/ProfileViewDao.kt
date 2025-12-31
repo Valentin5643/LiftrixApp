@@ -193,7 +193,7 @@ interface ProfileViewDao {
             val entity = profileView.copy(
                 isDirty = false,
                 isSynced = true,
-                syncVersion = System.currentTimeMillis().toInt()
+                syncVersion = System.currentTimeMillis()
             )
             _insert(entity)
         }

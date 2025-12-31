@@ -141,7 +141,7 @@ fun UnifiedWorkoutCard(
                 leadingIcon?.let { icon ->
                     LiftrixIcon(
                         icon = icon,
-                        contentDescription = null, // Will be included in card content description
+                        contentDescription = title,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(LiftrixSpacing.touchTarget) // 24dp from tokens
                     )
@@ -278,7 +278,7 @@ fun CompactUnifiedWorkoutCard(
                 leadingIcon?.let { icon ->
                     LiftrixIcon(
                         icon = icon,
-                        contentDescription = null, // Will be included in card content description
+                        contentDescription = title,
                         tint = MaterialTheme.colorScheme.primary,
                         size = 20.dp // Smaller icon for compact version
                     )

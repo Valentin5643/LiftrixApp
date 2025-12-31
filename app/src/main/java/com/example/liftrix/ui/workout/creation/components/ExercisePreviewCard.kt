@@ -234,7 +234,7 @@ private fun ExerciseDetailChip(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = text,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(16.dp)
         )
@@ -355,7 +355,7 @@ fun ExercisePreviewCard(
                         
                         Icon(
                             imageVector = Icons.Default.FitnessCenter,
-                            contentDescription = null,
+                            contentDescription = "Exercise category",
                             modifier = Modifier.size(24.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
@@ -440,7 +440,7 @@ fun ExercisePreviewCard(
                         
                         Icon(
                             imageVector = Icons.Default.Person,
-                            contentDescription = null,
+                            contentDescription = "Custom exercise",
                             modifier = Modifier.size(24.dp),
                             tint = MaterialTheme.colorScheme.secondary
                         )

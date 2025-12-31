@@ -150,7 +150,7 @@ fun WorkoutTemplateScreen(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = null
+                            contentDescription = "Navigate back"
                         )
                     }
                 },
@@ -173,7 +173,7 @@ fun WorkoutTemplateScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Done,
-                            contentDescription = null,
+                            contentDescription = "Save template",
                             tint = if (canSave) {
                                 MaterialTheme.colorScheme.primary
                             } else {
@@ -330,7 +330,7 @@ private fun ExerciseSelectionCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = null
+                    contentDescription = "Add exercise"
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Browse Exercises")
@@ -338,5 +338,4 @@ private fun ExerciseSelectionCard(
         }
     }
 }
-
 

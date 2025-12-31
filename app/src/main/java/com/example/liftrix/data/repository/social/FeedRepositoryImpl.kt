@@ -249,7 +249,7 @@ class FeedRepositoryImpl @Inject constructor(
             Timber.d("🔍 WORKOUT-POSTS-DEBUG: Creating post for user=$userId, workout=${request.workoutId}, visibility=${request.visibility}")
             
             // Get workout details for metadata
-            val workout = workoutDao.getWorkoutById(request.workoutId)
+            val workout = workoutDao.getWorkoutByIdForUser(request.workoutId, userId)
             
             val calculatedVolume = calculateTotalVolume(workout)
             Timber.d("🔍 POST-CREATION-DEBUG: About to create post entity - workoutId=${request.workoutId}, calculatedVolume=$calculatedVolume")

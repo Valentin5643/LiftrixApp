@@ -24,7 +24,7 @@ data class EnrichedFollowRelationship(
     @androidx.room.ColumnInfo(name = "accepted_at") val acceptedAt: Long?,
     @androidx.room.ColumnInfo(name = "blocked_at") val blockedAt: Long?,
     @androidx.room.ColumnInfo(name = "is_synced") val isSynced: Boolean,
-    @androidx.room.ColumnInfo(name = "sync_version") val syncVersion: Int,
+    @androidx.room.ColumnInfo(name = "sync_version") val syncVersion: Long,
     @androidx.room.ColumnInfo(name = "last_modified") val lastModified: Long,
     // Profile data from social_profiles join
     @androidx.room.ColumnInfo(name = "profile_display_name") val profileDisplayName: String?,
@@ -312,7 +312,7 @@ interface FollowRelationshipDao {
         SET is_synced = :isSynced, sync_version = :version
         WHERE id = :relationshipId
     """)
-    suspend fun updateSyncStatus(relationshipId: String, isSynced: Boolean, version: Int): Int
+    suspend fun updateSyncStatus(relationshipId: String, isSynced: Boolean, version: Long): Int
 
     // ========================================
     // Mutual Follow Detection
@@ -370,7 +370,7 @@ interface FollowRelationshipDao {
             val entity = followRelationship.copy(
                 isDirty = false,
                 isSynced = true,
-                syncVersion = System.currentTimeMillis().toInt()
+                syncVersion = System.currentTimeMillis()
             )
             _insert(entity)
         }

@@ -217,7 +217,7 @@ private fun EquipmentChip(
             {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
+                    contentDescription = "Selected",
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -356,7 +356,7 @@ private fun OtherEquipmentInput(
             leadingIcon = {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = null,
+                    contentDescription = "Add equipment",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
@@ -410,7 +410,7 @@ private fun OtherEquipmentInput(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Error,
-                        contentDescription = null,
+                        contentDescription = "Other equipment error",
                         tint = LiftrixColorsV2.DataViz.Series1,
                         modifier = Modifier.size(16.dp)
                     )
@@ -453,7 +453,7 @@ private fun EquipmentValidationMessage(
             ) {
                 Icon(
                     imageVector = Icons.Default.Error,
-                    contentDescription = null,
+                    contentDescription = "Equipment error",
                     tint = LiftrixColorsV2.DataViz.Series1,
                     modifier = Modifier.size(16.dp)
                 )
@@ -478,7 +478,7 @@ private fun EquipmentValidationMessage(
             ) {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
+                    contentDescription = "Equipment selection valid",
                     tint = LiftrixColorsV2.Teal,
                     modifier = Modifier.size(16.dp)
                 )

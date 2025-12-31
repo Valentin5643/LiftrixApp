@@ -128,7 +128,7 @@ fun UsernameAvailabilityIndicator(
             ) {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
+                    contentDescription = "Username available",
                     tint = Color(0xFF66BB6A),
                     modifier = Modifier.size(16.dp)
                 )
@@ -147,7 +147,7 @@ fun UsernameAvailabilityIndicator(
             ) {
                 Icon(
                     imageVector = Icons.Default.Cancel,
-                    contentDescription = null,
+                    contentDescription = "Username unavailable",
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(16.dp)
                 )
@@ -166,7 +166,7 @@ fun UsernameAvailabilityIndicator(
             ) {
                 Icon(
                     imageVector = Icons.Default.Error,
-                    contentDescription = null,
+                    contentDescription = "Invalid username",
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(16.dp)
                 )
@@ -212,7 +212,7 @@ fun UsernameSuggestions(
                         leadingIcon = {
                             Icon(
                                 imageVector = Icons.Default.Person,
-                                contentDescription = null,
+                                contentDescription = "Username suggestion",
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -374,7 +374,7 @@ fun UsernameChangeScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Info,
-                                contentDescription = null,
+                                contentDescription = "Username guidelines",
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -444,11 +444,11 @@ fun UsernameChangeScreen(
                             label = { Text("New Username *") },
                             placeholder = { Text("Enter your new username") },
                             leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Person,
-                                    contentDescription = null
-                                )
-                            },
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = "New username",
+                            )
+                        },
                             enabled = !uiState.isUpdatingUsername,
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.Text,
@@ -543,7 +543,7 @@ fun UsernameChangeScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Error,
-                            contentDescription = null,
+                            contentDescription = "Error",
                             tint = MaterialTheme.colorScheme.onErrorContainer
                         )
                         Text(
@@ -585,7 +585,7 @@ fun UsernameChangeScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
+                            contentDescription = "Success",
                             tint = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Text(

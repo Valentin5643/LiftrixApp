@@ -187,7 +187,7 @@ fun OnboardingFilterChip(
             {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
+                    contentDescription = "Selected",
                     modifier = Modifier.size(16.dp)
                 )
             }

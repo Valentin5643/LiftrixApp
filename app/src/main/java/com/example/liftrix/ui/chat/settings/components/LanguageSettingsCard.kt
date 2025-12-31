@@ -47,7 +47,7 @@ fun LanguageSettingsCard(
             ) {
                 Icon(
                     Icons.Default.Language,
-                    contentDescription = null,
+                    contentDescription = "Language settings",
                     tint = LiftrixColorsV2.primary,
                     modifier = Modifier.size(24.dp)
                 )

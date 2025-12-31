@@ -72,7 +72,7 @@ fun ExerciseFilterSheet(
                 onValueChange = { searchQuery = it },
                 label = { Text("Search exercises") },
                 leadingIcon = { 
-                    Icon(Icons.Default.Search, contentDescription = null) 
+                    Icon(Icons.Default.Search, contentDescription = "Search") 
                 },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true

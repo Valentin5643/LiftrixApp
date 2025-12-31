@@ -442,7 +442,7 @@ private fun QRScanningOverlay(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Error,
-                        contentDescription = null,
+                        contentDescription = "Error",
                         tint = Color.White,
                         modifier = Modifier.size(32.dp)
                     )
@@ -495,7 +495,7 @@ private fun QRScannerInstructions(
             ) {
                 Icon(
                     imageVector = Icons.Default.QrCode,
-                    contentDescription = null,
+                    contentDescription = "QR code",
                     tint = Color.White,
                     modifier = Modifier.size(20.dp)
                 )
@@ -546,7 +546,7 @@ private fun CameraPermissionRequest(
             ) {
                 Icon(
                     imageVector = Icons.Default.Camera,
-                    contentDescription = null,
+                    contentDescription = "Camera",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(64.dp)
                 )
@@ -571,7 +571,7 @@ private fun CameraPermissionRequest(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Camera,
-                        contentDescription = null,
+                        contentDescription = "Allow camera access",
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))

@@ -18,7 +18,7 @@ data class PostCommentWithProfile(
     @ColumnInfo(name = "edited_at") val editedAt: Long?,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
     @ColumnInfo(name = "is_synced") val isSynced: Boolean,
-    @ColumnInfo(name = "sync_version") val syncVersion: Int,
+    @ColumnInfo(name = "sync_version") val syncVersion: Long,
     val username: String?,
     @ColumnInfo(name = "display_name") val displayName: String?,
     @ColumnInfo(name = "profile_photo_url") val profilePhotoUrl: String?

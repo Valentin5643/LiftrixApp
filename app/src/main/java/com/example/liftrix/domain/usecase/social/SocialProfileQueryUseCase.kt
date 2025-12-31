@@ -107,10 +107,15 @@ class SocialProfileQueryUseCase @Inject constructor(
                     return liftrixFailure(
                         LiftrixError.NotFoundError(
                             errorMessage = "User profile not found",
+                            isRecoverable = true, // Profile can be created
                             analyticsContext = mapOf(
                                 "context" to "SocialProfileQueryUseCase",
-                                "profileUserId" to request.profileUserId
-                            )
+                                "profileUserId" to request.profileUserId,
+                                "suggestion" to "CREATE_PROFILE",
+                                "reason" to "Profile exists in auth but not in database - likely new user or incomplete onboarding"
+                            ),
+                            resourceType = "USER_PROFILE",
+                            resourceId = request.profileUserId
                         )
                     )
                 }

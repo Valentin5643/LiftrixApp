@@ -224,7 +224,7 @@ fun AccountDeletionFlow(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Error,
-                            contentDescription = null,
+                            contentDescription = "Error",
                             tint = MaterialTheme.colorScheme.onErrorContainer
                         )
                         Text(
@@ -309,7 +309,7 @@ private fun WarningStep(
             ) {
                 Icon(
                     imageVector = Icons.Default.Warning,
-                    contentDescription = null,
+                    contentDescription = "Warning",
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(48.dp)
                 )
@@ -352,7 +352,7 @@ private fun WarningStep(
                 ) {
                     Icon(
                         imageVector = item.icon,
-                        contentDescription = null,
+                        contentDescription = item.title,
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(24.dp)
                     )
@@ -390,7 +390,7 @@ private fun WarningStep(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Lightbulb,
-                        contentDescription = null,
+                        contentDescription = "Alternatives",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
                     )
@@ -454,7 +454,7 @@ private fun WarningStep(
             ) {
                 Icon(
                     imageVector = Icons.Default.Cancel,
-                    contentDescription = null,
+                    contentDescription = "Keep account",
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -472,7 +472,7 @@ private fun WarningStep(
             ) {
                 Icon(
                     imageVector = Icons.Default.ArrowForward,
-                    contentDescription = null,
+                    contentDescription = "Continue",
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -519,7 +519,7 @@ private fun ConfirmationStep(
             ) {
                 Icon(
                     imageVector = Icons.Default.Edit,
-                    contentDescription = null,
+                    contentDescription = "Type confirmation",
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(32.dp)
                 )
@@ -578,7 +578,7 @@ private fun ConfirmationStep(
                     ) {
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
+                            contentDescription = "Text matches",
                             tint = Color(0xFF66BB6A),
                             modifier = Modifier.size(16.dp)
                         )
@@ -613,7 +613,7 @@ private fun ConfirmationStep(
             ) {
                 Icon(
                     imageVector = Icons.Default.ArrowBack,
-                    contentDescription = null,
+                    contentDescription = "Back",
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -631,7 +631,7 @@ private fun ConfirmationStep(
             ) {
                 Icon(
                     imageVector = Icons.Default.ArrowForward,
-                    contentDescription = null,
+                    contentDescription = "Continue",
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -680,7 +680,7 @@ private fun AuthenticationStep(
             ) {
                 Icon(
                     imageVector = Icons.Default.Security,
-                    contentDescription = null,
+                    contentDescription = "Verify identity",
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(32.dp)
                 )
@@ -708,7 +708,7 @@ private fun AuthenticationStep(
             leadingIcon = {
                 Icon(
                     imageVector = Icons.Default.Lock,
-                    contentDescription = null
+                    contentDescription = "Password"
                 )
             },
             trailingIcon = {
@@ -764,7 +764,7 @@ private fun AuthenticationStep(
             ) {
                 Icon(
                     imageVector = Icons.Default.Warning,
-                    contentDescription = null,
+                    contentDescription = "Final warning",
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(24.dp)
                 )
@@ -795,7 +795,7 @@ private fun AuthenticationStep(
             ) {
                 Icon(
                     imageVector = Icons.Default.ArrowBack,
-                    contentDescription = null,
+                    contentDescription = "Back",
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -823,7 +823,7 @@ private fun AuthenticationStep(
                 } else {
                     Icon(
                         imageVector = Icons.Default.Delete,
-                        contentDescription = null,
+                        contentDescription = "Delete account",
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -892,7 +892,7 @@ private fun CompletedStep(
     ) {
         Icon(
             imageVector = Icons.Default.CheckCircle,
-            contentDescription = null,
+            contentDescription = "Account deleted",
             tint = Color(0xFF66BB6A),
             modifier = Modifier.size(64.dp)
         )

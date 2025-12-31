@@ -304,7 +304,7 @@ fun DataPortabilityScreen(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Error,
-                                    contentDescription = null,
+                                    contentDescription = "Export failed",
                                     tint = MaterialTheme.colorScheme.error
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))

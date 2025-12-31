@@ -229,7 +229,7 @@ fun SupportTicketScreen(
                                             } else {
                                                 Icon(
                                                     Icons.Default.Send,
-                                                    contentDescription = null,
+                                                    contentDescription = "Send reply",
                                                     modifier = Modifier.size(18.dp)
                                                 )
                                             }

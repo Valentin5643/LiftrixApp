@@ -135,7 +135,7 @@ private fun ConversionHeader(
         
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = title,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(64.dp)
         )
@@ -184,7 +184,7 @@ private fun CurrentProgressCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.History,
-                    contentDescription = null,
+                    contentDescription = "Progress history",
                     tint = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.size(24.dp)
                 )
@@ -311,7 +311,7 @@ private fun AdvantageItem(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = title,
             tint = MaterialTheme.colorScheme.onPrimaryContainer,
             modifier = Modifier.size(24.dp)
         )
@@ -355,7 +355,7 @@ private fun ConversionActions(
             ) {
                 Icon(
                     imageVector = Icons.Default.PersonAdd,
-                    contentDescription = null,
+                    contentDescription = "Create account",
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))

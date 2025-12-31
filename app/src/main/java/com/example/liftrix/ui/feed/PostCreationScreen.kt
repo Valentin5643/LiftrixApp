@@ -397,7 +397,7 @@ private fun MediaSection(
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Add,
-                    contentDescription = null,
+                    contentDescription = "Add media",
                     modifier = Modifier.size(16.dp)
                 )
                 

@@ -111,7 +111,7 @@ fun HelpScreen(
                 icon = { 
                     Icon(
                         imageVector = Icons.Default.Email, 
-                        contentDescription = null
+                        contentDescription = "Contact support"
                     )
                 },
                 modifier = Modifier.semantics {
@@ -382,7 +382,7 @@ private fun HelpSearchBar(
         leadingIcon = { 
             Icon(
                 imageVector = Icons.Default.Search, 
-                contentDescription = null
+                contentDescription = "Search help"
             )
         },
         trailingIcon = {
@@ -459,7 +459,7 @@ private fun HelpArticleCard(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Visibility,
-                            contentDescription = null,
+                            contentDescription = "Views",
                             modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -505,7 +505,7 @@ private fun FeaturedArticleCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Star,
-                        contentDescription = null,
+                        contentDescription = "Featured",
                         tint = MaterialTheme.colorScheme.primary
                     )
                     Text(
@@ -568,7 +568,7 @@ private fun CategoryCard(
         ) {
             Icon(
                 imageVector = getCategoryIcon(category.name),
-                contentDescription = null,
+                contentDescription = category.displayName,
                 tint = if (isSelected) {
                     MaterialTheme.colorScheme.onPrimaryContainer
                 } else {
@@ -620,7 +620,7 @@ private fun CategoryCard(
             
             Icon(
                 imageVector = Icons.Default.ChevronRight,
-                contentDescription = null,
+                contentDescription = "View category",
                 tint = if (isSelected) {
                     MaterialTheme.colorScheme.onPrimaryContainer
                 } else {
@@ -647,7 +647,7 @@ private fun NoSearchResultsContent(
     ) {
         Icon(
             imageVector = Icons.Default.SearchOff,
-            contentDescription = null,
+            contentDescription = "No results",
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -692,7 +692,7 @@ private fun HelpErrorContent(
     ) {
         Icon(
             imageVector = Icons.Default.Error,
-            contentDescription = null,
+            contentDescription = "Error",
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.error
         )
@@ -736,7 +736,7 @@ private fun HelpEmptyContent(
     ) {
         Icon(
             imageVector = Icons.Default.HelpOutline,
-            contentDescription = null,
+            contentDescription = "Help",
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )

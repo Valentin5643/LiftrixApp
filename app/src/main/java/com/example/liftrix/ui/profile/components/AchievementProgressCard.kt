@@ -142,7 +142,7 @@ private fun AchievementCardHeader(
             Spacer(modifier = Modifier.width(4.dp))
             Icon(
                 imageVector = Icons.Default.ArrowForward,
-                contentDescription = null,
+                contentDescription = "View all achievements",
                 modifier = Modifier.size(16.dp)
             )
         }

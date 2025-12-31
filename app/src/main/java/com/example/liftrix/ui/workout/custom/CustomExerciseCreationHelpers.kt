@@ -198,7 +198,7 @@ internal fun MediaSection(
             leadingIcon = {
                 Icon(
                     imageVector = Icons.Default.FitnessCenter, // Will be Movie icon when imported
-                    contentDescription = null,
+                    contentDescription = "Video link",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             },

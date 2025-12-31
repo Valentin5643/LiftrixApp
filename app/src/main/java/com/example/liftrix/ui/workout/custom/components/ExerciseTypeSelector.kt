@@ -220,7 +220,7 @@ private fun ExerciseTypeOption(
             ) {
                 Icon(
                     imageVector = icon,
-                    contentDescription = null,
+                    contentDescription = title,
                     modifier = Modifier.size(24.dp),
                     tint = if (isSelected) {
                         MaterialTheme.colorScheme.primary

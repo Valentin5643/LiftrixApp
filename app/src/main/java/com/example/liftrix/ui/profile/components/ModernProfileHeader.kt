@@ -284,7 +284,7 @@ private fun VerifiedBadge(
     ) {
         Icon(
             imageVector = Icons.Default.Verified,
-            contentDescription = null,
+            contentDescription = "Verified account",
             tint = Color.White,
             modifier = Modifier.size(16.dp)
         )

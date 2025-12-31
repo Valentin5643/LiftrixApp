@@ -105,7 +105,7 @@ abstract class DataModule {
                 .setTransactionExecutor(Dispatchers.IO.asExecutor())
                 .setQueryExecutor(Dispatchers.IO.asExecutor())
                 .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING) // WAL mode for better data persistence
-                .fallbackToDestructiveMigrationFrom(3) // TEMPORARY: One-time reset for schema hash mismatch during testing
+                .addMigrations(LiftrixDatabase.MIGRATION_3_4)
                 .fallbackToDestructiveMigration() // Allow destructive migration for development
                 // 🛡️ DATABASE LIFECYCLE: Add callback for database lifecycle events
                 .addCallback(object : RoomDatabase.Callback() {
@@ -129,22 +129,6 @@ abstract class DataModule {
                     override fun onOpen(db: SupportSQLiteDatabase) {
                         super.onOpen(db)
                         Timber.d("Encrypted database opened successfully")
-
-                        // Verify database integrity on each open
-                        try {
-                            val result = db.query("PRAGMA integrity_check;")
-                            if (result.moveToFirst()) {
-                                val status = result.getString(0)
-                                if (status == "ok") {
-                                    Timber.d("Database integrity check passed")
-                                } else {
-                                    Timber.w("Database integrity check failed: $status")
-                                }
-                            }
-                            result.close()
-                        } catch (e: Exception) {
-                            Timber.e(e, "Database integrity check failed")
-                        }
                     }
 
                     override fun onDestructiveMigration(db: SupportSQLiteDatabase) {
@@ -262,6 +246,9 @@ abstract class DataModule {
         fun provideGuestSessionDao(database: LiftrixDatabase): GuestSessionDao = database.guestSessionDao()
 
         @Provides
+        fun provideConsentDao(database: LiftrixDatabase): ConsentDao = database.consentDao()
+
+        @Provides
         fun provideWorkoutAnomalyDao(database: LiftrixDatabase): WorkoutAnomalyDao = database.workoutAnomalyDao()
 
         @Provides
@@ -316,6 +303,9 @@ abstract class DataModule {
 
         @Provides
         fun provideBlockedUserDao(database: LiftrixDatabase): BlockedUserDao = database.blockedUserDao()
+
+        @Provides
+        fun provideContentReportsDao(database: LiftrixDatabase): ContentReportsDao = database.contentReportsDao()
 
         // --- Notification DAOs ---
         @Provides

@@ -78,10 +78,52 @@ sealed class SettingsEvent : ViewModelEvent {
     object NavigateToPrivacy : SettingsEvent()
 
     /**
+     * Triggered when user taps on terms of service.
+     * Should navigate to terms of service screen.
+     */
+    object NavigateToTermsOfService : SettingsEvent()
+
+    /**
+     * Triggered when user taps on AI disclaimer.
+     * Should navigate to AI disclaimer screen.
+     */
+    object NavigateToAIDisclaimer : SettingsEvent()
+
+    /**
      * Triggered when user taps on community guidelines.
      * Should navigate to community guidelines screen.
      */
     object NavigateToCommunityGuidelines : SettingsEvent()
+
+    /**
+     * Triggered when user taps on content moderation policy.
+     * Should navigate to content moderation policy screen.
+     */
+    object NavigateToContentModerationPolicy : SettingsEvent()
+
+    /**
+     * Triggered when user taps on refund & subscription policy.
+     * Should navigate to refund & subscription policy screen.
+     */
+    object NavigateToRefundPolicy : SettingsEvent()
+
+    /**
+     * Triggered when user taps on AI chat settings.
+     * Should navigate to AI chat settings screen.
+     */
+    object NavigateToAIChatSettings : SettingsEvent()
+
+    /**
+     * Triggered when user taps on help center.
+     * Should navigate to help center screen.
+     */
+    object NavigateToHelpCenter : SettingsEvent()
+
+    /**
+     * Triggered when user taps on contact support.
+     * Should navigate to contact support screen.
+     */
+    object NavigateToContactSupport : SettingsEvent()
 
     /**
      * Triggered when user taps on help and support.
@@ -239,9 +281,29 @@ sealed class SettingsEvent : ViewModelEvent {
     
     /**
      * Triggered when user requests account deletion.
-     * Should show account deletion confirmation.
+     * Should show account deletion confirmation dialog.
      */
     object DeleteAccountRequested : SettingsEvent()
+
+    /**
+     * Triggered when user dismisses the delete account confirmation dialog.
+     * Hides the delete account dialog without deleting.
+     */
+    object DeleteAccountDialogDismissed : SettingsEvent()
+
+    /**
+     * Triggered when user confirms account deletion in the dialog.
+     * Initiates the account deletion process.
+     *
+     * @property reauthProvider The authentication provider type ("password", "google", "anonymous")
+     * @property reauthPayload The re-authentication credential (password or Google token)
+     * @property exportDataFirst Whether to export data before deletion
+     */
+    data class DeleteAccountConfirmed(
+        val reauthProvider: String,
+        val reauthPayload: String,
+        val exportDataFirst: Boolean
+    ) : SettingsEvent()
     
     // System events
     /**

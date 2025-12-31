@@ -50,28 +50,6 @@ class UnifiedSyncWorker @AssistedInject constructor(
     private val syncOperationManager: SyncOperationManager,
     private val offlineQueueManager: OfflineQueueManager
 ) : BaseSyncWorker(context, params) {
-    
-    // Fallback constructor for when Hilt factory generation fails
-    constructor(context: Context, params: WorkerParameters) : this(
-        context,
-        params,
-        WorkerServiceLocator.getUnifiedSyncDependencies(context).run {
-            Timber.w("⚠️ UnifiedSyncWorker using FALLBACK constructor - Hilt factory failed!")
-            return@run this
-        }
-    )
-    
-    // Helper constructor to unpack the dependency structure
-    private constructor(
-        context: Context,
-        params: WorkerParameters,
-        deps: WorkerServiceLocator.UnifiedSyncDependencies
-    ) : this(
-        context, 
-        params,
-        deps.syncOperationManager, 
-        deps.offlineQueueManager
-    )
 
     override val workerName: String = "UnifiedSyncWorker"
     override val maxRetryCount: Int = 5

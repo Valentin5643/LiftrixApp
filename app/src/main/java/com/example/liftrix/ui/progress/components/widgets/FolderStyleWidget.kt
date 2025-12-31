@@ -100,7 +100,7 @@ fun FolderStyleWidget(
                     // Icon in top-left, subtle like workout folders
                     Icon(
                         imageVector = icon,
-                        contentDescription = null,
+                        contentDescription = title,
                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         modifier = Modifier.size(24.dp)
                     )
@@ -180,7 +180,7 @@ fun CompactFolderStyleWidget(
                     ) {
                         Icon(
                             imageVector = icon,
-                            contentDescription = null,
+                            contentDescription = title,
                             tint = iconTint,
                             modifier = Modifier.size(28.dp)
                         )

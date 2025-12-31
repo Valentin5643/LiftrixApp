@@ -637,18 +637,32 @@ private fun ModernUserProfileContent(
             // Display workout posts in feed style
             items(profile.recentWorkoutPosts.size) { index ->
                 val post = profile.recentWorkoutPosts[index]
-                
-                // Load engagement status on first appearance
-                LaunchedEffect(post.id) {
-                    onLoadEngagementStatus(post.id)
+
+                // Enrich post with current profile data if missing
+                val enrichedPost = if (post.authorProfilePhotoUrl.isNullOrBlank() || post.authorDisplayName.isNullOrBlank()) {
+                    post.copy(
+                        authorProfilePhotoUrl = post.authorProfilePhotoUrl ?: profile.profileImageUrl,
+                        authorDisplayName = post.authorDisplayName?.takeIf { it.isNotBlank() }
+                            ?: profile.displayName
+                            ?: profile.username
+                    )
+                } else {
+                    post
                 }
-                
-                val isLiked = uiState.likedPosts.contains(post.id)
-                val isSaved = uiState.savedPosts.contains(post.id)
-                val isEngagementLoading = uiState.engagementLoadingPosts.contains(post.id)
-                
+
+                Timber.d("PFP_DEBUG: 📰 ENRICHED_POST: Original photoUrl='${post.authorProfilePhotoUrl}' → Enriched='${enrichedPost.authorProfilePhotoUrl}'")
+
+                // Load engagement status on first appearance
+                LaunchedEffect(enrichedPost.id) {
+                    onLoadEngagementStatus(enrichedPost.id)
+                }
+
+                val isLiked = uiState.likedPosts.contains(enrichedPost.id)
+                val isSaved = uiState.savedPosts.contains(enrichedPost.id)
+                val isEngagementLoading = uiState.engagementLoadingPosts.contains(enrichedPost.id)
+
                 WorkoutPostCard(
-                    post = post,
+                    post = enrichedPost,
                     isLiked = isLiked,
                     isSaved = isSaved,
                     onLikeClick = { 
@@ -707,6 +721,11 @@ private fun ModernUserProfileContent(
             // Display workouts as feed-style cards by converting them to WorkoutPost format
             items(profile.recentWorkouts.size) { index ->
                 val workout = profile.recentWorkouts[index]
+
+                // Debug: Log profile image URL
+                Timber.d("PFP_DEBUG: 📝 SYNTHETIC_POST_CREATION: Creating post for workout ${workout.id}")
+                Timber.d("PFP_DEBUG: 📝 SYNTHETIC_POST_CREATION: profile.profileImageUrl='${profile.profileImageUrl}' | profile.userId='${profile.userId}' | profile.username='${profile.username}'")
+
                 // Create a simplified WorkoutPost from the regular workout data
                 val syntheticPost = com.example.liftrix.domain.model.social.WorkoutPost(
                     id = workout.id,
@@ -907,7 +926,7 @@ private fun ProfileMenuOption(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = text,
             tint = textColor,
             modifier = Modifier.size(24.dp)
         )

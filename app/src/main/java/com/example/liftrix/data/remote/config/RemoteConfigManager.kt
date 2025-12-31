@@ -1,5 +1,6 @@
 package com.example.liftrix.data.remote.config
 
+import com.example.liftrix.BuildConfig
 import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
@@ -36,8 +37,14 @@ class RemoteConfigManager @Inject constructor(
     
     companion object {
         // Cache configuration
-        private const val MINIMUM_FETCH_INTERVAL_SECONDS = 3600L // 1 hour
+        private const val MINIMUM_FETCH_INTERVAL_SECONDS = 3600L // 1 hour (production)
         private const val FETCH_TIMEOUT_SECONDS = 60L
+
+        // TODO: TEMPORARY DEBUG OVERRIDE
+        // WHY: Enables immediate Remote Config fetching in debug builds for testing/debugging
+        // WHEN TO REMOVE: After Remote Config is fully tested and Firebase Console shows fetch activity
+        // PRODUCTION IMPACT: None - only affects debug builds (BuildConfig.DEBUG)
+        private const val DEBUG_MINIMUM_FETCH_INTERVAL_SECONDS = 0L // Immediate fetching for debug
         
         // Help content keys
         const val HELP_ARTICLES_JSON = "help_articles_json"
@@ -53,10 +60,16 @@ class RemoteConfigManager @Inject constructor(
         // Legal document keys
         const val PRIVACY_POLICY_URL = "privacy_policy_url"
         const val TERMS_OF_SERVICE_URL = "terms_of_service_url"
+        const val AI_DISCLAIMER_URL = "ai_disclaimer_url"
         const val COMMUNITY_GUIDELINES_URL = "community_guidelines_url"
+        const val CONTENT_MODERATION_POLICY_URL = "content_moderation_policy_url"
+        const val REFUND_SUBSCRIPTION_POLICY_URL = "refund_subscription_policy_url"
         const val PRIVACY_POLICY_VERSION = "privacy_policy_version"
         const val TERMS_VERSION = "terms_version"
+        const val AI_DISCLAIMER_VERSION = "ai_disclaimer_version"
         const val COMMUNITY_GUIDELINES_VERSION = "community_guidelines_version"
+        const val CONTENT_MODERATION_VERSION = "content_moderation_version"
+        const val REFUND_POLICY_VERSION = "refund_policy_version"
         
         // App configuration keys
         const val HELP_SEARCH_ENABLED = "help_search_enabled"
@@ -93,10 +106,16 @@ class RemoteConfigManager @Inject constructor(
             SUPPORT_FAQ_JSON to "[]",
             PRIVACY_POLICY_VERSION to "1.0",
             TERMS_VERSION to "1.0",
+            AI_DISCLAIMER_VERSION to "1.0",
             COMMUNITY_GUIDELINES_VERSION to "1.0",
+            CONTENT_MODERATION_VERSION to "1.0",
+            REFUND_POLICY_VERSION to "1.0",
             PRIVACY_POLICY_URL to "",
             TERMS_OF_SERVICE_URL to "",
+            AI_DISCLAIMER_URL to "",
             COMMUNITY_GUIDELINES_URL to "",
+            CONTENT_MODERATION_POLICY_URL to "",
+            REFUND_SUBSCRIPTION_POLICY_URL to "",
             
             // AI Chat defaults
             AI_CHAT_ENABLED to true,
@@ -127,6 +146,15 @@ class RemoteConfigManager @Inject constructor(
     
     /**
      * Initializes Remote Config with default values and settings
+     *
+     * DEBUG BUILD BEHAVIOR:
+     * - Sets minimumFetchIntervalInSeconds = 0 for immediate fetching
+     * - Enables real-time testing of Remote Config changes
+     * - Automatically calls fetchAndActivate() after initialization
+     *
+     * PRODUCTION BUILD BEHAVIOR:
+     * - Uses standard 1-hour fetch interval
+     * - Normal caching behavior
      */
     suspend fun initialize(): LiftrixResult<Unit> = liftrixCatching(
         errorMapper = { throwable ->
@@ -144,20 +172,46 @@ class RemoteConfigManager @Inject constructor(
                 Timber.d("Remote Config already initialized")
                 return@withContext
             }
-            
+
+            // Determine fetch interval based on build type
+            val fetchInterval = if (BuildConfig.DEBUG) {
+                DEBUG_MINIMUM_FETCH_INTERVAL_SECONDS
+            } else {
+                MINIMUM_FETCH_INTERVAL_SECONDS
+            }
+
             // Set up Remote Config settings
             val configSettings = FirebaseRemoteConfigSettings.Builder()
-                .setMinimumFetchIntervalInSeconds(MINIMUM_FETCH_INTERVAL_SECONDS)
+                .setMinimumFetchIntervalInSeconds(fetchInterval)
                 .setFetchTimeoutInSeconds(FETCH_TIMEOUT_SECONDS)
                 .build()
-            
+
             remoteConfig.setConfigSettingsAsync(configSettings).await()
-            
+
             // Set default values
             remoteConfig.setDefaultsAsync(DEFAULT_VALUES).await()
-            
+
             isInitialized = true
-            Timber.d("Remote Config initialized successfully")
+
+            // Log configuration mode
+            if (BuildConfig.DEBUG) {
+                Timber.i("🔧 DEBUG MODE: Remote Config initialized with IMMEDIATE fetching (interval = 0s)")
+                Timber.i("🔧 DEBUG MODE: Calling fetchAndActivate() now...")
+
+                // Immediately fetch and activate in debug builds
+                try {
+                    val fetchSuccess = remoteConfig.fetchAndActivate().await()
+                    if (fetchSuccess) {
+                        Timber.i("✅ DEBUG MODE: Remote Config fetch SUCCESS - values are now active")
+                    } else {
+                        Timber.w("⚠️ DEBUG MODE: Remote Config fetch returned false - using cached/default values")
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "❌ DEBUG MODE: Remote Config fetch FAILED - using default values")
+                }
+            } else {
+                Timber.d("Remote Config initialized successfully with ${MINIMUM_FETCH_INTERVAL_SECONDS}s fetch interval")
+            }
         }
     }
     
@@ -338,9 +392,24 @@ class RemoteConfigManager @Inject constructor(
     suspend fun getTermsOfServiceUrl(): LiftrixResult<String> = getString(TERMS_OF_SERVICE_URL)
 
     /**
+     * Gets AI disclaimer URL from Remote Config
+     */
+    suspend fun getAIDisclaimerUrl(): LiftrixResult<String> = getString(AI_DISCLAIMER_URL)
+
+    /**
      * Gets community guidelines URL from Remote Config
      */
     suspend fun getCommunityGuidelinesUrl(): LiftrixResult<String> = getString(COMMUNITY_GUIDELINES_URL)
+
+    /**
+     * Gets content moderation policy URL from Remote Config
+     */
+    suspend fun getContentModerationPolicyUrl(): LiftrixResult<String> = getString(CONTENT_MODERATION_POLICY_URL)
+
+    /**
+     * Gets refund & subscription policy URL from Remote Config
+     */
+    suspend fun getRefundSubscriptionPolicyUrl(): LiftrixResult<String> = getString(REFUND_SUBSCRIPTION_POLICY_URL)
 
     /**
      * Gets privacy policy version from Remote Config
@@ -353,9 +422,24 @@ class RemoteConfigManager @Inject constructor(
     suspend fun getTermsVersion(): LiftrixResult<String> = getString(TERMS_VERSION)
 
     /**
+     * Gets AI disclaimer version from Remote Config
+     */
+    suspend fun getAIDisclaimerVersion(): LiftrixResult<String> = getString(AI_DISCLAIMER_VERSION)
+
+    /**
      * Gets community guidelines version from Remote Config
      */
     suspend fun getCommunityGuidelinesVersion(): LiftrixResult<String> = getString(COMMUNITY_GUIDELINES_VERSION)
+
+    /**
+     * Gets content moderation policy version from Remote Config
+     */
+    suspend fun getContentModerationPolicyVersion(): LiftrixResult<String> = getString(CONTENT_MODERATION_VERSION)
+
+    /**
+     * Gets refund & subscription policy version from Remote Config
+     */
+    suspend fun getRefundPolicyVersion(): LiftrixResult<String> = getString(REFUND_POLICY_VERSION)
 
     /**
      * Checks if help search is enabled

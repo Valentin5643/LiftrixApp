@@ -14,7 +14,8 @@ import androidx.room.PrimaryKey
     indices = [
         Index(value = ["user_id", "created_at"]),
         Index(value = ["conversation_id", "created_at"]),
-        Index(value = ["user_id", "is_synced"])
+        Index(value = ["user_id", "is_synced"]),
+        Index(value = ["expires_at"])
     ]
 )
 data class ChatHistoryEntity(
@@ -54,11 +55,15 @@ data class ChatHistoryEntity(
     val isSynced: Boolean = false,
     
     @ColumnInfo(name = "sync_version", defaultValue = "0")
-    val syncVersion: Int = 0,
+    val syncVersion: Long = 0L,
     
     @ColumnInfo(name = "is_dirty", defaultValue = "0")
     val isDirty: Boolean = false,
-    
+
     @ColumnInfo(name = "last_modified", defaultValue = "0")
-    val lastModified: Long = 0L
+    val lastModified: Long = 0L,
+
+    // GDPR compliance: auto-delete after retention period (SPEC-20251230-google-play-compliance)
+    @ColumnInfo(name = "expires_at")
+    val expiresAt: Long? = null
 )

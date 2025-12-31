@@ -26,8 +26,12 @@ import androidx.room.PrimaryKey
               name = "idx_workout_posts_feed_query"),
         Index(value = ["like_count", "comment_count", "created_at"], 
               name = "idx_workout_posts_engagement"),
-        Index(value = ["prs_count", "created_at"], 
-              name = "idx_workout_posts_prs"),
+        Index(
+            value = ["visibility", "prs_count", "like_count"],
+            name = "idx_workout_posts_trending",
+            orders = [Index.Order.ASC, Index.Order.DESC, Index.Order.DESC]
+        ),
+        Index(value = ["prs_count", "created_at"], name = "idx_workout_posts_prs"),
         Index(value = ["is_synced", "sync_version"], 
               name = "idx_workout_posts_sync")
     ],
@@ -109,12 +113,25 @@ data class WorkoutPostEntity(
     val isSynced: Boolean = false,
 
     @ColumnInfo(name = "sync_version", defaultValue = "0")
-    val syncVersion: Int = 0,
+    val syncVersion: Long = 0L,
 
     // Offline-first architecture fields (SPEC-20241228)
     @ColumnInfo(name = "is_dirty", defaultValue = "0")
     val isDirty: Boolean = false,
 
     @ColumnInfo(name = "last_modified", defaultValue = "0")
-    val lastModified: Long = 0L
+    val lastModified: Long = 0L,
+
+    // Moderation fields (SPEC-20251230-google-play-compliance)
+    @ColumnInfo(name = "is_hidden", defaultValue = "0")
+    val isHidden: Boolean = false,
+
+    @ColumnInfo(name = "hidden_reason")
+    val hiddenReason: String? = null,
+
+    @ColumnInfo(name = "hidden_at")
+    val hiddenAt: Long? = null,
+
+    @ColumnInfo(name = "hidden_by_user_id")
+    val hiddenByUserId: String? = null
 )

@@ -130,7 +130,7 @@ fun EnhancedStatCard(
             statData.icon?.let { icon ->
                 Icon(
                     imageVector = icon,
-                    contentDescription = null,
+                    contentDescription = statData.label,
                     modifier = Modifier.size(LiftrixTokens.TouchTarget.IconLarge),
                     tint = MaterialTheme.colorScheme.primary
                 )
@@ -191,7 +191,7 @@ fun EnhancedActionCard(
             actionCardData.icon?.let { icon ->
                 Icon(
                     imageVector = icon,
-                    contentDescription = null,
+                    contentDescription = actionCardData.title,
                     modifier = Modifier.size(LiftrixTokens.TouchTarget.IconLarge),
                     tint = MaterialTheme.colorScheme.primary
                 )
@@ -279,7 +279,7 @@ fun EnhancedChip(
             {
                 Icon(
                     imageVector = icon,
-                    contentDescription = null,
+                    contentDescription = chipData.label,
                     modifier = Modifier.size(LiftrixTokens.TouchTarget.IconSmall)
                 )
             }

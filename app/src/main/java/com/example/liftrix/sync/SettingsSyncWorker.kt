@@ -224,7 +224,7 @@ class SettingsSyncWorker @AssistedInject constructor(
                 val remoteEntity = settingsMapper.toEntity(remoteSettings).copy(
                     isDirty = false,
                     isSynced = true,
-                    syncVersion = System.currentTimeMillis().toInt(),
+                    syncVersion = System.currentTimeMillis(),
                     lastModified = remoteLastModified
                 )
                 settingsDao.upsertFromRemote(remoteEntity)
@@ -292,7 +292,7 @@ class SettingsSyncWorker @AssistedInject constructor(
             "updatedAt" to settings.updatedAt.toEpochMilli(),
             "lastModified" to settings.updatedAt.toEpochMilli(),
             "syncedAt" to System.currentTimeMillis(),
-            "syncVersion" to 2 // Version 2 indicates enhanced sync format
+            "syncVersion" to 2L // Version 2 indicates enhanced sync format
         )
 
         firestore

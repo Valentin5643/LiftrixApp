@@ -138,7 +138,7 @@ private fun UserHeader(
             ) {
                 Icon(
                     imageVector = Icons.Default.CalendarToday,
-                    contentDescription = null,
+                    contentDescription = "Member since",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.size(14.dp)
                 )
@@ -169,7 +169,7 @@ private fun UserHeader(
             ) {
                 Icon(
                     imageVector = Icons.Default.FitnessCenter,
-                    contentDescription = null,
+                    contentDescription = "Workouts",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(16.dp)
                 )
@@ -296,7 +296,7 @@ private fun InterestRow(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = label,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             modifier = Modifier.size(16.dp)
         )
@@ -359,7 +359,7 @@ private fun ConnectionAction(
             ) {
                 Icon(
                     imageVector = Icons.Default.People,
-                    contentDescription = null,
+                    contentDescription = "Mutual connections",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     modifier = Modifier.size(14.dp)
                 )
@@ -383,7 +383,7 @@ private fun ConnectionAction(
                 ) {
                     Icon(
                         imageVector = Icons.Default.PersonAdd,
-                        contentDescription = null,
+                        contentDescription = "Follow",
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -397,7 +397,7 @@ private fun ConnectionAction(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Schedule,
-                        contentDescription = null,
+                        contentDescription = "Request sent",
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -411,7 +411,7 @@ private fun ConnectionAction(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Check,
-                        contentDescription = null,
+                        contentDescription = "Accept follow",
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -425,7 +425,7 @@ private fun ConnectionAction(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Check,
-                        contentDescription = null,
+                        contentDescription = "Following",
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -439,7 +439,7 @@ private fun ConnectionAction(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Check,
-                        contentDescription = null,
+                        contentDescription = "Following",
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -456,7 +456,7 @@ private fun ConnectionAction(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Star,
-                        contentDescription = null,
+                        contentDescription = "Gym buddy",
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -471,7 +471,7 @@ private fun ConnectionAction(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Block,
-                        contentDescription = null,
+                        contentDescription = "Blocked",
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))

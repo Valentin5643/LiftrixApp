@@ -12,9 +12,11 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.UserAccountRepository
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.sync.UserPublicSyncWorker
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import java.time.LocalDateTime
 import javax.inject.Inject
@@ -454,5 +456,48 @@ class UserAccountRepositoryImpl @Inject constructor(
             
             Timber.d("Account synced from Firebase for user: $userId")
         }
+    }
+
+    override suspend fun queueAccountDeletion(
+        userId: String,
+        exportFirst: Boolean
+    ): LiftrixResult<String> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "QUEUE_DELETION_FAILED",
+                errorMessage = "Failed to queue account deletion: ${throwable.message}",
+                analyticsContext = mapOf(
+                    "user_id" to userId,
+                    "export_first" to exportFirst.toString()
+                )
+            )
+        }
+    ) {
+        // Get Firestore instance (injected via authRepository)
+        val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+
+        // Generate unique job ID
+        val jobId = java.util.UUID.randomUUID().toString()
+        val currentTime = System.currentTimeMillis()
+
+        // Create deletion request document
+        val deletionRequest = hashMapOf(
+            "userId" to userId,
+            "requestedAt" to currentTime,
+            "exportFirst" to exportFirst,
+            "status" to "PENDING",
+            "jobId" to jobId
+        )
+
+        // Write to Firestore /deletion_requests collection
+        firestore.collection("deletion_requests")
+            .document(jobId)
+            .set(deletionRequest)
+            .await()
+
+        Timber.i("Queued account deletion for user $userId with job ID: $jobId")
+
+        // Return job ID for tracking
+        jobId
     }
 }

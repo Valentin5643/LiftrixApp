@@ -316,7 +316,7 @@ class ProfileViewModel @Inject constructor(
                         is ProfileDataState.Missing -> ProfileLoadingState.Missing
                         is ProfileDataState.Loaded -> ProfileLoadingState.Loaded(profileDataState.profile.copy(achievements = achievements))
                         is ProfileDataState.NoAuth -> ProfileLoadingState.Loading
-                        is ProfileDataState.Error -> ProfileLoadingState.Missing
+                        is ProfileDataState.Error -> ProfileLoadingState.Error(profileDataState.throwable)
                     }
                     
                     val shouldShowLoading = profileDataState is ProfileDataState.Loading || 

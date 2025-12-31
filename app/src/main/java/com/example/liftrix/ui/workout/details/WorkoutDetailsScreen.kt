@@ -315,7 +315,7 @@ private fun StatChip(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = label,
                 tint = if (highlight) LiftrixColorsV2.Dark.Warning else LiftrixColorsV2.Teal,
                 modifier = Modifier.size(16.dp)
             )
@@ -503,7 +503,7 @@ private fun ExerciseDetailCard(
                     ) {
                         Icon(
                             Icons.Default.Notes,
-                            contentDescription = null,
+                            contentDescription = "Notes",
                             tint = LiftrixColorsV2.Dark.TextSecondary,
                             modifier = Modifier.size(14.dp)
                         )
@@ -632,7 +632,7 @@ private fun NotesCard(notes: String) {
             ) {
                 Icon(
                     Icons.Default.Notes,
-                    contentDescription = null,
+                    contentDescription = "Workout notes",
                     tint = LiftrixColorsV2.Dark.TextSecondary,
                     modifier = Modifier.size(18.dp)
                 )
@@ -671,7 +671,7 @@ private fun ActionButtonsRow(
         ) {
             Icon(
                 Icons.Default.Edit,
-                contentDescription = null,
+                contentDescription = "Edit workout",
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))
@@ -687,7 +687,7 @@ private fun ActionButtonsRow(
         ) {
             Icon(
                 Icons.Default.Share,
-                contentDescription = null,
+                contentDescription = "Share workout",
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))
@@ -713,7 +713,7 @@ private fun ShareOnlyButton(
         ) {
             Icon(
                 Icons.Default.Share,
-                contentDescription = null,
+                contentDescription = "Share workout",
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(4.dp))
@@ -738,7 +738,7 @@ private fun ErrorContent(
     ) {
         Icon(
             Icons.Default.ErrorOutline,
-            contentDescription = null,
+            contentDescription = "Error",
             tint = LiftrixColorsV2.Dark.Error,
             modifier = Modifier.size(64.dp)
         )

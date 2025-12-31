@@ -37,43 +37,34 @@ import timber.log.Timber
 import javax.inject.Inject
 
 @HiltAndroidApp
-class LiftrixApp : Application(), Configuration.Provider {
-    
+class LiftrixApp : Application() {
+
     @Inject
     lateinit var widgetPreferencesRepository: WidgetPreferencesRepository
-    
+
     @Inject
     lateinit var cacheWarmingService: CacheWarmingService
-    
+
     @Inject
     lateinit var syncCoordinator: SyncCoordinator
-    
+
     @Inject
     lateinit var firebaseAuth: FirebaseAuth
-    
+
     @Inject
     lateinit var hiltWorkerFactory: HiltWorkerFactory
-    
+
     @Inject
     lateinit var initializeUserThemeUseCase: InitializeUserThemeUseCase
-    
-    @Inject 
+
+    @Inject
     lateinit var offlineQueueManager: com.example.liftrix.data.sync.OfflineQueueManager
-    
+
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    
+
     // App Check initialization state
     private val _isAppCheckInitialized = MutableStateFlow(false)
     val isAppCheckInitialized: StateFlow<Boolean> = _isAppCheckInitialized.asStateFlow()
-    
-    override val workManagerConfiguration: Configuration get() =
-        Configuration.Builder()
-            .setWorkerFactory(hiltWorkerFactory)
-            .setMinimumLoggingLevel(
-                if (BuildConfig.DEBUG) android.util.Log.DEBUG 
-                else android.util.Log.INFO
-            )
-            .build()
 
     companion object {
         const val WORKOUT_TIMER_CHANNEL_ID = "workout_timer_channel"
@@ -102,10 +93,25 @@ class LiftrixApp : Application(), Configuration.Provider {
         // SPEC-20241228: Log Room-First Architecture Configuration
         logOfflineArchitectureMode()
 
-        // WorkManager initialization is now handled automatically via Configuration.Provider
-        // The workManagerConfiguration property provides HiltWorkerFactory
-        Timber.d("WorkManager will be initialized automatically with HiltWorkerFactory")
-        
+        // 🔥 FIX: MANUAL WorkManager initialization to ensure HiltWorkerFactory is used
+        // This MUST happen before anything calls WorkManager.getInstance()
+        // We disabled auto-initialization via androidx.startup in AndroidManifest
+        try {
+            val workManagerConfig = Configuration.Builder()
+                .setWorkerFactory(hiltWorkerFactory)
+                .setMinimumLoggingLevel(
+                    if (BuildConfig.DEBUG) android.util.Log.DEBUG
+                    else android.util.Log.INFO
+                )
+                .build()
+
+            WorkManager.initialize(this, workManagerConfig)
+            Timber.d("🔥 SYNC WorkManager manually initialized with HiltWorkerFactory")
+        } catch (e: IllegalStateException) {
+            // WorkManager was already initialized (shouldn't happen with Startup disabled)
+            Timber.e(e, "🔥 SYNC ❌ WorkManager already initialized - early init detected!")
+        }
+
         // 🔧 DEBUG: Test if HiltWorkerFactory can create workers (debug builds only)
         if (BuildConfig.DEBUG) {
             debugVerifyWorkerFactory()
@@ -429,59 +435,23 @@ class LiftrixApp : Application(), Configuration.Provider {
     }
     
     /**
-     * 🔧 DEBUG: Test if HiltWorkerFactory can create workers at runtime
-     * This helps diagnose if Hilt assisted factories are properly generated
+     * 🔒 DEBUG: Verify HiltWorkerFactory is configured correctly
+     * Lightweight assertion to prevent silent regressions
      */
     private fun debugVerifyWorkerFactory() {
         applicationScope.launch {
             try {
-                Timber.d("🔧 HILT-DEBUG: Testing HiltWorkerFactory capabilities...")
+                delay(1000) // Give WorkManager time to initialize
+                val wf = WorkManager.getInstance(this@LiftrixApp).configuration.workerFactory
 
-                // Check if injection completed
-                if (::hiltWorkerFactory.isInitialized) {
-                    Timber.d("🔧 HILT-DEBUG: ✅ hiltWorkerFactory is injected: ${hiltWorkerFactory}")
-
-                    // Simple test: check if the factory class has the expected methods
-                    val factoryClass = hiltWorkerFactory.javaClass
-                    Timber.d("🔧 HILT-DEBUG: HiltWorkerFactory class: ${factoryClass.name}")
-
-                    // Check superclass to see if it's the real Hilt factory
-                    val superClass = factoryClass.superclass
-                    Timber.d("🔧 HILT-DEBUG: HiltWorkerFactory superclass: ${superClass?.name}")
-
-                    // Check if we can access WorkManager and its configuration
-                    delay(1000) // Give some time for WorkManager to initialize
-
-                    try {
-                        val workManager = WorkManager.getInstance(this@LiftrixApp)
-                        val config = workManager.configuration
-                        val actualFactory = config.workerFactory
-
-                        Timber.d("🔧 HILT-DEBUG: WorkManager factory in config: ${actualFactory}")
-                        Timber.d("🔧 HILT-DEBUG: Factory matches injected? ${actualFactory === hiltWorkerFactory}")
-
-                        if (actualFactory === hiltWorkerFactory) {
-                            Timber.d("🔧 HILT-DEBUG: ✅ WorkManager correctly configured with injected HiltWorkerFactory!")
-                        } else {
-                            Timber.w("🔧 HILT-DEBUG: ❌ WorkManager factory mismatch!")
-                            Timber.w("🔧 HILT-DEBUG: Expected: $hiltWorkerFactory")
-                            Timber.w("🔧 HILT-DEBUG: Actual: $actualFactory")
-                        }
-
-                    } catch (e: Exception) {
-                        Timber.e(e, "🔧 HILT-DEBUG: Failed to check WorkManager configuration")
-                    }
-
-                } else {
-                    Timber.e("🔧 HILT-DEBUG: ❌ hiltWorkerFactory not injected yet!")
+                // Simple assertion to catch regressions early
+                check(wf is HiltWorkerFactory) {
+                    "❌ WorkManager is not using HiltWorkerFactory! Using ${wf::class.java.simpleName} instead."
                 }
 
-                // Log that fallback constructors are available
-                Timber.d("🔧 HILT-DEBUG: Workers have fallback constructors as safety net")
-                Timber.d("🔧 HILT-DEBUG: Watch for 'using FALLBACK constructor' to detect Hilt issues")
-
+                Timber.d("✅ WorkManager configured with HiltWorkerFactory")
             } catch (e: Exception) {
-                Timber.e(e, "🔧 HILT-DEBUG: Failed to test HiltWorkerFactory")
+                Timber.e(e, "❌ Failed to verify WorkerFactory configuration")
             }
         }
     }
@@ -495,7 +465,13 @@ class LiftrixApp : Application(), Configuration.Provider {
             try {
                 Timber.d("🔧 LEGACY-CLEANUP: Starting legacy queue cleanup...")
                 
-                val result = offlineQueueManager.cleanupLegacyQueueEntries()
+                val currentUserId = firebaseAuth.currentUser?.uid
+                if (currentUserId.isNullOrBlank()) {
+                    Timber.d("🔧 LEGACY-CLEANUP: No authenticated user; skipping legacy queue cleanup")
+                    return@launch
+                }
+
+                val result = offlineQueueManager.cleanupLegacyQueueEntries(currentUserId)
                 result.fold(
                     onSuccess = { removedCount ->
                         if (removedCount > 0) {
@@ -516,4 +492,3 @@ class LiftrixApp : Application(), Configuration.Provider {
         }
     }
 }
-

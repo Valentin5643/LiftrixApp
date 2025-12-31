@@ -30,9 +30,10 @@ import kotlin.math.min
 object AccessibilityUtils {
 
     /**
-     * Minimum touch target size as per WCAG guidelines (44dp)
+     * Minimum touch target size as per Google Play requirements (48dp)
+     * Updated from 44dp to meet latest accessibility standards
      */
-    val MinimumTouchTargetSize = 44.dp
+    val MinimumTouchTargetSize = 48.dp
 
     /**
      * Minimum spacing between touch targets (8dp)
@@ -51,8 +52,8 @@ object AccessibilityUtils {
 
     /**
      * Ensures minimum touch target size for accessibility compliance.
-     * 
-     * @param minSize Minimum size (default 44dp)
+     *
+     * @param minSize Minimum size (default 48dp per Google Play requirements)
      * @return Modifier with minimum touch target size
      */
     fun Modifier.ensureMinimumTouchTarget(minSize: Dp = MinimumTouchTargetSize): Modifier {

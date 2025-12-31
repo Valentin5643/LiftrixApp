@@ -337,7 +337,7 @@ private fun ProfileVisibilitySection(
                         ProfileVisibility.FOLLOWERS -> Icons.Default.Groups
                         ProfileVisibility.PRIVATE -> Icons.Default.VisibilityOff
                     },
-                    contentDescription = null,
+                    contentDescription = "Profile visibility",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
@@ -437,7 +437,7 @@ private fun ContentSharingSection(
             ) {
                 Icon(
                     imageVector = Icons.Default.Groups,
-                    contentDescription = null,
+                    contentDescription = "Content sharing",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
@@ -510,7 +510,7 @@ private fun DiscoverySection(
             ) {
                 Icon(
                     imageVector = Icons.Default.Visibility,
-                    contentDescription = null,
+                    contentDescription = "Discovery settings",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
@@ -583,7 +583,7 @@ private fun NotificationSection(
             ) {
                 Icon(
                     imageVector = Icons.Default.Security,
-                    contentDescription = null,
+                    contentDescription = "Social notifications",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
@@ -633,7 +633,7 @@ private fun BlockedUsersSection(
         ) {
             Icon(
                 imageVector = Icons.Default.Block,
-                contentDescription = null,
+                contentDescription = "Blocked users",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(24.dp)
             )
@@ -692,7 +692,7 @@ private fun AccountManagementSection(
             ) {
                 Icon(
                     imageVector = Icons.Default.PersonRemove,
-                    contentDescription = null,
+                    contentDescription = "Account management",
                     tint = MaterialTheme.colorScheme.onErrorContainer,
                     modifier = Modifier.size(24.dp)
                 )

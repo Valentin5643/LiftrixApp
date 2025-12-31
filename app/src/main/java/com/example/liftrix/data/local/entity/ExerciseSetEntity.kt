@@ -17,15 +17,17 @@ import com.example.liftrix.data.local.converter.DateTimeConverters
     foreignKeys = [
         ForeignKey(
             entity = ExerciseEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["exercise_id"],
+            parentColumns = ["id", "user_id"],
+            childColumns = ["exercise_id", "user_id"],
             onDelete = ForeignKey.CASCADE
         )
     ],
     indices = [
-        Index(value = ["exercise_id"], name = "index_exercise_sets_exercise_id"),
-        Index(value = ["set_number"], name = "index_exercise_sets_set_number"),
-        Index(value = ["completed_at"], name = "index_exercise_sets_completed_at"),
+        Index(value = ["id", "user_id"], unique = true, name = "idx_exercise_sets_id_user"),
+        Index(value = ["user_id", "exercise_id"], name = "idx_exercise_sets_user_exercise"),
+        Index(value = ["exercise_id", "user_id"], name = "idx_exercise_sets_exercise_user"),
+        Index(value = ["user_id", "set_number"], name = "idx_exercise_sets_user_set_number"),
+        Index(value = ["user_id", "completed_at"], name = "idx_exercise_sets_user_completed"),
         Index(value = ["exercise_id", "set_number"], name = "idx_exercise_sets_exercise_set"),
         Index(value = ["exercise_id", "completed_at"], name = "idx_exercise_sets_exercise_completed"),
         Index(value = ["weight_kg", "completed_at"], name = "idx_exercise_sets_performance")
@@ -36,6 +38,9 @@ data class ExerciseSetEntity(
     @PrimaryKey(autoGenerate = true)
     @ColumnInfo(name = "id")
     val id: Long = 0,
+
+    @ColumnInfo(name = "user_id")
+    val userId: String,
     
     @ColumnInfo(name = "exercise_id")
     val exerciseId: Long,

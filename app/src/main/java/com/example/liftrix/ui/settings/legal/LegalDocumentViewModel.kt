@@ -119,7 +119,159 @@ class LegalDocumentViewModel @Inject constructor(
             )
         }
     }
-    
+
+    /**
+     * Loads AI disclaimer document
+     */
+    fun loadAIDisclaimer() {
+        viewModelScope.launch {
+            updateState { LegalDocumentUiState.Loading }
+
+            legalDocumentService.getAIDisclaimer().fold(
+                onSuccess = { document ->
+                    val currentData = getCurrentData()
+                    val data = currentData.copy(
+                        aiDisclaimer = document.content,
+                        aiDisclaimerLastUpdated = document.lastModified.toString()
+                    )
+
+                    if (data.hasAIDisclaimer) {
+                        updateState { LegalDocumentUiState.Success(data) }
+                    } else {
+                        updateState { LegalDocumentUiState.Empty() }
+                    }
+                    Timber.d("AI disclaimer loaded successfully")
+                },
+                onFailure = { throwable ->
+                    val error = when (throwable) {
+                        is LiftrixError -> throwable
+                        else -> LiftrixError.BusinessLogicError(
+                            code = "AI_DISCLAIMER_LOAD_FAILED",
+                            errorMessage = throwable.message ?: "Failed to load AI disclaimer",
+                            analyticsContext = mapOf("operation" to "LOAD_AI_DISCLAIMER")
+                        )
+                    }
+                    updateState { LegalDocumentUiState.Error(error, getCurrentData()) }
+                    Timber.e("Failed to load AI disclaimer: $error")
+                }
+            )
+        }
+    }
+
+    /**
+     * Loads community guidelines document
+     */
+    fun loadCommunityGuidelines() {
+        viewModelScope.launch {
+            updateState { LegalDocumentUiState.Loading }
+
+            legalDocumentService.getCommunityGuidelines().fold(
+                onSuccess = { document ->
+                    val currentData = getCurrentData()
+                    val data = currentData.copy(
+                        communityGuidelines = document.content,
+                        communityGuidelinesLastUpdated = document.lastModified.toString()
+                    )
+
+                    if (data.hasCommunityGuidelines) {
+                        updateState { LegalDocumentUiState.Success(data) }
+                    } else {
+                        updateState { LegalDocumentUiState.Empty() }
+                    }
+                    Timber.d("Community guidelines loaded successfully")
+                },
+                onFailure = { throwable ->
+                    val error = when (throwable) {
+                        is LiftrixError -> throwable
+                        else -> LiftrixError.BusinessLogicError(
+                            code = "COMMUNITY_GUIDELINES_LOAD_FAILED",
+                            errorMessage = throwable.message ?: "Failed to load community guidelines",
+                            analyticsContext = mapOf("operation" to "LOAD_COMMUNITY_GUIDELINES")
+                        )
+                    }
+                    updateState { LegalDocumentUiState.Error(error, getCurrentData()) }
+                    Timber.e("Failed to load community guidelines: $error")
+                }
+            )
+        }
+    }
+
+    /**
+     * Loads content moderation policy document
+     */
+    fun loadContentModerationPolicy() {
+        viewModelScope.launch {
+            updateState { LegalDocumentUiState.Loading }
+
+            legalDocumentService.getContentModerationPolicy().fold(
+                onSuccess = { document ->
+                    val currentData = getCurrentData()
+                    val data = currentData.copy(
+                        contentModerationPolicy = document.content,
+                        contentModerationPolicyLastUpdated = document.lastModified.toString()
+                    )
+
+                    if (data.hasContentModerationPolicy) {
+                        updateState { LegalDocumentUiState.Success(data) }
+                    } else {
+                        updateState { LegalDocumentUiState.Empty() }
+                    }
+                    Timber.d("Content moderation policy loaded successfully")
+                },
+                onFailure = { throwable ->
+                    val error = when (throwable) {
+                        is LiftrixError -> throwable
+                        else -> LiftrixError.BusinessLogicError(
+                            code = "CONTENT_MODERATION_LOAD_FAILED",
+                            errorMessage = throwable.message ?: "Failed to load content moderation policy",
+                            analyticsContext = mapOf("operation" to "LOAD_CONTENT_MODERATION_POLICY")
+                        )
+                    }
+                    updateState { LegalDocumentUiState.Error(error, getCurrentData()) }
+                    Timber.e("Failed to load content moderation policy: $error")
+                }
+            )
+        }
+    }
+
+    /**
+     * Loads refund and subscription policy document
+     */
+    fun loadRefundSubscriptionPolicy() {
+        viewModelScope.launch {
+            updateState { LegalDocumentUiState.Loading }
+
+            legalDocumentService.getRefundSubscriptionPolicy().fold(
+                onSuccess = { document ->
+                    val currentData = getCurrentData()
+                    val data = currentData.copy(
+                        refundSubscriptionPolicy = document.content,
+                        refundSubscriptionPolicyLastUpdated = document.lastModified.toString()
+                    )
+
+                    if (data.hasRefundSubscriptionPolicy) {
+                        updateState { LegalDocumentUiState.Success(data) }
+                    } else {
+                        updateState { LegalDocumentUiState.Empty() }
+                    }
+                    Timber.d("Refund & subscription policy loaded successfully")
+                },
+                onFailure = { throwable ->
+                    val error = when (throwable) {
+                        is LiftrixError -> throwable
+                        else -> LiftrixError.BusinessLogicError(
+                            code = "REFUND_POLICY_LOAD_FAILED",
+                            errorMessage = throwable.message ?: "Failed to load refund & subscription policy",
+                            analyticsContext = mapOf("operation" to "LOAD_REFUND_SUBSCRIPTION_POLICY")
+                        )
+                    }
+                    updateState { LegalDocumentUiState.Error(error, getCurrentData()) }
+                    Timber.e("Failed to load refund & subscription policy: $error")
+                }
+            )
+        }
+    }
+
     /**
      * Loads all legal documents
      */
@@ -136,12 +288,36 @@ class LegalDocumentViewModel @Inject constructor(
                 onSuccess = { it },
                 onFailure = { null }
             )
+            val aiDisclaimerDocument = legalDocumentService.getAIDisclaimer().fold(
+                onSuccess = { it },
+                onFailure = { null }
+            )
+            val communityGuidelinesDocument = legalDocumentService.getCommunityGuidelines().fold(
+                onSuccess = { it },
+                onFailure = { null }
+            )
+            val contentModerationDocument = legalDocumentService.getContentModerationPolicy().fold(
+                onSuccess = { it },
+                onFailure = { null }
+            )
+            val refundPolicyDocument = legalDocumentService.getRefundSubscriptionPolicy().fold(
+                onSuccess = { it },
+                onFailure = { null }
+            )
             
             val data = LegalDocumentUiState.Data(
                 privacyPolicy = privacyDocument?.content ?: "",
                 termsOfService = termsDocument?.content ?: "",
+                aiDisclaimer = aiDisclaimerDocument?.content ?: "",
+                communityGuidelines = communityGuidelinesDocument?.content ?: "",
+                contentModerationPolicy = contentModerationDocument?.content ?: "",
+                refundSubscriptionPolicy = refundPolicyDocument?.content ?: "",
                 privacyPolicyLastUpdated = privacyDocument?.lastModified?.toString(),
-                termsOfServiceLastUpdated = termsDocument?.lastModified?.toString()
+                termsOfServiceLastUpdated = termsDocument?.lastModified?.toString(),
+                aiDisclaimerLastUpdated = aiDisclaimerDocument?.lastModified?.toString(),
+                communityGuidelinesLastUpdated = communityGuidelinesDocument?.lastModified?.toString(),
+                contentModerationPolicyLastUpdated = contentModerationDocument?.lastModified?.toString(),
+                refundSubscriptionPolicyLastUpdated = refundPolicyDocument?.lastModified?.toString()
             )
             
             if (data.hasAnyDocument) {
@@ -181,12 +357,36 @@ class LegalDocumentViewModel @Inject constructor(
                     onSuccess = { it },
                     onFailure = { null }
                 )
+                val aiDisclaimerDocument = legalDocumentService.getAIDisclaimer(forceRefresh = true).fold(
+                    onSuccess = { it },
+                    onFailure = { null }
+                )
+                val communityGuidelinesDocument = legalDocumentService.getCommunityGuidelines(forceRefresh = true).fold(
+                    onSuccess = { it },
+                    onFailure = { null }
+                )
+                val contentModerationDocument = legalDocumentService.getContentModerationPolicy(forceRefresh = true).fold(
+                    onSuccess = { it },
+                    onFailure = { null }
+                )
+                val refundPolicyDocument = legalDocumentService.getRefundSubscriptionPolicy(forceRefresh = true).fold(
+                    onSuccess = { it },
+                    onFailure = { null }
+                )
                 
                 val data = currentData.copy(
                     privacyPolicy = privacyDocument?.content ?: "",
                     termsOfService = termsDocument?.content ?: "",
+                    aiDisclaimer = aiDisclaimerDocument?.content ?: "",
+                    communityGuidelines = communityGuidelinesDocument?.content ?: "",
+                    contentModerationPolicy = contentModerationDocument?.content ?: "",
+                    refundSubscriptionPolicy = refundPolicyDocument?.content ?: "",
                     privacyPolicyLastUpdated = privacyDocument?.lastModified?.toString(),
                     termsOfServiceLastUpdated = termsDocument?.lastModified?.toString(),
+                    aiDisclaimerLastUpdated = aiDisclaimerDocument?.lastModified?.toString(),
+                    communityGuidelinesLastUpdated = communityGuidelinesDocument?.lastModified?.toString(),
+                    contentModerationPolicyLastUpdated = contentModerationDocument?.lastModified?.toString(),
+                    refundSubscriptionPolicyLastUpdated = refundPolicyDocument?.lastModified?.toString(),
                     isRefreshing = false
                 )
                 
@@ -230,6 +430,10 @@ class LegalDocumentViewModel @Inject constructor(
                 val displayName = when (documentType) {
                     "privacy_policy" -> "Privacy Policy"
                     "terms_of_service" -> "Terms of Service"
+                    "ai_disclaimer" -> "AI Disclaimer"
+                    "community_guidelines" -> "Community Guidelines"
+                    "content_moderation_policy" -> "Content Moderation Policy"
+                    "refund_subscription_policy" -> "Refund & Subscription Policy"
                     "eula" -> "End User License Agreement"
                     "data_processing_agreement" -> "Data Processing Agreement"
                     else -> documentType.replace("_", " ").split(" ")
@@ -321,6 +525,30 @@ class LegalDocumentViewModel @Inject constructor(
                     searchResults.addAll(matches)
                 }
 
+                // Search in AI disclaimer
+                currentData.aiDisclaimer?.let { document ->
+                    val matches = findTextMatches(document, query, "AI Disclaimer")
+                    searchResults.addAll(matches)
+                }
+
+                // Search in community guidelines
+                currentData.communityGuidelines?.let { document ->
+                    val matches = findTextMatches(document, query, "Community Guidelines")
+                    searchResults.addAll(matches)
+                }
+
+                // Search in content moderation policy
+                currentData.contentModerationPolicy?.let { document ->
+                    val matches = findTextMatches(document, query, "Content Moderation Policy")
+                    searchResults.addAll(matches)
+                }
+
+                // Search in refund & subscription policy
+                currentData.refundSubscriptionPolicy?.let { document ->
+                    val matches = findTextMatches(document, query, "Refund & Subscription Policy")
+                    searchResults.addAll(matches)
+                }
+
                 emitSideEffect(LegalDocumentSideEffect.ShowSearchResults(searchResults))
                 Timber.d("Document search completed: ${searchResults.size} results for '$query'")
             } catch (e: Exception) {
@@ -383,6 +611,28 @@ class LegalDocumentViewModel @Inject constructor(
                         legalDocumentService.recordDocumentAcceptance(
                             userId = userId,
                             documentType = com.example.liftrix.domain.service.LegalDocumentType.TERMS_OF_SERVICE,
+                            version = document.version
+                        ).fold(
+                            onSuccess = { /* Success */ },
+                            onFailure = { error -> throw error }
+                        )
+                    }
+                    "ai_disclaimer" -> {
+                        val document = legalDocumentService.getAIDisclaimer().fold(
+                            onSuccess = { it },
+                            onFailure = { error -> throw error }
+                        )
+                        val userId = authQueryUseCase(waitForAuth = false).fold(
+                            onSuccess = { it.value },
+                            onFailure = { throw LiftrixError.BusinessLogicError(
+                                code = "USER_NOT_AUTHENTICATED",
+                                errorMessage = "User must be authenticated to accept legal documents",
+                                analyticsContext = mapOf("operation" to "ACCEPT_AI_DISCLAIMER")
+                            ) }
+                        )
+                        legalDocumentService.recordDocumentAcceptance(
+                            userId = userId,
+                            documentType = com.example.liftrix.domain.service.LegalDocumentType.AI_DISCLAIMER,
                             version = document.version
                         ).fold(
                             onSuccess = { /* Success */ },

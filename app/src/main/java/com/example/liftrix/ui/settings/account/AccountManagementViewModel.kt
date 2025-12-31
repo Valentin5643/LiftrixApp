@@ -326,17 +326,20 @@ class AccountManagementViewModel @Inject constructor(
                     )
                 }
                 
-                val result = accountCommandUseCase.deleteAccount(password)
+                val result = accountCommandUseCase.deleteAccount(
+                    reauthProvider = "password",
+                    reauthPayload = password
+                )
                 
                 result.fold(
-                    onSuccess = {
-                        Timber.d("Account deleted successfully")
+                    onSuccess = { deletionJobId ->
+                        Timber.d("Account deletion queued successfully: $deletionJobId")
                         trackAccountAction("account_deleted")
                         updateState {
                             copy(
                                 isDeletingAccount = false,
                                 accountDeleted = true,
-                                successMessage = "Account deleted successfully",
+                                successMessage = "Account deletion started",
                                 error = null
                             )
                         }

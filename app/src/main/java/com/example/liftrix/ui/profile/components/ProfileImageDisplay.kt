@@ -29,6 +29,7 @@ import com.example.liftrix.ui.theme.LiftrixTheme
 import com.example.liftrix.data.service.FirebaseStorageUrlResolver
 import com.example.liftrix.ui.components.isStoragePath
 import com.example.liftrix.ui.common.LocalFirebaseStorageUrlResolver
+import com.example.liftrix.ui.common.LocalProfileImageCache
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import com.google.firebase.storage.FirebaseStorage
@@ -68,24 +69,28 @@ fun ProfileImageDisplay(
     modifier: Modifier = Modifier,
     contentDescription: String? = null
 ) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val urlResolver = LocalFirebaseStorageUrlResolver.current
-    
-    // Image loading state management
-    var isLoading by remember(imageUrl) { mutableStateOf(!imageUrl.isNullOrBlank()) }
-    var loadedImage by remember(imageUrl) { mutableStateOf<android.graphics.Bitmap?>(null) }
-    var hasError by remember(imageUrl) { mutableStateOf(false) }
-    
-    // Load image when URL changes
-    LaunchedEffect(imageUrl, userId) {
+    val profileImageCache = LocalProfileImageCache.current
+
+    // Create stable key from URL to prevent recomposition loops
+    // Using hashCode ensures we only reload when URL content actually changes
+    val urlKey = remember(imageUrl) { imageUrl?.hashCode() }
+
+    // Image loading state management with stable keys
+    var isLoading by remember(urlKey) { mutableStateOf(!imageUrl.isNullOrBlank()) }
+    var loadedImage by remember(urlKey) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var hasError by remember(urlKey) { mutableStateOf(false) }
+
+    // Load image when URL key or userId changes (prevents redundant loads on recomposition)
+    LaunchedEffect(urlKey, userId) {
         if (!imageUrl.isNullOrBlank() && userId != null) {
             Timber.d("PFP_DEBUG: ProfileImageDisplay starting load for user $userId with URL: $imageUrl")
             scope.launch {
                 try {
                     isLoading = true
                     hasError = false
-                    
+
                     // Resolve storage path to URL if needed
                     val resolvedUrl = if (imageUrl.isStoragePath()) {
                         if (urlResolver != null) {
@@ -99,13 +104,12 @@ fun ProfileImageDisplay(
                         Timber.d("PFP_DEBUG: Using URL directly for user $userId | url=$imageUrl")
                         imageUrl
                     }
-                    
-                    if (resolvedUrl != null) {
-                        // Use ProfileImageCache for optimized loading
-                        val cache = ProfileImageCache(context)
-                        Timber.d("PFP_DEBUG: ProfileImageCache initialized for user $userId | resolvedUrl=$resolvedUrl")
-                        
-                        val bitmap = cache.loadImage(resolvedUrl, userId)
+
+                    if (resolvedUrl != null && profileImageCache != null) {
+                        // Use ProfileImageCache singleton for optimized loading
+                        Timber.d("PFP_DEBUG: Using shared ProfileImageCache for user $userId | resolvedUrl=$resolvedUrl")
+
+                        val bitmap = profileImageCache.loadImage(resolvedUrl, userId)
                         
                         loadedImage = bitmap
                         hasError = bitmap == null
@@ -116,7 +120,12 @@ fun ProfileImageDisplay(
                             Timber.w("PFP_DEBUG: ❌ ProfileImageDisplay cache miss for user $userId | resolvedUrl: $resolvedUrl")
                         }
                     } else {
-                        Timber.w("PFP_DEBUG: ❌ Failed to resolve URL for user $userId | originalInput: $imageUrl")
+                        if (profileImageCache == null) {
+                            Timber.e("PFP_DEBUG: ❌ ProfileImageCache not provided via CompositionLocal for user $userId")
+                        }
+                        if (resolvedUrl == null) {
+                            Timber.w("PFP_DEBUG: ❌ Failed to resolve URL for user $userId | originalInput: $imageUrl")
+                        }
                         hasError = true
                         loadedImage = null
                     }
@@ -190,7 +199,7 @@ fun ProfileImageDisplay(
                 val imageBitmap = loadedImage!!
                 Image(
                     painter = BitmapPainter(imageBitmap.asImageBitmap()),
-                    contentDescription = null, // Description handled by Box semantics
+                    contentDescription = accessibilityDescription,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
@@ -211,7 +220,7 @@ fun ProfileImageDisplay(
                 } else {
                     Icon(
                         imageVector = Icons.Default.Person,
-                        contentDescription = null, // Description handled by Box semantics
+                        contentDescription = accessibilityDescription,
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.size(size * 0.5f)
                     )

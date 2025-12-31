@@ -126,7 +126,7 @@ fun WorkoutFrequencyHeatmap(
                 
                 Icon(
                     imageVector = Icons.Default.CalendarMonth,
-                    contentDescription = null,
+                    contentDescription = "Frequency calendar",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(GridSystem.iconMedium)
                 )
@@ -213,7 +213,7 @@ private fun ModernEmptyState() {
     ) {
         Icon(
             imageVector = Icons.Default.CalendarMonth,
-            contentDescription = null,
+            contentDescription = "No frequency data",
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(GridSystem.iconLarge)
         )

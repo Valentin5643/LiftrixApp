@@ -112,7 +112,11 @@ private fun GuestStatusBanner(
                         isLowWorkouts -> Icons.Default.Warning
                         else -> Icons.Default.Person
                     },
-                    contentDescription = null,
+                    contentDescription = if (isLimitReached || isLowWorkouts) {
+                        "Guest limit warning"
+                    } else {
+                        "Guest mode"
+                    },
                     tint = contentColor,
                     modifier = Modifier.size(20.dp)
                 )
@@ -220,7 +224,7 @@ fun GuestModeChip(
             ) {
                 Icon(
                     imageVector = if (isUrgent) Icons.Default.Warning else Icons.Default.Person,
-                    contentDescription = null,
+                    contentDescription = if (isUrgent) "Guest limit warning" else "Guest mode",
                     tint = Color.White,
                     modifier = Modifier.size(14.dp)
                 )
@@ -276,7 +280,7 @@ fun GuestUpgradePrompt(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Star,
-                        contentDescription = null,
+                        contentDescription = "Upgrade prompt",
                         tint = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Spacer(modifier = Modifier.width(8.dp))

@@ -124,7 +124,7 @@ interface PostCommentDao {
         SET is_synced = 1, sync_version = :syncVersion, updated_at = :updatedAt
         WHERE id = :commentId
     """)
-    suspend fun markCommentSynced(commentId: String, syncVersion: Int = 1, updatedAt: Long = System.currentTimeMillis())
+    suspend fun markCommentSynced(commentId: String, syncVersion: Long = 1L, updatedAt: Long = System.currentTimeMillis())
     
     @Query("DELETE FROM post_comments WHERE post_id = :postId")
     suspend fun deleteAllCommentsForPost(postId: String)
@@ -145,7 +145,7 @@ interface PostCommentDao {
         SET is_synced = 1, sync_version = :syncVersion
         WHERE id = :commentId
     """)
-    suspend fun markAsSynced(commentId: String, syncVersion: Int)
+    suspend fun markAsSynced(commentId: String, syncVersion: Long)
 
     // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
 
@@ -172,7 +172,7 @@ interface PostCommentDao {
             val entity = comment.copy(
                 isDirty = false,
                 isSynced = true,
-                syncVersion = System.currentTimeMillis().toInt()
+                syncVersion = System.currentTimeMillis()
             )
             _insert(entity)
         }

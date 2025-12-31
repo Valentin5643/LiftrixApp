@@ -56,7 +56,7 @@ fun PersonalizationCard(
             ) {
                 Icon(
                     Icons.Default.Psychology,
-                    contentDescription = null,
+                    contentDescription = "AI personalization",
                     tint = LiftrixColorsV2.primary,
                     modifier = Modifier.size(24.dp)
                 )

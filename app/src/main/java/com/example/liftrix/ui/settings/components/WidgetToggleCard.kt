@@ -101,7 +101,7 @@ fun WidgetToggleCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.DragHandle,
-                        contentDescription = null, // Handled by parent semantics
+                        contentDescription = "Reorder widget",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(16.dp)
                     )
@@ -237,7 +237,11 @@ private fun ComplexityChip(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = when (complexity) {
+                    WidgetComplexity.SIMPLE -> "Simple widget"
+                    WidgetComplexity.MODERATE -> "Moderate complexity widget"
+                    WidgetComplexity.COMPLEX -> "Complex widget"
+                },
                 tint = textColor,
                 modifier = Modifier.size(12.dp)
             )

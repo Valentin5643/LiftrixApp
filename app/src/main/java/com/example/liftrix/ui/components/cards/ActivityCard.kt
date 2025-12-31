@@ -65,7 +65,7 @@ fun ActivityCard(
             ) {
                 Icon(
                     imageVector = icon,
-                    contentDescription = null,
+                    contentDescription = title,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
@@ -116,7 +116,7 @@ fun ActivityCard(
                 if (showChevron && onClick != null) {
                     Icon(
                         imageVector = Icons.Default.ChevronRight,
-                        contentDescription = null,
+                        contentDescription = "Open",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
@@ -151,7 +151,7 @@ fun CompactActivityCard(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = title,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(32.dp)
             )
@@ -233,7 +233,7 @@ fun FeatureCard(
             ) {
                 Icon(
                     imageVector = icon,
-                    contentDescription = null,
+                    contentDescription = title,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(40.dp)
                 )
@@ -274,7 +274,7 @@ fun FeatureCard(
                     
                     Icon(
                         imageVector = Icons.Default.ChevronRight,
-                        contentDescription = null,
+                        contentDescription = "View details",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
                     )

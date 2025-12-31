@@ -160,7 +160,7 @@ private fun SearchBar(
                 } else {
                     Icon(
                         imageVector = Icons.Default.Search,
-                        contentDescription = null,
+                        contentDescription = "Search users",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -220,7 +220,7 @@ private fun SearchBar(
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.FilterAlt,
-                            contentDescription = null,
+                            contentDescription = "Filters active",
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -234,7 +234,7 @@ private fun SearchBar(
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Speed,
-                            contentDescription = null,
+                            contentDescription = "Cached results",
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -294,7 +294,7 @@ private fun EmptySearchState(
     ) {
         Icon(
             imageVector = Icons.Default.SearchOff,
-            contentDescription = null,
+            contentDescription = "No users found",
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             modifier = Modifier.size(64.dp)
         )
@@ -340,7 +340,7 @@ private fun InitialSearchState(
     ) {
         Icon(
             imageVector = Icons.Default.People,
-            contentDescription = null,
+            contentDescription = "Discover people",
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             modifier = Modifier.size(80.dp)
         )
@@ -385,7 +385,7 @@ private fun ErrorState(
     ) {
         Icon(
             imageVector = Icons.Default.Error,
-            contentDescription = null,
+            contentDescription = "Error",
             tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(48.dp)
         )
@@ -414,7 +414,7 @@ private fun ErrorState(
         Button(onClick = onRetry) {
             Icon(
                 imageVector = Icons.Default.Refresh,
-                contentDescription = null,
+                contentDescription = "Retry",
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))

@@ -93,7 +93,7 @@ fun ExerciseRankingDetailScreen(
                             showMetricMenu = false
                         },
                         leadingIcon = if (currentSortBy == metric) {
-                            { Icon(Icons.Default.EmojiEvents, null) }
+                            { Icon(Icons.Default.EmojiEvents, "Selected metric") }
                         } else null
                     )
                 }
@@ -175,7 +175,7 @@ private fun ExerciseRankingContent(
                     )
                     Icon(
                         imageVector = Icons.Default.EmojiEvents,
-                        contentDescription = null,
+                        contentDescription = "Performance summary",
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -273,7 +273,11 @@ private fun ExerciseRankingContent(
                             } else {
                                 Icons.Default.TrendingDown
                             },
-                            contentDescription = null,
+                            contentDescription = if (sortBy.isHigherBetter()) {
+                                "Higher is better"
+                            } else {
+                                "Lower is better"
+                            },
                             modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -322,7 +326,7 @@ private fun PerformanceStatItem(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = label,
             modifier = Modifier.size(16.dp),
             tint = if (isWarning) {
                 MaterialTheme.colorScheme.error

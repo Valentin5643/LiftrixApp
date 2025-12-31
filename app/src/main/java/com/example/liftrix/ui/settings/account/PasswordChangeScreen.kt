@@ -161,7 +161,7 @@ fun PasswordStrengthIndicator(
                     ) {
                         Icon(
                             imageVector = if (requirement.met) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                            contentDescription = null,
+                            contentDescription = requirement.text,
                             tint = if (requirement.met) PasswordStrength.GOOD.color else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(16.dp)
                         )
@@ -284,7 +284,7 @@ fun PasswordChangeScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Security,
-                                contentDescription = null,
+                                contentDescription = "Password security",
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -334,7 +334,7 @@ fun PasswordChangeScreen(
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.Lock,
-                                    contentDescription = null
+                                    contentDescription = "Current password",
                                 )
                             },
                             trailingIcon = {
@@ -401,7 +401,7 @@ fun PasswordChangeScreen(
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.VpnKey,
-                                    contentDescription = null
+                                    contentDescription = "New password",
                                 )
                             },
                             trailingIcon = {
@@ -466,7 +466,7 @@ fun PasswordChangeScreen(
                             leadingIcon = {
                                 Icon(
                                     imageVector = Icons.Default.VpnKey,
-                                    contentDescription = null
+                                    contentDescription = "Confirm password",
                                 )
                             },
                             trailingIcon = {
@@ -518,7 +518,7 @@ fun PasswordChangeScreen(
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.CheckCircle,
-                                            contentDescription = null,
+                                            contentDescription = "Passwords match",
                                             tint = PasswordStrength.GOOD.color,
                                             modifier = Modifier.size(16.dp)
                                         )
@@ -594,7 +594,7 @@ fun PasswordChangeScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Error,
-                            contentDescription = null,
+                            contentDescription = "Error",
                             tint = MaterialTheme.colorScheme.onErrorContainer
                         )
                         Text(
@@ -636,7 +636,7 @@ fun PasswordChangeScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
+                            contentDescription = "Success",
                             tint = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Text(

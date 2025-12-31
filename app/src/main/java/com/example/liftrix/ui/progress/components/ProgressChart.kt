@@ -254,7 +254,7 @@ private fun EmptyChartContent(
         ) {
             Icon(
                 imageVector = Icons.Default.BarChart,
-                contentDescription = null,
+                contentDescription = "No data",
                 modifier = Modifier.size(48.dp),
                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
             )

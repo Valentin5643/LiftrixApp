@@ -134,16 +134,18 @@ class GymBuddySyncWorker @AssistedInject constructor(
         userId: String
     ): Int {
         val buddiesToUpload = mutableListOf<com.example.liftrix.data.local.entity.GymBuddyEntity>()
+        val collectionRef = firestore
+            .collection("users")
+            .document(userId)
+            .collection("gym_buddies")
+        val remoteDocs = FirestorePrefetcher.prefetchByIds(
+            collection = collectionRef,
+            ids = buddies.map { it.buddyId }
+        )
 
         for (buddy in buddies) {
-            val userBuddyRef = firestore
-                .collection("users")
-                .document(userId)
-                .collection("gym_buddies")
-                .document(buddy.buddyId)
-
-            val remoteDoc = userBuddyRef.get().await()
-            if (remoteDoc.exists()) {
+            val remoteDoc = remoteDocs[buddy.buddyId]
+            if (remoteDoc?.exists() == true) {
                 val remoteLastModified = when (val remoteValue = remoteDoc.get("lastModified")) {
                     is com.google.firebase.Timestamp -> remoteValue.toDate().time
                     is Number -> remoteValue.toLong()
@@ -160,7 +162,7 @@ class GymBuddySyncWorker @AssistedInject constructor(
                             ?: buddy.notificationCooldownHours,
                         isDirty = false,
                         isSynced = true,
-                        syncVersion = (remoteDoc.getLong("syncVersion") ?: buddy.syncVersion.toLong()).toInt(),
+                        syncVersion = remoteDoc.getLong("syncVersion") ?: buddy.syncVersion,
                         lastModified = remoteLastModified
                     )
                     gymBuddyDao.upsertFromRemote(remoteEntity)
@@ -180,11 +182,7 @@ class GymBuddySyncWorker @AssistedInject constructor(
         
         buddiesToUpload.forEach { buddy ->
             // Create bidirectional relationship as per specification
-            val userBuddyRef = firestore
-                .collection("users")
-                .document(userId)
-                .collection("gym_buddies")
-                .document(buddy.buddyId)
+            val userBuddyRef = collectionRef.document(buddy.buddyId)
             
             val buddyUserRef = firestore
                 .collection("users")

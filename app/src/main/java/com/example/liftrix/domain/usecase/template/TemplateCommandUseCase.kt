@@ -446,7 +446,7 @@ class TemplateCommandUseCase @Inject constructor(
             name = templateName,
             description = templateDescription,
             exercises = templateExercises,
-            estimatedDurationMinutes = 0, // Will be set below
+            estimatedDurationMinutes = null, // Avoid invalid placeholder value
             difficultyLevel = difficultyLevel,
             folderId = defaultFolderId,
             usageCount = 0,

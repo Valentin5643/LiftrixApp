@@ -420,7 +420,7 @@ private fun InlineFolderSectionHeader(
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = null,
+                    contentDescription = "Create folder",
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.primary
                 )
@@ -489,7 +489,7 @@ private fun QuickActionsCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
+                    contentDescription = "Start quick workout",
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
@@ -515,7 +515,7 @@ private fun QuickActionsCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.Assignment,
-                    contentDescription = null,
+                    contentDescription = "Create workout",
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
@@ -549,7 +549,7 @@ private fun EmptyWorkoutsCard(
         ) {
             Icon(
                 imageVector = Icons.Default.Assignment,
-                contentDescription = null,
+                contentDescription = "Workout templates",
                 modifier = Modifier.size(48.dp),
                 tint = MaterialTheme.colorScheme.primary
             )

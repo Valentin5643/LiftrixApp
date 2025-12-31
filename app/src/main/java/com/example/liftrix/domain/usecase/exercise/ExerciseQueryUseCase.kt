@@ -575,7 +575,7 @@ class ExerciseQueryUseCase @Inject constructor(
             val historicalSetsData = mutableListOf<ExerciseHistoryData>()
 
             exerciseHistory.forEach { exerciseEntity ->
-                val sets = exerciseSetDao.getSetsByExercise(exerciseEntity.id)
+                val sets = exerciseSetDao.getSetsByExercise(exerciseEntity.id, userId)
                 val completedSets = sets.filter { it.reps != null && it.reps > 0 }
 
                 if (completedSets.isNotEmpty()) {

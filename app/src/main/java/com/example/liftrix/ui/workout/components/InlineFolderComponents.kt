@@ -223,7 +223,7 @@ private fun FolderHeader(
             ) {
                 Icon(
                     imageVector = if (isExpanded) Icons.Filled.FolderOpen else Icons.Outlined.Folder,
-                    contentDescription = null,
+                    contentDescription = if (isExpanded) "Folder open" else "Folder closed",
                     modifier = Modifier.size(24.dp),
                     tint = MaterialTheme.colorScheme.primary
                 )
@@ -258,7 +258,7 @@ private fun FolderHeader(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Edit,
-                        contentDescription = null,
+                        contentDescription = "Edit folder",
                         modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -267,7 +267,7 @@ private fun FolderHeader(
                 // Expand/Collapse Arrow
                 Icon(
                     imageVector = Icons.Filled.ExpandMore,
-                    contentDescription = null,
+                    contentDescription = if (isExpanded) "Collapse folder" else "Expand folder",
                     modifier = Modifier
                         .size(24.dp)
                         .rotate(rotation),
@@ -654,7 +654,7 @@ private fun EmptyFolderContent(
         ) {
             Icon(
                 imageVector = Icons.Outlined.Folder,
-                contentDescription = null,
+                contentDescription = "Empty folder",
                 modifier = Modifier.size(32.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -735,7 +735,7 @@ fun CreateFolderDialog_OLD(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Close,
-                                contentDescription = null,
+                                contentDescription = "Close",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -840,7 +840,7 @@ fun QuickCreateFolderButton_OLD(
         ) {
             Icon(
                 imageVector = Icons.Filled.Add,
-                contentDescription = null,
+                contentDescription = "New folder",
                 modifier = Modifier.size(20.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
@@ -924,7 +924,7 @@ fun FolderEditDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Close,
-                                contentDescription = null,
+                                contentDescription = "Close",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -1116,7 +1116,7 @@ private fun FolderEditActionButton_OLD(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = title,
                 modifier = Modifier.size(24.dp),
                 tint = if (isDestructive) {
                     MaterialTheme.colorScheme.error
@@ -1343,7 +1343,7 @@ private fun FolderDeleteConfirmation(
             ) {
                 Icon(
                     imageVector = Icons.Filled.Delete,
-                    contentDescription = null,
+                    contentDescription = "Delete folder",
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(24.dp)
                 )

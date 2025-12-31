@@ -245,7 +245,7 @@ interface SettingsDao {
             val entity = settings.copy(
                 isDirty = false,
                 isSynced = true,
-                syncVersion = System.currentTimeMillis().toInt()
+                syncVersion = System.currentTimeMillis()
             )
             _insert(entity)
         }

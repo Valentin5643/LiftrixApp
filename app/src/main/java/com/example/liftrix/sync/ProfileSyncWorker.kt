@@ -45,43 +45,8 @@ class ProfileSyncWorker @AssistedInject constructor(
     private val profileCleanupService: ProfileCleanupService
 ) : BaseSyncWorker(context, params) {
 
-    // 🔧 HOTFIX: Fallback constructor for when Hilt factory generation fails
-    // This allows WorkManager to instantiate the worker via reflection
-    // TEMPORARY: Remove once Hilt assisted factories are confirmed working
-    constructor(context: Context, params: WorkerParameters) : this(
-        context,
-        params,
-        WorkerServiceLocator.getProfileSyncDependencies(context).run {
-            Timber.w("⚠️ ProfileSyncWorker using FALLBACK constructor - Hilt factory failed!")
-            return@run this
-        }
-    )
-    
-    // Helper constructor to unpack the dependency structure
-    private constructor(
-        context: Context,
-        params: WorkerParameters,
-        deps: WorkerServiceLocator.ProfileSyncDependencies
-    ) : this(
-        context, params,
-        deps.userProfileDao, deps.workoutDao, deps.achievementDao,
-        deps.userProfileMapper, deps.firestore, deps.auth,
-        deps.gson, deps.followRepository, deps.profileCleanupService
-    )
-
     init {
-        val processName = getProcessName()
-        Timber.d("✅ ProfileSyncWorker constructed with Hilt dependency injection in process: $processName")
-    }
-    
-    private fun getProcessName(): String {
-        return try {
-            val pid = android.os.Process.myPid()
-            val manager = applicationContext.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-            manager.runningAppProcesses?.firstOrNull { it.pid == pid }?.processName ?: "unknown"
-        } catch (e: Exception) {
-            "error: ${e.message}"
-        }
+        Timber.d("✅ ProfileSyncWorker constructed with Hilt dependency injection")
     }
 
     override val workerName: String = "ProfileSyncWorker"

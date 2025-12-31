@@ -60,6 +60,7 @@ class SettingsViewModel @Inject constructor(
     private val profileQueryUseCase: ProfileQueryUseCase,
     private val socialProfileQueryUseCase: SocialProfileQueryUseCase,
     private val authCommandUseCase: AuthCommandUseCase,
+    private val accountCommandUseCase: com.example.liftrix.domain.usecase.account.AccountCommandUseCase,
     private val profileImageOperationsUseCase: ProfileImageOperationsUseCase,
     private val imageProcessingService: ImageProcessingService,
     private val authRepository: AuthRepository,
@@ -170,7 +171,14 @@ class SettingsViewModel @Inject constructor(
             is SettingsEvent.NavigateToProfile -> handleProfileNavigation()
             is SettingsEvent.NavigateToSubscription -> handleSubscriptionNavigation()
             is SettingsEvent.NavigateToPrivacy -> handlePrivacyNavigation()
+            is SettingsEvent.NavigateToTermsOfService -> handleTermsOfServiceNavigation()
+            is SettingsEvent.NavigateToAIDisclaimer -> handleAIDisclaimerNavigation()
             is SettingsEvent.NavigateToCommunityGuidelines -> handleCommunityGuidelinesNavigation()
+            is SettingsEvent.NavigateToContentModerationPolicy -> handleContentModerationPolicyNavigation()
+            is SettingsEvent.NavigateToRefundPolicy -> handleRefundPolicyNavigation()
+            is SettingsEvent.NavigateToAIChatSettings -> handleAIChatSettingsNavigation()
+            is SettingsEvent.NavigateToHelpCenter -> handleHelpCenterNavigation()
+            is SettingsEvent.NavigateToContactSupport -> handleContactSupportNavigation()
             is SettingsEvent.NavigateToHelp -> handleHelpNavigation()
             is SettingsEvent.NavigateToAbout -> handleAboutNavigation()
             is SettingsEvent.NavigateToAnomalyDetection -> handleAnomalyDetectionNavigation()
@@ -196,6 +204,12 @@ class SettingsViewModel @Inject constructor(
             is SettingsEvent.ExportDataRequested -> handleDataExport()
             is SettingsEvent.NavigateToDataPortability -> handleDataPortabilityNavigation()
             is SettingsEvent.DeleteAccountRequested -> handleAccountDeletion()
+            is SettingsEvent.DeleteAccountDialogDismissed -> dismissDeleteAccountDialog()
+            is SettingsEvent.DeleteAccountConfirmed -> confirmAccountDeletion(
+                event.reauthProvider,
+                event.reauthPayload,
+                event.exportDataFirst
+            )
             is SettingsEvent.SystemThemeChanged -> handleSystemThemeChanged()
             is SettingsEvent.SubscriptionStatusChanged -> handleSubscriptionStatusChanged()
         }
@@ -728,10 +742,66 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
+     * Handles terms of service navigation event.
+     */
+    private fun handleTermsOfServiceNavigation() {
+        trackNavigationEvent("terms_of_service")
+        // Navigation will be handled by the UI layer
+    }
+
+    /**
+     * Handles AI disclaimer navigation event.
+     */
+    private fun handleAIDisclaimerNavigation() {
+        trackNavigationEvent("ai_disclaimer")
+        // Navigation will be handled by the UI layer
+    }
+
+    /**
      * Handles community guidelines navigation event.
      */
     private fun handleCommunityGuidelinesNavigation() {
         trackNavigationEvent("community_guidelines")
+        // Navigation will be handled by the UI layer
+    }
+
+    /**
+     * Handles content moderation policy navigation event.
+     */
+    private fun handleContentModerationPolicyNavigation() {
+        trackNavigationEvent("content_moderation_policy")
+        // Navigation will be handled by the UI layer
+    }
+
+    /**
+     * Handles refund policy navigation event.
+     */
+    private fun handleRefundPolicyNavigation() {
+        trackNavigationEvent("refund_subscription_policy")
+        // Navigation will be handled by the UI layer
+    }
+
+    /**
+     * Handles AI chat settings navigation event.
+     */
+    private fun handleAIChatSettingsNavigation() {
+        trackNavigationEvent("ai_chat_settings")
+        // Navigation will be handled by the UI layer
+    }
+
+    /**
+     * Handles help center navigation event.
+     */
+    private fun handleHelpCenterNavigation() {
+        trackNavigationEvent("help_center")
+        // Navigation will be handled by the UI layer
+    }
+
+    /**
+     * Handles contact support navigation event.
+     */
+    private fun handleContactSupportNavigation() {
+        trackNavigationEvent("contact_support")
         // Navigation will be handled by the UI layer
     }
 
@@ -1088,11 +1158,71 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Handles account deletion request.
+     * Handles account deletion request by showing the delete account confirmation dialog.
      */
     private fun handleAccountDeletion() {
         trackDataAction("delete_requested")
-        // Account deletion logic will be handled by the UI layer
+        updateState { copy(showDeleteAccountDialog = true) }
+    }
+
+    /**
+     * Dismisses the delete account confirmation dialog.
+     */
+    private fun dismissDeleteAccountDialog() {
+        updateState { copy(showDeleteAccountDialog = false) }
+    }
+
+    /**
+     * Confirms account deletion and initiates the deletion process.
+     *
+     * @param reauthProvider The authentication provider ("password", "google", "anonymous")
+     * @param reauthPayload The re-authentication credential
+     * @param exportDataFirst Whether to export data before deletion
+     */
+    private fun confirmAccountDeletion(
+        reauthProvider: String,
+        reauthPayload: String,
+        exportDataFirst: Boolean
+    ) {
+        val userId = currentUserId ?: return
+
+        updateState { copy(showDeleteAccountDialog = false, isLoading = true) }
+        trackDataAction("delete_confirmed")
+
+        viewModelScope.launch {
+            Timber.d("Initiating account deletion for user $userId with provider $reauthProvider, exportDataFirst=$exportDataFirst")
+
+            val result = accountCommandUseCase.deleteAccount(
+                reauthProvider = reauthProvider,
+                reauthPayload = reauthPayload,
+                exportDataFirst = exportDataFirst
+            )
+
+            result.fold(
+                onSuccess = { deletionJobId ->
+                    Timber.i("Account deletion initiated successfully. Job ID: $deletionJobId")
+                    trackDataAction("delete_success")
+
+                    // Sign out the user after successful deletion initiation
+                    confirmSignOut()
+                },
+                onFailure = { error ->
+                    Timber.e("Failed to delete account for user $userId: $error")
+                    trackDataAction("delete_failed")
+
+                    updateState {
+                        copy(
+                            isLoading = false,
+                            error = when (error) {
+                                is LiftrixError.AuthenticationError -> "Re-authentication failed. Please check your credentials."
+                                is LiftrixError.BusinessLogicError -> error.errorMessage
+                                else -> "Failed to delete account. Please try again."
+                            }
+                        )
+                    }
+                }
+            )
+        }
     }
 
     /**

@@ -274,7 +274,7 @@ interface FollowRequestDao {
     suspend fun updateSyncStatus(
         requestId: String,
         isSynced: Boolean,
-        version: Int,
+        version: Long,
         updatedAt: Long
     ): Int
 
@@ -308,7 +308,7 @@ interface FollowRequestDao {
             val entity = followRequest.copy(
                 isDirty = false,
                 isSynced = true,
-                syncVersion = System.currentTimeMillis().toInt()
+                syncVersion = System.currentTimeMillis()
             )
             _insert(entity)
         }

@@ -38,6 +38,7 @@ import com.example.liftrix.ui.common.components.ErrorDisplay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
+import timber.log.Timber
 
 /**
  * Screen for displaying and managing post comments.
@@ -62,6 +63,8 @@ fun PostCommentsScreen(
     val isPosting by viewModel.isPosting.collectAsState()
     val replyingTo by viewModel.replyingTo.collectAsState()
     val currentUserId by viewModel.currentUserId.collectAsState()
+    val reportingComment by viewModel.reportingComment.collectAsState()
+    val isSubmittingReport by viewModel.isSubmittingReport.collectAsState()
     
     val comments = viewModel.comments.collectAsLazyPagingItems()
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -136,6 +139,9 @@ fun PostCommentsScreen(
                         onCommentReply = { comment ->
                             viewModel.handleEvent(PostCommentsEvent.ReplyToComment(comment))
                         },
+                        onCommentReport = { comment ->
+                            viewModel.handleEvent(PostCommentsEvent.ReportComment(comment))
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -158,7 +164,7 @@ fun PostCommentsScreen(
                 ) {
                     Icon(
                         Icons.Default.Reply,
-                        contentDescription = null,
+                        contentDescription = "Replying",
                         tint = LiftrixColorsV2.onPrimaryContainer,
                         modifier = Modifier.size(16.dp)
                     )
@@ -207,6 +213,30 @@ fun PostCommentsScreen(
                 .padding(LiftrixSpacing.medium)
         )
     }
+
+    // Report dialog
+    reportingComment?.let { comment ->
+        com.example.liftrix.ui.social.ReportDialog(
+            contentType = "Comment",
+            contentId = comment.id,
+            onDismiss = {
+                viewModel.handleEvent(PostCommentsEvent.DismissReportDialog)
+            },
+            onSubmit = { reason, notes ->
+                viewModel.handleEvent(
+                    PostCommentsEvent.SubmitReport(
+                        commentId = comment.id,
+                        reason = reason,
+                        notes = notes
+                    )
+                )
+            },
+            onViewGuidelines = {
+                // TODO: Navigate to Community Guidelines screen
+                Timber.d("View Community Guidelines tapped")
+            }
+        )
+    }
 }
 
 @Composable
@@ -215,6 +245,7 @@ private fun CommentsContent(
     currentUserId: com.example.liftrix.core.identity.UserId?,
     onCommentLike: (String) -> Unit,
     onCommentReply: (PostComment) -> Unit,
+    onCommentReport: (PostComment) -> Unit,
     modifier: Modifier = Modifier
 ) {
     when (comments.loadState.refresh) {
@@ -255,6 +286,7 @@ private fun CommentsContent(
                                 isOwnComment = comment.userId == currentUserId?.value,
                                 onLikeClick = { onCommentLike(comment.id) },
                                 onReplyClick = { onCommentReply(comment) },
+                                onReportClick = { onCommentReport(comment) },
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
@@ -305,6 +337,7 @@ private fun CommentItem(
     isOwnComment: Boolean,
     onLikeClick: () -> Unit,
     onReplyClick: () -> Unit,
+    onReportClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -382,7 +415,17 @@ private fun CommentItem(
                     color = LiftrixColorsV2.onSurfaceVariant,
                     modifier = Modifier.clickable { onReplyClick() }
                 )
-                
+
+                // Report button (only for others' comments)
+                if (!isOwnComment) {
+                    Text(
+                        text = "Report",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = LiftrixColorsV2.onSurfaceVariant,
+                        modifier = Modifier.clickable { onReportClick() }
+                    )
+                }
+
                 // Like count
                 if (comment.likeCount > 0) {
                     Text(

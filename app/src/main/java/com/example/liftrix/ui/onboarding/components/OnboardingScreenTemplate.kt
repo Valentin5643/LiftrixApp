@@ -209,7 +209,7 @@ private fun OnboardingHeader(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = null,
+                        contentDescription = "Go back",
                         tint = accessibleColors.onSurface
                     )
                 }

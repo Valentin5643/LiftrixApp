@@ -140,7 +140,7 @@ private fun WorkoutStatItem(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = label,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(16.dp)
         )

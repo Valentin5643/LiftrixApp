@@ -15,6 +15,10 @@ import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@Deprecated(
+    message = "Legacy Firestore social data source is deprecated. Use Room-first repositories and sync workers.",
+    level = DeprecationLevel.WARNING
+)
 @Singleton
 class LegacySocialFirestoreDataSource @Inject constructor(
     private val firestore: FirebaseFirestore

@@ -69,7 +69,7 @@ data class SupportTicketMessageEntity(
     val isSynced: Boolean = false,
     
     @ColumnInfo(name = "sync_version")
-    val syncVersion: Int = 1,
+    val syncVersion: Long = 1L,
     
     @ColumnInfo(name = "is_dirty", defaultValue = "0")
     val isDirty: Boolean = false,

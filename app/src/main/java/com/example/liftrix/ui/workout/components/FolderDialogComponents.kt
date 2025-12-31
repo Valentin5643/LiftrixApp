@@ -89,7 +89,7 @@ fun CreateFolderDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Close,
-                                contentDescription = null,
+                                contentDescription = "Close",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -173,7 +173,7 @@ fun QuickCreateFolderButton(
         icon = {
             Icon(
                 imageVector = Icons.Filled.Add,
-                contentDescription = null,
+                contentDescription = "New folder",
                 tint = MaterialTheme.colorScheme.onPrimaryContainer
             )
         },
@@ -258,7 +258,7 @@ fun FolderEditDialog(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Close,
-                                contentDescription = null,
+                                contentDescription = "Close",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }

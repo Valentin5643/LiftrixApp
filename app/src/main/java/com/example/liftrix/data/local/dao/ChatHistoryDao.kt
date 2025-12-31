@@ -185,11 +185,15 @@ interface ChatHistoryDao {
     /**
      * Upsert chathistory from LOCAL origin (user edit).
      * Sets isDirty=true and lastModified, triggering sync queue.
+     * Calculates expires_at based on RETENTION_DAYS (default: 30 days).
      */
-    suspend fun upsertLocal(chatHistory: ChatHistoryEntity) {
+    suspend fun upsertLocal(chatHistory: ChatHistoryEntity, retentionDays: Int = 30) {
+        val currentTime = System.currentTimeMillis()
+        val expiresAt = currentTime + (retentionDays * 24 * 60 * 60 * 1000L)
         val entity = chatHistory.copy(
             isDirty = true,
-            lastModified = System.currentTimeMillis()
+            lastModified = currentTime,
+            expiresAt = expiresAt
         )
         _insert(entity)
     }
@@ -206,7 +210,7 @@ interface ChatHistoryDao {
             val entity = chatHistory.copy(
                 isDirty = false,
                 isSynced = true,
-                syncVersion = System.currentTimeMillis().toInt()
+                syncVersion = System.currentTimeMillis()
             )
             _insert(entity)
         }
@@ -237,4 +241,45 @@ interface ChatHistoryDao {
     suspend fun getChatHistoryForSync(id: String, userId: String): ChatHistoryEntity?
 
     // ========== END OFFLINE-FIRST METHODS ==========
+
+    // ========== GDPR COMPLIANCE METHODS (SPEC-20251230-google-play-compliance) ==========
+
+    /**
+     * Get expired messages (expires_at < current time).
+     * Used by ChatHistoryCleanupWorker for automatic deletion.
+     */
+    @Query("""
+        SELECT * FROM chat_history
+        WHERE expires_at IS NOT NULL
+        AND expires_at < :currentTime
+        ORDER BY expires_at ASC
+        LIMIT :limit
+    """)
+    suspend fun getExpiredMessages(
+        currentTime: Long = System.currentTimeMillis(),
+        limit: Int = 1000
+    ): List<ChatHistoryEntity>
+
+    /**
+     * Delete expired messages (automatic cleanup).
+     * Returns number of deleted messages.
+     */
+    @Query("""
+        DELETE FROM chat_history
+        WHERE expires_at IS NOT NULL
+        AND expires_at < :currentTime
+    """)
+    suspend fun deleteExpiredMessages(currentTime: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Count expired messages for metrics.
+     */
+    @Query("""
+        SELECT COUNT(*) FROM chat_history
+        WHERE expires_at IS NOT NULL
+        AND expires_at < :currentTime
+    """)
+    suspend fun countExpiredMessages(currentTime: Long = System.currentTimeMillis()): Int
+
+    // ========== END GDPR COMPLIANCE METHODS ==========
 }

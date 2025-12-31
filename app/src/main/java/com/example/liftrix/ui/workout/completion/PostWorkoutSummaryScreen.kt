@@ -273,7 +273,7 @@ private fun HeroSummaryCard(
                         ) {
                             Icon(
                                 Icons.Default.Schedule,
-                                contentDescription = null,
+                                contentDescription = "Duration",
                                 tint = Color.White.copy(alpha = 0.8f),
                                 modifier = Modifier.size(16.dp)
                             )
@@ -289,7 +289,7 @@ private fun HeroSummaryCard(
                         ) {
                             Icon(
                                 Icons.Default.DateRange,
-                                contentDescription = null,
+                                contentDescription = "Workout date",
                                 tint = Color.White.copy(alpha = 0.8f),
                                 modifier = Modifier.size(16.dp)
                             )
@@ -315,7 +315,7 @@ private fun HeroSummaryCard(
                 ) {
                     Icon(
                         Icons.Default.CheckCircle,
-                        contentDescription = null,
+                        contentDescription = "Completed",
                         tint = Color.White,
                         modifier = Modifier.size(32.dp)
                     )
@@ -420,7 +420,7 @@ private fun DarkMetricCard(
             ) {
                 Icon(
                     imageVector = icon,
-                    contentDescription = null,
+                    contentDescription = label,
                     tint = iconTint,
                     modifier = Modifier.size(18.dp)
                 )
@@ -478,7 +478,7 @@ private fun PersonalRecordsSection(
             ) {
                 Icon(
                     Icons.Default.EmojiEvents,
-                    contentDescription = null,
+                    contentDescription = "Personal records",
                     tint = LiftrixColorsV2.Dark.Warning,
                     modifier = Modifier.size(24.dp)
                 )
@@ -615,7 +615,7 @@ private fun ExerciseSummaryCard(
                             ) {
                                 Icon(
                                     Icons.Default.Add,
-                                    contentDescription = null,
+                                    contentDescription = "Add set",
                                     tint = Color.White,
                                     modifier = Modifier.size(16.dp)
                                 )
@@ -669,7 +669,7 @@ private fun ShareActionsCard(
         ) {
             Icon(
                 Icons.Default.CheckCircle,
-                contentDescription = null,
+                contentDescription = "Complete",
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -686,7 +686,7 @@ private fun ShareActionsCard(
         ) {
             Icon(
                 Icons.Default.ShareLocation,
-                contentDescription = null,
+                contentDescription = "Share externally",
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -790,7 +790,7 @@ private fun ShareMethodItem(
             ) {
                 Icon(
                     imageVector = icon,
-                    contentDescription = null,
+                    contentDescription = title,
                     tint = LiftrixColorsV2.Teal,
                     modifier = Modifier.size(24.dp)
                 )
@@ -812,7 +812,7 @@ private fun ShareMethodItem(
             
             Icon(
                 Icons.Default.KeyboardArrowRight,
-                contentDescription = null,
+                contentDescription = "View details",
                 tint = LiftrixColorsV2.Dark.TextSecondary
             )
         }
@@ -834,7 +834,7 @@ private fun ErrorContent(
     ) {
         Icon(
             Icons.Default.ErrorOutline,
-            contentDescription = null,
+            contentDescription = "Error",
             tint = LiftrixColorsV2.Dark.Error,
             modifier = Modifier.size(64.dp)
         )

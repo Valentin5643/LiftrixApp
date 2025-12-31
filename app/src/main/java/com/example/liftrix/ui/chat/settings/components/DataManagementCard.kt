@@ -54,7 +54,7 @@ fun DataManagementCard(
             ) {
                 Icon(
                     Icons.Default.Storage,
-                    contentDescription = null,
+                    contentDescription = "Data management",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )

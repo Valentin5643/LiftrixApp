@@ -1,4 +1,6 @@
 import org.gradle.api.tasks.PathSensitivity
+import java.io.FileInputStream
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -100,10 +102,33 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("../liftrix-release.keystore")
-            storePassword = System.getenv("KEYSTORE_PASSWORD")
-            keyAlias = System.getenv("KEY_ALIAS") ?: "liftrix"
-            keyPassword = System.getenv("KEY_PASSWORD")
+            // Use environment variables for CI/CD, fallback to local.properties for local development
+            val keystorePropertiesFile = rootProject.file("local.properties")
+            val keystoreProperties = Properties()
+
+            if (keystorePropertiesFile.exists()) {
+                keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+            }
+
+            val envKeystorePath: String? = System.getenv("KEYSTORE_PATH")
+            val envKeystorePassword: String? = System.getenv("KEYSTORE_PASSWORD")
+            val envKeyAlias: String? = System.getenv("KEY_ALIAS")
+            val envKeyPassword: String? = System.getenv("KEY_PASSWORD")
+
+            // SECURITY: Environment variables take precedence (for CI/CD)
+            // Fallback to local.properties for local development only
+            storeFile = file(
+                envKeystorePath
+                    ?: keystoreProperties.getProperty("KEYSTORE_PATH")
+                    ?: "../liftrix-release.keystore"
+            )
+            storePassword = envKeystorePassword
+                ?: keystoreProperties.getProperty("KEYSTORE_PASSWORD")
+            keyAlias = envKeyAlias
+                ?: keystoreProperties.getProperty("KEY_ALIAS")
+                ?: "liftrix"
+            keyPassword = envKeyPassword
+                ?: keystoreProperties.getProperty("KEY_PASSWORD")
         }
     }
 
@@ -228,6 +253,8 @@ ksp {
 dependencies {
     // Custom Lint rules for architectural enforcement
     lintChecks(project(":lint-rules"))
+    implementation(project(":user-scoping-annotations"))
+    ksp(project(":user-scoping-processor"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -309,7 +336,7 @@ dependencies {
     implementation(libs.hilt.work)
     implementation(libs.hilt.navigation.compose)
     ksp(libs.hilt.compiler)
-    // Note: AndroidX Hilt compiler for @HiltWorker is already included in main Hilt compiler
+    ksp(libs.androidx.hilt.compiler)
     
     // WorkManager
     implementation(libs.work.runtime.ktx)
@@ -555,7 +582,8 @@ tasks.register<JacocoReport>("jacocoTestReport") {
         "**/*Module_*Factory.*"
     )
 
-    val debugTree = fileTree("${buildDir}/tmp/kotlin-classes/debug") {
+    val buildDirFile = layout.buildDirectory.get().asFile
+    val debugTree = fileTree("${buildDirFile}/tmp/kotlin-classes/debug") {
         exclude(fileFilter)
     }
 
@@ -563,7 +591,7 @@ tasks.register<JacocoReport>("jacocoTestReport") {
 
     sourceDirectories.setFrom(files(mainSrc))
     classDirectories.setFrom(files(debugTree))
-    executionData.setFrom(fileTree(buildDir) {
+    executionData.setFrom(fileTree(buildDirFile) {
         include("jacoco/testDebugUnitTest.exec")
     })
 }
@@ -589,12 +617,13 @@ tasks.register<JacocoCoverageVerification>("jacocoCoverageVerification") {
         "**/*Module_*Factory.*"
     )
 
-    val debugTree = fileTree("${buildDir}/tmp/kotlin-classes/debug") {
+    val buildDirFile = layout.buildDirectory.get().asFile
+    val debugTree = fileTree("${buildDirFile}/tmp/kotlin-classes/debug") {
         exclude(fileFilter)
     }
 
     classDirectories.setFrom(files(debugTree))
-    executionData.setFrom(fileTree(buildDir) {
+    executionData.setFrom(fileTree(buildDirFile) {
         include("jacoco/testDebugUnitTest.exec")
     })
 

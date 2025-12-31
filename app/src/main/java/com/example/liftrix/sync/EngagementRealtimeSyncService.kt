@@ -1,9 +1,10 @@
 package com.example.liftrix.sync
 
+import androidx.lifecycle.LifecycleOwner
 import com.example.liftrix.config.OfflineArchitectureFlags
 import com.example.liftrix.data.local.dao.WorkoutPostDao
+import com.example.liftrix.data.service.FirestoreListenerManager
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -14,28 +15,31 @@ import javax.inject.Singleton
 /**
  * Real-time engagement sync service for instant like/comment count updates.
  * Part of Firebase sync infrastructure from SPEC-20250118-firebase-sync-social.
- * 
- * Provides real-time Firestore listeners for engagement metrics with proper
- * lifecycle management and error handling.
+ *
+ * Refactored to use FirestoreListenerManager for memory leak prevention (SPEC-20251230-google-play-compliance).
+ * Provides real-time Firestore listeners for engagement metrics with automatic lifecycle cleanup.
  */
 @Singleton
 class EngagementRealtimeSyncService @Inject constructor(
     private val firestore: FirebaseFirestore,
-    private val postDao: WorkoutPostDao
+    private val postDao: WorkoutPostDao,
+    private val listenerManager: FirestoreListenerManager
 ) {
     private val scope = CoroutineScope(SupervisorJob())
-    private val listeners = mutableMapOf<String, ListenerRegistration>()
     
     /**
-     * Start listening to real-time engagement updates for a specific post
+     * Start listening to real-time engagement updates for a specific post.
+     * Uses FirestoreListenerManager for automatic lifecycle cleanup.
+     *
+     * @param postId Post ID to listen to
+     * @param lifecycleOwner Optional LifecycleOwner for automatic cleanup (recommended)
      */
-    fun startListeningToPost(postId: String) {
-        // Remove existing listener if any
-        listeners[postId]?.remove()
-        
+    fun startListeningToPost(postId: String, lifecycleOwner: LifecycleOwner? = null) {
+        val listenerId = "engagement_$postId"
+
         Timber.d("Starting real-time engagement listening for post $postId")
-        
-        listeners[postId] = firestore
+
+        val registration = firestore
             .collection("workout_posts")
             .document(postId)
             .addSnapshotListener { snapshot, error ->
@@ -43,7 +47,7 @@ class EngagementRealtimeSyncService @Inject constructor(
                     Timber.e(error, "Engagement sync error for post $postId")
                     return@addSnapshotListener
                 }
-                
+
                 snapshot?.data?.let { data ->
                     scope.launch {
                         try {
@@ -54,14 +58,20 @@ class EngagementRealtimeSyncService @Inject constructor(
                     }
                 }
             }
+
+        // Register with listener manager for memory leak prevention
+        listenerManager.registerListener(listenerId, registration, lifecycleOwner)
     }
     
     /**
-     * Start listening to multiple posts at once for batch engagement updates
+     * Start listening to multiple posts at once for batch engagement updates.
+     *
+     * @param postIds List of post IDs to listen to
+     * @param lifecycleOwner Optional LifecycleOwner for automatic cleanup (recommended)
      */
-    fun startListeningToPosts(postIds: List<String>) {
+    fun startListeningToPosts(postIds: List<String>, lifecycleOwner: LifecycleOwner? = null) {
         postIds.forEach { postId ->
-            startListeningToPost(postId)
+            startListeningToPost(postId, lifecycleOwner)
         }
         Timber.d("Started real-time engagement listening for ${postIds.size} posts")
     }
@@ -113,16 +123,16 @@ class EngagementRealtimeSyncService @Inject constructor(
     }
 
     /**
-     * Stop listening to real-time updates for a specific post
+     * Stop listening to real-time updates for a specific post.
      */
     fun stopListening(postId: String) {
-        listeners[postId]?.remove()
-        listeners.remove(postId)
+        val listenerId = "engagement_$postId"
+        listenerManager.removeListener(listenerId)
         Timber.d("Stopped real-time engagement listening for post $postId")
     }
-    
+
     /**
-     * Stop listening to multiple posts at once
+     * Stop listening to multiple posts at once.
      */
     fun stopListening(postIds: List<String>) {
         postIds.forEach { postId ->
@@ -130,30 +140,37 @@ class EngagementRealtimeSyncService @Inject constructor(
         }
         Timber.d("Stopped real-time engagement listening for ${postIds.size} posts")
     }
-    
+
     /**
-     * Stop all active listeners - call this when user logs out or app is destroyed
+     * Stop all active listeners - call this when user logs out or app is destroyed.
      */
     fun stopAllListeners() {
-        val activeListenerCount = listeners.size
-        listeners.values.forEach { it.remove() }
-        listeners.clear()
-        
+        val activeListenerCount = listenerManager.getActiveListenerCount()
+        listenerManager.removeAllListeners()
+
         Timber.d("Stopped all real-time engagement listeners ($activeListenerCount active)")
     }
-    
+
     /**
-     * Get the number of active listeners for monitoring
+     * Get the number of active listeners for monitoring.
      */
-    fun getActiveListenerCount(): Int = listeners.size
-    
+    fun getActiveListenerCount(): Int = listenerManager.getActiveListenerCount()
+
     /**
-     * Check if a specific post is being listened to
+     * Check if a specific post is being listened to.
      */
-    fun isListeningToPost(postId: String): Boolean = listeners.containsKey(postId)
-    
+    fun isListeningToPost(postId: String): Boolean {
+        val listenerId = "engagement_$postId"
+        return listenerManager.isListenerActive(listenerId)
+    }
+
     /**
-     * Get all post IDs currently being listened to
+     * Get all post IDs currently being listened to.
      */
-    fun getListenedPostIds(): Set<String> = listeners.keys.toSet()
+    fun getListenedPostIds(): Set<String> {
+        return listenerManager.getActiveListenerIds()
+            .filter { it.startsWith("engagement_") }
+            .map { it.removePrefix("engagement_") }
+            .toSet()
+    }
 }

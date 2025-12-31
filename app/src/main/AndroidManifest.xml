@@ -9,7 +9,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="com.android.vending.BILLING" />
-    
+
+    <!-- Photo/Media permissions - Google Play Compliance (SPEC-20251230-google-play-compliance) -->
+    <!-- Prefer Android Photo Picker on Android 13+ (implemented in MediaPickerBottomSheet.kt) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
     <!-- Camera feature is not required for the app to function -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
@@ -59,7 +65,17 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
-            
+
+        <!-- Firebase Cloud Messaging Service - Google Play Compliance (SPEC-20251230-google-play-compliance) -->
+        <service
+            android:name=".service.LiftrixFirebaseMessagingService"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -69,19 +85,19 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
-        
-        <!-- Disable default WorkManager initialization to use HiltWorkerFactory -->
+
+        <!-- Disable WorkManager automatic initialization to control factory setup -->
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
             android:exported="false"
             tools:node="merge">
-            <!-- Remove WorkManagerInitializer to prevent default initialization -->
             <meta-data
                 android:name="androidx.work.WorkManagerInitializer"
                 android:value="androidx.startup"
                 tools:node="remove" />
         </provider>
+
     </application>
 
 </manifest>

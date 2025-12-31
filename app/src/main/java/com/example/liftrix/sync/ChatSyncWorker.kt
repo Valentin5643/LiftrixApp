@@ -175,8 +175,8 @@ class ChatSyncWorker @AssistedInject constructor(
                         updatedAt = remoteDoc.getLong("updatedAt") ?: preferences.updatedAt,
                         isDirty = false,
                         isSynced = true,
-                        syncVersion = (remoteDoc.getLong("syncVersion")
-                            ?: preferences.syncVersion.toLong()).toInt(),
+                        syncVersion = remoteDoc.getLong("syncVersion")
+                            ?: preferences.syncVersion,
                         lastModified = remoteLastModified
                     )
                     chatPreferencesDao.upsertFromRemote(remoteEntity)
@@ -195,7 +195,7 @@ class ChatSyncWorker @AssistedInject constructor(
                 "autoClearDays" to preferences.autoClearDays,
                 "userContextPrompt" to preferences.userContextPrompt,
                 "updatedAt" to preferences.updatedAt,
-                "syncVersion" to 1,
+                "syncVersion" to 1L,
                 "lastModified" to preferences.lastModified,
                 "lastSyncedAt" to FieldValue.serverTimestamp()
             )
@@ -239,18 +239,21 @@ class ChatSyncWorker @AssistedInject constructor(
             
             var totalSynced = 0
             
+            val collectionRef = firestore.collection("users")
+                .document(userId)
+                .collection("chat_history")
+
             // Process messages in batches
             unsyncedMessages.chunked(BATCH_SIZE).forEach { batch ->
                 val messagesToUpload = mutableListOf<ChatHistoryEntity>()
+                val remoteDocs = FirestorePrefetcher.prefetchByIds(
+                    collection = collectionRef,
+                    ids = batch.map { it.id }
+                )
 
                 for (message in batch) {
-                    val docRef = firestore.collection("users")
-                        .document(userId)
-                        .collection("chat_history")
-                        .document(message.id)
-
-                    val remoteDoc = docRef.get().await()
-                    if (remoteDoc.exists()) {
+                    val remoteDoc = remoteDocs[message.id]
+                    if (remoteDoc?.exists() == true) {
                         val remoteLastModified = when (val remoteValue = remoteDoc.get("lastModified")) {
                             is com.google.firebase.Timestamp -> remoteValue.toDate().time
                             is Number -> remoteValue.toLong()
@@ -275,8 +278,8 @@ class ChatSyncWorker @AssistedInject constructor(
                                 createdAt = remoteDoc.getLong("createdAt") ?: message.createdAt,
                                 isDirty = false,
                                 isSynced = true,
-                                syncVersion = (remoteDoc.getLong("syncVersion")
-                                    ?: message.syncVersion.toLong()).toInt(),
+                                syncVersion = remoteDoc.getLong("syncVersion")
+                                    ?: message.syncVersion,
                                 lastModified = remoteLastModified
                             )
                             chatHistoryDao.upsertFromRemote(remoteEntity)
@@ -303,15 +306,12 @@ class ChatSyncWorker @AssistedInject constructor(
                         "tokenCount" to message.tokenCount,
                         "processingTimeMs" to message.processingTimeMs,
                         "createdAt" to message.createdAt,
-                        "syncVersion" to 1,
+                        "syncVersion" to 1L,
                         "lastModified" to message.lastModified,
                         "lastSyncedAt" to FieldValue.serverTimestamp()
                     )
                     
-                    val docRef = firestore.collection("users")
-                        .document(userId)
-                        .collection("chat_history")
-                        .document(message.id)
+                    val docRef = collectionRef.document(message.id)
                     
                     firestoreBatch.set(docRef, messageData, SetOptions.merge())
                 }
@@ -374,7 +374,7 @@ class ChatSyncWorker @AssistedInject constructor(
                     userContextPrompt = preferencesDoc.getString("userContextPrompt"),
                     isDirty = false,
                     isSynced = true,
-                    syncVersion = (preferencesDoc.getLong("syncVersion") ?: 1).toInt(),
+                    syncVersion = preferencesDoc.getLong("syncVersion") ?: 1L,
                     lastModified = remoteLastModified,
                     updatedAt = preferencesDoc.getLong("updatedAt") ?: System.currentTimeMillis()
                 )
@@ -411,7 +411,7 @@ class ChatSyncWorker @AssistedInject constructor(
                         createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis(),
                         isDirty = false,
                         isSynced = true,
-                        syncVersion = (doc.getLong("syncVersion") ?: 1).toInt(),
+                        syncVersion = doc.getLong("syncVersion") ?: 1L,
                         lastModified = remoteLastModified
                     )
                 } catch (e: Exception) {

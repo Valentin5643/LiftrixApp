@@ -115,7 +115,7 @@ interface MediaItemDao {
         SET is_synced = 1, sync_version = :syncVersion
         WHERE id = :mediaId
     """)
-    suspend fun markAsSynced(mediaId: String, syncVersion: Int)
+    suspend fun markAsSynced(mediaId: String, syncVersion: Long)
     
     @Query("""
         SELECT * FROM media_items 
@@ -152,7 +152,7 @@ interface MediaItemDao {
             val entity = mediaItem.copy(
                 isDirty = false,
                 isSynced = true,
-                syncVersion = System.currentTimeMillis().toInt()
+                syncVersion = System.currentTimeMillis()
             )
             _insert(entity)
         }

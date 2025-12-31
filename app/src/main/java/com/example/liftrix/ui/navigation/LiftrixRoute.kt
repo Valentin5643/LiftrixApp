@@ -502,10 +502,28 @@ sealed class LiftrixRoute {
     data object TermsOfService : LiftrixRoute()
 
     /**
+     * AI disclaimer screen for viewing AI usage policy
+     */
+    @Serializable
+    data object AIDisclaimer : LiftrixRoute()
+
+    /**
      * Community guidelines screen for viewing community standards and acceptable behavior
      */
     @Serializable
     data object CommunityGuidelines : LiftrixRoute()
+
+    /**
+     * Content moderation policy screen for viewing enforcement guidelines
+     */
+    @Serializable
+    data object ContentModerationPolicy : LiftrixRoute()
+
+    /**
+     * Refund & subscription policy screen for billing terms
+     */
+    @Serializable
+    data object RefundSubscriptionPolicy : LiftrixRoute()
     
     /**
      * Data portability screen for importing and exporting workout data

@@ -315,7 +315,7 @@ interface SocialPrivacySettingsDao {
             val entity = socialPrivacySettings.copy(
                 isDirty = false,
                 isSynced = true,
-                syncVersion = System.currentTimeMillis().toInt()
+                syncVersion = System.currentTimeMillis()
             )
             _insert(entity)
         }

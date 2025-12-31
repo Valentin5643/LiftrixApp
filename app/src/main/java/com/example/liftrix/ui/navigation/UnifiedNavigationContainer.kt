@@ -92,7 +92,7 @@ import com.example.liftrix.ui.support.SupportTicketScreen
 import com.example.liftrix.ui.settings.about.AboutScreen
 import com.example.liftrix.ui.settings.legal.PrivacyPolicyScreen
 import com.example.liftrix.ui.settings.legal.TermsOfServiceScreen
-import com.example.liftrix.ui.settings.CommunityGuidelinesScreen
+import com.example.liftrix.ui.settings.legal.CommunityGuidelinesScreen
 import com.example.liftrix.ui.chat.ChatbotScreen
 import com.example.liftrix.ui.chat.settings.AIChatSettingsScreen
 import com.example.liftrix.ui.social.SocialViewModel
@@ -546,8 +546,17 @@ fun UnifiedNavigationContainer(
                         onNavigateToTermsOfService = {
                             navController.navigate(LiftrixRoute.TermsOfService)
                         },
+                        onNavigateToAIDisclaimer = {
+                            navController.navigate(LiftrixRoute.AIDisclaimer)
+                        },
                         onNavigateToCommunityGuidelines = {
                             navController.navigate(LiftrixRoute.CommunityGuidelines)
+                        },
+                        onNavigateToContentModerationPolicy = {
+                            navController.navigate(LiftrixRoute.ContentModerationPolicy)
+                        },
+                        onNavigateToRefundSubscriptionPolicy = {
+                            navController.navigate(LiftrixRoute.RefundSubscriptionPolicy)
                         },
                         onNavigateToDataPortability = {
                             navController.navigate(LiftrixRoute.DataPortability)
@@ -744,8 +753,32 @@ fun UnifiedNavigationContainer(
                     )
                 }
 
+                composable<LiftrixRoute.AIDisclaimer> {
+                    com.example.liftrix.ui.settings.legal.AIDisclaimerScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+
                 composable<LiftrixRoute.CommunityGuidelines> {
                     CommunityGuidelinesScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+
+                composable<LiftrixRoute.ContentModerationPolicy> {
+                    com.example.liftrix.ui.settings.legal.ContentModerationPolicyScreen(
+                        onNavigateBack = {
+                            navController.popBackStackSafely()
+                        }
+                    )
+                }
+
+                composable<LiftrixRoute.RefundSubscriptionPolicy> {
+                    com.example.liftrix.ui.settings.legal.RefundSubscriptionPolicyScreen(
                         onNavigateBack = {
                             navController.popBackStackSafely()
                         }

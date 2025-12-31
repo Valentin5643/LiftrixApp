@@ -199,7 +199,7 @@ interface ContentReportsDao {
             val entity = contentReport.copy(
                 isDirty = false,
                 isSynced = true,
-                syncVersion = System.currentTimeMillis().toInt()
+                syncVersion = System.currentTimeMillis()
             )
             _insert(entity)
         }

@@ -242,7 +242,7 @@ private fun SyncIcon(
         
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = if (isAnimated) "Syncing" else "Sync status",
             tint = color,
             modifier = Modifier
                 .size(20.dp)
@@ -251,7 +251,7 @@ private fun SyncIcon(
     } else {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = "Sync status",
             tint = color,
             modifier = Modifier.size(20.dp)
         )
@@ -287,7 +287,11 @@ private fun DetailedStageProgress(
                 
                 Icon(
                     imageVector = stageIcon,
-                    contentDescription = null,
+                    contentDescription = when {
+                        index < currentStageIndex -> "${stage.name} complete"
+                        index == currentStageIndex -> "${stage.name} syncing"
+                        else -> "${stage.name} pending"
+                    },
                     tint = stageColor,
                     modifier = Modifier.size(16.dp)
                 )
@@ -345,7 +349,7 @@ fun CompactSyncProgress(
             
             Icon(
                 imageVector = Icons.Default.Sync,
-                contentDescription = null,
+                contentDescription = "Syncing",
                 tint = LiftrixColorsV2.Teal,
                 modifier = Modifier
                     .size(14.dp)

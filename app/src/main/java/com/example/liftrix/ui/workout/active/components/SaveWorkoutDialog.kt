@@ -83,7 +83,7 @@ fun SaveWorkoutDialog(
             ) {
                 Icon(
                     imageVector = Icons.Default.Assignment,
-                    contentDescription = null,
+                    contentDescription = "Save workout",
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -301,7 +301,7 @@ private fun SaveOptionCard(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = title,
                 tint = if (isSelected) {
                     MaterialTheme.colorScheme.primary
                 } else {
@@ -408,7 +408,7 @@ private fun InfoCard(
         ) {
             Icon(
                 imageVector = Icons.Default.Info,
-                contentDescription = null,
+                contentDescription = "Info",
                 tint = MaterialTheme.colorScheme.onTertiaryContainer,
                 modifier = Modifier.size(20.dp)
             )

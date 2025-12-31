@@ -6,7 +6,6 @@ import com.example.liftrix.data.local.dao.PrivacySettingsDao
 import com.example.liftrix.data.local.dao.SocialProfileDao
 import com.example.liftrix.data.local.dao.WorkoutDao
 import com.example.liftrix.data.mapper.FriendMapper
-import com.example.liftrix.data.remote.legacy.LegacySocialFirestoreDataSource
 import com.example.liftrix.domain.model.Friend
 import com.example.liftrix.domain.model.FriendStatus
 import com.example.liftrix.domain.model.RecommendedUser
@@ -14,7 +13,6 @@ import com.example.liftrix.domain.model.SharedWorkout
 import com.example.liftrix.domain.model.User
 import com.example.liftrix.domain.model.WorkoutStatus
 import java.time.Duration
-import com.example.liftrix.config.OfflineArchitectureFlags
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SocialRepository
 import com.example.liftrix.domain.usecase.social.SocialProfileQueryUseCase
@@ -24,7 +22,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -48,8 +45,7 @@ class SocialRepositoryImpl @Inject constructor(
     private val recommendationCache: RecommendationCache,
     private val socialProfileQueryUseCase: SocialProfileQueryUseCase,
     private val userSuggestionService: com.example.liftrix.domain.service.UserSuggestionService,
-    private val syncCoordinator: SyncCoordinator,
-    private val legacyDataSource: LegacySocialFirestoreDataSource
+    private val syncCoordinator: SyncCoordinator
 ) : SocialRepository {
 
     companion object {
@@ -89,11 +85,7 @@ class SocialRepositoryImpl @Inject constructor(
                 return@flow
             }
 
-            val searchResults = if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
-                searchUsersRoomFirst(query, currentUserId.value)
-            } else {
-                searchUsersLegacy(query, currentUserId.value)
-            }
+            val searchResults = searchUsersRoomFirst(query, currentUserId.value)
 
             emit(searchResults)
             Timber.d("User search completed: ${searchResults.size} results for query '$query'")
@@ -137,18 +129,9 @@ class SocialRepositoryImpl @Inject constructor(
 
             Timber.d("DEBUG_SEND_FRIEND_REQUEST: Created friend request entity - userId: ${friendRequest.userId}, friendUserId: ${friendRequest.friendUserId}, status: ${friendRequest.status}")
 
-            if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
-                friendDao.upsertLocal(friendRequest)
-                Timber.d("DEBUG_SEND_FRIEND_REQUEST: Upserted friend request locally")
-                triggerImmediateSyncSafely(currentUserId.value)
-            } else {
-                // Save to local database (legacy path)
-                val insertId = friendDao.insertFriend(friendRequest)
-                Timber.d("DEBUG_SEND_FRIEND_REQUEST: Inserted friend request to database with ID: $insertId")
-
-                // Sync to Firebase (legacy path)
-                legacyDataSource.syncFriendRequest(currentUserId.value, friendUserId)
-            }
+            friendDao.upsertLocal(friendRequest)
+            Timber.d("DEBUG_SEND_FRIEND_REQUEST: Upserted friend request locally")
+            triggerImmediateSyncSafely(currentUserId.value)
 
             // Invalidate recommendation cache since friend relationships changed
             recommendationCache.invalidateCacheForUser(currentUserId.value)
@@ -176,16 +159,11 @@ class SocialRepositoryImpl @Inject constructor(
             val newStatus = if (accept) FriendStatus.ACCEPTED.name else "DECLINED"
             val now = Instant.now().toEpochMilli()
 
-            if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
-                val updatedRequest = existingRequest.copy(
-                    status = newStatus,
-                    updatedAt = Instant.ofEpochMilli(now)
-                )
-                friendDao.upsertLocal(updatedRequest)
-            } else {
-                // Update the friend request status (legacy path)
-                friendDao.updateFriendStatus(friendUserId, currentUserId.value, newStatus, now)
-            }
+            val updatedRequest = existingRequest.copy(
+                status = newStatus,
+                updatedAt = Instant.ofEpochMilli(now)
+            )
+            friendDao.upsertLocal(updatedRequest)
 
             if (accept) {
                 // Create bidirectional friendship
@@ -195,19 +173,10 @@ class SocialRepositoryImpl @Inject constructor(
                     isSynced = false
                 ).copy(status = FriendStatus.ACCEPTED.name)
 
-                if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
-                    friendDao.upsertLocal(reciprocalFriend)
-                } else {
-                    friendDao.insertFriend(reciprocalFriend)
-                }
+                friendDao.upsertLocal(reciprocalFriend)
             }
 
-            if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
-                triggerImmediateSyncSafely(currentUserId.value)
-            } else {
-                // Sync to Firebase (legacy path)
-                legacyDataSource.syncFriendResponse(currentUserId.value, friendUserId, accept)
-            }
+            triggerImmediateSyncSafely(currentUserId.value)
 
             // Invalidate recommendation cache for both users since friend relationships changed
             if (accept) {
@@ -381,34 +350,21 @@ class SocialRepositoryImpl @Inject constructor(
             val now = Instant.now().toEpochMilli()
 
             if (existingRelationship != null) {
-                if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
-                    val updatedRelationship = existingRelationship.copy(
-                        status = FriendStatus.BLOCKED.name,
-                        updatedAt = Instant.ofEpochMilli(now)
-                    )
-                    friendDao.upsertLocal(updatedRelationship)
-                } else {
-                    friendDao.updateFriendStatus(currentUserId.value, friendUserId, FriendStatus.BLOCKED.name, now)
-                }
+                val updatedRelationship = existingRelationship.copy(
+                    status = FriendStatus.BLOCKED.name,
+                    updatedAt = Instant.ofEpochMilli(now)
+                )
+                friendDao.upsertLocal(updatedRelationship)
             } else {
                 val blockedUser = friendMapper.createFriendRequest(currentUserId.value, friendUserId)
                     .copy(status = FriendStatus.BLOCKED.name)
-                if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
-                    friendDao.upsertLocal(blockedUser)
-                } else {
-                    friendDao.insertFriend(blockedUser)
-                }
+                friendDao.upsertLocal(blockedUser)
             }
 
             // Remove any reciprocal friendship
             friendDao.deleteFriendRelationship(friendUserId, currentUserId.value)
 
-            if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
-                triggerImmediateSyncSafely(currentUserId.value)
-            } else {
-                // Sync to Firebase (legacy path)
-                legacyDataSource.syncBlockUser(currentUserId.value, friendUserId)
-            }
+            triggerImmediateSyncSafely(currentUserId.value)
 
             Timber.d("User blocked successfully: $currentUserId blocked $friendUserId")
             Result.success(Unit)
@@ -427,12 +383,7 @@ class SocialRepositoryImpl @Inject constructor(
             // Remove blocked relationship
             friendDao.deleteFriendRelationship(currentUserId.value, friendUserId)
 
-            if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
-                triggerImmediateSyncSafely(currentUserId.value)
-            } else {
-                // Sync to Firebase (legacy path)
-                legacyDataSource.syncUnblockUser(currentUserId.value, friendUserId)
-            }
+            triggerImmediateSyncSafely(currentUserId.value)
 
             Timber.d("User unblocked successfully: $currentUserId unblocked $friendUserId")
             Result.success(Unit)
@@ -451,12 +402,7 @@ class SocialRepositoryImpl @Inject constructor(
             // Remove bidirectional friendship
             friendDao.deleteBidirectionalFriendRelationship(currentUserId.value, friendUserId)
 
-            if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
-                triggerImmediateSyncSafely(currentUserId.value)
-            } else {
-                // Sync to Firebase (legacy path)
-                legacyDataSource.syncRemoveFriend(currentUserId.value, friendUserId)
-            }
+            triggerImmediateSyncSafely(currentUserId.value)
 
             // Invalidate recommendation cache for both users since friend relationships changed
             recommendationCache.invalidateCacheForUser(currentUserId.value)
@@ -472,11 +418,7 @@ class SocialRepositoryImpl @Inject constructor(
     }
     
     override suspend fun getUserById(userId: String): User? {
-        return if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
-            getUserByIdRoomFirst(userId)
-        } else {
-            getUserByIdLegacy(userId)
-        }
+        return getUserByIdRoomFirst(userId)
     }
 
     override fun getRecommendedUsers(limit: Int, offset: Int): Flow<List<RecommendedUser>> = flow {
@@ -661,13 +603,8 @@ class SocialRepositoryImpl @Inject constructor(
 
             friendIds.collect { friends ->
                 if (friends.isNotEmpty()) {
-                    if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
-                        // Room-first: rely on local workouts + sync workers to refresh data
-                        triggerImmediateSyncSafely(currentUserId.value)
-                    } else {
-                        val fetchedCount = legacyDataSource.fetchFriendsWorkouts(friends)
-                        Timber.d("Retrieved $fetchedCount friends' workouts from Firebase")
-                    }
+                    // Room-first: rely on local workouts + sync workers to refresh data
+                    triggerImmediateSyncSafely(currentUserId.value)
                 }
             }
 
@@ -679,52 +616,31 @@ class SocialRepositoryImpl @Inject constructor(
     }
 
     fun setupRealtimeFeedListener(): Flow<Unit> {
-        return if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
-            callbackFlow {
-                try {
-                    val currentUserId = authRepository.getCurrentUserId()
-                    if (currentUserId == null) {
-                        Timber.w("Cannot setup local feed listener: user not authenticated")
-                        trySend(Unit)
-                        close()
-                        return@callbackFlow
-                    }
-
-                    Timber.d("Setting up local feed listener for user: $currentUserId")
-                    val job = launch {
-                        friendDao.getFriends(currentUserId.value).collect {
-                            trySend(Unit)
-                        }
-                    }
-
-                    awaitClose {
-                        job.cancel()
-                        Timber.d("Local feed listener removed")
-                    }
-                } catch (e: Exception) {
-                    Timber.e(e, "Failed to setup local feed listener")
-                    close(e)
-                }
-            }
-        } else {
-            val friendIdsFlow = flow {
+        return callbackFlow {
+            try {
                 val currentUserId = authRepository.getCurrentUserId()
                 if (currentUserId == null) {
-                    emit(emptyList())
-                    return@flow
+                    Timber.w("Cannot setup local feed listener: user not authenticated")
+                    trySend(Unit)
+                    close()
+                    return@callbackFlow
                 }
 
-                emitAll(
-                    friendDao.getFriends(currentUserId.value)
-                        .map { friendEntities ->
-                            friendEntities.filter { it.status == FriendStatus.ACCEPTED.name }
-                                .map { it.friendUserId }
-                        }
-                        .catch { emit(emptyList()) }
-                )
-            }
+                Timber.d("Setting up local feed listener for user: $currentUserId")
+                val job = launch {
+                    friendDao.getFriends(currentUserId.value).collect {
+                        trySend(Unit)
+                    }
+                }
 
-            legacyDataSource.setupRealtimeFeedListener(friendIdsFlow)
+                awaitClose {
+                    job.cancel()
+                    Timber.d("Local feed listener removed")
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to setup local feed listener")
+                close(e)
+            }
         }
     }
 
@@ -733,19 +649,15 @@ class SocialRepositoryImpl @Inject constructor(
             val currentUserId = authRepository.getCurrentUserId()
                 ?: return Result.failure(Exception("User not authenticated"))
 
-            if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
-                val existingProfile = socialProfileDao.getSocialProfileByUserId(currentUserId.value)
-                    ?: return Result.failure(Exception("Social profile not found"))
-                val now = System.currentTimeMillis()
-                val updatedProfile = existingProfile.copy(
-                    lastActive = now,
-                    updatedAt = now
-                )
-                socialProfileDao.upsertLocal(updatedProfile)
-                triggerImmediateSyncSafely(currentUserId.value)
-            } else {
-                legacyDataSource.updateUserPresence(currentUserId.value)
-            }
+            val existingProfile = socialProfileDao.getSocialProfileByUserId(currentUserId.value)
+                ?: return Result.failure(Exception("Social profile not found"))
+            val now = System.currentTimeMillis()
+            val updatedProfile = existingProfile.copy(
+                lastActive = now,
+                updatedAt = now
+            )
+            socialProfileDao.upsertLocal(updatedProfile)
+            triggerImmediateSyncSafely(currentUserId.value)
 
             Timber.d("User presence updated successfully for user: $currentUserId")
             Result.success(Unit)
@@ -765,11 +677,7 @@ class SocialRepositoryImpl @Inject constructor(
         limit: Int,
         offset: Int
     ): List<RecommendedUser> {
-        return if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
-            getMutualFriendsRecommendationsRoomFirst(currentUserId, existingFriendIds, limit, offset)
-        } else {
-            getMutualFriendsRecommendationsLegacy(currentUserId, existingFriendIds, limit, offset)
-        }
+        return getMutualFriendsRecommendationsRoomFirst(currentUserId, existingFriendIds, limit, offset)
     }
 
     /**
@@ -782,11 +690,7 @@ class SocialRepositoryImpl @Inject constructor(
         limit: Int,
         offset: Int
     ): List<RecommendedUser> {
-        return if (OfflineArchitectureFlags.FIX_SOCIAL_REPOSITORY) {
-            getGeneralRecommendationsRoomFirst(currentUserId, excludeUserIds, limit, offset)
-        } else {
-            getGeneralRecommendationsLegacy(currentUserId, excludeUserIds, limit, offset)
-        }
+        return getGeneralRecommendationsRoomFirst(currentUserId, excludeUserIds, limit, offset)
     }
 
     private suspend fun searchUsersRoomFirst(query: String, currentUserId: String): List<User> {
@@ -799,38 +703,9 @@ class SocialRepositoryImpl @Inject constructor(
             .map { mapSocialProfileToUser(it) }
     }
 
-    private suspend fun searchUsersLegacy(query: String, currentUserId: String): List<User> {
-        return try {
-            legacyDataSource.searchUsers(query, MAX_SEARCH_RESULTS, 5)
-                .mapNotNull { record ->
-                    if (record.id == currentUserId) {
-                        return@mapNotNull null
-                    }
-                    try {
-                        mapLegacyUserRecordToUser(record)
-                    } catch (e: Exception) {
-                        Timber.w(e, "Failed to parse legacy user record: ${record.id}")
-                        null
-                    }
-                }
-        } catch (e: Exception) {
-            Timber.e(e, "Legacy user search failed")
-            emptyList()
-        }
-    }
-
     private suspend fun getUserByIdRoomFirst(userId: String): User? {
         val profile = socialProfileDao.getSocialProfileByUserId(userId) ?: return null
         return mapSocialProfileToUser(profile)
-    }
-
-    private suspend fun getUserByIdLegacy(userId: String): User? {
-        return try {
-            legacyDataSource.getUserRecord(userId)?.let { mapLegacyUserRecordToUser(it) }
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to get user by ID: $userId")
-            null
-        }
     }
 
     private fun mapSocialProfileToUser(profile: com.example.liftrix.data.local.entity.SocialProfileEntity): User {
@@ -841,26 +716,6 @@ class SocialRepositoryImpl @Inject constructor(
         )
     }
 
-    private fun mapLegacyUserRecordToUser(record: LegacySocialFirestoreDataSource.LegacyUserRecord): User {
-        val userData = record.data
-        val now = java.time.LocalDateTime.now()
-        return User(
-            uid = record.id,
-            email = userData["email"] as? String ?: "",
-            displayName = userData["displayName"] as? String,
-            photoUrl = userData["photoUrl"] as? String,
-            isAnonymous = userData["isAnonymous"] as? Boolean ?: false,
-            subscriptionTier = com.example.liftrix.domain.model.SubscriptionTier.FREE,
-            subscriptionStatus = com.example.liftrix.domain.model.SubscriptionStatus.ACTIVE,
-            subscriptionExpiresAt = null,
-            premiumFeaturesEnabled = false,
-            onboardingCompleted = userData["onboardingCompleted"] as? Boolean ?: false,
-            profileVersion = userData["profileVersion"] as? Long ?: 1L,
-            createdAt = now,
-            lastSignInAt = now,
-            updatedAt = now
-        )
-    }
 
     private suspend fun getMutualFriendsRecommendationsRoomFirst(
         currentUserId: String,
@@ -897,32 +752,6 @@ class SocialRepositoryImpl @Inject constructor(
             .take(limit)
     }
 
-    private suspend fun getMutualFriendsRecommendationsLegacy(
-        currentUserId: String,
-        existingFriendIds: Set<String>,
-        limit: Int,
-        offset: Int
-    ): List<RecommendedUser> {
-        return try {
-            val candidateIds = legacyDataSource.getMutualFriendUserIds(existingFriendIds, limit, offset)
-            val recommendations = mutableListOf<RecommendedUser>()
-
-            for (userId in candidateIds) {
-                if (userId == currentUserId || userId in existingFriendIds) continue
-                val user = getUserByIdLegacy(userId)
-                if (user != null) {
-                    val isFollowing = friendDao.getFriendRelationship(currentUserId, userId)?.status == FriendStatus.ACCEPTED.name
-                    recommendations.add(RecommendedUser.fromUser(user, isFollowing = isFollowing))
-                }
-            }
-
-            Timber.d("Found ${recommendations.size} mutual friends recommendations")
-            recommendations
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to get mutual friends recommendations")
-            emptyList()
-        }
-    }
 
     private suspend fun getGeneralRecommendationsRoomFirst(
         currentUserId: String,
@@ -974,33 +803,6 @@ class SocialRepositoryImpl @Inject constructor(
             }
     }
 
-    private suspend fun getGeneralRecommendationsLegacy(
-        currentUserId: String,
-        excludeUserIds: Set<String>,
-        limit: Int,
-        offset: Int
-    ): List<RecommendedUser> {
-        val candidates = legacyDataSource.getGeneralRecommendationCandidates(
-            currentUserId = currentUserId,
-            excludeUserIds = excludeUserIds,
-            limit = limit,
-            offset = offset
-        )
-
-        return candidates.mapNotNull { candidate ->
-            val isFollowing = friendDao.getFriendRelationship(currentUserId, candidate.userId)?.status == FriendStatus.ACCEPTED.name
-            val displayName = (candidate.displayName ?: candidate.username).ifBlank { "Unknown User" }
-            if (displayName.isBlank()) {
-                return@mapNotNull null
-            }
-            RecommendedUser(
-                userId = candidate.userId,
-                username = displayName,
-                profileImageUrl = candidate.profilePhotoUrl,
-                isFollowing = isFollowing
-            )
-        }
-    }
 
     private suspend fun triggerImmediateSyncSafely(userId: String) {
         val result = syncCoordinator.triggerImmediateSync(userId)

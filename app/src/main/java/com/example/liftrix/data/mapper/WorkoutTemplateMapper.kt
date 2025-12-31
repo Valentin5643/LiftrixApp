@@ -56,7 +56,7 @@ class WorkoutTemplateMapper @Inject constructor() {
     /**
      * Converts WorkoutTemplate domain model to WorkoutTemplateEntity
      */
-    fun toEntity(domain: WorkoutTemplate, isSynced: Boolean = false, syncVersion: Int = 1): WorkoutTemplateEntity {
+    fun toEntity(domain: WorkoutTemplate, isSynced: Boolean = false, syncVersion: Long = 1L): WorkoutTemplateEntity {
         val exercisesJson = try {
             if (domain.exercises.isEmpty()) {
                 ""

@@ -175,7 +175,7 @@ fun CompactEditingModeIndicator(
         ) {
             Icon(
                 imageVector = if (isEditingHistorical) Icons.Default.History else Icons.Default.Edit,
-                contentDescription = null,
+                contentDescription = if (isEditingHistorical) "Editing session" else "Editing routine",
                 tint = if (isEditingHistorical) {
                     MaterialTheme.colorScheme.secondary
                 } else {

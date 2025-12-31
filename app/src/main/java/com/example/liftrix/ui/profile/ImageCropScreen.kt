@@ -135,7 +135,7 @@ fun ImageCropScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
-                            contentDescription = null
+                            contentDescription = "Go back"
                         )
                     }
                 },
@@ -156,7 +156,7 @@ fun ImageCropScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Check,
-                            contentDescription = null,
+                            contentDescription = "Confirm crop",
                             tint = if (!isLoading && !hasError) {
                                 MaterialTheme.colorScheme.primary
                             } else {

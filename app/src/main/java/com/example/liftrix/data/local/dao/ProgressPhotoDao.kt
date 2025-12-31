@@ -169,7 +169,7 @@ interface ProgressPhotoDao {
         SET is_synced = 1, sync_version = :syncVersion
         WHERE id = :photoId
     """)
-    suspend fun markAsSynced(photoId: String, syncVersion: Int)
+    suspend fun markAsSynced(photoId: String, syncVersion: Long)
     
     @Query("""
         SELECT * FROM progress_photos 
@@ -205,7 +205,7 @@ interface ProgressPhotoDao {
             val entity = progressPhoto.copy(
                 isDirty = false,
                 isSynced = true,
-                syncVersion = System.currentTimeMillis().toInt()
+                syncVersion = System.currentTimeMillis()
             )
             _insert(entity)
         }

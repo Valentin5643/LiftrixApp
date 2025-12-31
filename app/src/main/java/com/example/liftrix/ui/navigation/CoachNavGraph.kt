@@ -114,7 +114,7 @@ private fun CoachScreenPlaceholder(
         ) {
             Icon(
                 imageVector = Icons.Filled.Lightbulb,
-                contentDescription = null,
+                contentDescription = "AI coach preview",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
             )
@@ -179,7 +179,7 @@ private fun FeaturePreviewItem(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = title,
             tint = MaterialTheme.colorScheme.secondary
         )
         

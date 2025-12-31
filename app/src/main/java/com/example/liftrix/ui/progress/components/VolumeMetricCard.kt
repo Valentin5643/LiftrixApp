@@ -144,7 +144,7 @@ fun VolumeMetricCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.FitnessCenter,
-                        contentDescription = null,
+                        contentDescription = "Volume",
                         modifier = Modifier.size(18.dp),
                         tint = LiftrixColors.Primary
                     )
@@ -244,7 +244,7 @@ private fun VolumeChangeIndicator(
                     TrendDirection.STABLE -> Icons.Default.TrendingUp
                     TrendDirection.UNKNOWN -> Icons.Default.TrendingUp
                 },
-                contentDescription = null,
+                contentDescription = "Volume trend",
                 modifier = Modifier
                     .size(12.dp)
                     .let { mod ->

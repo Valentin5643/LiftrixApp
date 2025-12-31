@@ -7,7 +7,9 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.example.liftrix.data.local.entity.WorkoutEntity
+import com.example.liftrix.annotations.UserScoped
 import kotlinx.coroutines.flow.Flow
+import java.time.Instant
 
 @Dao
 interface WorkoutDao {
@@ -20,6 +22,7 @@ interface WorkoutDao {
             date DESC,
             created_at DESC
     """)
+    @UserScoped
     fun getAllWorkoutsForUser(userId: String): Flow<List<WorkoutEntity>>
     
     @Query("""
@@ -31,33 +34,48 @@ interface WorkoutDao {
             created_at DESC 
         LIMIT :limit
     """)
+    @UserScoped
     fun getRecentCompletedWorkouts(userId: String, limit: Int): Flow<List<WorkoutEntity>>
     
     @Query("SELECT * FROM workouts WHERE id = :id AND user_id = :userId")
+    @UserScoped
     suspend fun getWorkoutByIdForUser(id: String, userId: String): WorkoutEntity?
     
     @Query("SELECT * FROM workouts WHERE date = :date AND user_id = :userId ORDER BY created_at DESC")
+    @UserScoped
     fun getWorkoutsByDateForUser(date: String, userId: String): Flow<List<WorkoutEntity>>
     
     @Query("SELECT * FROM workouts WHERE is_synced = 0 AND user_id = :userId ORDER BY updated_at ASC")
+    @UserScoped
     suspend fun getUnsyncedWorkoutsForUser(userId: String): List<WorkoutEntity>
     
     @Query("SELECT COUNT(*) FROM workouts WHERE is_synced = 0 AND user_id = :userId")
+    @UserScoped
     suspend fun getUnsyncedCountForUser(userId: String): Int
     
     @Query("SELECT COUNT(*) FROM workouts WHERE is_synced = 1 AND user_id = :userId")
+    @UserScoped
     suspend fun getSyncedCountForUser(userId: String): Int
     
-    @Query("UPDATE workouts SET is_synced = 0, sync_version = :version WHERE user_id = :userId")
+    @Query("""
+        UPDATE workouts
+        SET is_synced = 0,
+            sync_version = :version
+        WHERE user_id = :userId
+    """)
+    @UserScoped
     suspend fun markAllWorkoutsAsUnsyncedForUser(userId: String, version: Long = System.currentTimeMillis()): Int
     
     @Query("SELECT * FROM workouts WHERE status = 'IN_PROGRESS' AND user_id = :userId ORDER BY updated_at DESC LIMIT 1")
+    @UserScoped
     suspend fun getActiveWorkoutForUser(userId: String): WorkoutEntity?
     
     @Query("SELECT * FROM workouts WHERE template_id = :templateId AND user_id = :userId ORDER BY created_at DESC LIMIT :limit")
+    @UserScoped
     fun getWorkoutsFromTemplateForUser(templateId: String, userId: String, limit: Int = 1000): Flow<List<WorkoutEntity>>
     
     @Query("SELECT * FROM workouts WHERE user_id = :userId AND date BETWEEN :startDate AND :endDate ORDER BY date ASC LIMIT :limit")
+    @UserScoped
     suspend fun getWorkoutsInDateRangeForUser(userId: String, startDate: String, endDate: String, limit: Int = 10000): List<WorkoutEntity>
     
     /**
@@ -72,10 +90,17 @@ interface WorkoutDao {
      * @return List of workout entities in the date range
      */
     @Query("SELECT * FROM workouts WHERE user_id = :userId AND date BETWEEN :startDate AND :endDate ORDER BY date ASC LIMIT :limit")
+    @UserScoped
     suspend fun getWorkoutsByDateRange(userId: String, startDate: String, endDate: String, limit: Int = 10000): List<WorkoutEntity>
     
-    @Query("SELECT w.* FROM workouts w JOIN exercises e ON w.id = e.workout_id WHERE e.id = :exerciseId")
-    suspend fun getWorkoutByExerciseId(exerciseId: Long): WorkoutEntity?
+    @Query("""
+        SELECT w.* FROM workouts w
+        JOIN exercises e ON w.id = e.workout_id
+        WHERE e.id = :exerciseId
+        AND w.user_id = :userId
+    """)
+    @UserScoped
+    suspend fun getWorkoutByExerciseId(exerciseId: Long, userId: String): WorkoutEntity?
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertWorkout(workout: WorkoutEntity): Long
@@ -86,29 +111,48 @@ interface WorkoutDao {
     @Update
     suspend fun updateWorkout(workout: WorkoutEntity): Int
     
-    @Query("UPDATE workouts SET is_synced = :isSynced, sync_version = :version WHERE id = :id AND user_id = :userId")
+    @Query("""
+        UPDATE workouts
+        SET is_synced = :isSynced,
+            sync_version = :version
+        WHERE id = :id
+        AND user_id = :userId
+    """)
+    @UserScoped
     suspend fun updateSyncStatusForUser(id: String, userId: String, isSynced: Boolean, version: Long): Int
     
-    @Query("UPDATE workouts SET is_synced = 1, sync_version = :version WHERE id IN (:ids) AND user_id = :userId")
+    @Query("""
+        UPDATE workouts
+        SET is_synced = 1,
+            sync_version = :version
+        WHERE id IN (:ids)
+        AND user_id = :userId
+    """)
+    @UserScoped
     suspend fun markWorkoutsAsSyncedForUser(ids: List<String>, userId: String, version: Long): Int
     
     @Delete
     suspend fun deleteWorkout(workout: WorkoutEntity): Int
     
     @Query("DELETE FROM workouts WHERE id = :id AND user_id = :userId")
+    @UserScoped
     suspend fun deleteWorkoutByIdForUser(id: String, userId: String): Int
     
     @Query("DELETE FROM workouts WHERE user_id = :userId")
+    @UserScoped
     suspend fun deleteAllWorkoutsForUser(userId: String): Int
     
     @Query("SELECT EXISTS(SELECT 1 FROM workouts WHERE id = :workoutId AND user_id = :userId)")
+    @UserScoped
     suspend fun workoutExistsByIdAndUser(workoutId: String, userId: String): Boolean
     
     // Export support methods
     @Query("SELECT * FROM workouts WHERE user_id = :userId ORDER BY date DESC")
+    @UserScoped
     suspend fun getAllWorkoutsForUserSync(userId: String): List<WorkoutEntity>
     
     @Query("SELECT * FROM workouts WHERE user_id = :userId AND date >= :startDate AND date <= :endDate ORDER BY date DESC")
+    @UserScoped
     suspend fun getWorkoutsInDateRangeForExport(userId: String, startDate: String, endDate: String): List<WorkoutEntity>
 
     // ========== OFFLINE-FIRST ARCHITECTURE METHODS (SPEC-20241228) ==========
@@ -117,12 +161,12 @@ interface WorkoutDao {
      * Upsert workout from LOCAL origin (user edit).
      * Sets isDirty=true and lastModified, triggering sync queue.
      */
-    suspend fun upsertLocal(workout: WorkoutEntity) {
+    suspend fun upsertLocal(workout: WorkoutEntity): Long {
         val entity = workout.copy(
             isDirty = true,
             lastModified = System.currentTimeMillis()
         )
-        _insert(entity)
+        return _insert(entity)
     }
 
     /**
@@ -152,52 +196,128 @@ interface WorkoutDao {
      * Get dirty workouts that need upload to Firestore.
      */
     @Query("SELECT * FROM workouts WHERE user_id = :userId AND is_dirty = 1 ORDER BY last_modified ASC")
+    @UserScoped
     suspend fun getDirtyWorkouts(userId: String): List<WorkoutEntity>
+
+    /**
+     * Mark all workouts as dirty to force a full upload (startup sync recovery).
+     */
+    @Query("""
+        UPDATE workouts
+        SET is_dirty = 1,
+            is_synced = 0,
+            last_modified = :lastModified
+        WHERE user_id = :userId
+    """)
+    @UserScoped
+    suspend fun markAllDirtyForUser(userId: String, lastModified: Long = System.currentTimeMillis()): Int
 
     /**
      * Mark workouts as clean after successful Firestore upload.
      */
-    @Query("UPDATE workouts SET is_dirty = 0, is_synced = 1, sync_version = :syncVersion WHERE id IN (:ids) AND user_id = :userId")
+    @Query("""
+        UPDATE workouts
+        SET is_dirty = 0,
+            is_synced = 1,
+            sync_version = :syncVersion
+        WHERE id IN (:ids)
+        AND user_id = :userId
+    """)
+    @UserScoped
     suspend fun markAsClean(ids: List<String>, userId: String, syncVersion: Long = System.currentTimeMillis()): Int
+
+    /**
+     * Mark workout as no longer dirty after a fatal sync validation failure.
+     * This prevents repeated upload attempts while keeping isSynced=false.
+     */
+    @Query("""
+        UPDATE workouts
+        SET is_dirty = 0,
+            is_synced = 0
+        WHERE id = :id
+        AND user_id = :userId
+    """)
+    @UserScoped
+    suspend fun markSyncFailed(id: String, userId: String): Int
+
+    @Query("""
+        UPDATE workouts
+        SET exercises_json = :exercisesJson,
+            updated_at = :updatedAt,
+            last_modified = :lastModified,
+            is_dirty = 1,
+            is_synced = 0
+        WHERE id = :workoutId
+        AND user_id = :userId
+    """)
+    @UserScoped
+    suspend fun updateExercisesJsonForWorkout(
+        workoutId: String,
+        userId: String,
+        exercisesJson: String,
+        updatedAt: Instant,
+        lastModified: Long
+    ): Int
 
     // ========== END OFFLINE-FIRST METHODS ==========
 
     // Legacy methods without user filtering - deprecated for migration
     @Deprecated("Use user-scoped methods instead")
-    @Query("SELECT * FROM workouts ORDER BY date DESC, created_at DESC")
-    fun getAllWorkouts(): Flow<List<WorkoutEntity>>
+    @Query("SELECT * FROM workouts WHERE user_id = :userId ORDER BY date DESC, created_at DESC")
+    @UserScoped
+    fun getAllWorkouts(userId: String): Flow<List<WorkoutEntity>>
+    
+    @Deprecated("Use getWorkoutByIdForUser instead")
+    @Query("SELECT * FROM workouts WHERE id = :id AND user_id = :userId")
+    @UserScoped
+    suspend fun getWorkoutById(id: String, userId: String): WorkoutEntity?
     
     @Deprecated("Use user-scoped methods instead")
-    @Query("SELECT * FROM workouts WHERE id = :id")
-    suspend fun getWorkoutById(id: String): WorkoutEntity?
+    @Query("SELECT * FROM workouts WHERE date = :date AND user_id = :userId ORDER BY created_at DESC")
+    @UserScoped
+    fun getWorkoutsByDate(date: String, userId: String): Flow<List<WorkoutEntity>>
     
     @Deprecated("Use user-scoped methods instead")
-    @Query("SELECT * FROM workouts WHERE date = :date ORDER BY created_at DESC")
-    fun getWorkoutsByDate(date: String): Flow<List<WorkoutEntity>>
+    @Query("SELECT COUNT(*) FROM workouts WHERE is_synced = 0 AND user_id = :userId")
+    @UserScoped
+    suspend fun getUnsyncedCount(userId: String): Int
     
     @Deprecated("Use user-scoped methods instead")
-    @Query("SELECT COUNT(*) FROM workouts WHERE is_synced = 0")
-    suspend fun getUnsyncedCount(): Int
+    @Query("SELECT * FROM workouts WHERE is_synced = 0 AND user_id = :userId ORDER BY updated_at ASC")
+    @UserScoped
+    suspend fun getUnsyncedWorkouts(userId: String): List<WorkoutEntity>
     
     @Deprecated("Use user-scoped methods instead")
-    @Query("SELECT * FROM workouts WHERE is_synced = 0 ORDER BY updated_at ASC")
-    suspend fun getUnsyncedWorkouts(): List<WorkoutEntity>
+    @Query("""
+        UPDATE workouts
+        SET is_synced = 1,
+            sync_version = :version
+        WHERE id IN (:ids)
+        AND user_id = :userId
+    """)
+    @UserScoped
+    suspend fun markWorkoutsAsSynced(ids: List<String>, userId: String, version: Long): Int
     
-    @Deprecated("Use user-scoped methods instead")
-    @Query("UPDATE workouts SET is_synced = 1, sync_version = :version WHERE id IN (:ids)")
-    suspend fun markWorkoutsAsSynced(ids: List<String>, version: Long): Int
+    @Deprecated("Use deleteWorkoutByIdForUser instead")
+    @Query("DELETE FROM workouts WHERE id = :id AND user_id = :userId")
+    @UserScoped
+    suspend fun deleteWorkoutById(id: String, userId: String): Int
     
-    @Deprecated("Use user-scoped methods instead")
-    @Query("DELETE FROM workouts WHERE id = :id")
-    suspend fun deleteWorkoutById(id: String): Int
+    @Deprecated("Use deleteAllWorkoutsForUser instead")
+    @Query("DELETE FROM workouts WHERE user_id = :userId")
+    @UserScoped
+    suspend fun deleteAllWorkouts(userId: String): Int
     
-    @Deprecated("Use user-scoped methods instead")
-    @Query("DELETE FROM workouts")
-    suspend fun deleteAllWorkouts(): Int
-    
-    @Deprecated("Use user-scoped updateSyncStatusForUser instead")
-    @Query("UPDATE workouts SET is_synced = :isSynced, sync_version = :version WHERE id = :id")
-    suspend fun updateSyncStatus(id: String, isSynced: Boolean, version: Long): Int
+    @Deprecated("Use updateSyncStatusForUser instead")
+    @Query("""
+        UPDATE workouts
+        SET is_synced = :isSynced,
+            sync_version = :version
+        WHERE id = :id
+        AND user_id = :userId
+    """)
+    @UserScoped
+    suspend fun updateSyncStatus(id: String, userId: String, isSynced: Boolean, version: Long): Int
     
     // Feed-specific queries for social workout timeline
     
@@ -212,6 +332,7 @@ interface WorkoutDao {
         ORDER BY w.end_time DESC 
         LIMIT :limit OFFSET :offset
     """)
+    @UserScoped(userIdParam = "currentUserId")
     fun getFeedWorkouts(
         currentUserId: String,
         friendIds: List<String>,
@@ -231,6 +352,7 @@ interface WorkoutDao {
             created_at DESC
         LIMIT :limit OFFSET :offset
     """)
+    @UserScoped
     fun getPersonalCompletedWorkouts(
         userId: String,
         limit: Int,
@@ -267,6 +389,7 @@ interface WorkoutDao {
         WHERE f.friend_user_id = :userId 
         AND f.status = 'ACCEPTED'
     """)
+    @UserScoped
     suspend fun getAcceptedFriendIds(userId: String): List<String>
     
     /**
@@ -416,38 +539,41 @@ interface WorkoutDao {
     
     /**
      * Gets the last completed workouts containing a specific exercise for previous set data retrieval.
-     * 
-     * Searches for completed workouts that contain the specified exercise ID in their exercises_json.
+     *
+     * Searches for completed workouts that contain the specified exercise ID using the
+     * normalized exercises table instead of JSON querying. This is more secure and efficient.
      * Used by GetPreviousSetDataUseCase to find historical performance data for workout comparison.
-     * 
-     * Security: User-scoped query prevents data leakage between users
-     * Performance: Uses LIKE for JSON search with proper indexing on user_id and date
+     *
+     * Security:
+     * - User-scoped query prevents data leakage between users
+     * - Parameterized query eliminates SQL injection risk (SEC-010)
+     * - Uses normalized table instead of JSON LIKE patterns
+     *
+     * Performance:
+     * - Leverages idx_exercises_user_library index for fast lookups
+     * - Subquery efficiently filters workouts by exercise presence
+     * - DISTINCT prevents duplicate results from multiple sets
+     *
      * Ordering: Returns most recent workouts first for optimal previous data relevance
-     * 
-     * ENHANCED: Searches multiple JSON fields for robust exercise matching:
-     * - Direct exercise fields: id, exerciseId, name
-     * - Nested library exercise: libraryExercise.id, libraryExercise.name
-     * - Handles both wrapped {"exercises": [...]} and direct [...] JSON formats
-     * 
+     *
      * @param userId The user ID for data scoping (MANDATORY for security)
-     * @param exerciseId The exercise ID to search for in JSON data
+     * @param exerciseId The exercise library ID to search for
      * @param limit Maximum number of workouts to return (default: 5 for performance)
      * @param excludeWorkoutId Optional workout ID to exclude (current active session)
      * @return List of WorkoutEntity ordered by date DESC, updated_at DESC
      */
     @Query("""
-        SELECT * FROM workouts 
-        WHERE user_id = :userId 
+        SELECT * FROM workouts
+        WHERE user_id = :userId
         AND status = 'COMPLETED'
-        AND (
-            exercises_json LIKE '%"id":"' || :exerciseId || '"%' OR
-            exercises_json LIKE '%"exerciseId":"' || :exerciseId || '"%' OR  
-            exercises_json LIKE '%"name":"' || :exerciseId || '"%' OR
-            exercises_json LIKE '%"libraryExercise":{"id":"' || :exerciseId || '"%' OR
-            exercises_json LIKE '%"libraryExercise":{"name":"' || :exerciseId || '"%'
+        AND id IN (
+            SELECT DISTINCT workout_id
+            FROM exercises
+            WHERE exercise_library_id = :exerciseId
+            AND user_id = :userId
         )
         AND (:excludeWorkoutId IS NULL OR id != :excludeWorkoutId)
-        ORDER BY date DESC, updated_at DESC 
+        ORDER BY date DESC, updated_at DESC
         LIMIT :limit
     """)
     suspend fun getLastCompletedWorkoutsWithExercise(

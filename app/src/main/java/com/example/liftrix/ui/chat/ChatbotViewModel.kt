@@ -24,6 +24,7 @@ import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
 import com.example.liftrix.domain.usecase.chat.SendChatMessageUseCase
 import com.example.liftrix.domain.usecase.chat.CheckUsageLimitsUseCase
 import com.example.liftrix.domain.repository.ChatRepository
+import com.google.firebase.functions.FirebaseFunctions
 import timber.log.Timber
 
 /**
@@ -50,7 +51,8 @@ class ChatbotViewModel @Inject constructor(
     private val authQueryUseCase: AuthQueryUseCase,
     private val chatRepository: ChatRepository,
     private val sendChatMessageUseCase: SendChatMessageUseCase,
-    private val checkUsageLimitsUseCase: CheckUsageLimitsUseCase
+    private val checkUsageLimitsUseCase: CheckUsageLimitsUseCase,
+    private val firebaseFunctions: FirebaseFunctions
 ) : ModernBaseViewModel<ChatbotUiState>(
     initialState = ChatbotUiState()
 ) {
@@ -137,6 +139,7 @@ class ChatbotViewModel @Inject constructor(
             is ChatbotEvent.SendMessage -> sendMessage(event.content)
             is ChatbotEvent.UpdateInput -> updateInput(event.text)
             is ChatbotEvent.ToggleLanguage -> toggleLanguage(event.language)
+            is ChatbotEvent.ReportAIMessage -> reportAIMessage(event.messageId, event.messageContent, event.reason, event.notes)
             ChatbotEvent.ToggleAutoDetect -> toggleAutoDetect()
             ChatbotEvent.RetryLastMessage -> retryLastMessage()
             ChatbotEvent.ClearConversation -> clearConversation()
@@ -305,6 +308,48 @@ class ChatbotViewModel @Inject constructor(
     }
 
     /**
+     * Reports an AI-generated message for safety review.
+     * Calls the aiReport Firebase Cloud Function with message content and reason.
+     */
+    private fun reportAIMessage(
+        messageId: String,
+        messageContent: String,
+        reason: com.example.liftrix.ui.chat.components.AIReportReason,
+        notes: String?
+    ) {
+        userId?.let { uid ->
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val reportData = hashMapOf(
+                        "messageId" to messageId,
+                        "messageContent" to messageContent,
+                        "reason" to reason.name,
+                        "reasonDescription" to reason.description,
+                        "notes" to (notes ?: ""),
+                        "userId" to uid,
+                        "timestamp" to System.currentTimeMillis()
+                    )
+
+                    firebaseFunctions
+                        .getHttpsCallable("aiReport")
+                        .call(reportData)
+                        .continueWith { task ->
+                            if (task.isSuccessful) {
+                                Timber.i("AI message reported successfully: $messageId")
+                                // Optionally show success toast to user
+                            } else {
+                                Timber.e(task.exception, "Failed to report AI message: $messageId")
+                                // Optionally show error to user
+                            }
+                        }
+                } catch (exception: Exception) {
+                    Timber.e(exception, "Error reporting AI message: $messageId")
+                }
+            }
+        }
+    }
+
+    /**
      * Checks current usage limits and updates UI state accordingly.
      */
     private fun checkUsageLimits() {
@@ -353,6 +398,12 @@ sealed class ChatbotEvent {
     data class SendMessage(val content: String) : ChatbotEvent()
     data class UpdateInput(val text: String) : ChatbotEvent()
     data class ToggleLanguage(val language: Language) : ChatbotEvent()
+    data class ReportAIMessage(
+        val messageId: String,
+        val messageContent: String,
+        val reason: com.example.liftrix.ui.chat.components.AIReportReason,
+        val notes: String?
+    ) : ChatbotEvent()
     object ToggleAutoDetect : ChatbotEvent()
     object RetryLastMessage : ChatbotEvent()
     object ClearConversation : ChatbotEvent()

@@ -42,43 +42,9 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
     private val safeFollowDao: SafeFollowRelationshipDaoImpl,
     private val firestore: FirebaseFirestore
 ) : CoroutineWorker(context, params) {
-    
-    // 🔧 HOTFIX: Fallback constructor for when Hilt factory generation fails
-    // This allows WorkManager to instantiate the worker via reflection
-    // TEMPORARY: Remove once Hilt assisted factories are confirmed working
-    constructor(context: Context, params: WorkerParameters) : this(
-        context,
-        params,
-        WorkerServiceLocator.getFollowRelationshipSyncDependencies(context).run {
-            Timber.w("⚠️ FollowRelationshipSyncWorker using FALLBACK constructor - Hilt factory failed!")
-            return@run this
-        }
-    )
-    
-    // Helper constructor to unpack the dependency structure
-    private constructor(
-        context: Context,
-        params: WorkerParameters,
-        deps: WorkerServiceLocator.FollowRelationshipSyncDependencies
-    ) : this(
-        context, params,
-        deps.followDao, deps.socialProfileDao, deps.safeFollowDao,
-        deps.firestore
-    )
 
     init {
-        val processName = getProcessName()
-        Timber.d("✅ FollowRelationshipSyncWorker constructed with Hilt dependency injection in process: $processName")
-    }
-    
-    private fun getProcessName(): String {
-        return try {
-            val pid = android.os.Process.myPid()
-            val manager = applicationContext.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-            manager.runningAppProcesses?.firstOrNull { it.pid == pid }?.processName ?: "unknown"
-        } catch (e: Exception) {
-            "error: ${e.message}"
-        }
+        Timber.d("✅ FollowRelationshipSyncWorker constructed with Hilt dependency injection")
     }
 
     companion object {
@@ -212,14 +178,15 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
         userId: String
     ): Int {
         val relationshipsToUpload = mutableListOf<com.example.liftrix.data.local.entity.FollowRelationshipEntity>()
+        val collectionRef = firestore.collection("follow_relationships")
+        val remoteDocs = FirestorePrefetcher.prefetchByIds(
+            collection = collectionRef,
+            ids = relationships.map { it.id }
+        )
 
         for (relationship in relationships) {
-            val docRef = firestore
-                .collection("follow_relationships")
-                .document(relationship.id)
-
-            val remoteDoc = docRef.get().await()
-            if (remoteDoc.exists()) {
+            val remoteDoc = remoteDocs[relationship.id]
+            if (remoteDoc?.exists() == true) {
                 val remoteLastModified = when (val remoteValue = remoteDoc.get("lastModified")) {
                     is com.google.firebase.Timestamp -> remoteValue.toDate().time
                     is Number -> remoteValue.toLong()
@@ -235,8 +202,8 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                         blockedAt = remoteDoc.getLong("blockedAt") ?: relationship.blockedAt,
                         isDirty = false,
                         isSynced = true,
-                        syncVersion = (remoteDoc.getLong("syncVersion")
-                            ?: relationship.syncVersion.toLong()).toInt(),
+                        syncVersion = remoteDoc.getLong("syncVersion")
+                            ?: relationship.syncVersion,
                         lastModified = remoteLastModified
                     )
                     followDao.upsertFromRemote(remoteEntity)
@@ -256,9 +223,7 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
         
         relationshipsToUpload.forEach { relationship ->
             // Add relationship document to Firestore
-            val docRef = firestore
-                .collection("follow_relationships")
-                .document(relationship.id)
+            val docRef = collectionRef.document(relationship.id)
             
             val relationshipData = mapOf(
                 "id" to relationship.id,
@@ -348,7 +313,7 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                         acceptedAt = (data["acceptedAt"] as? Long),
                         blockedAt = (data["blockedAt"] as? Long),
                         isSynced = true, // Mark as synced since we're fetching from Firebase
-                        syncVersion = (data["syncVersion"] as? Long)?.toInt() ?: 1,
+                        syncVersion = (data["syncVersion"] as? Long) ?: 1L,
                         lastModified = remoteLastModified,
                         isDirty = false
                     )
@@ -387,7 +352,7 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                         acceptedAt = (data["acceptedAt"] as? Long),
                         blockedAt = (data["blockedAt"] as? Long),
                         isSynced = true,
-                        syncVersion = (data["syncVersion"] as? Long)?.toInt() ?: 1,
+                        syncVersion = (data["syncVersion"] as? Long) ?: 1L,
                         lastModified = remoteLastModified,
                         isDirty = false
                     )

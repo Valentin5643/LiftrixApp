@@ -161,18 +161,22 @@ class AnalyticsSyncWorker @AssistedInject constructor(
         var syncedCount = 0
         var conflictCount = 0
         var permissionErrors = 0
+        val collectionRef = firestore.collection(FIRESTORE_ANALYTICS_COLLECTION)
+        val docIds = calculations.map { calculation ->
+            "${userId}_${calculation.calculationType}_${calculation.timestamp}"
+        }
+        val remoteDocs = FirestorePrefetcher.prefetchByIds(collectionRef, docIds)
 
         calculations.forEach { calculation ->
             try {
                 val analyticsDto = mapToAnalyticsDto(calculation, userId)
-                val documentRef = firestore
-                    .collection(FIRESTORE_ANALYTICS_COLLECTION)
-                    .document("${userId}_${calculation.calculationType}_${calculation.timestamp}")
+                val docId = "${userId}_${calculation.calculationType}_${calculation.timestamp}"
+                val documentRef = collectionRef.document(docId)
 
                 // Check for existing document to handle conflicts
-                val existingDoc = documentRef.get().await()
+                val existingDoc = remoteDocs[docId]
                 
-                if (existingDoc.exists()) {
+                if (existingDoc?.exists() == true) {
                     val existingTimestamp = existingDoc.getLong("timestamp") ?: 0L
                     val localTimestamp = calculation.timestamp
                     

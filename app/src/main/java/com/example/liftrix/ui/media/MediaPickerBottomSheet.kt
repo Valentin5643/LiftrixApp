@@ -3,7 +3,9 @@ package com.example.liftrix.ui.media
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -85,14 +87,14 @@ fun MediaPickerBottomSheet(
     
     var selectedMedia by remember { mutableStateOf<Set<GalleryItem>>(emptySet()) }
     var hasPermission by remember { mutableStateOf(false) }
-    
-    // Permission launcher
+
+    // Permission launcher (only for Android 12 and below)
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         hasPermission = isGranted
     }
-    
+
     // Camera launcher
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicturePreview()
@@ -102,9 +104,19 @@ fun MediaPickerBottomSheet(
             // Implementation would save bitmap to temporary file and return Uri
         }
     }
-    
-    // Gallery launcher for multiple selection
-    val galleryLauncher = rememberLauncherForActivityResult(
+
+    // Android 13+ Photo Picker (preferred method)
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = maxSelection)
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            onMediaSelected(uris)
+            onDismiss()
+        }
+    }
+
+    // Legacy gallery launcher for Android 12 and below
+    val legacyGalleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
     ) { uris ->
         if (uris.isNotEmpty()) {
@@ -112,13 +124,18 @@ fun MediaPickerBottomSheet(
             onDismiss()
         }
     }
-    
-    // Check permission on mount
+
+    // Check permission on mount (only needed for Android 12 and below)
     LaunchedEffect(Unit) {
-        hasPermission = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.READ_EXTERNAL_STORAGE
-        ) == PackageManager.PERMISSION_GRANTED
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            hasPermission = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            // Android 13+ doesn't need READ_EXTERNAL_STORAGE permission
+            hasPermission = true
+        }
     }
     
     if (isVisible) {
@@ -153,11 +170,21 @@ fun MediaPickerBottomSheet(
                     cameraLauncher.launch(null)
                 },
                 onOpenGallery = {
-                    val mimeType = when (mediaType) {
-                        MediaType.PHOTO -> "image/*"
-                        MediaType.VIDEO -> "video/*"
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        // Use Android 13+ Photo Picker (no permission needed)
+                        val mediaTypeFilter = when (mediaType) {
+                            MediaType.PHOTO -> ActivityResultContracts.PickVisualMedia.ImageOnly
+                            MediaType.VIDEO -> ActivityResultContracts.PickVisualMedia.VideoOnly
+                        }
+                        photoPickerLauncher.launch(PickVisualMediaRequest(mediaTypeFilter))
+                    } else {
+                        // Use legacy gallery picker for Android 12 and below
+                        val mimeType = when (mediaType) {
+                            MediaType.PHOTO -> "image/*"
+                            MediaType.VIDEO -> "video/*"
+                        }
+                        legacyGalleryLauncher.launch(mimeType)
                     }
-                    galleryLauncher.launch(mimeType)
                 },
                 maxSelection = maxSelection,
                 mediaType = mediaType
@@ -252,7 +279,7 @@ private fun PermissionRequestCard(
         ) {
             Icon(
                 imageVector = if (mediaType == MediaType.PHOTO) Icons.Default.Camera else Icons.Default.VideoLibrary,
-                contentDescription = null,
+                contentDescription = if (mediaType == MediaType.PHOTO) "Photo access" else "Video access",
                 modifier = Modifier.size(48.dp),
                 tint = LiftrixColorsV2.primary
             )
@@ -430,7 +457,7 @@ private fun MediaThumbnail(
     ) {
         AsyncImage(
             model = item.uri,
-            contentDescription = null,
+            contentDescription = "Selected media item",
             modifier = Modifier
                 .fillMaxSize()
                 .then(

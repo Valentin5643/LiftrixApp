@@ -86,7 +86,7 @@ data class PostCommentEntity(
     val isSynced: Boolean = false,
 
     @ColumnInfo(name = "sync_version", defaultValue = "0")
-    val syncVersion: Int = 0,
+    val syncVersion: Long = 0L,
 
     // Offline-first architecture fields (SPEC-20241228)
     @ColumnInfo(name = "is_dirty", defaultValue = "0")

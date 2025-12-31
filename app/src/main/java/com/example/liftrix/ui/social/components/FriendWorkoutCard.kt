@@ -187,12 +187,14 @@ private fun WorkoutSummary(
             WorkoutStatItem(
                 icon = Icons.Default.Schedule,
                 value = formatDuration(duration),
+                label = "Duration",
                 modifier = Modifier.weight(1f)
             )
             
             WorkoutStatItem(
                 icon = Icons.Default.FitnessCenter,
                 value = exerciseCount.toString(),
+                label = "Exercises",
                 modifier = Modifier.weight(1f)
             )
         }
@@ -206,6 +208,7 @@ private fun WorkoutSummary(
 private fun WorkoutStatItem(
     icon: ImageVector,
     value: String,
+    label: String,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -215,7 +218,7 @@ private fun WorkoutStatItem(
     ) {
         AccessibleIcon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = "$label: $value",
             iconSize = LiftrixTokens.TouchTarget.IconSmall,
             tint = MaterialTheme.colorScheme.primary
         )

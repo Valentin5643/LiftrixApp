@@ -19,6 +19,8 @@ import androidx.room.PrimaryKey
         Index(value = ["user_id"], unique = true),
         Index(value = ["username"], unique = true),
         Index(value = ["member_since"]),
+        Index(value = ["user_id", "is_dirty", "last_modified"],
+              name = "idx_social_profiles_dirty_sync"),
         // Composite indexes for social queries
         Index(value = ["is_private", "hide_from_suggestions", "last_active"], 
               name = "idx_social_profiles_discovery"),
@@ -101,7 +103,7 @@ data class SocialProfileEntity(
     val isSynced: Boolean = false,
 
     @ColumnInfo(name = "sync_version", defaultValue = "0")
-    val syncVersion: Int = 0,
+    val syncVersion: Long = 0L,
 
     @ColumnInfo(name = "is_dirty", defaultValue = "0")
     val isDirty: Boolean = false,

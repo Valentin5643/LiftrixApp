@@ -115,7 +115,7 @@ private fun PrivacyOption(
         ) {
             Icon(
                 imageVector = getVisibilityIcon(visibility),
-                contentDescription = null,
+                contentDescription = getVisibilityTitle(visibility),
                 tint = if (isSelected) LiftrixColorsV2.onPrimaryContainer else LiftrixColorsV2.onSurfaceVariant,
                 modifier = Modifier.size(24.dp)
             )

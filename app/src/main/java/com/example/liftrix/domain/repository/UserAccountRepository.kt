@@ -62,21 +62,41 @@ interface UserAccountRepository {
      * Schedules an account for deletion with a grace period
      */
     suspend fun scheduleAccountDeletion(userId: String): LiftrixResult<Unit>
-    
+
     /**
      * Cancels a scheduled account deletion
      */
     suspend fun cancelAccountDeletion(userId: String): LiftrixResult<Unit>
-    
+
     /**
      * Gets all accounts that are ready for deletion (grace period expired)
      */
     suspend fun getAccountsReadyForDeletion(): LiftrixResult<List<UserAccount>>
-    
+
     /**
      * Permanently deletes an account from local storage
      */
     suspend fun deleteAccount(userId: String): LiftrixResult<Unit>
+
+    /**
+     * Queue account deletion job in Firestore for Cloud Function processing.
+     *
+     * Creates deletion request document:
+     * /deletion_requests/{jobId}
+     * {
+     *   userId: string,
+     *   requestedAt: timestamp,
+     *   exportFirst: boolean,
+     *   status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"
+     * }
+     *
+     * Cloud Function monitors this collection and processes deletions.
+     *
+     * @param userId User ID to delete
+     * @param exportFirst Whether to export user data before deletion (GDPR requirement)
+     * @return LiftrixResult<String> with deletion job ID for tracking
+     */
+    suspend fun queueAccountDeletion(userId: String, exportFirst: Boolean): LiftrixResult<String>
     
     /**
      * Syncs account information from Firebase to local storage

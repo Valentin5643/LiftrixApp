@@ -10,12 +10,13 @@ import androidx.work.NetworkType
 import androidx.work.BackoffPolicy
 import androidx.work.workDataOf
 import com.example.liftrix.data.local.dao.WorkoutDao
+import com.example.liftrix.data.local.dao.DeadLetterQueueDao
+import com.example.liftrix.data.local.entity.DeadLetterQueueEntity
 import androidx.hilt.work.HiltWorker
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import com.example.liftrix.data.mapper.WorkoutMapper
 import com.example.liftrix.service.sync.ConflictResolver
-import com.example.liftrix.service.sync.ResolutionStrategy
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -25,67 +26,30 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.flow.first
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
-import java.time.Instant
 import com.google.firebase.Timestamp
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.Serializable
-import com.example.liftrix.data.model.ExerciseDto
-import com.example.liftrix.data.model.WorkoutSyncDto
-import com.example.liftrix.data.model.SyncPayload
-import com.example.liftrix.data.model.EnhancedWorkoutData
-import com.example.liftrix.data.model.DirectExerciseListWrapper
-import com.example.liftrix.data.model.LegacyExerciseWrapper
 import com.example.liftrix.data.remote.dto.WorkoutDto
 import com.example.liftrix.config.OfflineArchitectureFlags
+import com.example.liftrix.domain.service.AnalyticsService
+import com.example.liftrix.domain.service.NotificationHandler
+import java.util.UUID
 
 @HiltWorker
 class WorkoutSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val workoutDao: WorkoutDao,
+    private val deadLetterDao: DeadLetterQueueDao,
     private val workoutMapper: WorkoutMapper,
     private val firestore: FirebaseFirestore,
     private val auth: FirebaseAuth,
-    private val conflictResolver: ConflictResolver
+    private val conflictResolver: ConflictResolver,
+    private val analyticsService: AnalyticsService,
+    private val notificationHandler: NotificationHandler
 ) : BaseSyncWorker(context, params) {
-    
-    // 🔧 HOTFIX: Fallback constructor for when Hilt factory generation fails
-    // This allows WorkManager to instantiate the worker via reflection
-    // TEMPORARY: Remove once Hilt assisted factories are confirmed working
-    constructor(context: Context, params: WorkerParameters) : this(
-        context,
-        params,
-        WorkerServiceLocator.getWorkoutSyncDependencies(context).run {
-            Timber.w("⚠️ WorkoutSyncWorker using FALLBACK constructor - Hilt factory failed!")
-            return@run this
-        }
-    )
-    
-    // Helper constructor to unpack the dependency structure
-    private constructor(
-        context: Context,
-        params: WorkerParameters,
-        deps: WorkerServiceLocator.WorkoutSyncDependencies
-    ) : this(
-        context, params,
-        deps.workoutDao, deps.workoutMapper, deps.firestore,
-        deps.auth, deps.conflictResolver
-    )
 
     init {
-        val processName = getProcessName()
-        Timber.d("✅ WorkoutSyncWorker constructed with Hilt dependency injection in process: $processName")
-    }
-    
-    private fun getProcessName(): String {
-        return try {
-            val pid = android.os.Process.myPid()
-            val manager = applicationContext.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-            manager.runningAppProcesses?.firstOrNull { it.pid == pid }?.processName ?: "unknown"
-        } catch (e: Exception) {
-            "error: ${e.message}"
-        }
+        Timber.d("✅ WorkoutSyncWorker constructed with Hilt dependency injection")
     }
 
     override val workerName: String = "WorkoutSyncWorker"
@@ -116,6 +80,25 @@ class WorkoutSyncWorker @AssistedInject constructor(
          * 🔥 NEW: Get unique work name per user to prevent job conflicts
          */
         fun getWorkName(userId: String): String = "${WORK_NAME}_$userId"
+    }
+
+    /**
+     * 🔥 NEW (DR-010): Sealed class for structured validation results
+     */
+    sealed class ValidationResult {
+        data class Valid(
+            val domainWorkout: com.example.liftrix.domain.model.Workout? = null
+        ) : ValidationResult()
+
+        data class RecoverableError(
+            val reason: String,
+            val fallbackAvailable: Boolean = true
+        ) : ValidationResult()
+
+        data class FatalError(
+            val reason: String,
+            val exception: Exception? = null
+        ) : ValidationResult()
     }
 
     override suspend fun performSync(userId: String): Result {
@@ -251,20 +234,26 @@ class WorkoutSyncWorker @AssistedInject constructor(
                         // 🚀 PERF-P1-OPT1: Use prefetched remote doc instead of individual fetch
                         val remoteDoc = remoteDocsMap[workout.id]
 
-                        val dataToSync = if (remoteDoc != null && remoteDoc.exists()) {
-                            // Handle conflict resolution using proper DTO with safe deserialization
+                        var shouldUpload = true
+
+                        if (remoteDoc != null && remoteDoc.exists()) {
                             val remoteWorkout = safeDeserializeWorkout(remoteDoc)
                             if (remoteWorkout != null) {
-                                // 🔒 SECURITY FIX (SYNC-005): Validate sync version
                                 val remoteSyncVersion = remoteWorkout.syncVersion ?: 0L
                                 val localSyncVersion = workout.syncVersion
-
-                                if (localSyncVersion < remoteSyncVersion) {
-                                    Timber.w("[SYNC-VERSION] Local version outdated: local=$localSyncVersion, remote=$remoteSyncVersion")
-                                    throw IllegalStateException("Sync conflict: outdated local version")
+                                val localIsDirty = if (useDirtyFlagGating) {
+                                    workout.isDirty
+                                } else {
+                                    !workout.isSynced
                                 }
 
-                                // Simple last-write-wins for now - can be enhanced with ConflictResolver
+                                if (localSyncVersion < remoteSyncVersion) {
+                                    Timber.w("[SYNC-VERSION] Local version behind remote: local=$localSyncVersion, remote=$remoteSyncVersion (dirty=$localIsDirty)")
+                                    if (!localIsDirty) {
+                                        Timber.w("[SYNC-VERSION] Local is clean; remote may be authoritative")
+                                    }
+                                }
+
                                 val remoteUpdatedAtMillis = when (val updatedAt = remoteWorkout.updatedAt) {
                                     is Timestamp -> updatedAt.toDate().time
                                     is Long -> updatedAt
@@ -283,8 +272,9 @@ class WorkoutSyncWorker @AssistedInject constructor(
                                     remoteUpdatedAtMillis
                                 }
                                 val localLastModified = workout.lastModified
-                                if (effectiveRemoteLastModified > localLastModified) {
-                                    // Remote is newer, update local
+                                if (localIsDirty) {
+                                    Timber.i("[SYNC-CONFLICT] Local dirty; deferring to local upload for ${workout.id}")
+                                } else if (effectiveRemoteLastModified > localLastModified + 1000) {
                                     val domainWorkout = workoutMapper.fromFirestoreDto(remoteWorkout)
                                     val updatedEntity = workoutMapper.toEntity(domainWorkout, isSynced = true).copy(
                                         isDirty = false,
@@ -292,157 +282,39 @@ class WorkoutSyncWorker @AssistedInject constructor(
                                         syncVersion = System.currentTimeMillis()
                                     )
                                     workoutDao.upsertFromRemote(updatedEntity)
-                                    null // Skip this item in batch
-                                } else {
-                                    // 🔥 SYNC-SCHEMA-DEBUG: Log before and after toDomain conversion
-                                    Timber.d("[SYNC-SCHEMA-DEBUG] About to convert workout '${workout.name}' entity to domain")
-                                    Timber.d("[SYNC-SCHEMA-DEBUG] Original entity JSON length: ${workout.exercisesJson?.length ?: 0}")
-
-                                    // 🔥 SYNC-FIX: Use fallback logic to prevent data loss
-                                    val workoutData = try {
-                                        val domainWorkout = workoutMapper.toDomain(workout)
-
-                                        Timber.d("[SYNC-SCHEMA-DEBUG] After toDomain: workout has ${domainWorkout.exercises.size} exercises")
-                                        if (domainWorkout.exercises.isEmpty() && !workout.exercisesJson.isNullOrBlank()) {
-                                            Timber.e("[SYNC-SCHEMA-DEBUG] 🚨 CRITICAL: toDomain conversion LOST EXERCISES! Entity had JSON but domain has 0 exercises!")
-                                            Timber.w("[SYNC-FALLBACK] Using entity→DTO bypass to preserve exercise data")
-                                            workoutMapper.entityToFirestoreDto(workout, userId)
-                                        } else {
-                                            workoutMapper.toFirestoreDto(domainWorkout, userId)
-                                        }
-                                    } catch (e: Exception) {
-                                        Timber.e(e, "[SYNC-FALLBACK] toDomain failed in conflict resolution, using bypass")
-                                        workoutMapper.entityToFirestoreDto(workout, userId)
-                                    }
-
-                                    workoutData
+                                    shouldUpload = false
                                 }
-                            } else {
-                                // 🔥 SYNC-SCHEMA-DEBUG: Log toDomain conversion for failed remote parsing
-                                Timber.d("[SYNC-SCHEMA-DEBUG] Remote workout parsing failed, converting local '${workout.name}' entity to domain")
-                                Timber.d("[SYNC-SCHEMA-DEBUG] Original entity JSON length: ${workout.exercisesJson?.length ?: 0}")
-
-                                // 🔥 SYNC-FIX: Use fallback logic to prevent data loss
-                                val workoutData = try {
-                                    val domainWorkout = workoutMapper.toDomain(workout)
-
-                                    Timber.d("[SYNC-SCHEMA-DEBUG] After toDomain: workout has ${domainWorkout.exercises.size} exercises")
-                                    if (domainWorkout.exercises.isEmpty() && !workout.exercisesJson.isNullOrBlank()) {
-                                        Timber.e("[SYNC-SCHEMA-DEBUG] 🚨 CRITICAL: toDomain conversion LOST EXERCISES! Entity had JSON but domain has 0 exercises!")
-                                        Timber.w("[SYNC-FALLBACK] Using entity→DTO bypass to preserve exercise data")
-                                        workoutMapper.entityToFirestoreDto(workout, userId)
-                                    } else {
-                                        workoutMapper.toFirestoreDto(domainWorkout, userId)
-                                    }
-                                } catch (e: Exception) {
-                                    Timber.e(e, "[SYNC-FALLBACK] toDomain failed for remote parsing failure case, using bypass")
-                                    workoutMapper.entityToFirestoreDto(workout, userId)
-                                }
-
-                                workoutData
                             }
-                        } else {
-                            // 🔥 SYNC-SCHEMA-DEBUG: Log toDomain conversion for non-existing remote
-                            Timber.d("[SYNC-SCHEMA-DEBUG] No remote workout found, converting local '${workout.name}' entity to domain")
-                            Timber.d("[SYNC-SCHEMA-DEBUG] Original entity JSON length: ${workout.exercisesJson?.length ?: 0}")
-
-                            // 🔥 SYNC-FIX: Use fallback logic to prevent data loss
-                            val workoutData = try {
-                                val domainWorkout = workoutMapper.toDomain(workout)
-
-                                Timber.d("[SYNC-SCHEMA-DEBUG] After toDomain: workout has ${domainWorkout.exercises.size} exercises")
-                                if (domainWorkout.exercises.isEmpty() && !workout.exercisesJson.isNullOrBlank()) {
-                                    Timber.e("[SYNC-SCHEMA-DEBUG] 🚨 CRITICAL: toDomain conversion LOST EXERCISES! Entity had JSON but domain has 0 exercises!")
-                                    Timber.w("[SYNC-FALLBACK] Using entity→DTO bypass to preserve exercise data")
-                                    workoutMapper.entityToFirestoreDto(workout, userId)
-                                } else {
-                                    workoutMapper.toFirestoreDto(domainWorkout, userId)
-                                }
-                            } catch (e: Exception) {
-                                Timber.e(e, "[SYNC-FALLBACK] toDomain failed for non-existing remote case, using bypass")
-                                workoutMapper.entityToFirestoreDto(workout, userId)
-                            }
-
-                            workoutData
                         }
-                        
-                        if (dataToSync != null) {
-                            // 🔥 ENHANCED: Comprehensive logging for upload operations
-                            Timber.d("[SYNC-UPLOAD] 📤 Preparing workout for upload: ${workout.id}")
-                            Timber.d("[SYNC-UPLOAD]   - Name: '${workout.name}'")
-                            Timber.d("[SYNC-UPLOAD]   - Status: ${workout.status}")
-                            Timber.d("[SYNC-UPLOAD]   - Date: ${workout.date}")
-                            Timber.d("[SYNC-UPLOAD]   - Last modified: ${workout.lastModified}")
-                            Timber.d("[SYNC-UPLOAD]   - Is synced: ${workout.isSynced}")
-                            
-                            val exercisesList = try {
-                                if (workout.exercisesJson.isNullOrBlank()) {
-                                    Timber.d("[SYNC-UPLOAD]   - No exercises JSON data")
-                                    emptyList<ExerciseDto>()
-                                } else {
-                                    // Handle both wrapped and unwrapped formats
-                                    val json = Json { ignoreUnknownKeys = true }
-                                    val exercises = try {
-                                        val wrapper = json.decodeFromString<LegacyExerciseWrapper>(workout.exercisesJson)
-                                        wrapper.exercises
-                                    } catch (e: Exception) {
-                                        json.decodeFromString<List<ExerciseDto>>(workout.exercisesJson)
-                                    }
-                                    
-                                    Timber.d("[SYNC-UPLOAD]   - Parsed ${exercises.size} exercises successfully")
-                                    exercises.forEachIndexed { index, exercise ->
-                                        Timber.v("[SYNC-UPLOAD]     - Exercise $index: '${exercise.name}' (${exercise.sets.size} sets)")
-                                    }
-                                    exercises
-                                }
-                            } catch (e: Exception) {
-                                Timber.w(e, "[SYNC-UPLOAD] ⚠️ Failed to parse exercises JSON for workout ${workout.id}, using empty list")
-                                emptyList<ExerciseDto>()
-                            }
-                            
-                            val exercisesForFirestore = exercisesList.map { exercise ->
-                                mapOf(
-                                    "id" to exercise.id,
-                                    "name" to exercise.name,
-                                    "muscleGroup" to exercise.muscleGroup,
-                                    "orderIndex" to exercise.orderIndex,
-                                    "notes" to exercise.notes,
-                                    "sets" to exercise.sets.map { set ->
-                                        mapOf(
-                                            "setNumber" to set.setNumber,
-                                            "targetReps" to set.targetReps,
-                                            "actualReps" to set.actualReps,
-                                            "targetWeight" to set.targetWeight,
-                                            "actualWeight" to set.actualWeight,
-                                            "completed" to set.completed,
-                                            "rpe" to set.rpe
-                                        )
-                                    }
-                                )
-                            }
-                            
-                            val firestoreData = mapOf(
-                                "id" to workout.id,
-                                "userId" to userId,
-                                "name" to workout.name,
-                                "date" to Timestamp(workout.date.atStartOfDay().toInstant(java.time.ZoneOffset.UTC)),
-                                "status" to workout.status.name,
-                                "startTime" to workout.startTime?.epochSecond,
-                                "endTime" to workout.endTime?.epochSecond,
-                                "exercises" to exercisesForFirestore,
-                                "notes" to workout.notes,
-                                "templateId" to workout.templateId,
-                                "createdAt" to Timestamp(workout.createdAt),
-                                "syncVersion" to System.currentTimeMillis(),
-                                "lastModified" to workout.lastModified,
-                                "isSynced" to true,
-                                "updatedAt" to FieldValue.serverTimestamp()
-                            )
-                            
-                            firestoreBatch.set(docRef, firestoreData, SetOptions.merge())
-                            workoutsToMarkClean.add(workout.id)
-                            batchHasWrites = true
+
+                        if (!shouldUpload) {
+                            return@forEach
                         }
+
+                        val dataToSync = resolveWorkoutDtoForUpload(workout, userId)
+                        if (dataToSync == null) {
+                            failureCount++
+                            return@forEach
+                        }
+
+                        val syncVersion = System.currentTimeMillis()
+                        val uploadDto = dataToSync.copy(
+                            syncVersion = syncVersion,
+                            synced = true,
+                            lastModified = workout.lastModified,
+                            updatedAt = null
+                        )
+
+                        Timber.d("[SYNC-UPLOAD] 📤 Preparing workout for upload: ${workout.id}")
+                        Timber.d("[SYNC-UPLOAD]   - Name: '${workout.name}'")
+                        Timber.d("[SYNC-UPLOAD]   - Status: ${workout.status}")
+                        Timber.d("[SYNC-UPLOAD]   - Date: ${workout.date}")
+                        Timber.d("[SYNC-UPLOAD]   - Last modified: ${workout.lastModified}")
+                        Timber.d("[SYNC-UPLOAD]   - Is synced: ${workout.isSynced}")
+
+                        firestoreBatch.set(docRef, uploadDto, SetOptions.merge())
+                        workoutsToMarkClean.add(workout.id)
+                        batchHasWrites = true
                         
                     } catch (e: Exception) {
                         Timber.e(e, "Error preparing workout ${workout.id} for batch sync")
@@ -636,6 +508,11 @@ class WorkoutSyncWorker @AssistedInject constructor(
         } else {
             // 🔥 ENHANCED: Sophisticated conflict resolution with comprehensive logging
             val localLastModified = localWorkout.lastModified
+            val localIsDirty = if (useDirtyFlagGating) {
+                localWorkout.isDirty
+            } else {
+                !localWorkout.isSynced
+            }
             val timeDifferenceMs = kotlin.math.abs(effectiveRemoteLastModified - localLastModified)
             
             // 🔥 MIGRATION FIX: Handle workouts with missing/zero updatedAt timestamps
@@ -665,7 +542,7 @@ class WorkoutSyncWorker @AssistedInject constructor(
             Timber.d("[SYNC-MERGE]   - Local updated: ${java.util.Date(localLastModified)} (${localLastModified})")
             Timber.d("[SYNC-MERGE]   - Remote updated: ${java.util.Date(effectiveRemoteLastModified)} (${effectiveRemoteLastModified})")
             Timber.d("[SYNC-MERGE]   - Time difference: ${timeDifferenceMs}ms")
-            Timber.d("[SYNC-MERGE]   - Local dirty: ${localWorkout.isDirty}")
+            Timber.d("[SYNC-MERGE]   - Local dirty: $localIsDirty")
             Timber.d("[SYNC-MERGE]   - Local status: ${localWorkout.status}")
             
             when {
@@ -690,14 +567,14 @@ class WorkoutSyncWorker @AssistedInject constructor(
                 }
                 
                 // Local is significantly newer and unsynced - will be uploaded in regular sync
-                localLastModified > effectiveRemoteLastModified + 1000 && localWorkout.isDirty -> {
+                localLastModified > effectiveRemoteLastModified + 1000 && localIsDirty -> {
                     Timber.i("[SYNC-MERGE] ⬆️ Local workout is newer and unsynced: $remoteId")
                     Timber.d("[SYNC-MERGE]   - Will upload local changes (local was ${timeDifferenceMs}ms newer)")
                     "MERGED"
                 }
                 
                 // Local is newer but already synced - potential data loss scenario
-                localLastModified > effectiveRemoteLastModified + 1000 && !localWorkout.isDirty -> {
+                localLastModified > effectiveRemoteLastModified + 1000 && !localIsDirty -> {
                     Timber.w("[SYNC-MERGE] ⚠️ Local workout is newer but already synced: $remoteId")
                     Timber.w("[SYNC-MERGE]   - This suggests a sync race condition or clock skew")
                     Timber.w("[SYNC-MERGE]   - Keeping local version to prevent data loss")
@@ -706,7 +583,7 @@ class WorkoutSyncWorker @AssistedInject constructor(
                 
                 // Timestamps are very close (within 1 second) - check other factors
                 timeDifferenceMs <= 1000 -> {
-                    if (localWorkout.isDirty) {
+                    if (localIsDirty) {
                         Timber.i("[SYNC-MERGE] 🔄 Timestamps similar, local unsynced: $remoteId")
                         Timber.d("[SYNC-MERGE]   - Will upload local changes as authoritative")
                         "MERGED"
@@ -772,20 +649,11 @@ class WorkoutSyncWorker @AssistedInject constructor(
                 
                 // Mark all local workouts as needing sync to push them to remote
                 if (localUnsyncedCount == 0) {
-                    val localWorkouts = workoutDao.getAllWorkoutsForUser(userId).first()
-                    localWorkouts.take(5).forEach { workout ->  // Sample a few
-                        if (useDirtyFlagGating) {
-                            workoutDao.upsertLocal(workout)
-                        } else {
-                            workoutDao.updateSyncStatusForUser(
-                                id = workout.id,
-                                userId = userId,
-                                isSynced = false,  // Mark as unsynced to push to remote
-                                version = System.currentTimeMillis()
-                            )
-                        }
-                    }
-                    Timber.i("[SYNC-STARTUP] 🛡️ Marked local workouts for upload to populate empty remote")
+                    val markedCount = workoutDao.markAllDirtyForUser(
+                        userId = userId,
+                        lastModified = System.currentTimeMillis()
+                    )
+                    Timber.i("[SYNC-STARTUP] 🛡️ Marked $markedCount local workouts for upload to populate empty remote")
                 }
                 
                 return true  // Consider this successful - we preserved local data
@@ -1111,7 +979,7 @@ class WorkoutSyncWorker @AssistedInject constructor(
                     userId = data["userId"] as? String ?: "",
                     version = (data["version"] as? Number)?.toLong() ?: 1L,
                     syncVersion = (data["syncVersion"] as? Number)?.toLong() ?: 1L,
-                    isSynced = data["isSynced"] as? Boolean ?: false,
+                    synced = data["is_synced"] as? Boolean ?: false,
                     lastModified = data["lastModified"]
                 )
             } catch (manualException: Exception) {
@@ -1121,7 +989,214 @@ class WorkoutSyncWorker @AssistedInject constructor(
         }
     }
 
+    /**
+     * 🔥 NEW (DR-010): Pre-upload validation with dead-letter handling
+     *
+     * Validates workout data before syncing to prevent data loss.
+     * Implements comprehensive validation logic with three outcomes:
+     * 1. Valid - workout can be synced normally
+     * 2. RecoverableError - use fallback serialization (entityToFirestoreDto)
+     * 3. FatalError - move to dead letter queue for manual review
+     *
+     * @param workout WorkoutEntity to validate
+     * @return ValidationResult indicating validation outcome
+     */
+    private suspend fun validateWorkoutForSync(workout: com.example.liftrix.data.local.entity.WorkoutEntity): ValidationResult {
+        try {
+            // Step 1: Validate empty workout scenario
+            if (workout.exercisesJson.isNullOrBlank()) {
+                Timber.d("[SYNC-VALIDATION] Workout ${workout.id} has no exercises - this is valid (empty workout)")
+                return ValidationResult.Valid()
+            }
+
+            // Step 2: Attempt toDomain conversion
+            val domainWorkout = try {
+                workoutMapper.toDomain(workout)
+            } catch (e: Exception) {
+                Timber.e(e, "[SYNC-VALIDATION] toDomain() threw exception for workout ${workout.id}")
+
+                // Track analytics for deserialization failure
+                analyticsService.logEvent(
+                    eventName = "sync_validation_fatal_error",
+                    parameters = mapOf(
+                        "workout_id" to workout.id,
+                        "user_id" to workout.userId,
+                        "error_type" to "DESERIALIZATION_EXCEPTION",
+                        "error_message" to (e.message ?: "Unknown"),
+                        "json_length" to (workout.exercisesJson?.length ?: 0)
+                    )
+                )
+
+                return ValidationResult.FatalError(
+                    reason = "Deserialization failed: ${e.message}",
+                    exception = e
+                )
+            }
+
+            // Step 3: Validate exercise preservation
+            if (domainWorkout.exercises.isEmpty() && workout.exercisesJson.isNotBlank()) {
+                Timber.w("[SYNC-VALIDATION] toDomain() lost exercises for workout ${workout.id}")
+                Timber.w("[SYNC-VALIDATION] Entity has JSON (${workout.exercisesJson.length} chars) but domain has 0 exercises")
+
+                // Track analytics for data loss scenario
+                analyticsService.logEvent(
+                    eventName = "sync_validation_recoverable_error",
+                    parameters = mapOf(
+                        "workout_id" to workout.id,
+                        "user_id" to workout.userId,
+                        "error_type" to "EXERCISE_DATA_LOSS",
+                        "json_length" to workout.exercisesJson.length
+                    )
+                )
+
+                return ValidationResult.RecoverableError(
+                    reason = "toDomain() lost exercises - fallback available",
+                    fallbackAvailable = true
+                )
+            }
+
+            // Step 4: All validation passed
+            Timber.v("[SYNC-VALIDATION] Workout ${workout.id} passed all validation checks")
+            return ValidationResult.Valid(domainWorkout)
+
+        } catch (e: Exception) {
+            Timber.e(e, "[SYNC-VALIDATION] Unexpected validation failure for workout ${workout.id}")
+
+            // Track analytics for unexpected validation failure
+            analyticsService.logEvent(
+                eventName = "sync_validation_unexpected_error",
+                parameters = mapOf(
+                    "workout_id" to workout.id,
+                    "user_id" to workout.userId,
+                    "error_message" to (e.message ?: "Unknown")
+                )
+            )
+
+            return ValidationResult.FatalError(
+                reason = "Unexpected validation error: ${e.message}",
+                exception = e
+            )
+        }
+    }
+
+    private suspend fun resolveWorkoutDtoForUpload(
+        workout: com.example.liftrix.data.local.entity.WorkoutEntity,
+        userId: String
+    ): WorkoutDto? {
+        return when (val validation = validateWorkoutForSync(workout)) {
+            is ValidationResult.Valid -> {
+                val domainWorkout = validation.domainWorkout
+                if (domainWorkout != null) {
+                    workoutMapper.toFirestoreDto(domainWorkout, userId)
+                } else {
+                    workoutMapper.entityToFirestoreDto(workout, userId)
+                }
+            }
+            is ValidationResult.RecoverableError -> {
+                analyticsService.logEvent(
+                    eventName = "sync_fallback_used",
+                    parameters = mapOf(
+                        "workout_id" to workout.id,
+                        "user_id" to workout.userId,
+                        "reason" to validation.reason,
+                        "json_length" to workout.exercisesJson.length
+                    )
+                )
+                workoutMapper.entityToFirestoreDto(workout, userId)
+            }
+            is ValidationResult.FatalError -> {
+                moveToDeadLetterQueue(workout, validation)
+                null
+            }
+        }
+    }
+
+    /**
+     * 🔥 NEW (DR-010): Moves failed workout to dead letter queue with analytics tracking
+     *
+     * @param workout Workout entity that failed validation
+     * @param validationResult Fatal validation result
+     */
+    private suspend fun moveToDeadLetterQueue(
+        workout: com.example.liftrix.data.local.entity.WorkoutEntity,
+        validationResult: ValidationResult.FatalError
+    ) {
+        try {
+            val deadLetterEntity = DeadLetterQueueEntity(
+                id = UUID.randomUUID().toString(),
+                originalId = workout.id,
+                userId = workout.userId,
+                entityType = "WORKOUT",
+                entityId = workout.id,
+                operation = "SYNC_UPLOAD",
+                data = workout.exercisesJson ?: "{}",
+                priority = 1, // High priority for workouts
+                retryCount = 0,
+                createdAt = workout.createdAt.toEpochMilli(),
+                failedAt = System.currentTimeMillis(),
+                errorCategory = "VALIDATION_FAILURE",
+                errorMessage = validationResult.reason
+            )
+
+            deadLetterDao.insert(deadLetterEntity)
+
+            // Track analytics for dead letter queue addition
+            analyticsService.logEvent(
+                eventName = "sync_dead_letter_added",
+                parameters = mapOf(
+                    "workout_id" to workout.id,
+                    "user_id" to workout.userId,
+                    "error_category" to "VALIDATION_FAILURE",
+                    "error_reason" to validationResult.reason,
+                    "json_length" to (workout.exercisesJson?.length ?: 0)
+                )
+            )
+
+            val updatedCount = workoutDao.markSyncFailed(workout.id, workout.userId)
+            if (updatedCount == 0) {
+                Timber.w("[SYNC-DEAD-LETTER] Failed to mark workout ${workout.id} as sync-failed")
+            }
+
+            Timber.e("[SYNC-DEAD-LETTER] Moved workout ${workout.id} to dead letter queue: ${validationResult.reason}")
+            notifyWorkoutSyncFailure(workout, validationResult.reason)
+
+        } catch (e: Exception) {
+            Timber.e(e, "[SYNC-DEAD-LETTER] Failed to move workout ${workout.id} to dead letter queue")
+
+            // Track critical failure in dead letter queue insertion
+            analyticsService.recordException(
+                throwable = e,
+                additionalData = mapOf(
+                    "context" to "dead_letter_insert_failure",
+                    "workout_id" to workout.id
+                )
+            )
+        }
+    }
+
+    private suspend fun notifyWorkoutSyncFailure(
+        workout: com.example.liftrix.data.local.entity.WorkoutEntity,
+        reason: String
+    ) {
+        val data = mapOf(
+            "user_id" to workout.userId,
+            "workout_id" to workout.id,
+            "error_message" to reason.take(200)
+        )
+
+        try {
+            notificationHandler.showSystemNotification(
+                title = "Workout sync failed",
+                body = "We couldn't sync a workout. Open Liftrix to review and retry.",
+                type = "error",
+                data = data
+            )
+        } catch (e: Exception) {
+            Timber.w(e, "[SYNC-DEAD-LETTER] Failed to notify workout sync failure for ${workout.id}")
+        }
+    }
+
     // WorkoutDto moved to proper data class file:
     // app/src/main/java/com/example/liftrix/data/remote/dto/WorkoutDto.kt
     // This resolves Firestore field mapping warnings for isSynced and other fields
-} 
+}

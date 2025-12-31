@@ -59,19 +59,6 @@ class MasterSyncWorker @AssistedInject constructor(
     private val firebaseAuth: com.google.firebase.auth.FirebaseAuth
 ) : BaseSyncWorker(context, params) {
 
-    // 🔧 HOTFIX: Fallback constructor for when Hilt factory generation fails
-    // This allows WorkManager to instantiate the worker via reflection
-    // TEMPORARY: Remove once Hilt assisted factories are confirmed working
-    constructor(context: Context, params: WorkerParameters) : this(
-        context,
-        params,
-        WorkerServiceLocator.getSyncStatusRepository(context),
-        com.google.firebase.firestore.FirebaseFirestore.getInstance(),
-        com.google.firebase.auth.FirebaseAuth.getInstance()
-    ) {
-        Timber.w("⚠️ MasterSyncWorker using FALLBACK constructor - Hilt factory failed!")
-    }
-
     init {
         Timber.d("✅ MasterSyncWorker constructed with Hilt DI")
     }

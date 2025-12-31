@@ -105,7 +105,7 @@ class SettingsSyncWorkerV2 @AssistedInject constructor(
                 val remoteSettings = remoteDoc.toSettingsEntity(userId).copy(
                     isDirty = false,
                     isSynced = true,
-                    syncVersion = (remoteDoc.getLong("syncVersion") ?: 0L).toInt(),
+                    syncVersion = remoteDoc.getLong("syncVersion") ?: 0L,
                     lastModified = remoteLastModified
                 )
                 settingsDao.upsertFromRemote(remoteSettings)
@@ -209,7 +209,7 @@ class SettingsSyncWorkerV2 @AssistedInject constructor(
             allowMessages = true,
             autoPlayVideos = true,
             isSynced = false,
-            syncVersion = 0
+            syncVersion = 0L
         )
     }
     
@@ -234,7 +234,7 @@ class SettingsSyncWorkerV2 @AssistedInject constructor(
             allowMessages = getBoolean("allowMessages") ?: true,
             autoPlayVideos = getBoolean("autoPlayVideos") ?: true,
             isSynced = true,
-            syncVersion = (getLong("syncVersion") ?: 0).toInt()
+            syncVersion = getLong("syncVersion") ?: 0L
         )
     }
 }

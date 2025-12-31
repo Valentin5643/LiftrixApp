@@ -847,7 +847,7 @@ class FollowRepositoryImpl @Inject constructor(
                             else -> null
                         },
                         isSynced = true,
-                        syncVersion = (data["syncVersion"] as? Number)?.toInt() ?: 1,
+                        syncVersion = (data["syncVersion"] as? Number)?.toLong() ?: 1L,
                         lastModified = currentTime
                     )
                 )
@@ -880,7 +880,7 @@ class FollowRepositoryImpl @Inject constructor(
                                 else -> null
                             },
                             isSynced = true,
-                            syncVersion = (data["syncVersion"] as? Number)?.toInt() ?: 1,
+                            syncVersion = (data["syncVersion"] as? Number)?.toLong() ?: 1L,
                             lastModified = currentTime
                         )
                     )

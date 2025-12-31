@@ -231,7 +231,7 @@ private fun EmptyCommentsState(
     ) {
         Icon(
             imageVector = Icons.Outlined.ChatBubbleOutline,
-            contentDescription = null,
+            contentDescription = "Comments",
             tint = LiftrixColorsV2.onSurfaceVariant,
             modifier = Modifier.size(48.dp)
         )

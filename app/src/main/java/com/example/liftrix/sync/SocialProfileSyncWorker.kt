@@ -165,8 +165,8 @@ class SocialProfileSyncWorker @AssistedInject constructor(
                         personalWebsite = remoteDoc.getString("personalWebsite") ?: profile.personalWebsite,
                         isDirty = false,
                         isSynced = true,
-                        syncVersion = (remoteDoc.getLong("syncVersion")
-                            ?: profile.syncVersion.toLong()).toInt(),
+                        syncVersion = remoteDoc.getLong("syncVersion")
+                            ?: profile.syncVersion,
                         lastModified = remoteLastModified,
                         createdAt = remoteDoc.getLong("createdAt") ?: profile.createdAt,
                         updatedAt = remoteDoc.getTimestamp("updatedAt")?.toDate()?.time ?: profile.updatedAt

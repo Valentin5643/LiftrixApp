@@ -6,6 +6,7 @@ import com.example.liftrix.core.identity.UserId
 import com.example.liftrix.data.local.entity.SubscriptionEntity
 import com.example.liftrix.data.local.entity.UserAccountEntity
 import com.example.liftrix.data.local.entity.SubscriptionTier as DataSubscriptionTier
+import com.example.liftrix.data.local.LiftrixDatabase
 import com.example.liftrix.data.mapper.UserMapper
 import com.example.liftrix.data.mapper.UserProfileMapper
 import com.example.liftrix.data.mapper.SubscriptionMapper
@@ -24,6 +25,7 @@ import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
+import androidx.room.withTransaction
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -41,6 +43,7 @@ import java.time.LocalDateTime
 class AuthRepositoryImpl @Inject constructor(
     private val firebaseAuth: FirebaseAuth,
     private val syncCoordinator: com.example.liftrix.sync.SyncCoordinator,
+    private val database: LiftrixDatabase,
     private val userAccountDao: com.example.liftrix.data.local.dao.UserAccountDao,
     private val userProfileDao: com.example.liftrix.data.local.dao.UserProfileDao,
     private val userProfileMapper: UserProfileMapper,
@@ -48,7 +51,8 @@ class AuthRepositoryImpl @Inject constructor(
     private val settingsDao: com.example.liftrix.data.local.dao.SettingsDao,
     private val subscriptionDao: com.example.liftrix.data.local.dao.SubscriptionDao,
     private val offlineQueueManager: com.example.liftrix.data.sync.OfflineQueueManager,
-    private val legacyAuthDataSource: LegacyAuthFirestoreDataSource
+    private val legacyAuthDataSource: LegacyAuthFirestoreDataSource,
+    private val consentManagementService: com.example.liftrix.domain.service.ConsentManagementService
 ) : AuthRepository {
 
     override val currentUser: Flow<User?> = callbackFlow {
@@ -435,49 +439,57 @@ class AuthRepositoryImpl @Inject constructor(
         ) {
             Timber.d("Creating local user profile for: ${user.uid}")
 
-            val now = LocalDateTime.now()
+            // CRITICAL FIX: Use database transaction to ensure FK constraint order
+            database.withTransaction {
+                val now = LocalDateTime.now()
 
-            val accountEntity = buildUserAccountEntity(user, now = now)
-            userAccountDao.upsertLocal(accountEntity)
+                // 1. Insert UserAccountEntity first
+                val accountEntity = buildUserAccountEntity(user, now = now)
+                userAccountDao.upsertLocal(accountEntity)
 
-            val baseProfile = UserProfile.createMinimal(user.uid).copy(
-                displayName = user.displayName ?: "User",
-                profileImageUrl = user.photoUrl,
-                profileImageUpdatedAt = now,
-                updatedAt = now
-            )
-            val existingProfile = userProfileDao.getProfileForUserSuspend(user.uid)
-            val profileEntity = if (existingProfile != null) {
-                userProfileMapper.toEntityWithId(baseProfile, existingProfile.id, isSynced = false)
-            } else {
-                userProfileMapper.toEntity(baseProfile, isSynced = false)
+                // 2. Insert UserProfileEntity (parent for SubscriptionEntity FK)
+                val baseProfile = UserProfile.createMinimal(user.uid).copy(
+                    displayName = user.displayName ?: "User",
+                    profileImageUrl = user.photoUrl,
+                    profileImageUpdatedAt = now,
+                    updatedAt = now
+                )
+                val existingProfile = userProfileDao.getProfileForUserSuspend(user.uid)
+                val profileEntity = if (existingProfile != null) {
+                    userProfileMapper.toEntityWithId(baseProfile, existingProfile.id, isSynced = false)
+                } else {
+                    userProfileMapper.toEntity(baseProfile, isSynced = false)
+                }
+                userProfileDao.upsertLocal(profileEntity)
+
+                // 3. Insert SettingsEntity
+                val existingSettings = settingsDao.getUserSettingsSync(user.uid)
+                val settingsEntity = existingSettings ?: com.example.liftrix.data.local.entity.SettingsEntity.createDefault(user.uid)
+                settingsDao.upsertLocal(settingsEntity)
+
+                // 4. Insert SubscriptionEntity LAST (has FK dependency on UserProfileEntity)
+                val existingSubscription = subscriptionDao.getSubscription(user.uid)
+                val subscriptionEntity = existingSubscription ?: SubscriptionEntity(
+                    userId = user.uid,
+                    tier = DataSubscriptionTier.FREE,
+                    status = "active",
+                    provider = "manual",
+                    startedAt = Instant.now(),
+                    expiresAt = null,
+                    cancelledAt = null,
+                    trialEndsAt = null,
+                    autoRenew = false,
+                    priceCents = null,
+                    currency = "USD",
+                    createdAt = Instant.now(),
+                    updatedAt = Instant.now(),
+                    isSynced = false,
+                    syncVersion = 1L
+                )
+                subscriptionDao.upsertLocal(subscriptionEntity)
             }
-            userProfileDao.upsertLocal(profileEntity)
 
-            val existingSettings = settingsDao.getUserSettingsSync(user.uid)
-            val settingsEntity = existingSettings ?: com.example.liftrix.data.local.entity.SettingsEntity.createDefault(user.uid)
-            settingsDao.upsertLocal(settingsEntity)
-
-            val existingSubscription = subscriptionDao.getSubscription(user.uid)
-            val subscriptionEntity = existingSubscription ?: SubscriptionEntity(
-                userId = user.uid,
-                tier = DataSubscriptionTier.FREE,
-                status = "active",
-                provider = "manual",
-                startedAt = Instant.now(),
-                expiresAt = null,
-                cancelledAt = null,
-                trialEndsAt = null,
-                autoRenew = false,
-                priceCents = null,
-                currency = "USD",
-                createdAt = Instant.now(),
-                updatedAt = Instant.now(),
-                isSynced = false,
-                syncVersion = 1L
-            )
-            subscriptionDao.upsertLocal(subscriptionEntity)
-
+            // Queue sync after successful transaction
             queueProfileSync(user.uid)
             syncCoordinator.triggerImmediateSync(user.uid)
         }

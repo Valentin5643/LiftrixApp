@@ -27,7 +27,7 @@ fun EmptyState(
     ) {
         Icon(
             Icons.Default.Info,
-            contentDescription = null,
+            contentDescription = "Empty state",
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(48.dp)
         )

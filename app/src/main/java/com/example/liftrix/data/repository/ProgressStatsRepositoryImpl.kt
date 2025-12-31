@@ -176,14 +176,14 @@ class ProgressStatsRepositoryImpl @Inject constructor(
             // Group by workout date and calculate volume
             val volumeData = exercises.groupBy { exercise ->
                 // Get workout date for this exercise
-                workoutDao.getWorkoutByExerciseId(exercise.id)?.date
+                workoutDao.getWorkoutByExerciseId(exercise.id, userId)?.date
             }
                 .filterKeys { it != null }
                 .map { (date, exerciseList) ->
                     var totalVolume = 0f
                     
                     exerciseList.forEach { exercise ->
-                        val sets = exerciseSetDao.getSetsByExercise(exercise.id)
+                        val sets = exerciseSetDao.getSetsByExercise(exercise.id, userId)
                         sets.forEach { set ->
                             if (set.weightKg != null && set.reps != null) {
                                 totalVolume += set.weightKg * set.reps

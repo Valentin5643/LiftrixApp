@@ -78,7 +78,7 @@ fun SaveQuickWorkoutAsTemplateDialog(
         icon = {
             Icon(
                 imageVector = Icons.Default.Assignment,
-                contentDescription = null,
+                contentDescription = "Workout template",
                 tint = MaterialTheme.colorScheme.primary
             )
         },
@@ -155,7 +155,7 @@ fun SaveQuickWorkoutAsTemplateDialog(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Cancel,
-                        contentDescription = null,
+                        contentDescription = "Skip",
                         modifier = Modifier.padding(end = 4.dp)
                     )
                     Text("Skip")
@@ -176,7 +176,7 @@ fun SaveQuickWorkoutAsTemplateDialog(
                 ) {
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
-                        contentDescription = null,
+                        contentDescription = "Save template",
                         modifier = Modifier.padding(end = 4.dp),
                         tint = if (isValidName) MaterialTheme.colorScheme.primary else Color.Gray
                     )

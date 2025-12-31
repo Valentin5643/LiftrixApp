@@ -53,22 +53,6 @@ class UserPublicSyncWorker @AssistedInject constructor(
     private val gson: Gson
 ) : CoroutineWorker(context, params) {
 
-    // 🔥 FIX: Fallback constructor for WorkManager reflection when Hilt factory fails
-    // Uses EntryPoint pattern for proper dependency resolution
-    constructor(context: Context, params: WorkerParameters) : this(
-        context = context,
-        params = params,
-        userAccountDao = WorkerServiceLocator.getUserPublicSyncDependencies(context).userAccountDao,
-        userProfileDao = WorkerServiceLocator.getUserPublicSyncDependencies(context).userProfileDao,
-        workoutDao = WorkerServiceLocator.getUserPublicSyncDependencies(context).workoutDao,
-        firestore = WorkerServiceLocator.getUserPublicSyncDependencies(context).firestore,
-        auth = WorkerServiceLocator.getUserPublicSyncDependencies(context).auth,
-        gson = WorkerServiceLocator.getUserPublicSyncDependencies(context).gson
-    ) {
-        Timber.w("⚠️ UserPublicSyncWorker using FALLBACK constructor - Hilt factory failed!")
-        Timber.w("⚠️ Worker will function but this indicates assisted factory generation issue")
-    }
-
     companion object {
         const val WORK_NAME = "user_public_sync_work"
         const val KEY_SYNC_COUNT = "sync_count"
@@ -173,7 +157,7 @@ class UserPublicSyncWorker @AssistedInject constructor(
                     "publicAchievements" to emptyList<Map<String, Any>>(),
                     "searchTokens" to emptyList<String>(),
                     "searchKeywords" to emptyList<String>(),
-                    "syncVersion" to 1,
+                    "syncVersion" to 1L,
                     "lastModified" to System.currentTimeMillis(),
                     "updatedAt" to FieldValue.serverTimestamp()
                 )
@@ -291,7 +275,7 @@ class UserPublicSyncWorker @AssistedInject constructor(
                 "searchKeywords" to searchKeywords,
                 
                 // Metadata
-                "syncVersion" to 1, // Use simple integer version for Firestore rules compatibility
+                "syncVersion" to 1L, // Use simple integer version for Firestore rules compatibility
                 "lastModified" to localLastModified,
                 "updatedAt" to FieldValue.serverTimestamp()
             )

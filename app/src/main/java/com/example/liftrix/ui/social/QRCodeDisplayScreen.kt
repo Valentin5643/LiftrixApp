@@ -268,7 +268,7 @@ private fun ProfileUrlCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.Link,
-                    contentDescription = null,
+                    contentDescription = "Profile link",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
@@ -314,7 +314,7 @@ private fun QRCodeActions(
         ) {
             Icon(
                 imageVector = Icons.Default.Refresh,
-                contentDescription = null,
+                contentDescription = "Refresh QR code",
                 modifier = Modifier.size(18.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -345,7 +345,7 @@ private fun InstructionsCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.Info,
-                    contentDescription = null,
+                    contentDescription = "Instructions",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
@@ -463,7 +463,7 @@ private fun QRCodeErrorState(
     ) {
         Icon(
             imageVector = Icons.Default.Error,
-            contentDescription = null,
+            contentDescription = "Error",
             tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(48.dp)
         )

@@ -349,7 +349,7 @@ class CommentSyncService @Inject constructor(
                 editedAt = (data["edited_at"] as? com.google.firebase.Timestamp)?.toDate()?.time,
                 updatedAt = System.currentTimeMillis(),
                 isSynced = true, // From Firestore, so already synced
-                syncVersion = (data["sync_version"] as? Long)?.toInt() ?: 0
+                syncVersion = (data["sync_version"] as? Long) ?: 0L
             )
         } catch (e: Exception) {
             Timber.e(e, "Failed to parse comment document: $documentId")
@@ -359,4 +359,3 @@ class CommentSyncService @Inject constructor(
 
     private fun generateCommentId(): String = firestore.collection("post_comments").document().id
 }
-

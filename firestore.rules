@@ -6,9 +6,39 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     function isOwner(userId) {
       return request.auth.uid == userId;
+    }
+
+    // ========================================
+    // SECURITY: Timestamp Validation (SEC-T006)
+    // Prevents timestamp manipulation attacks (SEC-006)
+    // ========================================
+
+    /**
+     * Validates that client-provided lastModified timestamp is not in the future.
+     *
+     * Security: Prevents attackers from setting future timestamps to force data override
+     * in last-write-wins conflict resolution (SEC-006).
+     *
+     * Tolerance: Allows 5-minute clock skew for legitimate client time differences.
+     */
+    function isValidTimestamp(clientTimestamp) {
+      // Accept timestamp if it's within 5 minutes of server time
+      let maxAllowedTime = request.time.toMillis() + (5 * 60 * 1000); // 5 minutes tolerance
+      return clientTimestamp <= maxAllowedTime;
+    }
+
+    /**
+     * Validates sync metadata including timestamp verification.
+     * Used for all synced entities to ensure data integrity.
+     */
+    function hasValidSyncTimestamp() {
+      return !('lastModified' in request.resource.data) ||
+             (request.resource.data.lastModified is int &&
+              isValidTimestamp(request.resource.data.lastModified)) ||
+             (request.resource.data.lastModified is timestamp);
     }
     
     function isValidUserProfile() {
@@ -119,51 +149,57 @@ service cloud.firestore {
     match /users/{userId}/workouts/{workoutId} {
       // Allow read for authenticated users who own the data
       allow read: if isAuthenticated() && isOwner(userId);
-      
-      // Allow write with relaxed validation
-      allow write: if isAuthenticated() && 
+
+      // Allow write with timestamp validation (SEC-T006)
+      allow write: if isAuthenticated() &&
                       isOwner(userId) &&
                       request.resource.data.keys().hasAll(['id', 'userId']) &&
-                      request.resource.data.userId == request.auth.uid;
-      
-      allow create: if isAuthenticated() && 
+                      request.resource.data.userId == request.auth.uid &&
+                      hasValidSyncTimestamp();
+
+      allow create: if isAuthenticated() &&
                        isOwner(userId) &&
                        request.resource.data.keys().hasAll(['id', 'userId']) &&
-                       request.resource.data.userId == request.auth.uid;
+                       request.resource.data.userId == request.auth.uid &&
+                       hasValidSyncTimestamp();
     }
     
     // Templates subcollection - user workout templates
     match /users/{userId}/templates/{templateId} {
       // Allow read for owner and public templates
       allow read: if isAuthenticated() && isOwner(userId);
-      allow read: if isAuthenticated() && 
+      allow read: if isAuthenticated() &&
                      resource.data.isPublic == true &&
                      !hasBlockRelationship(request.auth.uid, userId);
-      
-      // Allow write with relaxed validation
-      allow write: if isAuthenticated() && 
+
+      // Allow write with timestamp validation (SEC-T006)
+      allow write: if isAuthenticated() &&
                       isOwner(userId) &&
                       request.resource.data.keys().hasAll(['id', 'userId']) &&
-                      request.resource.data.userId == request.auth.uid;
-      
-      allow create: if isAuthenticated() && 
+                      request.resource.data.userId == request.auth.uid &&
+                      hasValidSyncTimestamp();
+
+      allow create: if isAuthenticated() &&
                        isOwner(userId) &&
                        request.resource.data.keys().hasAll(['id', 'userId']) &&
-                       request.resource.data.userId == request.auth.uid;
+                       request.resource.data.userId == request.auth.uid &&
+                       hasValidSyncTimestamp();
     }
     
     // Achievements subcollection - user achievements
     match /users/{userId}/achievements/{achievementId} {
       allow read: if isAuthenticated() && isOwner(userId);
-      
-      // Allow client-side achievement writes with basic validation
-      allow write: if isAuthenticated() && 
-                      isOwner(userId) && 
-                      isValidAchievement();
-      
-      allow create: if isAuthenticated() && 
-                       isOwner(userId) && 
-                       isValidAchievement();
+
+      // Allow client-side achievement writes with validation and timestamp check (SEC-T006)
+      allow write: if isAuthenticated() &&
+                      isOwner(userId) &&
+                      isValidAchievement() &&
+                      hasValidSyncTimestamp();
+
+      allow create: if isAuthenticated() &&
+                       isOwner(userId) &&
+                       isValidAchievement() &&
+                       hasValidSyncTimestamp();
     }
     
     // Users public profiles - publicly accessible profile data
@@ -706,6 +742,203 @@ service cloud.firestore {
                        (!('version' in request.resource.data) || request.resource.data.version is int);
     }
     
+    // ========================================
+    // AUDIT LOGGING INFRASTRUCTURE (SEC-T005)
+    // Tamper-evident write-only audit logs
+    // ========================================
+
+    // Audit logs - write-only collection for forensic analysis
+    match /audit_logs/{logId} {
+      // SECURITY: Read only for admin users (requires custom claims)
+      // Regular users cannot read or modify audit logs
+      allow read: if request.auth.token.admin == true;
+
+      // SECURITY: Write-only for authenticated users
+      // Logs can be created but never updated or deleted (tamper-evident)
+      allow create: if isAuthenticated() &&
+                       request.resource.data.keys().hasAll(['eventType', 'userId', 'timestamp']) &&
+                       request.resource.data.eventType in [
+                         'CONFLICT_RESOLUTION',
+                         'HMAC_VERIFICATION_FAILURE',
+                         'TIMESTAMP_MANIPULATION',
+                         'USER_SCOPING_VIOLATION',
+                         'DATA_TAMPERING'
+                       ];
+
+      // SECURITY: Prevent updates and deletes (tamper-evident)
+      allow update, delete: if false;
+    }
+
+    // ========================================
+    // GDPR COMPLIANCE & MODERATION RULES
+    // Added for Google Play compliance (SPEC-20251230)
+    // ========================================
+
+    // User consent tracking - GDPR consent collection
+    match /user_consents/{userId} {
+      // Users can read their own consent records
+      allow read: if isAuthenticated() && isOwner(userId);
+
+      // Users can create/update their own consent records
+      allow write, create: if isAuthenticated() &&
+                              isOwner(userId) &&
+                              request.resource.data.keys().hasAll(['userId', 'privacyPolicy', 'healthData', 'aiChat']) &&
+                              request.resource.data.userId == request.auth.uid &&
+                              request.resource.data.privacyPolicy is bool &&
+                              request.resource.data.healthData is bool &&
+                              request.resource.data.aiChat is bool &&
+                              (!('analytics' in request.resource.data) || request.resource.data.analytics is bool) &&
+                              (!('marketing' in request.resource.data) || request.resource.data.marketing is bool) &&
+                              (!('consentVersion' in request.resource.data) || request.resource.data.consentVersion is string) &&
+                              (!('acceptedAt' in request.resource.data) || request.resource.data.acceptedAt is int);
+    }
+
+    // Moderation actions - admin-only audit trail for moderation
+    match /moderation_actions/{actionId} {
+      // Only admins can read moderation actions
+      allow read: if request.auth.token.admin == true;
+
+      // Only admins can create moderation action records (tamper-evident)
+      allow create: if request.auth.token.admin == true &&
+                       request.resource.data.keys().hasAll(['admin_user_id', 'action_type', 'target_type', 'target_id', 'reason']) &&
+                       request.resource.data.admin_user_id == request.auth.uid &&
+                       request.resource.data.action_type is string &&
+                       request.resource.data.target_type is string &&
+                       request.resource.data.target_id is string &&
+                       request.resource.data.reason is string;
+
+      // Prevent updates and deletes (tamper-evident audit log)
+      allow update, delete: if false;
+    }
+
+    // Content reports - user reporting of inappropriate content
+    match /content_reports/{reportId} {
+      // Users can only read their own reports, admins can read all
+      allow read: if isAuthenticated() &&
+                     (request.auth.token.admin == true ||
+                      resource.data.reporter_user_id == request.auth.uid);
+
+      // Any authenticated user can create a content report
+      allow create: if isAuthenticated() &&
+                       request.resource.data.keys().hasAll(['reporter_user_id', 'content_type', 'content_id', 'reason']) &&
+                       request.resource.data.reporter_user_id == request.auth.uid &&
+                       request.resource.data.content_type in ['POST', 'COMMENT', 'PROFILE'] &&
+                       request.resource.data.content_id is string &&
+                       request.resource.data.reason in ['SPAM', 'HARASSMENT', 'HATE_SPEECH', 'INAPPROPRIATE', 'MISINFORMATION', 'OTHER'] &&
+                       (!('notes' in request.resource.data) || request.resource.data.notes is string) &&
+                       (!('status' in request.resource.data) || request.resource.data.status == 'PENDING');
+
+      // Only admins can update reports (for status changes)
+      allow update: if request.auth.token.admin == true;
+
+      // Prevent report deletion
+      allow delete: if false;
+    }
+
+    // AI reports - user reporting of AI-generated harmful content
+    match /ai_reports/{reportId} {
+      // Users can only read their own reports, admins can read all
+      allow read: if isAuthenticated() &&
+                     (request.auth.token.admin == true ||
+                      resource.data.reporter_user_id == request.auth.uid);
+
+      // Any authenticated user can create an AI report
+      allow create: if isAuthenticated() &&
+                       request.resource.data.keys().hasAll(['message_id', 'message_content', 'reason', 'reporter_user_id']) &&
+                       request.resource.data.message_id is string &&
+                       request.resource.data.message_content is string &&
+                       request.resource.data.reason is string &&
+                       request.resource.data.reporter_user_id == request.auth.uid &&
+                       (!('notes' in request.resource.data) || request.resource.data.notes is string) &&
+                       (!('status' in request.resource.data) || request.resource.data.status == 'PENDING');
+
+      // Only admins can update reports (for status changes)
+      allow update: if request.auth.token.admin == true;
+
+      // Prevent report deletion
+      allow delete: if false;
+    }
+
+    // Account restrictions - admin-imposed restrictions on user accounts
+    match /account_restrictions/{restrictionId} {
+      // Users can read their own restrictions, admins can read all
+      allow read: if isAuthenticated() &&
+                     (request.auth.token.admin == true ||
+                      resource.data.user_id == request.auth.uid);
+
+      // Only admins can create/update account restrictions
+      allow write: if request.auth.token.admin == true &&
+                      request.resource.data.keys().hasAll(['user_id', 'restriction_type', 'reason', 'start_time']) &&
+                      request.resource.data.user_id is string &&
+                      request.resource.data.restriction_type in ['WARNED', 'SUSPENDED', 'BANNED'] &&
+                      request.resource.data.reason is string &&
+                      request.resource.data.start_time is int &&
+                      (!('end_time' in request.resource.data) || request.resource.data.end_time == null || request.resource.data.end_time is int) &&
+                      (!('is_active' in request.resource.data) || request.resource.data.is_active is bool);
+
+      allow create: if request.auth.token.admin == true &&
+                       request.resource.data.keys().hasAll(['user_id', 'restriction_type', 'reason', 'start_time']) &&
+                       request.resource.data.user_id is string &&
+                       request.resource.data.restriction_type in ['WARNED', 'SUSPENDED', 'BANNED'] &&
+                       request.resource.data.reason is string &&
+                       request.resource.data.start_time is int &&
+                       (!('end_time' in request.resource.data) || request.resource.data.end_time == null || request.resource.data.end_time is int) &&
+                       (!('is_active' in request.resource.data) || request.resource.data.is_active is bool);
+
+      // Prevent deletion (audit trail)
+      allow delete: if false;
+    }
+
+    // Account deletion queue - GDPR-compliant account deletion tracking
+    match /deletion_queue/{userId} {
+      // Users can only read their own deletion requests, admins can read all
+      allow read: if isAuthenticated() &&
+                     (request.auth.token.admin == true || isOwner(userId));
+
+      // Users can create their own deletion request
+      allow create: if isAuthenticated() &&
+                       isOwner(userId) &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.keys().hasAll(['userId', 'requestedAt']) &&
+                       request.resource.data.requestedAt is int;
+
+      // Only Cloud Functions can update/delete (processed by processAccountDeletion function)
+      allow update, delete: if false;
+    }
+
+    // Post comments - user comments on workout posts with moderation support
+    match /post_comments/{commentId} {
+      // Users can read comments on posts they can access
+      allow read: if isAuthenticated() &&
+                     !hasBlockRelationship(request.auth.uid, resource.data.userId);
+
+      // Users can create/update their own comments
+      allow write: if isAuthenticated() &&
+                      isOwner(request.resource.data.userId) &&
+                      request.resource.data.userId == request.auth.uid &&
+                      request.resource.data.keys().hasAll(['postId', 'userId', 'content', 'createdAt']) &&
+                      request.resource.data.postId is string &&
+                      request.resource.data.content is string &&
+                      request.resource.data.content.size() > 0 &&
+                      request.resource.data.content.size() <= 500 &&
+                      request.resource.data.createdAt is int;
+
+      allow create: if isAuthenticated() &&
+                       isOwner(request.resource.data.userId) &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.keys().hasAll(['postId', 'userId', 'content', 'createdAt']) &&
+                       request.resource.data.postId is string &&
+                       request.resource.data.content is string &&
+                       request.resource.data.content.size() > 0 &&
+                       request.resource.data.content.size() <= 500 &&
+                       request.resource.data.createdAt is int;
+
+      // Users can delete their own comments, admins can delete any
+      allow delete: if isAuthenticated() &&
+                       (request.auth.token.admin == true ||
+                        resource.data.userId == request.auth.uid);
+    }
+
     // Default deny all other paths
     match /{document=**} {
       allow read, write: if false;

@@ -3,6 +3,8 @@ package com.example.liftrix.data.local
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.liftrix.data.local.converter.DateTimeConverters
 import com.example.liftrix.data.local.converter.UserProfileConverters
 import com.example.liftrix.data.local.converter.WorkoutConverters
@@ -74,6 +76,9 @@ import com.example.liftrix.data.local.dao.ChatHistoryDao
 import com.example.liftrix.data.local.dao.PRReactionDao
 import com.example.liftrix.data.local.dao.PRNotificationPreferencesDao
 import com.example.liftrix.data.local.dao.PersonalRecordDao
+import com.example.liftrix.data.local.dao.ConsentDao
+import com.example.liftrix.data.local.dao.AccountRestrictionDao
+import com.example.liftrix.data.local.dao.ModerationActionDao
 
 import com.example.liftrix.data.local.entity.UserProfileEntity
 import com.example.liftrix.data.local.entity.ChatPreferencesEntity
@@ -140,6 +145,9 @@ import com.example.liftrix.data.local.entity.SettingsAuditEntity
 import com.example.liftrix.data.local.entity.SyncQueueEntity
 import com.example.liftrix.data.local.entity.DeadLetterQueueEntity
 import com.example.liftrix.data.local.entity.SyncPreferencesEntity
+import com.example.liftrix.data.local.entity.UserConsentEntity
+import com.example.liftrix.data.local.entity.AccountRestrictionEntity
+import com.example.liftrix.data.local.entity.ModerationActionEntity
 
 
 
@@ -210,8 +218,11 @@ import com.example.liftrix.data.local.entity.SyncPreferencesEntity
         PRReactionEntity::class,
         PRNotificationPreferencesEntity::class,
         PersonalRecordEntity::class,
+        UserConsentEntity::class,
+        AccountRestrictionEntity::class,
+        ModerationActionEntity::class,
     ],
-    version = 3,
+    version = 7,
     exportSchema = true
 )
 @TypeConverters(
@@ -288,4 +299,26 @@ abstract class LiftrixDatabase : RoomDatabase() {
     abstract fun prReactionDao(): PRReactionDao
     abstract fun prNotificationPreferencesDao(): PRNotificationPreferencesDao
     abstract fun personalRecordDao(): PersonalRecordDao
+    abstract fun consentDao(): ConsentDao
+    abstract fun accountRestrictionDao(): AccountRestrictionDao
+    abstract fun moderationActionDao(): ModerationActionDao
+
+    companion object {
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS idx_workout_posts_trending " +
+                        "ON workout_posts(visibility, prs_count DESC, like_count DESC)"
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS idx_social_profiles_dirty_sync " +
+                        "ON social_profiles(user_id, is_dirty, last_modified)"
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS idx_follow_relationships_mutual " +
+                        "ON follow_relationships(follower_id, following_id, status)"
+                )
+            }
+        }
+    }
 }

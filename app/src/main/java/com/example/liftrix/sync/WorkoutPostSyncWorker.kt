@@ -42,42 +42,9 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
     private val firestore: FirebaseFirestore,
     private val gson: Gson
 ) : BaseSyncWorker(context, params) {
-    
-    // 🔧 HOTFIX: Fallback constructor for when Hilt factory generation fails
-    // This allows WorkManager to instantiate the worker via reflection
-    // TEMPORARY: Remove once Hilt assisted factories are confirmed working
-    constructor(context: Context, params: WorkerParameters) : this(
-        context,
-        params,
-        WorkerServiceLocator.getWorkoutPostSyncDependencies(context).run {
-            Timber.w("⚠️ WorkoutPostSyncWorker using FALLBACK constructor - Hilt factory failed!")
-            return@run this
-        }
-    )
-    
-    // Helper constructor to unpack the dependency structure
-    private constructor(
-        context: Context,
-        params: WorkerParameters,
-        deps: WorkerServiceLocator.WorkoutPostSyncDependencies
-    ) : this(
-        context, params,
-        deps.postDao, deps.firestore, deps.gson
-    )
 
     init {
-        val processName = getProcessName()
-        Timber.d("✅ WorkoutPostSyncWorker constructed with Hilt dependency injection in process: $processName")
-    }
-    
-    private fun getProcessName(): String {
-        return try {
-            val pid = android.os.Process.myPid()
-            val manager = applicationContext.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-            manager.runningAppProcesses?.firstOrNull { it.pid == pid }?.processName ?: "unknown"
-        } catch (e: Exception) {
-            "error: ${e.message}"
-        }
+        Timber.d("✅ WorkoutPostSyncWorker constructed with Hilt dependency injection")
     }
 
     override val workerName: String = "WorkoutPostSyncWorker"
@@ -176,14 +143,15 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
     
     private suspend fun syncPostBatch(posts: List<com.example.liftrix.data.local.entity.WorkoutPostEntity>): Int {
         val postsToUpload = mutableListOf<com.example.liftrix.data.local.entity.WorkoutPostEntity>()
+        val collectionRef = firestore.collection("workout_posts")
+        val remoteDocs = FirestorePrefetcher.prefetchByIds(
+            collection = collectionRef,
+            ids = posts.map { it.id }
+        )
 
         for (post in posts) {
-            val docRef = firestore
-                .collection("workout_posts")
-                .document(post.id)
-
-            val remoteDoc = docRef.get().await()
-            if (remoteDoc.exists()) {
+            val remoteDoc = remoteDocs[post.id]
+            if (remoteDoc?.exists() == true) {
                 val remoteLastModified = when (val remoteValue = remoteDoc.get("lastModified")) {
                     is com.google.firebase.Timestamp -> remoteValue.toDate().time
                     is Number -> remoteValue.toLong()
@@ -217,7 +185,7 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
                         updatedAt = remoteDoc.getTimestamp("updatedAt")?.toDate()?.time ?: post.updatedAt,
                         isDirty = false,
                         isSynced = true,
-                        syncVersion = (remoteDoc.getLong("syncVersion") ?: post.syncVersion.toLong()).toInt(),
+                        syncVersion = remoteDoc.getLong("syncVersion") ?: post.syncVersion,
                         lastModified = remoteLastModified
                     )
                     postDao.upsertFromRemote(remoteEntity)
@@ -239,9 +207,7 @@ class WorkoutPostSyncWorker @AssistedInject constructor(
         Timber.d("[POST-BATCH] 🚀 Processing batch of ${postsToUpload.size} workout posts")
         
         postsToUpload.forEach { post ->
-            val docRef = firestore
-                .collection("workout_posts")
-                .document(post.id)
+            val docRef = collectionRef.document(post.id)
             
             // Parse media URLs JSON safely
             val mediaUrls: JsonElement? = post.mediaUrls?.let { 

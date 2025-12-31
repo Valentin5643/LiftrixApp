@@ -152,7 +152,7 @@ private fun GymBuddyHeader(
             ) {
                 Icon(
                     imageVector = Icons.Default.QrCode,
-                    contentDescription = null,
+                    contentDescription = "Show my QR code",
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -167,7 +167,7 @@ private fun GymBuddyHeader(
             ) {
                 Icon(
                     imageVector = Icons.Default.QrCodeScanner,
-                    contentDescription = null,
+                    contentDescription = "Scan QR code",
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -324,7 +324,11 @@ private fun GymBuddyCard(
                         } else {
                             Icons.Default.NotificationsOff
                         },
-                        contentDescription = null,
+                        contentDescription = if (buddy.isEligibleForPrNotification()) {
+                            "PR notifications active"
+                        } else {
+                            "PR notifications cooldown"
+                        },
                         tint = if (buddy.isEligibleForPrNotification()) {
                             MaterialTheme.colorScheme.primary
                         } else {
@@ -598,7 +602,7 @@ private fun EmptyStateContent(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = title,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
             modifier = Modifier.size(64.dp)
         )
@@ -640,7 +644,7 @@ private fun ErrorState(
     ) {
         Icon(
             imageVector = Icons.Default.Error,
-            contentDescription = null,
+            contentDescription = "Error",
             tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(48.dp)
         )
@@ -669,7 +673,7 @@ private fun ErrorState(
         Button(onClick = onRetry) {
             Icon(
                 imageVector = Icons.Default.Refresh,
-                contentDescription = null,
+                contentDescription = "Retry",
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -687,4 +691,3 @@ private fun GymBuddyScreenPreview() {
         )
     }
 }
-

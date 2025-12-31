@@ -4,6 +4,7 @@ import com.example.liftrix.domain.model.common.LiftrixResult
 import com.example.liftrix.domain.model.common.liftrixCatching
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.CreateCommentRequest
+import com.example.liftrix.domain.model.social.EngagementDataSource
 import com.example.liftrix.domain.model.social.PostComment
 import com.example.liftrix.domain.model.social.PostEngagementStats
 import com.example.liftrix.domain.repository.social.EngagementRepository
@@ -239,12 +240,15 @@ class PostEngagementUseCase @Inject constructor(
                 }
             )
 
-            val stats = statsResult.fold(
-                onSuccess = { it },
+            // Determine data source and stats with proper error tracking
+            val dataSource = statsResult.fold(
+                onSuccess = { stats ->
+                    EngagementDataSource.Loaded(stats)
+                },
                 onFailure = { error ->
                     Timber.e(error, "Failed to get engagement stats for post $postId")
-                    // Return default stats if stats fetch fails
-                    PostEngagementStats(
+                    // Create fallback stats with clear indication this is not real data
+                    val fallbackStats = PostEngagementStats(
                         postId = postId,
                         likeCount = 0,
                         commentCount = 0,
@@ -253,8 +257,27 @@ class PostEngagementUseCase @Inject constructor(
                         isLikedByViewer = isLiked,
                         isSavedByViewer = isSaved
                     )
+                    EngagementDataSource.Fallback(
+                        reason = error.message ?: "Stats fetch failed",
+                        fallbackStats = fallbackStats
+                    )
                 }
             )
+
+            // Extract stats from data source
+            val stats = when (dataSource) {
+                is EngagementDataSource.Loaded -> dataSource.stats
+                is EngagementDataSource.Fallback -> dataSource.fallbackStats
+                is EngagementDataSource.Unavailable -> PostEngagementStats(
+                    postId = postId,
+                    likeCount = 0,
+                    commentCount = 0,
+                    shareCount = 0,
+                    saveCount = 0,
+                    isLikedByViewer = false,
+                    isSavedByViewer = false
+                )
+            }
 
             val engagementStatus = PostEngagementStatus(
                 isLiked = isLiked,
@@ -262,10 +285,22 @@ class PostEngagementUseCase @Inject constructor(
                 stats = stats.copy(
                     isLikedByViewer = isLiked,
                     isSavedByViewer = isSaved
-                )
+                ),
+                dataSource = dataSource
             )
 
-            Timber.i("Engagement status retrieved for post $postId: liked=$isLiked, saved=$isSaved")
+            // Only log success if data was actually loaded, not using fallback
+            when (dataSource) {
+                is EngagementDataSource.Loaded -> {
+                    Timber.i("Engagement status retrieved for post $postId: liked=$isLiked, saved=$isSaved (source: LOADED)")
+                }
+                is EngagementDataSource.Fallback -> {
+                    Timber.w("Engagement status using FALLBACK for post $postId: liked=$isLiked, saved=$isSaved (reason: ${dataSource.reason})")
+                }
+                is EngagementDataSource.Unavailable -> {
+                    Timber.w("Engagement status UNAVAILABLE for post $postId")
+                }
+            }
 
             engagementStatus
         }
@@ -273,10 +308,16 @@ class PostEngagementUseCase @Inject constructor(
 
     /**
      * Comprehensive engagement status data for a post.
+     *
+     * @param isLiked Whether the viewer has liked the post
+     * @param isSaved Whether the viewer has saved the post
+     * @param stats Engagement statistics for the post
+     * @param dataSource Source of the engagement data (Loaded, Fallback, or Unavailable)
      */
     data class PostEngagementStatus(
         val isLiked: Boolean,
         val isSaved: Boolean,
-        val stats: PostEngagementStats
+        val stats: PostEngagementStats,
+        val dataSource: EngagementDataSource
     )
 }

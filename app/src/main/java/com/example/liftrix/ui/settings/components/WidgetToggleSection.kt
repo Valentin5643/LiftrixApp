@@ -178,7 +178,7 @@ private fun CategoryHeader(
         // Category icon and info
         Icon(
             imageVector = category.getIcon(),
-            contentDescription = null,
+            contentDescription = category.displayName,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(24.dp)
         )
@@ -210,7 +210,7 @@ private fun CategoryHeader(
                 ) {
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
-                        contentDescription = null,
+                        contentDescription = "Enable all widgets",
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -228,7 +228,7 @@ private fun CategoryHeader(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Cancel,
-                        contentDescription = null,
+                        contentDescription = "Disable all widgets",
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -339,7 +339,7 @@ private fun WidgetSubsection(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = title,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(16.dp)
             )

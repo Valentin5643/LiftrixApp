@@ -107,7 +107,7 @@ private fun MediaPickerOption(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = title,
                 tint = LiftrixColorsV2.primary,
                 modifier = Modifier.size(32.dp)
             )

@@ -12,6 +12,7 @@ import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.repository.SyncResult
 import com.example.liftrix.data.model.SyncPayload
 import com.example.liftrix.domain.service.AnalyticsTracker
+import com.example.liftrix.domain.service.NotificationHandler
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -49,7 +50,8 @@ class OfflineQueueManager @Inject constructor(
     private val deadLetterQueueDao: DeadLetterQueueDao,
     private val firebaseDataSource: FirebaseDataSource,
     private val json: Json,
-    private val analyticsTracker: AnalyticsTracker
+    private val analyticsTracker: AnalyticsTracker,
+    private val notificationHandler: NotificationHandler
 ) {
     
     /**
@@ -59,22 +61,28 @@ class OfflineQueueManager @Inject constructor(
      * This method proactively identifies and removes problematic queue entries to prevent
      * serialization errors during Google login and other sync operations.
      */
-    suspend fun cleanupLegacyQueueEntries(): LiftrixResult<Int> {
+    suspend fun cleanupLegacyQueueEntries(userId: String): LiftrixResult<Int> {
         return liftrixCatching(
             errorMapper = { throwable: Throwable ->
                 LiftrixError.DatabaseError(
                     errorMessage = "Failed to cleanup legacy queue entries",
                     operation = "CLEANUP",
                     table = "sync_queue",
-                    analyticsContext = mapOf("cleanup_type" to "legacy_serialization")
+                    analyticsContext = mapOf(
+                        "cleanup_type" to "legacy_serialization",
+                        "user_id" to userId
+                    )
                 )
             }
         ) {
+            if (userId.isBlank()) {
+                return@liftrixCatching 0
+            }
             var removedCount = 0
             
             try {
                 // Get all queue entries to check for deserialization issues
-                val allEntries = syncQueueDao.getAllQueueEntries()
+                val allEntries = syncQueueDao.getAllQueueEntries(userId)
                 Timber.d("OfflineQueueManager: Checking ${allEntries.size} queue entries for legacy serialization issues")
                 
                 for (entry in allEntries) {
@@ -393,9 +401,9 @@ class OfflineQueueManager @Inject constructor(
     /**
      * Processes operations that are ready for retry based on their retry schedule.
      */
-    suspend fun processRetryableOperations(): LiftrixResult<SyncResult> {
+    suspend fun processRetryableOperations(userId: String): LiftrixResult<SyncResult> {
         return try {
-            val retryableItems = syncQueueDao.getOperationsReadyForRetry()
+            val retryableItems = syncQueueDao.getOperationsReadyForRetry(userId)
             
             if (retryableItems.isEmpty()) {
                 return Result.success(SyncResult(successful = 0, failed = 0, conflicts = 0))
@@ -403,44 +411,39 @@ class OfflineQueueManager @Inject constructor(
             
             Timber.d("OfflineQueueManager: Processing ${retryableItems.size} retryable operations")
             
-            // Group by user to process efficiently
-            val groupedByUser = retryableItems.groupBy { it.userId }
-            
             var totalSuccessful = 0
             var totalFailed = 0
             var totalConflicts = 0
             
-            for ((userId, userItems) in groupedByUser) {
-                for (item in userItems) {
-                    try {
-                        val result = processQueueItem(item)
-                        
-                        when (result) {
-                            is ProcessResult.Success -> {
-                                syncQueueDao.delete(item)
-                                totalSuccessful++
-                            }
-                            is ProcessResult.Conflict -> {
-                                syncQueueDao.delete(item)
-                                totalConflicts++
-                            }
-                            is ProcessResult.Failure -> {
-                                handleSyncFailure(item, result.error)
-                                totalFailed++
-                            }
-                            is ProcessResult.Data -> {
-                                syncQueueDao.delete(item)
-                                totalSuccessful++
-                            }
-                            is ProcessResult.DataList -> {
-                                syncQueueDao.delete(item)
-                                totalSuccessful++
-                            }
+            for (item in retryableItems) {
+                try {
+                    val result = processQueueItem(item)
+                    
+                    when (result) {
+                        is ProcessResult.Success -> {
+                            syncQueueDao.delete(item)
+                            totalSuccessful++
                         }
-                    } catch (e: Exception) {
-                        handleSyncFailure(item, e)
-                        totalFailed++
+                        is ProcessResult.Conflict -> {
+                            syncQueueDao.delete(item)
+                            totalConflicts++
+                        }
+                        is ProcessResult.Failure -> {
+                            handleSyncFailure(item, result.error)
+                            totalFailed++
+                        }
+                        is ProcessResult.Data -> {
+                            syncQueueDao.delete(item)
+                            totalSuccessful++
+                        }
+                        is ProcessResult.DataList -> {
+                            syncQueueDao.delete(item)
+                            totalSuccessful++
+                        }
                     }
+                } catch (e: Exception) {
+                    handleSyncFailure(item, e)
+                    totalFailed++
                 }
             }
             
@@ -635,7 +638,13 @@ class OfflineQueueManager @Inject constructor(
             lastError = "${errorCategory.name}: ${error.message?.take(200) ?: "Unknown error"}"
         )
 
-        syncQueueDao.updateRetryInfo(updatedItem.id, nextRetryAt, newRetryCount, updatedItem.lastError)
+        syncQueueDao.updateRetryInfo(
+            id = updatedItem.id,
+            userId = updatedItem.userId,
+            nextRetryAt = nextRetryAt,
+            retryCount = newRetryCount,
+            lastError = updatedItem.lastError
+        )
     }
 
     /**
@@ -762,6 +771,10 @@ class OfflineQueueManager @Inject constructor(
 
             Timber.d("OfflineQueueManager: Successfully moved item ${item.id} to dead letter queue")
 
+            if (item.entityType == "WORKOUT") {
+                notifyCriticalSyncFailure(item, error)
+            }
+
         } catch (e: Exception) {
             Timber.e(e, "OfflineQueueManager: Failed to move item ${item.id} to dead letter queue")
             // Still remove from active queue to prevent infinite processing
@@ -775,7 +788,7 @@ class OfflineQueueManager @Inject constructor(
      */
     suspend fun reportQueueHealthMetrics(userId: String) {
         try {
-            val allItems = syncQueueDao.getAllQueueEntries().filter { it.userId == userId }
+            val allItems = syncQueueDao.getAllQueueEntries(userId)
             val pendingItems = allItems.filter { it.nextRetryAt == null || it.nextRetryAt <= System.currentTimeMillis() }
             val failedItems = allItems.filter { it.retryCount > 0 }
 
@@ -905,13 +918,45 @@ class OfflineQueueManager @Inject constructor(
             val cutoffTime = System.currentTimeMillis() - (daysOld * 24 * 60 * 60 * 1000L)
             val countBefore = deadLetterQueueDao.getDeadLetterCount(userId)
 
-            deadLetterQueueDao.clearOldReviewedItems(userId, cutoffTime)
+            deadLetterQueueDao.clearOldItems(userId, cutoffTime)
 
             val countAfter = deadLetterQueueDao.getDeadLetterCount(userId)
             val cleanedCount = countBefore - countAfter
 
             Timber.d("OfflineQueueManager: Cleaned up $cleanedCount old dead letter items for user $userId")
+
+            analyticsTracker.trackOfflineQueue(
+                action = "DEAD_LETTER_CLEANUP",
+                userId = userId,
+                queueSize = countAfter,
+                additionalProperties = mapOf(
+                    "cleaned_count" to cleanedCount,
+                    "days_old" to daysOld,
+                    "cutoff_time" to cutoffTime
+                )
+            )
             cleanedCount
+        }
+    }
+
+    private suspend fun notifyCriticalSyncFailure(item: SyncQueueEntity, error: Throwable) {
+        val reason = error.message?.take(200) ?: "Unknown error"
+        val data = mapOf(
+            "user_id" to item.userId,
+            "entity_id" to item.entityId,
+            "operation" to item.operation,
+            "error_message" to reason
+        )
+
+        try {
+            notificationHandler.showSystemNotification(
+                title = "Workout sync failed",
+                body = "We couldn't sync a workout. Open Liftrix to review and retry.",
+                type = "error",
+                data = data
+            )
+        } catch (e: Exception) {
+            Timber.w(e, "OfflineQueueManager: Failed to show sync failure notification for ${item.entityId}")
         }
     }
 

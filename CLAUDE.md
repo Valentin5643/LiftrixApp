@@ -809,23 +809,10 @@ ResponsiveDashboardLayout (Adaptive container)
             ↓ Analytics/Chart/Metric Widgets
 ```
 
-### Widget System (15 Total Widgets)
-**Active Widgets** (12 displayed):
-- `strength_progress` - 1RM tracking with PR markers
-- `volume_chart` - ModernVolumeChart with bezier curves
-- `frequency_chart` - Workout frequency heatmap
-- `muscle_group_chart` - Muscle distribution analysis
-- `exercise_ranking` - Top performing exercises
-- `workout_duration` - Session duration trends
-- `one_rm_progression` - Strength progression over time
-- `recent_achievements` - Latest personal records
-- `recovery_metrics` - Rest and recovery analysis
-- `consistency_score` - Workout consistency tracking
-- `overtraining_risk` - Overtraining detection
-- `progressive_overload` - Progressive overload analysis
+### Widget System (15 Total)
+**Active (12)**: `strength_progress`, `volume_chart`, `frequency_chart`, `muscle_group_chart`, `exercise_ranking`, `workout_duration`, `one_rm_progression`, `recent_achievements`, `recovery_metrics`, `consistency_score`, `overtraining_risk`, `progressive_overload`
 
-**Deprecated Widgets** (3 hidden, kept for compatibility):
-- `workout_frequency`, `total_volume`, `volume_calendar`
+**Deprecated (3)**: `workout_frequency`, `total_volume`, `volume_calendar`
 
 ### ViewModels & Coordination Pattern
 ```kotlin
@@ -843,21 +830,9 @@ ProgressSummaryViewModel
 ```
 
 ### Detail Screen Navigation
+**Routes**: `VolumeAnalysisDetail`, `OneRmDetail`, `MuscleGroupDetail`, `WorkoutFrequencyDetail`, `ExerciseRankingDetail`
 ```kotlin
-// Type-safe navigation to detail screens
-navController.navigate(
-    OneRmProgressionDetail(
-        exerciseIds = listOf("1", "2"),
-        timeRange = TimeRange.SIX_MONTHS
-    )
-)
-
-// Available detail routes
-VolumeAnalysisDetail
-OneRmDetail
-MuscleGroupDetail  
-WorkoutFrequencyDetail
-ExerciseRankingDetail
+navController.navigate(OneRmProgressionDetail(exerciseIds = listOf("1", "2"), timeRange = TimeRange.SIX_MONTHS))
 ```
 
 ### Performance Optimizations
@@ -866,20 +841,6 @@ ExerciseRankingDetail
 - **ResponsiveDashboardLayout**: 2-col mobile, 3-col tablet, 4-col desktop
 - **GlobalTimeRangeSelector**: Single source of truth for time filtering
 - **Widget virtualization**: Limits to 10 widgets under memory pressure
-
-### Chart Implementation Standards
-```kotlin
-// All charts follow this pattern
-@Composable
-fun ModernChart(
-    data: List<DataPoint>,
-    timeRange: TimeRangeType,
-    modifier: Modifier = Modifier,
-    onDataPointSelected: ((DataPoint) -> Unit)? = null,
-    showPersonalRecords: Boolean = true,
-    animationDuration: Int = 300
-)
-```
 
 ## Quick Reference
 
@@ -891,11 +852,7 @@ fun ModernChart(
 - Entities: `*Entity.kt` in `data/local/entity/`
 - AI Components: `ui/chat/ChatbotViewModel.kt`, `domain/service/AIChatService.kt`, `data/service/AbusePreventionService.kt`
 
-### Consolidated Use Cases
-
-The codebase uses consolidated use cases to reduce duplication:
-
-**By Domain:**
+### Consolidated Use Cases (by Domain)
 - **Auth**: AuthQueryUseCase, AuthCommandUseCase
 - **Profile**: ProfileQueryUseCase, ProfileCommandUseCase, ProfileImageOperationsUseCase, CalculateAchievementsUseCase
 - **Analytics**: AnalyticsQueryUseCase, AnalyticsExportUseCase, DashboardCommandUseCase, WidgetPreferencesUseCase, WidgetMigrationUseCase
@@ -996,96 +953,6 @@ RedesignedExerciseCard(
 LegacyExerciseCard(...)
 ```
 
-## 🚨 Critical Gotchas
-
-### Session State Management
-```kotlin
-// ✅ Use UnifiedWorkoutSessionManager for session operations
-// ❌ Never create multiple session state sources
-```
-
-### Firebase Sync Priority
-```kotlin
-// ✅ Read from Room, sync to Firebase in background
-// ❌ Never read directly from Firebase in UI layer
-```
-
-### Social Privacy Controls
-```kotlin
-// ✅ Always include viewer context for profile access
-userSearchRepository.getPublicProfile(profileUserId, viewerId)
-
-// ❌ Never expose profile data without privacy filtering
-userSearchRepository.getPublicProfile(profileUserId, null)
-```
-
-### Gym Buddy QR Code Gotchas
-```kotlin
-// ✅ Enforce 5 buddy limit and validate QR expiration
-if (buddies.size >= 5) throw BuddyLimitException("Maximum 5 buddies")
-if (System.currentTimeMillis() > expiresAt) throw QRExpiredException()
-
-// ❌ Never allow unlimited buddies or expired QR codes
-gymBuddyRepository.createConnection(userId1, userId2)  // No validation
-```
-
-### PR Notification Gotchas
-```kotlin
-// ✅ Enforce daily cooldown per buddy
-val cooldownKey = "$userId:$buddyId:${LocalDate.now()}"
-if (!prRepository.hasSentToday(cooldownKey)) {
-    // Send notification
-}
-
-// ❌ Never spam PR notifications
-buddies.forEach { sendPRNotification(it) }  // No cooldown
-```
-
-### Social Feed Engagement Gotchas
-```kotlin
-// ✅ Use optimistic updates with proper error handling
-_likedPosts.value = _likedPosts.value + postId
-val result = engagementRepository.toggleLike(postId, userId)
-if (result is LiftrixResult.Error) {
-    _likedPosts.value = _likedPosts.value - postId  // Must revert
-}
-
-// ❌ Never update engagement without optimistic UI feedback
-val result = engagementRepository.toggleLike(postId, userId)
-if (result is LiftrixResult.Success) {
-    _likedPosts.value = _likedPosts.value + postId  // Too slow
-}
-```
-
-### Feed Caching Performance
-```kotlin
-// ✅ Use relevance-based caching with proper invalidation
-feedCacheService.invalidateCache(userId, InvalidationReason.NEW_FOLLOW)
-
-// ❌ Don't cache feeds without proper invalidation strategy
-feedCache.put(userId, posts)  // Cache will become stale
-```
-
-### Progress Dashboard Navigation
-```kotlin
-// ✅ Use type-safe navigation with @Serializable data classes
-navController.navigate(OneRmProgressionDetail(exerciseIds = listOf("1", "2"), timeRange = TimeRange.SIX_MONTHS))
-
-// ❌ Don't use string-based navigation for detail views
-navController.navigate("oneRmDetail/1,2/SIX_MONTHS")
-```
-
-### Chart Performance Optimization
-```kotlin
-// ✅ Use remember() for expensive chart calculations
-val chartData = remember(rawData, timeRange) {
-    processChartData(rawData, timeRange)
-}
-
-// ❌ Don't recalculate chart data on every recomposition
-val chartData = processChartData(rawData, timeRange)
-```
-
 ## Key Classes & Components
 
 ### Core System Classes
@@ -1094,48 +961,6 @@ val chartData = processChartData(rawData, timeRange)
 - `BaseViewModel<S, E>` - ViewModel base class for MVI pattern
 - `UiState<T>` - UI state management (Loading/Success/Error/Empty)
 - `LiftrixRoute` - Type-safe navigation with @Serializable
-
-### Sync Infrastructure Classes
-- `SyncRepository` - Core sync operations contract
-- `SyncCoordinator` - Orchestrates all sync operations
-- `MasterSyncWorker` - Periodic sync coordinator (every 15 min)
-- `OfflineQueueManager` - Manages offline operations queue
-- `ConflictResolver` - Last-write-wins conflict resolution
-- `RealtimeSyncService` - Firestore real-time listeners
-- `FirebaseDataSource` - Firebase CRUD operations
-
-### UI Components
-- `UnifiedWorkoutCard` - Foundation card component (12dp radius, haptic feedback)
-- `ModernActionButton` - Three-tier button system (Primary/Secondary/Tertiary)
-- `LiftrixSpacing` - Semantic spacing tokens (16dp/12dp/8dp)
-- `ResponsiveDashboardLayout` - Adaptive grid (2-col mobile, 3-col tablet, 4-col desktop)
-- `AdaptiveWidgetGrid` - LazyVerticalGrid with dynamic columns and card spanning
-- `ModernVolumeChart` - Bezier curves, gradient fills, PR markers
-- `GlobalTimeRangeSelector` - Synchronized time selector for all charts
-
-### Social & Profile System
-- `ProfileViewModel` - Enhanced profile management with achievements
-- `UserSearchRepository` - Social discovery with privacy filtering
-- `QRCodeService` - ZXing-based QR code generation
-- `CalculateAchievementsUseCase` - Automatic achievement detection
-- `ProfileImageManager` - Image upload, crop, and cache management
-- `UnitConversionService` - Dynamic kg/lbs and km/miles conversion based on user settings
-
-### Social Feed & Engagement System
-- `FeedRepositoryImpl` - Paging3 integration with RemoteMediator for offline support
-- `EngagementRepositoryImpl` - Optimistic updates for likes, comments, saves with error recovery
-- `FeedGeneratorUseCase` - Intelligent relevance scoring (Recency + Engagement + PRs + Media)
-- `FeedCacheService` - Performance layer with relevance-based caching and smart invalidation
-- `CommentSyncService` - Real-time Firestore listeners for live comment updates
-- `MediaUploadServiceImpl` - Firebase Storage integration with compression and CDN
-- `PrivacyEnforcementService` - Content filtering based on privacy levels and user relationships
-
-### Gym Buddy & PR System
-- `GymBuddyViewModel` - QR code generation and buddy management
-- `GymBuddyRepository` - Mutual connections with 5 buddy limit
-- `PRDetectionServiceImpl` - Comprehensive PR detection algorithms
-- `NotificationActionService` - Handle notification actions without opening app
-- `NotificationRouter` - Intelligent routing with batching and quiet hours
 
 ## Performance Targets
 - **60fps UI rendering** with optimized animations

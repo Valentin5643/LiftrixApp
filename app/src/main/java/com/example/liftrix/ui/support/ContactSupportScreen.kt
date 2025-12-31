@@ -367,7 +367,7 @@ private fun TicketCreatedCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
-                        contentDescription = null,
+                        contentDescription = "Ticket created",
                         tint = MaterialTheme.colorScheme.primary
                     )
                     Text(
@@ -423,7 +423,7 @@ private fun ActiveTicketsCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.Info,
-                    contentDescription = null,
+                    contentDescription = "Active tickets info",
                     tint = MaterialTheme.colorScheme.primary
                 )
                 
@@ -442,7 +442,7 @@ private fun ActiveTicketsCard(
                 
                 Icon(
                     imageVector = Icons.Default.ChevronRight,
-                    contentDescription = null,
+                    contentDescription = "View tickets",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -763,7 +763,7 @@ private fun AttachmentsSection(
             ) {
                 Icon(
                     imageVector = Icons.Default.AttachFile,
-                    contentDescription = null,
+                    contentDescription = "Add attachment",
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
@@ -858,7 +858,7 @@ private fun DeviceInfoSection(
                 Text(if (expanded) "Hide" else "Show")
                 Icon(
                     imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = null
+                    contentDescription = if (expanded) "Hide device information" else "Show device information"
                 )
             }
         }
@@ -989,7 +989,7 @@ private fun SupportErrorContent(
     ) {
         Icon(
             imageVector = Icons.Default.Error,
-            contentDescription = null,
+            contentDescription = "Error",
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.error
         )
@@ -1032,7 +1032,7 @@ private fun SupportEmptyContent(
     ) {
         Icon(
             imageVector = Icons.Default.SupportAgent,
-            contentDescription = null,
+            contentDescription = "Support unavailable",
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )

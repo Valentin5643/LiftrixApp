@@ -187,7 +187,7 @@ private fun WorkoutPreviewCard(
             if (content.imageUrl != null) {
                 AsyncImage(
                     model = content.imageUrl,
-                    contentDescription = null,
+                    contentDescription = "Workout image",
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(200.dp)

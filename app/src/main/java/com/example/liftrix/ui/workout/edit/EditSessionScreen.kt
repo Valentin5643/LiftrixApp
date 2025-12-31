@@ -597,7 +597,7 @@ private fun EditSessionErrorContent(
         // Error icon and message
         Icon(
             imageVector = Icons.Default.Error,
-            contentDescription = null,
+            contentDescription = "Error",
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.error
         )

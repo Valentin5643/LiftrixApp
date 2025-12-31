@@ -44,7 +44,7 @@ fun FeedEndMessage(
     ) {
         Icon(
             imageVector = Icons.Outlined.CheckCircle,
-            contentDescription = null,
+            contentDescription = "You're all caught up",
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
                 .size(48.dp)

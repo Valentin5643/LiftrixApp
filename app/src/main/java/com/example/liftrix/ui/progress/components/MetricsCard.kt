@@ -216,7 +216,7 @@ private fun MetricsContent(
             icon?.let { iconVector ->
                 Icon(
                     imageVector = iconVector,
-                    contentDescription = null,
+                    contentDescription = title,
                     modifier = Modifier.size(if (isCompact) 16.dp else 20.dp),
                     tint = LiftrixColors.Primary.copy(alpha = 0.7f)
                 )

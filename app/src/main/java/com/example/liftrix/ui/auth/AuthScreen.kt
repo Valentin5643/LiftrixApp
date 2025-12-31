@@ -52,6 +52,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.domain.model.AuthEvent
 import com.example.liftrix.domain.model.AuthState
+import com.example.liftrix.ui.auth.components.ConsentData
+import com.example.liftrix.ui.auth.components.ConsentDialog
 import com.example.liftrix.ui.auth.components.SignInForm
 import com.example.liftrix.ui.auth.components.SignUpForm
 import com.example.liftrix.ui.workout.components.PrimaryActionButton
@@ -79,7 +81,9 @@ fun AuthScreen(
     val isDarkTheme = themeManager.getEffectiveThemeState(isSystemInDarkTheme())
     
     var isSignUpMode by remember { mutableStateOf(initialSignUpMode) }
-    
+    var showConsentDialog by remember { mutableStateOf(false) }
+    var pendingSignUpData by remember { mutableStateOf<Triple<String, String, String>?>(null) }
+
     // Setup Google Sign-In client outside of onClick - this ensures it's ready when needed
     val googleSignInClient = remember {
         try {
@@ -111,8 +115,12 @@ fun AuthScreen(
             Timber.d("Google Sign-In successful: account=${account?.email}, hasToken=${idToken != null}")
             viewModel.handleGoogleSignInResult(idToken)
         } catch (e: ApiException) {
-            Timber.e("Google Sign-In ApiException: statusCode=${e.statusCode}, message=${e.message}")
             when (e.statusCode) {
+                12501 -> { // SIGN_IN_CANCELLED - User cancelled the sign-in flow
+                    Timber.d("Google Sign-In: User cancelled sign-in (silent return)")
+                    // Do NOT call handleGoogleSignInResult - just return to auth screen silently
+                    // No error message needed for user-initiated cancellation
+                }
                 com.google.android.gms.common.api.CommonStatusCodes.SIGN_IN_REQUIRED -> {
                     Timber.w("Google Sign-In: User needs to sign in to Google account on device")
                     viewModel.handleGoogleSignInResult(null)
@@ -125,12 +133,8 @@ fun AuthScreen(
                     Timber.e("Google Sign-In: DEVELOPER_ERROR - Check SHA-1 fingerprints and OAuth client configuration in Firebase Console")
                     viewModel.handleGoogleSignInResult(null)
                 }
-                12501 -> { // SIGN_IN_CANCELLED
-                    Timber.w("Google Sign-In: User cancelled sign-in")
-                    viewModel.handleGoogleSignInResult(null)
-                }
                 else -> {
-                    Timber.e("Google Sign-In: Unknown error with statusCode=${e.statusCode}")
+                    Timber.e("Google Sign-In: ApiException with statusCode=${e.statusCode}, message=${e.message}")
                     viewModel.handleGoogleSignInResult(null)
                 }
             }
@@ -184,9 +188,9 @@ fun AuthScreen(
                     if (isSignUpMode) {
                         SignUpForm(
                             onSignUp = { email, password, username ->
-                                viewModel.handleEvent(
-                                    AuthEvent.EmailPasswordSignUp(email, password, username)
-                                )
+                                // Store signup data and show consent dialog
+                                pendingSignUpData = Triple(email, password, username)
+                                showConsentDialog = true
                             },
                             isLoading = authState is AuthState.Loading
                         )
@@ -343,6 +347,35 @@ fun AuthScreen(
             SnackbarHost(
                 hostState = snackbarHostState,
                 modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
+
+        // Consent Dialog (shown after signup form submission)
+        if (showConsentDialog && pendingSignUpData != null) {
+            ConsentDialog(
+                onConsentProvided = { consentData ->
+                    val (email, password, username) = pendingSignUpData!!
+                    // Process signup with consent data
+                    viewModel.handleEvent(
+                        AuthEvent.EmailPasswordSignUpWithConsent(
+                            email = email,
+                            password = password,
+                            username = username,
+                            consents = consentData
+                        )
+                    )
+                    showConsentDialog = false
+                    pendingSignUpData = null
+                },
+                onDismiss = {
+                    // User cancelled consent - clear pending data
+                    showConsentDialog = false
+                    pendingSignUpData = null
+                },
+                onPrivacyPolicyClick = {
+                    // TODO: Navigate to Privacy Policy screen
+                    Timber.d("Privacy Policy link clicked")
+                }
             )
         }
     }

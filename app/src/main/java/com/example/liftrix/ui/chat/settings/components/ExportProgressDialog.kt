@@ -87,7 +87,7 @@ private fun ExportingState(
     ) {
         Icon(
             Icons.Default.CloudDownload,
-            contentDescription = null,
+            contentDescription = "Exporting",
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(48.dp)
         )
@@ -133,7 +133,7 @@ private fun ExportCompletedState(
     ) {
         Icon(
             Icons.Default.CheckCircle,
-            contentDescription = null,
+            contentDescription = "Export complete",
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(48.dp)
         )
@@ -211,7 +211,7 @@ private fun ExportCompletedState(
             ) {
                 Icon(
                     if (hasCopied) Icons.Default.CheckCircle else Icons.Default.ContentCopy,
-                    contentDescription = null,
+                    contentDescription = if (hasCopied) "Copied" else "Copy to clipboard",
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(LiftrixSpacing.small))
@@ -288,7 +288,7 @@ private fun ExportOptionsState(
     ) {
         Icon(
             Icons.Default.CloudDownload,
-            contentDescription = null,
+            contentDescription = "Export options",
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(48.dp)
         )

@@ -336,7 +336,7 @@ private fun FormatOption(
         
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = title,
             tint = if (isSelected) LiftrixColorsV2.Teal else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
             modifier = Modifier.size(24.dp)
         )
@@ -453,7 +453,7 @@ private fun DataTypeOption(
         
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = title,
             tint = if (isSelected) LiftrixColorsV2.Teal else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
             modifier = Modifier.size(24.dp)
         )
@@ -665,7 +665,7 @@ private fun ExportResultCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
+                    contentDescription = "Export complete",
                     tint = LiftrixColorsV2.Light.Success,
                     modifier = Modifier.size(24.dp)
                 )
@@ -729,7 +729,7 @@ private fun ExportErrorCard(
             ) {
                 Icon(
                     imageVector = Icons.Default.Error,
-                    contentDescription = null,
+                    contentDescription = "Export failed",
                     tint = LiftrixColorsV2.Light.Error,
                     modifier = Modifier.size(24.dp)
                 )
@@ -788,7 +788,7 @@ private fun ErrorState(
         ) {
             Icon(
                 imageVector = Icons.Default.Error,
-                contentDescription = null,
+                contentDescription = "Error",
                 tint = LiftrixColorsV2.Light.Error,
                 modifier = Modifier.size(48.dp)
             )

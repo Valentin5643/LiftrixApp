@@ -221,7 +221,7 @@ fun HelpArticleScreen(
                                     ) {
                                         Icon(
                                             Icons.Default.ThumbUp,
-                                            contentDescription = null,
+                                            contentDescription = "Helpful",
                                             modifier = Modifier.size(18.dp)
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
@@ -238,7 +238,7 @@ fun HelpArticleScreen(
                                     ) {
                                         Icon(
                                             Icons.Default.ThumbDown,
-                                            contentDescription = null,
+                                            contentDescription = "Not helpful",
                                             modifier = Modifier.size(18.dp)
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
