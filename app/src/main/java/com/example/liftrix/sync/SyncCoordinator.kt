@@ -245,7 +245,7 @@ class SyncCoordinator @Inject constructor(
         
         val operation = workManager.enqueueUniqueWork(
             "${UNIFIED_SYNC_WORK_NAME}_immediate_$userId",
-            ExistingWorkPolicy.REPLACE,
+            ExistingWorkPolicy.KEEP,
             immediateSync
         )
         
@@ -271,7 +271,7 @@ class SyncCoordinator @Inject constructor(
         // Chain sync operations with dependencies
         val operation = workManager.beginUniqueWork(
             "${IMMEDIATE_SYNC_WORK_NAME}_$userId",
-            ExistingWorkPolicy.REPLACE,
+            ExistingWorkPolicy.KEEP,
             profileSync
         )
             .then(userPublicSync)
@@ -353,7 +353,7 @@ class SyncCoordinator @Inject constructor(
         
         workManager.enqueueUniqueWork(
             uniqueWorkName,
-            ExistingWorkPolicy.REPLACE,
+            ExistingWorkPolicy.KEEP,
             workRequest
         )
         
@@ -391,7 +391,7 @@ class SyncCoordinator @Inject constructor(
         
         workManager.enqueueUniqueWork(
             uniqueWorkName,
-            ExistingWorkPolicy.REPLACE,
+            ExistingWorkPolicy.KEEP,
             workRequest
         )
         

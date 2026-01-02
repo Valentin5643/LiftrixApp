@@ -54,6 +54,7 @@ class FollowRepositoryImpl @Inject constructor(
     private val socialProfileDao: SocialProfileDao,
     private val blockedUserDao: BlockedUserDao,
     private val userProfileDao: UserProfileDao,
+    private val userAccountDao: com.example.liftrix.data.local.dao.UserAccountDao,
     private val safeFollowDao: SafeFollowRelationshipDaoImpl,
     private val legacyDataSource: LegacyFollowFirestoreDataSource
 ) : FollowRepository {
@@ -152,7 +153,10 @@ class FollowRepositoryImpl @Inject constructor(
                 )
                 
                 // Use safe insert method that handles user validation automatically
-                safeFollowDao.insertFollowRelationshipsWithUserValidation(listOf(relationship))
+                safeFollowDao.insertFollowRelationshipsWithUserValidation(
+                    relationships = listOf(relationship),
+                    markDirty = true
+                )
                 
                 // Sync to Firebase
                 syncFollowRequestToFirebase(followRequest)
@@ -171,7 +175,10 @@ class FollowRepositoryImpl @Inject constructor(
                 )
                 
                 // Use safe insert method that handles user validation automatically
-                safeFollowDao.insertFollowRelationshipsWithUserValidation(listOf(relationship))
+                safeFollowDao.insertFollowRelationshipsWithUserValidation(
+                    relationships = listOf(relationship),
+                    markDirty = true
+                )
                 
                 // Update follower counts
                 updateFollowerCounts(followerId, targetUserId, isFollow = true)
@@ -214,6 +221,9 @@ class FollowRepositoryImpl @Inject constructor(
                 status = FollowRelationshipEntity.STATUS_ACCEPTED,
                 acceptedAt = currentTime
             )
+            followRelationshipDao.getFollowRelationship(requesterId, targetUserId)?.let { updated ->
+                followRelationshipDao.upsertLocal(updated)
+            }
             
             // Update follower counts
             updateFollowerCounts(requesterId, targetUserId, isFollow = true)
@@ -913,7 +923,8 @@ class FollowRepositoryImpl @Inject constructor(
      */
     private suspend fun fetchAndCreateSocialProfileFromFirebase(userId: String): SocialProfileEntity? {
         if (OfflineArchitectureFlags.FIX_FOLLOW_REPOSITORY) {
-            return null
+            // ROOM-FIRST FIX: Try to create profile from local UserAccount data
+            return tryCreateSocialProfileFromUserAccount(userId)
         }
 
         return try {
@@ -1121,6 +1132,93 @@ class FollowRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Timber.e(e, "Failed to ensure users exist for follow relationship")
             // Don't throw - this is a defensive mechanism, let the FK constraint handle actual errors
+        }
+    }
+
+    /**
+     * Tries to create a social profile from local UserAccount data (Room-First fallback).
+     * This is used when Room-First architecture is enabled and Firebase is not available.
+     *
+     * @param userId The user ID to create profile for
+     * @return The created SocialProfileEntity or null if UserAccount doesn't exist
+     */
+    private suspend fun tryCreateSocialProfileFromUserAccount(userId: String): SocialProfileEntity? {
+        return try {
+            Timber.w("⚠️ FOLLOW-FIX: Missing social profile for user $userId - attempting auto-creation from UserAccount")
+
+            // Get UserProfile data for bio, photo, etc. (optional - use fallbacks if missing)
+            val userProfile = userProfileDao.getProfileForUserSuspend(userId)
+
+            // Get actual username from UserAccount (optional - use fallbacks if missing)
+            val userAccount = userAccountDao.getAccountForUserSuspend(userId)
+
+            if (userProfile == null && userAccount == null) {
+                Timber.e("❌ FOLLOW-FIX: Cannot create social profile - BOTH UserProfile AND UserAccount missing for user: $userId")
+                Timber.e("   This indicates a severely corrupted user state - manual intervention required")
+                return null
+            }
+
+            // MAXIMUM RESILIENCE: Use actual data if available, otherwise intelligent fallbacks
+            val actualUsername = userAccount?.username
+                ?: userAccount?.displayName?.replace(" ", "_")?.lowercase()
+                ?: userProfile?.displayName?.replace(" ", "_")?.lowercase()
+                ?: "user_${userId.take(8)}"
+
+            val displayName = userProfile?.displayName
+                ?: userAccount?.displayName
+                ?: userAccount?.username
+                ?: "User ${userId.take(8)}"
+
+            val currentTime = System.currentTimeMillis()
+
+            if (userAccount == null) {
+                Timber.w("⚠️ FOLLOW-FIX: UserAccount missing - using fallback username: $actualUsername")
+            } else {
+                Timber.d("✅ FOLLOW-FIX: Using actual username: $actualUsername (from UserAccount)")
+            }
+            Timber.d("   - Display name: $displayName")
+            Timber.d("   - Has bio: ${userProfile?.bio != null}")
+            Timber.d("   - Has profile photo: ${userProfile?.profileImageUrl != null}")
+
+            // Create social profile entity (using available data with fallbacks)
+            val socialProfile = SocialProfileEntity(
+                userId = userId,
+                username = actualUsername,
+                displayName = displayName,
+                bio = userProfile?.bio,
+                profilePhotoUrl = userProfile?.profileImageUrl,
+                coverPhotoUrl = null,
+                isPrivate = !(userProfile?.isPublic ?: true), // Default to public if no UserProfile
+                hideFromSuggestions = false,
+                allowFriendRequests = true,
+                instagramHandle = null,
+                youtubeChannel = null,
+                personalWebsite = null,
+                memberSince = currentTime,
+                createdAt = currentTime,
+                updatedAt = currentTime
+            )
+
+            // Insert into database
+            socialProfileDao.insertProfile(socialProfile)
+            Timber.i("✅ FOLLOW-FIX: Successfully auto-created social profile for user $userId")
+            Timber.i("   - Username: $actualUsername ${if (userAccount != null) "(from UserAccount)" else "(fallback)"}")
+            Timber.i("   - Display Name: $displayName")
+            Timber.i("   - Bio: ${userProfile?.bio ?: "none"}")
+            Timber.i("   - Profile Photo: ${if (userProfile?.profileImageUrl != null) "preserved" else "none"}")
+            Timber.i("   - Data source: ${when {
+                userAccount != null && userProfile != null -> "UserAccount + UserProfile"
+                userAccount != null -> "UserAccount only (UserProfile missing)"
+                userProfile != null -> "UserProfile only (UserAccount missing)"
+                else -> "Full fallback (both missing - should not reach here)"
+            }}")
+            Timber.i("   - Profile should now be usable for follow operations")
+
+            // Return the created profile
+            socialProfile
+        } catch (e: Exception) {
+            Timber.e(e, "❌ FOLLOW-FIX: Failed to create social profile from UserAccount for user: $userId")
+            null
         }
     }
 }

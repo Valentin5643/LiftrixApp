@@ -1,13 +1,12 @@
 package com.example.liftrix.ui.auth.components
 
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,6 +21,8 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -40,7 +41,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -48,9 +48,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 
 /**
@@ -84,6 +82,12 @@ fun SignUpForm(
     
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val textFieldShape = RoundedCornerShape(14.dp)
+    val textPrimary = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary
+    val textSecondary = if (isDarkTheme) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary
+    val textTertiary = if (isDarkTheme) LiftrixColorsV2.Dark.TextTertiary else LiftrixColorsV2.Light.TextTertiary
+    val outlineColor = if (isDarkTheme) LiftrixColorsV2.Dark.OutlineVariant else LiftrixColorsV2.Light.OutlineVariant
+    val inputContainerColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundTertiary else LiftrixColorsV2.Light.BackgroundPrimary
     
     // Validate form whenever inputs change
     LaunchedEffect(username, email, password, confirmPassword, agreeToTerms) {
@@ -98,370 +102,343 @@ fun SignUpForm(
                      password.isNotBlank() && confirmPassword.isNotBlank() && agreeToTerms
     }
     
-    // Single compact layout for all screen sizes
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp),
-        verticalArrangement = Arrangement.Center,
+        modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Compact headline
-        Text(
-            text = "Let's Get Started",
-            style = MaterialTheme.typography.headlineMedium.copy(
-                fontSize = 24.sp,
-                lineHeight = 32.sp
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundSecondary else LiftrixColorsV2.Light.BackgroundSecondary
             ),
-            fontWeight = FontWeight.Bold,
-            color = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
-            textAlign = TextAlign.Center
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Text(
-            text = "Fill the form to continue",
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (isDarkTheme) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary,
-            textAlign = TextAlign.Center
-        )
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        // Username field
-        Column {
-            Text(
-                text = "Username",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            OutlinedTextField(
-                value = username,
-                onValueChange = { username = it },
-                placeholder = { 
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        "Choose a username",
-                        color = if (isDarkTheme) LiftrixColorsV2.Dark.TextTertiary else LiftrixColorsV2.Light.TextTertiary
-                    ) 
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = "Person icon",
-                        tint = LiftrixColorsV2.Teal,
-                        modifier = Modifier.size(20.dp)
+                        text = "Let's Get Started",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = textPrimary
                     )
-                },
-                isError = usernameError != null && username.isNotBlank(),
-                enabled = !isLoading,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Text,
-                    imeAction = ImeAction.Next
-                ),
-                keyboardActions = KeyboardActions(
-                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
-                ),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = LiftrixColorsV2.Teal,
-                    unfocusedBorderColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundTertiary else LiftrixColorsV2.Light.TextTertiary,
-                    focusedLabelColor = LiftrixColorsV2.Teal,
-                    cursorColor = LiftrixColorsV2.Teal,
-                    focusedTextColor = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
-                    unfocusedTextColor = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary
-                ),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
 
-        // Email field
-        Column {
-            Text(
-                text = "Your Email Address",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            OutlinedTextField(
-                value = email,
-                onValueChange = { email = it },
-                placeholder = { 
-                    Text(
-                        "user@example.com",
-                        color = if (isDarkTheme) LiftrixColorsV2.Dark.TextTertiary else LiftrixColorsV2.Light.TextTertiary
-                    ) 
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Email,
-                        contentDescription = "Email icon",
-                        tint = LiftrixColorsV2.Teal,
-                        modifier = Modifier.size(20.dp)
-                    )
-                },
-                isError = emailError != null && email.isNotBlank(),
-                enabled = !isLoading,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Email,
-                    imeAction = ImeAction.Next
-                ),
-                keyboardActions = KeyboardActions(
-                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
-                ),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = LiftrixColorsV2.Teal,
-                    unfocusedBorderColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundTertiary else LiftrixColorsV2.Light.TextTertiary,
-                    focusedLabelColor = LiftrixColorsV2.Teal,
-                    cursorColor = LiftrixColorsV2.Teal,
-                    focusedTextColor = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
-                    unfocusedTextColor = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary
-                ),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
-        // Password field
-        Column {
-            Text(
-                text = "Choose a Password",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                placeholder = { 
                     Text(
-                        "min. 8 characters",
-                        color = if (isDarkTheme) LiftrixColorsV2.Dark.TextTertiary else LiftrixColorsV2.Light.TextTertiary
-                    ) 
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = "Password icon",
-                        tint = LiftrixColorsV2.Teal,
-                        modifier = Modifier.size(20.dp)
+                        text = "Fill the form to continue",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = textSecondary
                     )
-                },
-                trailingIcon = {
-                    IconButton(
-                        onClick = { isPasswordVisible = !isPasswordVisible },
-                        enabled = !isLoading
-                    ) {
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it },
+                    label = { Text("Username", color = textTertiary) },
+                    placeholder = { Text("Choose a username", color = textTertiary) },
+                    leadingIcon = {
                         Icon(
-                            imageVector = if (isPasswordVisible) {
-                                Icons.Default.VisibilityOff
-                            } else {
-                                Icons.Default.Visibility
-                            },
-                            contentDescription = if (isPasswordVisible) {
-                                "Hide password"
-                            } else {
-                                "Show password"
-                            },
-                            tint = LiftrixColorsV2.Teal,
-                            modifier = Modifier.size(20.dp)
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Person icon",
+                            modifier = Modifier.size(18.dp)
                         )
-                    }
-                },
-                visualTransformation = if (isPasswordVisible) {
-                    VisualTransformation.None
-                } else {
-                    PasswordVisualTransformation()
-                },
-                isError = passwordError != null && password.isNotBlank(),
-                enabled = !isLoading,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Password,
-                    imeAction = ImeAction.Next
-                ),
-                keyboardActions = KeyboardActions(
-                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
-                ),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = LiftrixColorsV2.Teal,
-                    unfocusedBorderColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundTertiary else LiftrixColorsV2.Light.TextTertiary,
-                    focusedLabelColor = LiftrixColorsV2.Teal,
-                    cursorColor = LiftrixColorsV2.Teal,
-                    focusedTextColor = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
-                    unfocusedTextColor = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary
-                ),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
+                    },
+                    isError = usernameError != null && username.isNotBlank(),
+                    enabled = !isLoading,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Text,
+                        imeAction = ImeAction.Next
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = LiftrixColorsV2.Teal,
+                        unfocusedBorderColor = outlineColor,
+                        focusedLabelColor = LiftrixColorsV2.Teal,
+                        unfocusedLabelColor = textTertiary,
+                        cursorColor = LiftrixColorsV2.Teal,
+                        focusedTextColor = textPrimary,
+                        unfocusedTextColor = textPrimary,
+                        focusedContainerColor = inputContainerColor,
+                        unfocusedContainerColor = inputContainerColor,
+                        focusedLeadingIconColor = LiftrixColorsV2.Teal,
+                        unfocusedLeadingIconColor = textTertiary
+                    ),
+                    shape = textFieldShape,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp)
+                )
 
-        // Confirm Password field
-        Column {
-            Text(
-                text = "Confirm Password",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            OutlinedTextField(
-                value = confirmPassword,
-                onValueChange = { confirmPassword = it },
-                placeholder = { 
-                    Text(
-                        "Re-enter your password",
-                        color = if (isDarkTheme) LiftrixColorsV2.Dark.TextTertiary else LiftrixColorsV2.Light.TextTertiary
-                    ) 
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = "Confirm password icon",
-                        tint = LiftrixColorsV2.Teal,
-                        modifier = Modifier.size(20.dp)
-                    )
-                },
-                trailingIcon = {
-                    IconButton(
-                        onClick = { isConfirmPasswordVisible = !isConfirmPasswordVisible },
-                        enabled = !isLoading
-                    ) {
+                Spacer(modifier = Modifier.height(14.dp))
+
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("Email address", color = textTertiary) },
+                    placeholder = { Text("name@domain.com", color = textTertiary) },
+                    leadingIcon = {
                         Icon(
-                            imageVector = if (isConfirmPasswordVisible) {
-                                Icons.Default.VisibilityOff
-                            } else {
-                                Icons.Default.Visibility
-                            },
-                            contentDescription = if (isConfirmPasswordVisible) {
-                                "Hide confirm password"
-                            } else {
-                                "Show confirm password"
-                            },
-                            tint = LiftrixColorsV2.Teal,
-                            modifier = Modifier.size(20.dp)
+                            imageVector = Icons.Default.Email,
+                            contentDescription = "Email icon",
+                            modifier = Modifier.size(18.dp)
                         )
-                    }
-                },
-                visualTransformation = if (isConfirmPasswordVisible) {
-                    VisualTransformation.None
-                } else {
-                    PasswordVisualTransformation()
-                },
-                isError = confirmPasswordError != null && confirmPassword.isNotBlank(),
-                enabled = !isLoading,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Password,
-                    imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(
-                    onDone = {
+                    },
+                    isError = emailError != null && email.isNotBlank(),
+                    enabled = !isLoading,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Email,
+                        imeAction = ImeAction.Next
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = LiftrixColorsV2.Teal,
+                        unfocusedBorderColor = outlineColor,
+                        focusedLabelColor = LiftrixColorsV2.Teal,
+                        unfocusedLabelColor = textTertiary,
+                        cursorColor = LiftrixColorsV2.Teal,
+                        focusedTextColor = textPrimary,
+                        unfocusedTextColor = textPrimary,
+                        focusedContainerColor = inputContainerColor,
+                        unfocusedContainerColor = inputContainerColor,
+                        focusedLeadingIconColor = LiftrixColorsV2.Teal,
+                        unfocusedLeadingIconColor = textTertiary
+                    ),
+                    shape = textFieldShape,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp)
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Password", color = textTertiary) },
+                    placeholder = { Text("min. 8 characters", color = textTertiary) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Password icon",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    trailingIcon = {
+                        IconButton(
+                            onClick = { isPasswordVisible = !isPasswordVisible },
+                            enabled = !isLoading
+                        ) {
+                            Icon(
+                                imageVector = if (isPasswordVisible) {
+                                    Icons.Default.VisibilityOff
+                                } else {
+                                    Icons.Default.Visibility
+                                },
+                                contentDescription = if (isPasswordVisible) {
+                                    "Hide password"
+                                } else {
+                                    "Show password"
+                                },
+                                tint = if (isPasswordVisible) LiftrixColorsV2.Teal else textTertiary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    },
+                    visualTransformation = if (isPasswordVisible) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    isError = passwordError != null && password.isNotBlank(),
+                    enabled = !isLoading,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Next
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = LiftrixColorsV2.Teal,
+                        unfocusedBorderColor = outlineColor,
+                        focusedLabelColor = LiftrixColorsV2.Teal,
+                        unfocusedLabelColor = textTertiary,
+                        cursorColor = LiftrixColorsV2.Teal,
+                        focusedTextColor = textPrimary,
+                        unfocusedTextColor = textPrimary,
+                        focusedContainerColor = inputContainerColor,
+                        unfocusedContainerColor = inputContainerColor,
+                        focusedLeadingIconColor = LiftrixColorsV2.Teal,
+                        unfocusedLeadingIconColor = textTertiary,
+                        focusedTrailingIconColor = LiftrixColorsV2.Teal,
+                        unfocusedTrailingIconColor = textTertiary
+                    ),
+                    shape = textFieldShape,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp)
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                OutlinedTextField(
+                    value = confirmPassword,
+                    onValueChange = { confirmPassword = it },
+                    label = { Text("Confirm password", color = textTertiary) },
+                    placeholder = { Text("Re-enter your password", color = textTertiary) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Confirm password icon",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    trailingIcon = {
+                        IconButton(
+                            onClick = { isConfirmPasswordVisible = !isConfirmPasswordVisible },
+                            enabled = !isLoading
+                        ) {
+                            Icon(
+                                imageVector = if (isConfirmPasswordVisible) {
+                                    Icons.Default.VisibilityOff
+                                } else {
+                                    Icons.Default.Visibility
+                                },
+                                contentDescription = if (isConfirmPasswordVisible) {
+                                    "Hide confirm password"
+                                } else {
+                                    "Show confirm password"
+                                },
+                                tint = if (isConfirmPasswordVisible) LiftrixColorsV2.Teal else textTertiary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    },
+                    visualTransformation = if (isConfirmPasswordVisible) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    isError = confirmPasswordError != null && confirmPassword.isNotBlank(),
+                    enabled = !isLoading,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            keyboardController?.hide()
+                            if (isFormValid && !isLoading) {
+                                onSignUp(email, password, username)
+                            }
+                        }
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = LiftrixColorsV2.Teal,
+                        unfocusedBorderColor = outlineColor,
+                        focusedLabelColor = LiftrixColorsV2.Teal,
+                        unfocusedLabelColor = textTertiary,
+                        cursorColor = LiftrixColorsV2.Teal,
+                        focusedTextColor = textPrimary,
+                        unfocusedTextColor = textPrimary,
+                        focusedContainerColor = inputContainerColor,
+                        unfocusedContainerColor = inputContainerColor,
+                        focusedLeadingIconColor = LiftrixColorsV2.Teal,
+                        unfocusedLeadingIconColor = textTertiary,
+                        focusedTrailingIconColor = LiftrixColorsV2.Teal,
+                        unfocusedTrailingIconColor = textTertiary
+                    ),
+                    shape = textFieldShape,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = agreeToTerms,
+                        onCheckedChange = { agreeToTerms = it },
+                        enabled = !isLoading,
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = LiftrixColorsV2.Teal,
+                            uncheckedColor = outlineColor,
+                            checkmarkColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundPrimary else LiftrixColorsV2.Light.BackgroundPrimary
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "I agree to the terms of use",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = textSecondary
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Button(
+                    onClick = {
                         keyboardController?.hide()
-                        if (isFormValid && !isLoading) {
+                        if (isFormValid) {
                             onSignUp(email, password, username)
                         }
+                    },
+                    enabled = isFormValid && !isLoading,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = LiftrixColorsV2.Teal,
+                        contentColor = if (isDarkTheme)
+                            LiftrixColorsV2.Dark.TextPrimary
+                        else
+                            LiftrixColorsV2.Light.BackgroundPrimary,
+                        disabledContainerColor = if (isDarkTheme)
+                            LiftrixColorsV2.Dark.BackgroundTertiary
+                        else
+                            LiftrixColorsV2.Light.BackgroundTertiary,
+                        disabledContentColor = if (isDarkTheme)
+                            LiftrixColorsV2.Dark.TextDisabled
+                        else
+                            LiftrixColorsV2.Light.TextDisabled
+                    )
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary
+                        )
+                    } else {
+                        Text(
+                            text = "Sign up",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
-                ),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = LiftrixColorsV2.Teal,
-                    unfocusedBorderColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundTertiary else LiftrixColorsV2.Light.TextTertiary,
-                    focusedLabelColor = LiftrixColorsV2.Teal,
-                    cursorColor = LiftrixColorsV2.Teal,
-                    focusedTextColor = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
-                    unfocusedTextColor = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary
-                ),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // Terms checkbox
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Checkbox(
-                checked = agreeToTerms,
-                onCheckedChange = { agreeToTerms = it },
-                enabled = !isLoading,
-                colors = CheckboxDefaults.colors(
-                    checkedColor = LiftrixColorsV2.Teal,
-                    uncheckedColor = if (isDarkTheme) LiftrixColorsV2.Dark.TextTertiary else LiftrixColorsV2.Light.TextTertiary,
-                    checkmarkColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundPrimary else LiftrixColorsV2.Light.BackgroundPrimary
-                )
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "I agree with terms of use",
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (isDarkTheme) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        // Sign up button
-        Button(
-            onClick = {
-                keyboardController?.hide()
-                if (isFormValid) {
-                    onSignUp(email, password, username)
                 }
-            },
-            enabled = isFormValid && !isLoading,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            shape = RoundedCornerShape(28.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = LiftrixColorsV2.Teal,
-                contentColor = if (isDarkTheme) 
-                    LiftrixColorsV2.Dark.TextPrimary 
-                else 
-                    LiftrixColorsV2.Light.BackgroundPrimary,
-                disabledContainerColor = if (isDarkTheme) 
-                    LiftrixColorsV2.Dark.BackgroundTertiary 
-                else 
-                    LiftrixColorsV2.Light.BackgroundTertiary,
-                disabledContentColor = if (isDarkTheme)
-                    LiftrixColorsV2.Dark.TextDisabled
-                else
-                    LiftrixColorsV2.Light.TextDisabled
-            )
-        ) {
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    color = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary
-                )
-            } else {
-                Text(
-                    text = "Sign up",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isDarkTheme) 
-                        LiftrixColorsV2.Dark.TextPrimary 
-                    else 
-                        LiftrixColorsV2.Light.BackgroundPrimary
-                )
             }
         }
     }
+
 }
 
 private fun validateUsername(username: String): String? {

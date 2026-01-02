@@ -23,6 +23,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.tasks.await
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
+import com.example.liftrix.data.local.LiftrixDatabase
+import android.os.Process
 
 /**
  * Worker responsible for syncing social profile data to Firebase.
@@ -36,6 +38,7 @@ class SocialProfileSyncWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val socialProfileDao: SocialProfileDao,
+    private val database: LiftrixDatabase,
     private val firestore: FirebaseFirestore
 ) : CoroutineWorker(context, params) {
 
@@ -77,14 +80,31 @@ class SocialProfileSyncWorker @AssistedInject constructor(
             val forceSync = inputData.getBoolean("forceSync", false)
             val useDirtyFlagGating = OfflineArchitectureFlags.ROOM_FIRST_ENABLED &&
                 OfflineArchitectureFlags.USE_DIRTY_FLAG_GATING
+
+            logProfileDbDiagnostics("PROFILE_SYNC_START userId=$userId")
+            val preTotalCount = socialProfileDao.getTotalProfileCount()
+            val preUserCount = socialProfileDao.getProfileCount(userId)
+            Timber.d("PROFILE_SYNC_PRE_COUNTS userId=$userId userCount=$preUserCount totalCount=$preTotalCount")
             
             Timber.i("[SOCIAL-SYNC] 🔄 Starting social profile sync for user: $userId")
             Timber.d("[SOCIAL-SYNC]   - Force sync: $forceSync")
             Timber.d("[SOCIAL-SYNC]   - Target collection: social_profiles")
             Timber.d("[SOCIAL-SYNC]   - This sync makes user discoverable in search")
 
-            val profile = socialProfileDao.getProfile(userId) 
-                ?: return@withContext Result.failure(
+            val profile = socialProfileDao.getProfile(userId)
+            Timber.d(
+                "PROFILE_SYNC_LOOKUP userId=$userId found=${profile != null} " +
+                    "profileUserId=${profile?.userId} profileUsername=${profile?.username}"
+            )
+
+            if (profile == null) {
+                val recentProfiles = socialProfileDao.getAllProfilesForDebug()
+                val recentProfileIds = recentProfiles.joinToString { it.userId }
+                Timber.e(
+                    "PROFILE_SYNC_MISSING userId=$userId recentCount=${recentProfiles.size} " +
+                        "recentUserIds=[$recentProfileIds]"
+                )
+                return@withContext Result.failure(
                     Data.Builder()
                         .putString(KEY_ERROR_MESSAGE, "Social profile not found for user $userId")
                         .build()
@@ -93,6 +113,7 @@ class SocialProfileSyncWorker @AssistedInject constructor(
                     Timber.e("[SOCIAL-SYNC]   - User must create social profile first to be discoverable")
                     Timber.e("[SOCIAL-SYNC]   - Check CreateSocialProfileUseCase execution")
                 }
+            }
             
             if (useDirtyFlagGating && !profile.isDirty) {
                 Timber.d("[SOCIAL-SYNC] ✅ Profile not dirty for user $userId, skipping (dirty gating enabled)")
@@ -252,5 +273,17 @@ class SocialProfileSyncWorker @AssistedInject constructor(
                 )
             }
         }
+    }
+
+    private fun logProfileDbDiagnostics(context: String) {
+        val dbName = runCatching { database.openHelper.databaseName }.getOrNull()
+        val dbPath = runCatching { database.openHelper.writableDatabase.path }.getOrNull()
+        val dbId = System.identityHashCode(database)
+        val daoId = System.identityHashCode(socialProfileDao)
+        val pid = Process.myPid()
+        val threadName = Thread.currentThread().name
+        Timber.d(
+            "PROFILE_DB_DIAG $context dbName=$dbName dbPath=$dbPath dbId=$dbId daoId=$daoId pid=$pid thread=$threadName"
+        )
     }
 }

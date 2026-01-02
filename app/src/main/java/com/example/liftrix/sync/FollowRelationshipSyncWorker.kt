@@ -17,6 +17,7 @@ import com.example.liftrix.data.local.dao.SafeFollowRelationshipDaoImpl
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.WriteBatch
+import com.google.firebase.auth.FirebaseAuth
 import com.example.liftrix.config.OfflineArchitectureFlags
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -52,6 +53,7 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
         const val KEY_SYNC_COUNT = "sync_count"
         const val KEY_ERROR_MESSAGE = "error_message"
         private const val MAX_RETRY_COUNT = 3
+        private const val USERS_PUBLIC_COLLECTION = "users_public"
         
         fun createWorkRequest(userId: String, forceSync: Boolean = false, restoreFromFirebase: Boolean = false): OneTimeWorkRequest {
             return OneTimeWorkRequestBuilder<FollowRelationshipSyncWorker>()
@@ -96,6 +98,20 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                         .build()
                 )
             }
+
+            val authUserId = FirebaseAuth.getInstance().currentUser?.uid
+            if (authUserId == null) {
+                Timber.w("PROFILE_FOLLOW_AUTH_MISSING userId=$userId")
+                return@withContext Result.retry()
+            }
+            if (authUserId != userId) {
+                Timber.w("PROFILE_FOLLOW_AUTH_MISMATCH userId=$userId authUserId=$authUserId")
+                return@withContext Result.failure(
+                    Data.Builder()
+                        .putString(KEY_ERROR_MESSAGE, "Auth user mismatch for follow sync")
+                        .build()
+                )
+            }
             
             val forceSync = inputData.getBoolean("forceSync", false)
             val restoreFromFirebase = inputData.getBoolean("restoreFromFirebase", false)
@@ -117,6 +133,7 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
             
             // 🔥 FOLLOW-SYNC-FIX: For login scenarios, always check Firebase even if no local unsynced data
             if (unsyncedRelationships.isEmpty() && !forceSync && !restoreFromFirebase) {
+                val relatedProfileFetchCount = fetchMissingProfilesForRelationships(userId)
                 // Check if user has any local relationships at all
                 val localFollowingCount = followDao.getFollowingCount(userId)
                 val localFollowerCount = followDao.getFollowerCount(userId)
@@ -128,6 +145,7 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                         return@withContext Result.success(
                             Data.Builder()
                                 .putInt(KEY_SYNC_COUNT, restoredCount)
+                                .putInt("profile_fetch_count", relatedProfileFetchCount)
                                 .putString("operation", "restore_from_firebase")
                                 .build()
                         )
@@ -138,6 +156,7 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                 return@withContext Result.success(
                     Data.Builder()
                         .putInt(KEY_SYNC_COUNT, 0)
+                        .putInt("profile_fetch_count", relatedProfileFetchCount)
                         .build()
                 )
             }
@@ -150,10 +169,12 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
             }
             
             Timber.d("Successfully synced $processed follow relationships for user $userId")
+                val relatedProfileFetchCount = fetchMissingProfilesForRelationships(userId)
             
             return@withContext Result.success(
                 Data.Builder()
                     .putInt(KEY_SYNC_COUNT, processed)
+                    .putInt("profile_fetch_count", relatedProfileFetchCount)
                     .build()
             )
             
@@ -178,43 +199,24 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
         userId: String
     ): Int {
         val relationshipsToUpload = mutableListOf<com.example.liftrix.data.local.entity.FollowRelationshipEntity>()
+        val relationshipsToAccept = mutableListOf<com.example.liftrix.data.local.entity.FollowRelationshipEntity>()
+        val relationshipsToMarkClean = mutableListOf<com.example.liftrix.data.local.entity.FollowRelationshipEntity>()
         val collectionRef = firestore.collection("follow_relationships")
-        val remoteDocs = FirestorePrefetcher.prefetchByIds(
-            collection = collectionRef,
-            ids = relationships.map { it.id }
-        )
 
         for (relationship in relationships) {
-            val remoteDoc = remoteDocs[relationship.id]
-            if (remoteDoc?.exists() == true) {
-                val remoteLastModified = when (val remoteValue = remoteDoc.get("lastModified")) {
-                    is com.google.firebase.Timestamp -> remoteValue.toDate().time
-                    is Number -> remoteValue.toLong()
-                    else -> 0L
-                }
-                if (remoteLastModified > relationship.lastModified) {
-                    val remoteEntity = relationship.copy(
-                        followerId = remoteDoc.getString("followerId") ?: relationship.followerId,
-                        followingId = remoteDoc.getString("followingId") ?: relationship.followingId,
-                        status = remoteDoc.getString("status") ?: relationship.status,
-                        createdAt = remoteDoc.getLong("createdAt") ?: relationship.createdAt,
-                        acceptedAt = remoteDoc.getLong("acceptedAt") ?: relationship.acceptedAt,
-                        blockedAt = remoteDoc.getLong("blockedAt") ?: relationship.blockedAt,
-                        isDirty = false,
-                        isSynced = true,
-                        syncVersion = remoteDoc.getLong("syncVersion")
-                            ?: relationship.syncVersion,
-                        lastModified = remoteLastModified
-                    )
-                    followDao.upsertFromRemote(remoteEntity)
-                    continue
-                }
+            val isFollower = relationship.followerId == userId
+            if (isFollower) {
+                relationshipsToUpload.add(relationship)
+                continue
             }
 
-            relationshipsToUpload.add(relationship)
+            if (relationship.followingId == userId && relationship.status == "ACCEPTED") {
+                relationshipsToAccept.add(relationship)
+                continue
+            }
         }
 
-        if (relationshipsToUpload.isEmpty()) {
+        if (relationshipsToUpload.isEmpty() && relationshipsToAccept.isEmpty() && relationshipsToMarkClean.isEmpty()) {
             return 0
         }
 
@@ -222,6 +224,11 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
         val timestamp = System.currentTimeMillis()
         
         relationshipsToUpload.forEach { relationship ->
+            Timber.d(
+                "PROFILE_FOLLOW_WRITE_PLAN userId=$userId relationshipId=${relationship.id} " +
+                    "followerId=${relationship.followerId} followingId=${relationship.followingId} " +
+                    "status=${relationship.status} createdAt=${relationship.createdAt}"
+            )
             // Add relationship document to Firestore
             val docRef = collectionRef.document(relationship.id)
             
@@ -247,15 +254,71 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                 val followingRef = firestore
                     .collection("social_profiles")
                     .document(relationship.followingId)
-                
+
+                if (relationship.followerId == userId) {
+                    batch.update(followerRef, mapOf(
+                        "followingCount" to FieldValue.increment(1),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    ))
+                } else {
+                    Timber.w(
+                        "PROFILE_FOLLOW_COUNT_SKIP userId=$userId target=${relationship.followerId} reason=not_owner"
+                    )
+                }
+
+                if (relationship.followingId == userId) {
+                    batch.update(followingRef, mapOf(
+                        "followerCount" to FieldValue.increment(1),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    ))
+                } else {
+                    Timber.w(
+                        "PROFILE_FOLLOW_COUNT_SKIP userId=$userId target=${relationship.followingId} reason=not_owner"
+                    )
+                }
+            }
+        }
+
+        relationshipsToAccept.forEach { relationship ->
+            Timber.d(
+                "PROFILE_FOLLOW_ACCEPT_PLAN userId=$userId relationshipId=${relationship.id} " +
+                    "followerId=${relationship.followerId} followingId=${relationship.followingId} " +
+                    "status=${relationship.status} acceptedAt=${relationship.acceptedAt}"
+            )
+            val docRef = collectionRef.document(relationship.id)
+            val updateData = mapOf(
+                "status" to relationship.status,
+                "acceptedAt" to relationship.acceptedAt,
+                "lastModified" to relationship.lastModified,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            batch.update(docRef, updateData)
+
+            val followerRef = firestore
+                .collection("social_profiles")
+                .document(relationship.followerId)
+            val followingRef = firestore
+                .collection("social_profiles")
+                .document(relationship.followingId)
+            if (relationship.followerId == userId) {
                 batch.update(followerRef, mapOf(
                     "followingCount" to FieldValue.increment(1),
                     "updatedAt" to FieldValue.serverTimestamp()
                 ))
+            } else {
+                Timber.w(
+                    "PROFILE_FOLLOW_COUNT_SKIP userId=$userId target=${relationship.followerId} reason=not_owner"
+                )
+            }
+            if (relationship.followingId == userId) {
                 batch.update(followingRef, mapOf(
                     "followerCount" to FieldValue.increment(1),
                     "updatedAt" to FieldValue.serverTimestamp()
                 ))
+            } else {
+                Timber.w(
+                    "PROFILE_FOLLOW_COUNT_SKIP userId=$userId target=${relationship.followingId} reason=not_owner"
+                )
             }
         }
         
@@ -263,13 +326,18 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
         batch.commit().await()
         
         // Mark relationships as synced in local database
-        followDao.markAsClean(
-            ids = relationshipsToUpload.map { it.id },
-            userId = userId,
-            syncVersion = timestamp
-        )
+        val cleanedIds = (relationshipsToUpload + relationshipsToAccept + relationshipsToMarkClean)
+            .map { it.id }
+            .distinct()
+        if (cleanedIds.isNotEmpty()) {
+            followDao.markAsClean(
+                ids = cleanedIds,
+                userId = userId,
+                syncVersion = timestamp
+            )
+        }
         
-        return relationshipsToUpload.size
+        return relationshipsToUpload.size + relationshipsToAccept.size + relationshipsToMarkClean.size
     }
     
     /**
@@ -286,6 +354,13 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
             
             val currentTime = System.currentTimeMillis()
             val restoredRelationships = mutableListOf<com.example.liftrix.data.local.entity.FollowRelationshipEntity>()
+            val dirtyRelationships = followDao.getDirtyFollowRelationships(userId)
+            val localRelationshipCount = followDao.getTotalRelationshipCount(userId)
+            if (dirtyRelationships.isNotEmpty()) {
+                Timber.w(
+                    "PROFILE_FOLLOW_RESTORE_CLEAR_SKIP userId=$userId dirtyCount=${dirtyRelationships.size}"
+                )
+            }
             
             // Fetch relationships where user is the follower (following others)
             val followingQuery = firestore.collection("follow_relationships")
@@ -362,6 +437,17 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                 }
             }
             
+            if (dirtyRelationships.isEmpty() && restoredRelationships.isNotEmpty()) {
+                val clearedCount = followDao.deleteAllRelationshipsForUser(userId)
+                Timber.w(
+                    "PROFILE_FOLLOW_RESTORE_CLEAR userId=$userId clearedCount=$clearedCount reason=no_dirty_local_state"
+                )
+            } else if (dirtyRelationships.isEmpty() && restoredRelationships.isEmpty() && localRelationshipCount > 0) {
+                Timber.w(
+                    "PROFILE_FOLLOW_RESTORE_CLEAR_SKIP userId=$userId reason=remote_empty localCount=$localRelationshipCount"
+                )
+            }
+
             // Batch insert all restored relationships using safe method
             if (restoredRelationships.isNotEmpty()) {
                 val insertedCount = safeFollowDao.insertFollowRelationshipsWithUserValidation(restoredRelationships)
@@ -377,9 +463,10 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                 
                 for (checkUserId in allUserIds) {
                     if (checkUserId != userId) {
-                        val profileExists = socialProfileDao.getSocialProfileByUserId(checkUserId) != null
-                        if (!profileExists) {
-                            Timber.d("🔥 FOLLOW-SYNC-FIX: Social profile missing for $checkUserId, will fetch from Firebase")
+                        val localProfile = socialProfileDao.getSocialProfileByUserId(checkUserId)
+                        val profileMissing = localProfile == null || isLikelyStubProfile(localProfile)
+                        if (profileMissing) {
+                            Timber.d("PFP_PROFILE_FETCH_MISSING userId=$checkUserId source=restore reason=missing_or_stub")
                             missingUserIds.add(checkUserId)
                         }
                     }
@@ -387,8 +474,12 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                 
                 // Fetch missing user profiles in parallel
                 if (missingUserIds.isNotEmpty()) {
-                    val profileFetchCount = fetchMissingUserProfiles(missingUserIds)
-                    Timber.i("🔥 FOLLOW-SYNC-FIX: Fetched $profileFetchCount/${missingUserIds.size} missing user profiles from Firebase")
+                    val fetchResult = fetchMissingUserProfiles(missingUserIds)
+                    Timber.i(
+                        "PFP_PROFILE_FETCH_RESULT source=restore fetched=${fetchResult.fetchedCount} " +
+                            "missing=${fetchResult.missingUserIds.size}"
+                    )
+                    pruneLocalRelationshipsForMissingProfiles(userId, fetchResult.missingUserIds)
                 }
             } else {
                 Timber.d("🔥 FOLLOW-SYNC-FIX: No follow relationships found in Firebase for user $userId")
@@ -401,6 +492,43 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
             0
         }
     }
+
+    private suspend fun fetchMissingProfilesForRelationships(userId: String): Int {
+        val followingIds = followDao.getFollowingUserIds(userId)
+        val followerIds = followDao.getFollowerUserIds(userId)
+        val relatedUserIds = (followingIds + followerIds)
+            .filterNot { it == userId }
+            .distinct()
+
+        if (relatedUserIds.isEmpty()) {
+            return 0
+        }
+
+        val missingUserIds = relatedUserIds.filter { relatedUserId ->
+            val localProfile = socialProfileDao.getSocialProfileByUserId(relatedUserId)
+            localProfile == null || isLikelyStubProfile(localProfile)
+        }
+
+        if (missingUserIds.isEmpty()) {
+            return 0
+        }
+
+        Timber.d("PFP_PROFILE_FETCH_RELATED_START userId=$userId missingCount=${missingUserIds.size}")
+        val fetchResult = fetchMissingUserProfiles(missingUserIds)
+        Timber.i(
+            "PFP_PROFILE_FETCH_RESULT source=relationships fetched=${fetchResult.fetchedCount} " +
+                "missing=${fetchResult.missingUserIds.size}"
+        )
+        pruneLocalRelationshipsForMissingProfiles(userId, fetchResult.missingUserIds)
+        return fetchResult.fetchedCount
+    }
+
+    private fun isLikelyStubProfile(profile: com.example.liftrix.data.local.entity.SocialProfileEntity): Boolean {
+        val displayNameStub = profile.displayName.isNullOrBlank() || profile.displayName == "User"
+        val usernameStub = profile.username.startsWith("user_")
+        val missingDetails = profile.profilePhotoUrl.isNullOrBlank() && profile.bio.isNullOrBlank()
+        return displayNameStub && usernameStub && missingDetails
+    }
     
     /**
      * 🔥 FIX: Fetches and caches missing user profiles from Firebase in parallel batches.
@@ -410,10 +538,16 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
      * @param userIds List of user IDs to fetch profiles for
      * @return The number of profiles successfully fetched and cached
      */
-    private suspend fun fetchMissingUserProfiles(userIds: List<String>): Int {
+    private data class FetchProfilesResult(
+        val fetchedCount: Int,
+        val missingUserIds: List<String>
+    )
+
+    private suspend fun fetchMissingUserProfiles(userIds: List<String>): FetchProfilesResult {
         return try {
-            Timber.d("🔥 FOLLOW-SYNC-FIX: Fetching ${userIds.size} missing user profiles from Firebase")
+            Timber.d("PFP_PROFILE_FETCH_START count=${userIds.size}")
             var successCount = 0
+            val missingUserIds = mutableListOf<String>()
             
             // Process in batches of 10 to avoid overwhelming Firebase and the local database
             userIds.chunked(10).forEach { batch ->
@@ -428,6 +562,7 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                         if (socialProfileDoc.exists()) {
                             val data = socialProfileDoc.data ?: return@forEach
                             val currentTime = System.currentTimeMillis()
+                            val photoUrl = data["profilePhotoUrl"] as? String ?: data["profileImageUrl"] as? String
                             
                             // Create social profile from Firebase data
                             val socialProfile = com.example.liftrix.data.local.entity.SocialProfileEntity(
@@ -435,7 +570,7 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                                 username = data["username"] as? String ?: "user_$userId",
                                 displayName = data["displayName"] as? String ?: data["display_name"] as? String,
                                 bio = data["bio"] as? String,
-                                profilePhotoUrl = data["profilePhotoUrl"] as? String ?: data["profileImageUrl"] as? String,
+                                profilePhotoUrl = photoUrl,
                                 coverPhotoUrl = data["coverPhotoUrl"] as? String,
                                 workoutCount = (data["workoutCount"] as? Number)?.toInt() ?: 0,
                                 followerCount = (data["followerCount"] as? Number)?.toInt() ?: 0,
@@ -459,20 +594,20 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                             try {
                                 socialProfileDao.insertProfile(socialProfile)
                                 successCount++
-                                Timber.d("🔥 FOLLOW-SYNC-FIX: Created social profile for user $userId")
+                                Timber.d("PFP_PROFILE_FETCH_SOCIAL_PROFILES userId=$userId hasPhotoUrl=${photoUrl != null}")
                             } catch (e: Exception) {
                                 // Try update if insert fails
                                 try {
                                     socialProfileDao.updateProfile(socialProfile)
                                     successCount++
-                                    Timber.d("🔥 FOLLOW-SYNC-FIX: Updated social profile for user $userId")
+                                    Timber.d("PFP_PROFILE_FETCH_SOCIAL_PROFILES_UPDATE userId=$userId hasPhotoUrl=${photoUrl != null}")
                                 } catch (updateError: Exception) {
-                                    Timber.w(updateError, "🔥 FOLLOW-SYNC-FIX: Failed to insert/update social profile for user $userId")
+                                    Timber.w(updateError, "PFP_PROFILE_FETCH_SOCIAL_PROFILES_FAIL userId=$userId")
                                 }
                             }
                         } else {
-                            // Fallback: try social_profiles collection
-                            val publicProfileDoc = firestore.collection("social_profiles")
+                            // Fallback: try users_public collection
+                            val publicProfileDoc = firestore.collection(USERS_PUBLIC_COLLECTION)
                                 .document(userId)
                                 .get()
                                 .await()
@@ -480,14 +615,19 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                             if (publicProfileDoc.exists()) {
                                 val data = publicProfileDoc.data ?: return@forEach
                                 val currentTime = System.currentTimeMillis()
+                                val photoUrl = data["profileImageUrl"] as? String ?: data["profilePhotoUrl"] as? String
+                                val isPrivate = (data["isPrivate"] as? Boolean)
+                                    ?: !((data["isPublic"] as? Boolean) ?: true)
+                                val hideFromSuggestions = data["hideFromSuggestions"] as? Boolean
+                                    ?: !((data["isSearchable"] as? Boolean) ?: true)
                                 
                                 // Create minimal social profile from public data
                                 val socialProfile = com.example.liftrix.data.local.entity.SocialProfileEntity(
                                     userId = userId,
                                     username = data["username"] as? String ?: "user_$userId",
-                                    displayName = data["displayName"] as? String ?: "User",
+                                    displayName = data["displayName"] as? String ?: data["username"] as? String ?: "User",
                                     bio = data["bio"] as? String,
-                                    profilePhotoUrl = data["profileImageUrl"] as? String,
+                                    profilePhotoUrl = photoUrl,
                                     coverPhotoUrl = null,
                                     workoutCount = (data["totalWorkouts"] as? Number)?.toInt() ?: 0,
                                     followerCount = (data["followersCount"] as? Number)?.toInt() ?: 0,
@@ -495,8 +635,8 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                                     memberSince = currentTime,
                                     lastActive = currentTime,
                                     isVerified = data["isVerified"] as? Boolean ?: false,
-                                    isPrivate = data["isPrivate"] as? Boolean ?: false,
-                                    hideFromSuggestions = false,
+                                    isPrivate = isPrivate,
+                                    hideFromSuggestions = hideFromSuggestions,
                                     allowFriendRequests = true,
                                     instagramHandle = null,
                                     youtubeChannel = null,
@@ -507,36 +647,69 @@ class FollowRelationshipSyncWorker @AssistedInject constructor(
                                     updatedAt = currentTime
                                 )
                                 
+                                Timber.d(
+                                    "PFP_PROFILE_FETCH_USERS_PUBLIC userId=$userId hasPhotoUrl=${photoUrl != null} " +
+                                        "isPrivate=$isPrivate hideFromSuggestions=$hideFromSuggestions"
+                                )
+                                
                                 // Insert social profile
                                 try {
                                     socialProfileDao.insertProfile(socialProfile)
                                     successCount++
-                                    Timber.d("🔥 FOLLOW-SYNC-FIX: Created social profile from public data for user $userId")
+                                    Timber.d("PFP_PROFILE_FETCH_USERS_PUBLIC_INSERT userId=$userId hasPhotoUrl=${photoUrl != null}")
                                 } catch (e: Exception) {
                                     try {
                                         socialProfileDao.updateProfile(socialProfile)
                                         successCount++
-                                        Timber.d("🔥 FOLLOW-SYNC-FIX: Updated social profile from public data for user $userId")
+                                        Timber.d("PFP_PROFILE_FETCH_USERS_PUBLIC_UPDATE userId=$userId hasPhotoUrl=${photoUrl != null}")
                                     } catch (updateError: Exception) {
-                                        Timber.w(updateError, "🔥 FOLLOW-SYNC-FIX: Failed to insert/update social profile from public data for user $userId")
+                                        Timber.w(updateError, "PFP_PROFILE_FETCH_USERS_PUBLIC_FAIL userId=$userId")
                                     }
                                 }
                             } else {
-                                Timber.w("🔥 FOLLOW-SYNC-FIX: No profile data found in Firebase for user $userId")
+                                Timber.w("PFP_PROFILE_FETCH_MISSING userId=$userId source=firebase reason=no_profile_data")
+                                missingUserIds.add(userId)
                             }
                         }
                     } catch (e: Exception) {
-                        Timber.e(e, "🔥 FOLLOW-SYNC-FIX: Failed to fetch profile for user $userId")
+                        Timber.e(e, "PFP_PROFILE_FETCH_ERROR userId=$userId")
+                        missingUserIds.add(userId)
                     }
                 }
             }
             
-            Timber.i("🔥 FOLLOW-SYNC-FIX: Successfully fetched and cached $successCount/${userIds.size} user profiles")
-            successCount
+            Timber.i("PFP_PROFILE_FETCH_SUMMARY fetched=$successCount total=${userIds.size} missing=${missingUserIds.size}")
+            FetchProfilesResult(
+                fetchedCount = successCount,
+                missingUserIds = missingUserIds.distinct()
+            )
             
         } catch (e: Exception) {
-            Timber.e(e, "🔥 FOLLOW-SYNC-FIX: Failed to fetch missing user profiles")
-            0
+            Timber.e(e, "PFP_PROFILE_FETCH_FATAL")
+            FetchProfilesResult(
+                fetchedCount = 0,
+                missingUserIds = userIds
+            )
+        }
+    }
+
+    private suspend fun pruneLocalRelationshipsForMissingProfiles(
+        userId: String,
+        missingUserIds: List<String>
+    ) {
+        if (missingUserIds.isEmpty()) {
+            return
+        }
+
+        Timber.w("PFP_PROFILE_PRUNE_START userId=$userId missingCount=${missingUserIds.size}")
+        missingUserIds.distinct().forEach { missingUserId ->
+            try {
+                followDao.deleteFollowRelationship(userId, missingUserId)
+                followDao.deleteFollowRelationship(missingUserId, userId)
+                Timber.w("PFP_PROFILE_PRUNE_RELATIONSHIP userId=$userId removedUserId=$missingUserId")
+            } catch (e: Exception) {
+                Timber.e(e, "PFP_PROFILE_PRUNE_FAIL userId=$userId removedUserId=$missingUserId")
+            }
         }
     }
 }

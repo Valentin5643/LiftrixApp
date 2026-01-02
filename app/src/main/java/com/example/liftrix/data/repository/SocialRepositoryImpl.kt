@@ -1,6 +1,7 @@
 package com.example.liftrix.data.repository
 
 import com.example.liftrix.data.cache.RecommendationCache
+import com.example.liftrix.data.local.dao.FollowRelationshipDao
 import com.example.liftrix.data.local.dao.FriendDao
 import com.example.liftrix.data.local.dao.PrivacySettingsDao
 import com.example.liftrix.data.local.dao.SocialProfileDao
@@ -37,6 +38,7 @@ import javax.inject.Singleton
 @Singleton
 class SocialRepositoryImpl @Inject constructor(
     private val friendDao: FriendDao,
+    private val followRelationshipDao: FollowRelationshipDao,
     private val privacySettingsDao: PrivacySettingsDao,
     private val socialProfileDao: SocialProfileDao,
     private val workoutDao: WorkoutDao,
@@ -431,15 +433,20 @@ class SocialRepositoryImpl @Inject constructor(
             }
 
             Timber.v("Loading recommended users: limit=$limit, offset=$offset")
+            val followExclusions = getFollowExclusionIds(currentUserId.value)
             
             // Step 1: Check cache first (only for first page)
             if (offset == 0) {
                 val cachedRecommendations = recommendationCache.getCachedRecommendations(currentUserId.value)
                 if (cachedRecommendations != null) {
-                    val cachedResults = cachedRecommendations.take(limit)
-                    Timber.d("Cache hit: returning ${cachedResults.size} cached recommendations")
-                    emit(cachedResults)
-                    return@flow
+                    val cachedResults = cachedRecommendations
+                        .filterNot { it.userId in followExclusions }
+                        .take(limit)
+                    if (cachedResults.isNotEmpty()) {
+                        Timber.d("Cache hit: returning ${cachedResults.size} cached recommendations")
+                        emit(cachedResults)
+                        return@flow
+                    }
                 }
                 Timber.d("Cache miss: proceeding with fresh API call")
             }
@@ -451,13 +458,14 @@ class SocialRepositoryImpl @Inject constructor(
 
             existingFriendIds.collect { friendIds ->
                 val recommendations = mutableListOf<RecommendedUser>()
+                val excludedIds = friendIds + followExclusions
 
                 // Step 3: Get mutual friends recommendations (50% of limit)
                 val mutualFriendsLimit = (limit * MUTUAL_FRIENDS_WEIGHT).toInt()
                 if (mutualFriendsLimit > 0) {
                     val mutualFriendsUsers = getMutualFriendsRecommendations(
                         currentUserId = currentUserId.value,
-                        existingFriendIds = friendIds,
+                        existingFriendIds = excludedIds,
                         limit = mutualFriendsLimit,
                         offset = offset / 2
                     )
@@ -490,7 +498,7 @@ class SocialRepositoryImpl @Inject constructor(
                                     // Fallback to basic recommendations
                                     val generalUsers = getGeneralRecommendations(
                                         currentUserId = currentUserId.value,
-                                        excludeUserIds = friendIds + recommendations.map { it.userId }.toSet(),
+                                        excludeUserIds = excludedIds + recommendations.map { it.userId }.toSet(),
                                         limit = remainingSlots,
                                         offset = offset
                                     )
@@ -501,7 +509,7 @@ class SocialRepositoryImpl @Inject constructor(
                             // Fallback to basic recommendations
                             val generalUsers = getGeneralRecommendations(
                                 currentUserId = currentUserId.value,
-                                excludeUserIds = friendIds + recommendations.map { it.userId }.toSet(),
+                                excludeUserIds = excludedIds + recommendations.map { it.userId }.toSet(),
                                 limit = remainingSlots,
                                 offset = offset
                             )
@@ -511,7 +519,7 @@ class SocialRepositoryImpl @Inject constructor(
                         // For established users, use the basic Firebase query approach
                         val generalUsers = getGeneralRecommendations(
                             currentUserId = currentUserId.value,
-                            excludeUserIds = friendIds + recommendations.map { it.userId }.toSet(),
+                            excludeUserIds = excludedIds + recommendations.map { it.userId }.toSet(),
                             limit = remainingSlots,
                             offset = offset
                         )
@@ -523,14 +531,17 @@ class SocialRepositoryImpl @Inject constructor(
                 val finalRecommendations = recommendations
                     .distinctBy { it.userId }
                     .take(limit)
+                val freshExclusions = getFollowExclusionIds(currentUserId.value)
+                val filteredRecommendations = finalRecommendations
+                    .filterNot { it.userId in freshExclusions }
 
                 // Step 5: Cache fresh recommendations (only for first page)
-                if (offset == 0 && finalRecommendations.isNotEmpty()) {
-                    recommendationCache.cacheRecommendations(currentUserId.value, finalRecommendations)
+                if (offset == 0 && filteredRecommendations.isNotEmpty()) {
+                    recommendationCache.cacheRecommendations(currentUserId.value, filteredRecommendations)
                 }
                 
-                Timber.d("Generated ${finalRecommendations.size} recommendations for user: $currentUserId")
-                emit(finalRecommendations)
+                Timber.d("Generated ${filteredRecommendations.size} recommendations for user: $currentUserId")
+                emit(filteredRecommendations)
             }
             
         } catch (e: Exception) {
@@ -714,6 +725,17 @@ class SocialRepositoryImpl @Inject constructor(
             displayName = profile.displayName ?: profile.username,
             photoUrl = profile.profilePhotoUrl
         )
+    }
+
+    private suspend fun getFollowExclusionIds(userId: String): Set<String> {
+        return try {
+            val followingIds = followRelationshipDao.getFollowingUserIds(userId)
+            val pendingIds = followRelationshipDao.getSentFollowRequests(userId).map { it.followingId }
+            (followingIds + pendingIds).toSet()
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to load follow exclusions for user: $userId")
+            emptySet()
+        }
     }
 
 

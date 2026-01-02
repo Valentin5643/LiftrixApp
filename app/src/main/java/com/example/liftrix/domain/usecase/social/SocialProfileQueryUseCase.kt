@@ -30,8 +30,13 @@ class SocialProfileQueryUseCase @Inject constructor(
     private val userSearchRepository: UserSearchRepository,
     private val authRepository: AuthRepository,
     private val authQueryUseCase: AuthQueryUseCase,
-    private val errorHandler: ErrorHandler
+    private val errorHandler: ErrorHandler,
+    private val userAccountRepository: com.example.liftrix.domain.repository.UserAccountRepository,
+    private val socialProfileCommandUseCase: SocialProfileCommandUseCase
 ) {
+    // In-memory guard to prevent infinite retry loops for profile creation
+    private val creationAttempts = mutableMapOf<String, Long>()
+    private val CREATION_COOLDOWN_MS = 5000L // 5 seconds cooldown between attempts
     /**
      * Gets a social profile for the specified user ID (simple invocation).
      * Applies privacy filtering based on the current viewer.
@@ -104,20 +109,8 @@ class SocialProfileQueryUseCase @Inject constructor(
                         )
                     )
                 } else {
-                    return liftrixFailure(
-                        LiftrixError.NotFoundError(
-                            errorMessage = "User profile not found",
-                            isRecoverable = true, // Profile can be created
-                            analyticsContext = mapOf(
-                                "context" to "SocialProfileQueryUseCase",
-                                "profileUserId" to request.profileUserId,
-                                "suggestion" to "CREATE_PROFILE",
-                                "reason" to "Profile exists in auth but not in database - likely new user or incomplete onboarding"
-                            ),
-                            resourceType = "USER_PROFILE",
-                            resourceId = request.profileUserId
-                        )
-                    )
+                    // ENHANCED FIX: Auto-create missing profile instead of just returning error
+                    return attemptAutoProfileCreation(request.profileUserId, currentUserId, request)
                 }
             }
 
@@ -282,6 +275,173 @@ class SocialProfileQueryUseCase @Inject constructor(
     ) {
         require(username.isNotBlank()) { "Username cannot be blank" }
         socialProfileRepository.checkUsernameAvailability(username).getOrThrow()
+    }
+
+    /**
+     * Attempts to auto-create a missing social profile for the user.
+     * This is a recovery mechanism for users who completed signup but social profile creation failed.
+     *
+     * Self-healing design: Allows ANY caller (owner, followers, searchers) to trigger profile recovery.
+     * Safe because it only creates from existing UserAccount data (public info, no private data exposure).
+     * Enables consistent state across follow, search, and profile view flows.
+     */
+    private suspend fun attemptAutoProfileCreation(
+        profileUserId: String,
+        currentUserId: String,
+        request: GetPublicProfileRequest
+    ): LiftrixResult<GetPublicProfileResult> {
+        return try {
+            // GUARD: Prevent infinite loop - check if we recently attempted creation
+            val lastAttempt = creationAttempts[profileUserId]
+            val now = System.currentTimeMillis()
+            if (lastAttempt != null && (now - lastAttempt) < CREATION_COOLDOWN_MS) {
+                Timber.w("🛑 Profile creation for $profileUserId attempted too recently (${now - lastAttempt}ms ago)")
+                Timber.w("   Preventing infinite loop - returning error instead of retrying")
+                return liftrixFailure(
+                    LiftrixError.NotFoundError(
+                        errorMessage = "User profile not found (creation in progress - please refresh)",
+                        isRecoverable = true,
+                        analyticsContext = mapOf(
+                            "context" to "SocialProfileQueryUseCase",
+                            "profileUserId" to profileUserId,
+                            "reason" to "Creation cooldown active - preventing infinite loop"
+                        ),
+                        resourceType = "USER_PROFILE",
+                        resourceId = profileUserId
+                    )
+                )
+            }
+
+            // Mark creation attempt
+            creationAttempts[profileUserId] = now
+
+            // FIXED: Allow auto-creation from any caller to enable self-healing for follow/search flows
+            Timber.w("⚠️ Missing social profile detected for user: $profileUserId - attempting auto-creation (requested by: $currentUserId)")
+
+            // SAFEGUARD: Get UserAccount data if available, otherwise use fallback values
+            // This ensures MAXIMUM self-healing - even for users with incomplete account data
+            val userAccountResult = userAccountRepository.getAccountInfoSuspend(profileUserId)
+            val userAccount = userAccountResult.getOrNull()
+
+            if (userAccount == null) {
+                Timber.w("⚠️ UserAccount not found for user $profileUserId - using fallback values for recovery")
+                Timber.w("   This user likely has incomplete signup state")
+                Timber.w("   Creating minimal profile with userId-based defaults")
+            } else {
+                Timber.d("✅ UserAccount found for user $profileUserId - using actual account data")
+                Timber.d("   - Has username: ${userAccount.username != null}")
+                Timber.d("   - Has displayName: ${userAccount.displayName != null}")
+            }
+
+            // Use actual data if available, otherwise intelligent fallbacks
+            val username = userAccount?.username
+                ?: userAccount?.displayName?.replace(" ", "_")?.lowercase()
+                ?: "user_${profileUserId.take(8)}"
+
+            val displayName = userAccount?.displayName
+                ?: userAccount?.username
+                ?: "User ${profileUserId.take(8)}"
+
+            Timber.d("PROFILE_SOCIAL_AUTO_CREATE_TRIGGER userId=$profileUserId username=$username")
+            Timber.i("🔧 Auto-creating social profile for user $profileUserId with username: $username")
+
+            // Create the missing profile (idempotent - will return existing if already created)
+            val createResult = socialProfileCommandUseCase.create(
+                username = username,
+                displayName = displayName,
+                bio = null
+            )
+
+            createResult.fold(
+                onSuccess = { socialProfile ->
+                    Timber.d("PROFILE_SOCIAL_AUTO_CREATE_SUCCESS userId=$profileUserId")
+                    Timber.i("✅ Successfully auto-created social profile for user: $profileUserId")
+
+                    // Clear creation attempt tracker on success
+                    creationAttempts.remove(profileUserId)
+
+                    // CRITICAL FIX: Construct result directly from created profile instead of re-querying
+                    // This prevents infinite loop when Room/Firestore haven't synced yet
+                    val publicProfile = com.example.liftrix.domain.model.social.PublicUserProfile(
+                        userId = socialProfile.userId,
+                        username = socialProfile.username,
+                        displayName = socialProfile.displayName,
+                        profileImageUrl = null, // Will be populated on next sync
+                        coverImageUrl = null,
+                        bio = socialProfile.bio,
+                        age = null,
+                        location = null,
+                        fitnessLevel = null,
+                        fitnessGoals = emptyList(),
+                        followersCount = 0,
+                        followingCount = 0,
+                        mutualConnectionsCount = 0,
+                        totalWorkouts = 0,
+                        currentStreak = 0,
+                        longestStreak = 0,
+                        memberSince = java.time.LocalDateTime.now(), // Convert from millis if needed
+                        lastActive = null,
+                        isVerified = false,
+                        isPrivate = socialProfile.isPrivate,
+                        followStatus = if (profileUserId == currentUserId)
+                            com.example.liftrix.domain.model.social.FollowStatus.NONE
+                            else com.example.liftrix.domain.model.social.FollowStatus.NONE,
+                        connectionStatus = if (profileUserId == currentUserId)
+                            com.example.liftrix.domain.model.social.ConnectionStatus.SELF
+                            else com.example.liftrix.domain.model.social.ConnectionStatus.NONE,
+                        canViewDetails = true, // Just created, viewer can see
+                        instagramHandle = null,
+                        youtubeChannel = null,
+                        personalWebsite = null,
+                        recentWorkouts = emptyList(),
+                        recentWorkoutPosts = emptyList(),
+                        achievements = emptyList(),
+                        publicWorkoutStats = null
+                    )
+
+                    val result = GetPublicProfileResult(
+                        profile = publicProfile,
+                        isOwnProfile = profileUserId == currentUserId,
+                        canInteract = true
+                    )
+
+                    return LiftrixResult.success(result)
+                },
+                onFailure = { error ->
+                    Timber.e("PROFILE_SOCIAL_AUTO_CREATE_FAIL userId=$profileUserId error=${error.message}")
+                    Timber.e("❌ Failed to auto-create social profile for user $profileUserId: ${error.message}")
+                    return liftrixFailure(
+                        LiftrixError.NotFoundError(
+                            errorMessage = "User profile not found and could not be created automatically. Please try again or contact support.",
+                            isRecoverable = true,
+                            analyticsContext = mapOf(
+                                "context" to "SocialProfileQueryUseCase",
+                                "profileUserId" to profileUserId,
+                                "reason" to "Auto-creation failed: ${error.message}",
+                                "suggestion" to "RETRY_OR_CONTACT_SUPPORT"
+                            ),
+                            resourceType = "USER_PROFILE",
+                            resourceId = profileUserId
+                        )
+                    )
+                }
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "Exception during auto profile creation for user: $profileUserId")
+            liftrixFailure(
+                LiftrixError.NotFoundError(
+                    errorMessage = "User profile not found",
+                    isRecoverable = true,
+                    analyticsContext = mapOf(
+                        "context" to "SocialProfileQueryUseCase",
+                        "profileUserId" to profileUserId,
+                        "error" to (e.message ?: "Unknown exception")
+                    ),
+                    resourceType = "USER_PROFILE",
+                    resourceId = profileUserId
+                )
+            )
+        }
     }
 
     companion object {

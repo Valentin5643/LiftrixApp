@@ -19,6 +19,8 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 import kotlin.math.ln
 import kotlin.math.pow
+import com.example.liftrix.data.local.LiftrixDatabase
+import android.os.Process
 
 /**
  * Advanced user suggestion service with ML-inspired algorithms for social discovery.
@@ -44,7 +46,8 @@ class UserSuggestionService @Inject constructor(
     private val socialProfileDao: SocialProfileDao,
     private val followRelationshipDao: FollowRelationshipDao,
     private val profileViewDao: ProfileViewDao,
-    private val blockedUserDao: BlockedUserDao
+    private val blockedUserDao: BlockedUserDao,
+    private val database: LiftrixDatabase
 ) {
 
     companion object {
@@ -83,10 +86,22 @@ class UserSuggestionService @Inject constructor(
                 )
             }
         ) {
+            logProfileDbDiagnostics("PROFILE_DISCOVERY_PERSONALIZED_START userId=$userId")
+            val preTotalCount = socialProfileDao.getTotalProfileCount()
+            val preUserCount = socialProfileDao.getProfileCount(userId)
+            Timber.d(
+                "PROFILE_DISCOVERY_PERSONALIZED_COUNTS userId=$userId userCount=$preUserCount totalCount=$preTotalCount"
+            )
+
             Timber.d("Generating personalized suggestions for user: $userId, limit: $limit")
             
             val userProfile = socialProfileDao.getSocialProfileByUserId(userId)
                 ?: throw IllegalArgumentException("User profile not found")
+
+            Timber.d(
+                "PROFILE_DISCOVERY_PERSONALIZED_SELF userId=$userId username=${userProfile.username} " +
+                    "isDirty=${userProfile.isDirty} isSynced=${userProfile.isSynced}"
+            )
             
             // Get candidate users from multiple sources
             val candidateUsers = getCandidateUsers(userId, limit * 3)
@@ -173,10 +188,22 @@ class UserSuggestionService @Inject constructor(
                 )
             }
         ) {
+            logProfileDbDiagnostics("PROFILE_DISCOVERY_NEW_USER_START userId=$userId")
+            val preTotalCount = socialProfileDao.getTotalProfileCount()
+            val preUserCount = socialProfileDao.getProfileCount(userId)
+            Timber.d(
+                "PROFILE_DISCOVERY_NEW_USER_COUNTS userId=$userId userCount=$preUserCount totalCount=$preTotalCount"
+            )
+
             Timber.d("Getting new user suggestions for user: $userId")
             
             val userProfile = socialProfileDao.getSocialProfileByUserId(userId)
                 ?: throw IllegalArgumentException("User profile not found")
+
+            Timber.d(
+                "PROFILE_DISCOVERY_NEW_USER_SELF userId=$userId username=${userProfile.username} " +
+                    "isDirty=${userProfile.isDirty} isSynced=${userProfile.isSynced}"
+            )
             
             // For new users, focus on popular and active users
             val popularUsers = getPopularUsers(userId, limit)
@@ -596,6 +623,18 @@ class UserSuggestionService @Inject constructor(
             workoutCount >= 20 -> 1  // Beginner
             else -> 0 // New
         }
+    }
+
+    private fun logProfileDbDiagnostics(context: String) {
+        val dbName = runCatching { database.openHelper.databaseName }.getOrNull()
+        val dbPath = runCatching { database.openHelper.writableDatabase.path }.getOrNull()
+        val dbId = System.identityHashCode(database)
+        val daoId = System.identityHashCode(socialProfileDao)
+        val pid = Process.myPid()
+        val threadName = Thread.currentThread().name
+        Timber.d(
+            "PROFILE_DB_DIAG $context dbName=$dbName dbPath=$dbPath dbId=$dbId daoId=$daoId pid=$pid thread=$threadName"
+        )
     }
 }
 

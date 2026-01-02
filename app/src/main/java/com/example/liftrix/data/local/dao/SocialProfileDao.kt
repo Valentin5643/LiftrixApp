@@ -198,7 +198,11 @@ interface SocialProfileDao {
 
     @Query("""
         UPDATE social_profiles 
-        SET profile_photo_url = :photoUrl, updated_at = :updatedAt
+        SET profile_photo_url = :photoUrl,
+            updated_at = :updatedAt,
+            last_modified = :updatedAt,
+            is_dirty = 1,
+            is_synced = 0
         WHERE user_id = :userId
     """)
     suspend fun updateProfilePhoto(userId: String, photoUrl: String?, updatedAt: Long): Int

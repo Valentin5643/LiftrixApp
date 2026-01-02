@@ -12,7 +12,6 @@ import com.google.gson.reflect.TypeToken
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneOffset
-import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -50,7 +49,7 @@ class UserProfileMapper @Inject constructor(
 
     fun toEntity(profile: UserProfile, isSynced: Boolean = false): UserProfileEntity {
         return UserProfileEntity(
-            id = UUID.randomUUID().toString(), // Generate unique ID for entity
+            id = profile.userId,
             userId = profile.userId,
             displayName = profile.displayName,
             age = profile.age,
@@ -83,8 +82,9 @@ class UserProfileMapper @Inject constructor(
     }
 
     fun toEntityWithId(profile: UserProfile, entityId: String, isSynced: Boolean = false): UserProfileEntity {
+        val resolvedId = if (entityId == profile.userId) entityId else profile.userId
         return UserProfileEntity(
-            id = entityId,
+            id = resolvedId,
             userId = profile.userId,
             displayName = profile.displayName,
             age = profile.age,
@@ -132,29 +132,27 @@ class UserProfileMapper @Inject constructor(
     }
 
     fun fromFirestoreDto(dto: UserProfileDto): UserProfile {
-        return UserProfile(
-            userId = dto.userId,
-            displayName = "User", // Default value, not available in basic UserProfileDto
-            bio = null, // Default value, not available in basic UserProfileDto
-            age = dto.age,
-            weight = dto.weight?.let { Weight.fromKilograms(it.value) },
-            availableEquipment = dto.availableEquipment.mapNotNull { it.toEquipment() },
-            otherEquipment = dto.otherEquipment,
-            fitnessGoals = dto.fitnessGoals.mapNotNull { it.toFitnessGoal() },
-            goalsPriority = dto.goalsPriority?.mapKeys { it.key.toFitnessGoal()!! },
-            isPublic = true, // Default value
-            lastActiveAt = null, // Default value, not available in basic UserProfileDto
-            totalWorkouts = 0, // Default value
-            currentStreak = 0, // Default value
-            longestStreak = 0, // Default value
-            memberSince = LocalDateTime.now(), // Default value
-            profileCompletionPercentage = 0, // Default value
-            completedAt = dto.completedAt?.toLocalDateTime(),
-            updatedAt = dto.updatedAt?.toLocalDateTime() ?: LocalDateTime.now(),
-            profileVersion = dto.profileVersion,
-            profileImageUrl = null, // Default value
-            profileImageUpdatedAt = null, // Default value
-            hasCustomProfileImage = false // Default value
+        // ❌ CRITICAL: UserProfileDto from /users collection does NOT contain displayName, bio, or social fields
+        // This method should ONLY be used for fitness profile data (goals, equipment, weights)
+        // For social/discovery features, use SocialProfileEntity from /social_profiles collection
+        throw IllegalStateException(
+            """
+            ⚠️  DATA ARCHITECTURE ERROR ⚠️
+            Attempted to convert UserProfileDto to UserProfile for social features.
+
+            PROBLEM: UserProfileDto from Firestore /users collection does NOT include:
+            - displayName (required for UI)
+            - bio (social feature)
+            - profileImageUrl (social feature)
+            - social stats (followers, workouts, etc.)
+
+            SOLUTION: Use SocialProfileEntity instead for social/discovery features.
+            - For social profiles → Query social_profiles table in Room
+            - For fitness data only → Use this mapper ONLY for fitness profile sync
+
+            User ID: ${dto.userId}
+            This is a developer error, not a user error.
+            """.trimIndent()
         )
     }
 

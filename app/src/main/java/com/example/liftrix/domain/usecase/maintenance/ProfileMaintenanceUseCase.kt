@@ -9,21 +9,26 @@ import javax.inject.Inject
 
 /**
  * Use case for performing maintenance operations on user profiles and related data.
- * 
+ *
  * This includes:
  * - Detecting and removing orphaned profiles
  * - Performing bulk cleanup operations
  * - Generating maintenance reports
  * - Validating data integrity across Firebase Auth, Firestore, and Room
- * 
+ * - Ensuring social profile completeness
+ *
  * This use case should be used for:
  * - Scheduled maintenance operations
  * - Admin-triggered cleanup tasks
  * - Post-migration data validation
  * - Debugging sync issues
+ * - App launch health checks
  */
 class ProfileMaintenanceUseCase @Inject constructor(
-    private val profileCleanupService: ProfileCleanupService
+    private val profileCleanupService: ProfileCleanupService,
+    private val socialProfileRepository: com.example.liftrix.domain.repository.social.SocialProfileRepository,
+    private val userAccountRepository: com.example.liftrix.domain.repository.UserAccountRepository,
+    private val socialProfileCommandUseCase: com.example.liftrix.domain.usecase.social.SocialProfileCommandUseCase
 ) {
     
     /**
@@ -302,10 +307,77 @@ class ProfileMaintenanceUseCase @Inject constructor(
         }
     ) {
         Timber.i("🛠️ MAINTENANCE: Scheduling periodic maintenance operations")
-        
+
         // This would integrate with WorkManager or similar scheduling system
         // For now, just log the intent
-        
+
         Timber.d("🛠️ MAINTENANCE: Periodic maintenance scheduling complete")
+    }
+
+    /**
+     * Ensures a social profile exists for the given user.
+     * This is a health check that auto-repairs missing social profiles.
+     *
+     * Use cases:
+     * - App launch health check
+     * - Post-login verification
+     * - Recovery from failed signup flows
+     *
+     * @param userId The user ID to check
+     * @return LiftrixResult indicating success or failure
+     */
+    suspend fun ensureSocialProfileExists(userId: String): LiftrixResult<Unit> = liftrixCatching(
+        errorMapper = { throwable ->
+            LiftrixError.BusinessLogicError(
+                code = "PROFILE_HEALTH_CHECK_FAILED",
+                errorMessage = "Failed to ensure social profile exists: ${throwable.message}",
+                analyticsContext = mapOf("user_id" to userId)
+            )
+        }
+    ) {
+        Timber.d("🔍 HEALTH-CHECK: Verifying social profile exists for user: $userId")
+
+        // Check if social profile exists
+        val hasProfileResult = socialProfileRepository.hasProfile(userId)
+        val hasProfile = hasProfileResult.getOrNull() ?: false
+
+        if (!hasProfile) {
+            Timber.w("⚠️ HEALTH-CHECK: Missing social profile detected for user $userId - attempting auto-repair")
+
+            // Get username from UserAccount
+            val userAccountResult = userAccountRepository.getAccountInfoSuspend(userId)
+            val userAccount = userAccountResult.getOrNull()
+
+            if (userAccount == null) {
+                Timber.e("❌ HEALTH-CHECK: Cannot repair - UserAccount not found for user: $userId")
+                throw IllegalStateException("UserAccount not found for user $userId - incomplete user state")
+            }
+
+            val username = userAccount.username ?: "user_${userId.take(8)}"
+            val displayName = userAccount.displayName ?: username
+
+            Timber.i("🔧 HEALTH-CHECK: Auto-creating social profile for user $userId with username: $username")
+
+            // Create the missing profile (idempotent - will return existing if already created)
+            val createResult = socialProfileCommandUseCase.create(
+                username = username,
+                displayName = displayName,
+                bio = null
+            )
+
+            createResult.fold(
+                onSuccess = { profile ->
+                    Timber.i("✅ HEALTH-CHECK: Successfully auto-created social profile for user: $userId")
+                    Timber.i("   - Username: ${profile.username}")
+                    Timber.i("   - Profile should now be discoverable in search")
+                },
+                onFailure = { error ->
+                    Timber.e("❌ HEALTH-CHECK: Failed to auto-create social profile for user $userId: ${error.message}")
+                    throw IllegalStateException("Failed to create social profile: ${error.message}")
+                }
+            )
+        } else {
+            Timber.d("✅ HEALTH-CHECK: Social profile exists for user $userId")
+        }
     }
 }

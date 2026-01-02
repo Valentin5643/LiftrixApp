@@ -20,6 +20,8 @@ import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.example.liftrix.data.local.LiftrixDatabase
+import android.os.Process
 
 /**
  * Implementation of SocialProfileRepository with user scoping and privacy enforcement.
@@ -32,6 +34,7 @@ class SocialProfileRepositoryImpl @Inject constructor(
     private val socialProfileDao: SocialProfileDao,
     private val blockedUserDao: BlockedUserDao,
     private val userAccountDao: UserAccountDao,
+    private val database: LiftrixDatabase,
     @ApplicationContext private val context: Context
 ) : SocialProfileRepository {
     
@@ -234,8 +237,26 @@ class SocialProfileRepositoryImpl @Inject constructor(
                 )
             }
         ) {
-            val entity = profile.toEntity()
+            logProfileDbDiagnostics("PROFILE_CREATE_START userId=${profile.userId}")
+            val preUserCount = socialProfileDao.getProfileCount(profile.userId)
+            val preTotalCount = socialProfileDao.getTotalProfileCount()
+            Timber.d("PROFILE_CREATE_PRE_COUNTS userId=${profile.userId} userCount=$preUserCount totalCount=$preTotalCount")
+
+            val entity = profile.toEntity().copy(
+                isDirty = true,
+                lastModified = System.currentTimeMillis()
+            )
             val insertResult = socialProfileDao.insertProfile(entity)
+            Timber.d("PROFILE_CREATE_INSERT_RESULT userId=${profile.userId} insertResult=$insertResult")
+
+            val postUserCount = socialProfileDao.getProfileCount(profile.userId)
+            val postTotalCount = socialProfileDao.getTotalProfileCount()
+            val persistedProfile = socialProfileDao.getProfile(profile.userId)
+            Timber.d(
+                "PROFILE_CREATE_POST_COUNTS userId=${profile.userId} userCount=$postUserCount " +
+                    "totalCount=$postTotalCount persistedUserId=${persistedProfile?.userId} " +
+                    "persistedUsername=${persistedProfile?.username}"
+            )
             
             // Also update the username in UserAccountEntity for consistency
             val usernameUpdateResult = userAccountDao.updateUsername(profile.userId, profile.username)
@@ -299,6 +320,10 @@ class SocialProfileRepositoryImpl @Inject constructor(
             }
         ) {
             val updatedAt = System.currentTimeMillis()
+            Timber.d(
+                "PFP_PROFILE_PHOTO_UPDATE userId=$userId hasPhotoUrl=${!photoUrl.isNullOrBlank()} " +
+                    "updatedAt=$updatedAt"
+            )
             socialProfileDao.updateProfilePhoto(userId, photoUrl, updatedAt)
         }
     }
@@ -442,6 +467,18 @@ class SocialProfileRepositoryImpl @Inject constructor(
             personalWebsite = personalWebsite,
             createdAt = createdAt,
             updatedAt = updatedAt
+        )
+    }
+
+    private fun logProfileDbDiagnostics(context: String) {
+        val dbName = runCatching { database.openHelper.databaseName }.getOrNull()
+        val dbPath = runCatching { database.openHelper.writableDatabase.path }.getOrNull()
+        val dbId = System.identityHashCode(database)
+        val daoId = System.identityHashCode(socialProfileDao)
+        val pid = Process.myPid()
+        val threadName = Thread.currentThread().name
+        Timber.d(
+            "PROFILE_DB_DIAG $context dbName=$dbName dbPath=$dbPath dbId=$dbId daoId=$daoId pid=$pid thread=$threadName"
         )
     }
 }

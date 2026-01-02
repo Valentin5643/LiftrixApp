@@ -5,26 +5,27 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedButton
+import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -42,23 +43,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextAlign
-
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.liftrix.domain.model.AuthEvent
 import com.example.liftrix.domain.model.AuthState
-import com.example.liftrix.ui.auth.components.ConsentData
 import com.example.liftrix.ui.auth.components.ConsentDialog
 import com.example.liftrix.ui.auth.components.SignInForm
 import com.example.liftrix.ui.auth.components.SignUpForm
-import com.example.liftrix.ui.workout.components.PrimaryActionButton
-import com.example.liftrix.ui.workout.components.SecondaryActionButton
-import com.example.liftrix.ui.workout.components.TertiaryActionButton
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
@@ -79,10 +70,14 @@ fun AuthScreen(
     // FIXED: Use ThemeManager to respect user's explicit theme preference instead of system theme
     val themeManager = remember { com.example.liftrix.ui.theme.ThemeManager.getInstance(context) }
     val isDarkTheme = themeManager.getEffectiveThemeState(isSystemInDarkTheme())
-    
+    val dividerColor = if (isDarkTheme) LiftrixColorsV2.Dark.Divider else LiftrixColorsV2.Light.Divider
+    val textSecondary = if (isDarkTheme) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary
+    val textTertiary = if (isDarkTheme) LiftrixColorsV2.Dark.TextTertiary else LiftrixColorsV2.Light.TextTertiary
+
     var isSignUpMode by remember { mutableStateOf(initialSignUpMode) }
     var showConsentDialog by remember { mutableStateOf(false) }
     var pendingSignUpData by remember { mutableStateOf<Triple<String, String, String>?>(null) }
+    val bottomPadding = if (isSignUpMode) 88.dp else 32.dp
 
     // Setup Google Sign-In client outside of onClick - this ensures it's ready when needed
     val googleSignInClient = remember {
@@ -173,12 +168,13 @@ fun AuthScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 32.dp)
+                    .padding(start = 24.dp, top = 32.dp, end = 24.dp, bottom = bottomPadding)
+                    .navigationBarsPadding()
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceEvenly
+                verticalArrangement = Arrangement.Top
             ) {
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // Auth form section
                 Column(
@@ -213,102 +209,160 @@ fun AuthScreen(
                     }
                     
                     Spacer(modifier = Modifier.height(24.dp))
-                    
+
                     // Alternative sign-in options
-                    Text(
-                        text = "or",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (isDarkTheme) LiftrixColorsV2.Dark.TextTertiary else LiftrixColorsV2.Light.TextTertiary
-                    )
-                    
-                    Spacer(modifier = Modifier.height(20.dp))
-                    
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Google Sign-In
-                        OutlinedButton(
-                            onClick = {
-                                Timber.d("Google Sign-In button clicked")
-                                if (googleSignInClient != null) {
-                                    Timber.d("Google Sign-In client available, starting sign-in flow")
-                                    viewModel.handleEvent(AuthEvent.GoogleSignIn)
-                                    try {
-                                        // Force account selection by signing out first
-                                        // This clears any cached account selection and shows the account picker
-                                        googleSignInClient.signOut().addOnCompleteListener { signOutTask ->
-                                            Timber.d("Google Sign-In signOut completed: success=${signOutTask.isSuccessful}")
-                                            try {
-                                                val signInIntent = googleSignInClient.signInIntent
-                                                Timber.d("Launching Google Sign-In intent with account selection")
-                                                googleSignInLauncher.launch(signInIntent)
-                                            } catch (e: Exception) {
-                                                Timber.e(e, "Failed to launch Google Sign-In after signOut")
-                                                viewModel.handleGoogleSignInResult(null)
-                                            }
+                        Divider(
+                            modifier = Modifier.weight(1f),
+                            color = dividerColor
+                        )
+                        Text(
+                            text = "or",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = textTertiary,
+                            modifier = Modifier.padding(horizontal = 12.dp)
+                        )
+                        Divider(
+                            modifier = Modifier.weight(1f),
+                            color = dividerColor
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    // Google Sign-In
+                    OutlinedButton(
+                        onClick = {
+                            Timber.d("Google Sign-In button clicked")
+                            if (googleSignInClient != null) {
+                                Timber.d("Google Sign-In client available, starting sign-in flow")
+                                viewModel.handleEvent(AuthEvent.GoogleSignIn)
+                                try {
+                                    // Force account selection by signing out first
+                                    // This clears any cached account selection and shows the account picker
+                                    googleSignInClient.signOut().addOnCompleteListener { signOutTask ->
+                                        Timber.d("Google Sign-In signOut completed: success=${signOutTask.isSuccessful}")
+                                        try {
+                                            val signInIntent = googleSignInClient.signInIntent
+                                            Timber.d("Launching Google Sign-In intent with account selection")
+                                            googleSignInLauncher.launch(signInIntent)
+                                        } catch (e: Exception) {
+                                            Timber.e(e, "Failed to launch Google Sign-In after signOut")
+                                            viewModel.handleGoogleSignInResult(null)
                                         }
-                                    } catch (e: Exception) {
-                                        Timber.e(e, "Failed to initiate Google Sign-In flow")
-                                        viewModel.handleGoogleSignInResult(null)
                                     }
-                                } else {
-                                    Timber.e("Google Sign-In client not initialized - cannot proceed")
+                                } catch (e: Exception) {
+                                    Timber.e(e, "Failed to initiate Google Sign-In flow")
                                     viewModel.handleGoogleSignInResult(null)
                                 }
-                            },
-                            enabled = authState !is AuthState.Loading,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_google),
-                                    contentDescription = "Google",
-                                    modifier = Modifier.size(20.dp),
-                                    tint = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Google", color = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary)
+                            } else {
+                                Timber.e("Google Sign-In client not initialized - cannot proceed")
+                                viewModel.handleGoogleSignInResult(null)
                             }
-                        }
-                        
-                        // Guest Sign-In
-                        TextButton(
-                            onClick = {
-                                viewModel.handleEvent(AuthEvent.AnonymousSignIn)
-                            },
-                            enabled = authState !is AuthState.Loading,
-                            modifier = Modifier.weight(1f)
+                        },
+                        enabled = authState !is AuthState.Loading,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary
+                        )
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
                         ) {
-                            Text(
-                                text = "Continue as Guest",
-                                color = LiftrixColorsV2.Light.TextSecondary
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_google),
+                                contentDescription = "Google",
+                                modifier = Modifier.size(20.dp),
+                                tint = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary
                             )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text("Continue with Google")
                         }
                     }
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    // Toggle between sign in and sign up - moved below Google/Guest
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Guest Sign-In
                     TextButton(
-                        onClick = { isSignUpMode = !isSignUpMode },
-                        enabled = authState !is AuthState.Loading
+                        onClick = {
+                            viewModel.handleEvent(AuthEvent.AnonymousSignIn)
+                        },
+                        enabled = authState !is AuthState.Loading,
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(vertical = 6.dp)
                     ) {
                         Text(
-                            text = if (isSignUpMode) {
-                                "Already have an account?"
-                            } else {
-                                "Don't have an account?"
-                            },
-                            color = LiftrixColorsV2.Light.TextSecondary
+                            text = "Continue as guest",
+                            color = textSecondary
                         )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Toggle between sign in and sign up - moved below Google/Guest
+                    if (!isSignUpMode) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Don't have an account?",
+                                color = textSecondary,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            TextButton(
+                                onClick = { isSignUpMode = true },
+                                enabled = authState !is AuthState.Loading,
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Text(
+                                    text = "Create account",
+                                    color = LiftrixColorsV2.Teal
+                                )
+                            }
+                        }
                     }
                 }
                 
                 Spacer(modifier = Modifier.height(40.dp))
+            }
+
+            if (isSignUpMode) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(bottom = 48.dp)
+                        .padding(horizontal = 24.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Already have an account?",
+                        color = textSecondary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    TextButton(
+                        onClick = { isSignUpMode = false },
+                        enabled = authState !is AuthState.Loading,
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text(
+                            text = "Sign in",
+                            color = LiftrixColorsV2.Teal
+                        )
+                    }
+                }
             }
             
             // Loading overlay

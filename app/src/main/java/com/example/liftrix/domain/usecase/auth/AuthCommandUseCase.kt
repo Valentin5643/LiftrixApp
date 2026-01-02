@@ -296,15 +296,31 @@ class AuthCommandUseCase @Inject constructor(
             onFailure = { error -> Timber.e(error, "UserProfile save failed for user: ${user.uid}") }
         )
 
-        // Create SocialProfile (Room-First)
+        // Create SocialProfile (Room-First) - BLOCKING
+        // CRITICAL FIX: Make social profile creation mandatory to prevent incomplete user states
+        Timber.d("PROFILE_SOCIAL_CREATE_TRIGGER userId=${user.uid} source=signup_email username=$username")
         val socialProfileResult = socialProfileCommandUseCase.create(
             username = username,
             displayName = username,
             bio = null
         )
-        socialProfileResult.fold(
-            onSuccess = { Timber.d("SocialProfile created successfully for user: ${user.uid}") },
-            onFailure = { error -> Timber.e(error, "SocialProfile creation failed for user: ${user.uid}") }
+        val socialProfile = socialProfileResult.fold(
+            onSuccess = {
+                Timber.d("PROFILE_SOCIAL_CREATE_SUCCESS userId=${user.uid} source=signup_email")
+                it
+            },
+            onFailure = { error ->
+                Timber.e(error, "PROFILE_SOCIAL_CREATE_FAIL userId=${user.uid} source=signup_email error=${error.message}")
+                // Clean up partial state before throwing
+                try {
+                    profileCommandUseCase.deleteProfile(user.uid)
+                    userAccountRepository.deleteAccount(user.uid)
+                    Timber.d("Cleaned up partial user state for failed signup: ${user.uid}")
+                } catch (cleanupError: Exception) {
+                    Timber.e(cleanupError, "Failed to cleanup partial state, manual cleanup may be required")
+                }
+                throw IllegalStateException("Failed to create complete user profile: ${error.message}")
+            }
         )
 
         // Allow time for all local DB writes to complete
@@ -630,14 +646,16 @@ class AuthCommandUseCase @Inject constructor(
 
                 // Create social profile with delay
                 delay(1000)
+                Timber.d("PROFILE_SOCIAL_CREATE_TRIGGER userId=${user.uid} source=google_new username=${userAccount.username}")
                 val socialProfileResult = socialProfileCommandUseCase.create(
                     username = userAccount.username ?: "user_${user.uid.take(8)}",
                     displayName = user.displayName ?: userAccount.username ?: "User",
-                    bio = null
+                    bio = null,
+                    profilePhotoUrl = user.photoUrl
                 )
                 socialProfileResult.fold(
-                    onSuccess = { Timber.d("✅ Social profile created for Google user ${user.uid}") },
-                    onFailure = { Timber.e("❌ Failed to create social profile: ${it.message}") }
+                    onSuccess = { Timber.d("PROFILE_SOCIAL_CREATE_SUCCESS userId=${user.uid} source=google_new") },
+                    onFailure = { Timber.e("PROFILE_SOCIAL_CREATE_FAIL userId=${user.uid} source=google_new error=${it.message}") }
                 )
 
                 // Create user profile
@@ -661,14 +679,16 @@ class AuthCommandUseCase @Inject constructor(
             // Ensure profiles exist
             delay(500)
 
+            Timber.d("PROFILE_SOCIAL_CREATE_TRIGGER userId=${user.uid} source=google_existing username=${existingAccount.username}")
             val socialProfileResult = socialProfileCommandUseCase.create(
                 username = existingAccount.username!!,
                 displayName = user.displayName ?: existingAccount.displayName ?: existingAccount.username!!,
-                bio = null
+                bio = null,
+                profilePhotoUrl = user.photoUrl
             )
             socialProfileResult.fold(
-                onSuccess = { Timber.d("✅ Social profile ensured for existing user ${user.uid}") },
-                onFailure = { Timber.d("Social profile check: ${it.message}") }
+                onSuccess = { Timber.d("PROFILE_SOCIAL_CREATE_SUCCESS userId=${user.uid} source=google_existing") },
+                onFailure = { Timber.d("PROFILE_SOCIAL_CREATE_FAIL userId=${user.uid} source=google_existing error=${it.message}") }
             )
 
             createUserProfileForGoogleUser(user, existingAccount)
@@ -682,6 +702,17 @@ class AuthCommandUseCase @Inject constructor(
             userAccountRepository.updateUsername(user.uid, username).fold(
                 onSuccess = {
                     Timber.d("Username set for existing Google user ${user.uid}")
+                    Timber.d("PROFILE_SOCIAL_CREATE_TRIGGER userId=${user.uid} source=google_existing username=$username")
+                    val socialProfileResult = socialProfileCommandUseCase.create(
+                        username = username,
+                        displayName = user.displayName ?: username,
+                        bio = null,
+                        profilePhotoUrl = user.photoUrl
+                    )
+                    socialProfileResult.fold(
+                        onSuccess = { Timber.d("PROFILE_SOCIAL_CREATE_SUCCESS userId=${user.uid} source=google_existing") },
+                        onFailure = { Timber.d("PROFILE_SOCIAL_CREATE_FAIL userId=${user.uid} source=google_existing error=${it.message}") }
+                    )
                     val syncRequest = UserPublicSyncWorker.createWorkRequest(user.uid, forceSync = true)
                     workManager.enqueue(syncRequest)
                 },

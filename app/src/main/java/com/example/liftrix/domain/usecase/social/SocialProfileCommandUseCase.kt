@@ -36,12 +36,14 @@ class SocialProfileCommandUseCase @Inject constructor(
      * @param username Unique username for the profile
      * @param displayName Display name for the profile
      * @param bio Optional bio/description
+     * @param profilePhotoUrl Optional profile photo URL
      * @return The created social profile
      */
     suspend fun create(
         username: String,
         displayName: String,
-        bio: String?
+        bio: String?,
+        profilePhotoUrl: String? = null
     ): LiftrixResult<SocialProfile> = liftrixCatching(
         errorMapper = { throwable ->
             LiftrixError.BusinessLogicError(
@@ -57,11 +59,41 @@ class SocialProfileCommandUseCase @Inject constructor(
         val userId = authQueryUseCase(waitForAuth = false).getOrNull()
             ?: throw IllegalStateException("User not authenticated")
 
+        val normalizedPhotoUrl = profilePhotoUrl?.trim()?.takeIf { it.isNotBlank() }
+
+        Timber.d(
+            "PFP_PROFILE_CREATE_START userId=${userId.value} username=$username displayName=$displayName " +
+                "photoUrlPresent=${normalizedPhotoUrl != null}"
+        )
         Timber.i("[SOCIAL-PROFILE] 🔨 Creating social profile for user: ${userId.value}")
         Timber.d("[SOCIAL-PROFILE]   - Username: '$username'")
         Timber.d("[SOCIAL-PROFILE]   - Display Name: '$displayName'")
         Timber.d("[SOCIAL-PROFILE]   - Bio: ${if (bio != null) "'$bio'" else "null"}")
 
+        // IDEMPOTENCY FIX: Check if profile already exists - make creation idempotent
+        val existingProfile = profileRepository.getProfile(userId.value, userId.value).getOrNull()
+        if (existingProfile != null) {
+            if (normalizedPhotoUrl != null && existingProfile.profilePhotoUrl.isNullOrBlank()) {
+                Timber.d("PFP_PROFILE_BACKFILL_PHOTO userId=${userId.value} hasPhotoUrl=true")
+                profileRepository.updateProfile(
+                    userId = userId.value,
+                    updates = SocialProfileRepository.ProfileUpdate(profilePhotoUrl = normalizedPhotoUrl)
+                ).fold(
+                    onSuccess = {
+                        Timber.d("PFP_PROFILE_BACKFILL_PHOTO_SUCCESS userId=${userId.value}")
+                    },
+                    onFailure = { error ->
+                        Timber.e(
+                            "PFP_PROFILE_BACKFILL_PHOTO_FAIL userId=${userId.value} " +
+                                "error=${error.message}"
+                        )
+                    }
+                )
+            }
+            Timber.d("PROFILE_SOCIAL_CREATE_SKIP userId=${userId.value} reason=already_exists")
+            Timber.i("[SOCIAL-PROFILE] ✅ Profile already exists for user ${userId.value}, returning existing")
+            return LiftrixResult.success(existingProfile)
+        }
 
         // Validate inputs
         Timber.d("[SOCIAL-PROFILE] 🔍 Validating input fields...")
@@ -101,6 +133,7 @@ class SocialProfileCommandUseCase @Inject constructor(
             username = username.lowercase().trim(),
             displayName = displayName.trim(),
             bio = bio?.trim(),
+            profilePhotoUrl = normalizedPhotoUrl,
             memberSince = now,
             isPrivate = false, // Public by default for maximum discoverability
             hideFromSuggestions = false, // Show in user suggestions and discovery
@@ -115,6 +148,7 @@ class SocialProfileCommandUseCase @Inject constructor(
         Timber.d("[SOCIAL-PROFILE]   - Allow friend requests: ${profile.allowFriendRequests}")
 
         val result = profileRepository.createProfile(profile).getOrThrow()
+        Timber.d("PROFILE_SOCIAL_CREATE_COMPLETE userId=${userId.value} username=${result.username}")
 
         Timber.i("[SOCIAL-PROFILE] ✅ Social profile created successfully for user: ${userId.value}")
         Timber.i("[SOCIAL-PROFILE]   - User should now appear in search results")

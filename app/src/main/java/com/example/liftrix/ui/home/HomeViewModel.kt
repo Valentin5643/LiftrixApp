@@ -8,6 +8,7 @@ import com.example.liftrix.domain.model.FeedWorkout
 import com.example.liftrix.domain.model.RecommendedUser
 import com.example.liftrix.domain.model.Workout
 import com.example.liftrix.domain.model.WorkoutStats
+import com.example.liftrix.domain.model.social.FollowStatus
 import com.example.liftrix.domain.repository.AuthRepository
 import com.example.liftrix.domain.repository.SocialRepository
 import com.example.liftrix.domain.usecase.auth.AuthQueryUseCase
@@ -449,17 +450,25 @@ class HomeViewModel @Inject constructor(
                         val currentData = uiState.value.dataOrNull() ?: HomeScreenData()
                         val currentState = currentData.recommendationsState
                         if (currentState is RecommendationsState.Success) {
-                            val updatedUsers = currentState.users.map { user ->
-                                if (user.userId == userId) {
-                                    user.withFollowStatus(true)
-                                } else {
-                                    user
+                            val shouldRemove = followStatus == FollowStatus.FOLLOWING ||
+                                followStatus == FollowStatus.PENDING_SENT ||
+                                followStatus == FollowStatus.MUTUAL_FOLLOW
+                            val updatedUsers = if (shouldRemove) {
+                                currentState.users.filterNot { it.userId == userId }
+                            } else {
+                                currentState.users.map { user ->
+                                    if (user.userId == userId) {
+                                        user.withFollowStatus(true)
+                                    } else {
+                                        user
+                                    }
                                 }
                             }
                             updateHomeScreenData {
                                 it.copy(recommendationsState = currentState.copy(users = updatedUsers))
                             }
                         }
+                        socialRepository.refreshDiscoveryCache()
                         trackUserFollowed(userId)
                     },
                     onFailure = { error: Throwable ->

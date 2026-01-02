@@ -155,6 +155,7 @@ fun FollowerListScreen(
             else -> {
                 FollowerListContent(
                     followers = uiState.filteredFollowers,
+                    listType = listType,
                     isLoadingMore = uiState.isLoadingMore,
                     canLoadMore = uiState.canLoadMore,
                     onFollowToggle = { userId -> viewModel.toggleFollowStatus(userId) },
@@ -169,6 +170,7 @@ fun FollowerListScreen(
 @Composable
 private fun FollowerListContent(
     followers: List<FollowRelationship>,
+    listType: FollowerListType,
     isLoadingMore: Boolean,
     canLoadMore: Boolean,
     onFollowToggle: (String) -> Unit,
@@ -183,6 +185,7 @@ private fun FollowerListContent(
         items(followers) { relationship ->
             FollowerListItem(
                 relationship = relationship,
+                listType = listType,
                 onFollowToggle = { onFollowToggle(relationship.userId) },
                 onNavigateToProfile = onNavigateToProfile
             )
@@ -224,6 +227,7 @@ private fun FollowerListContent(
 @Composable
 private fun FollowerListItem(
     relationship: FollowRelationship,
+    listType: FollowerListType,
     onFollowToggle: () -> Unit,
     onNavigateToProfile: (String) -> Unit
 ) {
@@ -277,6 +281,7 @@ private fun FollowerListItem(
             // Follow Button
             FollowActionButton(
                 connectionStatus = relationship.connectionStatus,
+                listType = listType,
                 onClick = onFollowToggle,
                 isCurrentUser = false // This screen doesn't show current user in the list
             )
@@ -287,11 +292,21 @@ private fun FollowerListItem(
 @Composable
 private fun FollowActionButton(
     connectionStatus: ConnectionStatus,
+    listType: FollowerListType,
     onClick: () -> Unit,
     isCurrentUser: Boolean
 ) {
     if (isCurrentUser) {
         return // No button for current user
+    }
+
+    if (listType == FollowerListType.FOLLOWERS &&
+        (connectionStatus == ConnectionStatus.CONNECTED ||
+            connectionStatus == ConnectionStatus.MUTUAL_FOLLOW ||
+            connectionStatus == ConnectionStatus.GYM_BUDDY ||
+            connectionStatus == ConnectionStatus.PENDING_SENT)
+    ) {
+        return // Follow-back already done or pending; keep user, hide button.
     }
     
     when (connectionStatus) {

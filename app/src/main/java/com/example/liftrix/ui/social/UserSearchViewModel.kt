@@ -6,6 +6,7 @@ import com.example.liftrix.domain.model.FitnessGoal
 import com.example.liftrix.domain.model.error.LiftrixError
 import com.example.liftrix.domain.model.social.SearchFilters
 import com.example.liftrix.domain.model.social.UserSearchResult
+import com.example.liftrix.domain.model.social.FollowStatus
 import com.example.liftrix.domain.model.FitnessLevel
 import com.example.liftrix.domain.usecase.social.SocialSearchUseCase
 import com.example.liftrix.domain.usecase.social.SearchUsersRequest
@@ -243,6 +244,9 @@ class UserSearchViewModel @Inject constructor(
             )
 
             result.onSuccess { followStatus ->
+                val shouldRemove = followStatus == FollowStatus.FOLLOWING ||
+                    followStatus == FollowStatus.PENDING_SENT ||
+                    followStatus == FollowStatus.MUTUAL_FOLLOW
                 // Update the user's connection status in search results
                 val newConnectionStatus = when (followStatus.name) {
                     "NONE" -> com.example.liftrix.domain.model.social.ConnectionStatus.NONE
@@ -255,11 +259,17 @@ class UserSearchViewModel @Inject constructor(
 
                 updateState { currentState ->
                     currentState.copy(
-                        searchResults = currentState.searchResults.map { result ->
-                            if (result.userId == targetUserId) {
-                                result.copy(connectionStatus = newConnectionStatus)
-                            } else {
-                                result
+                        searchResults = if (shouldRemove) {
+                            currentState.searchResults.filterNot { result ->
+                                result.userId == targetUserId
+                            }
+                        } else {
+                            currentState.searchResults.map { result ->
+                                if (result.userId == targetUserId) {
+                                    result.copy(connectionStatus = newConnectionStatus)
+                                } else {
+                                    result
+                                }
                             }
                         }
                     )

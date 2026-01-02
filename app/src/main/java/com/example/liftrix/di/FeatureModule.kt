@@ -138,9 +138,16 @@ abstract class FeatureModule {
             socialProfileDao: SocialProfileDao,
             blockedUserDao: BlockedUserDao,
             userAccountDao: UserAccountDao,
+            database: LiftrixDatabase,
             @ApplicationContext context: Context
         ): SocialProfileRepository =
-            SocialProfileRepositoryImpl(socialProfileDao, blockedUserDao, userAccountDao, context)
+            SocialProfileRepositoryImpl(
+                socialProfileDao,
+                blockedUserDao,
+                userAccountDao,
+                database,
+                context
+            )
 
         @Provides
         @Singleton
@@ -192,12 +199,13 @@ abstract class FeatureModule {
             socialProfileDao: SocialProfileDao,
             blockedUserDao: BlockedUserDao,
             userProfileDao: UserProfileDao,
+            userAccountDao: com.example.liftrix.data.local.dao.UserAccountDao,
             safeFollowDao: SafeFollowRelationshipDaoImpl,
             legacyFollowDataSource: LegacyFollowFirestoreDataSource
         ): FollowRepository =
             FollowRepositoryImpl(
                 followRelationshipDao, followRequestDao, profileViewDao,
-                socialProfileDao, blockedUserDao, userProfileDao,
+                socialProfileDao, blockedUserDao, userProfileDao, userAccountDao,
                 safeFollowDao, legacyFollowDataSource
             )
 

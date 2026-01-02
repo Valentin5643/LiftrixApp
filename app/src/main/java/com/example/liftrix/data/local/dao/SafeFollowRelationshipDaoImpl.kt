@@ -39,7 +39,8 @@ class SafeFollowRelationshipDaoImpl @Inject constructor(
      * @return Number of relationships successfully inserted
      */
     suspend fun insertFollowRelationshipsWithUserValidation(
-        relationships: List<FollowRelationshipEntity>
+        relationships: List<FollowRelationshipEntity>,
+        markDirty: Boolean = false
     ): Int = withContext(Dispatchers.IO) {
         if (relationships.isEmpty()) return@withContext 0
         
@@ -114,7 +115,11 @@ class SafeFollowRelationshipDaoImpl @Inject constructor(
                 var successCount = 0
                 relationships.forEach { relationship ->
                     try {
-                        followDao.insertFollowRelationship(relationship)
+                        if (markDirty) {
+                            followDao.upsertLocal(relationship)
+                        } else {
+                            followDao.insertFollowRelationship(relationship)
+                        }
                         successCount++
                         Timber.v("🔐 SYNC-SAFE: Inserted relationship ${relationship.id}")
                     } catch (e: Exception) {

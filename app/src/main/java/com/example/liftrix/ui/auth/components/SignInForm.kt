@@ -2,10 +2,12 @@ package com.example.liftrix.ui.auth.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -32,8 +34,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.isSystemInDarkTheme
-import com.example.liftrix.ui.workout.components.PrimaryActionButton
-import com.example.liftrix.ui.workout.components.TertiaryActionButton
 import com.example.liftrix.ui.theme.LiftrixColorsV2
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,7 +44,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -52,8 +51,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /**
  * Sign in form with email/password validation and forgot password functionality
@@ -85,6 +84,12 @@ fun SignInForm(
     val context = androidx.compose.ui.platform.LocalContext.current
     val themeManager = remember { com.example.liftrix.ui.theme.ThemeManager.getInstance(context) }
     val isDarkTheme = themeManager.getEffectiveThemeState(isSystemInDarkTheme())
+    val textFieldShape = RoundedCornerShape(14.dp)
+    val textPrimary = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary
+    val textSecondary = if (isDarkTheme) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary
+    val textTertiary = if (isDarkTheme) LiftrixColorsV2.Dark.TextTertiary else LiftrixColorsV2.Light.TextTertiary
+    val outlineColor = if (isDarkTheme) LiftrixColorsV2.Dark.OutlineVariant else LiftrixColorsV2.Light.OutlineVariant
+    val inputContainerColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundTertiary else LiftrixColorsV2.Light.BackgroundPrimary
     
     // Validate form whenever inputs change
     LaunchedEffect(email, password) {
@@ -104,29 +109,29 @@ fun SignInForm(
             colors = CardDefaults.cardColors(
                 containerColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundSecondary else LiftrixColorsV2.Light.BackgroundSecondary
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            shape = RoundedCornerShape(20.dp)
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Form title
-                Text(
-                    text = "Welcome Back",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary
-                )
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Text(
-                    text = "Sign in to your account",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = LiftrixColorsV2.Teal
-                )
-                
-                Spacer(modifier = Modifier.height(24.dp))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "Welcome Back",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = textPrimary
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Sign in to continue",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = LiftrixColorsV2.Teal
+                    )
+                }
                 
                 // Error message display
                 if (errorMessage != null) {
@@ -135,7 +140,8 @@ fun SignInForm(
                         colors = CardDefaults.cardColors(
                             containerColor = if (isDarkTheme) LiftrixColorsV2.Dark.Error.copy(alpha = 0.1f) else LiftrixColorsV2.Light.Error.copy(alpha = 0.1f)
                         ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
                         Row(
                             modifier = Modifier.padding(12.dp),
@@ -155,7 +161,6 @@ fun SignInForm(
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
                 }
                 
                 // Email field
@@ -168,29 +173,34 @@ fun SignInForm(
                             onClearError()
                         }
                     },
-                    label = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Email,
-                                contentDescription = "Email icon",
-                                modifier = Modifier.size(18.dp),
-                                tint = LiftrixColorsV2.Teal
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Email Address", color = if (isDarkTheme) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary)
-                        }
+                    label = { Text("Email address", color = textTertiary) },
+                    placeholder = { Text("name@domain.com", color = textTertiary) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Email,
+                            contentDescription = "Email icon",
+                            modifier = Modifier.size(18.dp)
+                        )
                     },
                     enabled = !isLoading,
-                    modifier = Modifier.fillMaxWidth(),
+                    isError = emailError != null && email.isNotBlank(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = LiftrixColorsV2.Teal,
-                        unfocusedBorderColor = if (isDarkTheme) LiftrixColorsV2.Dark.Outline else LiftrixColorsV2.Light.Outline,
-                        focusedTextColor = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
-                        unfocusedTextColor = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
+                        unfocusedBorderColor = outlineColor,
+                        focusedTextColor = textPrimary,
+                        unfocusedTextColor = textPrimary,
                         cursorColor = LiftrixColorsV2.Teal,
-                        focusedContainerColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundSecondary else LiftrixColorsV2.Light.BackgroundSecondary,
-                        unfocusedContainerColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundSecondary else LiftrixColorsV2.Light.BackgroundSecondary
+                        focusedContainerColor = inputContainerColor,
+                        unfocusedContainerColor = inputContainerColor,
+                        focusedLabelColor = LiftrixColorsV2.Teal,
+                        unfocusedLabelColor = textTertiary,
+                        focusedLeadingIconColor = LiftrixColorsV2.Teal,
+                        unfocusedLeadingIconColor = textTertiary
                     ),
+                    shape = textFieldShape,
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Email,
                         imeAction = ImeAction.Next
@@ -200,8 +210,6 @@ fun SignInForm(
                     ),
                     singleLine = true
                 )
-                
-                Spacer(modifier = Modifier.height(12.dp))
                 
                 // Password field
                 OutlinedTextField(
@@ -213,29 +221,36 @@ fun SignInForm(
                             onClearError()
                         }
                     },
-                    label = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Lock,
-                                contentDescription = "Password icon",
-                                modifier = Modifier.size(18.dp),
-                                tint = LiftrixColorsV2.Teal
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Password", color = if (isDarkTheme) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary)
-                        }
+                    label = { Text("Password", color = textTertiary) },
+                    placeholder = { Text("Enter your password", color = textTertiary) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Password icon",
+                            modifier = Modifier.size(18.dp)
+                        )
                     },
                     enabled = !isLoading,
-                    modifier = Modifier.fillMaxWidth(),
+                    isError = passwordError != null && password.isNotBlank(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = LiftrixColorsV2.Teal,
-                        unfocusedBorderColor = if (isDarkTheme) LiftrixColorsV2.Dark.Outline else LiftrixColorsV2.Light.Outline,
-                        focusedTextColor = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
-                        unfocusedTextColor = if (isDarkTheme) LiftrixColorsV2.Dark.TextPrimary else LiftrixColorsV2.Light.TextPrimary,
+                        unfocusedBorderColor = outlineColor,
+                        focusedTextColor = textPrimary,
+                        unfocusedTextColor = textPrimary,
                         cursorColor = LiftrixColorsV2.Teal,
-                        focusedContainerColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundSecondary else LiftrixColorsV2.Light.BackgroundSecondary,
-                        unfocusedContainerColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundSecondary else LiftrixColorsV2.Light.BackgroundSecondary
+                        focusedContainerColor = inputContainerColor,
+                        unfocusedContainerColor = inputContainerColor,
+                        focusedLabelColor = LiftrixColorsV2.Teal,
+                        unfocusedLabelColor = textTertiary,
+                        focusedLeadingIconColor = LiftrixColorsV2.Teal,
+                        unfocusedLeadingIconColor = textTertiary,
+                        focusedTrailingIconColor = LiftrixColorsV2.Teal,
+                        unfocusedTrailingIconColor = textTertiary
                     ),
+                    shape = textFieldShape,
                     visualTransformation = if (isPasswordVisible) {
                         VisualTransformation.None
                     } else {
@@ -257,7 +272,7 @@ fun SignInForm(
                                 } else {
                                     "Show password"
                                 },
-                                tint = if (isDarkTheme) LiftrixColorsV2.Dark.TextTertiary else LiftrixColorsV2.Light.TextTertiary
+                                tint = if (isPasswordVisible) LiftrixColorsV2.Teal else textTertiary
                             )
                         }
                     },
@@ -276,46 +291,42 @@ fun SignInForm(
                     singleLine = true
                 )
                 
-                Spacer(modifier = Modifier.height(12.dp))
-                
                 // Remember me checkbox
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Checkbox(
-                        checked = rememberMe,
-                        onCheckedChange = { rememberMe = it },
-                        enabled = !isLoading,
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = LiftrixColorsV2.Teal,
-                            uncheckedColor = if (isDarkTheme) LiftrixColorsV2.Dark.Outline else LiftrixColorsV2.Light.Outline,
-                            checkmarkColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundPrimary else LiftrixColorsV2.Light.BackgroundPrimary
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = rememberMe,
+                            onCheckedChange = { rememberMe = it },
+                            enabled = !isLoading,
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = LiftrixColorsV2.Teal,
+                                uncheckedColor = outlineColor,
+                                checkmarkColor = if (isDarkTheme) LiftrixColorsV2.Dark.BackgroundPrimary else LiftrixColorsV2.Light.BackgroundPrimary
+                            )
                         )
-                    )
-                    Text(
-                        text = "Remember me next time",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (isDarkTheme) LiftrixColorsV2.Dark.TextSecondary else LiftrixColorsV2.Light.TextSecondary,
-                        modifier = Modifier.weight(1f)
-                    )
+                        Text(
+                            text = "Remember me",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = textSecondary
+                        )
+                    }
+                    TextButton(
+                        onClick = { showForgotPassword = true },
+                        enabled = !isLoading,
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text(
+                            text = "Forgot password?",
+                            color = LiftrixColorsV2.Teal,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1
+                        )
+                    }
                 }
-                
-                // FIXED: Forgot password button with proper layout
-                TextButton(
-                    onClick = { showForgotPassword = true },
-                    enabled = !isLoading,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "Forgot password?",
-                        color = LiftrixColorsV2.Teal,
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1
-                    )
-                }
-                
-                Spacer(modifier = Modifier.height(16.dp))
                 
                 // Sign in button
                 Button(
@@ -326,7 +337,7 @@ fun SignInForm(
                     enabled = isFormValid && !isLoading,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp),
+                        .height(52.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = LiftrixColorsV2.Teal,
                         contentColor = if (isDarkTheme) 
@@ -341,7 +352,8 @@ fun SignInForm(
                             LiftrixColorsV2.Dark.TextDisabled
                         else
                             LiftrixColorsV2.Light.TextDisabled
-                    )
+                    ),
+                    shape = RoundedCornerShape(14.dp)
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(

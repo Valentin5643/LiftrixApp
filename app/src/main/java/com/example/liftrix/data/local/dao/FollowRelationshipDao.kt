@@ -89,6 +89,12 @@ interface FollowRelationshipDao {
     suspend fun getFollowingUserIds(userId: String): List<String>
 
     @Query("""
+        SELECT follower_id FROM follow_relationships
+        WHERE following_id = :userId AND status = 'ACCEPTED'
+    """)
+    suspend fun getFollowerUserIds(userId: String): List<String>
+
+    @Query("""
         SELECT fr.* FROM follow_relationships fr
         INNER JOIN social_profiles sp ON fr.follower_id = sp.user_id
         WHERE fr.following_id = :userId AND fr.status = :status

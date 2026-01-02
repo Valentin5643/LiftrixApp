@@ -23,6 +23,7 @@ import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import timber.log.Timber
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.time.Duration.Companion.minutes
@@ -53,6 +54,7 @@ class OfflineQueueManager @Inject constructor(
     private val analyticsTracker: AnalyticsTracker,
     private val notificationHandler: NotificationHandler
 ) {
+    private val inFlightQueueItems = ConcurrentHashMap.newKeySet<String>()
     
     /**
      * 🔥 FIX: Clean up legacy queue entries that can't be deserialized.
@@ -221,6 +223,12 @@ class OfflineQueueManager @Inject constructor(
             var conflicts = 0
             
             for (item in pendingItems) {
+                if (!inFlightQueueItems.add(item.id)) {
+                    if (item.entityType == "PROFILE") {
+                        Timber.d("[PROFILE-QUEUE] PROFILE_QUEUE_GUARD_SKIP itemId=${item.id} entityType=${item.entityType}")
+                    }
+                    continue
+                }
                 try {
                     val result = processQueueItem(item)
                     
@@ -288,6 +296,8 @@ class OfflineQueueManager @Inject constructor(
                     handleSyncFailure(item, e)
                     failed++
                     Timber.e(e, "OfflineQueueManager: Unexpected error processing operation ${item.id}")
+                } finally {
+                    inFlightQueueItems.remove(item.id)
                 }
             }
             
@@ -416,6 +426,12 @@ class OfflineQueueManager @Inject constructor(
             var totalConflicts = 0
             
             for (item in retryableItems) {
+                if (!inFlightQueueItems.add(item.id)) {
+                    if (item.entityType == "PROFILE") {
+                        Timber.d("[PROFILE-QUEUE] PROFILE_QUEUE_GUARD_SKIP itemId=${item.id} entityType=${item.entityType}")
+                    }
+                    continue
+                }
                 try {
                     val result = processQueueItem(item)
                     
@@ -444,6 +460,8 @@ class OfflineQueueManager @Inject constructor(
                 } catch (e: Exception) {
                     handleSyncFailure(item, e)
                     totalFailed++
+                } finally {
+                    inFlightQueueItems.remove(item.id)
                 }
             }
             

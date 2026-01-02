@@ -366,7 +366,7 @@ class FolderRepositoryImpl @Inject constructor(
     private fun createMinimalUserProfile(userId: String): com.example.liftrix.data.local.entity.UserProfileEntity {
         val now = java.time.LocalDateTime.now()
         return com.example.liftrix.data.local.entity.UserProfileEntity(
-            id = java.util.UUID.randomUUID().toString(),
+            id = userId,
             userId = userId,
             displayName = "User", // Default display name
             age = null,
